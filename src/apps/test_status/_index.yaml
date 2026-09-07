@@ -1,0 +1,68 @@
+version: '1.0'
+namespace: bee.test_status
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, uuid, json, contract]
+  imports:
+    view: bee.test_status:view
+    client: bee.application:client
+    journal: bee.threads:client
+    protocol: bee.threads:protocol
+    appearance: bee.desktop:appearance
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Test Status
+      icon: T
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: Tools
+      role: test-status
+      resume_schema: test-status.v1
+      restart_policy: manual
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [tty, time, channel, process, json]
+  imports:
+    journal: bee.threads:client
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:thread_write_client_policy]
+- name: workers
+  kind: process.host
+  host: {max_processes: 16, workers: 2}
+  lifecycle: {auto_start: true}
+- name: runner
+  kind: contract.definition
+  methods:
+  - name: start
+    description: Start the fixed shared-UI checks with a durable run identity
+- name: local_runner
+  kind: contract.binding
+  contracts:
+  - contract: bee.test_status:runner
+    methods:
+      start: bee.test_status:start
+- name: start
+  kind: function.lua
+  source: file://runner.lua
+  method: start
+  modules: [process]
+  imports:
+    journal: bee.threads:client
+    protocol: bee.threads:protocol
+  security:
+    policies: [bee:thread_write_client_policy, bee:test_run_spawn_policy]
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance

@@ -1,0 +1,174 @@
+"""Cold-start app recovery with stable identities and newly granted execution."""
+from pathlib import Path
+import json
+import re
+import shutil
+import sqlite3
+import subprocess
+import tempfile
+import yaml
+from tui_smoke import Desktop, ROOT, RUNTIME
+
+SOURCE = '''local tty = require("tty")
+local client = require("client")
+local process = require("process")
+local channel = require("channel")
+local json = require("json")
+local function main(value: unknown)
+    local launch = client.launch(value)
+    if not launch then error("Invalid launch") end
+    local input = assert(tty.events())
+    local lifecycle = assert(process.events())
+    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local count = 0
+    if launch.resume_state ~= "" then
+        local state: unknown = json.decode(launch.resume_state)
+        if type(state) ~= "table" or type(state.count) ~= "number" then error("Invalid counter checkpoint") end
+        count = math.floor(state.count)
+    end
+    assert(tty.start())
+    local output = assert(tty.surface())
+    local width, height = tty.screen_size()
+    local saved = -1
+    local function paint()
+        local canvas = tty.canvas(width, height)
+        canvas:clear(" ")
+        canvas:put(1, 1, "Counter: " .. tostring(count), width)
+        canvas:put(1, 2, "Saved: " .. tostring(saved), width)
+        canvas:put(1, 3, "Execution: " .. launch.launch_token, width)
+        assert(output:present(canvas:rows()))
+    end
+    local function checkpoint()
+        local encoded = json.encode({count = count})
+        assert(client.checkpoint(launch, encoded))
+    end
+    paint(); client.ready(launch); checkpoint()
+    while true do
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive()})
+        if not event.ok then break end
+        if event.channel == lifecycle then
+            if event.value.kind == process.event.CANCEL then break end
+        elseif event.channel == receipts then
+            local msg = event.value
+            local data: unknown = msg:payload():data()
+            if msg:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then saved = count; paint() end
+        elseif event.value.type == "close" then break
+        elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
+        elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
+    end
+    output:close(); tty.stop()
+end
+return {main = main}
+'''
+
+def stored(folder):
+    with sqlite3.connect(folder / "workspace.db") as db:
+        return json.loads(db.execute("SELECT value FROM workspace_state WHERE singleton=1").fetchone()[0])
+
+def run(packed):
+    with tempfile.TemporaryDirectory(prefix="bee-recovery-") as temporary:
+        folder = Path(temporary)
+        project = folder / "project"
+        shutil.copytree(ROOT / "src", project / "src")
+        for name in [".wippy.yaml", "wippy.lock"]:
+            shutil.copy2(ROOT / name, project / name)
+        fixture = project / "src/probe"
+        fixture.mkdir()
+        (fixture / "app.lua").write_text(SOURCE)
+        entry = {"name": "app", "kind": "process.lua", "source": "file://app.lua", "method": "main",
+                 "modules": ["tty", "process", "channel", "json"], "imports": {"client": "bee.application:client"},
+                 "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view", "revision": "1",
+                 "title": "Counter", "instance_policy": "multiple", "resume_schema": "counter.v1", "restart_policy": "automatic"}}}
+        (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
+        index = project / "src/_index.yaml"
+        doc = yaml.safe_load(index.read_text())
+        next(e for e in doc["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "probe:app", "policies": []})
+        index.write_text(yaml.safe_dump(doc, sort_keys=False))
+        subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
+        pack = folder / "recovery.wapp"
+        if packed:
+            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        def boot(apps=()):
+            return Desktop(folder, packed, project=project, pack_file=pack, apps=apps)
+        ui = boot(("probe:app",))
+        try:
+            ui.wait("Saved: 0")
+            ui.key(b"ab")
+            ui.wait("Saved: 2")
+            ui.corners()
+            bounds = ui.frame()
+            state = stored(folder)
+            identity = state["applications"][0]["instance_id"]
+            old_execution = re.search(r"Execution: (\S+)", ui.text()).group(1)
+            ui.key(b"\x1b[20;3~")
+            ui.quit()
+        finally:
+            ui.close()
+        ui = boot()
+        try:
+            ui.wait("− Counter")
+            ui.key(b"\x1b\t")
+            ui.wait("Saved: 2")
+            assert ui.frame() == bounds, (ui.frame(), bounds)
+            assert stored(folder)["applications"][0]["instance_id"] == identity
+            assert re.search(r"Execution: (\S+)", ui.text()).group(1) != old_execution
+            assert old_execution not in json.dumps(stored(folder)), "Execution capability was persisted"
+            ui.key(b"c")
+            ui.wait("Saved: 3")
+            # Unclean termination must recover the last acknowledged checkpoint.
+            ui.process.kill(); ui.process.wait()
+        finally:
+            ui.close()
+        ui = boot()
+        try:
+            ui.wait("Saved: 3")
+            ui.key(b"\x17")
+            ui.wait("No applications open")
+            ui.quit()
+        finally:
+            ui.close()
+        ui = boot()
+        try:
+            ui.wait("No applications open")
+            assert not stored(folder)["applications"], "Closed app was resurrected"
+            ui.quit()
+        finally:
+            ui.close()
+        # A manual contract retains its checkpoint but requires an explicit open.
+        entry["meta"]["application"]["restart_policy"] = "manual"
+        (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
+        if packed:
+            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        ui = boot(("probe:app",))
+        try:
+            ui.wait("Saved: 0"); ui.key(b"m"); ui.wait("Saved: 1"); ui.quit()
+        finally:
+            ui.close()
+        ui = boot()
+        try:
+            ui.wait("No applications open")
+            assert stored(folder)["applications"]
+            ui.open_start(); ui.choose("Counter"); ui.wait("Saved: 1"); ui.quit()
+        finally:
+            ui.close()
+        entry["meta"]["application"]["resume_schema"] = "counter.v2"
+        (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
+        if packed:
+            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        ui = boot()
+        try:
+            ui.wait("No applications open")
+            ui.open_start(); ui.choose("Counter")
+            ui.wait("checkpoint schema is incompatible")
+            assert stored(folder)["applications"][0]["resume_schema"] == "counter.v1"
+            ui.quit()
+        finally:
+            ui.close()
+        with sqlite3.connect(folder / "workspace.db") as db:
+            migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations").fetchall()
+            assert len(migrations) == 1
+        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, one migration")
+
+if __name__ == "__main__":
+    run(False)
+    run(True)

@@ -1,0 +1,129 @@
+local model = require("model")
+local appearance = require("appearance")
+local contract = require("contract")
+local M = {}
+type Reply = contract.Reply
+function M.reply(value: unknown): Reply?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local op = value.op
+    if op ~= "open" and op ~= "close" and op ~= "closed" and op ~= "focus" and op ~= "attached"
+        and op ~= "bind" and op ~= "page" and op ~= "shutdown" then return nil end
+    local request_id, id = contract.text(value.request_id, 80), contract.text(value.id, 80)
+    local instance, title = contract.text(value.instance_id, 80), contract.text(value.title, 80)
+    local mount, code = contract.text(value.mount, 1024), contract.text(value.error_code, 80)
+    if not request_id or not id or not instance or not title or not mount or not code
+        or type(value.error) ~= "string" or #value.error > 4096 then return nil end
+    local icon = contract.text(value.icon, 8)
+    if value.icon ~= nil and not icon then return nil end
+    return {version = 1, request_id = request_id, op = op, id = id, instance_id = instance, icon = icon,
+        title = title, mount = mount, error_code = code, error = value.error,
+        definition_id = contract.text(value.definition_id, 160) or "", resume_schema = contract.text(value.resume_schema, 80) or "",
+        restart_policy = contract.text(value.restart_policy, 16) or "never",
+        resume_state = type(value.resume_state) == "string" and #value.resume_state <= 65536 and value.resume_state or ""}
+end
+local function integer(value: unknown): integer?
+    if type(value) ~= "number" or value ~= value or value < -2147483647 or value > 2147483647 then return nil end
+    if value ~= math.floor(value) then return nil end
+    return math.floor(value)
+end
+local function rect(value: unknown): model.Rect?
+    if type(value) ~= "table" then return nil end
+    local x, y, width, height = integer(value.x), integer(value.y), integer(value.width), integer(value.height)
+    if not x or not y or not width or not height or width < 1 or height < 1 then return nil end
+    return {x = x, y = y, width = width, height = height}
+end
+local function window(value: unknown): model.Window?
+    if type(value) ~= "table" then return nil end
+    if type(value.id) ~= "string" or type(value.instance_id) ~= "string" or type(value.title) ~= "string" then return nil end
+    local bounds, normal = rect(value.bounds), rect(value.normal_bounds)
+    if not bounds or not normal then return nil end
+    local mode = value.mode
+    if mode ~= "floating" and mode ~= "fullscreen" and mode ~= "minimized" and mode ~= "collapsed" then return nil end
+    local restore = value.restore_mode
+    if restore ~= "floating" and restore ~= "fullscreen" and restore ~= "collapsed" then return nil end
+    local icon = contract.text(value.icon, 8)
+    if value.icon ~= nil and not icon then return nil end
+    return {id = value.id, instance_id = value.instance_id, title = value.title, icon = icon,
+        bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore}
+end
+function M.scene(value: unknown): model.Scene?
+    if type(value) ~= "table" or type(value.windows) ~= "table" or type(value.focus) ~= "string" then return nil end
+    local width, height, revision = integer(value.width), integer(value.height), integer(value.revision)
+    if not width or not height or not revision or width < 1 or height < 1 or revision < 0 then return nil end
+    local count = 0
+    for key in pairs(value.windows) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
+        count = count + 1
+    end
+    local windows: {model.Window} = {}
+    local ids: {[string]: boolean} = {}
+    for index = 1, count do
+        local item = window(value.windows[index])
+        if not item or item.id == "" or ids[item.id] then return nil end
+        if item.id == value.focus and item.mode == "minimized" then return nil end
+        ids[item.id] = true
+        windows[#windows + 1] = item
+    end
+    if value.focus ~= "" and not ids[value.focus] then return nil end
+    return {width = width, height = height, revision = revision, focus = value.focus, windows = windows}
+end
+type Acknowledgement = {version: integer, request_id: string, scene: model.Scene, tabs: {string}?, preferences: appearance.Preferences?, error_code: string, error: string}
+type CatalogItem = contract.Descriptor
+type Desktop = {scene: model.Scene, tabs: {string}, preferences: appearance.Preferences, catalog: {CatalogItem}}
+function M.catalog(value: unknown): {CatalogItem}?
+    if type(value) ~= "table" then return nil end
+    local result: {CatalogItem} = {}
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 64 then return nil end
+        count = count + 1
+    end
+    local seen: {[string]: boolean} = {}
+    for index = 1, count do
+        local item: unknown = value[index]
+        if type(item) ~= "table" or type(item.singleton) ~= "boolean" then return nil end
+        local id, revision = contract.text(item.definition_id, 160), contract.text(item.definition_revision, 80)
+        local title, icon = contract.text(item.title, 80), contract.text(item.icon, 8)
+        local group, role = contract.text(item.group, 160), contract.text(item.role, 32)
+        if not id or id == "" or seen[id] or not revision or not title or not icon or not group or not role then return nil end
+        seen[id] = true
+        result[#result + 1] = {definition_id = id, definition_revision = revision, title = title, icon = icon, group = group, role = role, singleton = item.singleton, resume_schema = contract.text(item.resume_schema, 80) or "", restart_policy = contract.text(item.restart_policy, 16) or "never"}
+    end
+    return result
+end
+function M.desktop(value: unknown): Desktop?
+    if type(value) ~= "table" or type(value.tabs) ~= "table" then return nil end
+    local scene = M.scene(value.scene)
+    if not scene then return nil end
+    local count = 0
+    for key in pairs(value.tabs) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
+        count = count + 1
+    end
+    if count ~= #scene.windows then return nil end
+    local known: {[string]: boolean} = {}
+    for _, win in ipairs(scene.windows) do known[win.id] = true end
+    local tabs: {string} = {}
+    for index = 1, count do
+        local id = value.tabs[index]
+        if type(id) ~= "string" or not known[id] then return nil end
+        known[id] = nil
+        tabs[#tabs + 1] = id
+    end
+    local preferences = value.preferences == nil and appearance.defaults() or appearance.decode(value.preferences)
+    if not preferences then return nil end
+    local catalog = value.catalog ~= nil and M.catalog(value.catalog) or {}
+    if not catalog then return nil end
+    return {scene = scene, tabs = tabs, preferences = preferences, catalog = catalog}
+end
+function M.ack(value: unknown): Acknowledgement?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local request_id = contract.text(value.request_id, 80)
+    local code = contract.text(value.error_code, 80)
+    if not request_id or not code or type(value.error) ~= "string" or #value.error > 4096 then return nil end
+    local desktop = M.desktop(value)
+    if not desktop then return nil end
+    return {version = 1, request_id = request_id, scene = desktop.scene, tabs = desktop.tabs, preferences = desktop.preferences,
+        error_code = code, error = value.error}
+end
+return M

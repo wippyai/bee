@@ -1,0 +1,6 @@
+version: '1.0'
+namespace: bee.desktop
+entries:
+- name: appearance
+  kind: library.lua
+  source: file://appearance.lua

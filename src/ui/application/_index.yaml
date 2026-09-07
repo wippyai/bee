@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.application
+entries:
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules: [process, uuid]
+  imports:
+    arguments: bee.application:arguments
+- name: arguments
+  kind: library.lua
+  source: file://arguments.lua

@@ -1,0 +1,34 @@
+version: '1.0'
+namespace: bee.desktop
+entries:
+- name: command_test
+  kind: function.lua
+  source: file://command_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    commands: bee.protocol:commands
+    test: wippy.test:test
+- name: state_test
+  kind: function.lua
+  source: file://state_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    state: bee.desktop:state
+    commands: bee.protocol:commands
+    test: wippy.test:test
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    model: bee.desktop:model
+    test: wippy.test:test

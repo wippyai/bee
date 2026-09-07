@@ -1,0 +1,1257 @@
+diff --git a/cmd/wippy/cmd/lint.go b/cmd/wippy/cmd/lint.go
+index 4e3faa0145..bbbc57628e 100644
+--- a/cmd/wippy/cmd/lint.go
++++ b/cmd/wippy/cmd/lint.go
+@@ -13,9 +13,6 @@ import (
+ 	"sync"
+ 	"sync/atomic"
+ 
+-	"github.com/charmbracelet/bubbles/progress"
+-	"github.com/charmbracelet/bubbles/spinner"
+-	tea "github.com/charmbracelet/bubbletea"
+ 	"github.com/charmbracelet/lipgloss"
+ 	"github.com/spf13/cobra"
+ 	"github.com/wippyai/go-lua/compiler/ast"
+@@ -93,9 +90,6 @@ var (
+ 	styleSuccess = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+ 	styleCode    = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+ 	styleNS      = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
+-	styleEntry   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+-	styleMuted   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+-	styleFace    = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Bold(true)
+ )
+ 
+ // ----------------------------------------------------------------------------
+@@ -280,7 +274,7 @@ func runLint(cmd *cobra.Command, _ []string) error {
+ 
+ 	var result *LintResult
+ 	if console {
+-		result, err = runLintWithUI(luaEntries, reportSet, linter, lcache, cfg)
++		result, err = runLintWithUI(cmd.Context(), luaEntries, reportSet, linter, lcache, cfg)
+ 	} else {
+ 		result = runLintSimple(luaEntries, reportSet, linter, lcache, cfg)
+ 	}
+@@ -511,46 +505,23 @@ func outputResults(result *LintResult, opts lintOptions) error {
+ // Linting execution
+ // ----------------------------------------------------------------------------
+ 
+-func runLintWithUI(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter *lint.Linter, lcache lintCache, cfg lintConfig) (*LintResult, error) {
+-	prog := progress.New(progress.WithDefaultGradient())
+-	s := spinner.New()
+-	s.Spinner = spinner.Dot
+-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+-
+-	m := &lintModel{
+-		progress:     prog,
+-		spinner:      s,
+-		totalEntries: len(luaEntries),
+-	}
+-
+-	p := newCLIProgram(m)
+-
+-	go func() {
+-		defer func() {
+-			if r := recover(); r != nil {
+-				p.Send(lintErrorMsg{err: fmt.Errorf("lint panic: %v", r)})
+-			}
+-		}()
+-		result := lintEntries(luaEntries, reportSet, linter, lcache, cfg, p)
+-		p.Send(lintCompleteMsg{result: result})
++func runLintWithUI(ctx context.Context, luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter *lint.Linter, lcache lintCache, cfg lintConfig) (result *LintResult, err error) {
++	reporter := newCLIProgressReporter(ctx, os.Stdout)
++	reporter.lintTotal = len(luaEntries)
++	defer reporter.Close()
++	defer func() {
++		if recovered := recover(); recovered != nil {
++			result = nil
++			err = fmt.Errorf("lint panic: %v", recovered)
++		}
+ 	}()
+ 
+-	finalModel, err := p.Run()
+-	if err != nil {
++	result = lintEntries(luaEntries, reportSet, linter, lcache, cfg, reporter)
++	if err := reporter.Err(); err != nil {
+ 		return nil, err
+ 	}
+-
+-	if lm, ok := finalModel.(*lintModel); ok {
+-		if lm.err != nil {
+-			return nil, lm.err
+-		}
+-		if lm.result == nil {
+-			return nil, fmt.Errorf("lint operation was interrupted")
+-		}
+-		return lm.result, nil
+-	}
+-
+-	return nil, fmt.Errorf("lint operation was interrupted")
++	_ = reporter.Send(lintCompleteMsg{result: result})
++	return result, nil
+ }
+ 
+ func runLintSimple(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter *lint.Linter, lcache lintCache, cfg lintConfig) *LintResult {
+@@ -560,7 +531,7 @@ func runLintSimple(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, lint
+ }
+ 
+ // lintEntries is the core linting loop. If prog is non-nil, sends UI updates.
+-func lintEntries(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter *lint.Linter, lcache lintCache, cfg lintConfig, prog *tea.Program) *LintResult {
++func lintEntries(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter *lint.Linter, lcache lintCache, cfg lintConfig, prog *cliProgressReporter) *LintResult {
+ 	result := &LintResult{TotalEntries: len(luaEntries)}
+ 	workers := cfg.workers
+ 	if workers < 1 {
+@@ -601,6 +572,9 @@ func lintEntries(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter
+ 	}
+ 
+ 	for _, levelEntries := range levels {
++		if prog != nil && prog.Err() != nil {
++			return result
++		}
+ 		if len(levelEntries) == 0 {
+ 			continue
+ 		}
+@@ -660,6 +634,9 @@ func lintEntries(luaEntries []regapi.Entry, reportSet map[regapi.ID]bool, linter
+ 			}(i, entry)
+ 		}
+ 		wg.Wait()
++		if prog != nil && prog.Err() != nil {
++			return result
++		}
+ 
+ 		for i := range results {
+ 			mergeEntryResult(result, &results[i], manifestMap, reportSet)
+@@ -1446,26 +1423,6 @@ func groupDiagnostics(diagnostics []Diagnostic) ([]*codeStats, []*nsStats) {
+ 	return codes, namespaces
+ }
+ 
+-// ----------------------------------------------------------------------------
+-// Bubbletea UI model
+-// ----------------------------------------------------------------------------
+-
+-type lintModel struct {
+-	err          error
+-	result       *LintResult
+-	currentEntry string
+-	spinner      spinner.Model
+-	progress     progress.Model
+-	checked      int
+-	totalEntries int
+-	errors       int
+-	warnings     int
+-	entryIssues  int
+-	percent      float64
+-	eyeFrame     int
+-	done         bool
+-}
+-
+ type lintProgressMsg struct {
+ 	entry      string
+ 	percent    float64
+@@ -1486,127 +1443,3 @@ type lintCompleteMsg struct {
+ type lintErrorMsg struct {
+ 	err error
+ }
+-
+-func (m *lintModel) Init() tea.Cmd {
+-	return m.spinner.Tick
+-}
+-
+-func (m *lintModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+-	switch msg := msg.(type) {
+-	case tea.KeyMsg:
+-		if msg.String() == "ctrl+c" || msg.String() == "q" {
+-			return m, tea.Quit
+-		}
+-
+-	case lintEntryMsg:
+-		m.currentEntry = msg.entry
+-		m.entryIssues = 0
+-		return m, nil
+-
+-	case lintProgressMsg:
+-		m.percent = msg.percent
+-		m.currentEntry = msg.entry
+-		m.checked = msg.checked
+-		m.errors = msg.errors
+-		m.warnings = msg.warnings
+-		m.entryIssues = msg.entryIssue
+-		return m, nil
+-
+-	case lintCompleteMsg:
+-		m.result = msg.result
+-		m.percent = 1.0
+-		m.done = true
+-		return m, tea.Quit
+-
+-	case lintErrorMsg:
+-		m.err = msg.err
+-		m.done = true
+-		return m, tea.Quit
+-
+-	case spinner.TickMsg:
+-		m.eyeFrame++
+-		var cmd tea.Cmd
+-		m.spinner, cmd = m.spinner.Update(msg)
+-		return m, cmd
+-	}
+-
+-	return m, nil
+-}
+-
+-func (m *lintModel) View() string {
+-	pad := "  "
+-
+-	if m.done && m.err != nil {
+-		return styleError.Render(fmt.Sprintf("\n%sError: %v\n", pad, m.err))
+-	}
+-
+-	if m.done && m.result != nil {
+-		return ""
+-	}
+-
+-	var view strings.Builder
+-	view.WriteString("\n")
+-	view.WriteString(pad)
+-	view.WriteString(m.progress.ViewAs(m.percent))
+-	view.WriteString("\n\n")
+-
+-	view.WriteString(pad)
+-	if m.entryIssues == 0 {
+-		view.WriteString(styleFace.Render(lintEyes(m.eyeFrame)))
+-	} else {
+-		view.WriteString(styleFace.Render(lintFace(m.entryIssues)))
+-	}
+-	view.WriteString(" ")
+-	if m.currentEntry != "" {
+-		view.WriteString(styleEntry.Render(m.currentEntry))
+-	}
+-	view.WriteString("\n")
+-
+-	view.WriteString(pad)
+-	view.WriteString(styleMuted.Render(fmt.Sprintf("%d/%d entries", m.checked, m.totalEntries)))
+-	if m.errors > 0 {
+-		view.WriteString("  ")
+-		view.WriteString(styleError.Render(fmt.Sprintf("%d errors", m.errors)))
+-	}
+-	if m.warnings > 0 {
+-		view.WriteString("  ")
+-		view.WriteString(styleWarning.Render(fmt.Sprintf("%d warnings", m.warnings)))
+-	}
+-	view.WriteString("\n\n")
+-
+-	return view.String()
+-}
+-
+-func lintEyes(frame int) string {
+-	eyes := [][2]string{
+-		{"\u25d5", "\u25d5"},
+-		{"\u25d4", "\u25d4"},
+-		{"\u25d1", "\u25d0"},
+-		{"\u25d4", "\u25d4"},
+-		{"\u25d5", "\u25d5"},
+-		{"\u25cf", "\u25cf"},
+-		{"-", "-"},
+-		{"\u25cf", "\u25cf"},
+-	}
+-	e := eyes[frame%len(eyes)]
+-	return "( " + e[0] + "_" + e[1] + " )"
+-}
+-
+-func lintFace(issues int) string {
+-	switch {
+-	case issues == 1:
+-		return "( ._. )"
+-	case issues <= 3:
+-		return "( \u25d4_\u25d4 )"
+-	case issues <= 10:
+-		return "( \u25c9_\u25c9 )"
+-	case issues <= 20:
+-		return "( O_o )"
+-	case issues <= 35:
+-		return "( T_T )"
+-	case issues <= 50:
+-		return "( >_< )"
+-	default:
+-		return "( x_x )"
+-	}
+-}
+diff --git a/cmd/wippy/cmd/pack.go b/cmd/wippy/cmd/pack.go
+index 2cc13ebd64..b2c566286e 100644
+--- a/cmd/wippy/cmd/pack.go
++++ b/cmd/wippy/cmd/pack.go
+@@ -13,8 +13,6 @@ import (
+ 	"strings"
+ 	"time"
+ 
+-	"github.com/charmbracelet/bubbles/progress"
+-	tea "github.com/charmbracelet/bubbletea"
+ 	"github.com/charmbracelet/lipgloss"
+ 	"github.com/spf13/cobra"
+ 	"github.com/wippyai/runtime/api/attrs"
+@@ -85,7 +83,6 @@ type packModel struct {
+ 	embedPatterns []string
+ 	logs          []string
+ 	resources     []resourceInfo
+-	progress      progress.Model
+ 	fileSize      int64
+ 	percent       float64
+ 	entryCount    int
+@@ -129,34 +126,22 @@ type logMsg struct {
+ 	message string
+ }
+ 
+-func (m *packModel) Init() tea.Cmd {
+-	return nil
+-}
+-
+-func (m *packModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
++func (m *packModel) apply(msg any) {
+ 	switch msg := msg.(type) {
+-	case tea.KeyMsg:
+-		if msg.String() == "ctrl+c" || msg.String() == "q" {
+-			return m, tea.Quit
+-		}
+-
+ 	case logMsg:
+ 		if m.verbose {
+ 			m.addLog(msg)
+ 		}
+-		return m, nil
+ 
+ 	case progressMsg:
+ 		m.stage = msg.stage
+ 		m.percent = msg.percent
+ 		m.status = msg.status
+-		return m, m.progress.SetPercent(msg.percent)
+ 
+ 	case statsMsg:
+ 		m.entryCount = msg.entryCount
+ 		m.resourceCount = msg.resourceCount
+ 		m.resources = msg.resources
+-		return m, nil
+ 
+ 	case completedMsg:
+ 		m.stage = stageDone
+@@ -164,54 +149,36 @@ func (m *packModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+ 		m.metadata = msg.metadata
+ 		m.percent = 1.0
+ 		m.done = true
+-		return m, tea.Sequence(m.progress.SetPercent(1.0), tea.Quit)
+ 
+ 	case errorMsg:
+ 		m.stage = stageError
+ 		m.err = msg.err
+ 		m.done = true
+-		return m, tea.Quit
+-
+-	case progress.FrameMsg:
+-		progressModel, cmd := m.progress.Update(msg)
+-		m.progress = progressModel.(progress.Model)
+-		return m, cmd
+ 	}
+-
+-	return m, nil
+ }
+ 
+ func (m *packModel) addLog(msg logMsg) {
+-	levelColor := "8"
+ 	levelIcon := "•"
+ 
+ 	switch msg.level {
+ 	case "info":
+-		levelColor = "14"
+ 		levelIcon = "●"
+ 	case "warn":
+-		levelColor = "11"
+ 		levelIcon = "⚠"
+ 	case "error":
+-		levelColor = "9"
+ 		levelIcon = "✗"
+ 	case "debug":
+-		levelColor = "8"
+ 		levelIcon = "○"
+ 	}
+ 
+-	levelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(levelColor)).Bold(true)
+-	msgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+-
+-	logLine := fmt.Sprintf("%s %s", levelStyle.Render(levelIcon), msgStyle.Render(msg.message))
++	logLine := fmt.Sprintf("%s %s", levelIcon, msg.message)
+ 
+ 	if len(msg.fields) > 0 {
+ 		var fields []string
+ 		for k, v := range msg.fields {
+ 			fields = append(fields, fmt.Sprintf("%s=%v", k, v))
+ 		}
+-		logLine += " " + dimStyle.Render(strings.Join(fields, " "))
++		logLine += " " + strings.Join(fields, " ")
+ 	}
+ 
+ 	m.logs = append(m.logs, logLine)
+@@ -220,116 +187,6 @@ func (m *packModel) addLog(msg logMsg) {
+ 	}
+ }
+ 
+-func (m *packModel) View() string {
+-	if m.done && m.err != nil {
+-		return lipgloss.NewStyle().
+-			Foreground(lipgloss.Color("9")).
+-			Bold(true).
+-			Render(fmt.Sprintf("\n✗ Error: %v\n", m.err))
+-	}
+-
+-	if m.done {
+-		successStyle := lipgloss.NewStyle().
+-			Foreground(lipgloss.Color("10")).
+-			Bold(true)
+-
+-		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+-		labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+-
+-		sizeKB := float64(m.fileSize) / 1024
+-		var sizeStr string
+-		if sizeKB > 1024 {
+-			sizeStr = fmt.Sprintf("%.2f MB", sizeKB/1024)
+-		} else {
+-			sizeStr = fmt.Sprintf("%.2f KB", sizeKB)
+-		}
+-
+-		info := fmt.Sprintf("\n  %s %s", labelStyle.Render("File:"), m.outputFile)
+-		info += fmt.Sprintf("\n  %s %s", labelStyle.Render("Size:"), sizeStr)
+-
+-		if desc := m.metadata.GetString("description", ""); desc != "" {
+-			info += fmt.Sprintf("\n  %s %s", labelStyle.Render("Description:"), desc)
+-		}
+-
+-		if tags, ok := m.metadata["tags"].([]string); ok && len(tags) > 0 {
+-			info += fmt.Sprintf("\n  %s %s", labelStyle.Render("Tags:"), strings.Join(tags, ", "))
+-		}
+-
+-		if wippyVer := m.metadata.GetString("wippy_version", ""); wippyVer != "" {
+-			commit := m.metadata.GetString("wippy_commit", "")
+-			if len(commit) > 7 {
+-				commit = commit[:7]
+-			}
+-			info += fmt.Sprintf("\n  %s %s (%s)", labelStyle.Render("Wippy:"), wippyVer, commit)
+-		}
+-
+-		if packedAt := m.metadata.GetString("packed_at", ""); packedAt != "" {
+-			info += fmt.Sprintf("\n  %s %s", labelStyle.Render("Packed:"), packedAt)
+-		}
+-
+-		info += fmt.Sprintf("\n  %s %d", labelStyle.Render("Entries:"), m.entryCount)
+-
+-		if m.resourceCount > 0 {
+-			info += fmt.Sprintf("\n\n  %s", labelStyle.Render("Embedded resources:"))
+-			for _, res := range m.resources {
+-				resSize := float64(res.size) / 1024
+-				var resSizeStr string
+-				if resSize > 1024 {
+-					resSizeStr = fmt.Sprintf("%.2f MB", resSize/1024)
+-				} else {
+-					resSizeStr = fmt.Sprintf("%.2f KB", resSize)
+-				}
+-				info += fmt.Sprintf("\n    • %s (%d files, %s)",
+-					dimStyle.Render(res.name),
+-					res.fileCount,
+-					resSizeStr)
+-			}
+-		}
+-
+-		return successStyle.Render("\n✓ Pack created successfully") +
+-			dimStyle.Render(info) +
+-			"\n\n"
+-	}
+-
+-	titleStyle := lipgloss.NewStyle().
+-		Foreground(lipgloss.Color("12")).
+-		Bold(true)
+-
+-	statusStyle := lipgloss.NewStyle().
+-		Foreground(lipgloss.Color("8"))
+-
+-	var embedInfo string
+-	if m.embedAll {
+-		embedInfo = statusStyle.Render("  Embed patterns: all fs.directory entries\n")
+-	} else if len(m.embedPatterns) > 0 {
+-		embedInfo = statusStyle.Render(fmt.Sprintf("  Embed patterns: %s\n", strings.Join(m.embedPatterns, ", ")))
+-	}
+-
+-	var view strings.Builder
+-	view.WriteString("\n")
+-	view.WriteString(titleStyle.Render("Creating pack: " + m.outputFile))
+-	view.WriteString("\n")
+-	view.WriteString(embedInfo)
+-	view.WriteString("\n")
+-
+-	if m.verbose && len(m.logs) > 0 {
+-		logStyle := lipgloss.NewStyle().
+-			MaxHeight(15).
+-			PaddingLeft(1)
+-
+-		view.WriteString(logStyle.Render(strings.Join(m.logs, "\n")))
+-		view.WriteString("\n\n")
+-	}
+-
+-	view.WriteString("  ")
+-	view.WriteString(m.progress.View())
+-	view.WriteString("\n\n  ")
+-	view.WriteString(statusStyle.Render(m.status))
+-	view.WriteString("\n\n")
+-
+-	return view.String()
+-}
+-
+ func runPack(cmd *cobra.Command, args []string) error {
+ 	// Auto-enable compact mode for pack command
+ 	silentLogs = true
+@@ -375,10 +232,8 @@ func runPack(cmd *cobra.Command, args []string) error {
+ 	}
+ 	verboseMode := rootCmd.PersistentFlags().Lookup("verbose").Changed
+ 
+-	prog := progress.New(progress.WithDefaultGradient())
+ 	m := &packModel{
+ 		stage:         stageInit,
+-		progress:      prog,
+ 		status:        "Initializing...",
+ 		embedPatterns: embedConfig.patterns,
+ 		embedAll:      embedConfig.all,
+@@ -387,27 +242,21 @@ func runPack(cmd *cobra.Command, args []string) error {
+ 		maxLogs:       20,
+ 	}
+ 
+-	p := newCLIProgram(m)
++	reporter := newCLIProgressReporter(cmd.Context(), os.Stdout)
++	reporter.pack = m
++	defer reporter.Close()
+ 
+-	go func() {
+-		if err := performPack(cmd, args, app, p); err != nil {
+-			p.Send(errorMsg{err: err})
+-		}
+-	}()
+-
+-	finalModel, err := p.Run()
+-	if err != nil {
++	if err := performPack(cmd, args, app, reporter); err != nil {
++		_ = reporter.Send(errorMsg{err: err})
+ 		return err
+ 	}
+-
+-	if packModel, ok := finalModel.(*packModel); ok && packModel.err != nil {
+-		return packModel.err
++	if err := reporter.Err(); err != nil {
++		return err
+ 	}
+-
+ 	return nil
+ }
+ 
+-func performPack(cmd *cobra.Command, args []string, app *appinit.Context, p *tea.Program) error {
++func performPack(cmd *cobra.Command, args []string, app *appinit.Context, p *cliProgressReporter) error {
+ 	logger := app.Logger.Named("pack")
+ 	outputFile := args[0]
+ 	lockFile, _ := cmd.Flags().GetString("lock-file")
+diff --git a/cmd/wippy/cmd/tea_program.go b/cmd/wippy/cmd/tea_program.go
+index 43316f5bdd..f1e7d4e4c4 100644
+--- a/cmd/wippy/cmd/tea_program.go
++++ b/cmd/wippy/cmd/tea_program.go
+@@ -3,24 +3,217 @@
+ package cmd
+ 
+ import (
++	"context"
++	"fmt"
++	"io"
+ 	"os"
++	"strings"
++	"sync"
+ 
+-	tea "github.com/charmbracelet/bubbletea"
+ 	"golang.org/x/term"
+ )
+ 
+-func newCLIProgram(model tea.Model) *tea.Program {
+-	return tea.NewProgram(model, cliTeaProgramOptions(os.Stdin, os.Stdout)...)
++// cliProgressReporter is deliberately a small, synchronous progress sink.
++// It does not read input, put the terminal in raw mode, or ask the terminal
++// about its color/background. The command context remains the sole source of
++// cancellation for the work being reported.
++type cliProgressReporter struct {
++	ctx     context.Context
++	out     io.Writer
++	enabled bool
++
++	mu       sync.Mutex
++	lineOpen bool
++
++	pack      *packModel
++	lintTotal int
++	lintEntry string
++	lintDone  bool
++}
++
++func newCLIProgressReporter(ctx context.Context, output *os.File) *cliProgressReporter {
++	return newProgressReporter(ctx, output, isTerminalFile(output))
+ }
+ 
+-func cliTeaProgramOptions(input, output *os.File) []tea.ProgramOption {
+-	if !isTerminalFile(input) || !isTerminalFile(output) {
+-		return []tea.ProgramOption{
+-			tea.WithInput(nil),
+-			tea.WithoutRenderer(),
++func newProgressReporter(ctx context.Context, output io.Writer, enabled bool) *cliProgressReporter {
++	if ctx == nil {
++		ctx = context.Background()
++	}
++	if output == nil {
++		output = io.Discard
++	}
++	return &cliProgressReporter{
++		ctx:     ctx,
++		out:     output,
++		enabled: enabled,
++	}
++}
++
++func (r *cliProgressReporter) Err() error {
++	if r == nil || r.ctx == nil {
++		return nil
++	}
++	return r.ctx.Err()
++}
++
++// Send accepts the progress events emitted by lint and pack. Returning the
++// context error lets synchronous callers observe cancellation while existing
++// event call sites can continue to treat reporting as best effort.
++func (r *cliProgressReporter) Send(msg any) error {
++	if r == nil {
++		return nil
++	}
++	if err := r.Err(); err != nil {
++		return err
++	}
++
++	r.mu.Lock()
++	defer r.mu.Unlock()
++
++	switch msg := msg.(type) {
++	case progressMsg:
++		r.sendPackProgress(msg)
++	case statsMsg:
++		if r.pack != nil {
++			r.pack.apply(msg)
++		}
++	case completedMsg:
++		if r.pack != nil {
++			r.pack.apply(msg)
++			r.writePackSummary()
++		}
++	case errorMsg:
++		if r.pack != nil {
++			r.pack.apply(msg)
++		}
++	case logMsg:
++		if r.pack != nil {
++			r.pack.apply(msg)
++			if r.pack.verbose && len(r.pack.logs) > 0 {
++				r.writeLine(r.pack.logs[len(r.pack.logs)-1])
++			}
+ 		}
++	case lintEntryMsg:
++		r.lintEntry = msg.entry
++	case lintProgressMsg:
++		r.sendLintProgress(msg)
++	case lintCompleteMsg:
++		r.lintDone = true
++		r.finishProgressLine()
++	case lintErrorMsg:
++		r.finishProgressLine()
++	}
++
++	return r.Err()
++}
++
++func (r *cliProgressReporter) sendPackProgress(msg progressMsg) {
++	if r.pack == nil {
++		r.pack = &packModel{}
++	}
++	r.pack.apply(msg)
++	status := strings.TrimSpace(msg.status)
++	line := fmt.Sprintf("Packing %s: %3.0f%%", r.pack.outputFile, clampProgress(msg.percent)*100)
++	if status != "" {
++		line += " " + status
++	}
++	r.writeProgressLine(line)
++}
++
++func (r *cliProgressReporter) sendLintProgress(msg lintProgressMsg) {
++	r.lintEntry = msg.entry
++	line := fmt.Sprintf("Linting... %d/%d entries (%3.0f%%)", msg.checked, r.lintTotal, clampProgress(msg.percent)*100)
++	if msg.errors > 0 || msg.warnings > 0 {
++		line += fmt.Sprintf(" [%d errors, %d warnings]", msg.errors, msg.warnings)
++	}
++	if msg.entry != "" {
++		line += " " + msg.entry
++	}
++	r.writeProgressLine(line)
++}
++
++func (r *cliProgressReporter) writeProgressLine(line string) {
++	if !r.enabled {
++		return
++	}
++	_, _ = fmt.Fprintf(r.out, "\r%s", line)
++	r.lineOpen = true
++}
++
++func (r *cliProgressReporter) writeLine(line string) {
++	if !r.enabled {
++		return
++	}
++	r.finishProgressLine()
++	_, _ = fmt.Fprintln(r.out, line)
++}
++
++func (r *cliProgressReporter) finishProgressLine() {
++	if !r.enabled || !r.lineOpen {
++		return
++	}
++	_, _ = fmt.Fprintln(r.out)
++	r.lineOpen = false
++}
++
++func (r *cliProgressReporter) writePackSummary() {
++	if r.pack == nil || !r.enabled {
++		return
++	}
++	r.finishProgressLine()
++	_, _ = fmt.Fprintln(r.out, "Pack created successfully")
++	_, _ = fmt.Fprintf(r.out, "  File: %s\n", r.pack.outputFile)
++	_, _ = fmt.Fprintf(r.out, "  Size: %s\n", formatPackSize(r.pack.fileSize))
++	if desc := r.pack.metadata.GetString("description", ""); desc != "" {
++		_, _ = fmt.Fprintf(r.out, "  Description: %s\n", desc)
++	}
++	if tags, ok := r.pack.metadata["tags"].([]string); ok && len(tags) > 0 {
++		_, _ = fmt.Fprintf(r.out, "  Tags: %s\n", strings.Join(tags, ", "))
++	}
++	if wippyVer := r.pack.metadata.GetString("wippy_version", ""); wippyVer != "" {
++		commit := r.pack.metadata.GetString("wippy_commit", "")
++		if len(commit) > 7 {
++			commit = commit[:7]
++		}
++		_, _ = fmt.Fprintf(r.out, "  Wippy: %s (%s)\n", wippyVer, commit)
++	}
++	if packedAt := r.pack.metadata.GetString("packed_at", ""); packedAt != "" {
++		_, _ = fmt.Fprintf(r.out, "  Packed: %s\n", packedAt)
++	}
++	_, _ = fmt.Fprintf(r.out, "  Entries: %d\n", r.pack.entryCount)
++	if r.pack.resourceCount > 0 {
++		_, _ = fmt.Fprintln(r.out, "  Embedded resources:")
++		for _, res := range r.pack.resources {
++			_, _ = fmt.Fprintf(r.out, "    - %s (%d files, %s)\n", res.name, res.fileCount, formatPackSize(int64(res.size)))
++		}
++	}
++}
++
++func (r *cliProgressReporter) Close() {
++	if r == nil {
++		return
++	}
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	r.finishProgressLine()
++}
++
++func clampProgress(percent float64) float64 {
++	if percent < 0 {
++		return 0
++	}
++	if percent > 1 {
++		return 1
++	}
++	return percent
++}
++
++func formatPackSize(size int64) string {
++	sizeKB := float64(size) / 1024
++	if sizeKB > 1024 {
++		return fmt.Sprintf("%.2f MB", sizeKB/1024)
+ 	}
+-	return nil
++	return fmt.Sprintf("%.2f KB", sizeKB)
+ }
+ 
+ func isTerminalFile(file *os.File) bool {
+diff --git a/cmd/wippy/cmd/tea_program_test.go b/cmd/wippy/cmd/tea_program_test.go
+index bd53f5e733..01cfe0d88e 100644
+--- a/cmd/wippy/cmd/tea_program_test.go
++++ b/cmd/wippy/cmd/tea_program_test.go
+@@ -3,35 +3,59 @@
+ package cmd
+ 
+ import (
++	"bytes"
++	"context"
+ 	"os"
+ 	"testing"
+ 
+-	tea "github.com/charmbracelet/bubbletea"
+ 	"github.com/stretchr/testify/require"
+ )
+ 
+-type quitTestModel struct{}
++func TestCLIProgressReporterWritesPlainProgress(t *testing.T) {
++	var output bytes.Buffer
++	reporter := newProgressReporter(context.Background(), &output, true)
++	reporter.lintTotal = 2
+ 
+-func (quitTestModel) Init() tea.Cmd {
+-	return tea.Quit
++	require.NoError(t, reporter.Send(lintProgressMsg{
++		entry:   "app:main",
++		percent: 0.5,
++		checked: 1,
++	}))
++	reporter.Close()
++
++	require.Contains(t, output.String(), "Linting... 1/2 entries ( 50%) app:main")
++	require.NotContains(t, output.String(), "\x1b[")
+ }
+ 
+-func (quitTestModel) Update(tea.Msg) (tea.Model, tea.Cmd) {
+-	return quitTestModel{}, nil
++func TestCLIProgressReporterSuppressesNonTTYOutput(t *testing.T) {
++	var output bytes.Buffer
++	reporter := newProgressReporter(context.Background(), &output, false)
++
++	require.NoError(t, reporter.Send(progressMsg{percent: 0.5, status: "working"}))
++	reporter.Close()
++
++	require.Empty(t, output.String())
+ }
+ 
+-func (quitTestModel) View() string {
+-	return ""
++func TestCLIProgressReporterObservesCancellation(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	reporter := newProgressReporter(ctx, &bytes.Buffer{}, true)
++	cancel()
++
++	require.ErrorIs(t, reporter.Send(lintProgressMsg{}), context.Canceled)
+ }
+ 
+-func TestCLITeaProgramOptionsRunWithoutTTY(t *testing.T) {
+-	file, err := os.CreateTemp(t.TempDir(), "non-tty-*")
++func TestCLIProgressReporterUsesNoTTYForRegularFile(t *testing.T) {
++	file, err := os.CreateTemp(t.TempDir(), "progress-output-*")
+ 	require.NoError(t, err)
+-	defer func() { require.NoError(t, file.Close()) }()
++	t.Cleanup(func() { _ = file.Close() })
+ 
+ 	require.False(t, isTerminalFile(file))
++	reporter := newCLIProgressReporter(context.Background(), file)
++	require.NoError(t, reporter.Send(lintProgressMsg{percent: 1, checked: 1}))
++	reporter.Close()
+ 
+-	program := tea.NewProgram(quitTestModel{}, cliTeaProgramOptions(file, file)...)
+-	_, err = program.Run()
++	info, err := file.Stat()
+ 	require.NoError(t, err)
++	require.Zero(t, info.Size())
+ }
+diff --git a/runtime/lua/modules/security/types.go b/runtime/lua/modules/security/types.go
+index 28551b180b..b296f89ceb 100644
+--- a/runtime/lua/modules/security/types.go
++++ b/runtime/lua/modules/security/types.go
+@@ -25,14 +25,14 @@ func init() {
+ 	// Policy type
+ 	policyType = typ.NewInterface("security.Policy", []typ.Method{
+ 		{Name: "id", Type: typ.Func().Param("self", typ.Self).Returns(typ.String).Build()},
+-		{Name: "evaluate", Type: typ.Func().Param("self", typ.Self).Param("actor", actorType).Param("resource", typ.String).Param("action", typ.String).OptParam("context", typ.Any).Returns(typ.String).Build()},
++		{Name: "evaluate", Type: typ.Func().Param("self", typ.Self).Param("actor", actorType).Param("action", typ.String).Param("resource", typ.String).OptParam("context", typ.Any).Returns(typ.String).Build()},
+ 	})
+ 
+ 	// Scope type (self-referential and references policyType)
+ 	scopeType = typ.NewInterface("security.Scope", []typ.Method{
+ 		{Name: "with", Type: typ.Func().Param("self", typ.Self).Param("policy", policyType).Returns(typ.Self).Build()},
+ 		{Name: "without", Type: typ.Func().Param("self", typ.Self).Param("policy", typ.Any).Returns(typ.Self).Build()},
+-		{Name: "evaluate", Type: typ.Func().Param("self", typ.Self).Param("actor", actorType).Param("resource", typ.String).Param("action", typ.String).OptParam("context", typ.Any).Returns(typ.String).Build()},
++		{Name: "evaluate", Type: typ.Func().Param("self", typ.Self).Param("actor", actorType).Param("action", typ.String).Param("resource", typ.String).OptParam("context", typ.Any).Returns(typ.String).Build()},
+ 		{Name: "contains", Type: typ.Func().Param("self", typ.Self).Param("policy", typ.Any).Returns(typ.Boolean).Build()},
+ 		{Name: "policies", Type: typ.Func().Param("self", typ.Self).Returns(typ.NewArray(policyType)).Build()},
+ 	})
+@@ -58,7 +58,7 @@ func ModuleTypes() *io.Manifest {
+ 	moduleType := typ.NewInterface("security", []typ.Method{
+ 		{Name: "actor", Type: typ.Func().Returns(typ.NewOptional(actorType)).Build()},
+ 		{Name: "scope", Type: typ.Func().Returns(typ.NewOptional(scopeType)).Build()},
+-		{Name: "can", Type: typ.Func().Param("resource", typ.String).Param("action", typ.String).OptParam("context", typ.Any).Returns(typ.Boolean).Build()},
++		{Name: "can", Type: typ.Func().Param("action", typ.String).Param("resource", typ.String).OptParam("context", typ.Any).Returns(typ.Boolean).Build()},
+ 		{Name: "policy", Type: typ.Func().Param("name", typ.String).Returns(policyType, typ.NewOptional(typ.LuaError)).Build()},
+ 		{Name: "named_scope", Type: typ.Func().Param("name", typ.String).Returns(scopeType, typ.NewOptional(typ.LuaError)).Build()},
+ 		{Name: "new_scope", Type: typ.Func().OptParam("policies", typ.NewArray(policyType)).Returns(scopeType).Build()},
+diff --git a/service/terminal/surface.go b/service/terminal/surface.go
+index dc34f7a8a9..ee73ca0f7b 100644
+--- a/service/terminal/surface.go
++++ b/service/terminal/surface.go
+@@ -54,7 +54,14 @@ func (s *Surface) Present(frame ttyapi.Frame) (ttyapi.PresentStats, error) {
+ 	if len(s.rows) > limit {
+ 		limit = len(s.rows)
+ 	}
+-	for index := 0; index < limit; index++ {
++	// Clear removed rows first. After a terminal shrink, cursor moves to
++	// those old rows clamp to the new bottom row; painting must follow cleanup.
++	removed := limit - len(rows)
++	for step := 0; step < limit; step++ {
++		index := step - removed
++		if step < removed {
++			index = len(rows) + step
++		}
+ 		current, previous := "", ""
+ 		if index < len(rows) {
+ 			current = rows[index]
+@@ -62,7 +69,7 @@ func (s *Surface) Present(frame ttyapi.Frame) (ttyapi.PresentStats, error) {
+ 		if index < len(s.rows) {
+ 			previous = s.rows[index]
+ 		}
+-		if !s.invalid && current == previous && index < len(rows) && index < len(s.rows) {
++		if !s.invalid && removed == 0 && current == previous && index < len(rows) && index < len(s.rows) {
+ 			continue
+ 		}
+ 		changed++
+diff --git a/service/terminal/surface_test.go b/service/terminal/surface_test.go
+index 807ddc11ad..aa92bc6ad4 100644
+--- a/service/terminal/surface_test.go
++++ b/service/terminal/surface_test.go
+@@ -7,10 +7,27 @@ import (
+ 	"errors"
+ 	"testing"
+ 
++	"github.com/charmbracelet/x/vt"
+ 	"github.com/stretchr/testify/require"
+ 	ttyapi "github.com/wippyai/runtime/api/tty"
+ )
+ 
++func TestSurfaceShrinkPreservesBottomRow(t *testing.T) {
++	for _, invalidate := range []bool{false, true} {
++		screen := vt.NewEmulator(8, 4)
++		surface := NewSurface(screen, ttyapi.SurfaceOptions{})
++		_, err := surface.Present(ttyapi.Frame{Rows: []string{"content", "BEE bar", "old", "tail"}})
++		require.NoError(t, err)
++		screen.Resize(8, 2)
++		if invalidate {
++			surface.Invalidate()
++		}
++		_, err = surface.Present(ttyapi.Frame{Rows: []string{"content", "BEE bar"}})
++		require.NoError(t, err)
++		require.Contains(t, screen.Render(), "BEE bar")
++	}
++}
++
+ type failingWriter struct {
+ 	err     error
+ 	succeed int
+diff --git a/system/scheduler/actor/resize_test.go b/system/scheduler/actor/resize_test.go
+index 24282b2297..1ce557cb4a 100644
+--- a/system/scheduler/actor/resize_test.go
++++ b/system/scheduler/actor/resize_test.go
+@@ -142,7 +142,7 @@ func TestSchedulerResizeRejectsWhileStopping(t *testing.T) {
+ 		sched.Stop(ctx)
+ 		close(stopDone)
+ 	}()
+-	waitFor(t, func() bool { return sched.stopping.Load() })
++	waitFor(t, func() bool { return sched.isStopping() })
+ 
+ 	started := time.Now()
+ 	if err := sched.ResizeWorkers(2); !errors.Is(err, process.ErrSchedulerStopping) {
+diff --git a/system/scheduler/actor/scheduler.go b/system/scheduler/actor/scheduler.go
+index df18b051ae..48014d87ca 100644
+--- a/system/scheduler/actor/scheduler.go
++++ b/system/scheduler/actor/scheduler.go
+@@ -23,6 +23,15 @@ import (
+ 	"github.com/wippyai/runtime/system/scheduler/affinity"
+ )
+ 
++// The scheduler phase is monotonic. Draining closes admission but keeps workers
++// alive for asynchronous cancellation/cleanup yields. Worker exit is permitted
++// only after the process set drains or its shutdown deadline expires.
++const (
++	phaseRunning uint32 = iota
++	phaseDraining
++	phaseStoppingWorkers
++)
++
+ type Option func(*Scheduler)
+ 
+ var errNilPackage = apierror.New(apierror.Invalid, "cannot send nil package").WithRetryable(apierror.False)
+@@ -89,11 +98,13 @@ type Scheduler struct {
+ 	retiredStolen   atomic.Uint64
+ 	queueSize       int
+ 	nextID          atomic.Uint64
+-	stopping        atomic.Bool
++	phase           atomic.Uint32
+ 	collectStats    atomic.Bool
+ 	started         bool
+ }
+ 
++func (s *Scheduler) isStopping() bool { return s.phase.Load() != phaseRunning }
++
+ func NewScheduler(registry dispatcher.Registry, opts ...Option) *Scheduler {
+ 	s := &Scheduler{
+ 		registry:       registry,
+@@ -124,17 +135,17 @@ func (s *Scheduler) getHandler(cmd dispatcher.Command) dispatcher.Handler {
+ // Stop gracefully shuts down the scheduler.
+ // Sends cancel events and waits for processes to complete or context deadline.
+ func (s *Scheduler) Stop(ctx context.Context) {
+-	// Publish the terminal state while serialized with Start and Resize, then
++	// Begin draining while serialized with Start and Resize, then
+ 	// release the control lock before lifecycle callbacks and worker waits.
+ 	s.controlMu.Lock()
+-	if s.stopping.Swap(true) {
++	if !s.phase.CompareAndSwap(phaseRunning, phaseDraining) {
+ 		s.controlMu.Unlock()
+ 		return
+ 	}
+ 	s.controlMu.Unlock()
+ 
+ 	// Push cancel event directly to each processor's queue.
+-	// Safe because stopping=true prevents pool release.
++	// Safe because draining prevents pool release.
+ 	// Wake idle/blocked processors so they process the cancel.
+ 	s.byPID.Range(func(_, value any) bool {
+ 		proc := value.(*Processor)
+@@ -185,6 +196,9 @@ func (s *Scheduler) Stop(ctx context.Context) {
+ 	}
+ 
+ 	// Wake and wait for workers to exit
++	// Admission closes before cancellation, but workers must remain available
++	// for asynchronous cleanup until processes drain or the deadline expires.
++	s.phase.CompareAndSwap(phaseDraining, phaseStoppingWorkers)
+ 	s.wakeAll()
+ 	s.wg.Wait()
+ 
+@@ -248,7 +262,7 @@ func (s *Scheduler) WakeProcessor(q *process.EventQueue, gen uint64) {
+ }
+ 
+ func (s *Scheduler) Submit(ctx context.Context, pid pid.PID, p process.Process, method string, input payload.Payloads) (*Processor, error) {
+-	if s.stopping.Load() {
++	if s.isStopping() {
+ 		return nil, process.ErrSchedulerStopping
+ 	}
+ 	if s.maxProcesses > 0 && s.processorCount.Load() >= s.maxProcesses {
+@@ -347,7 +361,7 @@ func (s *Scheduler) finishProcessor(proc *Processor, result *process.StepOutput,
+ 	s.byPID.Delete(proc.pid.String())
+ 	s.byQueue.Delete(proc.queue)
+ 
+-	stopping := s.stopping.Load()
++	stopping := s.isStopping()
+ 	if !proc.pooled {
+ 		if s.processorCount.Add(-1) == 0 && stopping {
+ 			select {
+@@ -382,7 +396,7 @@ func (s *Scheduler) finishProcessor(proc *Processor, result *process.StepOutput,
+ }
+ 
+ func (s *Scheduler) CreateProcessor(ctx context.Context, pid pid.PID, p process.Process) (*Processor, error) {
+-	if s.stopping.Load() {
++	if s.isStopping() {
+ 		return nil, process.ErrSchedulerStopping
+ 	}
+ 	if s.maxProcesses > 0 && s.processorCount.Load() >= s.maxProcesses {
+diff --git a/system/scheduler/actor/scheduler_workers.go b/system/scheduler/actor/scheduler_workers.go
+index aeaba56c01..3cfdb3f9f4 100644
+--- a/system/scheduler/actor/scheduler_workers.go
++++ b/system/scheduler/actor/scheduler_workers.go
+@@ -24,7 +24,7 @@ func (s *Scheduler) Start() {
+ 	s.controlMu.Lock()
+ 	defer s.controlMu.Unlock()
+ 
+-	if s.started || s.stopping.Load() {
++	if s.started || s.isStopping() {
+ 		return
+ 	}
+ 	s.started = true
+@@ -41,14 +41,14 @@ func (s *Scheduler) ResizeWorkers(target int) error {
+ 	if target <= 0 {
+ 		return ErrInvalidWorkerCount
+ 	}
+-	if s.stopping.Load() {
++	if s.isStopping() {
+ 		return process.ErrSchedulerStopping
+ 	}
+ 
+ 	s.controlMu.Lock()
+ 	defer s.controlMu.Unlock()
+ 
+-	if s.stopping.Load() {
++	if s.isStopping() {
+ 		return process.ErrSchedulerStopping
+ 	}
+ 
+diff --git a/system/scheduler/actor/worker.go b/system/scheduler/actor/worker.go
+index a173e0684f..95bdae3109 100644
+--- a/system/scheduler/actor/worker.go
++++ b/system/scheduler/actor/worker.go
+@@ -65,7 +65,7 @@ func (w *Worker) run() {
+ 			continue
+ 		}
+ 
+-		if s.stopping.Load() {
++		if s.phase.Load() == phaseStoppingWorkers {
+ 			w.drain()
+ 			return
+ 		}
+@@ -85,7 +85,7 @@ func (w *Worker) run() {
+ 			w.handoffQueuedWork()
+ 			return
+ 		}
+-		if s.stopping.Load() {
++		if s.phase.Load() == phaseStoppingWorkers {
+ 			w.drain()
+ 			return
+ 		}
+@@ -151,7 +151,7 @@ func (w *Worker) park() {
+ 			w.executed.Add(1)
+ 			return
+ 		}
+-		if s.stopping.Load() {
++		if s.phase.Load() == phaseStoppingWorkers {
+ 			w.parkMu.Unlock()
+ 			return
+ 		}
+diff --git a/system/tty/mount.go b/system/tty/mount.go
+index 97b54c7e9f..4069848556 100644
+--- a/system/tty/mount.go
++++ b/system/tty/mount.go
+@@ -118,7 +118,11 @@ func (v *viewport) Revoke(ctx context.Context, ref string) error {
+ 	s := v.session.service
+ 	s.mu.Lock()
+ 	m := s.mounts[ref]
+-	if m == nil || m.issuer != v {
++	if m == nil {
++		s.mu.Unlock()
++		return nil // Recipient EXIT or an earlier revoke already removed this mount.
++	}
++	if m.issuer != v {
+ 		s.mu.Unlock()
+ 		return ttyapi.ErrInvalidGrant
+ 	}
+diff --git a/system/tty/mount_test.go b/system/tty/mount_test.go
+index 66668fee49..46bd0f2f37 100644
+--- a/system/tty/mount_test.go
++++ b/system/tty/mount_test.go
+@@ -75,6 +75,8 @@ func TestMountPermissionsRecipientAndRevocation(t *testing.T) {
+ 	_, err = s.Attach(agent, ref)
+ 	require.ErrorIs(t, err, ttyapi.ErrInvalidGrant)
+ 	require.NoError(t, issuer.Revoke(ctx, ref))
++	require.NoError(t, issuer.Revoke(ctx, ref), "revocation is idempotent after recipient cleanup")
++	require.ErrorIs(t, issuer.Revoke(stranger, ref), ttyapi.ErrPermissionDenied)
+ 	require.ErrorIs(t, mounted.(ttyapi.CheckedViewport).Check(agent, ttyapi.RightObserve), ttyapi.ErrMountExpired)
+ 	require.Zero(t, mounted.Snapshot().Width)
+ 	_, open := <-mounted.Updates()
+diff --git a/cmd/wippy/cmd/startup_terminal_test.go b/cmd/wippy/cmd/startup_terminal_test.go
+new file mode 100644
+--- /dev/null
++++ b/cmd/wippy/cmd/startup_terminal_test.go
+@@ -0,0 +1,36 @@
++// SPDX-License-Identifier: MPL-2.0
++//go:build !windows
++
++package cmd
++
++import (
++	"context"
++	"fmt"
++	"os"
++	"os/exec"
++	"testing"
++	"time"
++
++	"github.com/creack/pty"
++	"github.com/stretchr/testify/require"
++)
++
++// A CLI dependency previously queried OSC 11 from init(), before main could
++// start the runtime. A terminal that never answers must still reach command code.
++func TestCLIStartupWithoutTerminalResponses(t *testing.T) {
++	if os.Getenv("WIPPY_TEST_STARTUP_CHILD") == "1" {
++		fmt.Println("command code reached")
++		return
++	}
++	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++	defer cancel()
++	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIStartupWithoutTerminalResponses$")
++	cmd.Env = append(os.Environ(), "WIPPY_TEST_STARTUP_CHILD=1", "TERM=xterm-256color")
++	terminal, err := pty.Start(cmd)
++	require.NoError(t, err)
++	defer terminal.Close()
++	// Deliberately send no bytes to the controlling terminal.
++	err = cmd.Wait()
++	require.NoError(t, ctx.Err(), "startup waited for terminal query responses")
++	require.NoError(t, err)
++}
+diff --git a/system/scheduler/actor/shutdown_yield_test.go b/system/scheduler/actor/shutdown_yield_test.go
+new file mode 100644
+--- /dev/null
++++ b/system/scheduler/actor/shutdown_yield_test.go
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: MPL-2.0
++package actor
++
++import (
++	"context"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++	"github.com/wippyai/runtime/api/dispatcher"
++	pidapi "github.com/wippyai/runtime/api/pid"
++	"github.com/wippyai/runtime/api/runtime"
++	"github.com/wippyai/runtime/system/scheduler"
++)
++
++type shutdownGateHandler struct {
++	started chan struct{}
++	release chan struct{}
++	once    sync.Once
++}
++
++func (h *shutdownGateHandler) Handle(_ context.Context, _ dispatcher.Command, tag uint64, receiver dispatcher.ResultReceiver) error {
++	h.once.Do(func() { close(h.started) })
++	go func() { <-h.release; receiver.CompleteYield(tag, nil, nil) }()
++	return nil
++}
++
++func TestShutdownResumesAsyncCleanup(t *testing.T) {
++	handler := &shutdownGateHandler{started: make(chan struct{}), release: make(chan struct{})}
++	registry := scheduler.NewRegistry()
++	registry.Register(1, handler)
++	results := make(chan *runtime.Result, 1)
++	sched := NewScheduler(registry, WithWorkers(1), WithLifecycle(&testLifecycle{onComplete: func(_ context.Context, _ pidapi.PID, result *runtime.Result) { results <- result }}))
++	sched.Start()
++	_, err := sched.Submit(context.Background(), pidapi.PID{UniqID: "shutdown-yield"}, &slowProcess{}, "", nil)
++	require.NoError(t, err)
++	select {
++	case <-handler.started:
++	case <-time.After(time.Second):
++		t.Fatal("process did not yield")
++	}
++	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
++	defer cancel()
++	stopped := make(chan struct{})
++	go func() { sched.Stop(ctx); close(stopped) }()
++	require.Eventually(t, func() bool { return sched.isStopping() }, time.Second, time.Millisecond)
++	// Give the worker time to run out of immediate work during shutdown.
++	time.Sleep(30 * time.Millisecond)
++	close(handler.release)
++	select {
++	case <-stopped:
++	case <-time.After(time.Second):
++		cancel()
++		<-stopped
++		t.Fatal("shutdown abandoned async cleanup until its timeout")
++	}
++	completed := <-results
++	require.NoError(t, completed.Error)
++}

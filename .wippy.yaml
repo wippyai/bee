@@ -1,0 +1,7 @@
+version: '1.0'
+registry:
+  enable_history: true
+  history_type: sqlite
+  history_path: .wippy/registry.db
+shutdown:
+  timeout: 3s

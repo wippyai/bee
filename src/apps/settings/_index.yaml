@@ -1,0 +1,38 @@
+version: '1.0'
+namespace: bee.settings
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - uuid
+  - time
+  - json
+  imports:
+    appearance: bee.desktop:appearance
+    view: bee.settings:view
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Settings
+      icon: S
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: appearance
+      resume_schema: settings.v1
+      restart_policy: automatic
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.desktop:appearance

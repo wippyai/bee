@@ -1,0 +1,7 @@
+organization: bee
+module: bee
+description: A small extensible workspace desktop
+license: MIT
+exclude_meta:
+  type:
+  - test

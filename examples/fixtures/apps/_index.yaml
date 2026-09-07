@@ -1,0 +1,47 @@
+version: '1.0'
+namespace: bee.apps
+entries:
+- name: welcome
+  kind: process.lua
+  source: file://welcome.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - security
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Welcome
+      icon: B
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: Examples
+      role: ''
+  imports:
+    client: bee.application:client
+- name: palette
+  kind: process.lua
+  source: file://palette.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - security
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Colors
+      icon: C
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: Examples
+      role: ''
+  imports:
+    client: bee.application:client

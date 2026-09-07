@@ -1,0 +1,77 @@
+version: '1.0'
+namespace: bee.console
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - exec
+  - process
+  - channel
+  imports:
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Terminal
+      icon: '>'
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: ''
+      role: terminal
+- name: executor
+  kind: exec.native
+  default_env:
+    PATH: ${env:bee.console:path}
+    HOME: ${env:bee.console:home}
+    USER: ${env:bee.console:user}
+    LANG: ${env:bee.console:lang}
+    TERM: xterm-256color
+- name: executor_policy
+  kind: security.policy
+  policy:
+    actions:
+    - exec.get
+    resources:
+    - bee.console:executor
+    effect: allow
+- name: command_policy
+  kind: security.policy
+  policy:
+    actions:
+    - exec.run
+    resources:
+    - /bin/bash -i
+    effect: allow
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: path
+  kind: env.variable
+  storage: bee.console:environment
+  variable: PATH
+  default: /usr/local/bin:/usr/bin:/bin
+  readonly: true
+- name: home
+  kind: env.variable
+  storage: bee.console:environment
+  variable: HOME
+  default: /
+  readonly: true
+- name: user
+  kind: env.variable
+  storage: bee.console:environment
+  variable: USER
+  default: ''
+  readonly: true
+- name: lang
+  kind: env.variable
+  storage: bee.console:environment
+  variable: LANG
+  default: C.UTF-8
+  readonly: true

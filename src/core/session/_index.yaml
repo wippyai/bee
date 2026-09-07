@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.session
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, ctx]
+  imports:
+    commands: bee.protocol:commands
+    state: bee.desktop:state
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:session_policy]

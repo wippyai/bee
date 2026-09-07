@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.storage
+entries:
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, hash]

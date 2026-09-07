@@ -1,0 +1,72 @@
+version: '1.0'
+namespace: bee.threads
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules: [contract]
+  imports:
+    protocol: bee.threads:protocol
+- name: journal
+  kind: contract.definition
+  methods:
+  - name: claim
+    description: Claim a stable run identity in the caller's thread
+  - name: append
+    description: Commit an idempotent event in a claimed run
+  - name: read_after
+    description: Read an ordered page after an exclusive sequence
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:journal
+    methods:
+      claim: bee.threads:claim
+      append: bee.threads:append
+      read_after: bee.threads:read_after
+- name: claim
+  kind: function.lua
+  source: file://methods.lua
+  method: claim
+  modules: [security]
+  imports:
+    protocol: bee.threads:protocol
+    store: bee.threads.persist:store
+  security:
+    policies: [bee:thread_storage_policy]
+- name: append
+  kind: function.lua
+  source: file://methods.lua
+  method: append
+  modules: [security]
+  imports:
+    protocol: bee.threads:protocol
+    store: bee.threads.persist:store
+  security:
+    policies: [bee:thread_storage_policy]
+- name: read_after
+  kind: function.lua
+  source: file://methods.lua
+  method: read_after
+  modules: [security]
+  imports:
+    protocol: bee.threads:protocol
+    store: bee.threads.persist:store
+  security:
+    policies: [bee:thread_storage_policy]
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: database_path
+  kind: env.variable
+  storage: bee.threads:environment
+  variable: BEE_THREADS_DB
+  default: .wippy/threads.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.threads:database_path}
+  lifecycle: {auto_start: true}

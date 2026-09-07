@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.applications
+entries:
+- name: broker
+  kind: process.lua
+  source: file://broker.lua
+  method: main
+  modules: [security, process, channel, tty, uuid, registry, time, ctx]
+  imports:
+    contract: bee.protocol:application
+    catalog: bee.applications:catalog
+    lifecycle: bee.applications:lifecycle
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:broker_policy]
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry]
+  imports:
+    contract: bee.protocol:application

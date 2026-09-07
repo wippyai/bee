@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.terminal
+entries:
+- name: render_test
+  kind: function.lua
+  source: file://render_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    model: bee.desktop:model
+    layout: bee.desktop:layout
+    render: bee.terminal:render
+    bindings: bee.terminal:bindings
+    menu: bee.terminal:menu
+    appearance: bee.desktop:appearance

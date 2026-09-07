@@ -1,0 +1,4 @@
+modules:
+- name: wippy/test
+  version: 0.4.17
+  hash: 37a304cc20aa3005004255e9fda16835a94119db520c0c97e1db044c7844a229

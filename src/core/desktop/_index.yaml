@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.desktop
+entries:
+- name: definition
+  kind: ns.definition
+  meta:
+    title: Bee desktop model
+    description: Pure typed scene and window layout state
+- name: model
+  kind: library.lua
+  source: file://model.lua
+- name: state
+  kind: library.lua
+  source: file://state.lua
+  imports:
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+    commands: bee.protocol:commands
+- name: layout
+  kind: library.lua
+  source: file://layout.lua
+  imports:
+    model: bee.desktop:model

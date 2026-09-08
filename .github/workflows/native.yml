@@ -15,7 +15,7 @@ jobs:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Build pinned native development runtime
       id: toolchain
-      uses: wippyai/builder@85186a30868e8cc50e29eedf060a0a47f7f6a7d0
+      uses: wippyai/builder@946b3bbac37957e908b8a08e24da3fadf64bb9bf
       with:
         mode: toolchain
         manifest: wippy.build.json

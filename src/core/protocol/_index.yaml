@@ -6,6 +6,7 @@ entries:
   source: file://commands.lua
   imports:
     appearance: bee.desktop:appearance
+    contract: bee.protocol:application
 - name: input
   kind: library.lua
   source: file://input.lua

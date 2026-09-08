@@ -3,7 +3,7 @@ local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
 type Descriptor = {definition_id: string, title: string, group: string, role: string}
-type Item = {label: string, action: string, enabled: boolean, children: {Item}?}
+type Item = {label: string, action: string, enabled: boolean, shortcut: string?, children: {Item}?}
 type State = {selected: integer, offset: integer, kind: string?, target: string?, x: integer?, y: integer?, path: {integer}?}
 type Panel = {x: integer, y: integer, width: integer, height: integer, capacity: integer, inset: integer}
 type Response = {state: State, action: string, close: boolean}
@@ -18,15 +18,15 @@ function M.items(focused: boolean, initial: boolean, has_windows: boolean?, cata
                 if item.children and item.action == "group:" .. part then found = item; break end
             end
             if not found then
-                found = {label = part .. "  ›", action = "group:" .. part, enabled = true, children = {}}
+                found = {label = part, action = "group:" .. part, enabled = true, children = {}}
                 current[#current + 1] = found
             end
             if found.children then current = found.children end
         end
         current[#current + 1] = {label = descriptor.title, action = "open:" .. descriptor.definition_id, enabled = true}
     end
-    if initial then table.insert(items, 1, {label = "Open application         Ctrl+N", action = "initial", enabled = true}) end
-    items[#items + 1] = {label = "Exit                     Ctrl+Q", action = "quit", enabled = true}
+    if initial then table.insert(items, 1, {label = "Open application", shortcut = "Ctrl+N", action = "initial", enabled = true}) end
+    items[#items + 1] = {label = "Exit", shortcut = "Ctrl+Q", action = "quit", enabled = true}
     return items
 end
 local function descend(items: {Item}, path: {integer}?): {Item}
@@ -42,13 +42,13 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
             if win.id == state.target then
                 return descend({
                     {label = "Restore", action = "restore", enabled = win.mode ~= "floating"},
-                    {label = "Minimize                 Alt+F9", action = "minimize", enabled = win.mode ~= "minimized"},
-                    {label = "Maximize / restore          F11", action = "fullscreen", enabled = win.mode ~= "minimized"},
+                    {label = "Minimize", shortcut = "Alt+F9", action = "minimize", enabled = win.mode ~= "minimized"},
+                    {label = "Maximize / restore", shortcut = "F11", action = "fullscreen", enabled = win.mode ~= "minimized"},
                     {label = "Snap left", action = "snap_left", enabled = win.mode ~= "minimized"},
                     {label = "Snap right", action = "snap_right", enabled = win.mode ~= "minimized"},
                     {label = "Collapse", action = "collapse", enabled = win.mode == "floating"},
                     {label = "Rename…", action = "rename", enabled = true},
-                    {label = "Accent  ›", action = "group:accent", enabled = true, children = {
+                    {label = "Accent", action = "group:accent", enabled = true, children = {
                         {label = "Theme default", action = "accent:", enabled = true},
                         {label = "Amber", action = "accent:amber", enabled = true},
                         {label = "Cyan", action = "accent:cyan", enabled = true},
@@ -56,7 +56,7 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
                         {label = "Rose", action = "accent:rose", enabled = true},
                         {label = "Violet", action = "accent:violet", enabled = true},
                     }},
-                    {label = "Close                    Ctrl+W", action = "close", enabled = true},
+                    {label = "Close", shortcut = "Ctrl+W", action = "close", enabled = true},
                 }, state.path)
             end
         end
@@ -69,7 +69,7 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
             end
         end
         items[#items + 1] = {label = "Restore windows", action = "restore_all", enabled = #scene.windows > 0}
-        items[#items + 1] = {label = "Reload desktop              F12", action = "rejoin", enabled = true}
+        items[#items + 1] = {label = "Reload desktop", shortcut = "F12", action = "rejoin", enabled = true}
         return items
     end
     local items = M.items(scene.focus ~= "", initial, #scene.windows > 0, catalog)
@@ -201,9 +201,20 @@ function M.draw(canvas: tty.Canvas, panel: Panel, state: State, items: {Item}, p
         local index = state.offset + row
         local item = items[index]
         if item then
-            local style = item.enabled and normal or appearance.style(theme.border, theme.surface)
-            if index == state.selected then style = appearance.style(appearance.selection_text(theme), theme.accent) end
-            canvas:put(panel.x + 1, panel.y + panel.inset + row, style .. " " .. item.label .. string.rep(" ", inside) .. "\27[0m", inside)
+            local style = item.enabled and normal or appearance.style(theme.muted, theme.surface)
+            local hint_style = appearance.style(theme.muted, theme.surface)
+            if index == state.selected and item.enabled then
+                style = appearance.style(appearance.selection_text(theme), theme.accent)
+                hint_style = style
+            end
+            local available = math.floor(math.max(0, inside - 2))
+            local hint = item.children and "›" or (item.shortcut or "")
+            if tty.text.width(hint) + 4 > available then hint = "" end
+            local hint_width = tty.text.width(hint)
+            local label = tty.text.truncate(item.label, math.floor(math.max(0, available - hint_width - (hint ~= "" and 2 or 0))), "…")
+            local gap = string.rep(" ", math.floor(math.max(0, available - tty.text.width(label) - hint_width)))
+            local text = normal .. " " .. style .. label .. gap .. hint_style .. hint .. normal .. " "
+            canvas:put(panel.x + 1, panel.y + panel.inset + row, text .. "\27[0m", inside)
         end
     end
 end

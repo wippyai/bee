@@ -1,6 +1,7 @@
 local process = require("process")
 local channel = require("channel")
 local ctx = require("ctx")
+local contract = require("contract")
 local commands = require("commands")
 local state = require("state")
 local appearance = require("appearance")
@@ -12,6 +13,8 @@ local function main(owner: string, width: integer, height: integer, preferences:
     local lifecycle = assert(process.events())
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted session bootstrap") end
+    local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
+    if not workspace_id then error("Invalid workspace identity bootstrap") end
     assert(process.monitor(owner))
     local desktop = state.new(width, height, appearance.decode(preferences))
 
@@ -45,7 +48,7 @@ local function main(owner: string, width: integer, height: integer, preferences:
             if msg:from() == owner then
                 local raw: unknown = msg:payload():data()
                 local command = commands.decode(raw)
-                if command then
+                if command and (command.op ~= "add" or command.workspace_id == workspace_id) then
                     if command.op == "shutdown" then
                         if command.request_id then send_ack(command.request_id, "", "") end
                         break

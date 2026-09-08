@@ -1,6 +1,7 @@
 local test = require("test")
 local decode = require("decode")
 local model = require("model")
+local contract = require("contract")
 local function define_tests()
     test.describe("Process boundary decoding", function()
         test.it("rejects malformed replies rather than coercing authority fields", function()
@@ -8,6 +9,33 @@ local function define_tests()
             test.is_nil(decode.reply({op = "open", mount = 123}))
             test.is_nil(decode.reply({request_id = "1", op = "open", id = "a", instance_id = "b",
                 title = "A", mount = "m", error = false}))
+        end)
+        test.it("requires matching workspace identity at the live reply boundary", function()
+            local owner = "0123456789abcdef0123456789abcdef"
+            local reply = contract.reply("r", "closed")
+            local legacy = decode.reply(reply)
+            if not legacy then error("Legacy value should remain decodable") end
+            test.is_false(decode.belongs(legacy, owner))
+            reply.workspace_id = owner
+            local accepted = decode.reply(reply)
+            if not accepted then error("Valid reply rejected") end
+            test.is_true(decode.belongs(accepted, owner))
+            test.is_false(decode.belongs(accepted, "ffffffffffffffffffffffffffffffff"))
+            reply.workspace_id = "malformed"
+            test.is_nil(decode.reply(reply))
+        end)
+        test.it("preserves window workspace identity through geometry and decoded snapshots", function()
+            local owner = "0123456789abcdef0123456789abcdef"
+            local scene = model.add(model.new(80, 24), "view", "instance", "Title", nil, owner)
+            scene = model.toggle_fullscreen(scene, "view")
+            scene = model.minimize(scene, "view")
+            local decoded = decode.scene(scene)
+            if not decoded then error("Valid scene rejected") end
+            test.eq(decoded.windows[1].workspace_id, owner)
+            decoded.windows[1].workspace_id = "ffffffffffffffffffffffffffffffff"
+            test.eq(scene.windows[1].workspace_id, owner)
+            scene.windows[1].workspace_id = "bad"
+            test.is_nil(decode.scene(scene))
         end)
         test.it("rejects sparse windows, duplicate identities and missing focus", function()
             local scene = model.add(model.new(80, 24), "view", "instance", "Title")

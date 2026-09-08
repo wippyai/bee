@@ -222,10 +222,14 @@ negative permissions, lifecycle failures and durable recovery. That evidence doe
 not establish protection against arbitrary OS-user code or readiness for live
 package replacement. Carry the following gates into the first extension change:
 
-- Define failure outcomes for workspace control sends currently issued without
-  checking the send result, especially restore/open coordination; prove a failed
-  delivery cannot leave an operation waiting forever. Core EXIT handling is not
-  a substitute for a correlated operation failure.
+- Implemented for workspace-to-broker/session control: a rejected send reports
+  its topic/request ID, ends the local owner through its save path and preserves
+  recovery when structural control fails. Source/pack injection covers bind,
+  restore, accepted shutdown and checkpoint receipts. Ordinary open/close and quit
+  preparation failures preserve running apps and permit explicit retry.
+  Appearance requests keep their correlated error path.
+  Remote reconnect and disconnected-client behavior still need the attachment
+  contract; local fail-fast behavior is not a remote availability guarantee.
 - Keep append/draft persistence outside the desktop envelope and outside the
   presenter's input loop. Storage failure must remain visible and preserve the
   last committed state.

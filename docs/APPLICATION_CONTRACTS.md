@@ -49,10 +49,38 @@ package releases will follow contract stabilization.
 ## Launch and lifecycle
 
 The broker supplies one launch value with `version`, `broker_pid`, `workspace_pid`,
-`instance_id`, `view_id`, `definition_id`, `definition_revision`, `registry_revision`
+`workspace_id`, `instance_id`, `view_id`, `definition_id`, `definition_revision`,
+`registry_revision`
 and `launch_token`. `bee.application:client` validates it. The revision identifies
 the registry state observed for launch; it is not a promise that a mutable loader
 pins every future import. Transactional activation is a future installer concern.
+
+`workspace_id` is the required opaque ID from the owning workspace database.
+The workspace installs it in the broker's trusted bootstrap context; applications
+cannot select it through launch arguments. `client.reference(launch)` returns a
+copied `{workspace_id, instance_id, view_id}` logical reference. It contains no
+execution PID, mount, token or permission. Reopening an application in the same
+workspace retains the workspace ID even when execution changes.
+
+Broker replies carry `workspace_id`; the workspace and presenter require it
+to match their trusted bootstrap identity before acting on a reply. The workspace
+also checks it on checkpoint delivery. New session windows retain that ID through
+geometry changes, snapshots and persistence. Legacy local saved windows without
+the field remain readable and receive the current owner's identity on reopen.
+Identity still does not replace sender authentication or capability checks.
+
+Private desktop application requests also carry `workspace_id`. The workspace
+and broker both require their own identity before open, close, bind or shutdown
+can reach execution. Missing or foreign targets receive `workspace_mismatch`;
+they cannot silently fall back to the local workspace. The shell clears pending
+close state on that error and allows explicit retry. These checks qualify local
+routing; they do not implement remote dispatch or multi-workspace clients.
+
+The stored recovery record remains local to its owning database. This reference
+helper does not add remote routing or turn local open/close APIs into
+cross-workspace operations. Sender, instance and capability checks remain the
+authority boundary. Restart the whole workspace after updating this launch
+contract; F12 only replaces the presenter.
 
 Open requests may carry `arguments`, a dense list of up to 16 strings (1 KiB each,
 8 KiB combined, no control characters). Omission means an empty list. The broker
@@ -76,6 +104,14 @@ The broker checks the actual sender PID, instance/view identities and launch tok
 UI apps signal after their initial frame; Terminal signals after PTY attachment.
 The native program can still fail after attachment; EXIT remains authoritative.
 
+Producer readiness is independent of a desktop consumer. The broker accepts an
+admitted open without a bound presenter, acknowledges readiness and checkpoints,
+and retains its viewport for later attachment. An `open` success may carry an
+empty mount. If mounting to a bound recipient fails, readiness still succeeds;
+a separate `attached` error reports `attachment_failed` without terminating the
+app. A later bind can attach to the same producer. The local workspace launcher
+still requires a physical desktop; this broker capability is not a headless profile.
+
 Broker owner requests use `bee.app.request`: `version: 1`, nonempty `request_id`,
 `op: open|close|bind|shutdown`, with the operation's definition/view/recipient.
 Replies use `bee.app.reply`, version 1, correlated request ID, operation, view ID
@@ -93,6 +129,12 @@ Appearance uses `bee.appearance.request` (`state|set`) and
 `bee.appearance.state`, with version 1 and a request ID. All apps can read; writes
 require the protected grant. The session commits preferences and its projection
 revision. Broker-originated updates are checked before apps adopt them.
+
+The broker resolves viewport default colors from the theme and presentation role
+at creation and on appearance changes. Windows Classic uses a black console with
+light text for the `terminal` role while ordinary application panels remain
+silver. Explicit program colors remain intact. The role selects presentation,
+not additional permissions.
 
 Runtime process control uses `bee.application.control` (`stop|force_stop`,
 `execution_pid`) and `bee.application.result`, with version 1, request ID and

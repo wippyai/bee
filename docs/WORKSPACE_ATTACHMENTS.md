@@ -1,7 +1,12 @@
 # Workspace identity and client attachments
 
-Status: design, not a callable API. Production currently has one local workspace
-owner and one desktop session. [Workspace state](WORKSPACE_STATE.md) documents
+Status: attachment design, not a callable API. The primary store now persists an
+opaque workspace ID through migration 2. Application launches carry it and the
+app SDK exposes a logical view reference. Broker replies and desktop windows now
+retain it too. Local application requests carry an explicit target checked by
+the workspace and broker; missing or foreign targets are rejected. Production
+still has one local workspace owner and one desktop
+session. [Workspace state](WORKSPACE_STATE.md) documents
 the implemented envelope. This design leaves cluster transport and naming to the
 runtime work; no remote discovery or network listener is enabled by it.
 
@@ -26,6 +31,33 @@ at their hosts. Hive discovery must identify candidate nodes and workspaces;
 authentication and explicit attachment policy still decide access. Being on the
 same home network does not grant control. Runtime cluster/naming changes remain
 separate work; Bee should consume the native mesh and capability contracts.
+
+An infrastructure application may expose an authorized provisioning contract from
+one workspace, for example a Proxmox service. Its host owns credentials and
+resource limits. Other nodes discover its public operations, then authenticate
+and request permission; membership alone does not grant provisioning authority.
+A durable request/run identity correlates allocation results with the requesting
+workflow. Provisioned machines enroll explicitly before exposing services to the
+Hive. A retried request must resolve the original allocation or report an unknown
+outcome instead of blindly creating another machine. This is an example consumer
+of the proposed service boundary, not an implemented Proxmox integration.
+
+Use a typed consumer library over native mesh actor messages and service
+resolution, not an additional Bee network protocol. Authorization is checked at
+the service owner; a library check alone is insufficient. A synchronized component
+or overlay can supply the client contract and code on another node, allowing its
+client process to run there. Definition availability does not transfer credentials,
+database ownership, live grants or placement policy. Destination admission and
+resource bindings still govern spawn and use. Cross-node definition activation
+and client placement require acceptance before they become supported operations.
+
+Components may also declare filesystem resources and local overlays intended for
+sharing. Keep their definitions, immutable packaged files, writable working files
+and materialized overlays distinct. Destination bindings resolve access to local,
+mounted or synchronized filesystems; component availability alone is not a
+filesystem grant. A component may own explicit file synchronization and its
+conflict/retry contract. Syncing its overlay does not implicitly replicate every
+writable file or database it uses.
 
 ## Host and client composition
 
@@ -83,7 +115,10 @@ or capability values, never durable identity or proof of user authority.
 
 A workspace owns instance admission, application state and resource references.
 The application/subsystem owns run state and durable event history. The client
-owns tab ordering, placement, focus and appearance. A client can show several
+owns tab ordering, placement, focus and desktop chrome appearance. Producer page
+defaults and application appearance remain workspace/application-owned, so clients
+with different desktop themes cannot race to recolor one shared viewport.
+A client can show several
 workspaces; several clients can show one workspace with independent layouts.
 Closing a tab detaches a view. Stopping an application or cancelling a run is a
 separate authorized operation. Existing view-owned apps retain close-to-stop
@@ -128,9 +163,11 @@ handoff. Runtime capability semantics must be verified before implementing this.
 
 ## Storage and profiles
 
-Add workspace identity through a new immutable migration, preserving existing
-desktop and application records. Separate client layout from workspace domain
-state when adding multiple clients; existing desktop state becomes the initial
+Workspace storage identity is implemented through immutable migration 2,
+preserving existing desktop and application records. It appears in app launch
+values, logical view references, broker replies and desktop windows. Live reply
+consumers reject a missing or mismatched workspace identity. Separate client
+layout from workspace domain state when adding multiple clients; existing desktop state becomes the initial
 local client's projection. Copying a database for a backup retains identity;
 creating an independent workspace from it needs an explicit fork operation with
 a new identity. Two writable clones must not silently claim one workspace.
@@ -175,6 +212,9 @@ integration/acceptance work. Mesh connectivity does not replicate SQLite state.
 
 ## Implementation sequence and acceptance
 
+The [client/host extraction plan](CLIENT_HOST_SPLIT.md) maps these requirements to
+the current actor owners, appearance scopes, storage transition and local gates.
+
 ### Headless nodes and composed applications
 
 A Bee node may be headless. The intended headless profile starts the workspace's
@@ -200,8 +240,10 @@ authority. Hosted execution and billing are outside this foundation.
 
 1. Finish the local run/view separation using the test-status application. A
    closed view must not cancel its run; reopening replays committed events.
-2. Persist workspace identity and carry it through launch, snapshot, checkpoint
-   and UI values. Test restore, rename, invalid identities and mismatched replies.
+2. Storage, app-launch and window identity are implemented, with reply and
+   checkpoint workspace checks. Local request targets are enforced at both receivers.
+   Finish cross-workspace dispatch and labels.
+   Test restore, rename, invalid identities and mismatched replies.
 3. Introduce explicit client layout ownership and local attachment lifecycle.
    Test independent layouts and denied/stale control changes before networking.
 4. Bind the same contract to verified runtime mesh capabilities behind the Hive

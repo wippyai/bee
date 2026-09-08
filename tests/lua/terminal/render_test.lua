@@ -13,6 +13,32 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("keeps Classic terminals dark without changing application panels", function()
+            local theme = appearance.theme("classic")
+            local terminal = appearance.page(theme, true)
+            local panel = appearance.page(theme, false)
+            test.eq(terminal.background, "#0c0c0c")
+            test.eq(terminal.foreground, "#cccccc")
+            test.eq(panel.background, "#c0c0c0")
+            test.eq(panel.foreground, "#000000")
+            local honey = appearance.theme("honey")
+            test.eq(appearance.page(honey, true).background, honey.surface)
+        end)
+        test.it("marks Start open only for launcher navigation", function()
+            local scene = model.add(model.new(80, 24), "one", "app", "One")
+            local contents: {[string]: render.Content} = {}
+            local function arrow(state: menu.State?): string
+                local frame = render.draw(scene, {"one"}, contents, nil, nil, "", "workspace", nil, state, false, catalog)
+                return frame.rows[1]
+            end
+            test.is_true(arrow(nil):find("BEE ▾", 1, true) ~= nil)
+            test.is_true(arrow({selected = 1, offset = 0}):find("BEE ▴", 1, true) ~= nil)
+            test.is_true(arrow({selected = 1, offset = 0, path = {1}}):find("BEE ▴", 1, true) ~= nil)
+            for _, kind in ipairs({"desktop", "window"}) do
+                test.is_true(arrow({selected = 1, offset = 0, kind = kind, target = "one", x = 30, y = 10}):find("BEE ▾", 1, true) ~= nil)
+            end
+        end)
+
         test.it("keeps the boot mark inside compact and full-size terminals", function()
             for _, width in ipairs({1, 8, 23, 24, 80, 120}) do
                 for _, height in ipairs({1, 2, 5, 13, 14, 30}) do
@@ -21,9 +47,9 @@ local function define_tests()
                     for _, row in ipairs(rows) do test.eq(tty.text.width(row), width) end
                     if width >= 24 and height >= 14 then
                         test.is_true(table.concat(rows):find("╰──╲ ╱──╯", 1, true) ~= nil)
-                    elseif width >= 3 then
-                        test.is_true(table.concat(rows):find("bee", 1, true) ~= nil)
                     end
+                    test.is_true(table.concat(rows):find("bee", 1, true) == nil)
+                    test.is_true(table.concat(rows):find("b e e", 1, true) == nil)
                 end
             end
         end)

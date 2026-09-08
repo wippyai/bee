@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.attachment_probe
+entries:
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process, channel, time, security, tty, json]
+  imports:
+    decode: bee.protocol:decode
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+    recovery: bee.workspace:recovery
+    store: bee.storage:store
+  meta:
+    command:
+      name: attachment-probe
+      security:
+        actor: {id: attachment-test}
+        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy]
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, uuid]
+  imports:
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Detached probe
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      resume_schema: attachment-v1
+      restart_policy: automatic

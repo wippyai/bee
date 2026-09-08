@@ -11,11 +11,12 @@ can provide an explicit path for an isolated workspace. Wippy registry history
 remains separate in `.wippy/registry.db` (or its configured
 `registry.history_path`).
 
-The public API is:
+The core-only storage API is:
 
 ```lua
 local storage = require("store")
 local store, err = storage.open()
+local workspace_id, identity_err = store:identity() -- stable opaque ID
 local state, read_err = store:read() -- nil, nil before the first write
 local ok, write_err = store:write(encoded_json)
 store:close()
@@ -27,7 +28,17 @@ be a JSON object with `version = 1` and is limited to 2 MiB. The storage layer
 checks syntax and the top-level version; the workspace protocol validates
 desktop geometry, preferences, application identities and opaque resume records.
 
-The database uses two tables. `workspace_state` is a singleton row containing
+The database uses three tables. Migration 2 adds `workspace_identity`, a
+singleton containing an opaque 32-character lowercase hexadecimal ID. It is
+generated once inside the migration transaction, independently from the state
+envelope. This ID names a workspace; it does not grant authority. There is no
+identity-write method. Reopening, relocating or backing up a
+database retains its ID; a fresh database receives a new ID. Copying a database
+therefore makes a backup with the same identity, not an independent writable
+workspace. Missing or malformed identity after migration causes `open()` to fail;
+Bee never repairs it by silently minting a new ID. Migration 1 remains unchanged.
+
+`workspace_state` is a singleton row containing
 the envelope, schema version, monotonic generation and update timestamp.
 `workspace_schema_migrations` is an append-only ledger with integer `id`,
 immutable `name`, `checksum` and `applied_at` fields. `open()` enables WAL and

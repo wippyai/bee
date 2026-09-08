@@ -13,7 +13,7 @@ function M.background(canvas: tty.Canvas, width: integer, height: integer, prefe
 end
 function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, starting: boolean)
     local theme = appearance.theme(preferences.theme)
-    -- A cell-native bee: folded wings, striped body and a small wordmark.
+    -- A cell-native bee: folded wings and striped body.
     -- No timed splash or terminal-dependent emoji width.
     local lines: {string} = {
         "    ╭──╮ ╭──╮    ",
@@ -21,10 +21,8 @@ function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferen
         " ╭──────┴─────╮  ",
         "◂│ ██  ██  •  │  ",
         " ╰────────────╯  ",
-        "       ╲ ╲       ",
-        "",
-        "b e e"}
-    if width < 24 or height < 14 then lines = {"bee"} end
+        "       ╲ ╲       "}
+    if width < 24 or height < 14 then lines = {} end
     if starting and height >= 5 then
         lines[#lines + 1] = ""
         lines[#lines + 1] = "Starting…"

@@ -2,10 +2,11 @@
 from pathlib import Path
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 import yaml
-from tui_smoke import Desktop, ROOT
+from tui_smoke import Desktop, ROOT, RUNTIME
 
 SOURCE = '''local tty = require("tty")
 local client = require("client")
@@ -100,7 +101,10 @@ def run():
         # Retry the same operation identity. First launch is root-generated;
         # every later presenter open uses one fixed request ID in this fixture.
         presenter = project / "src/core/terminal/main.lua"
-        text = presenter.read_text().replace('request_id = uuid.v7(), op = op, definition_id', 'request_id = op == "open" and "duplicate-probe" or uuid.v7(), op = op, definition_id')
+        text = presenter.read_text()
+        anchor = 'request_id = uuid.v7(), op = op, workspace_id = workspace_id, definition_id'
+        assert text.count(anchor) == 1, "Presenter retry injection point changed"
+        text = text.replace(anchor, 'request_id = op == "open" and "duplicate-probe" or uuid.v7(), op = op, workspace_id = workspace_id, definition_id')
         presenter.write_text(text)
         with tempfile.TemporaryDirectory(prefix="bee-dedup-") as directory:
             ui = Desktop(directory, project=project, apps=("probe:stubborn",))
@@ -144,5 +148,35 @@ def run():
             finally:
                 ui.close()
 
+def detached():
+    for packed in (False, True):
+        with tempfile.TemporaryDirectory(prefix="bee-detached-") as directory:
+            folder = Path(directory)
+            project = folder / "project"
+            shutil.copytree(ROOT / "src", project / "src")
+            shutil.copytree(ROOT / "tests/fixtures/attachments", project / "src/probe")
+            for name in (".wippy.yaml", "wippy.lock"):
+                shutil.copy2(ROOT / name, project / name)
+            index = project / "src/_index.yaml"
+            document = yaml.safe_load(index.read_text())
+            # Source exec honors the process host; the pinned pack launcher
+            # currently drops --host and still needs a passive terminal entry.
+            if not packed:
+                document["entries"] = [e for e in document["entries"] if e["kind"] != "terminal.host"]
+            next(e for e in document["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
+            index.write_text(yaml.safe_dump(document, sort_keys=False))
+            subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
+            pack = folder / "detached.wapp"
+            if packed:
+                subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+            for mode in ("detached", "failed-open"):
+                args = [str(RUNTIME), "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
+                result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
+                                        env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
+                assert result.returncode == 0, result.stdout + result.stderr
+    print("Detached broker source/pack: piped CLI with no physical TTY, checkpoint before attachment, readiness survives deadline, failed mount and reattach preserve producer", flush=True)
+
+
 if __name__ == "__main__":
     run()
+    detached()

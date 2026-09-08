@@ -34,11 +34,17 @@ PROBE = '''
     own:close()
 '''
 
-def exercise(packed):
+def exercise(packed, theme="honey"):
     with tempfile.TemporaryDirectory(prefix="bee-console-") as temporary:
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        if theme != "honey":
+            appearance = project / "src/ui/appearance.lua"
+            source = appearance.read_text()
+            anchor = 'function M.defaults(): Preferences return {theme = "honey",'
+            assert source.count(anchor) == 1
+            appearance.write_text(source.replace(anchor, f'function M.defaults(): Preferences return {{theme = "{theme}",'))
         for name in ["wippy.lock", ".wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         app = project / "src/apps/console/app.lua"
@@ -117,6 +123,8 @@ def exercise(packed):
             left, top, right, bottom = ui.frame()
             background = ui.screen.buffer[top][left].bg
             assert background != "default"
+            if theme == "classic":
+                assert background == "0c0c0c", background
             for y in range(top, bottom-1):
                 for x in range(left, right-1):
                     assert ui.screen.buffer[y][x].bg == background
@@ -130,10 +138,12 @@ def exercise(packed):
             while Path(f"/proc/{native_pid}").exists() and time.monotonic() < deadline:
                 time.sleep(.02)
             assert not Path(f"/proc/{native_pid}").exists(), "Native shell leaked after workspace exit"
-            print(f"Terminal {'pack' if packed else 'source'}: command, wrapped-input resize/erase, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
+            print(f"Terminal {'pack' if packed else 'source'} ({theme}): command, wrapped-input resize/erase, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
         finally:
             ui.close()
 
 if __name__ == "__main__":
     exercise(False)
     exercise(True)
+    exercise(False, "classic")
+    exercise(True, "classic")

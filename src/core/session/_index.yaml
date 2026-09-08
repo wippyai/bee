@@ -7,6 +7,7 @@ entries:
   method: main
   modules: [process, channel, ctx]
   imports:
+    contract: bee.protocol:application
     commands: bee.protocol:commands
     state: bee.desktop:state
     appearance: bee.desktop:appearance

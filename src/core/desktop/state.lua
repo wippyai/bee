@@ -17,34 +17,6 @@ type Envelope = {scene: model.Scene, tabs: {string}, preferences: appearance.Pre
 local M = {}
 local MAX_WINDOWS = 16
 
-local function copy_rect(value: model.Rect): model.Rect
-    return {x = value.x, y = value.y, width = value.width, height = value.height}
-end
-
-local function copy_window(value: model.Window): model.Window
-    return {
-        id = value.id,
-        instance_id = value.instance_id,
-        title = value.title, user_title = value.user_title, accent = value.accent, icon = value.icon,
-        bounds = copy_rect(value.bounds),
-        normal_bounds = copy_rect(value.normal_bounds),
-        mode = value.mode,
-        restore_mode = value.restore_mode,
-    }
-end
-
-local function copy_scene(value: model.Scene): model.Scene
-    local windows: {model.Window} = {}
-    for index = 1, #value.windows do windows[index] = copy_window(value.windows[index]) end
-    return {
-        width = value.width,
-        height = value.height,
-        revision = value.revision,
-        focus = value.focus,
-        windows = windows,
-    }
-end
-
 local function copy_tabs(value: {string}): {string}
     local tabs: {string} = {}
     for index = 1, #value do tabs[index] = value[index] end
@@ -78,7 +50,7 @@ function M.reduce(value: State, command: commands.Command): State
     elseif command.op == "add" then
         if not command.id or not command.instance_id or not command.title then return value end
         if #value.scene.windows >= MAX_WINDOWS then return value end
-        local scene = model.add(value.scene, command.id, command.instance_id, command.title, command.icon)
+        local scene = model.add(value.scene, command.id, command.instance_id, command.title, command.icon, command.workspace_id)
         if scene == value.scene then return value end
         local tabs = copy_tabs(value.tabs)
         tabs[#tabs + 1] = command.id
@@ -149,7 +121,7 @@ function M.reduce(value: State, command: commands.Command): State
         if preferences.theme == value.preferences.theme and preferences.background == value.preferences.background and preferences.taskbar == value.preferences.taskbar then
             return value
         end
-        local scene = copy_scene(value.scene)
+        local scene = model.copy(value.scene)
         scene.revision = scene.revision + 1
         return {
             scene = scene,
@@ -162,7 +134,7 @@ end
 
 function M.envelope(value: State): Envelope
     return {
-        scene = copy_scene(value.scene),
+        scene = model.copy(value.scene),
         tabs = copy_tabs(value.tabs),
         preferences = copy_preferences(value.preferences),
     }

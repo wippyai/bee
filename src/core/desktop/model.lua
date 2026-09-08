@@ -7,6 +7,7 @@ type RestoreMode = "floating" | "fullscreen" | "collapsed"
 type Window = {
     id: string,
     instance_id: string,
+    workspace_id: string?,
     title: string,
     user_title: string?,
     accent: string?,
@@ -43,7 +44,7 @@ end
 local function copy_window(value: Window): Window
     return {
         id = value.id,
-        instance_id = value.instance_id,
+        instance_id = value.instance_id, workspace_id = value.workspace_id,
         title = value.title, user_title = value.user_title, accent = value.accent, icon = value.icon,
         bounds = copy_rect(value.bounds),
         normal_bounds = copy_rect(value.normal_bounds),
@@ -58,6 +59,12 @@ local function copy_windows(values: {Window}): {Window}
         result[index] = copy_window(values[index])
     end
     return result
+end
+
+-- One copy boundary for all scene consumers; new window fields stay intact.
+function M.copy(scene: Scene): Scene
+    return {width = scene.width, height = scene.height, revision = scene.revision,
+        focus = scene.focus, windows = copy_windows(scene.windows)}
 end
 
 local function workspace(width: integer, height: integer): Rect
@@ -204,14 +211,14 @@ function M.new(width: integer, height: integer): Scene
     }
 end
 
-function M.add(scene: Scene, id: string, instance_id: string, title: string, icon: string?): Scene
+function M.add(scene: Scene, id: string, instance_id: string, title: string, icon: string?, workspace_id: string?): Scene
     if find_index(scene.windows, id) ~= nil then return scene end
 
     local area = workspace(scene.width, scene.height)
     local rect = default_bounds(area, #scene.windows + 1)
     local added: Window = {
         id = id,
-        instance_id = instance_id,
+        instance_id = instance_id, workspace_id = workspace_id,
         title = title, icon = icon,
         bounds = copy_rect(rect),
         normal_bounds = copy_rect(rect),

@@ -3,8 +3,10 @@
 This describes the implemented version-1 store, not the future resource catalog.
 The workspace owner alone opens `bee:workspace_db`. Its default local file is
 `.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The launcher runs
-from the Bee checkout directory. Selecting a project folder does not yet create
-a stable workspace UUID or an authorized filesystem binding.
+from the Bee checkout directory. Each database now has a durable opaque workspace
+ID in the separate
+`workspace_identity` table. Selecting a project folder does not create an
+authorized filesystem binding.
 
 ## Persisted values
 
@@ -20,12 +22,18 @@ ownership and integrity checks. The envelope is bounded to 2 MiB.
 | Each resume record | `id` (view), `instance_id`, `definition_id`, `resume_schema`, `restart_policy`, `resume_state`, optional `window` |
 
 App state is a JSON string bounded to 64 KiB. There are no persisted per-app
-checkpoint sequence numbers, pinned definition versions or workspace UUIDs in
-this envelope. Runtime launch values include revision information, but recovery
+checkpoint sequence numbers or pinned definition versions in this envelope.
+The workspace ID is stored separately and supplied in application launch values.
+New desktop windows and broker replies carry it too. Old local windows without
+the field remain readable and are rebound to their owner on reopen. Remote
+attachment and cross-workspace request routing remain unimplemented. Runtime launch values include revision information, but recovery
 resolves the admitted definition available at boot and checks its declared
 resume schema. An installer must not mistake this for version pinning.
 
-The workspace stores committed scene changes, not each drag preview. It retains
+The workspace stores committed scene changes, not each drag preview. During
+bootstrap and sequential restoration, persistence retains the saved desktop
+projection until restoration finishes. A rejected bind or restore send therefore
+cannot overwrite the previous layout with an incomplete boot screen. It retains
 resume records for failed or incompatible restores. Runtime PIDs, launch tokens,
 TTY mounts and native resources are recreated, never stored as authority.
 PID strings may repeat across runtime boots.
@@ -70,5 +78,7 @@ catalogs likewise need explicit owners. Sharing a local SQLite file would not
 grant cross-owner SQL access or provide synchronization between machines.
 
 [Workspace attachments](WORKSPACE_ATTACHMENTS.md) specifies the proposed identity
-and client layout split for future mixed-workspace tabs. That identity and remote
-attachment protocol are not implemented by the current envelope.
+and client layout split for future mixed-workspace tabs. The storage identity
+exists and the app SDK exposes workspace-qualified logical view references.
+Desktop snapshots preserve workspace identity for newly opened windows.
+Client layout separation, remote routing and attachment remain unimplemented.

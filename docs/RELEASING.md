@@ -58,7 +58,8 @@ module checks run on every Bee target, with a separate Linux module gate.
 Windows desktop support requires replacing the current Bash/POSIX terminal
 assumptions; it is outside this release matrix. Builder has Windows CLI builds.
 
-After merging, select a version and create its tag on the reviewed main commit.
+After merging, an administrator selects a version and creates its tag on the
+reviewed main commit.
 The workflow verifies ancestry. Tag updates and deletions are blocked. Passing
 checks produce a **draft** GitHub release with checksummed assets. Review the
 assets, dependency notices and release notes before publishing. Module tags
@@ -120,7 +121,10 @@ Manual dispatch retries an existing published application release through the
 same checks. Failure stays visible; the workflow never substitutes a mutable label
 or increments the version automatically.
 
-Configure repository secret `WIPPY_HUB_TOKEN` with permission to publish `bee/bee`.
+Configure `WIPPY_HUB_TOKEN` in the GitHub `hub` environment with permission to
+publish `bee/bee`. Limit that environment to the `main` branch and `v*` tags;
+release-tag creation is restricted to administrators. Keep the token out of
+repository-wide secrets, which same-repository PR workflows can access.
 Pre-create the module in the Hub `bee` organization, or grant module-creation
 permission for its first publication.
 The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository

@@ -7,11 +7,11 @@ is [docs/README.md](README.md); no GitHub Pages site is configured.
 
 | Setting | Configuration |
 |---|---|
-| Main | Pull request, one approving review, stale approval dismissal, resolved conversations, current base |
+| Main | Pull request, one code-owner review, stale approval dismissal, resolved conversations, current base |
 | Required checks | `Bee CI` and `Native module CI`, produced by GitHub Actions |
 | Administrators | Main protection applies |
 | History | Linear; force pushes and deletion blocked |
-| Release tags | Updates and deletion blocked, including administrators |
+| Release tags | Creation limited to administrators; updates and deletion blocked for everyone |
 | Default Actions token | Read-only; cannot approve pull requests |
 | External actions | Full commit SHA required |
 | Secret protection | GitHub scanning and push protection enabled |
@@ -24,8 +24,12 @@ See [SECURITY.md](../SECURITY.md) for private reports.
 
 ## Credential boundary
 
-`WIPPY_HUB_TOKEN` is a repository Actions secret. Only the Hub publication workflow
-references it, as `WIPPY_TOKEN` in the credential check and publication steps.
+`WIPPY_HUB_TOKEN` is an Actions secret in the `hub` environment. Only the Hub
+publication workflow references it, as `WIPPY_TOKEN` in the credential check and
+publication steps.
+The environment permits the `main` branch and `v*` tags, with no manual approval
+step. A separate ruleset limits release-tag creation to repository administrators.
+PR branches cannot use the environment, and the token has no repository-wide copy.
 PR builds and artifact assembly receive no Hub token. The publication workflow
 requires a published application release and a successful native tag build at
 the same commit. Its GitHub token has `contents: read` and `actions: read`.

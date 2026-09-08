@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-labelledby="title">
   <title id="title">Bee</title>
+  <rect width="160" height="160" rx="24" fill="#10151b"/>
   <g fill="#f0f3f6">
     <path d="M75 70C48 64 39 42 50 31C64 18 85 37 88 65Z"/>
     <path d="M88 65C86 38 99 24 111 31C126 41 114 62 99 71Z"/>

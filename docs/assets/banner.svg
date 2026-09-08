@@ -12,5 +12,5 @@
   <path d="M60 68h16v62H60zm31 0h16v62H91z" fill="#10151b"/>
   <circle cx="128" cy="91" r="5" fill="#10151b"/>
   </g>
-  <text x="272" y="151" fill="#f0f3f6" font-family="DejaVu Sans" font-size="84" font-weight="bold">Bee</text>
+  <text x="272" y="151" fill="#f0f3f6" font-family="DejaVu Sans, Arial, sans-serif" font-size="84" font-weight="bold">Bee</text>
 </svg>

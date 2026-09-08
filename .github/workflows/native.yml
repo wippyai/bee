@@ -150,4 +150,9 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         RELEASE_TAG: ${{ github.ref_name }}
-      run: gh release create "$RELEASE_TAG" artifacts/* install.sh --verify-tag --draft --generate-notes
+      run: |
+        release_flags=(--latest)
+        if [[ "$RELEASE_TAG" == *-* ]]; then
+          release_flags=(--prerelease --latest=false)
+        fi
+        gh release create "$RELEASE_TAG" artifacts/* install.sh --verify-tag --draft --generate-notes "${release_flags[@]}"

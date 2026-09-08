@@ -52,4 +52,9 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ github.ref_name }}
-      run: gh release create "$RELEASE_TAG" bee-native.tar.gz bee-native.tar.gz.sha256 --verify-tag --draft --notes-file release-notes.md
+      run: |
+        release_flags=(--latest=false)
+        if [[ "$RELEASE_TAG" == *-* ]]; then
+          release_flags+=(--prerelease)
+        fi
+        gh release create "$RELEASE_TAG" bee-native.tar.gz bee-native.tar.gz.sha256 --verify-tag --draft --notes-file release-notes.md "${release_flags[@]}"

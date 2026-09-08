@@ -76,6 +76,10 @@ linked-module notices and their source evidence.
 ## Binary installer
 
 Application releases also attach the repository's `install.sh`. It downloads
+the latest stable application release by default; `--version` can select a
+published prerelease. Native-module releases never update GitHub's latest-release
+pointer. Application tags with a prerelease suffix are marked as prereleases.
+The installer downloads
 published binaries for Linux/macOS on amd64/arm64, verifies the matching archive
 checksum, and replaces the executable through a temporary file in the destination
 directory. `make installer-check` covers installation and failure preservation;

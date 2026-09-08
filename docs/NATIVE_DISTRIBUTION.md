@@ -108,9 +108,10 @@ Cache keys include code identity, source, dependencies and compiler cache versio
 type-check keys also include checker settings and native type manifests. Changed
 entries are recomputed. Workspace databases and deployment selections remain in
 their own state directories. Local sequential validation with two isolated Bee
-installations reused 184 cache files without rewriting them. Concurrent-process
-eviction and cross-computer distribution have not been validated; a shared cache
-is currently opt-in. Use a directory writable only by the owning OS user.
+installations reused 184 cache files without rewriting them. Two concurrent
+installations also passed strict checking with an eight-entry cache limit and
+pruning after every write. Cross-computer distribution remains untested; sharing
+is opt-in. Use a directory writable only by the owning OS user.
 
 ## I/O events
 

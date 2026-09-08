@@ -15,28 +15,33 @@ jobs:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Build pinned native development runtime
       id: toolchain
-      uses: wippyai/builder@d2b6c33c30ac32f9ce0db2af2e17ebd10fdf6dd4
+      uses: wippyai/builder@85186a30868e8cc50e29eedf060a0a47f7f6a7d0
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
+    - name: Configure acceptance harness
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
     - run: python3 -m pip install -r tests/requirements.txt
     - run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
     - run: make native-check
     - name: Assemble application
       env:
-        BUILDER_SCRIPT: ${{ steps.toolchain.outputs.builder }}
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
         RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         GH_TOKEN: ${{ github.token }}
       run: |
         if [ -n "$RELEASE_TAG" ]; then export BEE_VERSION="${RELEASE_TAG#v}"; fi
-        make standalone BUILDER="$BUILDER_SCRIPT"
+        make standalone BUILDER="$BUILDER_BINARY"
     - name: Verify offline standalone desktop
       run: sudo unshare --net -- env PATH="$PATH" make native-binary-check
     - name: Archive binary and provenance
       env:
-        BUILDER_SCRIPT: ${{ steps.toolchain.outputs.builder }}
-      run: python3 "$BUILDER_SCRIPT" package dist/bee --output dist/bee-linux-amd64.tar.gz
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+      run: |
+        "$BUILDER_BINARY" package dist/bee --output dist/bee-linux-amd64.tar.gz
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: bee-linux-amd64

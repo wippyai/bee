@@ -27,15 +27,15 @@
     "command": "bee",
     "mode": "base",
     "data_env": {
-      "BEE_WORKSPACE_DB": "workspace.db",
-      "BEE_THREADS_DB": "threads.db"
+      "BEE_THREADS_DB": "threads.db",
+      "BEE_WORKSPACE_DB": "workspace.db"
     },
     "packs": [
       {
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "481047fe8085eb9a1e72da7cb4d3fd2ac398ad048b5af87b4f66ba7e7ca7a67e"
+        "sha256": "c5539fe1d577344d277b6c4d3d7e3b9fd264818957c6464c687f1ce3f1ccaab7"
       }
     ]
   },

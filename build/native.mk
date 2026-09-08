@@ -1,21 +1,20 @@
 # Standalone distribution uses the same native components for tools and releases.
-BUILDER ?= scripts/build_native.py
+BUILDER ?= env GOWORK=off GOTOOLCHAIN=go1.27.0 go run build/bootstrap.go
 NATIVE_WIPPY ?= .wippy/bin/bee-wippy
 BEE_BINARY ?= dist/bee
-.PHONY: native-tools native-check native-pack standalone
+.PHONY: native-tools native-check native-pack standalone native-binary-check
 native-tools:
-	python3 "$(BUILDER)" toolchain wippy.build.json --output $(NATIVE_WIPPY)
+	$(BUILDER) toolchain wippy.build.json --output "$(NATIVE_WIPPY)"
 
 native-check:
 	$(MAKE) -C native check
 	$(MAKE) -C native integration WIPPY="$(abspath $(NATIVE_WIPPY))"
 
 native-pack:
-	python3 scripts/native_pack.py "$(abspath $(NATIVE_WIPPY))"
+	$(BUILDER) pack wippy.build.json --toolchain "$(abspath $(NATIVE_WIPPY))" $(if $(BEE_VERSION),--version "$(BEE_VERSION)",)
 
 standalone: native-pack
-	python3 "$(BUILDER)" build wippy.build.json --output $(BEE_BINARY)
+	$(BUILDER) build wippy.build.json --output "$(BEE_BINARY)"
 
-.PHONY: native-binary-check
 native-binary-check:
 	python3 tests/native_binary.py "$(BEE_BINARY)"

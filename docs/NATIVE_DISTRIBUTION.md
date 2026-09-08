@@ -17,7 +17,8 @@ make native-binary-check
 ```
 
 The source tools and executable use the same compiled component selection.
-Building requires Git, Python, Go 1.27.0, a C compiler and Git credentials that can
+`build/bootstrap.go` runs the pinned Go assembler.
+The Go assembler requires Git, Go 1.27.0, a C compiler and Git credentials that can
 read the selected private modules. Running the resulting binary needs neither Go,
 Wippy nor the Bee checkout. The native Terminal still requires `/bin/bash` and
 runs with the OS user's authority. The current Linux build uses the platform's

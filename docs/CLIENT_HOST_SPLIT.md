@@ -1,6 +1,7 @@
 # Workspace host and desktop client extraction
 
-Status: extraction plan; the broker readiness step below is now implemented.
+Status: extraction in progress; a private TTY-free host actor is implemented and
+tested separately from the current local desktop.
 The required behavior and native mesh boundary are in
 [workspace attachments](WORKSPACE_ATTACHMENTS.md). Local Bee still combines the
 physical terminal owner and workspace host. No headless profile exists yet.
@@ -8,6 +9,23 @@ The current wide-terminal header shows the workspace's short durable ID; it is
 informational, not a workspace switcher. The generic idle "Ready" label is gone.
 The runtime registry stores definitions/history separately from the workspace
 application store and journal; none of those storage paths is a UI workspace name.
+
+`bee.workspace:host` owns its broker, configured persistence, automatic app
+restoration and checkpoint receipts. Its bootstrap is restricted by host context
+and exact core-spawn policy. It accepts application operations only from its
+bootstrapped supervisor PID; ordinary applications cannot spawn it. The `host`
+fixture opens and checkpoints without a physical TTY, detaches a view, stops the
+host and proves stable workspace/view/instance identities on automatic restart.
+The fixture selects the host's process and storage policies explicitly.
+It also sends a correctly addressed open from a different actor and verifies
+that the unauthorized application never appears in the restored membership.
+
+This private entry is not yet used by `bee` and has no public command or headless
+profile. It does not admit independent client owners or persist their layouts.
+Its supervisor is a stable owner, not a replaceable presenter; losing that
+supervisor ends the host. Local launch still uses the existing combined owner.
+Do not run both owners against the same database: generation checks reject stale
+writes, but they are not host election or a multi-writer protocol.
 
 ## Named supervisor endpoint
 

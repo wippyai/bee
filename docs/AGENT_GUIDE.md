@@ -55,8 +55,10 @@ Do not create a parallel mesh, naming system or registry reconciler.
 Current evidence: the broker retains ready producers without a presenter, its
 attachment module retains one recipient-and-grant record per instance, and stale
 mounts lose observation/input/resize authority after detach. The named-host fixture
-uses native LOCAL registration after startup readiness. These are local proofs;
-there is no production headless host, workspace switcher or `bee hive` CLI yet.
+uses native LOCAL registration after startup readiness. A private `bee.workspace:host`
+now owns its broker and persistence without a physical TTY and has source/pack
+checkpoint/restart coverage. The local desktop does not use it yet; there is no
+headless launch profile, workspace switcher or `bee hive` CLI.
 The short workspace ID in the header is informational.
 
 Establish the local owner boundary first; then the Hive and agent-integration

@@ -159,7 +159,7 @@ def detached():
             code = broker.read_text()
             bootstrap = 'if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end'
             assert code.count(bootstrap) == 1
-            code = code.replace(bootstrap, bootstrap + '\n    assert(process.registry.register("bee.attachment_probe.host", nil, process.registry.LOCAL))')
+            code = code.replace(bootstrap, bootstrap + '\n    if ctx.get("bee.host_owner") == nil then assert(process.registry.register("bee.attachment_probe.host", nil, process.registry.LOCAL)) end')
             broker.write_text(code)
             attachment = project / "src/core/applications/attachment.lua"
             code = attachment.read_text()
@@ -189,12 +189,12 @@ def detached():
             pack = folder / "detached.wapp"
             if packed:
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-            for mode in ("detached", "failed-open", "terminal", "observation"):
+            for mode in ("detached", "failed-open", "terminal", "observation", "host"):
                 args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
-    print("Detached broker source/pack: named endpoint, checkpoint before attachment, stale rights denied, independent Terminal rebind; native observer fan-out, rights denial and stream closure preserve controller", flush=True)
+    print("Source/pack: detached broker and independent Terminal rebind; native observer isolation; stable host checkpoint, supervisor admission and cold restore", flush=True)
 
 
 if __name__ == "__main__":

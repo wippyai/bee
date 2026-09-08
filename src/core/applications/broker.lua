@@ -539,6 +539,7 @@ local function main(owner: string, initial_preferences: unknown)
                 emit(reply)
             elseif req then
                 local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
+                fingerprint = fingerprint .. "\0" .. req.instance_id
                 local cached = completed[req.request_id]
                 if fingerprints[req.request_id] and fingerprints[req.request_id] ~= fingerprint then
                     emit(contract.reply(req.request_id, "open", "request_conflict", "Request ID was reused for another operation"))
@@ -563,19 +564,29 @@ local function main(owner: string, initial_preferences: unknown)
                             end
                         end
                     elseif req.op == "bind" then
-                        recipient = req.recipient
+                        if req.id == "" then recipient = req.recipient end
                         local reply = contract.reply(req.request_id, "bind")
                         local function rebind(item: Instance)
-                            local result = attachment.replace(item.view, item.attachment, item.opened and recipient or "")
+                            local result = attachment.replace(item.view, item.attachment, item.opened and req.recipient or "")
                             item.attachment = result.attachment
                             if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
-                            if result.error_code == "revoke_failed" or (recipient ~= "" and item.opened) then
+                            if result.error_code == "revoke_failed" or (req.recipient ~= "" and item.opened) then
                                 local response = identified(item, "attached", req.request_id, result.error_code, result.error)
                                 if result.error ~= "" then response.mount = "" end
                                 emit(response)
                             end
                         end
-                        for _, item in pairs(instances) do rebind(item) end
+                        if req.id == "" then
+                            for _, item in pairs(instances) do rebind(item) end
+                        else
+                            local item = instances[req.id]
+                            reply.id, reply.instance_id = req.id, req.instance_id
+                            if not item or item.instance_id ~= req.instance_id then
+                                reply.error_code, reply.error = "not_found", "Application view is no longer open"
+                            elseif not item.opened then
+                                reply.error_code, reply.error = "not_ready", "Application view is not ready"
+                            else rebind(item) end
+                        end
                         emit(reply, true)
                     elseif req.op == "close" then
                         local item = instances[req.id]

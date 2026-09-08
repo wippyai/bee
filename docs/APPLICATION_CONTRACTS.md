@@ -142,6 +142,12 @@ still requires a physical desktop; this broker capability is not a headless prof
 
 Broker owner requests use `bee.app.request`: `version: 1`, nonempty `request_id`,
 `op: open|close|bind|shutdown`, with the operation's definition/view/recipient.
+For `bind`, supplying both `id` and `instance_id` targets that exact live view
+within `workspace_id`. A mismatched instance returns `not_found` without revoking
+any grant. An empty recipient detaches only that view; other controllers and the
+default recipient for future opens remain unchanged. Omitting both identifiers
+retains the local desktop's whole-broker bind. Supplying only one is malformed.
+Both forms remain restricted to the trusted broker owner, not arbitrary clients.
 Replies use `bee.app.reply`, version 1, correlated request ID, operation, view ID
 (`id`), instance ID, title, mount, and explicit `error_code`/`error` strings.
 Unsolicited `closed` is emitted on EXIT. Duplicate successful opens focus the

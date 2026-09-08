@@ -46,6 +46,12 @@ Broker open/readiness work without
 that recipient, and mount failures retain ready producers. The recovery envelope combines client layout with application
 state. These are explicit local assumptions, not reusable multi-client contracts.
 
+Owner requests can now bind one exact workspace/instance/view independently.
+That operation leaves other view grants and the default recipient for future
+opens intact. The whole-broker bind remains for local presenter replacement.
+This is a per-view controller boundary; observers, client admission and independent
+client layouts still require the steps below.
+
 ## Owners after extraction
 
 | Owner | State and resources | Failure boundary |

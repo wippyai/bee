@@ -72,7 +72,7 @@ jobs:
         persist-credentials: false
     - name: Build pinned native development runtime
       id: toolchain
-      uses: wippyai/builder@e80e35b6f9301ca01a366b4d1de3eddcf8f3e97d
+      uses: wippyai/builder@67a04357e73b43c35d354c5bb17b3261a9802ea3
       with:
         mode: toolchain
         manifest: wippy.build.json

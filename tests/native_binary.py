@@ -40,8 +40,11 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     folder = Path(temporary) / "empty launch folder"
     folder.mkdir()
     state = Path(temporary) / "bee state"
-    ui = NativeDesktop(folder, state, "bee.settings:app")
+    ui = NativeDesktop(folder, state)
     try:
+        ui.wait("No applications open")
+        ui.open_start()
+        ui.choose("Settings")
         ui.wait("Settings")
         ui.key(b"\x1b[24~")
         ui.wait("Settings")
@@ -66,5 +69,19 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
         ui.quit(confirm=True)
     finally:
         ui.close()
+    for name, heading in (("Process Manager", "Heap"), ("Test Status", "SHARED UI CHECKS")):
+        ui = NativeDesktop(folder, Path(temporary) / name)
+        try:
+            ui.wait("No applications open")
+            ui.open_start()
+            ui.choose("Tools")
+            ui.choose(name)
+            ui.wait(heading)
+            if name == "Test Status":
+                ui.key(b"r")
+                ui.wait("6 passed / 0 failed")
+            ui.quit()
+        finally:
+            ui.close()
     assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
-print("Standalone Bee: embedded boot, Settings recovery, native terminal and presenter rejoin passed")
+print("Standalone Bee: fresh desktop, all default apps, Settings recovery, native terminal and presenter rejoin passed")

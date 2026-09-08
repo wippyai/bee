@@ -66,6 +66,10 @@ assets, dependency notices and release notes before publishing. Module tags
 produce an archive containing only the `native/` tree. GitHub also provides its
 standard repository source downloads.
 
+The tagged commit's complete message must contain no GitHub Actions skip
+directive, including `[skip ci]`. A skipped tag-push workflow produces no assets
+and cannot satisfy the Hub publication gate.
+
 A manual Bee workflow run accepts a preview version and base/bootstrap choice
 and uploads artifacts. Tag releases use base mode. Change that release policy
 through a reviewed workflow change if a product needs bootstrap-only releases.

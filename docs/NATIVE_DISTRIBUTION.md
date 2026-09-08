@@ -54,6 +54,12 @@ Bee has one published module root.
 
 ## Installed application and updates
 
+The embedded baseline contains the complete default desktop, Terminal, Settings,
+Process Manager and Test Status. First boot requires no Hub connection, account
+or downloaded extension. The standalone acceptance harness starts with empty
+state, opens every default app, runs Test Status checks, exercises a native shell
+and verifies Settings recovery. Linux release jobs run it with networking disabled.
+
 ```sh
 ./dist/bee
 ./dist/bee --state-dir /path/to/bee-state

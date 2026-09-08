@@ -7,6 +7,9 @@ Bee is a terminal desktop for coding. Run shells and command-line agents in
 separate windows, switch between them, and keep your workspace preferences.
 Built on [Wippy](https://github.com/wippyai/runtime).
 
+The executable includes the desktop and all four default apps. Its first launch
+works offline; Hub access is optional for later application updates.
+
 [Install](#install) · [Run](#run) · [Development](#development) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md)
 
 ![Bee running Settings, Terminal and Process Manager](docs/assets/desktop.gif)
@@ -32,7 +35,17 @@ Bee-specific agent hooks and MCP integration are not implemented yet.
 ## Install
 
 **Alpha.** Native builds target Linux and macOS on amd64 and arm64.
-There is no stable release download yet. Install a locally built executable onto PATH:
+There is no published release download yet. Build from a checkout with Git,
+Go 1.27.0 and a C compiler installed:
+
+```sh
+make setup
+make standalone
+```
+
+The repositories are private during alpha preparation; Git credentials must have
+read access to Bee and Builder. See the [build prerequisites](docs/NATIVE_DISTRIBUTION.md#build-and-check).
+Install the resulting executable onto PATH:
 
 ```sh
 mkdir -p "$HOME/.local/bin"
@@ -102,7 +115,7 @@ shows local behavior only.
 
 ## License
 
-Bee-owned code is [MIT](LICENSE). Runtime patches retain MPL-2.0; dependencies
+Bee-owned code is [MIT](LICENSE). Wippy retains MPL-2.0; dependencies
 retain their own licenses.
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)

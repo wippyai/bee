@@ -23,7 +23,7 @@ jobs:
         }
         status=$(request https://hub.wippy.ai/api/v1/account/orgs)
         test "$status" = 200
-        jq -e 'any(.[]; .org.name == "bee")' "$response" >/dev/null
+        jq -e 'any(.[]; .org.name == "bee" and (.role == "owner" or .role == "admin"))' "$response" >/dev/null
         status=$(request \
           --header 'Content-Type: application/json' \
           --header 'Connect-Protocol-Version: 1' \

@@ -54,7 +54,7 @@ The downloaded platform archives and saved release proof logs also scanned clean
 Direct scans of all four executable payloads found no Wippy or GitHub token patterns.
 
 Run the **Hub credential check** workflow manually on main after replacing the
-token. It verifies Bee membership and sends an incomplete publish request that
+token. It verifies a Bee owner/admin role and sends an incomplete publish request that
 must reach version validation. The request omits the version and upload payload,
 so it cannot create an upload. The job prints no response bodies or credentials.
 

@@ -1,6 +1,9 @@
 # Native distribution audit
 
-Reviewed September 7, 2026. Scope: Wippy Builder, the runtime application host,
+Historical checkpoint from September 7, 2026. See [native distribution](NATIVE_DISTRIBUTION.md)
+and [GitHub setup](GITHUB.md) for current platform and publication status.
+
+Scope: Wippy Builder, the runtime application host,
 Bee's native module and bootstrap, SDK documentation, release workflows, and UI
 ownership/import boundaries. Builder and Bee repositories are currently private.
 
@@ -14,7 +17,7 @@ ownership/import boundaries. Builder and Bee repositories are currently private.
 | Watcher overflow behavior was underspecified | Document native buffer, runtime retention limits, channel closure and reopening | Checked runtime subscription and overflow implementation |
 | Documentation mixed design instructions with implementation status | Describe ownership, callable APIs, tested behavior and remaining work directly | Manual review of promptmap leads and source references |
 
-The selected builder revision is `6e2852f063f833fdcee9b6a2f63ccee6d8523e01`.
+The builder revision at this checkpoint was `6e2852f063f833fdcee9b6a2f63ccee6d8523e01`.
 The native component is pinned to
 `v0.0.0-20260908020612-39e56a73d8d4`.
 
@@ -58,7 +61,7 @@ The local rebuilt executable, provenance and logs are in `dist/native-audit/`.
 The Docker check exercises the native module. Full Bee desktop acceptance inside
 a container remains separate work.
 
-## Remaining release work
+## Release work identified at this checkpoint
 
 - Review and merge runtime PRs 667 and 668; the current build carries patches.
 - Stabilize the event SDK boundary currently using exported engine APIs.

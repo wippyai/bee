@@ -153,9 +153,10 @@ will replace that implicit choice once this subsystem exists.
 
 ## Native assembly
 
-A pinned builder assembles Bee, Wippy and the typed native `ioevents` module into
-a Linux amd64 executable. Standalone acceptance verifies source-free boot, Settings
+A pinned builder assembles Bee, Wippy and the typed native `ioevents` module for
+Linux and macOS on amd64 and arm64. Standalone acceptance verifies source-free boot, Settings
 recovery, native shell execution and F12. Base/bootstrap deployment handling and a
-draft-release pipeline are implemented; Hub publication, in-app installation and
-stable distribution remain pending. See [native distribution](NATIVE_DISTRIBUTION.md)
+draft-release and Hub publication pipelines are implemented. A completed Hub upload
+and update proof, in-app installation and stable distribution remain pending.
+See [native distribution](NATIVE_DISTRIBUTION.md)
 for the canonical update boundary and outstanding acceptance/license limits.

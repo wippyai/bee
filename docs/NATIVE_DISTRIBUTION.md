@@ -1,6 +1,6 @@
 # Native distribution
 
-Bee can be assembled into one Linux amd64 executable containing Wippy, its
+Bee can be assembled into a Linux or macOS executable on amd64 or arm64 containing Wippy, its
 versioned application pack and the `ioevents` native component. The reusable
 assembler is [wippyai/builder](https://github.com/wippyai/builder); Bee selects its
 inputs in `wippy.build.json` and pins the assembler in `runtime/builder.lock.json`.
@@ -30,7 +30,8 @@ The Go assembler requires Git, Go 1.27.0, a C compiler and Git credentials that 
 read the selected private modules. Running the resulting binary needs neither Go,
 Wippy nor the Bee checkout. The native Terminal still requires `/bin/bash` and
 runs with the OS user's authority. The current Linux build uses the platform's
-C library. Other platforms require separate build and application acceptance.
+C library. CI builds and exercises all four targets for release tags. Windows
+desktop support still needs a replacement for the Bash/POSIX terminal assumptions.
 
 Linux standalone acceptance also passes in a Debian Bookworm container with a
 numeric non-root UID, networking disabled, a read-only root and all capabilities
@@ -79,8 +80,9 @@ verifies artifact hashes, then switches the activation record. Failure retains
 the previous selection. Stop Bee before updating; the state directory has an
 exclusive process-lifetime lock. Hub credentials and an available published Bee
 module are required for real Bee updates. The [release protocol](RELEASING.md)
-provides a local Hub preflight and a publication workflow. Hub credentials and an
-actual Bee publication/update proof remain pending. In-app Hub installation is
+provides a local Hub preflight and a publication workflow. The deployment token
+is configured and passed live publish authorization checks. A completed Bee upload
+and update proof remain pending. In-app Hub installation is
 not implemented.
 
 The manifest's `base` mode provides explicit `--base` recovery using embedded code

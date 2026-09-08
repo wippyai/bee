@@ -15,6 +15,12 @@ The native module uses Go's nested-module tag convention. A major version of
 module releases do not release the desktop; application releases do not change
 the pinned native module automatically.
 
+Native Go pins must resolve from a retained main commit or a module release tag.
+After squash-merging a module change, pin its merged revision before deleting the
+feature branch; Go does not resolve short pseudo-version hashes through PR refs.
+Verify the pin with an empty module cache. The current pin uses the merged main
+revision and contains the same native source as the original development pin.
+
 ## Local release
 
 ```sh

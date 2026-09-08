@@ -48,6 +48,7 @@ possible secret format.
 `make repository-check` validates workflows and scans Git history and current
 files with redacted output. It is part of the application validation and release gates.
 The downloaded platform archives and saved release proof logs also scanned clean.
+Direct scans of all four executable payloads found no Wippy or GitHub token patterns.
 
 ## Release boundaries
 

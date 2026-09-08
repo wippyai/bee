@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.interaction
+entries:
+- name: delivery_test
+  kind: function.lua
+  source: file://delivery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    questions: bee.interaction:delivery
+    protocol: bee.interaction:protocol

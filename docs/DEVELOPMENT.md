@@ -16,7 +16,9 @@ install the executable using the README before testing global launch behavior.
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
 | `src/core/workspace` | Physical terminal lifetime, bootstrap and durable recovery orchestration |
-| `src/core/client` | Private qualified client layout and owned client store; desktop integration pending |
+| `src/core/host` | Private TTY-free workspace host, client admission, renderer grants and live inventory |
+| `src/core/client` | Private desktop client, qualified layout, owned client store and question projection |
+| `src/core/interaction` | Bounded host/client question envelopes and host-owned delivery state |
 | `src/core/session` | Committed desktop projection |
 | `src/core/applications` | Admission, app lifecycle, producer capabilities and operation routing |
 | `src/core/desktop` | Pure scene/reducer/layout values |
@@ -32,6 +34,11 @@ Registry IDs are public identities independent of file location. Existing
 their IDs. `main.lua` is an actor entry point, `app.lua` a default app entry point,
 and `view.lua` a renderer. Use domain names for helpers, not generic `utils.lua`.
 Extract by responsibility when an actor grows; do not create a universal manager.
+The private host/client path is still separate from normal launch. The broker
+owns application questions; host interaction delivery selects eligible clients,
+and the client inbox translates native view identities into its own tab identities.
+The presenter owns only dialog rendering and input. Keep admission and question
+authority out of that presentation layer.
 `bee.terminal:display` is the stable owner's physical display adapter. Its surface
 and viewport handles remain inside that owner; only a native viewport grant goes
 to a presenter. It handles boot, frame forwarding and the paused frame, while the

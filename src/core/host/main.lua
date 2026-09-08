@@ -25,6 +25,9 @@ local function main(owner: string, database_resource: string?)
     local preferences = assert(process.listen("bee.appearance.request", {message = true}))
     local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
+    local selections = assert(process.listen("bee.host.selection", {message = true}))
+    local client_answers = assert(process.listen("bee.host.answer", {message = true}))
+    local client_appearance = assert(process.listen("bee.client.appearance.result", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
@@ -97,7 +100,8 @@ local function main(owner: string, database_resource: string?)
     local function run()
         while true do
             local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
-                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), events:case_receive()})
+                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(),
+                selections:case_receive(), client_answers:case_receive(), client_appearance:case_receive(), events:case_receive()})
             if not selected.ok then break end
             if selected.channel == events then
                 local event = selected.value
@@ -169,7 +173,14 @@ local function main(owner: string, database_resource: string?)
                         if stopping and reply.op == "shutdown" then break end
                     end
                 elseif selected.channel == questions and message:from() == broker then
+                    connections.questions(client_connections, data)
                     deliver("bee.interaction.state", data)
+                elseif selected.channel == selections then
+                    connections.selection(client_connections, tostring(message:from()), data)
+                elseif selected.channel == client_answers then
+                    connections.answer(client_connections, tostring(message:from()), data)
+                elseif selected.channel == client_appearance then
+                    connections.appearance_result(client_connections, tostring(message:from()), data)
                 elseif selected.channel == answers and message:from() == owner then
                     local response = interaction.response(data)
                     if response then send("bee.interaction.response", data) end
@@ -178,15 +189,21 @@ local function main(owner: string, database_resource: string?)
                         send("bee.application.shutdown", {version = 1, op = "prepare"})
                     end
                 elseif selected.channel == preferences and message:from() == broker then
-                    local next_preferences = appearance.decode(data)
-                    if type(data) == "table" and data.version == 1 and contract.text(data.request_id, 80) and next_preferences then
-                        local next: recovery.Snapshot = {version = 1, desktop = {scene = snapshot.desktop.scene,
-                            tabs = snapshot.desktop.tabs, preferences = next_preferences}, applications = snapshot.applications}
-                        local committed, err = database:write(next)
-                        if committed then snapshot = next end
-                        send("bee.appearance.state", {version = 1, request_id = data.request_id,
-                            theme = snapshot.desktop.preferences.theme, background = snapshot.desktop.preferences.background,
-                            taskbar = snapshot.desktop.preferences.taskbar, error_code = committed and "" or "persistence_failed", error = err or ""})
+                    if connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping) then
+                        -- An admitted renderer owns this request through the
+                        -- client store. The connections model sends the
+                        -- scoped result back to the broker.
+                    else
+                        local next_preferences = appearance.decode(data)
+                        if type(data) == "table" and data.version == 1 and contract.text(data.request_id, 80) and next_preferences then
+                            local next: recovery.Snapshot = {version = 1, desktop = {scene = snapshot.desktop.scene,
+                                tabs = snapshot.desktop.tabs, preferences = next_preferences}, applications = snapshot.applications}
+                            local committed, err = database:write(next)
+                            if committed then snapshot = next end
+                            send("bee.appearance.state", {version = 1, request_id = data.request_id,
+                                theme = snapshot.desktop.preferences.theme, background = snapshot.desktop.preferences.background,
+                                taskbar = snapshot.desktop.preferences.taskbar, error_code = committed and "" or "persistence_failed", error = err or ""})
+                        end
                     end
                 end
             end
@@ -195,7 +212,7 @@ local function main(owner: string, database_resource: string?)
     local completed, run_error = pcall(run)
     database:close()
     process.terminate(broker)
-    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests}) do
+    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, selections, client_answers, client_appearance}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

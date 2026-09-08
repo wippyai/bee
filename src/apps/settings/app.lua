@@ -19,8 +19,8 @@ local function main(value: unknown)
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
-    local preferences = appearance.defaults()
-    local confirmed = preferences
+    local preferences: appearance.Preferences = appearance.defaults()
+    local confirmed: appearance.Preferences = preferences
     local status = ""
     local pending_ticks = 0
     local ticker = assert(time.ticker("1s"))
@@ -102,10 +102,12 @@ local function main(value: unknown)
                 local payload: unknown = message:payload():data()
                 local next_preferences = appearance.decode(payload)
                 if next_preferences and type(payload) == "table" and payload.version == 1 then
-                    confirmed = next_preferences
+                    local error_code = type(payload.error_code) == "string" and payload.error_code or ""
+                    if error_code == "" then confirmed = next_preferences end
                     -- An older acknowledgement must not undo a newer key/click.
                     if pending == "" or pending == payload.request_id then
-                        preferences = next_preferences; pending = ""; dirty = true
+                        preferences = confirmed
+                        pending = ""; dirty = true
                         status = type(payload.error) == "string" and payload.error or ""
                     end
                 end

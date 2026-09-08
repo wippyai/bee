@@ -15,7 +15,7 @@ informational, not a workspace switcher. The generic idle "Ready" label is gone.
 The runtime registry stores definitions/history separately from the workspace
 application store and journal; none of those storage paths is a UI workspace name.
 
-`bee.workspace:host` owns its broker, configured persistence, automatic app
+`bee.host:main` owns its broker, configured persistence, automatic app
 restoration and checkpoint receipts. Its bootstrap is restricted by host context
 and exact core-spawn policy. Its supervisor selects admitted client executions
 and their open, close and control permissions; ordinary applications cannot spawn
@@ -32,8 +32,8 @@ It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
 This private entry is not yet used by `bee` and has no public command or headless
-profile. It admits private desktop clients and delivers catalog/live-view snapshots;
-client question delivery and normal launcher integration remain unfinished.
+profile. It admits private desktop clients and delivers catalog/live-view and
+selected-question snapshots; normal launcher integration remains unfinished.
 Each private desktop client owns its separate layout store.
 Its supervisor is a stable owner, not a replaceable presenter; losing that
 supervisor ends the host. Local launch still uses the existing combined owner.
@@ -44,7 +44,8 @@ writes, but they are not host election or a multi-writer protocol.
 
 Only the bootstrapped supervisor may send `bee.host.client` with version 1,
 request ID, workspace ID, exact recipient PID and `admit`, `detach` or `render`. Admission
-requires explicit `open`, `close` and `control` booleans. The host monitors that
+requires explicit `open`, `close` and `control` booleans; optional `appearance`
+defaults to false and permits client preference changes. The host monitors that
 execution and supplies a fresh connection ID through `bee.host.admitted`, along
 with `renderer`, `renderer_generation` and `renderer_pending`.
 Requests must match both the actual sender and the connection ID; metadata does
@@ -139,13 +140,21 @@ independent screen geometry and selected tabs, native Terminal input, F12, clien
 exit without stopping the Terminal, and fresh-client reattachment using the saved
 layout and the same live shell variable. Ctrl+Q detaches this private client;
 it does not negotiate shutdown of the host's applications.
+The same source/pack fixture checks guarded Terminal close, confirmation isolation
+between clients, F12 with a pending question, cancellation retaining the shell,
+accepted close after client reattachment and stale-instance close rejection.
 
-This entry is still incomplete: it has no client dialog delivery or Settings
-appearance route, no mixed-workspace composition, no automatic migration from the
+The fixture also opens Settings through Start and verifies that a theme change
+persists to that client's store without changing the other client's preferences.
+The host requires an explicit `appearance` admission grant for changes; shared
+producer page defaults remain workspace-owned. The same source/pack fixture
+verifies a fresh Settings write after F12 and denial for a second client without
+the appearance grant. Reading current client preferences does not grant writes.
+
+This entry is still incomplete: it has no mixed-workspace composition, no automatic migration from the
 old workspace desktop, and no public launcher. Unexpected presenter/host loss
 ends the client; supervised admission/replacement timeouts and paused recovery
-still need implementation. Application close requiring a dialog is not usable
-through this entry yet. These limitations are why normal `bee` continues to use
+still need implementation. These limitations are why normal `bee` continues to use
 the existing combined owner.
 
 ## Named supervisor endpoint
@@ -239,9 +248,14 @@ uses the combined workspace owner.
 Client preferences own wallpaper, desktop chrome and tab presentation. The
 workspace/application owns producer page defaults and application appearance.
 Two clients with different themes observe the same application pixels; neither
-may recolor the shared producer merely by attaching. The current local Settings
-operation changes both from one preference value. Preserve that local experience
-during migration, then make the scope explicit when multiple clients are enabled.
+may recolor the shared producer merely by attaching. Normal combined-launcher
+Settings changes both from one preference value. In the private client path,
+the broker routes Settings through its current native attachment recipient to
+the admitted client, which commits its preferences through its own session/store.
+The response is client-scoped and does not change workspace producer defaults.
+Unknown or replaced renderers cannot fall back to workspace preference writes.
+Preserve the combined local experience until normal-launch migration makes the
+scope explicit to the user.
 The Classic terminal palette belongs to producer appearance, not client chrome.
 
 ### Presenter recipient ownership
@@ -255,7 +269,7 @@ explicit `renderer` PID. An empty renderer clears presentation. Client `control`
 permission is required; core owners, other clients and their selected or pending
 renderers cannot be chosen. Client bind payloads still cannot select recipients.
 
-`bee.workspace:client_connections` owns admissions, correlation and renderer
+`bee.host:clients` owns admissions, correlation and renderer
 transitions inside the host actor. Replacement fences bind requests and old bind
 replies, revokes the old recipient's grants, removes its monitor, then monitors
 and selects the replacement. `bee.host.presentation` informs the stable client
@@ -294,9 +308,27 @@ accepts one valid answer and retires the pending request everywhere. Dismissal,
 client disconnection and replacement are not consent. Preserve the current
 broker-owned questions across F12 while extracting this delivery layer.
 
-This inbox is a proposed client process boundary, not a new globally trusted
-mailbox. Its limits, sender admission, allowed response shapes and replay rules
-must be checked independently of the visual shell implementation.
+The private implementation uses `bee.client:inbox`, a pure module inside the
+stable client actor. A separate inbox process remains optional. The broker still
+owns pending requests; `bee.interaction:delivery` keeps only host-local selections
+and dispatched-answer state. Source/pack desktop acceptance covers Terminal close
+delivery and presenter replacement; this is not yet part of normal launch.
+
+`bee.host.selection` carries workspace/connection identity, a monotonically
+increasing selection revision and at most 16 exact view/instance pairs. The host
+authenticates the sending client and requires its supervisor-selected `control`
+permission. Selection expresses interest, not additional authority. Connection-
+qualified `bee.host.questions` snapshots contain only matching questions; workspace
+shutdown questions stay on the supervisor route.
+
+`bee.host.answer` echoes the selection revision and exact question/view/instance
+identity. The host dispatches at most one answer while that question remains
+pending. `bee.host.question_result` acknowledges dispatch or reports rejection;
+only broker publication establishes retirement. Failed delivery permits retry.
+Detaching removes selection, and replacing a renderer preserves unanswered
+questions. The client maps native view IDs to its tab IDs for presentation and
+reverses that mapping for answers. Admitted-client close requests also require
+the current instance ID, so a stale tab cannot close a replacement instance.
 
 ## Local attachment proof first
 

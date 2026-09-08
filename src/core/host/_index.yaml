@@ -1,0 +1,42 @@
+version: '1.0'
+namespace: bee.host
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, security, ctx, uuid]
+  imports:
+    persistence: bee.workspace:persistence
+    recovery: bee.workspace:recovery
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+    interaction: bee.application:interaction
+    connections: bee.host:clients
+    inventory: bee.host:inventory
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+- name: clients
+  kind: library.lua
+  source: file://clients.lua
+  modules: [process, uuid, hash]
+  imports:
+    clients: bee.host:protocol
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    questions: bee.interaction:delivery
+    interaction: bee.application:interaction
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    inventory: bee.host:inventory
+    appearance: bee.desktop:appearance

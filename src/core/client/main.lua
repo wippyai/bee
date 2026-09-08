@@ -15,8 +15,10 @@ local contract = require("contract")
 local inventory = require("inventory")
 local host_protocol = require("host_protocol")
 local physical = require("physical")
+local inbox = require("inbox")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
+type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 
 local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?)
     if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
@@ -46,6 +48,10 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local commands = listen("bee.desktop.command")
         local scenes = listen("bee.desktop.scene")
         local acknowledgements = listen("bee.desktop.ack")
+        local question_states = listen("bee.host.questions")
+        local question_results = listen("bee.host.question_result")
+        local answers = listen("bee.interaction.response")
+        local appearance_requests = listen("bee.client.appearance.request")
         assert(process.monitor(owner)); assert(process.monitor(host))
         local database, database_error = store.open(database_resource)
         if not database then error(tostring(database_error)) end
@@ -63,6 +69,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local removals: {[string]: string} = {}
         local pending: {[string]: {op: string, tab_id: string}} = {}
         local pending_count = 0
+        local appearance_pending: {[string]: AppearancePending} = {}
         for _, target in ipairs(layout.targets) do targets[target.tab_id] = target end
         local catalog: {contract.Descriptor} = {}
         local live: {inventory.View} = {}
@@ -70,6 +77,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local connection_id, renderer_generation = "", ""
         local bindings: {[string]: Binding} = {}
         local active = false
+        local inbox_state: inbox.State? = nil
         local initial_opened = false
         local self = tostring(process.pid())
         local function send(recipient: string, topic: string, value: unknown)
@@ -94,13 +102,34 @@ local function main(owner: string, host: string, workspace_id: string, database_
             if active then send(presenter, "bee.desktop.scene", {scene = layout.scene, tabs = layout.tabs,
                 preferences = layout.preferences, catalog = catalog}) end
         end
+        local function publish_questions()
+            if active and inbox_state then
+                send(presenter, "bee.interaction.state", {version = 1, items = inbox_state.items})
+            end
+        end
+        local function select_targets()
+            if inbox_state and inbox.select(inbox_state, layout.targets) then
+                publish_questions()
+                send(host, "bee.host.selection", inbox.selection(inbox_state))
+            end
+        end
         local function adopt(value: unknown)
             local next_layout, projection_error = state.project(layout, value, targets)
             if projection_error then error(projection_error) end
             if not next_layout then return end
+            if next_layout.scene.revision == layout.scene.revision
+                and next_layout.scene.focus == layout.scene.focus
+                and #next_layout.scene.windows == #layout.scene.windows
+                and #next_layout.tabs == #layout.tabs
+                and next_layout.preferences.theme == layout.preferences.theme
+                and next_layout.preferences.background == layout.preferences.background
+                and next_layout.preferences.taskbar == layout.preferences.taskbar then
+                return
+            end
             local committed, err = store.write(database, next_layout)
             if not committed then error(tostring(err)) end
             layout = next_layout
+            select_targets()
             publish()
         end
         local function remove(key: string)
@@ -182,13 +211,22 @@ local function main(owner: string, host: string, workspace_id: string, database_
                 ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self)))
         end
+        local function appearance_result(request: host_protocol.ClientAppearanceRequest, code: string, message: string)
+            local current = layout.preferences
+            send(host, "bee.client.appearance.result", {version = 1, request_id = request.request_id,
+                action = request.action, workspace_id = request.workspace_id, connection_id = request.connection_id,
+                renderer = request.renderer, renderer_generation = request.renderer_generation,
+                revision = layout.scene.revision, theme = current.theme, background = current.background,
+                taskbar = current.taskbar, error_code = code, error = message})
+        end
         local function run()
             send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id, client_id = database.client_id})
             while true do
                 local cases = {events:case_receive(), input:case_receive(), admissions:case_receive(),
                     presentations:case_receive(), replies:case_receive(),
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(),
-                    acknowledgements:case_receive(), updates:case_receive()}
+                    acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
+                    question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive()}
                 -- These channels are independent of admission delivery. Leave their
                 -- initial snapshots queued until we can validate the connection.
                 if connection_id ~= "" then
@@ -226,7 +264,48 @@ local function main(owner: string, host: string, workspace_id: string, database_
                         local token, generation = contract.text(data.connection_id, 80), contract.text(data.renderer_generation, 80)
                         if not token or token == "" or not generation or generation == "" then error("Invalid admission identity") end
                         connection_id, renderer_generation = token, generation
+                        inbox_state = inbox.new(workspace_id, token)
+                        select_targets()
                         spawn_presenter()
+                elseif selected.channel == question_states and sender == host then
+                        if inbox_state and inbox.observe(inbox_state, data) then publish_questions() end
+                    elseif selected.channel == appearance_requests and sender == host then
+                        local request = host_protocol.client_appearance(data)
+                        if request then
+                            if request.workspace_id ~= workspace_id or request.connection_id ~= connection_id
+                                or request.renderer_generation ~= renderer_generation or request.renderer ~= presenter or not active then
+                                appearance_result(request, "stale_renderer", "Client renderer is no longer current")
+                            elseif request.action == "state" then
+                                appearance_result(request, "", "")
+                            else
+                                local count = 0
+                                for _ in pairs(appearance_pending) do count = count + 1 end
+                                if count >= 16 then
+                                    appearance_result(request, "busy", "Client appearance request capacity reached")
+                                else
+                                    local session_request_id = uuid.v7()
+                                    appearance_pending[session_request_id] = {request = request}
+                                    local sent, err = process.send(session, "bee.desktop.command", {version = 1,
+                                        op = "appearance", request_id = session_request_id, theme = request.theme,
+                                        background = request.background, taskbar = request.taskbar,
+                                        expected_revision = layout.scene.revision})
+                                    if not sent then
+                                        appearance_pending[session_request_id] = nil
+                                        appearance_result(request, "delivery_failed", tostring(err))
+                                    end
+                                end
+                            end
+                        end
+                    elseif selected.channel == answers and sender == presenter and active then
+                        if inbox_state then
+                            local response = inbox.answer(inbox_state, data)
+                            if response then send(host, "bee.host.answer", response) end
+                        end
+                    elseif selected.channel == question_results and sender == host then
+                        if inbox_state then
+                            local result = inbox.result(inbox_state, data)
+                            if result and active then send(presenter, "bee.interaction.result", result) end
+                        end
                     elseif selected.channel == controls and sender == presenter then
                         if type(data) == "table" and data.version == 1 then
                             if data.op == "ready" then
@@ -252,6 +331,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
                             if retired_presenter ~= "" then process.terminate(retired_presenter); retired_presenter = "" end
                             if retired_view then retired_view:close(); retired_view = nil end
                             publish()
+                            publish_questions()
                             for _, view in ipairs(live) do
                                 local key = tab(view.view_id, view.instance_id)
                                 local target = key and targets[key] or nil
@@ -347,7 +427,23 @@ local function main(owner: string, host: string, workspace_id: string, database_
                                     targets[key], retired[key] = nil, nil
                                 end
                                 removals[ack.request_id] = nil
-                            elseif active then send(presenter, "bee.desktop.ack", ack) end
+                            else
+                                local pending_appearance = appearance_pending[ack.request_id]
+                                if pending_appearance then
+                                    local appearance_request = pending_appearance.request
+                                    if not appearance_request then error("Missing pending appearance request") end
+                                    appearance_pending[ack.request_id] = nil
+                                    local code, message = ack.error_code, ack.error
+                                    if code == "" then
+                                        -- Session and durable projection must agree before
+                                        -- reporting success. A failed commit ends this client
+                                        -- through the same cleanup path as any scene write.
+                                        adopt(data)
+                                    end
+                                    appearance_result(appearance_request, code, message)
+                                end
+                                if active then send(presenter, "bee.desktop.ack", ack) end
+                            end
                         end
                     end
                 end

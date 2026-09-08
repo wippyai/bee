@@ -6,22 +6,49 @@ local hash = require("hash")
 local clients = require("clients")
 local contract = require("contract")
 local inventory = require("inventory")
+local questions = require("questions")
+local interaction = require("interaction")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean, renderer_generation: string}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
+type AppearanceOp = "state" | "set"
+type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
+    renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
     inventory: inventory.State,
+    questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
-    completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string}}
+    completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
+    appearance_routes: {[string]: AppearanceRoute}}
 local M = {}
 function M.new(owner: string, broker: string, workspace_id: string): State
     return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()),
         inventory = inventory.new(workspace_id),
-        admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {}}
+        questions = questions.new(workspace_id),
+        admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
+        appearance_routes = {}}
 end
 local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)
     assert(process.send(state.owner, "bee.host.client_result", {version = 1, request_id = id, op = op,
         workspace_id = state.workspace_id, recipient = recipient, connection_id = connection_id, error_code = code, error = message}))
+end
+
+local function appearance_result(state: State, request_id: string, action: AppearanceOp,
+    connection_id: string, renderer: string, renderer_generation: string,
+    theme: string, background: string, taskbar: string, code: string, message: string)
+    -- This reply is consumed only by the authenticated broker. The stable
+    -- client connection fields are retained for diagnostics and correlation;
+    -- the broker already authenticated the originating Settings process.
+    assert(process.send(state.broker, "bee.appearance.state", {version = 1, scope = "client",
+        request_id = request_id, action = action, workspace_id = state.workspace_id,
+        connection_id = connection_id, renderer = renderer, renderer_generation = renderer_generation,
+        revision = 0, theme = theme, background = background, taskbar = taskbar,
+        error_code = code, error = message}))
+end
+
+local function failed_appearance(state: State, route: AppearanceRoute, code: string, message: string)
+    appearance_result(state, route.request_id, route.action, route.connection_id, route.renderer,
+        route.renderer_generation, route.theme, route.background, route.taskbar, code, message)
 end
 local function pending(state: State, client: clients.Client): Change?
     for _, change in pairs(state.changes) do if change.connection_id == client.connection_id then return change end end
@@ -35,6 +62,7 @@ local function change(state: State, client: clients.Client, op: ChangeOp, reques
 end
 local function detach(state: State, client: clients.Client, request_id: string)
     client.detaching = true
+    questions.forget(state.questions, client.connection_id)
     local previous = pending(state, client)
     if previous then
         if previous.op == "render" and state.queued_detaches[client.connection_id] == nil then
@@ -45,6 +73,41 @@ local function detach(state: State, client: clients.Client, request_id: string)
         return
     end
     change(state, client, "detach", request_id, "")
+end
+local function send_questions(state: State, client: clients.Client)
+    if client.detaching or not client.permissions.control then return end
+    local snapshot = questions.snapshot(state.questions, client.connection_id)
+    if snapshot and not process.send(client.recipient, "bee.host.questions", snapshot) then detach(state, client, "") end
+end
+function M.questions(state: State, data: unknown)
+    if not questions.update(state.questions, data) then error("Invalid broker question snapshot") end
+    for _, client in pairs(state.admitted) do send_questions(state, client) end
+end
+function M.selection(state: State, caller: string, data: unknown)
+    local client = state.admitted[caller]
+    if not client or client.detaching or not client.permissions.control then return end
+    if questions.select(state.questions, client.connection_id, data) then send_questions(state, client) end
+end
+function M.answer(state: State, caller: string, data: unknown)
+    local client = state.admitted[caller]
+    if not client or client.detaching then return end
+    local response = interaction.response(data)
+    if not response then return end
+    local code, failure = "permission_denied", "Client interaction control is not granted"
+    if client.permissions.control then
+        local accepted, reason = questions.answer(state.questions, client.connection_id, data)
+        code, failure = reason or "", reason or ""
+        if accepted then
+            local sent, err = process.send(state.broker, "bee.interaction.response", {version = 1,
+                request_id = accepted.request_id, id = accepted.id, instance_id = accepted.instance_id,
+                action = accepted.action, value = accepted.value})
+            if sent then questions.dispatched(state.questions, accepted)
+            else code, failure = "delivery_failed", tostring(err) end
+        end
+    end
+    if not process.send(client.recipient, "bee.host.question_result", {version = 1, workspace_id = state.workspace_id,
+        connection_id = client.connection_id, request_id = response.request_id, id = response.id,
+        instance_id = response.instance_id, error_code = code, error = failure}) then detach(state, client, "") end
 end
 local function presentation(state: State, client: clients.Client, code: string, message: string): (boolean, string?)
     local sent, err = process.send(client.recipient, "bee.host.presentation", {version = 1, workspace_id = state.workspace_id,
@@ -81,6 +144,12 @@ local function forget(state: State, connection_id: string)
     local retained: {string} = {}
     for _, id in ipairs(state.completed) do if state.routes[id] then retained[#retained + 1] = id end end
     state.completed = retained
+    for id, route in pairs(state.appearance_routes) do
+        if route.connection_id == connection_id then
+            failed_appearance(state, route, "unavailable", "Client connection was detached")
+            state.appearance_routes[id] = nil
+        end
+    end
 end
 function M.control(state: State, caller: string, data: unknown, ready: boolean): string?
     if caller ~= state.owner then return nil end
@@ -194,6 +263,89 @@ local function release_renderer(client: clients.Client): (boolean, string?)
     client.renderer = ""
     return true, nil
 end
+
+-- Route an appearance request from the broker to the stable client owner only
+-- when the broker's attachment recipient is the client's current renderer.
+-- A nonempty recipient must be a currently admitted renderer. The private host
+-- never interprets an unknown renderer as permission to change workspace state.
+function M.appearance(state: State, caller: string, data: unknown, ready: boolean): boolean
+    if caller ~= state.broker then return false end
+    local request = clients.appearance(data)
+    if not request or request.recipient == "" then return false end
+
+    local client: clients.Client? = nil
+    for _, candidate in pairs(state.admitted) do
+        if candidate.renderer == request.recipient then client = candidate; break end
+    end
+    if not client then
+        appearance_result(state, request.request_id, request.action, "", request.recipient, "",
+            request.theme, request.background, request.taskbar, "stale_renderer", "Client renderer is not admitted")
+        return true
+    end
+
+    local route: AppearanceRoute = {request_id = request.request_id, action = request.action,
+        recipient = client.recipient, connection_id = client.connection_id, renderer = client.renderer,
+        renderer_generation = client.renderer_generation, theme = request.theme, background = request.background,
+        taskbar = request.taskbar}
+    local code, message = "", ""
+    if not ready then code, message = "busy", "Host is not accepting clients"
+    elseif client.detaching then code, message = "unavailable", "Client is detaching"
+    elseif request.action == "set" and not client.permissions.appearance then code, message = "permission_denied", "Client appearance is not granted"
+    elseif client.renderer == "" then code, message = "unavailable", "Client renderer is unavailable"
+    elseif state.appearance_routes[request.request_id] then code, message = "request_conflict", "Appearance request ID was reused"
+    else
+        local count = 0
+        for _, pending_route in pairs(state.appearance_routes) do
+            if pending_route.connection_id == client.connection_id then count = count + 1 end
+        end
+        if count >= 16 then code, message = "busy", "Client appearance request capacity reached" end
+    end
+    if code ~= "" then
+        failed_appearance(state, route, code, message)
+        return true
+    end
+
+    state.appearance_routes[request.request_id] = route
+    local sent, err = process.send(client.recipient, "bee.client.appearance.request", {version = 1,
+        request_id = request.request_id, action = request.action, workspace_id = state.workspace_id,
+        connection_id = client.connection_id, renderer = client.renderer,
+        renderer_generation = client.renderer_generation, theme = request.theme,
+        background = request.background, taskbar = request.taskbar})
+    if not sent then
+        state.appearance_routes[request.request_id] = nil
+        failed_appearance(state, route, "delivery_failed", tostring(err))
+    end
+    return true
+end
+
+-- Only the stable admitted client execution may answer a route. The renderer
+-- and connection generation must still be the exact values selected by the
+-- host when the request was delivered.
+function M.appearance_result(state: State, caller: string, data: unknown): boolean
+    local response = clients.appearance_result(data)
+    if not response then return false end
+    local route = state.appearance_routes[response.request_id]
+    if not route or caller ~= route.recipient or response.workspace_id ~= state.workspace_id
+        or response.action ~= route.action or response.connection_id ~= route.connection_id
+        or response.renderer ~= route.renderer or response.renderer_generation ~= route.renderer_generation then
+        return false
+    end
+    state.appearance_routes[response.request_id] = nil
+    local client = state.admitted[caller]
+    if not client or client.detaching or client.rendering or client.connection_id ~= route.connection_id
+        or client.renderer ~= route.renderer or client.renderer_generation ~= route.renderer_generation then
+        failed_appearance(state, route, "stale_renderer", "Client renderer changed before appearance completed")
+        return true
+    end
+    assert(process.send(state.broker, "bee.appearance.state", {version = 1, scope = "client",
+        request_id = response.request_id, action = response.action, workspace_id = state.workspace_id,
+        connection_id = response.connection_id, renderer = response.renderer,
+        renderer_generation = response.renderer_generation, revision = response.revision,
+        theme = response.theme, background = response.background, taskbar = response.taskbar,
+        error_code = response.error_code, error = response.error}))
+    return true
+end
+
 function M.reply(state: State, reply: contract.Reply, current: inventory.State): boolean
     if current.workspace_id ~= state.workspace_id then error("Foreign workspace result inventory") end
     state.inventory = current

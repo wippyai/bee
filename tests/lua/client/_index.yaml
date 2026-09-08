@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: inbox_test
+  kind: function.lua
+  source: file://inbox_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    inbox: bee.client:inbox
 - name: state_test
   kind: function.lua
   source: file://state_test.lua

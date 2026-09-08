@@ -5,6 +5,7 @@ type Spec = {request_id: string, id: string, instance_id: string, kind: Kind,
 type Wire = {version: integer, request_id: string, id: string, instance_id: string, kind: Kind,
     title: string, message: string, accept: string, initial: string}
 type Response = {request_id: string, id: string, instance_id: string, action: "accept" | "cancel", value: string}
+type Result = {version: integer, request_id: string, id: string, instance_id: string, error_code: string, error: string}
 local M = {}
 local function text(value: unknown, limit: integer, required: boolean): string?
     if type(value) ~= "string" or #value > limit or value:find("%c") or (required and value == "") then return nil end
@@ -37,6 +38,13 @@ function M.response(value: unknown): Response?
     if not request_id or not id or not instance_id or not answer then return nil end
     if action == "cancel" and answer ~= "" then return nil end
     return {request_id = request_id, id = id, instance_id = instance_id, action = action, value = answer}
+end
+function M.result(value: unknown): Result?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local request_id, id = text(value.request_id, 80, true), text(value.id, 80, true)
+    local instance_id, code = text(value.instance_id, 80, true), text(value.error_code, 80, false)
+    if not request_id or not id or not instance_id or not code or type(value.error) ~= "string" or #value.error > 4096 then return nil end
+    return {version = 1, request_id = request_id, id = id, instance_id = instance_id, error_code = code, error = value.error}
 end
 function M.shutdown(value: unknown): Spec?
     if type(value) ~= "table" or value.version ~= 1 then return nil end

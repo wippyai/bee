@@ -54,6 +54,11 @@ local function define_tests()
             test.eq(clients.allowed(client, request), false)
             request.op = "close"
             test.eq(clients.allowed(client, request), false)
+            client.permissions.close = true
+            request.instance_id = ""
+            test.eq(clients.allowed(client, request), false)
+            request.instance_id = "instance"
+            test.eq(clients.allowed(client, request), true)
             request.op = "shutdown"
             test.eq(clients.allowed(client, request), false)
             request.op = "unbind"
@@ -88,6 +93,23 @@ local function define_tests()
             value.views.workspace_id = "ffffffffffffffffffffffffffffffff"
             test.is_nil(clients.result(value))
             test.is_nil(clients.result(reply))
+        end)
+        test.it("keeps appearance authority explicit and validates scoped receipts", function()
+            local value = {version = 1, request_id = "admit", workspace_id = identity,
+                op = "admit", recipient = "client", permissions = {open = true, close = true, control = true}}
+            local admitted = clients.control(value)
+            if not admitted or not admitted.permissions then error("Missing admission") end
+            test.is_false(admitted.permissions.appearance == true)
+            local receipt = {version = 1, request_id = "appearance", action = "set", workspace_id = identity,
+                connection_id = "connection", renderer = "renderer", renderer_generation = "generation",
+                revision = 2, theme = "honey", background = "dots", taskbar = "labels",
+                error_code = "", error = ""}
+            test.not_nil(clients.appearance_result(receipt))
+            receipt.revision = -1
+            test.is_nil(clients.appearance_result(receipt))
+            receipt.revision = 2
+            receipt.renderer_generation = ""
+            test.is_nil(clients.appearance_result(receipt))
         end)
     end)
 end

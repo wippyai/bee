@@ -37,7 +37,7 @@ def run():
                                     env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
                                          "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
             assert result.returncode == 0, result.stdout + result.stderr
-    print("Desktop clients source/pack: separate displays, qualified selected tabs, owned layouts, native PTY isolation, F12, independent exit and retained-terminal client restart")
+    print("Desktop clients source/pack: separate displays, qualified tabs, PTY isolation, F12 with close dialog, cancel/accept, independent exit, retained-terminal restart and isolated Settings persistence")
 
 
 if __name__ == "__main__":

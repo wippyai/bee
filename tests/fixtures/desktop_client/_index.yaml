@@ -23,9 +23,10 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, security, tty, time]
+  modules: [process, security, tty, time, channel]
   imports:
     store: bee.client:store
+    decode: bee.protocol:decode
   security:
     policies: [bee.desktop_client_probe:root_policy]
   meta:

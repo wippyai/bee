@@ -55,14 +55,14 @@ Do not create a parallel mesh, naming system or registry reconciler.
 Current evidence: the broker retains ready producers without a presenter, its
 attachment module retains one recipient-and-grant record per instance, and stale
 mounts lose observation/input/resize authority after detach. The named-host fixture
-uses native LOCAL registration after startup readiness. A private `bee.workspace:host`
+uses native LOCAL registration after startup readiness. A private `bee.host:main`
 now owns its broker and persistence without a physical TTY and has source/pack
 checkpoint/restart coverage. The local desktop does not use it yet; there is no
 headless launch profile, workspace switcher or `bee hive` CLI.
 The private host admits supervisor-selected client actors with explicit operation
 permissions and connection IDs. Source/pack tests cover two clients, detach,
 re-admission, exit cleanup and retained native terminals. Public desktop attachment,
-legacy client-store migration and client question delivery remain unfinished; see the
+legacy client-store migration remain unfinished; see the
 private admission contract in `CLIENT_HOST_SPLIT.md`.
 Admitted actors receive separate, connection-qualified catalog and live-view
 snapshots, including apps opened before admission. These descriptions carry no
@@ -77,8 +77,10 @@ normal desktop launch still uses its existing F12 path.
 The private `bee.client:main` now composes a display, session, presenter and client
 store against one admitted host. Source/pack checks prove two independent desktop
 actors, selected-tab isolation, F12 and fresh-client reattachment to a retained
-Terminal. It lacks dialogs, Settings routing, mixed workspaces and robust failure
-recovery; do not substitute it for normal launch yet. See the private client
+Terminal. Guarded-close dialogs are tested across F12 and client reattachment.
+Settings theme persistence, isolation, F12 and denied writes also have source/pack
+acceptance; mixed workspaces and robust failure
+recovery remain unfinished. Do not substitute it for normal launch yet. See the private client
 acceptance section in `CLIENT_HOST_SPLIT.md`.
 `CLIENT_STATE.md` documents the private client store and import receipt. Its
 qualified layout and source/pack persistence tests pass, but normal desktop launch

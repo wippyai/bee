@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: inbox
+  kind: library.lua
+  source: file://inbox.lua
+  imports:
+    layout: bee.client:state
+    questions: bee.interaction:protocol
+    interaction: bee.application:interaction
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -12,9 +19,11 @@ entries:
     decode: bee.protocol:decode
     input_decode: bee.protocol:input
     contract: bee.protocol:application
-    inventory: bee.workspace:inventory
-    host_protocol: bee.workspace:client_protocol
+    inventory: bee.host:inventory
+    host_protocol: bee.host:protocol
+    inbox: bee.client:inbox
     physical: bee.terminal:display
+    appearance: bee.desktop:appearance
 - name: store
   kind: library.lua
   source: file://store.lua

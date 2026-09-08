@@ -182,7 +182,7 @@ def detached():
                         end
 ''')
             broker.write_text(code)
-            connections = project / "src/core/workspace/client_connections.lua"
+            connections = project / "src/core/host/clients.lua"
             code = connections.read_text()
             gate = 'op = "unbind", recipient ='
             assert code.count(gate) == 1

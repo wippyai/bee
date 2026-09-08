@@ -1,0 +1,22 @@
+version: '1.0'
+namespace: bee.host
+entries:
+- name: inventory_test
+  kind: function.lua
+  source: file://inventory_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    inventory: bee.host:inventory
+    contract: bee.protocol:application
+- name: clients_test
+  kind: function.lua
+  source: file://clients_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    clients: bee.host:protocol
+    contract: bee.protocol:application

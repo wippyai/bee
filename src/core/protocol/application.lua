@@ -31,7 +31,7 @@ function M.request(value: unknown): Request?
     local recipient = M.text(value.recipient or "", 160)
     if not id or not instance_id or not definition_id or not recipient then return nil end
     if op == "bind" and ((id == "") ~= (instance_id == "")) then return nil end
-    if op ~= "bind" and instance_id ~= "" then return nil end
+    if op ~= "bind" and op ~= "close" and instance_id ~= "" then return nil end
     if op == "unbind" and (recipient == "" or id ~= "") then return nil end
     if op == "open" and definition_id == "" then return nil end
     if op == "close" and id == "" then return nil end

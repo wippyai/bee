@@ -30,6 +30,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local presentations = assert(process.listen("bee.host.presentation", {message = true}))
     local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
     local updates = assert(process.listen("bee.host.views", {message = true}))
+    local question_results = assert(process.listen("bee.host.question_result", {message = true}))
     local renderer_generation = ""
     local function status(phase: string, view: View?)
         assert(process.send(owner, "bee.client.status", {phase = phase, view = view}))
@@ -189,12 +190,21 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             connection_id = fresh
             last_revision = -1
             catalog(); wait_views(2)
+            assert(process.send(host, "bee.host.answer", {version = 1, workspace_id = workspace_id,
+                connection_id = fresh, selection_revision = 1, request_id = "forbidden-answer",
+                id = opened.id, instance_id = opened.instance_id, action = "accept", value = ""}))
+            local denied = assert(question_results:receive())
+            assert(denied:from() == host)
+            local receipt: unknown = denied:payload():data()
+            assert(type(receipt) == "table" and receipt.request_id == "forbidden-answer"
+                and receipt.connection_id == fresh and receipt.workspace_id == workspace_id
+                and receipt.error_code == "permission_denied", "Readmitted observer gained dialog control")
             status("denied")
         elseif op == "exit" then break
         else error("Invalid client test command") end
     end
     -- Deliberately rely on execution cleanup; the host must retire this admission.
-    for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates, question_results}) do process.unlisten(subscription) end
 end
 function M.renderer(owner: string, client: string)
     local mounts = assert(process.listen("bee.renderer.mount", {message = true}))
@@ -239,7 +249,7 @@ function M.main()
         policies[#policies + 1] = policy
     end
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-        :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true}):spawn_monitored("bee.workspace:host", "bee:workers", owner)))
+        :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true}):spawn_monitored("bee.host:main", "bee:workers", owner)))
     local started = assert(ready:receive())
     assert(started:from() == host)
     local boot: unknown = started:payload():data()

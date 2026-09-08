@@ -27,6 +27,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local scenes = assert(process.listen("bee.desktop.scene", {message = true}))
     local acknowledgements = assert(process.listen("bee.desktop.ack", {message = true}))
     local dialog_states = assert(process.listen("bee.interaction.state", {message = true}))
+    local dialog_results = assert(process.listen("bee.interaction.result", {message = true}))
     local dialogs: {[string]: dialog.State} = {}
     local answered: {[string]: boolean} = {}
     local retire = assert(process.listen("bee.workspace.retire", {message = true}))
@@ -182,7 +183,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
-            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), dialog_states:case_receive(), ticks:case_receive()})
+            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), dialog_states:case_receive(),
+            dialog_results:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
@@ -199,13 +201,27 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 local next_dialogs: {[string]: dialog.State} = {}
                 local next_answered: {[string]: boolean} = {}
                 for _, spec in ipairs(specs) do
+                    -- Question and lifecycle messages use separate channels.
+                    -- A visible question must own input even if "closing" is late.
+                    closing[spec.id] = nil
                     local previous = dialogs[spec.id]
                     if previous and previous.spec.request_id == spec.request_id then next_dialogs[spec.id] = previous
                     else next_dialogs[spec.id] = dialog.open(spec) end
                     if answered[spec.request_id] then next_answered[spec.request_id] = true end
                 end
                 dialogs, answered = next_dialogs, next_answered
+                if not pending_request then adopt_routing() end
                 dirty = true
+            end
+        elseif selected.channel == dialog_results and selected.value:from() == owner then
+            local result = interaction.result(selected.value:payload():data())
+            if result then
+                local current = dialogs[result.id]
+                if current and current.spec.request_id == result.request_id and current.spec.instance_id == result.instance_id
+                    and result.error_code ~= "" then
+                    if result.error_code ~= "already_dispatched" then answered[result.request_id] = nil end
+                    status, dirty = result.error, true
+                end
             end
         elseif selected.channel == retire then
             if selected.value:from() == owner then rejoining = true; running = false end
@@ -482,6 +498,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     end
     ticker:stop()
     process.unlisten(dialog_states)
+    process.unlisten(dialog_results)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
     for _, attached in pairs(attachments) do attached.view:close() end
     output:close()

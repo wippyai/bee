@@ -1,0 +1,16 @@
+version: '1.0'
+namespace: bee.interaction
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    contract: bee.protocol:application
+    interaction: bee.application:interaction
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  imports:
+    contract: bee.protocol:application
+    interaction: bee.application:interaction
+    protocol: bee.interaction:protocol

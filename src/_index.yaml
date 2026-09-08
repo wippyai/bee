@@ -134,7 +134,7 @@ entries:
     - process.spawn
     - process.spawn.monitored
     resources:
-    - bee.workspace:host
+    - bee.host:main
     - bee.workspace:main
     - bee.workspace:launch
     - bee.client:main
@@ -149,7 +149,7 @@ entries:
     - process.spawn
     - process.spawn.monitored
     resources:
-    - bee.workspace:host
+    - bee.host:main
     - bee.session:main
     - bee.applications:broker
     - bee.terminal:main

@@ -118,7 +118,7 @@ import subprocess
 import tempfile
 
 runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
-allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol",
+allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol", "bee.host", "bee.interaction",
            "bee.session", "bee.settings", "bee.processes", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.test_status", "bee.client"}
 
 def check_loaded(cwd, packed=False):

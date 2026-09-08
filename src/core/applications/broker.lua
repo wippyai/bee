@@ -16,6 +16,8 @@ local interaction = require("interaction")
 local interactions = require("interactions")
 local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
+type AppearanceOp = "state" | "set"
+type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
 type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, launch_token: string,
@@ -66,7 +68,7 @@ local function main(owner: string, initial_preferences: unknown)
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
     local appearance_revision = 0
-    local preference_waiters: {[string]: Waiter} = {}
+    local preference_waiters: {[string]: PreferenceWaiter} = {}
     local scope_cache: {[string]: security.Scope} = {}
     local base, base_error = security.policy("bee:base_app_policy")
     if base_error then error(tostring(base_error)) end
@@ -107,10 +109,32 @@ local function main(owner: string, initial_preferences: unknown)
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
         return reply
     end
-    local function appearance_state(item: Instance, request_id: string?, code: string?, message: string?)
+    local function appearance_state(item: Instance, request_id: string?, code: string?, message: string?, value: appearance.Preferences?, revision: number?, scope: string?)
+        local current = value or preferences
         process.send(item.execution_pid, "bee.appearance.state", {version = 1, request_id = request_id or "",
-            revision = appearance_revision, theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar,
-            error_code = code or "", error = message or ""})
+            revision = revision or appearance_revision, theme = current.theme, background = current.background, taskbar = current.taskbar,
+            error_code = code or "", error = message or "", scope = scope})
+    end
+    local function route_client_appearance(item: Instance, action: AppearanceOp, request_id: string, value: appearance.Preferences): boolean
+        local mounted = item.attachment
+        if not mounted or mounted.recipient == "" then return false end
+        -- Keep one write in flight for an app, while allowing a bind-triggered
+        -- state refresh to coexist with a user click already being delivered.
+        for id, waiter in pairs(preference_waiters) do
+            if waiter.recipient == item.execution_pid and (action == "set" or waiter.action == "state") then
+                appearance_state(item, waiter.request_id, "superseded", "A newer appearance request replaced this one")
+                preference_waiters[id] = nil
+            end
+        end
+        local routed_id = uuid.v7()
+        preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = action}
+        local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = action,
+            request_id = routed_id, recipient = mounted.recipient, theme = value.theme, background = value.background, taskbar = value.taskbar})
+        if not sent then
+            preference_waiters[routed_id] = nil
+            appearance_state(item, request_id, "unavailable", tostring(err))
+        end
+        return true
     end
     local function find_pid(pid: string): Instance?
         for _, item in pairs(instances) do if item.execution_pid == pid then return item end end
@@ -261,7 +285,7 @@ local function main(owner: string, initial_preferences: unknown)
                 item.close_request_id = uuid.v7()
                 transition(item, "request_close")
             end
-            emit(identified(item, "closing", ""))
+            emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
         else transition(item, force and "force_stop" or "stop") end
     end
     assert(process.send(owner, "bee.application.catalog", {version = 1, items = catalog.items(bindings)}))
@@ -470,7 +494,8 @@ local function main(owner: string, initial_preferences: unknown)
             local data: unknown = msg:payload():data()
             if msg:from() == owner and type(data) == "table" and data.version == 1 then
                 local prefs = appearance.decode(data)
-                if prefs and type(data.revision) == "number" and data.revision >= appearance_revision then
+                local scoped = data.scope == "client"
+                if not scoped and prefs and type(data.revision) == "number" and data.revision >= appearance_revision then
                     preferences, appearance_revision = prefs, math.floor(data.revision)
                     local theme = appearance.theme(preferences.theme)
                     for _, item in pairs(instances) do
@@ -481,7 +506,12 @@ local function main(owner: string, initial_preferences: unknown)
                 if type(data.request_id) == "string" then
                     local waiter = preference_waiters[data.request_id]
                     local item = waiter and find_pid(waiter.recipient)
-                    if item and waiter then appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "", type(data.error) == "string" and data.error or "") end
+                    if item and waiter then
+                        local revision: number? = nil
+                        if type(data.revision) == "number" and data.revision >= 0 and data.revision == math.floor(data.revision) then revision = data.revision end
+                        appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "",
+                            type(data.error) == "string" and data.error or "", scoped and prefs or nil, revision, scoped and "client" or nil)
+                    end
                     preference_waiters[data.request_id] = nil
                 end
             end
@@ -492,7 +522,9 @@ local function main(owner: string, initial_preferences: unknown)
             if item and type(data) == "table" and data.version == 1 then
                 local request_id = contract.text(data.request_id, 80)
                 if request_id and request_id ~= "" then
-                    if data.op == "state" then appearance_state(item, request_id)
+                    if data.op == "state" then
+                        local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
+                        if not route_client_appearance(item, "state", request_id, current) then appearance_state(item, request_id) end
                     elseif data.op == "set" then
                         local prefs = appearance.decode(data)
                         if not item.binding.appearance_write then appearance_state(item, request_id, "permission_denied", "Appearance changes are not granted")
@@ -505,13 +537,15 @@ local function main(owner: string, initial_preferences: unknown)
                                     preference_waiters[id] = nil
                                 end
                             end
-                            local routed_id = uuid.v7()
-                            preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, control = false}
-                            local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", request_id = routed_id,
-                                theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar})
-                            if not sent then
-                                preference_waiters[routed_id] = nil
-                                appearance_state(item, request_id, "unavailable", tostring(err))
+                            if not route_client_appearance(item, "set", request_id, prefs) then
+                                local routed_id = uuid.v7()
+                                preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = "set"}
+                                local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = "set", request_id = routed_id,
+                                    recipient = "", theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar})
+                                if not sent then
+                                    preference_waiters[routed_id] = nil
+                                    appearance_state(item, request_id, "unavailable", tostring(err))
+                                end
                             end
                         end
                     end
@@ -575,6 +609,10 @@ local function main(owner: string, initial_preferences: unknown)
                                 if result.error ~= "" then response.mount = "" end
                                 emit(response)
                             end
+                            if result.error_code == "" and req.recipient ~= "" and item.opened and item.binding.appearance_write then
+                                local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
+                                route_client_appearance(item, "state", "", current)
+                            end
                         end
                         if req.id == "" then
                             for _, item in pairs(instances) do rebind(item) end
@@ -603,7 +641,9 @@ local function main(owner: string, initial_preferences: unknown)
                         emit(reply, true)
                     elseif req.op == "close" then
                         local item = instances[req.id]
-                        if item then stop(item, {request_id = req.request_id, recipient = owner, control = false}, false)
+                        if item and req.instance_id ~= "" and item.instance_id ~= req.instance_id then
+                            emit(contract.reply(req.request_id, "close", "stale_instance", "View belongs to another application instance"), true)
+                        elseif item then stop(item, {request_id = req.request_id, recipient = owner, control = false}, false)
                         else emit(contract.reply(req.request_id, "close", "not_found", "View is no longer open"), true) end
                     elseif req.op == "open" and shutdown_plan then
                         emit(contract.reply(req.request_id, "open", "busy", "Quit confirmation pending"), true)

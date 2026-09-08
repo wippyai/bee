@@ -81,6 +81,9 @@ Terminal. Guarded-close dialogs are tested across F12 and client reattachment.
 Settings theme persistence, isolation, F12 and denied writes also have source/pack
 acceptance. The private local entry also proves presenter-crash recovery, bounded
 pause for readiness or renderer timeouts, and supervised normal/emergency exit.
+Its supervisor explicitly grants workspace appearance: the host commits Settings
+writes before updating producer pages and client chrome. Ordinary clients retain
+independent chrome; see the appearance contract for cross-store recovery.
 Mixed workspaces and public launch migration remain unfinished. Do not substitute
 it for normal launch yet. See the private client
 acceptance section in `CLIENT_HOST_SPLIT.md`.

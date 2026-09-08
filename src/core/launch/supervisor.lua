@@ -94,7 +94,8 @@ local function main(client: string, database_resource: string?)
                     if not protocol.ready(data, workspace_id) then error("Client did not acknowledge durable legacy import") end
                     pending = uuid.v7(); advance("admitting")
                     send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
-                        op = "admit", recipient = client, permissions = {open = true, close = true, control = true, appearance = true}})
+                        op = "admit", recipient = client, permissions = {open = true, close = true, control = true,
+                            appearance = true, workspace_appearance = true}})
                 elseif selected.channel == results and sender == host and type(data) == "table" then
                     if protocol.request(data, workspace_id) == pending and (phase == "admitting" or phase == "rendering") then
                         if data.error_code ~= "" then

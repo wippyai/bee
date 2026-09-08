@@ -17,6 +17,14 @@ the existing scene model plus one qualified target per window:
 
 `{tab_id, workspace_id, instance_id, view_id}`
 
+The private local launch selects workspace appearance: its supervisor grants
+host-owned preference writes, and bootstrap projects the fresh host preferences
+over any stale client copy. Layout and targets remain client-owned. The two stores
+do not share a transaction; the host value is authoritative for this local mode.
+Ordinary attached clients retain independent chrome preferences. See the
+[appearance contract](CLIENT_HOST_SPLIT.md#identity-and-appearance) for commit,
+projection, failure and permission behavior.
+
 Scene IDs are client tab keys. Every target must match its window's workspace
 and instance identity. Equal view and instance IDs from different workspaces do
 not collide. The current scene limit remains sixteen windows per desktop; this

@@ -293,10 +293,10 @@ end
 -- when the broker's attachment recipient is the client's current renderer.
 -- A nonempty recipient must be a currently admitted renderer. The private host
 -- never interprets an unknown renderer as permission to change workspace state.
-function M.appearance(state: State, caller: string, data: unknown, ready: boolean): boolean
-    if caller ~= state.broker then return false end
+function M.appearance(state: State, caller: string, data: unknown, ready: boolean): (boolean, clients.AppearanceRequest?)
+    if caller ~= state.broker then return false, nil end
     local request = clients.appearance(data)
-    if not request or request.recipient == "" then return false end
+    if not request or request.recipient == "" then return false, nil end
 
     local client: clients.Client? = nil
     for _, candidate in pairs(state.admitted) do
@@ -305,7 +305,7 @@ function M.appearance(state: State, caller: string, data: unknown, ready: boolea
     if not client then
         appearance_result(state, request.request_id, request.action, "", request.recipient, "",
             request.theme, request.background, request.taskbar, "stale_renderer", "Client renderer is not admitted")
-        return true
+        return true, nil
     end
 
     local route: AppearanceRoute = {request_id = request.request_id, action = request.action,
@@ -327,20 +327,33 @@ function M.appearance(state: State, caller: string, data: unknown, ready: boolea
     end
     if code ~= "" then
         failed_appearance(state, route, code, message)
-        return true
+        return true, nil
     end
 
     state.appearance_routes[request.request_id] = route
-    local sent, err = process.send(client.recipient, "bee.client.appearance.request", {version = 1,
-        request_id = request.request_id, action = request.action, workspace_id = state.workspace_id,
-        connection_id = client.connection_id, renderer = client.renderer,
-        renderer_generation = client.renderer_generation, theme = request.theme,
-        background = request.background, taskbar = request.taskbar})
+    if client.permissions.workspace_appearance and request.action == "set" then return true, request end
+    M.forward_appearance(state, request.request_id, "", "")
+    return true, nil
+end
+
+-- A workspace-scoped write reaches this point only after the host commits it.
+function M.forward_appearance(state: State, request_id: string, code: string, message: string)
+    local route = state.appearance_routes[request_id]
+    if not route then error("Missing admitted appearance route") end
+    if code ~= "" then
+        state.appearance_routes[request_id] = nil
+        failed_appearance(state, route, code, message)
+        return
+    end
+    local sent, err = process.send(route.recipient, "bee.client.appearance.request", {version = 1,
+        request_id = route.request_id, action = route.action, workspace_id = state.workspace_id,
+        connection_id = route.connection_id, renderer = route.renderer,
+        renderer_generation = route.renderer_generation, theme = route.theme,
+        background = route.background, taskbar = route.taskbar})
     if not sent then
-        state.appearance_routes[request.request_id] = nil
+        state.appearance_routes[request_id] = nil
         failed_appearance(state, route, "delivery_failed", tostring(err))
     end
-    return true
 end
 
 -- Only the stable admitted client execution may answer a route. The renderer

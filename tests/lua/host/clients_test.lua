@@ -21,6 +21,21 @@ local function define_tests()
             test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
                 op = "shutdown", recipient = "client"}))
         end)
+        test.it("requires an explicit workspace appearance grant alongside appearance writes", function()
+            local base = {version = 1, request_id = "r", workspace_id = identity, op = "admit", recipient = "client",
+                permissions = {open = true, close = true, control = true, appearance = false, workspace_appearance = true}}
+            test.is_nil(clients.control(base))
+            base.permissions.appearance = true
+            local selected = clients.control(base)
+            if not selected or not selected.permissions then error("Missing appearance admission") end
+            test.is_true(selected.permissions.workspace_appearance)
+            test.is_false(clients.same_permissions(selected.permissions,
+                {open = true, close = true, control = true, appearance = true, workspace_appearance = false}))
+            local ordinary = clients.control({version = 1, request_id = "r", workspace_id = identity,
+                op = "admit", recipient = "client", permissions = {open = true, close = true, control = true, appearance = true}})
+            if not ordinary or not ordinary.permissions then error("Missing ordinary admission") end
+            test.is_false(ordinary.permissions.workspace_appearance)
+        end)
         test.it("denies foreign control, host recovery and lifecycle authority", function()
             local client: clients.Client = {recipient = "client", connection_id = "connection",
                 permissions = {open = true, close = false, control = true}, detaching = false,

@@ -11,12 +11,21 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run():
+def run(workspace_appearance=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        if workspace_appearance:
+            fixture = project / "src/client_probe/main.lua"
+            code = fixture.read_text()
+            permission = 'appearance = label == "left"'
+            assertion = '    if not themed then error("Missing themed client state") end\n'
+            assert code.count(permission) == code.count(assertion) == 1
+            code = code.replace(permission, permission + ', workspace_appearance = label == "left"')
+            code = code.replace(assertion, assertion + '    wait_text(right_screen, "48;2;12;12;12")\n')
+            fixture.write_text(code)
         shutil.copytree(ROOT / "tests/fixtures/client_storage/client_database", project / "src/client_databases")
         config = project / "src/_index.yaml"
         value = yaml.safe_load(config.read_text())
@@ -37,8 +46,9 @@ def run():
                                     env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
                                          "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
             assert result.returncode == 0, result.stdout + result.stderr
-    print("Desktop clients source/pack: separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
+    print(f"Desktop clients source/pack ({'workspace appearance' if workspace_appearance else 'independent appearance'}): separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
 
 
 if __name__ == "__main__":
     run()
+    run(True)

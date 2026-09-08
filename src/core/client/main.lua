@@ -21,6 +21,7 @@ local interaction = require("interaction")
 local command = require("command")
 local arguments = require("arguments")
 local launcher = require("launcher")
+local appearance = require("appearance")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
@@ -77,9 +78,23 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         if read_error then error(read_error) end
         local display: physical.Display = terminal and terminal.display or physical.open()
         owned_display = display
-        local layout = saved or state.empty(display.width, display.height)
+        local layout: state.State = saved or state.empty(display.width, display.height)
         for _, target in ipairs(layout.targets) do
             if target.workspace_id ~= workspace_id then error("This client bootstrap requires one workspace") end
+        end
+        if bootstrap.workspace_appearance then
+            local host_desktop = decode.desktop(bootstrap.legacy_desktop)
+            if not host_desktop then error("Workspace appearance requires the host startup snapshot") end
+            local next_preferences = appearance.decode(host_desktop.preferences)
+            if not next_preferences then error("Invalid host appearance snapshot") end
+            if layout.preferences.theme ~= next_preferences.theme or layout.preferences.background ~= next_preferences.background
+                or layout.preferences.taskbar ~= next_preferences.taskbar then
+                local next_layout: state.State = {version = layout.version, scene = layout.scene, tabs = layout.tabs,
+                    targets = layout.targets, preferences = next_preferences}
+                local committed, err = store.write(database, next_layout)
+                if not committed then error("Client appearance projection failed: " .. tostring(err)) end
+                layout = next_layout
+            end
         end
         local targets: {[string]: state.Target} = {}
         local retired: {[string]: string} = {}
@@ -588,7 +603,7 @@ local function local_entry(database_resource: string, initial_application: strin
     if not boot then return end
     local function run()
         return run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
-            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop,
+            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop, workspace_appearance = true,
                 arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen,
                 secondary_application = bootstrap.secondary_application}, true, boot.terminal)
     end

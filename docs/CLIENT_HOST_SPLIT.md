@@ -45,7 +45,9 @@ writes, but they are not host election or a multi-writer protocol.
 Only the bootstrapped supervisor may send `bee.host.client` with version 1,
 request ID, workspace ID, exact recipient PID and `admit`, `detach` or `render`. Admission
 requires explicit `open`, `close` and `control` booleans; optional `appearance`
-defaults to false and permits client preference changes. The host monitors that
+defaults to false and permits client preference changes. Optional
+`workspace_appearance` also defaults to false and requires `appearance = true`;
+it permits host-owned workspace preference writes through Settings. The host monitors that
 execution and supplies a fresh connection ID through `bee.host.admitted`, along
 with `renderer`, `renderer_generation` and `renderer_pending`.
 Requests must match both the actual sender and the connection ID; metadata does
@@ -225,12 +227,10 @@ wiring still uses the combined entry.
 native input channel to the desktop in the same execution. It contains no window,
 session or application routing. The separate supervisor actor remains TTY-free.
 
-Before replacing normal launch, preserve its remaining behavior explicitly:
-select the persistent client database alongside the workspace database and preserve the local Settings
-effect on producer colors without giving the client workspace-storage authority.
-The independent-client tests intentionally keep chrome preferences separate from
-workspace-owned producer defaults. Public launch must resolve that distinction
-instead of silently changing the local theme behavior.
+Before replacing normal launch, select the persistent client database alongside
+the workspace database and run the public-command migration checks. The private
+local supervisor now grants workspace appearance explicitly, preserving the local
+Settings effect on producer colors without client workspace-storage authority.
 
 The host finishes automatic recovery before admission. The first authoritative
 inventory reconciles saved client targets, removing tabs for applications that
@@ -378,14 +378,36 @@ Client preferences own wallpaper, desktop chrome and tab presentation. The
 workspace/application owns producer page defaults and application appearance.
 Two clients with different themes observe the same application pixels; neither
 may recolor the shared producer merely by attaching. Normal combined-launcher
-Settings changes both from one preference value. In the private client path,
+Settings changes both from one preference value. In the ordinary private client path,
 the broker routes Settings through its current native attachment recipient to
 the admitted client, which commits its preferences through its own session/store.
 The response is client-scoped and does not change workspace producer defaults.
 Unknown or replaced renderers cannot fall back to workspace preference writes.
-Preserve the combined local experience until normal-launch migration makes the
-scope explicit to the user.
 The Classic terminal palette belongs to producer appearance, not client chrome.
+
+The private local supervisor selects `workspace_appearance = true`. For such an
+admission, the host commits Settings writes to the workspace database first and
+publishes revisioned producer defaults to the broker. It then asks the client to
+project the same preferences through its session and client store. The client
+acknowledgement completes the Settings request. The host remains the sole workspace
+writer; neither app metadata nor a client bootstrap flag confers this grant.
+Workspace broadcasts refresh mounted appearance controllers through their own
+admitted-client route, so they do not acquire another client's chrome preferences.
+
+These two owned stores do not share a transaction. A rejected host commit leaves
+producer colors and client chrome unchanged and reports the failure. If the host
+commits but client projection fails, the workspace value remains authoritative:
+the local bootstrap's `workspace_appearance` option projects the fresh host
+snapshot into the client store on restart, preserving layout and tab identity.
+This bootstrap option selects how that client displays saved preferences; host
+admission separately controls write authority. Ordinary clients keep their own
+preferences and receive no workspace-write grant.
+
+Source/pack acceptance changes Windows Classic on live and newly opened Terminals,
+checks full background fill and F12, simulates a stale client projection on cold
+boot, and rejects an injected host save failure without changing colors. Two-client
+acceptance covers both ordinary grants and the explicit workspace grant: producer
+pages change across the workspace while the other client's chrome stays unchanged.
 
 ### Presenter recipient ownership
 

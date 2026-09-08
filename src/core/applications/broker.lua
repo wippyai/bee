@@ -500,7 +500,12 @@ local function main(owner: string, initial_preferences: unknown)
                     local theme = appearance.theme(preferences.theme)
                     for _, item in pairs(instances) do
                         local _, err = item.view:set_page(appearance.page(theme, item.descriptor.role == "terminal"))
-                        appearance_state(item, nil, err and "page_failed" or "", err and tostring(err) or "")
+                        if err then
+                            appearance_state(item, nil, "page_failed", tostring(err))
+                        elseif data.scope ~= "workspace" or not item.binding.appearance_write
+                            or not route_client_appearance(item, "state", uuid.v7(), preferences) then
+                            appearance_state(item)
+                        end
                     end
                 end
                 if type(data.request_id) == "string" then

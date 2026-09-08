@@ -64,6 +64,18 @@ local function main(owner: string, database_resource: string?)
     local function send(topic: string, value: unknown)
         assert(process.send(broker, topic, value))
     end
+    local appearance_revision = 0
+    local function persist_preferences(preferences: appearance.Preferences, request_id: string): (boolean, string?)
+        if appearance_revision >= 9007199254740990 then return false, "Appearance revision exhausted" end
+        local next: recovery.Snapshot = {version = 1, desktop = {scene = snapshot.desktop.scene,
+            tabs = snapshot.desktop.tabs, preferences = preferences}, applications = snapshot.applications}
+        local committed, err = database:write(next)
+        if committed then snapshot = next; appearance_revision = appearance_revision + 1 end
+        send("bee.appearance.state", {version = 1, scope = "workspace", request_id = request_id, revision = appearance_revision,
+            theme = snapshot.desktop.preferences.theme, background = snapshot.desktop.preferences.background,
+            taskbar = snapshot.desktop.preferences.taskbar, error_code = committed and "" or "persistence_failed", error = err or ""})
+        return committed, err
+    end
     local function restore_next()
         local record = table.remove(restore_queue, 1)
         if record then
@@ -189,20 +201,17 @@ local function main(owner: string, database_resource: string?)
                         send("bee.application.shutdown", {version = 1, op = "prepare"})
                     end
                 elseif selected.channel == preferences and message:from() == broker then
-                    if connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping) then
-                        -- An admitted renderer owns this request through the
-                        -- client store. The connections model sends the
-                        -- scoped result back to the broker.
-                    else
+                    local handled, workspace_request = connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping)
+                    if workspace_request then
+                        local next_preferences = appearance.decode(workspace_request)
+                        if not next_preferences then error("Invalid admitted workspace appearance") end
+                        local committed, err = persist_preferences(next_preferences, "")
+                        connections.forward_appearance(client_connections, workspace_request.request_id,
+                            committed and "" or "persistence_failed", err or "")
+                    elseif not handled then
                         local next_preferences = appearance.decode(data)
                         if type(data) == "table" and data.version == 1 and contract.text(data.request_id, 80) and next_preferences then
-                            local next: recovery.Snapshot = {version = 1, desktop = {scene = snapshot.desktop.scene,
-                                tabs = snapshot.desktop.tabs, preferences = next_preferences}, applications = snapshot.applications}
-                            local committed, err = database:write(next)
-                            if committed then snapshot = next end
-                            send("bee.appearance.state", {version = 1, request_id = data.request_id,
-                                theme = snapshot.desktop.preferences.theme, background = snapshot.desktop.preferences.background,
-                                taskbar = snapshot.desktop.preferences.taskbar, error_code = committed and "" or "persistence_failed", error = err or ""})
+                            persist_preferences(next_preferences, tostring(data.request_id))
                         end
                     end
                 end

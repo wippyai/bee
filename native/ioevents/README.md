@@ -3,14 +3,14 @@
 This Bee-owned native component adds `ioevents` to Wippy. It uses the MIT-licensed
 Syncthing notify backend, pinned in the parent Go module. The Go service tests
 cover real file notifications, periodic reconciliation signals, path containment,
-owner cancellation, quotas and shutdown. Lua integration acceptance is in progress.
+owner cancellation, quotas and shutdown. Lua integration acceptance covers typed lint, denied permissions and real scheduler delivery.
 
 The host links `ioevents.Component()` into its native component list. Lua entries
 must declare `ioevents` in `modules`. A process also needs explicit host-selected
 `fs.get` and `ioevents.watch` grants for the named filesystem resource. Registry
 metadata and module import declarations do not authorize filesystem access.
 
-Proposed consumer example, pending runtime acceptance:
+Consumer example:
 
 ```lua
 local ioevents = require("ioevents")
@@ -41,6 +41,6 @@ buffers and routed message retention are bounded. Runtime subscription epochs an
 generations prevent events from an old subscription entering a recycled process.
 Lua values are constructed on the scheduler step, never on watcher goroutines.
 
-Run `make -C native check` from Bee to run race tests and Go vet. Bee code is MIT;
+Run `make native-check` after `make native-tools` for race tests, Go vet and Lua integration acceptance. Bee code is MIT;
 Wippy and its dependencies retain their upstream licenses. The backend's license
 is retained in `native/licenses/notify.txt`.

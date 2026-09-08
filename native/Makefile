@@ -6,3 +6,8 @@ check: test
 	go vet -tags "$(TAGS)" ./...
 test:
 	go test -race -tags "$(TAGS)" ./...
+
+WIPPY ?= wippy
+.PHONY: integration
+integration:
+	python3 tests/integration.py "$(WIPPY)"

@@ -1,0 +1,63 @@
+name: Native Bee
+on:
+  push:
+    branches: [main, feat/native-ioevents]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - name: Build pinned native development runtime
+      id: toolchain
+      uses: wippyai/builder@d2b6c33c30ac32f9ce0db2af2e17ebd10fdf6dd4
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    - run: python3 -m pip install -r tests/requirements.txt
+    - run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
+    - run: make native-check
+    - name: Assemble application
+      env:
+        BUILDER_SCRIPT: ${{ steps.toolchain.outputs.builder }}
+        RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [ -n "$RELEASE_TAG" ]; then export BEE_VERSION="${RELEASE_TAG#v}"; fi
+        make standalone BUILDER="$BUILDER_SCRIPT"
+    - name: Verify offline standalone desktop
+      run: sudo unshare --net -- env PATH="$PATH" make native-binary-check
+    - name: Archive binary and provenance
+      env:
+        BUILDER_SCRIPT: ${{ steps.toolchain.outputs.builder }}
+      run: python3 "$BUILDER_SCRIPT" package dist/bee --output dist/bee-linux-amd64.tar.gz
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: bee-linux-amd64
+        path: |
+          dist/bee-linux-amd64.tar.gz
+          dist/bee-linux-amd64.tar.gz.sha256
+        if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: linux
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: bee-linux-amd64
+        path: artifacts
+    - name: Prepare draft release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: gh release create "$RELEASE_TAG" artifacts/* --verify-tag --draft --generate-notes

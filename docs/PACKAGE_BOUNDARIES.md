@@ -1,5 +1,8 @@
 # Package boundaries
 
+Native assembly is now implemented as described in [native distribution](NATIVE_DISTRIBUTION.md).
+The package extraction, in-app installation and overlay operations below remain proposals.
+
 The shell is the current delivery boundary. Directories distinguish ownership;
 separate Hub releases and dependency manifests will follow once the contracts
 are stable. Moving a file must not change an application's registry identity.

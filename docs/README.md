@@ -12,6 +12,7 @@ package these same pages with status and version, not maintain a second copy.
 | App admission, launch, messages and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
 | Local journal, Test Status and future subscriptions | [Threads](THREADS.md) |
+| Native binary, update modes and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |
 | Current critique and recommended next slice | [Foundation next steps](FOUNDATION_NEXT.md) |
 

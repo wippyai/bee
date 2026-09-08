@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "name": "bee",
+  "runtime": {
+    "repository": "https://github.com/wippyai/runtime.git",
+    "commit": "055505effbb0816ee833fb85c817d2954f6a0ccc",
+    "go": "1.27.0",
+    "tags": [
+      "fts5",
+      "sqlite_vec",
+      "treesitter",
+      "sqlite_preupdate_hook"
+    ],
+    "patches": [
+      {
+        "path": "runtime/patches/foundation.patch",
+        "sha256": "aa3ccfb9b78d5ba75e59278a4010ea6eaea3032e0f260fa859a26df680992ec3"
+      },
+      {
+        "path": "runtime/patches/application-host.patch",
+        "sha256": "6d251788d443a2e2a5ef1c70b3f7c06e864eefcf97992fcf203bdbfc6cf890f9"
+      }
+    ]
+  },
+  "application": {
+    "module": "bee/bee",
+    "command": "bee",
+    "mode": "base",
+    "data_env": {
+      "BEE_WORKSPACE_DB": "workspace.db",
+      "BEE_THREADS_DB": "threads.db"
+    },
+    "packs": [
+      {
+        "module": "bee/bee",
+        "version": "0.1.0-dev",
+        "path": "dist/bee-native.wapp",
+        "sha256": "481047fe8085eb9a1e72da7cb4d3fd2ac398ad048b5af87b4f66ba7e7ca7a67e"
+      }
+    ]
+  },
+  "native": [
+    {
+      "module": "github.com/wippyai/bee/native",
+      "version": "v0.0.0-20260908001447-70917fa75697",
+      "package": "github.com/wippyai/bee/native/ioevents",
+      "factory": "Component",
+      "private": true
+    }
+  ]
+}

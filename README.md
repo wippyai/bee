@@ -83,17 +83,18 @@ isolated temporary workspaces and resolve their pinned test dependency from cach
 or Hub. They inspect both the actual source registry and the portable pack, then
 exercise real terminal sessions, colors, geometry, input isolation and recovery.
 
-`dist/bee.wapp` runs without the source checkout. A single native `bee` executable
-and Hub publication as `bee/bee` are planned distribution paths, not releases
-provided by this repository yet.
+`dist/bee.wapp` runs without the source checkout. `make native-tools standalone`
+assembles a single native `bee` executable; see [native distribution](docs/NATIVE_DISTRIBUTION.md)
+for checks, update modes and release limits. Hub publication as `bee/bee` is still
+planned; no stable native release is published.
 
 ## Current boundary
 
 Presenter replacement preserves live app processes, their viewports, layout and
 appearance. Workspace state is persisted in `.wippy/workspace.db`, separately
 from registry history in `.wippy/registry.db`. Installation,
-Hub discovery, workspace overlays, self-editing, agent/MCP adapters and filesystem
-watchers are separate planned subsystems. The current broker is not yet an
+Hub discovery, workspace overlays, self-editing, agent/MCP adapters and workspace filesystem resource discovery are planned.
+The optional native I/O events module is implemented with explicit resource permissions. The current broker is not yet an
 untrusted-code host.
 
 See the [documentation map](docs/README.md),

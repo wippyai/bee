@@ -113,7 +113,7 @@ implemented API and limits, and [workspace attachments](WORKSPACE_ATTACHMENTS.md
 for the proposed identity split.
 
 The shell remains the delivery focus. Hub installation, authorized overlay editing,
-MCP, AI drivers, native binary packaging and service/run
+MCP, AI drivers and service/run
 lifetimes are separate subsystems, not unfinished responsibilities of the presenter.
 
 The first resource subsystem should own a workspace's named filesystem roots:
@@ -124,3 +124,12 @@ not authorize a root automatically. Native paths, container roots and virtual
 providers need explicit resolution and containment checks at the provider boundary.
 The terminal currently starts in the runtime's working directory; a resource binding
 will replace that implicit choice once this subsystem exists.
+
+## Native assembly
+
+A pinned builder assembles Bee, Wippy and the typed native `ioevents` module into
+a Linux amd64 executable. Standalone acceptance verifies source-free boot, Settings
+recovery, native shell execution and F12. Base/bootstrap deployment handling and a
+draft-release pipeline are implemented; Hub publication, in-app installation and
+stable distribution remain pending. See [native distribution](NATIVE_DISTRIBUTION.md)
+for the canonical update boundary and outstanding acceptance/license limits.

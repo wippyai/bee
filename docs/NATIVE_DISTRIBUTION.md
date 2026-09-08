@@ -81,6 +81,31 @@ require a new executable; Hub updates replace application packs. Lint catches
 missing module exports and type incompatibilities, but a semantic native-version
 requirement gate is not implemented.
 
+## Shared startup cache
+
+Wippy can share compiled Lua and type-check artifacts between local installations
+using an absolute `lua.cache.dir`. Configure each installation's state-directory
+`.wippy.yaml` with the same user-owned location:
+
+```yaml
+version: '1.0'
+lua:
+  type_system:
+    enabled: true
+    strict: true
+  cache:
+    enabled: true
+    dir: /absolute/user-cache/wippy/lua
+```
+
+Cache keys include code identity, source, dependencies and compiler cache version;
+type-check keys also include checker settings and native type manifests. Changed
+entries are recomputed. Workspace databases and deployment selections remain in
+their own state directories. Local sequential validation with two isolated Bee
+installations reused 184 cache files without rewriting them. Concurrent-process
+eviction and cross-computer distribution have not been validated; a shared cache
+is currently opt-in. Use a directory writable only by the owning OS user.
+
 ## I/O events
 
 The Bee-owned [native component](../native/ioevents/README.md) uses the pinned MIT

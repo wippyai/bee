@@ -35,7 +35,7 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "59933c9c1edc291eff62be22cf05dae2f6e0db10639c438d4cac8de7fe3f8737"
+        "sha256": "2e3918cbd43315dcea63ba93a47196bde693e7ff82d0fc9441188600cb285150"
       }
     ]
   },

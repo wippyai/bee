@@ -13,6 +13,7 @@ package these same pages with status and version, not maintain a second copy.
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
 | Local journal, Test Status and future subscriptions | [Threads](THREADS.md) |
 | Native binary, update modes and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
+| Local artifacts, CI gates and release tags | [Releasing](RELEASING.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |
 | Current critique and recommended next slice | [Foundation next steps](FOUNDATION_NEXT.md) |
 

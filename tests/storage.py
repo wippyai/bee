@@ -252,10 +252,10 @@ def client_storage():
         pack = root / "client-storage.wapp"
         subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
 
-        def probe(folder, mode, packed=False, failure=None):
+        def probe(folder, mode, packed=False, failure=None, command="client-storage-probe"):
             folder.mkdir(exist_ok=True)
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
-            args += ["client-storage-probe", mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
+            args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
                                     env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
                                          "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
@@ -267,6 +267,9 @@ def client_storage():
 
         for packed in (False, True):
             folder = root / ("packed" if packed else "source")
+            probe(folder, "seed", packed, command="client-storage-bindings")
+            probe(folder, "verify", packed, command="client-storage-bindings")
+            probe(folder, "verify", packed, command="client-storage-denial")
             probe(folder, "seed", packed)
             database = folder / "client.db"
             with sqlite3.connect(database) as db:
@@ -319,7 +322,7 @@ def client_storage():
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
         staged_store.write_text(healthy)
         probe(failed_migration, "seed")
-    print("Client storage source/pack: stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial")
+    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial")
 
 
 if __name__ == "__main__":

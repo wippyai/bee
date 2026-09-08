@@ -1,7 +1,12 @@
 version: '1.0'
 namespace: bee.storage
 entries:
+- name: binding
+  kind: library.lua
+  source: file://binding.lua
 - name: store
   kind: library.lua
   source: file://store.lua
   modules: [sql, json, hash]
+  imports:
+    binding: bee.storage:binding

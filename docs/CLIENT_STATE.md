@@ -25,17 +25,24 @@ they do not persist unknown fields from incoming tables.
 
 ## Owned database
 
-`bee.client:store` uses only the host-supplied `bee:client_db` resource, separate
-from `bee:workspace_db`, runtime registry history and the journal. Normal local
+`bee.client:store` defaults to the host-supplied `bee:client_db` resource, separate
+from `bee:workspace_db`, runtime registry history and the journal. Protected
+bootstrap may instead supply `bee.client.db:<name>` to `open(resource)` for each
+independent client. Names contain only letters, digits, underscores and hyphens;
+the whole resource ID is bounded to 160 bytes. File paths, wildcards and workspace
+database bindings are rejected before acquisition. Native `db.get` still requires
+an exact host-selected resource grant; a valid name grants nothing. Normal local
 boot does not yet declare that resource. The fixture declares it with an isolated
 `BEE_CLIENT_DB` path; the future client launcher must supply its persistent data
 binding. Merely disabling `auto_start` is insufficient: native SQLite resources
 open their files during registry loading. The client-storage policy grants only
-that database; the ordinary application boundary explicitly denies it, including
-when an app has a broader database grant. No current default app receives the
+that default database; additional bindings require their own exact policy. The
+ordinary application boundary denies both the default resource and all
+`bee.client.db:*` and `bee.workspace.db:*` resources, including when an app has a
+broader database grant. No current default app receives the
 client-storage policy. Native processes still have OS-user file authority.
 
-The private API is `open()`, `read(handle)`, `write(handle, state)`,
+The private API is `open(resource?)`, `read(handle)`, `write(handle, state)`,
 `import_legacy(handle, workspace_id, desktop)` and `close(handle)`. Handles and
 their native database fields must remain inside the owning client process.
 Each store has a stable random client identity. Reads validate the whole state;
@@ -73,3 +80,7 @@ also runs the source/pack Lua storage fixture, restart/retry, existing-layout
 protection, failed import and migration rollback, stale writers, schema corruption
 and native app database denial. These are persistence checks, not evidence that
 two interactive desktop clients are implemented.
+The storage fixture also selects two client and two workspace resources, writes
+different state, restarts and verifies isolation in source and pack. Native
+checks reject ungranted resources and broad-grant attempts to bypass the core
+database boundary. Production bootstrap has not yet selected per-client stores.

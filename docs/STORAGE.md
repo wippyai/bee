@@ -1,10 +1,15 @@
 # Workspace storage
 
 `bee.storage:store` is the small persistence boundary for the workspace and
-session core. It acquires the fixed `bee:workspace_db` SQLite resource; the
-root registry entry owns that resource's path and lifecycle. Callers cannot
-select a different database or table, and default applications do not import
-this library or receive `db.get` for the workspace resource.
+session core. `open()` acquires `bee:workspace_db`; protected bootstrap may pass
+`open("bee.workspace.db:<name>")` to isolate additional workspace owners. Names
+contain only letters, digits, underscores and hyphens, with a 160-byte total ID
+limit. The root registry owns each resource's path and lifecycle. Callers cannot
+pass file paths, select client resources or change tables. Native `db.get` must
+grant the selected resource explicitly; the existing default policy grants only
+`bee:workspace_db`. Default applications cannot import this library, and their
+storage boundary denies both default core stores and the reserved client/workspace
+database namespaces even under a broader database grant.
 
 The default workspace file is `.wippy/workspace.db`, and `BEE_WORKSPACE_DB`
 can provide an explicit path for an isolated workspace. Wippy registry history

@@ -8,6 +8,7 @@ entries:
   imports:
     state: bee.client:state
     contract: bee.protocol:application
+    binding: bee.storage:binding
 - name: state
   kind: library.lua
   source: file://state.lua

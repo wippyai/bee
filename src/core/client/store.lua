@@ -1,9 +1,10 @@
--- MIT. Fixed client database; no workspace checkpoint or registry publication.
+-- MIT. Host-selected client database; no workspace checkpoint or registry publication.
 local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
 local state = require("state")
 local contract = require("contract")
+local binding = require("binding")
 type Row = {client_id: string, generation: integer, value: state.State?, workspace_id: string, receipt: string}
 type Store = {
     db: sql.DB, closed: boolean, client_id: string, generation: integer,
@@ -153,8 +154,10 @@ function M.close(store: Store): (boolean, string?)
     local released, err = store.db:release()
     return released == true, err and tostring(err) or nil
 end
-function M.open(): (Store?, string?)
-    local db, err = sql.get("bee:client_db")
+function M.open(resource: string?): (Store?, string?)
+    local database_id = binding.database("client", resource)
+    if not database_id then return nil, "Invalid client database binding" end
+    local db, err = sql.get(database_id)
     if not db then return nil, tostring(err) end
     local function fail(message: string): (Store?, string?)
         db:release()

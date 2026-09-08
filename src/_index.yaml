@@ -196,6 +196,8 @@ entries:
     resources:
     - bee:workspace_db
     - bee:client_db
+    - bee.client.db:*
+    - bee.workspace.db:*
     effect: deny
 - name: client_storage_policy
   kind: security.policy

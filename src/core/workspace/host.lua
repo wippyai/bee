@@ -14,7 +14,7 @@ local interaction = require("interaction")
 local connections = require("connections")
 local inventory = require("inventory")
 
-local function main(owner: string)
+local function main(owner: string, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -27,7 +27,7 @@ local function main(owner: string)
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
-    local database, database_error = persistence.open()
+    local database, database_error = persistence.open(database_resource)
     if not database then error(tostring(database_error)) end
     local workspace_id = database.workspace_id
     local empty_tabs: {string} = {}

@@ -18,6 +18,11 @@ the host or admit clients. The `host`
 fixture opens and checkpoints without a physical TTY, detaches a view, stops the
 host and proves stable workspace/view/instance identities on automatic restart.
 The fixture selects the host's process and storage policies explicitly.
+The private host accepts an optional second `database_resource` argument. Its
+supervisor must grant that exact `bee.workspace.db:<name>` resource through native
+policy; omission retains `bee:workspace_db`. Registry configuration owns the
+underlying SQLite path. Separate hosts must receive separate resources/stores;
+resource selection does not elect an owner or make shared writes safe.
 It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
@@ -162,6 +167,13 @@ view ID as the scene key; different workspaces may contain the same value.
 Pending requests retain the target and the live attachment incarnation so a
 late reply cannot affect a replacement tab. Workspace ID validation and actual
 sender authentication both remain required.
+
+The desktop integration must distinguish discovery from tab selection. A host
+inventory snapshot can update selected tabs and offer other running views, but
+must not automatically bind every discovered view. Rejoin reacquires only that
+client's selected targets. Opening or explicitly selecting a view can request
+its attachment; joining a second client alone must not displace an existing
+controller. These selection rules are not yet wired into the desktop actor.
 
 Client preferences own wallpaper, desktop chrome and tab presentation. The
 workspace/application owns producer page defaults and application appearance.

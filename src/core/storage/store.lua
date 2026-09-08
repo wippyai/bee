@@ -1,12 +1,12 @@
 -- Durable workspace state owned by the workspace/session core.
 --
--- The database resource is deliberately fixed here.  Its SQLite file and
--- lifecycle are configured by the root registry entry; callers cannot select
--- another database or table. Applications receive no import to this library;
--- the host's database policy also denies them access to the workspace store.
+-- The host selects a reserved registry resource under an exact database policy.
+-- Registry configuration owns its file and lifecycle. Applications cannot import
+-- this library and their database boundary denies the reserved store namespaces.
 local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
+local binding = require("binding")
 
 type Migration = {id: integer, name: string, sql: string}
 type Store = {
@@ -21,7 +21,6 @@ type Store = {
 
 local M = {}
 
-local DATABASE_ID = "bee:workspace_db"
 local STATE_VERSION = 1
 local MAX_STATE_BYTES = 2097152
 local MIGRATION_TABLE = "workspace_schema_migrations"
@@ -347,8 +346,10 @@ local function close_store(store: Store): (boolean, string?)
     return ok == true, nil
 end
 
-function M.open(): (Store?, string?)
-    local db, acquire_err = sql.get(DATABASE_ID)
+function M.open(resource: string?): (Store?, string?)
+    local database_id = binding.database("workspace", resource)
+    if not database_id then return nil, "Invalid workspace database binding" end
+    local db, acquire_err = sql.get(database_id)
     if not db then return nil, error_text("open workspace database", acquire_err) end
 
     local db_type, type_err = db:type()

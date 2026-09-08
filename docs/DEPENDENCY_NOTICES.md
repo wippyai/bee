@@ -19,6 +19,10 @@ use their own executable metadata and notice review.
 
 Upstream's comparison of the Nexus license commit against `v0.1.0` shows only
 the addition of `LICENSE`; its source files are unchanged.
+[Runtime PR #677](https://github.com/wippyai/runtime/pull/677) prepares that
+dependency update. The downloaded module distributions also differ only by
+`LICENSE`; affected Temporal and telemetry race tests passed locally. Bee still
+uses its existing runtime pin and does not yet include this update.
 
 Do not assign an upstream license based solely on the license of Bee or Wippy.
 Resolve applicable terms and update the pinned inputs before public distribution.

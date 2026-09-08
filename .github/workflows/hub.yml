@@ -18,6 +18,9 @@ jobs:
     if: startsWith(github.event.release.tag_name || inputs.tag, 'v')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:

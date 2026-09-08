@@ -89,6 +89,8 @@ publishes an immutable protected version through the native Wippy CLI.
 `.github/workflows/hub.yml` runs when an application GitHub release is published.
 It requires a semantic version tag on main, a published release and a successful
 native tag workflow for the same commit. Native-module tags do not trigger it.
+The publication job grants its GitHub token `contents: read` and `actions: read`
+to inspect the release and its completed build run.
 Manual dispatch retries an existing published application release through the
 same checks. Failure stays visible; the workflow never substitutes a mutable label
 or increments the version automatically.

@@ -27,7 +27,7 @@ native-binary-check:
 
 BEE_RELEASE_ARCHIVE ?= dist/release/bee-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz
 .PHONY: release
-release: native-tools
+release: repository-check native-tools
 	$(MAKE) check WIPPY="$(abspath $(NATIVE_WIPPY))"
 	$(MAKE) native-check
 	$(MAKE) standalone

@@ -37,6 +37,13 @@ conversations and an up-to-date branch. Stale approvals are dismissed. These
 rules include administrators. Force pushes and branch deletion are disabled;
 merge with squash or rebase.
 
+The validation job runs `make repository-check` before application assembly:
+actionlint checks workflows, and Gitleaks scans history and current files with
+redacted output and a Wippy Hub token rule. Native-module tags run the same checks.
+Dependabot groups weekly Actions and native Go dependency updates to limit PR runs.
+Actions default to read-only permissions and require full commit pins. Checkout
+steps do not retain credentials in Git configuration.
+
 PR and main checks run Linux amd64 with the full foundation suite. Release tags
 and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
 Linux amd64 also dry-runs the Hub publication packer without upload credentials.
@@ -121,8 +128,19 @@ Bee carries the checksummed runtime fix from
 [PR #684](https://github.com/wippyai/runtime/pull/684), so pack-only publication
 validation does not request credentials. Linux CI runs this preflight before
 the foundation suite. Actual publication retains its authentication requirement.
-No Hub version has been uploaded, and authenticated
-publication plus a real Bee Hub update remain unverified. The local executable
-continues to start from its embedded pack. Authentication alone does not establish
-permission to publish `bee/bee`; verify organization access and token scope before
-publishing the first release.
+The deployment token passed the live Hub publish authorization checks for
+`bee/bee` on 2026-09-08, and Hub reported organization role `owner`. Those probes
+omitted the version and upload payload, so they created no publication. A completed
+upload and a real Bee update remain acceptance gates for the first release.
+
+## Distribution access
+
+Both repositories are currently private. GitHub releases inherit repository
+visibility: anonymous downloads and the documented public installer command
+require a public Bee repository. Builder action sharing is enabled for the Wippy
+organization. Decide public visibility before announcing an OSS release.
+
+The repository uses the organization code of conduct, local contribution and
+security policies, issue forms, and CODEOWNERS. The documentation lives in `docs/`;
+there is no separate GitHub Pages site. See [repository setup](GITHUB.md) for
+settings and credential boundaries.

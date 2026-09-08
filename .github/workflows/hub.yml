@@ -28,6 +28,7 @@ jobs:
       with:
         ref: ${{ github.event.release.tag_name || inputs.tag }}
         fetch-depth: 0
+        persist-credentials: false
     - name: Validate published release
       env:
         GH_TOKEN: ${{ github.token }}

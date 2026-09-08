@@ -33,6 +33,15 @@ check: installer-check lint test threads pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/test_status.py
 
 include build/native.mk
+
+ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+GITLEAKS ?= go run github.com/zricethezav/gitleaks/v8@v8.30.1
+.PHONY: repository-check
+repository-check:
+	env GOWORK=off $(ACTIONLINT)
+	env GOWORK=off $(GITLEAKS) git --log-opts=--all --redact --no-banner
+	env GOWORK=off $(GITLEAKS) dir --redact --no-banner
+
 .PHONY: installer-check
 installer-check:
 	sh -n install.sh tests/install.sh

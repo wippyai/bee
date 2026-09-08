@@ -1,11 +1,13 @@
-![Bee — a terminal workspace built on Wippy](docs/assets/banner.png)
+![Bee](docs/assets/banner.svg)
 
-[![Foundation checks](https://github.com/wippyai/bee/actions/workflows/check.yml/badge.svg)](https://github.com/wippyai/bee/actions/workflows/check.yml)
+[![Bee checks](https://github.com/wippyai/bee/actions/workflows/native.yml/badge.svg)](https://github.com/wippyai/bee/actions/workflows/native.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-edbd59)](LICENSE)
 
 Bee is a terminal desktop for coding. Run shells and command-line agents in
 separate windows, switch between them, and keep your workspace preferences.
 Built on [Wippy](https://github.com/wippyai/runtime).
+
+[Install](#install) · [Run](#run) · [Development](#development) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md)
 
 ![Bee running Settings, Terminal and Process Manager](docs/assets/desktop.gif)
 
@@ -27,7 +29,9 @@ Agent commands open fullscreen and receive the arguments you pass after their
 name. They must already be installed on PATH. These are native terminal sessions;
 Bee-specific agent hooks and MCP integration are not implemented yet.
 
-**Development preview.** Native builds target Linux and macOS on amd64 and arm64.
+## Install
+
+**Alpha.** Native builds target Linux and macOS on amd64 and arm64.
 There is no stable release download yet. Install a locally built executable onto PATH:
 
 ```sh
@@ -40,22 +44,24 @@ Keep `~/.local/bin` on PATH in your shell configuration. Source-development
 instructions are in the
 [development guide](docs/DEVELOPMENT.md).
 
-After the first application release is published, install its binary with:
+Once the first alpha is [published](https://github.com/wippyai/bee/releases),
+install it with an explicit version:
 
 ```sh
-curl -fsSL https://github.com/wippyai/bee/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/wippyai/bee/releases/download/v0.1.0-alpha.1/install.sh | sh -s -- --version 0.1.0-alpha.1
 ```
 
 The installer selects Linux or macOS on amd64 or arm64, verifies the archive's
 SHA-256 checksum, and installs to `~/.local/bin` without sudo. To inspect it first
-or select a version and destination:
+or choose a destination:
 
 ```sh
-curl -fLO https://github.com/wippyai/bee/releases/latest/download/install.sh
-sh install.sh --version 0.1.0 --dir "$HOME/.local/bin"
+curl -fLO https://github.com/wippyai/bee/releases/download/v0.1.0-alpha.1/install.sh
+sh install.sh --version 0.1.0-alpha.1 --dir "$HOME/.local/bin"
 ```
 
-The version must have a published release. Installing a new binary preserves
+Replace the version with the release you want. The installer's default selects
+the latest stable release; alpha releases need `--version`. Installing a new binary preserves
 Bee's workspace data. Archive checksums detect download corruption; they are
 served by the same GitHub release as the binary.
 
@@ -98,3 +104,5 @@ shows local behavior only.
 
 Bee-owned code is [MIT](LICENSE). Runtime patches retain MPL-2.0; dependencies
 retain their own licenses.
+
+[Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)

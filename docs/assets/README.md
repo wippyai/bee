@@ -1,7 +1,8 @@
 # Repository images
 
-`banner.svg` is the editable banner source; `banner.png` is its raster export.
-The bee mark preserves the desktop's existing terminal artwork.
+`banner.svg` is the banner used by the README; `banner.png` is its 2× raster export.
+`logo.svg` contains the standalone repository mark; `logo.png` is its raster export.
+The mark uses vector shapes, so it stays legible without terminal fonts.
 
 `desktop.gif` was captured on 2026-09-07 from the standalone Linux Bee binary
 built with the fullscreen handlers and subsequent workspace-header cleanup. It contains 14

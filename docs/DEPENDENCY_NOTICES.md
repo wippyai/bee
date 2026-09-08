@@ -6,11 +6,17 @@ and preserves runtime patch sources separately. Common text-document formats are
 accepted; source files such as `license_test.go` are excluded. The inventory is
 an input to release review, including any separate terms in bundled native source.
 
-The Linux amd64 artifact currently reports one missing root notice:
+The Linux amd64 artifact reports no linked Go modules without root license files.
+This is an inventory result; target acceptance and license review remain release gates.
 
-| Linked module | Pinned version | Evidence and next step |
-|---|---|---|
-| `github.com/wippyai/module-registry-proto-go` | `v0.0.1` | The owner selected MPL-2.0 for the source protocol and generated bindings. [Bindings PR #1](https://github.com/wippyai/module-registry-proto-go/pull/1) adds the license and notice. The protocol-source repository is archived, so its prepared change cannot be pushed yet. Merge the license changes and update the runtime dependency pin before distribution. |
+The owner selected MPL-2.0 for the registry protocol and generated bindings.
+Bee pins the bindings to `v0.0.2-0.20260908140534-f6e2910c835f` through the
+checksummed `runtime/patches/registry-license.patch`. The downloaded module differs
+from `v0.0.1` only by `LICENSE`, `NOTICE`, and `README.md`; generated Go code is
+identical. [Bindings PR #1](https://github.com/wippyai/module-registry-proto-go/pull/1)
+and [runtime PR #683](https://github.com/wippyai/runtime/pull/683) remain under
+review. The protocol-source repository is archived, so its separate prepared
+license change cannot be pushed yet.
 
 The earlier module-graph inventory also listed sqlite-vec bindings and
 plan9netshell. Neither is linked into this Linux executable. Other targets must

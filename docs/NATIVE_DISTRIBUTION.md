@@ -146,8 +146,8 @@ organization; native module fetching uses the consuming repository's token.
 Archives contain the executable, input manifest provenance, effective Go module
 files, available dependency license notices and the runtime patch sources.
 Archive timestamps and ownership are normalized; pack timestamps and the native
-C toolchain still affect binary reproducibility. The linked registry Go bindings
-currently lack a root license file at their pinned version; the inventory lists them.
-See the [dependency notice review](DEPENDENCY_NOTICES.md) for the remaining work.
-Resolve those notices and review native target acceptance before publishing a
+C toolchain still affect binary reproducibility. The Linux amd64 inventory has
+root notices for all linked Go modules, including the pinned MPL-2.0 registry bindings.
+See the [dependency notice review](DEPENDENCY_NOTICES.md) for pending upstream reviews.
+Complete those reviews and native target acceptance before publishing a
 stable release. No release tag is created by development checks.

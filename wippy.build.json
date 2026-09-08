@@ -23,6 +23,10 @@
       {
         "path": "runtime/patches/dependency-notices.patch",
         "sha256": "f714b62a905dffe17f2fa7f6905d9c91edfd11de8dc4fb4d4a42ad3deee45fac"
+      },
+      {
+        "path": "runtime/patches/registry-license.patch",
+        "sha256": "015558288f98d531cb6cc650fbbd77dc8057bfd95f65230a727cdac6a1654bc5"
       }
     ]
   },
@@ -39,7 +43,7 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "27a21c19aea63610407540533ace2d3cc339c7e76ccc10cb72eaa4d8ca48648e"
+        "sha256": "f76f110810975a5182665a4cdc87d2c50ca73f6c4066cbd8b3ee3bf5758bd0fb"
       }
     ]
   },

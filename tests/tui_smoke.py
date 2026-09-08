@@ -184,6 +184,29 @@ class Desktop:
             self.process.wait()
         os.close(self.master)
 
+    def assert_local_only(self):
+        """Default Linux composition must not bind TCP/UDP network endpoints."""
+        assert self.process.poll() is None
+        process_dir = Path(f"/proc/{self.process.pid}")
+        sockets = set()
+        for descriptor in (process_dir / "fd").iterdir():
+            try:
+                target = os.readlink(descriptor)
+            except FileNotFoundError:
+                continue
+            if target.startswith("socket:["):
+                sockets.add(target[8:-1])
+        bound = []
+        for protocol in ("tcp", "tcp6", "udp", "udp6"):
+            for row in (process_dir / "net" / protocol).read_text().splitlines()[1:]:
+                fields = row.split()
+                if fields[9] not in sockets:
+                    continue
+                if fields[3] == "0A" or (protocol.startswith("udp") and fields[1].split(":")[-1] != "0000"):
+                    bound.append((protocol, fields[1], fields[3]))
+        assert not bound, f"Default Bee bound network endpoints: {bound}"
+        assert self.process.poll() is None
+
     def exhausted_recovery(self):
         # One injected crash already recovered. Exhaust the remaining automatic
         # attempts, then prove manual retry retains the original application.
@@ -224,6 +247,7 @@ def exercise(packed, project, pack_file):
         ui = Desktop(directory, packed, project=project, pack_file=pack_file, apps=("bee.apps:welcome", "bee.apps:palette"))
         try:
             ui.wait("Small shell. Independent applications.")
+            ui.assert_local_only()
             ui.corners()
             before = ui.frame()
             ui.mouse(0, before[0] + 5, before[1])

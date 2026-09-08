@@ -5,6 +5,8 @@ installation and MCP tools are planned in [PACKAGE_BOUNDARIES.md](PACKAGE_BOUNDA
 there are no published Bee tools for those operations yet.
 
 Read `README.md`, `docs/FOUNDATION_STATUS.md` and `docs/DEVELOPMENT.md` first.
+The [local acceptance checkpoint](LOCAL_FOUNDATION_ACCEPTANCE.md) separates verified
+foundation work from the still-required headless/client milestone.
 `docs/README.md` distinguishes current contracts from historical/design pages.
 Keep desktop responsibilities
 in `src/core`, reusable appearance in `src/ui`, and standalone apps in `src/apps`.

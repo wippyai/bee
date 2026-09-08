@@ -99,12 +99,11 @@ mutation is denied to applications today.
 
 ## Reproducible runtime and validation
 
-`make setup` builds the commit and checksum-verified patch in `runtime/lock.json`.
-It disables ambient Go workspaces and never consumes a checkout's dirty files.
-The patch preserves the native startup, full-width surface and scheduler shutdown
-fixes needed by this desktop. These runtime files retain their upstream MPL-2.0
-license; Bee's own source is MIT. The runtime patch should move upstream before
-a public stable release; carrying it here makes this development checkpoint reproducible.
+`make setup` uses the Go builder and `wippy.build.json`, the same runtime and native
+components used for standalone releases. The builder disables ambient Go workspaces
+and verifies its pinned checkout. Bee's own source is MIT; Wippy retains MPL-2.0.
+The required runtime changes are merged upstream. Bee carries no runtime patches;
+see [runtime integration](RUNTIME_UPSTREAM.md) for the source pin and validation.
 
 The workspace alone opens `bee:workspace_db`, a separate SQLite store from runtime
 registry history. Its append-only migration ledger verifies names and checksums;
@@ -139,7 +138,7 @@ implemented API and limits, and [workspace attachments](WORKSPACE_ATTACHMENTS.md
 for the proposed identity split.
 
 The shell remains the delivery focus. Hub installation, authorized overlay editing,
-MCP, AI drivers, native binary packaging and service/run
+MCP, AI drivers and service/run
 lifetimes are separate subsystems, not unfinished responsibilities of the presenter.
 
 The first resource subsystem should own a workspace's named filesystem roots:
@@ -150,3 +149,13 @@ not authorize a root automatically. Native paths, container roots and virtual
 providers need explicit resolution and containment checks at the provider boundary.
 The terminal currently starts in the runtime's working directory; a resource binding
 will replace that implicit choice once this subsystem exists.
+
+## Native assembly
+
+A pinned builder assembles Bee, Wippy and the typed native `ioevents` module for
+Linux and macOS on amd64 and arm64. Standalone acceptance verifies source-free boot, Settings
+recovery, native shell execution and F12. Base/bootstrap deployment handling and a
+draft-release and Hub publication pipelines are implemented. A completed Hub upload
+and update proof, in-app installation and stable distribution remain pending.
+See [native distribution](NATIVE_DISTRIBUTION.md)
+for the canonical update boundary and outstanding acceptance/license limits.

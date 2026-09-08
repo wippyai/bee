@@ -7,11 +7,17 @@ package these same pages with status and version, not maintain a second copy.
 | Read for | Current source |
 |---|---|
 | Run and develop | [Repository README](../README.md), [agent guide](AGENT_GUIDE.md) |
+| Contributions, reviews and community standards | [Contributing](../CONTRIBUTING.md) |
+| Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | What exists and who owns it | [Foundation status](FOUNDATION_STATUS.md) |
 | Code style and placement | [Development conventions](DEVELOPMENT.md) |
 | App admission, launch, messages and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
 | Local journal, Test Status and future subscriptions | [Threads](THREADS.md) |
+| Native binary, update modes and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
+| Runtime source pin and upstream changes | [Runtime integration](RUNTIME_UPSTREAM.md) |
+| Local artifacts, CI gates and release tags | [Releasing](RELEASING.md) |
+| GitHub protections, credentials and repository settings | [GitHub setup](GITHUB.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |
 | Current critique and recommended next slice | [Foundation next steps](FOUNDATION_NEXT.md) |
 

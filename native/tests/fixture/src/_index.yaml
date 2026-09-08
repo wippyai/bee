@@ -1,0 +1,57 @@
+version: '1.0'
+namespace: native.fixture
+entries:
+- name: terminal
+  kind: terminal.host
+  hide_logs: true
+  lifecycle:
+    auto_start: true
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: root_path
+  kind: env.variable
+  storage: native.fixture:environment
+  variable: BEE_IOEVENTS_TEST_ROOT
+  readonly: true
+- name: files
+  kind: fs.directory
+  directory: ${env:native.fixture:root_path}
+- name: watch_policy
+  kind: security.policy
+  policy:
+    actions:
+    - fs.get
+    - ioevents.watch
+    resources:
+    - native.fixture:files
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules:
+  - io
+  - ioevents
+  meta:
+    command:
+      name: watch
+      security:
+        actor:
+          id: native.fixture
+        policies:
+        - native.fixture:watch_policy
+- name: denied
+  kind: process.lua
+  source: file://main.lua
+  method: denied
+  modules:
+  - io
+  - ioevents
+  meta:
+    command:
+      name: denied
+      security:
+        actor:
+          id: native.denied

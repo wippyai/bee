@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-labelledby="title description">
+  <title id="title">Bee</title>
+  <desc id="description">The terminal bee from the application's welcome screen.</desc>
+  <rect width="320" height="320" rx="12" fill="#10151b"/>
+  <g fill="#edbd59" font-family="DejaVu Sans Mono" font-size="28" xml:space="preserve">
+    <text x="17" y="100">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
+    <text x="17" y="128">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
+    <text x="17" y="156">&#160;╭──────┴─────╮&#160;&#160;</text>
+    <text x="17" y="184">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
+    <text x="17" y="212">&#160;╰────────────╯&#160;&#160;</text>
+    <text x="17" y="240">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+  </g>
+</svg>

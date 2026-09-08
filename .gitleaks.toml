@@ -1,0 +1,11 @@
+title = "Bee secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "wippy-hub-token"
+description = "Wippy Hub token"
+regex = '''\b(wpy_(?:k[0-9]+\.)?[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,})'''
+secretGroup = 1
+keywords = ["wpy_"]

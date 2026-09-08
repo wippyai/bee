@@ -1,8 +1,0 @@
-{
-  "repository": "https://github.com/wippyai/runtime.git",
-  "commit": "055505effbb0816ee833fb85c817d2954f6a0ccc",
-  "go": "1.27.0",
-  "patch": "patches/foundation.patch",
-  "patch_sha256": "aa3ccfb9b78d5ba75e59278a4010ea6eaea3032e0f260fa859a26df680992ec3",
-  "tags": "fts5 sqlite_vec treesitter sqlite_preupdate_hook"
-}

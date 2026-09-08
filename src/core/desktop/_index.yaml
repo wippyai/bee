@@ -1,11 +1,6 @@
 version: '1.0'
 namespace: bee.desktop
 entries:
-- name: definition
-  kind: ns.definition
-  meta:
-    title: Bee desktop model
-    description: Pure typed scene and window layout state
 - name: model
   kind: library.lua
   source: file://model.lua

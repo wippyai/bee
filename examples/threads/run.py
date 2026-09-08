@@ -9,7 +9,7 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 def stage(folder):
     project = Path(folder)

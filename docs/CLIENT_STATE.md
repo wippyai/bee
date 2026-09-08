@@ -4,6 +4,11 @@ Status: the private client actor uses this store and typed layout. Source/pack
 tests cover independent desktop actors and client restart against retained host
 applications. Normal local launch still uses the workspace envelope. Automatic
 host-to-client migration and public independent desktop launch are not wired yet.
+Trusted private client bootstrap can now supply a final version-1 options record
+with `legacy_desktop`. It imports before opening the display and returns `import_receipt` in
+`bee.client.ready` only after the client-store commit. Without an offer, that field
+is empty. The source/pack desktop fixture retries the same offer after client exit
+and verifies the receipt and later layout are retained.
 
 The workspace host owns application membership, checkpoints and producer
 appearance. A desktop client owns placement, tab order, focus, personal titles,
@@ -71,7 +76,11 @@ The remaining host/client migration protocol must:
 3. On interruption, replay the offer; the existing client receipt makes it safe.
 4. Preserve the original workspace ID and application records throughout.
 
-There is no cross-database transaction or implemented host acknowledgement yet.
+There is no cross-database transaction or durable host acknowledgement yet.
+The private readiness receipt establishes only the client-side commit; the
+supervisor must authenticate the sending client and match its workspace before
+using it. The source desktop is retained, so interruption can safely retry the
+same offer. No legacy workspace record is deleted or rewritten by client import.
 The client store alone does not authorize attachment or restore a native process.
 Standalone launch still needs a client-data binding when the new client actor is
 integrated; `BEE_CLIENT_DB` is not currently a public workspace-selector command.

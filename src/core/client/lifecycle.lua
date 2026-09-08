@@ -1,0 +1,35 @@
+-- MIT. Supervisor-selected client lifetime, separate from workspace authority.
+local contract = require("contract")
+local interaction = require("interaction")
+local arguments = require("arguments")
+type Bootstrap = {quit_mode: "detach" | "supervisor", legacy_desktop: unknown, arguments: {string}, fullscreen: boolean}
+type Control = {op: "state" | "save" | "exit", request_id: string, shutdown: interaction.Wire?}
+local M = {}
+function M.bootstrap(value: unknown): Bootstrap?
+    if value == nil then return {quit_mode = "detach", legacy_desktop = nil, arguments = {}, fullscreen = false} end
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local mode = value.quit_mode
+    if mode == nil then mode = "detach" end
+    if mode ~= "detach" and mode ~= "supervisor" then return nil end
+    local args = arguments.decode(value.arguments)
+    if not args or (value.fullscreen ~= nil and type(value.fullscreen) ~= "boolean") then return nil end
+    return {quit_mode = mode, legacy_desktop = value.legacy_desktop, arguments = args, fullscreen = value.fullscreen == true}
+end
+function M.control(value: unknown, workspace_id: string): Control?
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
+    local request_id = contract.text(value.request_id, 80)
+    if not request_id or request_id == "" then return nil end
+    if value.op == "exit" then
+        if value.shutdown ~= nil then return nil end
+        return {op = "exit", request_id = request_id, shutdown = nil}
+    end
+    if value.op == "save" then
+        if value.shutdown ~= nil then return nil end
+        return {op = "save", request_id = request_id, shutdown = nil}
+    end
+    if value.op ~= "state" then return nil end
+    local question = interaction.shutdown(value)
+    if value.shutdown ~= nil and not question then return nil end
+    return {op = "state", request_id = request_id, shutdown = question and interaction.wire(question) or nil}
+end
+return M

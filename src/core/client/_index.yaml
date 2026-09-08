@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  imports:
+    contract: bee.protocol:application
+    interaction: bee.application:interaction
+    arguments: bee.application:arguments
 - name: inbox
   kind: library.lua
   source: file://inbox.lua
@@ -22,6 +29,8 @@ entries:
     inventory: bee.host:inventory
     host_protocol: bee.host:protocol
     inbox: bee.client:inbox
+    lifecycle: bee.client:lifecycle
+    interaction: bee.application:interaction
     physical: bee.terminal:display
     appearance: bee.desktop:appearance
 - name: store

@@ -16,13 +16,17 @@ local inventory = require("inventory")
 local host_protocol = require("host_protocol")
 local physical = require("physical")
 local inbox = require("inbox")
+local lifecycle = require("lifecycle")
+local interaction = require("interaction")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 
-local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?)
+local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown)
     if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
         or host == "" or host == owner then error("Untrusted client bootstrap") end
+    local bootstrap = lifecycle.bootstrap(options)
+    if not bootstrap then error("Invalid client bootstrap options") end
     local owned_database: store.Store? = nil
     local owned_display: physical.Display? = nil
     local presenter, session = "", ""
@@ -52,10 +56,17 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local question_results = listen("bee.host.question_result")
         local answers = listen("bee.interaction.response")
         local appearance_requests = listen("bee.client.appearance.request")
+        local supervisor_controls = listen("bee.client.control")
         assert(process.monitor(owner)); assert(process.monitor(host))
         local database, database_error = store.open(database_resource)
         if not database then error(tostring(database_error)) end
         owned_database = database
+        local import_receipt = ""
+        if bootstrap.legacy_desktop ~= nil then
+            local receipt, import_error = store.import_legacy(database, workspace_id, bootstrap.legacy_desktop)
+            if not receipt then error(tostring(import_error)) end
+            import_receipt = receipt
+        end
         local saved, read_error = store.read(database)
         if read_error then error(read_error) end
         local display: physical.Display = physical.open()
@@ -78,7 +89,12 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local bindings: {[string]: Binding} = {}
         local active = false
         local inbox_state: inbox.State? = nil
+        local shutdown_question: interaction.Wire? = nil
+        local shutdown_answered = ""
+        local quit_request = ""
+        local saved_for_exit = false
         local initial_opened = false
+        local initial_request = ""
         local self = tostring(process.pid())
         local function send(recipient: string, topic: string, value: unknown)
             assert(process.send(recipient, topic, value))
@@ -104,7 +120,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
         end
         local function publish_questions()
             if active and inbox_state then
-                send(presenter, "bee.interaction.state", {version = 1, items = inbox_state.items})
+                send(presenter, "bee.interaction.state", {version = 1, items = inbox_state.items, shutdown = shutdown_question})
             end
         end
         local function select_targets()
@@ -158,6 +174,14 @@ local function main(owner: string, host: string, workspace_id: string, database_
                     end
                 end
             end
+        end
+        local function request_quit(): boolean
+            if bootstrap.quit_mode == "detach" then save_before_exit(); return true end
+            if quit_request == "" then
+                quit_request = uuid.v7()
+                send(owner, "bee.client.quit", {version = 1, workspace_id = workspace_id, request_id = quit_request})
+            end
+            return false
         end
         local function bind(target: state.Target)
             if not active then return end
@@ -220,16 +244,22 @@ local function main(owner: string, host: string, workspace_id: string, database_
                 taskbar = current.taskbar, error_code = code, error = message})
         end
         local function run()
-            send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id, client_id = database.client_id})
+            send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id,
+                client_id = database.client_id, import_receipt = import_receipt})
             while true do
                 local cases = {events:case_receive(), input:case_receive(), admissions:case_receive(),
                     presentations:case_receive(), replies:case_receive(),
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
-                    question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive()}
+                    question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive(),
+                    supervisor_controls:case_receive()}
+                -- Once saved for local shutdown, retain the physical display but
+                -- stop consuming app removals and scene edits. Host cleanup must
+                -- not overwrite the layout that will be restored on next boot.
+                if saved_for_exit then cases = {events:case_receive(), supervisor_controls:case_receive()} end
                 -- These channels are independent of admission delivery. Leave their
                 -- initial snapshots queued until we can validate the connection.
-                if connection_id ~= "" then
+                if connection_id ~= "" and not saved_for_exit then
                     cases[#cases + 1] = catalogs:case_receive()
                     cases[#cases + 1] = views:case_receive()
                 end
@@ -240,15 +270,17 @@ local function main(owner: string, host: string, workspace_id: string, database_
                     if event.kind == process.event.CANCEL then break end
                     if event.kind == process.event.EXIT then
                         local exited = tostring(event.from)
-                        if exited == owner or exited == host or exited == session or exited == presenter then break end
+                        if exited == owner or (exited == host and not saved_for_exit) or exited == session or exited == presenter then break end
                     end
                 elseif selected.channel == input then
                     local event = input_decode.decode(selected.value)
                     if event then
-                        if event.type == "close" or (event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release") then
+                        if event.type == "close" then
                             save_before_exit(); break
                         end
-                        if event.type == "resize" then
+                        if event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release" then
+                            if request_quit() then break end
+                        elseif event.type == "resize" then
                             physical.resize(display, event.width, event.height)
                             send(session, "bee.desktop.command", {version = 1, op = "screen", width = event.width, height = event.height})
                         elseif active then display.view:send(event) end
@@ -296,8 +328,35 @@ local function main(owner: string, host: string, workspace_id: string, database_
                                 end
                             end
                         end
+                    elseif selected.channel == supervisor_controls and sender == owner and bootstrap.quit_mode == "supervisor" then
+                        local control = lifecycle.control(data, workspace_id)
+                        if control then
+                            if control.op == "save" then
+                                if not saved_for_exit then save_before_exit(); saved_for_exit = true end
+                                send(owner, "bee.client.saved", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
+                            elseif control.op == "exit" then
+                                if not saved_for_exit then save_before_exit() end
+                                send(owner, "bee.client.exit_ready", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
+                                break
+                            elseif not saved_for_exit then
+                                shutdown_question = control.shutdown
+                                if not shutdown_question or shutdown_question.request_id ~= shutdown_answered then shutdown_answered = "" end
+                                if not shutdown_question then quit_request = "" end
+                                publish_questions()
+                            end
+                        end
                     elseif selected.channel == answers and sender == presenter and active then
-                        if inbox_state then
+                        local response = interaction.response(data)
+                        if response and shutdown_question and response.id == shutdown_question.id
+                            and response.instance_id == shutdown_question.instance_id and response.request_id == shutdown_question.request_id
+                            and response.value == "" then
+                            if shutdown_answered ~= response.request_id then
+                                send(owner, "bee.client.shutdown_answer", {version = 1, workspace_id = workspace_id,
+                                    request_id = response.request_id, id = response.id, instance_id = response.instance_id,
+                                    action = response.action, value = response.value})
+                                shutdown_answered = response.request_id
+                            end
+                        elseif inbox_state then
                             local response = inbox.answer(inbox_state, data)
                             if response then send(host, "bee.host.answer", response) end
                         end
@@ -311,7 +370,8 @@ local function main(owner: string, host: string, workspace_id: string, database_
                             if data.op == "ready" then
                                 send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
                                     connection_id = connection_id, renderer = presenter})
-                            elseif data.op == "quit" then save_before_exit(); break
+                            elseif data.op == "quit" then
+                                if request_quit() then break end
                             elseif data.op == "rejoin" and active then
                                 -- Keep the old renderer alive until the host revokes its grants.
                                 -- A separate viewport prevents competing output leases during handoff.
@@ -339,8 +399,10 @@ local function main(owner: string, host: string, workspace_id: string, database_
                             end
                             if not initial_opened and initial_application and initial_application ~= "" then
                                 initial_opened = true
-                                send(host, "bee.app.request", {version = 1, request_id = uuid.v7(), op = "open",
-                                    workspace_id = workspace_id, connection_id = connection_id, definition_id = initial_application})
+                                initial_request = uuid.v7()
+                                send(host, "bee.app.request", {version = 1, request_id = initial_request, op = "open",
+                                    workspace_id = workspace_id, connection_id = connection_id, definition_id = initial_application,
+                                    arguments = bootstrap.arguments})
                             end
                         end
                     elseif selected.channel == catalogs and sender == host then
@@ -401,6 +463,14 @@ local function main(owner: string, host: string, workspace_id: string, database_
                                     if not target then error("Missing selected target") end
                                     bind(target)
                                     send(session, "bee.desktop.command", {version = 1, op = "focus", id = key})
+                                    if reply.request_id == initial_request and bootstrap.fullscreen then
+                                        local fullscreen = false
+                                        for _, window in ipairs(layout.scene.windows) do
+                                            if window.id == key and window.mode == "fullscreen" then fullscreen = true end
+                                        end
+                                        if not fullscreen then send(session, "bee.desktop.command", {version = 1, op = "fullscreen", id = key}) end
+                                        initial_request = ""
+                                    end
                                 else
                                     reply.error_code, reply.error = "unavailable", "Application is no longer running"
                                 end

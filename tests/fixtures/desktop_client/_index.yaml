@@ -27,6 +27,7 @@ entries:
   imports:
     store: bee.client:store
     decode: bee.protocol:decode
+    interaction: bee.application:interaction
   security:
     policies: [bee.desktop_client_probe:root_policy]
   meta:

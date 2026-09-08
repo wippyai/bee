@@ -105,11 +105,17 @@ the current combined desktop has not switched to these streams yet.
 
 ## Private desktop client acceptance
 
-`bee.client:main(owner, host, workspace_id, database_resource, initial_application?)`
+`bee.client:main(owner, host, workspace_id, database_resource, initial_application?, options?)`
 now runs an independent desktop against one admitted host. Bootstrap requires
 the supervisor's `bee.client_owner` context. The supervisor supplies desktop
 permissions, `bee:client_spawn_policy` and an exact client-database grant; ordinary
 apps cannot spawn this entry. There is no public client command yet.
+The optional version-1 bootstrap options carry `arguments` for the initial
+application and a boolean `fullscreen`. Arguments use the shared bounded decoder
+and are forwarded as literal values. Fullscreen applies to the correlated initial
+open result, without toggling an already-fullscreen saved tab back to floating.
+Source/pack acceptance checks both literal argument delivery and saved fullscreen
+state. Normal command aliases continue through the combined launcher until migration.
 
 The actor owns its physical display adapter, layout store, session and presenter.
 Its selected targets retain full workspace/instance/view identity, with separate
@@ -140,6 +146,30 @@ independent screen geometry and selected tabs, native Terminal input, F12, clien
 exit without stopping the Terminal, and fresh-client reattachment using the saved
 layout and the same live shell variable. Ctrl+Q detaches this private client;
 it does not negotiate shutdown of the host's applications.
+Trusted bootstrap may instead select `quit_mode = "supervisor"` in its final
+version-1 options record. Keyboard and menu quit then send `bee.client.quit` to
+the bootstrapped owner and keep the client alive. Only that owner can send
+workspace-qualified `bee.client.control` messages: `state` supplies or clears a
+validated global shutdown confirmation, while `exit` saves the committed client
+projection and begins cleanup. `bee.client.shutdown_answer` returns the exact
+question identity and decision to the owner. `bee.client.exit_ready` acknowledges
+the final save; actual process EXIT establishes termination. Ordinary client
+admission does not grant host shutdown authority.
+
+For local runtime exit, `save` first commits the final projection and responds
+with `bee.client.saved`. The client retains its display while consuming only
+supervisor control and process lifecycle events. It ignores later host removals
+and scene changes, preserving the saved restart layout. Host exit during this
+phase does not release the display. The supervisor finishes host cleanup before
+sending `exit`; owner/session/presenter failure still ends the client. Repeated
+`save` requests acknowledge the already saved state without replaying queued edits.
+
+The fixture exercises supervisor quit through the actual host and broker:
+forwarded shutdown confirmation, cancellation, a fresh confirmation, accepted quit,
+client save, completed host cleanup, explicit client exit, and preserved saved tabs.
+It matches the broker's quit
+reply to the accepted question ID. This proves the actor protocol; the public
+local launcher still needs to perform that coordination.
 The same source/pack fixture checks guarded Terminal close, confirmation isolation
 between clients, F12 with a pending question, cancellation retaining the shell,
 accepted close after client reattachment and stale-instance close rejection.
@@ -158,6 +188,32 @@ still need implementation. These limitations are why normal `bee` continues to u
 the existing combined owner.
 
 ## Named supervisor endpoint
+
+### Local launcher topology (next implementation)
+
+The runtime's physical `tty.port` context key is deliberately non-inheritable.
+A viewport grant is a virtual producer capability, not a way to transfer the
+existing physical port. Keep the terminal entry execution as the desktop client;
+it starts a TTY-free local supervisor, which starts and owns the workspace host.
+The supervisor admits the entry client and selects its presenter through the
+same private host protocol exercised by the fixtures. No second physical display
+adapter or forwarding compositor is needed.
+
+The entry's private boot function may construct this local topology; the ordinary
+externally spawned client entry must retain its trusted-context checks. Separate
+these entry points without making an arbitrary payload bypass bootstrap authority.
+Only the supervisor has host admission/shutdown authority. The client keeps its
+own exact store grant and the session/presenter spawn scope.
+
+Local quit must keep the entry execution alive until its supervisor has finished
+host cleanup. The existing `exit_ready` protocol proves final client persistence,
+but a terminal entry returning can stop the runtime and its child processes.
+The private client supplies a save/finish handshake: save the client,
+finish host cleanup while the client retains the physical display, then release
+the client and observe exits. Cancellation leaves all owners running. A detached
+remote client keeps the current save-and-detach behavior. This topology and
+public launcher are not implemented yet; the private fixture verifies the finish
+handshake through actual host cleanup.
 
 Use the runtime's `process.registry.register(name, nil, scope)` and direct
 `process.send(name, topic, body)` addressing. The supervisor registers its own

@@ -16,5 +16,5 @@
     <text x="420" y="169" fill="#f0f3f6" font-size="76" font-weight="bold">Bee</text>
     <text x="424" y="214" fill="#b9c3ce" font-size="24">A terminal workspace built on Wippy.</text>
   </g>
-  <text x="424" y="267" fill="#edbd59" font-family="DejaVu Sans Mono" font-size="17">$ ./bee</text>
+  <text x="424" y="267" fill="#edbd59" font-family="DejaVu Sans Mono" font-size="17">$ bee codex</text>
 </svg>

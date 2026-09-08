@@ -52,7 +52,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     end
     local hits: {TabHit} = {}
     if height >= 3 then
-        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil)
+        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil and start.kind == nil)
         hits = strip.hits
         canvas:put(1, 1, strip.text, width)
     end

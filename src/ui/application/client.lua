@@ -4,15 +4,21 @@ local uuid = require("uuid")
 local arguments = require("arguments")
 local interaction = require("interaction")
 local M = {}
-type Launch = {version: integer, broker_pid: string, workspace_pid: string, instance_id: string,
+type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
     view_id: string, definition_id: string, definition_revision: string, registry_revision: string, launch_token: string, resume_schema: string, resume_state: string, arguments: {string}}
 local function field(value: unknown, size: integer): string?
     if type(value) ~= "string" or value == "" or #value > size or value:find("%c") then return nil end
     return value
 end
+local function workspace_identity(value: unknown): string?
+    if type(value) == "string" and #value == 32 and not value:find("[^0-9a-f]") then return value end
+    return nil
+end
 function M.launch(value: unknown): Launch?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
     local broker, workspace = field(value.broker_pid, 160), field(value.workspace_pid, 160)
+    local workspace_id = workspace_identity(value.workspace_id)
+    if not workspace_id then return nil end
     local instance, view = field(value.instance_id, 80), field(value.view_id, 80)
     local definition, revision = field(value.definition_id, 160), field(value.definition_revision, 80)
     local registry_revision, token = field(value.registry_revision, 160), field(value.launch_token, 80)
@@ -22,8 +28,13 @@ function M.launch(value: unknown): Launch?
     if #schema > 80 or #state > 65536 then return nil end
     local args = arguments.decode(value.arguments)
     if not args then return nil end
-    return {version = 1, broker_pid = broker, workspace_pid = workspace, instance_id = instance,
+    return {version = 1, broker_pid = broker, workspace_pid = workspace, workspace_id = workspace_id, instance_id = instance,
         view_id = view, definition_id = definition, definition_revision = revision, registry_revision = registry_revision, launch_token = token, resume_schema = schema, resume_state = state, arguments = args}
+end
+-- A logical view reference carries no PID, mount, token or permission.
+type ViewReference = {workspace_id: string, instance_id: string, view_id: string}
+function M.reference(launch: Launch): ViewReference
+    return {workspace_id = launch.workspace_id, instance_id = launch.instance_id, view_id = launch.view_id}
 end
 type ReadyOptions = {negotiate_close: boolean?}
 function M.ready(launch: Launch, options: ReadyOptions?)

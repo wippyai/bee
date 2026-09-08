@@ -30,7 +30,7 @@ the owner's contract; mesh membership does not make SQLite a replicated store.
 **Test Status** is an on-demand application under Start → Tools. Run it with:
 
 ```sh
-./run.sh --app bee.test_status:app desktop-checks first-run
+bee --command bee-app run bee.test_status:app desktop-checks first-run
 ```
 
 The first argument selects a thread; the optional second starts an idempotently

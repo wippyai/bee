@@ -51,6 +51,7 @@ entries:
   kind: security.policy
   policy:
     actions:
+    - registry.get
     - tty.mount
     - tty.observe
     - tty.input

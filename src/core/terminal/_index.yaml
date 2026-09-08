@@ -7,6 +7,7 @@ entries:
   method: main
   modules: [tty, process, channel, time, uuid, ctx]
   imports:
+    contract: bee.protocol:application
     title_editor: bee.terminal:title_editor
     dialog: bee.terminal:dialog
     model: bee.desktop:model

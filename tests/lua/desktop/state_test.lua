@@ -12,6 +12,28 @@ end
 
 local function define_tests()
     test.describe("Authoritative desktop state", function()
+        test.it("maximizes idempotently and restores minimized applications", function()
+            local current = state.reduce(state.new(80, 24), command("add",
+                {id = "one", instance_id = "a", title = "One"}))
+            current = state.reduce(current, command("maximize", {id = "one"}))
+            test.eq(current.scene.windows[1].mode, "fullscreen")
+            local revision = current.scene.revision
+            current = state.reduce(current, command("maximize", {id = "one"}))
+            test.eq(current.scene.revision, revision)
+            current = state.reduce(current, command("minimize", {id = "one"}))
+            current = state.reduce(current, command("maximize", {id = "one"}))
+            test.eq(current.scene.windows[1].mode, "fullscreen")
+        end)
+        test.it("preserves workspace identity in independent desktop envelopes", function()
+            local owner = "0123456789abcdef0123456789abcdef"
+            local current = state.reduce(state.new(80, 24), command("add",
+                {id = "view", instance_id = "instance", title = "App", workspace_id = owner}))
+            local envelope = state.envelope(current)
+            test.eq(envelope.scene.windows[1].workspace_id, owner)
+            envelope.scene.windows[1].workspace_id = "ffffffffffffffffffffffffffffffff"
+            test.eq(state.envelope(current).scene.windows[1].workspace_id, owner)
+        end)
+
         test.it("keeps tab order stable while scene stacking changes", function()
             local current = state.new(80, 24)
             current = state.reduce(current, command("add", {id = "one", instance_id = "a", title = "One"}))

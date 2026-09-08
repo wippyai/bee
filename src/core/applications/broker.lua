@@ -10,6 +10,7 @@ local ctx = require("ctx")
 local contract = require("contract")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
+local attachment = require("attachment")
 local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
@@ -17,12 +18,16 @@ local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
 type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, mount: string, launch_token: string,
-    negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, ready_received: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
+    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, launch_token: string,
+    negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end
+    local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
+    if not workspace_id then
+        error("Invalid workspace identity bootstrap")
+    end
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
     local close_replies = assert(process.listen("bee.application.close.reply", {message = true}))
@@ -81,6 +86,7 @@ local function main(owner: string, initial_preferences: unknown)
         scope_cache[binding.definition_id] = security.new_scope(policies)
     end
     local function emit(reply: contract.Reply, remember: boolean?)
+        reply.workspace_id = workspace_id
         if remember and reply.request_id ~= "" then
             pending[reply.request_id] = nil
             if not completed[reply.request_id] then completed_order[#completed_order + 1] = reply.request_id end
@@ -94,7 +100,8 @@ local function main(owner: string, initial_preferences: unknown)
     end
     local function identified(item: Instance, op: contract.ReplyOp, request_id: string, code: string?, message: string?): contract.Reply
         local reply = contract.reply(request_id, op, code, message)
-        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, item.mount
+        reply.workspace_id = workspace_id
+        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, attachment.reference(item.attachment)
         reply.icon = item.descriptor.icon
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
@@ -111,9 +118,9 @@ local function main(owner: string, initial_preferences: unknown)
     end
     local function mount(item: Instance): string?
         if recipient == "" then return "Desktop is not attached" end
-        local value, err = item.view:mount(recipient, {observe = true, input = true, resize = true})
-        if not value then return tostring(err) end
-        item.mount = value
+        local result = attachment.replace(item.view, item.attachment, recipient)
+        item.attachment = result.attachment
+        if result.error ~= "" then return result.error end
         return nil
     end
     local function control_result(waiter: Waiter, code: string, message: string)
@@ -182,21 +189,18 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.add(dialogs, spec, item.close_request_id or "", item.execution_pid, true) then publish_dialogs() end
     end
     local function transition(item: Instance, event: lifecycle.Event)
-        if event == "ready" then
-            item.ready_received = true
-            if recipient == "" then return end
-        end
         local next_state, effect = lifecycle.reduce(item.state, event, now())
         item.state = next_state
         if effect == "opened" then
-            local err = mount(item)
-            if err then
-                item.state = {phase = "terminating", deadline = now() + 1, failure = "attachment_failed"}
-                process.terminate(item.execution_pid)
-            else
-                item.opened = true
-                emit(identified(item, "open", item.open_request), true)
-                appearance_state(item)
+            -- Readiness belongs to the producer. A missing or failed consumer
+            -- attachment must not turn a ready application into a startup failure.
+            item.opened = true
+            local attachment_error: string? = nil
+            if recipient ~= "" then attachment_error = mount(item) end
+            emit(identified(item, "open", item.open_request), true)
+            appearance_state(item)
+            if attachment_error then
+                emit(identified(item, "attached", item.open_request, "attachment_failed", attachment_error))
             end
         elseif effect == "query_close" then
             discard_dialog(item)
@@ -291,7 +295,7 @@ local function main(owner: string, initial_preferences: unknown)
         refresh_shutdown()
     end
     local function accept_readiness(item: Instance, negotiate: boolean)
-        if item.state.phase == "starting" and not item.ready_received then item.negotiate_close = negotiate end
+        if item.state.phase == "starting" then item.negotiate_close = negotiate end
         transition(item, "ready")
     end
     local function tick_instance(item: Instance)
@@ -470,7 +474,7 @@ local function main(owner: string, initial_preferences: unknown)
                     preferences, appearance_revision = prefs, math.floor(data.revision)
                     local theme = appearance.theme(preferences.theme)
                     for _, item in pairs(instances) do
-                        local _, err = item.view:set_page({foreground = theme.text, background = theme.surface})
+                        local _, err = item.view:set_page(appearance.page(theme, item.descriptor.role == "terminal"))
                         appearance_state(item, nil, err and "page_failed" or "", err and tostring(err) or "")
                     end
                 end
@@ -529,7 +533,11 @@ local function main(owner: string, initial_preferences: unknown)
             end
         elseif selected.channel == requests and selected.value:from() == owner then
             local req = contract.request(selected.value:payload():data())
-            if req then
+            if req and req.workspace_id ~= workspace_id then
+                local reply = contract.reply(req.request_id, req.op, "workspace_mismatch", "Request targets another workspace")
+                reply.id = req.id
+                emit(reply)
+            elseif req then
                 local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
                 local cached = completed[req.request_id]
                 if fingerprints[req.request_id] and fingerprints[req.request_id] ~= fingerprint then
@@ -558,17 +566,13 @@ local function main(owner: string, initial_preferences: unknown)
                         recipient = req.recipient
                         local reply = contract.reply(req.request_id, "bind")
                         local function rebind(item: Instance)
-                            local view = item.view
-                            if item.mount ~= "" then
-                                local _, err = view:revoke(item.mount)
-                                if err then reply.error_code, reply.error = "revoke_failed", tostring(err) end
-                                item.mount = ""
-                            end
-                            if recipient ~= "" and not item.opened and item.ready_received then transition(item, "ready")
-                            elseif recipient ~= "" and item.opened then
-                                local err = mount(item)
-                                if err then reply.error_code, reply.error = "attachment_failed", err end
-                                emit(identified(item, "attached", req.request_id, err and "attachment_failed" or "", err))
+                            local result = attachment.replace(item.view, item.attachment, item.opened and recipient or "")
+                            item.attachment = result.attachment
+                            if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
+                            if result.error_code == "revoke_failed" or (recipient ~= "" and item.opened) then
+                                local response = identified(item, "attached", req.request_id, result.error_code, result.error)
+                                if result.error ~= "" then response.mount = "" end
+                                emit(response)
                             end
                         end
                         for _, item in pairs(instances) do rebind(item) end
@@ -597,14 +601,13 @@ local function main(owner: string, initial_preferences: unknown)
                             emit(contract.reply(req.request_id, "open", "incompatible_checkpoint", "Application checkpoint schema is incompatible"), true)
                         elseif req.restore_view_id ~= "" and instances[req.restore_view_id] then
                             emit(contract.reply(req.request_id, "open", "identity_conflict", "View identity is already active"), true)
-                        elseif recipient == "" then emit(contract.reply(req.request_id, "open", "not_attached", "Desktop is not attached"), true)
                         elseif count >= 16 then emit(contract.reply(req.request_id, "open", "instance_limit", "Desktop instance limit reached"), true)
                         else
                             local view_id = req.restore_view_id ~= "" and req.restore_view_id or uuid.v7()
                             local instance_id = req.restore_instance_id ~= "" and req.restore_instance_id or uuid.v7()
                             local token = uuid.v7()
                             local theme = appearance.theme(preferences.theme)
-                            local view, err = tty.viewport({width = 60, height = 16, page = {foreground = theme.text, background = theme.surface}})
+                            local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, descriptor.role == "terminal")})
                             if not view then emit(contract.reply(req.request_id, "open", "viewport_failed", tostring(err)), true)
                             else
                                 local grant, grant_err = view:grant()
@@ -612,14 +615,14 @@ local function main(owner: string, initial_preferences: unknown)
                                 else
                                     local version = assert(registry.current_version())
                                     local pid, spawn_err = process.with_options({terminal = grant}):with_scope(scope_cache[req.definition_id])
-                                        :spawn_monitored(req.definition_id, "bee:workers", {version = 1, broker_pid = tostring(process.pid()), workspace_pid = owner,
+                                        :spawn_monitored(req.definition_id, "bee:workers", {version = 1, broker_pid = tostring(process.pid()), workspace_pid = owner, workspace_id = workspace_id,
                                             instance_id = instance_id, view_id = view_id, definition_id = req.definition_id,
                                             definition_revision = descriptor.definition_revision, registry_revision = version:string(), launch_token = token, resume_schema = descriptor.resume_schema, resume_state = req.resume_state, arguments = req.arguments})
                                     if not pid then view:close(); emit(contract.reply(req.request_id, "open", "spawn_failed", tostring(spawn_err)), true)
                                     else
                                         instances[view_id] = {view_id = view_id, instance_id = instance_id, execution_pid = tostring(pid), view = view,
-                                            descriptor = descriptor, binding = binding, mount = "", launch_token = token,
-                                            state = lifecycle.start(now()), open_request = req.request_id, opened = false, ready_received = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
+                                            descriptor = descriptor, binding = binding, launch_token = token,
+                                            state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
                                     end
                                 end
                             end

@@ -1,6 +1,7 @@
 -- Semantic desktop colors and validated presentation preferences.
 type Theme = {id: string, title: string, ground: string, surface: string, text: string,
-    muted: string, border: string, accent: string, pattern: string, on_accent: string?}
+    muted: string, border: string, accent: string, pattern: string, on_accent: string?, terminal_text: string?, terminal_surface: string?}
+type Page = {foreground: string, background: string}
 type Preferences = {theme: string, background: string, taskbar: string?}
 local M = {}
 local themes: {Theme} = {
@@ -19,7 +20,7 @@ local themes: {Theme} = {
     {id = "lavender", title = "Lavender", ground = "#e8e2f0", surface = "#f5effb", text = "#42394f", muted = "#75677f", border = "#9b8eaa", accent = "#75509d", pattern = "#d0c5dc"},
     {id = "mono", title = "Mono", ground = "#0d0d0d", surface = "#242424", text = "#ededed", muted = "#aaaaaa", border = "#777777", accent = "#ffffff", pattern = "#2b2b2b"},
     {id = "dos", title = "DOS Blue", ground = "#000080", surface = "#0000aa", text = "#ffffff", muted = "#aaaaaa", border = "#55ffff", accent = "#ffff55", pattern = "#0000aa"},
-    {id = "classic", title = "Windows Classic", ground = "#008080", surface = "#c0c0c0", text = "#000000", muted = "#505050", border = "#606060", accent = "#000080", pattern = "#006b6b", on_accent = "#ffffff"},
+    {id = "classic", title = "Windows Classic", ground = "#008080", surface = "#c0c0c0", text = "#000000", muted = "#505050", border = "#606060", accent = "#000080", pattern = "#006b6b", on_accent = "#ffffff", terminal_text = "#cccccc", terminal_surface = "#0c0c0c"},
 }
 local backgrounds: {string} = {"dots", "solid", "grid", "horizon", "stars", "weave", "crosshatch", "bricks", "diagonal", "waves", "hex"}
 type Pattern = {period: integer, rows: {string}}
@@ -62,6 +63,12 @@ function M.instance_accent(theme: Theme, name: string?): (string, string)
     return dark, "#000000"
 end
 function M.themes(): {Theme} return themes end
+function M.page(theme: Theme, terminal: boolean): Page
+    if terminal then
+        return {foreground = theme.terminal_text or theme.text, background = theme.terminal_surface or theme.surface}
+    end
+    return {foreground = theme.text, background = theme.surface}
+end
 function M.backgrounds(): {string} return backgrounds end
 function M.defaults(): Preferences return {theme = "honey", background = "dots", taskbar = "labels"} end
 function M.theme(id: string): Theme

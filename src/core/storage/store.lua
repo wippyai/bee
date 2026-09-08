@@ -13,6 +13,7 @@ type Store = {
     db: sql.DB,
     closed: boolean,
     generation: integer?,
+    identity: (Store) -> (string?, string?),
     read: (Store) -> (string?, string?),
     write: (Store, string) -> (boolean, string?),
     close: (Store) -> (boolean, string?),
@@ -49,8 +50,22 @@ CREATE TABLE IF NOT EXISTS workspace_state (
 )
 ]]
 
+-- Identity is independent from the mutable desktop envelope, folder and host.
+-- Seed it only as part of the migration: a missing row on later opens is corrupt.
+local IDENTITY_TABLE_SQL = [[
+CREATE TABLE workspace_identity (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    workspace_id TEXT NOT NULL CHECK (
+        length(workspace_id) = 32 AND workspace_id NOT GLOB '*[^0-9a-f]*'
+    )
+);
+INSERT INTO workspace_identity (singleton, workspace_id)
+VALUES (1, lower(hex(randomblob(16))))
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
+    {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string
@@ -196,6 +211,22 @@ end
 local function ensure_open(store: Store): string?
     if store.closed then return "workspace store is closed" end
     return nil
+end
+
+local function identity_text(value: unknown): string?
+    if type(value) == "string" and #value == 32 and not value:find("[^0-9a-f]") then return value end
+    return nil
+end
+
+local function read_identity(store: Store): (string?, string?)
+    local closed_err = ensure_open(store)
+    if closed_err then return nil, closed_err end
+    local rows, err = store.db:query("SELECT singleton, workspace_id FROM workspace_identity")
+    if not rows or err then return nil, error_text("read workspace identity", err) end
+    if #rows ~= 1 or integer(rows[1].singleton) ~= 1 then return nil, "workspace identity row is corrupt" end
+    local id = identity_text(rows[1].workspace_id)
+    if not id then return nil, "workspace identity is invalid" end
+    return id, nil
 end
 
 local function read_state(store: Store): (string?, string?)
@@ -345,10 +376,16 @@ function M.open(): (Store?, string?)
         db = db,
         closed = false,
         generation = nil,
+        identity = read_identity,
         read = read_state,
         write = write_state,
         close = close_store,
     }
+    local _, identity_err = read_identity(store)
+    if identity_err then
+        store:close()
+        return nil, identity_err
+    end
     local _, initial_read_err = read_state(store)
     if initial_read_err then
         store:close()

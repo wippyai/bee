@@ -24,6 +24,7 @@ entries:
     test: wippy.test:test
     model: bee.desktop:model
     decode: bee.protocol:decode
+    contract: bee.protocol:application
 - name: recovery_test
   kind: function.lua
   source: file://recovery_test.lua

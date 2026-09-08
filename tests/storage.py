@@ -1,5 +1,7 @@
 """Workspace storage migration and generation-CAS acceptance checks."""
 from pathlib import Path
+import hashlib
+import re
 import os
 import shutil
 import sqlite3
@@ -20,6 +22,9 @@ local function main()
     if not right then error(tostring(right_error)) end
     if left.load ~= nil or left.save ~= nil then error("legacy storage aliases remain") end
 
+    local identity = assert(left:identity())
+    assert(#identity == 32 and not identity:find("[^0-9a-f]"))
+    assert(identity == assert(right:identity()), "Handles disagree on workspace identity")
     local baseline, baseline_error = left:read()
     if baseline_error then error(tostring(baseline_error)) end
     if not baseline then
@@ -57,6 +62,8 @@ local function main()
 
     local closed, close_error = left:close()
     if not closed then error(tostring(close_error)) end
+    local closed_identity, closed_identity_error = left:identity()
+    assert(not closed_identity and closed_identity_error)
     local closed_read, closed_read_error = left:read()
     if closed_read or not closed_read_error or not tostring(closed_read_error):find("closed") then
         error("closed store remained readable")
@@ -123,7 +130,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert len(migration) == 1 and migration[0][0] == 1
+            assert len(migration) == 2 and migration[0][0] == 1 and migration[1][0] == 2
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE singleton = 1"
@@ -151,16 +158,76 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (2, 'future_schema', 'future', 'now')"
+                "VALUES (3, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "newer than this Bee build" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 2")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 3")
             connection.commit()
         run_probe(project, folder)
 
-    print("Storage: WAL, migration ledger integrity/newer-version rejection, generation CAS, close behavior")
+        def identity(path):
+            with sqlite3.connect(path) as db:
+                return db.execute("SELECT workspace_id FROM workspace_identity WHERE singleton=1").fetchone()[0]
+
+        original_id = identity(database)
+        run_probe(project, folder)
+        assert identity(database) == original_id, "Reopen changed workspace identity"
+        moved = folder / "relocated"
+        moved.mkdir()
+        with sqlite3.connect(database) as db, sqlite3.connect(moved / "workspace.db") as target:
+            db.backup(target)
+        run_probe(project, moved)
+        assert identity(moved / "workspace.db") == original_id, "Backup/relocation changed identity"
+        fresh = folder / "fresh"
+        fresh.mkdir()
+        run_probe(project, fresh)
+        assert identity(fresh / "workspace.db") != original_id, "Fresh workspaces share identity"
+
+        # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
+        legacy = folder / "legacy"
+        legacy.mkdir()
+        sql = re.search(r"local STATE_TABLE_SQL = \[\[(.*?)\]\]", (ROOT / "src/core/storage/store.lua").read_text(), re.S).group(1)
+        # Lua long strings discard the initial newline.
+        sql = sql.removeprefix("\n")
+        digest = hashlib.sha256(("workspace_state_v1\n" + sql).encode()).hexdigest()
+        assert digest == checksum == "c489523d14fa75467dd136391807da471970843d6faaabc5c930092e40af4da2", "Migration 1 checksum changed"
+        with sqlite3.connect(legacy / "workspace.db") as db:
+            db.execute(sql)
+            db.execute("CREATE TABLE workspace_schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)")
+            db.execute("INSERT INTO workspace_schema_migrations VALUES (1, 'workspace_state_v1', ?, 'before')", (checksum,))
+            db.execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", ('{"version":1,"probe":"legacy"}',))
+        # Open only: prove migration leaves the envelope and generation untouched.
+        (probe / "main.lua").write_text('local storage = require("store")\nlocal function main() local s = assert(storage.open()); assert(s:identity()); s:close() end\nreturn {main = main}\n')
+        store_file = project / "src/core/storage/store.lua"
+        healthy_store = store_file.read_text()
+        seed = "VALUES (1, lower(hex(randomblob(16))))"
+        assert healthy_store.count(seed) == 1
+        store_file.write_text(healthy_store.replace(seed, seed + ";\nSELECT * FROM missing_identity_seed_source"))
+        assert "apply workspace migration" in run_probe(project, legacy, expect_success=False)
+        with sqlite3.connect(legacy / "workspace.db") as db:
+            assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='workspace_identity'").fetchone()[0] == 0
+            assert db.execute("SELECT count(*) FROM workspace_schema_migrations").fetchone()[0] == 1
+            assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
+        store_file.write_text(healthy_store)
+        run_probe(project, legacy)
+        with sqlite3.connect(legacy / "workspace.db") as db:
+            assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
+            assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
+        assert len(identity(legacy / "workspace.db")) == 32
+
+        # An applied identity migration cannot silently mint another ID.
+        with sqlite3.connect(database) as db:
+            db.execute("DELETE FROM workspace_identity")
+        assert "identity row is corrupt" in run_probe(project, folder, expect_success=False)
+        with sqlite3.connect(database) as db:
+            assert db.execute("SELECT count(*) FROM workspace_identity").fetchone()[0] == 0
+            db.execute("PRAGMA ignore_check_constraints = ON")
+            db.execute("INSERT INTO workspace_identity VALUES (1, 'malformed')")
+        assert "identity is invalid" in run_probe(project, folder, expect_success=False)
+
+    print("Storage: WAL, migration ledger integrity/newer-version rejection, generation CAS, close behavior, stable identity, legacy upgrade/rollback, relocation, fresh identity and corrupt identity denial")
 
 
 if __name__ == "__main__":

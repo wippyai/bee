@@ -4,6 +4,7 @@
 -- that its reducer only receives a finite command vocabulary with normalized
 -- integer geometry and validated appearance values.
 local appearance = require("appearance")
+local contract = require("contract")
 
 local M = {}
 
@@ -14,7 +15,7 @@ local MAX_TITLE = 240
 local MAX_APPEARANCE_VALUE = 80
 local MAX_COORDINATE = 2147483647
 
-type Op = "screen" | "add" | "focus" | "fullscreen" | "minimize" | "collapse" | "restore"
+type Op = "screen" | "add" | "focus" | "fullscreen" | "maximize" | "minimize" | "collapse" | "restore"
     | "snap" | "place" | "remove" | "personalize" | "announce" | "appearance" | "snapshot" | "shutdown"
 type Command = {
     version: integer,
@@ -24,6 +25,7 @@ type Command = {
     height: integer?,
     id: string?,
     instance_id: string?,
+    workspace_id: string?,
     title: string?,
     user_title: string?,
     accent: string?,
@@ -58,6 +60,7 @@ local function accent(value: unknown): string?
 end
 
 local function target_op(value: unknown): Op?
+    if value == "maximize" then return "maximize" end
     if value == "focus" then return "focus" end
     if value == "fullscreen" then return "fullscreen" end
     if value == "minimize" then return "minimize" end
@@ -90,13 +93,15 @@ function M.decode(value: unknown): Command?
     elseif value.op == "add" then
         local id = text(value.id, MAX_ID, true)
         local instance_id = text(value.instance_id, MAX_INSTANCE_ID, true)
+        local workspace_id = contract.workspace_id(value.workspace_id)
+        if value.workspace_id ~= nil and not workspace_id then return nil end
         local title = text(value.title, MAX_TITLE, false)
         local icon = value.icon == nil and "" or text(value.icon, 8, false)
         if not icon then return nil end
         if not id or not instance_id or not title then return nil end
         return {version = base.version, request_id = base.request_id, op = "add", id = id,
-            instance_id = instance_id, title = title, icon = icon} :: Command
-    elseif value.op == "focus" or value.op == "fullscreen" or value.op == "minimize"
+            instance_id = instance_id, workspace_id = workspace_id, title = title, icon = icon} :: Command
+    elseif value.op == "focus" or value.op == "fullscreen" or value.op == "maximize" or value.op == "minimize"
         or value.op == "collapse" or value.op == "restore" or value.op == "remove" then
         local id = text(value.id, MAX_ID, value.op ~= "focus")
         if not id then return nil end

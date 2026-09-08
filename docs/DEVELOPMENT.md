@@ -6,6 +6,12 @@ to create empty directories or web adapters in Bee.
 
 ## Placement and ownership
 
+User launch instructions use the globally installed `bee` executable. For an
+editable checkout, `make run WIPPY="$PWD/.wippy/bin/bee-wippy"` runs source through
+the development launcher in the repository directory. This is separate from
+normal `bee` launches, which preserve the caller's project directory. Build and
+install the executable using the README before testing global launch behavior.
+
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
@@ -51,6 +57,13 @@ A PID in a payload is not authentication. Keep request IDs, instance IDs, view I
 execution PIDs, revisions and resume schemas distinct. A successful send means
 queued, not ready, committed or stopped. Report asynchronous completion explicitly;
 timeouts can leave an uncertain outcome and must not trigger blind retries.
+Structural workspace-to-broker/session control uses the local owner's checked
+delivery boundary. A rejected structural send ends that owner through its save
+path with the topic and request ID when available. Ordinary app open/close and
+quit-preparation failures instead return an error without ending running apps.
+Do not introduce an unchecked control send that
+leaves a restore, close or receipt waiting forever. Presenter snapshots may be
+reconstructed; remote reconnection requires its own attachment contract.
 
 Use `process.listen(topic, {message = true})` and `channel.select` as in the current
 actors; unregister listeners on exit. Wippy 2 semantics must be proved against

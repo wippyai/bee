@@ -1,15 +1,11 @@
 # Foundation sweep and next prototype
 
-Status: source review on 2026-09-07 against Bee `ac339ed`. The next slice below
-is a proposal, not an installed API. This pass does not implement threads, Hub
-or self-update; core review and explicit activation boundaries come first. The goal is to move real external-agent work
-into Bee quickly, without making the desktop an agent framework.
-
-Implementation update: the local journal, native contract consumer and standalone
-Test Status worker/view are now implemented; see [Threads](THREADS.md) for the
-current API and acceptance checks. The review below remains historical where it
-describes threads as absent. Durable subscriptions, participant membership,
-workflow scheduling, Hub and self-update remain proposals.
+Status: current local foundation reviewed through `ad8857f`. The original review
+was against `ac339ed`; proposed extension contracts below remain unimplemented
+unless the current-state table explicitly says otherwise. See [Threads](THREADS.md)
+for the local journal, isolated subscriber proof and standalone Test Status worker.
+Bee can launch installed external programs fullscreen through registered command
+handlers; this does not implement agent drivers or MCP.
 
 ## What exists, and what is missing
 
@@ -17,20 +13,119 @@ workflow scheduling, Hub and self-update remain proposals.
 |---|---|---|
 | Desktop | Separate workspace, session, broker and replaceable presenter | Keep domain operations out of input/render loops |
 | Application client | Typed launch, readiness and checkpoint helper | Not an agent driver, tool catalog or external API |
-| Persistence | Local envelope, migration ledger, opt-in app recovery | No durable project/resource identity or event journal |
+| Persistence | Local envelope, checked migrations, stable workspace ID, opt-in app recovery and a separate local journal | Named filesystem/project resources and independently persisted client layout |
 | Authority | Actor-process sender checks, protected admission, scoped TTY | Durable participant membership and external session identity |
-| Threads/subscriptions | Absent from production | Ordered durable events, authorized replay and cursor-based consumption |
+| Threads/subscriptions | Production journal and polling Test Status view; isolated bounded subscriber proof | Production subscriptions, durable consumer cursors and dynamic membership |
 | Agent drivers/MCP | Archived POC only | External transport adapter over owned contracts; drivers later |
 | Publication | Direct app registry/overlay writes denied | Candidate validation, authorized activation and durable receipts |
 | Live installation | Not implemented | Admission/catalog refresh, dependency/migration/upgrade orchestration |
 | Documentation | Repository Markdown | Later package the same pages as discoverable registry documentation |
+
+## Verified local checkpoint and next work
+
+`make check` passed after the fullscreen-handler change, covering typed Lua,
+source/pack UI, window recovery, authority denial, responsive shutdown, the
+subscriber fixture and Test Status. The executable acceptance also passed all
+three provider aliases with literal arguments, fullscreen placement and F12.
+The relevant checks live in `tests/threads.py`, `tests/thread_storage.py`,
+`tests/test_status.py`, `tests/console.py`, `tests/recovery.py` and
+`tests/native_binary.py`; a green local check does not prove remote operation.
+
+The next structural slice is the [client/host extraction](CLIENT_HOST_SPLIT.md):
+owner-held attachment records, one explicit input/resize controller, then a
+workspace host that can boot without a physical TTY. Broker readiness without a
+presenter is already implemented and tested. Independent client lifetimes,
+mixed-workspace layouts, remote attachments and the Hive profile are not.
+Preserve the current local launch and prove two local client owners before
+connecting separate runtimes. Runtime naming/Raft work remains separately owned.
+
+The local foundation does not require implementing the full proposed thread
+contract below. AI drivers, local models, MCP, Hub installation and self-edit
+activation remain separate future work. The Workspace Manager and compact shell
+switcher are planned presentation surfaces over workspace contracts, not new
+workspace owners or an implicit reason to enable networking.
 
 The broker reads protected bindings at startup and sends its initial catalog.
 It reads a descriptor on open, but that is not atomic admission/catalog refresh
 or code-version pinning. F12 replaces the presenter, not the broker. Therefore
 raw registry mutation must not be described as a supported live installation.
 
+## Moving daily work into Bee and recording it
+
+Keep the repository demo tied to verified behavior. The current GIF records the
+real local desktop, Settings, Terminal and Process Manager. It is not an agent
+integration or self-edit demonstration.
+
+1. **Use the terminal foundation.** Run an installed harness through `bee codex`,
+   `bee claude` or `bee agy`; prove arguments, working directory, input, resize,
+   close and presenter recovery. This launch slice is implemented. It does not
+   yet give the harness Bee tools or durable harness-session recovery.
+2. **Connect workspace operations.** After the owner/attachment boundary is
+   settled, expose explicitly authorized operations through an external adapter.
+   Thread observations and app operations retain their owners and typed contracts.
+   Prove sender admission, denied access and reconnect before moving orchestration
+   into Bee. MCP and harness hooks remain unimplemented.
+3. **Edit one application from inside Bee.** Introduce the publication owner,
+   source/draft ownership, expected revision, validation and activation receipts.
+   Preserve local edits and a known-good boot; test conflicting edits, denied
+   publication and interrupted activation. A review decision applies to the exact
+   validated revision. Self-edit authority is separately granted, never inherited
+   merely by opening an agent terminal.
+4. **Record the actual self-edit loop.** Show the agent working inside Bee,
+   the proposed diff, validation results, review, activation and the changed app.
+   Demonstrate the real refresh/restart behavior, including what state survives.
+   Record recovery from a rejected or failed candidate separately. Do not animate
+   an unimplemented success path or suggest native code updates are live Lua edits.
+
+Hub acquisition is not a prerequisite for the first local edit. Runtime overlays
+are an activation mechanism with their own restrictions, not the durable source
+of drafts. Broader self-edit coverage follows only after the single-app flow is
+accepted. This sequence is a plan, not permission to bypass publication checks.
+
 ## Code and organization critique
+
+### Legacy driver shapes to retain
+
+Reference-only review on 2026-09-07 inspected the external legacy tree:
+`driver-claude/src/driver.lua`, its `_index.yaml`,
+`_archive/poc/lineage/src/harness/{catalog,kit}.lua`, the Codex driver there,
+and `os-gateway/src/{hook,mcp}.lua`. None is a production dependency or evidence
+that its provider-specific flags still work in current harness versions.
+
+The useful shape is a registry-discovered native driver contract, independent
+window/session execution owners, and a gateway bound to the launched action.
+The legacy `prepare`, `command` and `parse` methods separate launch preparation
+from provider output parsing; hook observations and MCP calls meet in the thread.
+Keep that separation while replacing untyped values and shell-command strings
+with bounded typed launch data and literal argument vectors.
+
+The intended zero-setup path remains `bee codex [brief]` (likewise other admitted
+handlers). Its application handler selects an admitted driver binding. The run
+owner creates or joins the authorized thread, records the driver revision and
+harness session reference, prepares scoped hook/MCP configuration, then launches
+the native program. The gateway must be ready before the harness starts; failure
+must report an incomplete launch, not quietly run an apparently integrated agent
+without its tools. The visible terminal is one view of that execution.
+
+Keep `workspace_id`, `thread_id`, run identity, app/view identity and the harness's
+own conversation/session ID distinct. A driver declares interactive, resumed-turn
+and structured-output capabilities separately. Preserve original hook names and
+source event identity alongside normalized events; absent hooks are explicit.
+Interactive terminal input is not automatically a safe background message queue.
+
+MCP exposes the same authorized subsystem operations that local apps consume.
+The launch owner binds credentials to the admitted run and resource scope; a
+thread ID or URL parameter alone does not grant access. Driver configuration
+does not enable bypass flags or edit the user's global harness configuration by
+default. Harness configuration/authentication and resume behavior need acceptance
+against supported provider versions before this replaces today's Terminal aliases.
+Self-edit tools still route through the separately granted publication owner.
+
+The next implementation should retain the legacy contract shape, not its hardcoded
+home paths, fixed tool inventory or shell-specific command assembly. Native and
+remote launches use the same run contract; the destination owner establishes the
+actor and allowed execution scope after admission. This remains proposed driver
+work, sequenced after the local host/attachment boundary.
 
 The import graph, pure scene reducer, typed boundary decoders, independent apps,
 negative permission checks and source/pack acceptance provide a useful base.
@@ -222,10 +317,14 @@ negative permissions, lifecycle failures and durable recovery. That evidence doe
 not establish protection against arbitrary OS-user code or readiness for live
 package replacement. Carry the following gates into the first extension change:
 
-- Define failure outcomes for workspace control sends currently issued without
-  checking the send result, especially restore/open coordination; prove a failed
-  delivery cannot leave an operation waiting forever. Core EXIT handling is not
-  a substitute for a correlated operation failure.
+- Implemented for workspace-to-broker/session control: a rejected send reports
+  its topic/request ID, ends the local owner through its save path and preserves
+  recovery when structural control fails. Source/pack injection covers bind,
+  restore, accepted shutdown and checkpoint receipts. Ordinary open/close and quit
+  preparation failures preserve running apps and permit explicit retry.
+  Appearance requests keep their correlated error path.
+  Remote reconnect and disconnected-client behavior still need the attachment
+  contract; local fail-fast behavior is not a remote availability guarantee.
 - Keep append/draft persistence outside the desktop envelope and outside the
   presenter's input loop. Storage failure must remain visible and preserve the
   last committed state.

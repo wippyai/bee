@@ -29,6 +29,8 @@ for path in (ROOT / "src").rglob("_index.yaml"):
                     allowed_imports += ("bee.processes:",)
                 if identity.startswith("bee.settings:"):
                     allowed_imports += ("bee.settings:",)
+                if identity.startswith("bee.console:"):
+                    allowed_imports += ("bee.console:",)
                 assert target.startswith(allowed_imports), (identity, target)
         source = entry.get("source", "")
         if source.startswith("file://"):

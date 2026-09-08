@@ -3,6 +3,7 @@ local title_editor = require("title_editor")
 local dialog = require("dialog")
 local interaction = require("interaction")
 local ctx = require("ctx")
+local contract = require("contract")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -18,6 +19,8 @@ local appearance = require("appearance")
 type Attachment = {view: tty.Viewport, width: integer, height: integer, revision: integer}
 local function main(owner: string, initial_application: string?, secondary_application: string?)
     if ctx.get("bee.workspace_owner") ~= owner or owner == "" then error("Untrusted presenter bootstrap") end
+    local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
+    if not workspace_id then error("Invalid workspace identity bootstrap") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -94,7 +97,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             closing[id] = true
             routing_scene = model.remove(routing_scene, id)
         end
-        local sent, err = process.send(owner, "bee.app.request", {version = 1, request_id = uuid.v7(), op = op, definition_id = definition_id, id = id})
+        local sent, err = process.send(owner, "bee.app.request", {version = 1, request_id = uuid.v7(), op = op, workspace_id = workspace_id, definition_id = definition_id, id = id})
         if not sent then closing[id] = nil; adopt_routing(); status = tostring(err) end
     end
     local function rectangle(win: model.Window): model.Rect
@@ -170,7 +173,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 else status = tostring(err or "View unavailable") end
             end
         end
-        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "workspace / local",
+        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. workspace_id:sub(1, 8),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus])
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
@@ -210,14 +213,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
             local msg = selected.value
             if msg:from() == owner then
                 local reply = decode.reply(msg:payload():data())
-                if reply then
+                if reply and decode.belongs(reply, workspace_id) then
                     if reply.error == "" and (reply.op == "open" or reply.op == "attached" or reply.op == "focus" or reply.op == "close") then status = "" end
                     if reply.op == "closing" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
                     if reply.error ~= "" then
                         status = reply.error
                         if reply.op == "close" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
                     end
-                    if (reply.op == "open" or reply.op == "attached") and reply.error == "" then
+                    if (reply.op == "open" or reply.op == "attached") and reply.error == "" and reply.mount ~= "" then
                         local view, err = tty.attach(reply.mount)
                         if view then
                             attachments[reply.id] = {view = view, width = 0, height = 0, revision = -1}

@@ -3,11 +3,26 @@ local appearance = require("appearance")
 local contract = require("contract")
 local M = {}
 type Reply = contract.Reply
+local function reply_op(value: unknown): contract.ReplyOp?
+    if value == "open" then return "open" end
+    if value == "close" then return "close" end
+    if value == "closed" then return "closed" end
+    if value == "focus" then return "focus" end
+    if value == "attached" then return "attached" end
+    if value == "bind" then return "bind" end
+    if value == "page" then return "page" end
+    if value == "title" then return "title" end
+    if value == "closing" then return "closing" end
+    if value == "quit" then return "quit" end
+    if value == "shutdown" then return "shutdown" end
+    return nil
+end
 function M.reply(value: unknown): Reply?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
-    local op = value.op
-    if op ~= "open" and op ~= "close" and op ~= "closed" and op ~= "focus" and op ~= "attached"
-        and op ~= "bind" and op ~= "page" and op ~= "title" and op ~= "closing" and op ~= "quit" and op ~= "shutdown" then return nil end
+    local workspace_id = contract.workspace_id(value.workspace_id)
+    if value.workspace_id ~= nil and not workspace_id then return nil end
+    local op = reply_op(value.op)
+    if not op then return nil end
     local request_id, id = contract.text(value.request_id, 80), contract.text(value.id, 80)
     local instance, title = contract.text(value.instance_id, 80), contract.text(value.title, 80)
     local mount, code = contract.text(value.mount, 1024), contract.text(value.error_code, 80)
@@ -15,11 +30,14 @@ function M.reply(value: unknown): Reply?
         or type(value.error) ~= "string" or #value.error > 4096 then return nil end
     local icon = contract.text(value.icon, 8)
     if value.icon ~= nil and not icon then return nil end
-    return {version = 1, request_id = request_id, op = op, id = id, instance_id = instance, icon = icon,
+    return {version = 1, request_id = request_id, op = op, id = id, instance_id = instance, workspace_id = workspace_id, icon = icon,
         title = title, mount = mount, error_code = code, error = value.error,
         definition_id = contract.text(value.definition_id, 160) or "", resume_schema = contract.text(value.resume_schema, 80) or "",
         restart_policy = contract.text(value.restart_policy, 16) or "never",
         resume_state = type(value.resume_state) == "string" and #value.resume_state <= 65536 and value.resume_state or ""}
+end
+function M.belongs(reply: Reply, workspace_id: string): boolean
+    return reply.workspace_id == workspace_id and contract.workspace_id(workspace_id) ~= nil
 end
 local function integer(value: unknown): integer?
     if type(value) ~= "number" or value ~= value or value < -2147483647 or value > 2147483647 then return nil end
@@ -66,7 +84,9 @@ local function window(value: unknown): model.Window?
     if value.user_title ~= nil and not user_title then return nil end
     local selected_accent = accent(value.accent)
     if value.accent ~= nil and selected_accent == nil then return nil end
-    return {id = value.id, instance_id = value.instance_id, title = value.title,
+    local workspace_id = contract.workspace_id(value.workspace_id)
+    if value.workspace_id ~= nil and not workspace_id then return nil end
+    return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title,
         user_title = user_title, accent = selected_accent, icon = icon,
         bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore}
 end

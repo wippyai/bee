@@ -4,6 +4,7 @@ local exec = require("exec")
 local process = require("process")
 local channel = require("channel")
 local client = require("client")
+local command = require("command")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
@@ -13,12 +14,13 @@ local function main(value: unknown)
     assert(tty.start())
     local width, height = tty.screen_size()
     local executor = assert(exec.get("bee.console:executor"))
-    local child, spawn_error = executor:exec("/bin/bash -i", {pty = {term = "xterm-256color", width = width, height = height}})
+    local child, spawn_error = executor:exec(command.encode(launch.arguments), {pty = {term = "xterm-256color", width = width, height = height}})
     if not child then executor:release(); error(tostring(spawn_error)) end
     local terminal, attach_error = child:attach_terminal()
     if not terminal then child:close(true); executor:release(); error(tostring(attach_error)) end
     -- Attachment creates the native proxy and transfers child ownership to it.
     client.ready(launch, {negotiate_close = true})
+    if #launch.arguments > 0 then client.title(launch, launch.arguments[1]) end
     local done = terminal:done()
     while true do
         local selected = channel.select({input:case_receive(), events:case_receive(), done:case_receive(), closes:case_receive()})

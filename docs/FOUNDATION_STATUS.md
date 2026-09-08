@@ -10,6 +10,9 @@ implemented boundary. Older design documents are proposals where they differ.
 Settings provides 16 themes, 11 backgrounds and a Labels/Icons taskbar choice.
 These preferences persist with the workspace. Compact tabs retain admitted app
 icons, minimize/restore actions and the normal focus/overflow behavior.
+Windows Classic keeps its silver application panels and uses a black console
+with light default text for Terminal. Start and context menus align shortcuts
+and submenu indicators; the BEE arrow reflects only the Start menu state.
 Title/tab context menus also support user labels and named accents. The session
 owns these values independently of application identity; supported recovery
 restores them. Apps can announce their own bounded titles through the authenticated
@@ -39,7 +42,12 @@ and presentation roles; core code contains no bundled-app IDs. Shared UI helpers
 are optional; the Terminal uses Wippy's native PTY proxy directly.
 
 Applications receive identities before spawn and acknowledge readiness. A spawn
-alone is not an opened application. Readiness has a three-second deadline. Unguarded close
+alone is not an opened application. Readiness has a three-second deadline and
+does not require a presenter attachment. The broker can retain a ready producer
+and accept its checkpoints while detached; a mount failure reports attachment
+failure without killing the app. Source/pack Lua acceptance checks this through
+piped execution. A complete headless workspace profile remains unimplemented.
+Unguarded close
 sends the producer a cooperative close event, then requests termination after
 250ms. Guarded apps enter this cleanup only after an accepted decision. Records remain owned until EXIT; unsuccessful termination reports
 uncertainty rather than claiming the process stopped. Workspace exit starts all
@@ -53,6 +61,12 @@ F12 retires only the presenter. The broker revokes old mounts and binds new ones
 to the fresh PID. App processes, PTYs, viewport content, geometry, tab order and
 preferences survive. Retry exhaustion preserves the last physical frame and
 allows F12 retry or Ctrl+Q exit. Failure of the session or broker ends the workspace.
+Rejected structural workspace-to-broker/session sends end the local workspace
+with a visible error through its save path. Bind, restore, accepted shutdown and
+checkpoint-receipt failure tests verify recovery survives and healthy reboot
+works. Rejected ordinary open/close and quit preparation preserve running apps,
+report failure and permit explicit retry.
+Presenter snapshots remain reconstructible; this is not remote reconnection.
 Workspace preferences and opt-in app checkpoints survive cold starts in the primary
 workspace database. Settings demonstrates the resume contract. Terminal does not
 claim to resurrect native processes after runtime shutdown.
@@ -69,7 +83,10 @@ owner argument. Receivers authenticate actual sender PIDs before interpreting da
 Settings receives an appearance-write operation grant. Process Manager receives
 read-only runtime metrics plus a broker stop operation grant; core and supervisor
 service control remain protected. Terminal alone receives its named native executor
-and the fixed `/bin/bash -i` launch command. Bash supplies interactive line editing
+and native command execution. Empty arguments launch `/bin/bash -i`; registered
+CLI handlers launch `claude`, `codex` or `agy` fullscreen with literal arguments.
+These programs must be installed on PATH; agent integration is not implemented.
+Bash supplies interactive line editing
 and history navigation. It has no ambient foreign TTY authority.
 Producer capabilities and recipient-bound mounts carry terminal rights.
 
@@ -92,6 +109,15 @@ a public stable release; carrying it here makes this development checkpoint repr
 The workspace alone opens `bee:workspace_db`, a separate SQLite store from runtime
 registry history. Its append-only migration ledger verifies names and checksums;
 newer or altered migrations fail closed. Generation checks reject stale writers.
+Migration 2 assigns a stable opaque workspace identity without changing the
+existing envelope or migration 1. The ID survives reopen and database relocation.
+The workspace supplies this ID through trusted broker bootstrap and application
+launch values. The app SDK exposes a copied logical view reference. Broker
+replies and desktop windows retain the workspace ID; workspace/presenter replies
+for a different workspace are rejected. Local application requests carry an
+explicit target checked by both the workspace and broker. Missing or foreign
+targets return an error without executing locally. Mixed-workspace composition and remote
+attachment are not implemented.
 Apps checkpoint through their broker; a successful receipt follows database commit.
 See [storage](STORAGE.md) and [application contracts](APPLICATION_CONTRACTS.md).
 

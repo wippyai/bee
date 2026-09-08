@@ -4,11 +4,23 @@ local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
     test.describe("Application launch arguments", function()
+        test.it("preserves request workspace identity and rejects malformed routing values", function()
+            local identity = "0123456789abcdef0123456789abcdef"
+            local value = {version = 1, request_id = "route", op = "open", definition_id = "test:app", workspace_id = identity}
+            local request = assert(contract.request(value))
+            test.eq(request.workspace_id, identity)
+            value.workspace_id = "ffffffffffffffffffffffffffffffff"
+            test.eq(request.workspace_id, identity)
+            for _, invalid in ipairs({"", "workspace", "0123456789ABCDEF0123456789ABCDEF", identity .. "0"}) do
+                value.workspace_id = invalid
+                test.is_nil(contract.request(value))
+            end
+        end)
         test.it("copies explicit arguments across both boundary decoders", function()
             local source = {"project-a", "run-a", ""}
             local request = assert(contract.request({version = 1, request_id = "r", op = "open",
                 definition_id = "test:app", arguments = source}))
-            local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace",
+            local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace", workspace_id = "0123456789abcdef0123456789abcdef",
                 instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
                 registry_revision = "1", launch_token = "token", arguments = request.arguments}))
             source[1] = "changed"
@@ -17,8 +29,28 @@ local function define_tests()
             test.eq(launch.arguments[2], "run-a")
             test.eq(launch.arguments[3], "")
         end)
+        test.it("requires canonical workspace identity and returns an independent view reference", function()
+            local value = {version = 1, broker_pid = "broker", workspace_pid = "workspace",
+                workspace_id = "0123456789abcdef0123456789abcdef", instance_id = "instance", view_id = "view",
+                definition_id = "test:app", definition_revision = "1", registry_revision = "1", launch_token = "token"}
+            local launch = client.launch(value)
+            if not launch then error("Valid launch was rejected") end
+            local reference = client.reference(launch)
+            test.eq(reference.workspace_id, value.workspace_id)
+            test.eq(reference.instance_id, "instance")
+            test.eq(reference.view_id, "view")
+            reference.workspace_id = "ffffffffffffffffffffffffffffffff"
+            test.eq(launch.workspace_id, value.workspace_id)
+            for _, invalid in ipairs({"", "workspace", "0123456789abcdef0123456789abcdefff0", "0123456789ABCDEF0123456789ABCDEF", "0123456789abcdef0123456789abcdef\n"}) do
+                value.workspace_id = invalid
+                test.is_nil(client.launch(value))
+            end
+            test.is_nil(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace",
+                instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
+                registry_revision = "1", launch_token = "token"}))
+        end)
         test.it("authenticates cancellation results before resuming work", function()
-            local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace",
+            local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace", workspace_id = "0123456789abcdef0123456789abcdef",
                 instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
                 registry_revision = "1", launch_token = "token"}))
             local reply = {version = 1, id = "view", instance_id = "instance", request_id = "close", action = "cancel"}

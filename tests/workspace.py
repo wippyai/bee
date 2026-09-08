@@ -20,8 +20,9 @@ def fixture_workspace(presenter_probe=False):
             # by a fresh process. No diagnostics or test flags enter the core pack.
             presenter = folder / "src/core/terminal/main.lua"
             text = presenter.read_text()
-            assert '"workspace / local"' in text
-            text = text.replace('"workspace / local"', '"workspace / local " .. tostring(process.pid()):sub(-12)')
+            label = '"Workspace " .. workspace_id:sub(1, 8)'
+            assert label in text
+            text = text.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)')
             anchor = 'local action = bindings.action('
             assert anchor in text
             text = text.replace(anchor, 'if event.key_type == "f10" then error("Injected presenter failure") end\n                ' + anchor)

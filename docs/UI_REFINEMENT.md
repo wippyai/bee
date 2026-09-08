@@ -30,7 +30,7 @@ now preserve workspace state across full restarts, as described
 in [WORKSPACE_STATE.md](WORKSPACE_STATE.md). General installation, MCP and agent
 drivers remain separate from the desktop.
 
-After this update, exit with Ctrl+Q and run `./run.sh` again: changes include the
+After this update, exit with Ctrl+Q and run `bee` again: changes include the
 stable workspace and session processes, which F12 does not replace.
 
 ## Second refinement round

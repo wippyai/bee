@@ -1,9 +1,94 @@
 # Workspace identity and client attachments
 
-Status: design, not a callable API. Production currently has one local workspace
-owner and one desktop session. [Workspace state](WORKSPACE_STATE.md) documents
+Status: attachment design, not a callable API. The primary store now persists an
+opaque workspace ID through migration 2. Application launches carry it and the
+app SDK exposes a logical view reference. Broker replies and desktop windows now
+retain it too. Local application requests carry an explicit target checked by
+the workspace and broker; missing or foreign targets are rejected. Production
+still has one local workspace owner and one desktop
+session. [Workspace state](WORKSPACE_STATE.md) documents
 the implemented envelope. This design leaves cluster transport and naming to the
 runtime work; no remote discovery or network listener is enabled by it.
+
+## Registry environment and portable application content
+
+A workspace is a logical identity with an owning host, an application environment
+and resource bindings. Its identity is not a database filename or the caller's
+current directory. The registry owns definitions, configuration and registry
+history. The application-level workspace store owns desktop state and supported
+app checkpoints; the journal owns its events. Do not mirror registry definitions
+into workspace tables and build a second registry reconciler there.
+
+The planned portable export separates declarative content from execution state:
+
+- Application definitions, pinned dependencies and explicit configuration form a
+  versioned manifest using canonical registry/package representations. Selective
+  export includes the dependency closure or names the external requirements.
+- Supported overlay contributions retain their base revision, source and intended
+  changes. Ephemeral overlay owner IDs and generations are local activation data,
+  not portable authority. Export preserves authored content; destination admission
+  decides whether and how to publish it through native registry operations.
+- An application may separately export versioned saved state through its own
+  contract. A checkpoint is not automatically a portable dataset: large stores,
+  filesystem content and journal history need explicit owned export semantics.
+- Credentials, live PIDs, TTY mounts, active database handles and source-machine
+  policy grants are excluded. Resource references require destination bindings.
+
+Import stages content, resolves dependencies, checks supported schema/runtime
+requirements and presents conflicts and requested permissions before activation.
+Retain definition IDs where possible; explicit conflicts must not silently replace
+an unrelated installed application. Registry history records destination changes;
+copying a source registry SQLite file is not the application transfer protocol.
+Cross-store activation and application-data migration need recoverable receipts,
+not an assumed transaction spanning unrelated owners.
+
+The workspace catalog will reference the selected application environment and
+its revision. Registry publication remains the authority boundary, whether its
+input is a package, a reviewed file change or a supported overlay. This is a
+design constraint for future transfer/self-edit work, not an implemented exporter.
+
+## Workspace selection and Hive
+
+The workspace subsystem owns durable identity, state and application membership
+without requiring Hive. Hive provides authorized discovery and routing between
+nodes. A future standalone Workspace Manager application presents local and
+remote workspaces, their applications and optional node topology. A compact shell
+switcher selects the target for new opens; existing tabs retain their original
+workspace ownership. The client's layout can mix tabs from several workspaces.
+Neither the manager nor a shell selection transfers ownership or authorization.
+These UI and remote operations remain proposals until their contracts and
+acceptance checks exist.
+
+## Setup without repeated keys
+
+Pairing is a proposed Bee convenience layer over native configuration. The pinned
+runtime example (`boot/components/system/cluster.example.yaml`) provides seed
+addresses, stable unique node names, membership secret configuration and server/
+client roles. It does not establish the proposed one-time invitation protocol.
+Do not advertise `bee hive init/invite/join` as implemented commands yet.
+
+An explicit first setup should persist the selected profile, native node identity,
+seed addresses and protected credential references. Subsequent `bee` launches
+can reuse that choice without asking for a long key or profile flags. Fresh
+installations remain local-only. Several clients on one computer should reuse
+their selected local host; several actual nodes require separate identities,
+ports and runtime-state directories. A workspace catalog reference selects the
+workspace independently of those node boot settings.
+
+A future invitation needs expiration, single-use redemption, authenticated
+destination binding and revocation semantics. Nearby discovery only finds a
+candidate. Membership credentials establish the transport boundary; application
+placement and workspace access still require owner admission. Keep credentials
+out of exported application definitions and ordinary registry metadata.
+
+The 2026-09-07 local native mesh proof used a clean archive of runtime `055505ef`:
+two runtimes, mutual TLS, one scheduler worker each and 20 cross-node PTY commands
+per runtime passed. The same clean-build proof subsequently passed across two
+authorized Linux hosts after a confirmed Go build cache was cleared on the second
+host. Both peers connected over mutual TLS and completed 20 cross-host commands;
+observed command-to-screen p95 was approximately 17–19 ms in that test environment.
+Temporary identities and scratch files were isolated from existing cluster state.
+This is a runtime primitive proof, not two Bee desktops or Hive discovery.
 
 ## Required headless profile
 
@@ -26,6 +111,33 @@ at their hosts. Hive discovery must identify candidate nodes and workspaces;
 authentication and explicit attachment policy still decide access. Being on the
 same home network does not grant control. Runtime cluster/naming changes remain
 separate work; Bee should consume the native mesh and capability contracts.
+
+An infrastructure application may expose an authorized provisioning contract from
+one workspace, for example a Proxmox service. Its host owns credentials and
+resource limits. Other nodes discover its public operations, then authenticate
+and request permission; membership alone does not grant provisioning authority.
+A durable request/run identity correlates allocation results with the requesting
+workflow. Provisioned machines enroll explicitly before exposing services to the
+Hive. A retried request must resolve the original allocation or report an unknown
+outcome instead of blindly creating another machine. This is an example consumer
+of the proposed service boundary, not an implemented Proxmox integration.
+
+Use a typed consumer library over native mesh actor messages and service
+resolution, not an additional Bee network protocol. Authorization is checked at
+the service owner; a library check alone is insufficient. A synchronized component
+or overlay can supply the client contract and code on another node, allowing its
+client process to run there. Definition availability does not transfer credentials,
+database ownership, live grants or placement policy. Destination admission and
+resource bindings still govern spawn and use. Cross-node definition activation
+and client placement require acceptance before they become supported operations.
+
+Components may also declare filesystem resources and local overlays intended for
+sharing. Keep their definitions, immutable packaged files, writable working files
+and materialized overlays distinct. Destination bindings resolve access to local,
+mounted or synchronized filesystems; component availability alone is not a
+filesystem grant. A component may own explicit file synchronization and its
+conflict/retry contract. Syncing its overlay does not implicitly replicate every
+writable file or database it uses.
 
 ## Host and client composition
 
@@ -83,7 +195,10 @@ or capability values, never durable identity or proof of user authority.
 
 A workspace owns instance admission, application state and resource references.
 The application/subsystem owns run state and durable event history. The client
-owns tab ordering, placement, focus and appearance. A client can show several
+owns tab ordering, placement, focus and desktop chrome appearance. Producer page
+defaults and application appearance remain workspace/application-owned, so clients
+with different desktop themes cannot race to recolor one shared viewport.
+A client can show several
 workspaces; several clients can show one workspace with independent layouts.
 Closing a tab detaches a view. Stopping an application or cancelling a run is a
 separate authorized operation. Existing view-owned apps retain close-to-stop
@@ -128,9 +243,11 @@ handoff. Runtime capability semantics must be verified before implementing this.
 
 ## Storage and profiles
 
-Add workspace identity through a new immutable migration, preserving existing
-desktop and application records. Separate client layout from workspace domain
-state when adding multiple clients; existing desktop state becomes the initial
+Workspace storage identity is implemented through immutable migration 2,
+preserving existing desktop and application records. It appears in app launch
+values, logical view references, broker replies and desktop windows. Live reply
+consumers reject a missing or mismatched workspace identity. Separate client
+layout from workspace domain state when adding multiple clients; existing desktop state becomes the initial
 local client's projection. Copying a database for a backup retains identity;
 creating an independent workspace from it needs an explicit fork operation with
 a new identity. Two writable clones must not silently claim one workspace.
@@ -175,6 +292,9 @@ integration/acceptance work. Mesh connectivity does not replicate SQLite state.
 
 ## Implementation sequence and acceptance
 
+The [client/host extraction plan](CLIENT_HOST_SPLIT.md) maps these requirements to
+the current actor owners, appearance scopes, storage transition and local gates.
+
 ### Headless nodes and composed applications
 
 A Bee node may be headless. The intended headless profile starts the workspace's
@@ -200,8 +320,10 @@ authority. Hosted execution and billing are outside this foundation.
 
 1. Finish the local run/view separation using the test-status application. A
    closed view must not cancel its run; reopening replays committed events.
-2. Persist workspace identity and carry it through launch, snapshot, checkpoint
-   and UI values. Test restore, rename, invalid identities and mismatched replies.
+2. Storage, app-launch and window identity are implemented, with reply and
+   checkpoint workspace checks. Local request targets are enforced at both receivers.
+   Finish cross-workspace dispatch and labels.
+   Test restore, rename, invalid identities and mismatched replies.
 3. Introduce explicit client layout ownership and local attachment lifecycle.
    Test independent layouts and denied/stale control changes before networking.
 4. Bind the same contract to verified runtime mesh capabilities behind the Hive
@@ -215,7 +337,30 @@ client loss and workspace identity visible throughout. Live migration, automatic
 failover of arbitrary native processes, shared writable workspace replication
 and a 100-node deployment remain outside this local foundation milestone.
 
-A future standalone Cluster application under **Start → Tools → Cluster** can expose node health, connectivity and
-workspace placement through native runtime contracts. Authorized controls belong
-to that application/subsystem, not the desktop presenter. Installing or opening
-its UI must not silently enable cluster mode in the local profile.
+A future standalone **Hive Manager** under **Start → Tools → Hive Manager** exposes
+reachable nodes, connection health and hosted workspaces through native contracts.
+Bee remains the client entry point: selecting a remote workspace attaches it to
+the current client, rather than requiring a separate SSH terminal or a second
+desktop. The compact workspace switcher uses the same workspace catalog and
+attachment operations; it does not own a separate connection implementation.
+Local workspace management owns names and environment/resource references;
+Hive Manager adds discovery and remote placement without becoming their owner.
+
+The required operation sequence is discover, inspect authorized workspaces,
+request attachment, receive a current projection, then open/focus the selected
+application using its full workspace reference. Detach, reconnect, unavailable
+hosts and explicit controller transfer need first-class outcomes. A timeout is
+not evidence that a remote application failed to start. Retry uses the original
+request identity and resolves its outcome before spawning again.
+
+Authorized controls belong to the relevant subsystem, not the presenter.
+Installing or opening the manager must not silently enable cluster mode in the
+local profile. When Hive is disabled, show its disabled state and the explicit
+profile requirement; do not fabricate nodes or connection status.
+
+TTY-specific runtime gaps belong in the scoped viewport PR (#653); cluster
+membership and Raft remain separately owned. Before requesting an extension,
+check the actual PR revision and reproduce the missing behavior through native
+contracts. Required end-to-end evidence remains two Bee runtimes with remote
+input/resize, recipient denial, safe controller handoff, disconnect/reconnect
+and tab identity preserved. Current local broker tests do not satisfy that gate.

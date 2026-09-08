@@ -79,8 +79,10 @@ store against one admitted host. Source/pack checks prove two independent deskto
 actors, selected-tab isolation, F12 and fresh-client reattachment to a retained
 Terminal. Guarded-close dialogs are tested across F12 and client reattachment.
 Settings theme persistence, isolation, F12 and denied writes also have source/pack
-acceptance; mixed workspaces and robust failure
-recovery remain unfinished. Do not substitute it for normal launch yet. See the private client
+acceptance. The private local entry also proves presenter-crash recovery, bounded
+pause for readiness or renderer timeouts, and supervised normal/emergency exit.
+Mixed workspaces and public launch migration remain unfinished. Do not substitute
+it for normal launch yet. See the private client
 acceptance section in `CLIENT_HOST_SPLIT.md`.
 `CLIENT_STATE.md` documents the private client store and import receipt. Its
 qualified layout and source/pack persistence tests pass, but normal desktop launch

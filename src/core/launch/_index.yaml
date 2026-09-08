@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.launch
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+- name: supervisor
+  kind: process.lua
+  source: file://supervisor.lua
+  method: main
+  modules: [process, channel, security, ctx, time, uuid]
+  imports:
+    protocol: bee.launch:protocol
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    interaction: bee.application:interaction

@@ -138,6 +138,8 @@ entries:
     - bee.workspace:main
     - bee.workspace:launch
     - bee.client:main
+    - bee.client:local
+    - bee.launch:supervisor
     - bee.session:main
     - bee.applications:broker
     - bee.terminal:main
@@ -171,6 +173,12 @@ entries:
   policy:
     actions: [process.spawn, process.spawn.monitored]
     resources: [bee.applications:broker]
+    effect: allow
+- name: local_supervisor_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.host:main]
     effect: allow
 - name: workspace_environment
   kind: env.storage.os

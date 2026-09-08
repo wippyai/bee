@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.launch
+entries:
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.launch:protocol

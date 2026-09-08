@@ -20,7 +20,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
-  imports:
+  imports: &client_imports
     store: bee.client:store
     state: bee.client:state
     decode: bee.protocol:decode
@@ -33,6 +33,12 @@ entries:
     interaction: bee.application:interaction
     physical: bee.terminal:display
     appearance: bee.desktop:appearance
+- name: local
+  kind: process.lua
+  source: file://main.lua
+  method: local_entry
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports: *client_imports
 - name: store
   kind: library.lua
   source: file://store.lua

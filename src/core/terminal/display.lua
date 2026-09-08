@@ -49,12 +49,13 @@ function M.present(value: Display): boolean
     value.last_rows = snapshot.rows
     return true
 end
-function M.paused(value: Display)
+function M.paused(value: Display, emergency: boolean?)
     local canvas = tty.canvas(value.width, value.height)
     canvas:clear(" ")
     for y = 1, value.height do canvas:put(1, y, value.last_rows[y] or "", value.width) end
     canvas:put(1, value.height, "\27[38;2;255;201;99;48;2;23;32;44m"
-        .. " Desktop paused. F12 Retry / Ctrl+Q Exit" .. string.rep(" ", value.width) .. "\27[0m", value.width)
+        .. (emergency and " Desktop paused. F12 Retry / Ctrl+Q Emergency exit" or " Desktop paused. F12 Retry / Ctrl+Q Exit")
+        .. string.rep(" ", value.width) .. "\27[0m", value.width)
     value.output:present(canvas:rows(), {cursor = {x = 1, y = 1, visible = false}})
 end
 function M.close(value: Display)

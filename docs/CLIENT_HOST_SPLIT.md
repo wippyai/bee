@@ -182,14 +182,16 @@ verifies a fresh Settings write after F12 and denial for a second client without
 the appearance grant. Reading current client preferences does not grant writes.
 
 This entry is still incomplete: it has no mixed-workspace composition, no automatic migration from the
-old workspace desktop, and no public launcher. Unexpected presenter/host loss
-ends the client; supervised admission/replacement timeouts and paused recovery
-still need implementation. These limitations are why normal `bee` continues to use
+old workspace desktop, and no public launcher. Presenter exit retains the last
+physical frame with F12 retry. Host/session loss or admission failure ends the
+client; supervised renderer failure supports explicit retry
+as described below.
+These limitations are why normal `bee` continues to use
 the existing combined owner.
 
 ## Named supervisor endpoint
 
-### Local launcher topology (next implementation)
+### Private local launcher topology
 
 The runtime's physical `tty.port` context key is deliberately non-inheritable.
 A viewport grant is a virtual producer capability, not a way to transfer the
@@ -199,7 +201,13 @@ The supervisor admits the entry client and selects its presenter through the
 same private host protocol exercised by the fixtures. No second physical display
 adapter or forwarding compositor is needed.
 
-The entry's private boot function may construct this local topology; the ordinary
+`bee.client:local(database_resource, initial_application?)` constructs this topology
+using `bee.launch:supervisor`. It has no public command metadata. The terminal
+fixture supplies an exact client-store binding and narrow spawn/database policies.
+Source/pack acceptance verifies physical-terminal boot, native execution, F12,
+quit cancellation and coordinated exit without a second compositor.
+
+The entry's private boot function constructs this local topology; the ordinary
 externally spawned client entry must retain its trusted-context checks. Separate
 these entry points without making an arbitrary payload bypass bootstrap authority.
 Only the supervisor has host admission/shutdown authority. The client keeps its
@@ -211,9 +219,24 @@ but a terminal entry returning can stop the runtime and its child processes.
 The private client supplies a save/finish handshake: save the client,
 finish host cleanup while the client retains the physical display, then release
 the client and observe exits. Cancellation leaves all owners running. A detached
-remote client keeps the current save-and-detach behavior. This topology and
-public launcher are not implemented yet; the private fixture verifies the finish
-handshake through actual host cleanup.
+remote client keeps the current save-and-detach behavior. Public command migration
+is not yet complete; the private local-entry fixture
+verifies the finish handshake through actual host cleanup. Startup, admission,
+rendering and finish phases have ten-second failure deadlines; idle running has
+no supervisor polling timer. A rejected renderer replacement pauses the client
+for explicit retry. Presenter crashes likewise preserve the frame and apps;
+the source/pack local-entry fixture crashes a presenter and verifies that F12
+recovers the same live shell. The paused screen explicitly labels Ctrl+Q as
+Emergency exit. That authenticated client request saves the layout and asks the
+supervisor to finish host cleanup without a presenter-dependent confirmation.
+Normal quit continues to negotiate. Both exit paths have physical-terminal
+source/pack acceptance. A presenter that does not announce readiness within three
+seconds also pauses; late readiness cannot silently resume it. A renderer transition
+that exceeds ten seconds pauses without ending the host. The operation may still
+complete: F12 explicitly reconciles with the host, while stale replies cannot
+complete a newer request. Source/pack acceptance drops a renderer acknowledgement
+after the host transition and verifies bounded pause, F12 recovery of the same PTY
+and negotiated exit. These deadlines add no steady-state polling timer.
 
 Use the runtime's `process.registry.register(name, nil, scope)` and direct
 `process.send(name, topic, body)` addressing. The supervisor registers its own

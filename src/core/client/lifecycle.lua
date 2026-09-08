@@ -3,7 +3,7 @@ local contract = require("contract")
 local interaction = require("interaction")
 local arguments = require("arguments")
 type Bootstrap = {quit_mode: "detach" | "supervisor", legacy_desktop: unknown, arguments: {string}, fullscreen: boolean}
-type Control = {op: "state" | "save" | "exit", request_id: string, shutdown: interaction.Wire?}
+type Control = {op: "state" | "save" | "exit" | "pause", request_id: string, shutdown: interaction.Wire?}
 local M = {}
 function M.bootstrap(value: unknown): Bootstrap?
     if value == nil then return {quit_mode = "detach", legacy_desktop = nil, arguments = {}, fullscreen = false} end
@@ -26,6 +26,10 @@ function M.control(value: unknown, workspace_id: string): Control?
     if value.op == "save" then
         if value.shutdown ~= nil then return nil end
         return {op = "save", request_id = request_id, shutdown = nil}
+    end
+    if value.op == "pause" then
+        if value.shutdown ~= nil then return nil end
+        return {op = "pause", request_id = request_id, shutdown = nil}
     end
     if value.op ~= "state" then return nil end
     local question = interaction.shutdown(value)

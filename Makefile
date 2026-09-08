@@ -30,5 +30,6 @@ check: lint test threads pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/navigation.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/lifecycle.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/test_status.py

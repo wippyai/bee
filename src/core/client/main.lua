@@ -22,9 +22,7 @@ type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 
-local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown)
-    if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
-        or host == "" or host == owner then error("Untrusted client bootstrap") end
+local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean)
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid client bootstrap options") end
     local owned_database: store.Store? = nil
@@ -57,7 +55,12 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local answers = listen("bee.interaction.response")
         local appearance_requests = listen("bee.client.appearance.request")
         local supervisor_controls = listen("bee.client.control")
-        assert(process.monitor(owner)); assert(process.monitor(host))
+        if not owner_monitored then
+            local monitored, owner_error = process.monitor(owner)
+            if not monitored then error("Monitor client owner: " .. tostring(owner_error)) end
+        end
+        local host_monitored, host_error = process.monitor(host)
+        if not host_monitored then error("Monitor workspace host: " .. tostring(host_error)) end
         local database, database_error = store.open(database_resource)
         if not database then error(tostring(database_error)) end
         owned_database = database
@@ -88,6 +91,9 @@ local function main(owner: string, host: string, workspace_id: string, database_
         local connection_id, renderer_generation = "", ""
         local bindings: {[string]: Binding} = {}
         local active = false
+        local paused = false
+        local waiting_presenter = false
+        local presenter_deadline = time.after("3s")
         local inbox_state: inbox.State? = nil
         local shutdown_question: interaction.Wire? = nil
         local shutdown_answered = ""
@@ -179,7 +185,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
             if bootstrap.quit_mode == "detach" then save_before_exit(); return true end
             if quit_request == "" then
                 quit_request = uuid.v7()
-                send(owner, "bee.client.quit", {version = 1, workspace_id = workspace_id, request_id = quit_request})
+                send(owner, "bee.client.quit", {version = 1, workspace_id = workspace_id, request_id = quit_request, emergency = paused})
             end
             return false
         end
@@ -230,10 +236,27 @@ local function main(owner: string, host: string, workspace_id: string, database_
         end
         local updates = assert(display.view:updates())
         local function spawn_presenter()
+            waiting_presenter = true
+            presenter_deadline = time.after("3s")
             local grant = assert(display.view:grant())
             presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = self,
                 ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self)))
+        end
+        local function pause_presenter()
+            active, paused, waiting_presenter, bindings = false, true, false, {}
+            physical.paused(display, bootstrap.quit_mode == "supervisor")
+        end
+        local function restart_presenter()
+            active, paused, bindings = false, false, {}
+            if retired_view then
+                if presenter ~= "" and presenter ~= retired_presenter then process.terminate(presenter) end
+                physical.replace(display)
+            else
+                retired_presenter, retired_view = presenter, physical.stage(display)
+            end
+            updates = assert(display.view:updates())
+            spawn_presenter()
         end
         local function appearance_result(request: host_protocol.ClientAppearanceRequest, code: string, message: string)
             local current = layout.preferences
@@ -257,6 +280,7 @@ local function main(owner: string, host: string, workspace_id: string, database_
                 -- stop consuming app removals and scene edits. Host cleanup must
                 -- not overwrite the layout that will be restored on next boot.
                 if saved_for_exit then cases = {events:case_receive(), supervisor_controls:case_receive()} end
+                if waiting_presenter and not saved_for_exit then cases[#cases + 1] = presenter_deadline:case_receive() end
                 -- These channels are independent of admission delivery. Leave their
                 -- initial snapshots queued until we can validate the connection.
                 if connection_id ~= "" and not saved_for_exit then
@@ -265,12 +289,18 @@ local function main(owner: string, host: string, workspace_id: string, database_
                 end
                 local selected = channel.select(cases)
                 if not selected.ok then break end
-                if selected.channel == events then
+                if selected.channel == presenter_deadline then
+                    pause_presenter()
+                elseif selected.channel == events then
                     local event = selected.value
                     if event.kind == process.event.CANCEL then break end
                     if event.kind == process.event.EXIT then
                         local exited = tostring(event.from)
-                        if exited == owner or (exited == host and not saved_for_exit) or exited == session or exited == presenter then break end
+                        if exited == owner or (exited == host and not saved_for_exit) or exited == session then break end
+                        if exited == presenter then
+                            if saved_for_exit then break end
+                            pause_presenter()
+                        end
                     end
                 elseif selected.channel == input then
                     local event = input_decode.decode(selected.value)
@@ -280,9 +310,12 @@ local function main(owner: string, host: string, workspace_id: string, database_
                         end
                         if event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release" then
                             if request_quit() then break end
+                        elseif paused and event.type == "key" and event.key_type == "f12" and event.action ~= "release" then
+                            restart_presenter()
                         elseif event.type == "resize" then
                             physical.resize(display, event.width, event.height)
                             send(session, "bee.desktop.command", {version = 1, op = "screen", width = event.width, height = event.height})
+                            if paused then physical.paused(display, bootstrap.quit_mode == "supervisor") end
                         elseif active then display.view:send(event) end
                     end
                 elseif selected.channel == updates then
@@ -331,7 +364,9 @@ local function main(owner: string, host: string, workspace_id: string, database_
                     elseif selected.channel == supervisor_controls and sender == owner and bootstrap.quit_mode == "supervisor" then
                         local control = lifecycle.control(data, workspace_id)
                         if control then
-                            if control.op == "save" then
+                            if control.op == "pause" and not saved_for_exit then
+                                pause_presenter()
+                            elseif control.op == "save" then
                                 if not saved_for_exit then save_before_exit(); saved_for_exit = true end
                                 send(owner, "bee.client.saved", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
                             elseif control.op == "exit" then
@@ -368,17 +403,17 @@ local function main(owner: string, host: string, workspace_id: string, database_
                     elseif selected.channel == controls and sender == presenter then
                         if type(data) == "table" and data.version == 1 then
                             if data.op == "ready" then
-                                send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
-                                    connection_id = connection_id, renderer = presenter})
+                                if waiting_presenter and not paused then
+                                    waiting_presenter = false
+                                    send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
+                                        connection_id = connection_id, renderer = presenter})
+                                end
                             elseif data.op == "quit" then
                                 if request_quit() then break end
                             elseif data.op == "rejoin" and active then
                                 -- Keep the old renderer alive until the host revokes its grants.
                                 -- A separate viewport prevents competing output leases during handoff.
-                                active, bindings = false, {}
-                                retired_presenter, retired_view = presenter, physical.stage(display)
-                                updates = assert(display.view:updates())
-                                spawn_presenter()
+                                restart_presenter()
                             end
                         end
                     elseif selected.channel == presentations and sender == host then
@@ -386,24 +421,28 @@ local function main(owner: string, host: string, workspace_id: string, database_
                             and not (active and data.renderer == presenter and data.generation == renderer_generation
                                 and data.pending == false and data.error_code == "") then
                             local generation = contract.text(data.generation, 80)
-                            if not generation or generation == "" or data.renderer ~= presenter or data.error_code ~= "" then error("Renderer admission failed") end
-                            renderer_generation, active = generation, true
-                            if retired_presenter ~= "" then process.terminate(retired_presenter); retired_presenter = "" end
-                            if retired_view then retired_view:close(); retired_view = nil end
-                            publish()
-                            publish_questions()
-                            for _, view in ipairs(live) do
-                                local key = tab(view.view_id, view.instance_id)
-                                local target = key and targets[key] or nil
-                                if target then bind(target) end
-                            end
-                            if not initial_opened and initial_application and initial_application ~= "" then
-                                initial_opened = true
-                                initial_request = uuid.v7()
-                                send(host, "bee.app.request", {version = 1, request_id = initial_request, op = "open",
-                                    workspace_id = workspace_id, connection_id = connection_id, definition_id = initial_application,
-                                    arguments = bootstrap.arguments})
-                            end
+                            if not generation or generation == "" then error("Invalid renderer generation") end
+                            if data.error_code ~= "" then
+                                pause_presenter()
+                            elseif data.renderer == presenter and data.pending == false and not paused then
+                                renderer_generation, active, paused = generation, true, false
+                                if retired_presenter ~= "" then process.terminate(retired_presenter); retired_presenter = "" end
+                                if retired_view then retired_view:close(); retired_view = nil end
+                                publish()
+                                publish_questions()
+                                for _, view in ipairs(live) do
+                                    local key = tab(view.view_id, view.instance_id)
+                                    local target = key and targets[key] or nil
+                                    if target then bind(target) end
+                                end
+                                if not initial_opened and initial_application and initial_application ~= "" then
+                                    initial_opened = true
+                                    initial_request = uuid.v7()
+                                    send(host, "bee.app.request", {version = 1, request_id = initial_request, op = "open",
+                                        workspace_id = workspace_id, connection_id = connection_id, definition_id = initial_application,
+                                        arguments = bootstrap.arguments})
+                                end
+                            elseif data.renderer == "" and active then pause_presenter() end
                         end
                     elseif selected.channel == catalogs and sender == host then
                         local value = inventory.catalog(data)
@@ -531,4 +570,47 @@ local function main(owner: string, host: string, workspace_id: string, database_
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end
     if not completed then error(tostring(err)) end
 end
-return {main = main}
+local function main(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown)
+    if owner == "" or ctx.get("bee.client_owner") ~= owner or not contract.workspace_id(workspace_id)
+        or host == "" or host == owner then error("Untrusted client bootstrap") end
+    return run_client(owner, host, workspace_id, database_resource, initial_application, options, false)
+end
+-- Private terminal entry. The spawn boundary protects this constructor; it never
+-- makes an externally supplied owner acceptable to the ordinary client entry.
+local function local_entry(database_resource: string, initial_application: string?)
+    local boot, boot_error = process.listen("bee.launch.host", {message = true})
+    if not boot then error(tostring(boot_error)) end
+    local supervisor = ""
+    local function run()
+        local policies: {security.Policy} = {}
+        for _, name in ipairs({"bee:host_policy", "bee:local_supervisor_spawn_policy"}) do
+            local policy, err = security.policy(name)
+            if not policy then error(tostring(err)) end
+            policies[#policies + 1] = policy
+        end
+        local self = tostring(process.pid())
+        supervisor = tostring(assert(process.with_options({}):with_context({["bee.launch_owner"] = self})
+            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:supervisor", "bee:workers", self)))
+        local deadline = time.after("10s")
+        while true do
+            local selected = channel.select({boot:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel == deadline then error("Local host startup timed out") end
+            local message = selected.value
+            if tostring(message:from()) == supervisor then
+                local data: unknown = message:payload():data()
+                if type(data) ~= "table" or data.version ~= 1 then error("Invalid local host bootstrap") end
+                local workspace_id = contract.workspace_id(data.workspace_id)
+                local host = contract.text(data.host, 160)
+                local desktop = decode.desktop(data.desktop)
+                if not workspace_id or not host or host == "" or not desktop then error("Invalid local host bootstrap") end
+                return run_client(supervisor, host, workspace_id, database_resource, initial_application,
+                    {version = 1, quit_mode = "supervisor", legacy_desktop = desktop}, true)
+            end
+        end
+    end
+    local ok, err = pcall(run)
+    process.unlisten(boot)
+    if supervisor ~= "" then process.terminate(supervisor) end
+    if not ok then error(err) end
+end
+return {main = main, local_entry = local_entry}

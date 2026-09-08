@@ -17,6 +17,7 @@ install the executable using the README before testing global launch behavior.
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
 | `src/core/workspace` | Physical terminal lifetime, bootstrap and durable recovery orchestration |
 | `src/core/host` | Private TTY-free workspace host, client admission, renderer grants and live inventory |
+| `src/core/launch` | Private local supervisor: startup, admission, presenter selection and coordinated exit |
 | `src/core/client` | Private desktop client, qualified layout, owned client store and question projection |
 | `src/core/interaction` | Bounded host/client question envelopes and host-owned delivery state |
 | `src/core/session` | Committed desktop projection |

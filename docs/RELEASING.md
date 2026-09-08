@@ -1,8 +1,8 @@
 # Releasing Bee
 
 Bee launches through its own executable. The embedded application can be a
-recoverable base version or a first-install bootstrap. Hub publication remains
-separate; no Hub launch entry point is required by this release pipeline.
+recoverable base version or a first-install bootstrap. Hub publication follows
+publication of a validated GitHub release; no Hub launch entry point is required.
 
 | Deliverable | Repository | Tag | Artifact |
 |---|---|---|---|
@@ -39,6 +39,7 @@ merge with squash or rebase.
 
 PR and main checks run Linux amd64 with the full foundation suite. Release tags
 and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
+Linux amd64 also dry-runs the Hub publication packer without upload credentials.
 Both Linux targets run executable acceptance with networking disabled. Native
 module checks run on every Bee target, with a separate Linux module gate.
 Windows desktop support requires replacing the current Bash/POSIX terminal
@@ -64,7 +65,40 @@ binary, provenance, effective Go module files, available dependency notices and
 runtime patch sources. Runtime patches retain their upstream MPL-2.0 license.
 
 Resolve missing dependency notices before a stable public release. Signing and
-Bee Hub publication are separately configured work. Keep private keys in
+Hub credentials require separate configuration. Keep private keys in
 restricted secret storage; never attach them to releases or embed them in packs.
 Hub updates can replace compatible Lua application packs after publication;
 native module changes require a new Bee binary.
+
+## Hub publication
+
+```sh
+make native-tools
+make hub-check BEE_VERSION=0.1.0-dev
+```
+
+The preflight runs strict lint and Wippy's actual publication packer with
+`--dry-run`. It validates the `bee/bee` application module without uploading.
+Production source selection and test exclusions come from `wippy.yaml` and
+the runtime publisher. `make hub-publish BEE_VERSION=…` runs that preflight and
+publishes an immutable protected version through the native Wippy CLI.
+
+`.github/workflows/hub.yml` runs when an application GitHub release is published.
+It requires a semantic version tag on main, a published release and a successful
+native tag workflow for the same commit. Native-module tags do not trigger it.
+Manual dispatch retries an existing published application release through the
+same checks. Failure stays visible; the workflow never substitutes a mutable label
+or increments the version automatically.
+
+Configure repository secret `WIPPY_HUB_TOKEN` with permission to publish `bee/bee`.
+Pre-create the module in the Hub `bee` organization, or grant module-creation
+permission for its first publication.
+The runtime receives it as `WIPPY_TOKEN` only for publication. The repository has
+no Hub secret configured yet. Set repository variable `BEE_HUB_VISIBILITY` to
+`public` or `private` for first-time module creation; the default is private.
+Existing module visibility is preserved. Local publication accepts the equivalent
+`HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
+
+The local dry run passed. No Hub version has been uploaded, and authenticated
+publication plus a real Bee Hub update remain unverified. The local executable
+continues to start from its embedded pack while credentials are prepared.

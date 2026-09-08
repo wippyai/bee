@@ -72,8 +72,10 @@ resolver in a staged deployment, lints against the compiled native modules,
 verifies artifact hashes, then switches the activation record. Failure retains
 the previous selection. Stop Bee before updating; the state directory has an
 exclusive process-lifetime lock. Hub credentials and an available published Bee
-module are required for real Bee updates. Bee Hub publication and in-app Hub
-installation are not implemented by this change.
+module are required for real Bee updates. The [release protocol](RELEASING.md)
+provides a local Hub preflight and a publication workflow. Hub credentials and an
+actual Bee publication/update proof remain pending. In-app Hub installation is
+not implemented.
 
 The manifest's `base` mode provides explicit `--base` recovery using embedded code
 and separate registry history. `bootstrap` mode seeds only the first deployment

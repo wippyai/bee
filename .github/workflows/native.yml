@@ -80,6 +80,7 @@ jobs:
     - name: Native module checks
       run: make native-check
     - name: Assemble application
+      id: assemble
       env:
         BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
         REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
@@ -88,6 +89,12 @@ jobs:
         version="$REQUESTED_VERSION"
         if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
         make standalone BUILDER="$BUILDER_BINARY" BEE_VERSION="$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+    - name: Validate Hub publication pack
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      env:
+        BEE_VERSION: ${{ steps.assemble.outputs.version }}
+      run: make hub-check
     - name: Verify standalone desktop
       if: matrix.goos == 'darwin'
       run: make native-binary-check

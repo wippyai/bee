@@ -33,3 +33,13 @@ release: native-tools
 	$(MAKE) standalone
 	$(MAKE) native-binary-check
 	$(BUILDER) package "$(BEE_BINARY)" --output "$(BEE_RELEASE_ARCHIVE)"
+
+HUB_VISIBILITY ?= private
+.PHONY: hub-check hub-publish
+hub-check:
+	@test -n "$(BEE_VERSION)" || { echo 'Set BEE_VERSION to the release version.' >&2; exit 1; }
+	$(MAKE) lint WIPPY="$(abspath $(NATIVE_WIPPY))"
+	"$(abspath $(NATIVE_WIPPY))" publish --dry-run --version "$(BEE_VERSION)"
+
+hub-publish: hub-check
+	"$(abspath $(NATIVE_WIPPY))" publish --version "$(BEE_VERSION)" --protected --module-visibility "$(HUB_VISIBILITY)"

@@ -5,6 +5,7 @@ local uuid = require("uuid")
 local hash = require("hash")
 local clients = require("clients")
 local contract = require("contract")
+local inventory = require("inventory")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean, renderer_generation: string}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
@@ -79,10 +80,11 @@ local function forget(state: State, connection_id: string)
     for _, id in ipairs(state.completed) do if state.routes[id] then retained[#retained + 1] = id end end
     state.completed = retained
 end
-function M.control(state: State, caller: string, data: unknown, ready: boolean)
-    if caller ~= state.owner then return end
+function M.control(state: State, caller: string, data: unknown, ready: boolean): string?
+    if caller ~= state.owner then return nil end
     local control = clients.control(data)
-    if not control then return end
+    if not control then return nil end
+    local joined_recipient: string? = nil
     local client = state.admitted[control.recipient]
     local code, failure = "", ""
     if control.workspace_id ~= state.workspace_id then code, failure = "workspace_mismatch", "Foreign workspace"
@@ -90,14 +92,14 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean)
     elseif control.recipient == state.owner or control.recipient == state.self or control.recipient == state.broker then
         code, failure = "invalid_argument", "Core owners cannot be desktop clients"
     elseif control.op == "detach" then
-        if client then detach(state, client, control.request_id); return end
+        if client then detach(state, client, control.request_id); return nil end
         code, failure = "not_found", "Client is not admitted"
     elseif control.op == "render" then
         if not client then code, failure = "not_found", "Client is not admitted"
         elseif client.detaching or pending(state, client) then code, failure = "busy", "Client grants are changing"
         elseif not client.permissions.control then code, failure = "permission_denied", "Client control is not granted"
         elseif reserved(state, control.renderer, client.connection_id) then code, failure = "permission_denied", "Renderer belongs to another owner"
-        else render(state, client, control.renderer, control.request_id); return end
+        else render(state, client, control.renderer, control.request_id); return nil end
     elseif control.permissions then
         if client and (client.detaching or not clients.same_permissions(client.permissions, control.permissions)) then
             code, failure = "busy", "Detach the current admission before replacing its permissions"
@@ -120,11 +122,27 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean)
                 local sent, send_error = process.send(client.recipient, "bee.host.admitted", {version = 1,
                     workspace_id = state.workspace_id, connection_id = client.connection_id, permissions = client.permissions,
                     renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering})
-                if not sent then code, failure = "delivery_failed", tostring(send_error); detach(state, client, "") end
+                if not sent then code, failure = "delivery_failed", tostring(send_error); detach(state, client, "")
+                else joined_recipient = client.recipient end
             end
         end
     end
     result(state, control.request_id, control.op, control.recipient, client and client.connection_id or "", code, failure)
+    return joined_recipient
+end
+function M.publish(state: State, value: inventory.State, kind: "catalog" | "views", recipient: string?)
+    if value.workspace_id ~= state.workspace_id then error("Foreign workspace inventory") end
+    for _, client in pairs(state.admitted) do
+        if not client.detaching and (recipient == nil or recipient == client.recipient) then
+            local sent = false
+            if kind == "catalog" then
+                sent = process.send(client.recipient, "bee.host.catalog", inventory.catalog_message(value, client.connection_id)) == true
+            else
+                sent = process.send(client.recipient, "bee.host.views", inventory.views_message(value, client.connection_id)) == true
+            end
+            if not sent then detach(state, client, "") end
+        end
+    end
 end
 local function reject(state: State, client: clients.Client, request: contract.Request, reason: string, message: string)
     local reply = contract.reply(request.request_id, request.op, reason, message)

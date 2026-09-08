@@ -47,26 +47,29 @@ entries:
 - name: clients
   kind: library.lua
   source: file://clients.lua
-  modules: [process, security, tty, time]
+  modules: [process, security, tty, time, channel]
   imports:
     decode: bee.protocol:decode
     contract: bee.protocol:application
+    inventory: bee.workspace:inventory
 - name: client
   kind: process.lua
   source: file://clients.lua
   method: client
-  modules: [process, security, tty, time]
+  modules: [process, security, tty, time, channel]
   imports:
     decode: bee.protocol:decode
     contract: bee.protocol:application
+    inventory: bee.workspace:inventory
 - name: renderer
   kind: process.lua
   source: file://clients.lua
   method: renderer
-  modules: [process, security, tty, time]
+  modules: [process, security, tty, time, channel]
   imports:
     decode: bee.protocol:decode
     contract: bee.protocol:application
+    inventory: bee.workspace:inventory
 - name: host
   kind: library.lua
   source: file://host.lua

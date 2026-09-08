@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.protocol
 entries:
+- name: inventory_test
+  kind: function.lua
+  source: file://inventory_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    inventory: bee.workspace:inventory
+    contract: bee.protocol:application
 - name: client_admission_test
   kind: function.lua
   source: file://client_admission_test.lua

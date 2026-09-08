@@ -22,8 +22,8 @@ It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
 This private entry is not yet used by `bee` and has no public command or headless
-profile. It admits client actors but does not yet integrate desktop clients,
-deliver their catalogs or questions, or persist their layouts.
+profile. It admits client actors and delivers catalog/live-view snapshots, but
+does not yet integrate desktop clients, deliver their questions or persist their layouts.
 Its supervisor is a stable owner, not a replaceable presenter; losing that
 supervisor ends the host. Local launch still uses the existing combined owner.
 Do not run both owners against the same database: generation checks reject stale
@@ -59,6 +59,29 @@ application processes remain alive. The `clients` fixture proves two actor
 clients with equal public request IDs, stale-grant denial, permission replacement
 rules, fresh connection IDs, automatic exit cleanup and retained native shell
 state in source and pack. These actors are not independent desktop sessions yet.
+
+### Private host inventory
+
+Successful admission delivers `bee.host.catalog` and `bee.host.views`. Each is a
+complete version-1 snapshot with `workspace_id`, `connection_id`, `revision` and
+`items`. Catalog and live-view revisions advance independently. Clients must
+authenticate the host sender, check both identities and reject stale revisions;
+the private inventory library supplies strict payload decoders.
+
+Catalog items are public application descriptors. Live items contain only the
+workspace, view, instance and definition IDs, title and optional icon. They omit
+execution PIDs, mounts, checkpoints and permission policies. Admission permits
+this discovery; observing an item does not grant control or a terminal mount.
+The live list is bounded to 16 views and excludes saved applications that are not
+running. Joining clients receive existing views; opens, title changes and exits
+publish updated snapshots. Catalog changes do not repeat startup restoration.
+Detach fences publication immediately. A rejected delivery initiates the same
+grant-revocation path as other client delivery failures.
+
+Source/pack actor tests cover joining after another Terminal opened, observing
+an application's title and removal, fresh snapshots after re-admission, and no
+new inventory after detach. Inventory delivery is implemented in the private host;
+the current combined desktop has not switched to these streams yet.
 
 ## Named supervisor endpoint
 

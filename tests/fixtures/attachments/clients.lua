@@ -5,6 +5,8 @@ local tty = require("tty")
 local time = require("time")
 local decode = require("decode")
 local contract = require("contract")
+local inventory = require("inventory")
+local channel = require("channel")
 type View = {id: string, instance_id: string, native_pid: string}
 local M = {}
 local function command(view: tty.Viewport, text: string)
@@ -25,6 +27,8 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local commands = assert(process.listen("bee.client.command", {message = true}))
     local presentations = assert(process.listen("bee.host.presentation", {message = true}))
+    local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
+    local updates = assert(process.listen("bee.host.views", {message = true}))
     local renderer_generation = ""
     local function status(phase: string, view: View?)
         assert(process.send(owner, "bee.client.status", {phase = phase, view = view}))
@@ -50,6 +54,47 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     end
     status("ready")
     local connection_id = admission()
+    local last_revision = -1
+    local function catalog()
+        while true do
+            local message = assert(catalogs:receive())
+            assert(message:from() == host)
+            local value = inventory.catalog(message:payload():data())
+            if not value then error("Invalid host catalog") end
+            if value.connection_id == connection_id then
+                assert(value.workspace_id == workspace_id)
+                local terminal = false
+                for _, item in ipairs(value.items) do if item.definition_id == "bee.console:app" then terminal = true end end
+                assert(terminal, "Host omitted its Terminal descriptor")
+                return
+            end
+        end
+    end
+    local function views(sender: string, data: unknown): inventory.Views?
+        assert(sender == host)
+        local value = inventory.views(data)
+        if not value then error("Invalid host views") end
+        if value.connection_id ~= connection_id then return nil end
+        assert(value.workspace_id == workspace_id and value.revision >= last_revision)
+        last_revision = value.revision
+        if type(data) ~= "table" or type(data.items) ~= "table" then error("Invalid raw views") end
+        for _, item in pairs(data.items) do
+            assert(type(item) == "table" and item.mount == nil and item.resume_state == nil and item.execution_pid == nil and item.permissions == nil, "Inventory disclosed authority or checkpoint data")
+        end
+        return value
+    end
+    local function wait_views(count: integer, title: string?)
+        while true do
+            local message = assert(updates:receive())
+            local value = views(tostring(message:from()), message:payload():data())
+            if value and #value.items == count then
+                if not title then return end
+                for _, item in ipairs(value.items) do if item.title == title then return end end
+            end
+        end
+    end
+    catalog()
+    wait_views(label == "A" and 0 or 1)
     local function presentation(renderer: string, code: string)
         local message = assert(presentations:receive())
         assert(message:from() == host)
@@ -71,6 +116,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     if not view then error(tostring(view_error)) end
     command(view, "bee_client=" .. label .. "; printf 'BEE_CLIENT_%s_%s\\n' \"$bee_client\" \"$$\"")
     local native_pid = wait_for(view, "BEE_CLIENT_" .. label .. "_(%d+)")
+    wait_views(label == "A" and 1 or 2)
     status("opened", {id = opened.id, instance_id = opened.instance_id, native_pid = native_pid})
     while true do
         local message = assert(commands:receive())
@@ -99,6 +145,20 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         elseif op == "render-cancelled" then
             presentation("", "cancelled")
             status("render-cancelled")
+        elseif op == "inventory-two" or op == "inventory-three" then
+            wait_views(op == "inventory-two" and 2 or 3, op == "inventory-three" and "Inventory probe" or nil)
+            status(op)
+        elseif op == "inventory-detached" then
+            local deadline = time.after("100ms")
+            while true do
+                local selected = channel.select({updates:case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then break end
+                assert(selected.ok)
+                local message = selected.value
+                local value = views(tostring(message:from()), message:payload():data())
+                assert(not value or #value.items <= 2, "Detached client received a newly opened application")
+            end
+            status("inventory-detached")
         elseif op == "check" then
             command(view, "printf 'BEE_CHECK_%s_%s\\n' \"$bee_client\" \"$$\"")
             wait_for(view, "BEE_CHECK_" .. label .. "_" .. native_pid)
@@ -118,12 +178,14 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
                 assert(reply("forbidden", "open").error_code == "permission_denied")
             end
             connection_id = fresh
+            last_revision = -1
+            catalog(); wait_views(2)
             status("denied")
         elseif op == "exit" then break
         else error("Invalid client test command") end
     end
     -- Deliberately rely on execution cleanup; the host must retire this admission.
-    for _, subscription in ipairs({admissions, replies, commands, presentations}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates}) do process.unlisten(subscription) end
 end
 function M.renderer(owner: string, client: string)
     local mounts = assert(process.listen("bee.renderer.mount", {message = true}))
@@ -199,6 +261,16 @@ function M.main()
             recipient = pid, permissions = {open = allowed, close = false, control = allowed}}))
         result(id, pid, expected)
     end
+    local function reply(id: string, op: string): decode.Reply
+        while true do
+            local message = assert(replies:receive())
+            assert(message:from() == host)
+            local value = decode.reply(message:payload():data())
+            if value then assert(decode.belongs(value, workspace_id)) end
+            if value and value.request_id == id and value.op == op then return value end
+        end
+        error("Missing supervisor reply")
+    end
     local function detach(id: string, pid: string)
         assert(process.send(host, "bee.host.client", {version = 1, request_id = id, op = "detach", workspace_id = workspace_id, recipient = pid}))
         result(id, pid, "")
@@ -214,6 +286,7 @@ function M.main()
     local second_view = status(second, "opened")
     if not second_view then error("Missing second view") end
     assert(first_view.id ~= second_view.id and first_view.native_pid ~= second_view.native_pid, "Client request IDs collided")
+    assert(process.send(first, "bee.client.command", "inventory-two")); status(first, "inventory-two")
     local function renderer_status(pid: string, phase: string)
         local message = assert(renderers:receive())
         assert(message:from() == pid and message:payload():data() == phase, "Unexpected renderer status")
@@ -264,6 +337,15 @@ function M.main()
     assert(process.send(final_renderer, "bee.renderer.command", "exit"))
     assert(process.send(first, "bee.client.command", "stale")); status(first, "stale")
     assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(host, "bee.app.request", {version = 1, request_id = "inventory-open", op = "open", workspace_id = workspace_id,
+        definition_id = "bee.attachment_probe:app", arguments = {"inventory"}}))
+    local third = reply("inventory-open", "open")
+    assert(third.error_code == "")
+    assert(process.send(second, "bee.client.command", "inventory-three")); status(second, "inventory-three")
+    assert(process.send(first, "bee.client.command", "inventory-detached")); status(first, "inventory-detached")
+    assert(process.send(host, "bee.app.request", {version = 1, request_id = "inventory-close", op = "close", workspace_id = workspace_id, id = third.id}))
+    assert(reply("inventory-close", "close").error_code == "")
+    assert(process.send(second, "bee.client.command", "inventory-two")); status(second, "inventory-two")
     admit("readmit-first", first, false, "")
     select_renderer("ungranted-renderer", first, second, "permission_denied")
     assert(process.send(first, "bee.client.command", "readmit")); status(first, "denied")
@@ -271,15 +353,6 @@ function M.main()
     result("", second, "")
     detach("detach-again", first)
     assert(process.send(first, "bee.client.command", "exit"))
-    local function reply(id: string, op: string): decode.Reply
-        while true do
-            local message = assert(replies:receive())
-            assert(message:from() == host)
-            local value = decode.reply(message:payload():data())
-            if value and value.request_id == id and value.op == op then return value end
-        end
-        error("Missing supervisor reply")
-    end
     for index, state in ipairs({first_view, second_view}) do
         local id = "inspect-" .. tostring(index)
         assert(process.send(host, "bee.app.request", {version = 1, request_id = id, op = "bind", workspace_id = workspace_id,

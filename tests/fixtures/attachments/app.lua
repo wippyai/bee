@@ -24,6 +24,7 @@ local function main(value: unknown)
             if selected.value:from() == launch.broker_pid and type(data) == "table" and data.request_id == checkpoint then
                 assert(data.error_code == "", "Checkpoint failed")
                 assert(surface:present({"SAVED " .. nonce}))
+                if launch.arguments[1] == "inventory" then assert(client.title(launch, "Inventory probe")) end
             end
         end
     end

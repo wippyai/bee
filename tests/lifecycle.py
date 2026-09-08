@@ -220,7 +220,7 @@ def detached():
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
-    print("Source/pack: detached Terminal, observer isolation, host restore, two clients, renderer replacement/failure, stale generation and queued detach", flush=True)
+    print("Source/pack: detached Terminal, observer isolation, host restore, client inventory/title/exit updates, detach fencing, renderer replacement/failure, stale generation and queued detach", flush=True)
 
 
 if __name__ == "__main__":

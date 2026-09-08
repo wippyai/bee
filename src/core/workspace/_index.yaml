@@ -15,6 +15,13 @@ entries:
     appearance: bee.desktop:appearance
     interaction: bee.application:interaction
     connections: bee.workspace:client_connections
+    inventory: bee.workspace:inventory
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
 - name: client_connections
   kind: library.lua
   source: file://client_connections.lua
@@ -22,6 +29,7 @@ entries:
   imports:
     clients: bee.workspace:client_protocol
     contract: bee.protocol:application
+    inventory: bee.workspace:inventory
 - name: client_protocol
   kind: library.lua
   source: file://client_protocol.lua

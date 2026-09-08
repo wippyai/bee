@@ -62,8 +62,12 @@ headless launch profile, workspace switcher or `bee hive` CLI.
 The private host admits supervisor-selected client actors with explicit operation
 permissions and connection IDs. Source/pack tests cover two clients, detach,
 re-admission, exit cleanup and retained native terminals. Desktop attachment,
-client layout storage and client question delivery remain unfinished; see the
+client-store integration and client question delivery remain unfinished; see the
 private admission contract in `CLIENT_HOST_SPLIT.md`.
+Admitted actors receive separate, connection-qualified catalog and live-view
+snapshots, including apps opened before admission. These descriptions carry no
+mounts or checkpoints. Source/pack checks cover title/exit updates and publication
+fencing on detach; the desktop does not consume these streams yet.
 The host also supports supervisor-selected renderer replacement under an existing
 client connection. Bind requests carry the current renderer generation. Source/pack
 tests cover old-grant denial, failed revocation, renderer exit and queued detach;

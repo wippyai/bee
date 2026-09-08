@@ -12,6 +12,7 @@ local model = require("model")
 local appearance = require("appearance")
 local interaction = require("interaction")
 local connections = require("connections")
+local inventory = require("inventory")
 
 local function main(owner: string)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
@@ -52,6 +53,8 @@ local function main(owner: string)
     local stopping = false
     local fatal: string? = nil
     local client_connections = connections.new(owner, broker, workspace_id)
+    local live_inventory = inventory.new(workspace_id)
+    local catalog_received = false
     local function deliver(topic: string, value: unknown)
         assert(process.send(owner, topic, value))
     end
@@ -108,10 +111,20 @@ local function main(owner: string)
                 local message = selected.value
                 local data: unknown = message:payload():data()
                 if selected.channel == catalogs and message:from() == broker then
-                    deliver("bee.application.catalog", data)
-                    restore_next()
+                    if type(data) == "table" and data.version == 1 then
+                        local next_inventory = inventory.set_catalog(live_inventory, data.items)
+                        if not next_inventory then error("Invalid broker catalog") end
+                        live_inventory = next_inventory
+                        deliver("bee.application.catalog", data)
+                        if ready then connections.publish(client_connections, live_inventory, "catalog") end
+                        if not catalog_received then catalog_received = true; restore_next() end
+                    end
                 elseif selected.channel == client_requests then
-                    connections.control(client_connections, tostring(message:from()), data, ready and not stopping)
+                    local joined = connections.control(client_connections, tostring(message:from()), data, ready and not stopping)
+                    if joined then
+                        connections.publish(client_connections, live_inventory, "catalog", joined)
+                        connections.publish(client_connections, live_inventory, "views", joined)
+                    end
                 elseif selected.channel == requests then
                     local request = contract.request(data)
                     local caller = tostring(message:from())
@@ -138,9 +151,14 @@ local function main(owner: string)
                 elseif selected.channel == replies and message:from() == broker then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
+                        local next_inventory = inventory.observe(live_inventory, reply)
                         if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
                             local committed, err = replace_record(nil, reply.id)
                             if not committed then error("Workspace save failed: " .. tostring(err)) end
+                        end
+                        if next_inventory then
+                            live_inventory = next_inventory
+                            if ready then connections.publish(client_connections, live_inventory, "views") end
                         end
                         if not connections.reply(client_connections, reply) then
                             if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then

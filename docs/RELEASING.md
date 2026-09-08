@@ -98,12 +98,14 @@ or increments the version automatically.
 Configure repository secret `WIPPY_HUB_TOKEN` with permission to publish `bee/bee`.
 Pre-create the module in the Hub `bee` organization, or grant module-creation
 permission for its first publication.
-The runtime receives it as `WIPPY_TOKEN` only for publication. The repository has
-no Hub secret configured yet. Set repository variable `BEE_HUB_VISIBILITY` to
+The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository
+variable `BEE_HUB_VISIBILITY` to
 `public` or `private` for first-time module creation; the default is private.
 Existing module visibility is preserved. Local publication accepts the equivalent
 `HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
 
 The local dry run passed. No Hub version has been uploaded, and authenticated
 publication plus a real Bee Hub update remain unverified. The local executable
-continues to start from its embedded pack while credentials are prepared.
+continues to start from its embedded pack. Authentication alone does not establish
+permission to publish `bee/bee`; verify organization access and token scope before
+publishing the first release.

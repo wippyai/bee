@@ -1,65 +1,128 @@
 name: Native Bee
 on:
   push:
-    branches: [main, feat/native-ioevents]
+    branches: [main]
     tags: ['v*']
   pull_request:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Application version for a local-preview artifact build
+        type: string
+        default: 0.1.0-dev
+      mode:
+        description: Embedded application mode
+        type: choice
+        options: [base, bootstrap]
+        default: base
 permissions:
   contents: read
+concurrency:
+  group: native-bee-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 jobs:
-  linux:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+    - name: Require release tags to belong to main
+      if: github.ref_type == 'tag'
+      run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+  build:
+    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - {goos: linux, goarch: amd64, runner: ubuntu-24.04}
+        - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
+        - {goos: darwin, goarch: amd64, runner: macos-26-intel}
+        - {goos: darwin, goarch: arm64, runner: macos-26}
+    env:
+      BEE_MODE: ${{ inputs.mode || 'base' }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Build pinned native development runtime
       id: toolchain
-      uses: wippyai/builder@6e2852f063f833fdcee9b6a2f63ccee6d8523e01
+      uses: wippyai/builder@96e5e3e6f78d580e4fd72451d53304091a77d4e2
       with:
         mode: toolchain
         manifest: wippy.build.json
         output: .wippy/bin/bee-wippy
-    - name: Configure acceptance harness
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+    - name: Verify runner architecture
+      env:
+        EXPECTED_OS: ${{ matrix.goos }}
+        EXPECTED_ARCH: ${{ matrix.goarch }}
+      run: |
+        test "$(go env GOOS)" = "$EXPECTED_OS"
+        test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
     - run: python3 -m pip install -r tests/requirements.txt
-    - run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
-    - run: make native-check
+    - name: Full foundation checks
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
+    - name: Native module checks
+      run: make native-check
     - name: Assemble application
       env:
         BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
-        RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
         GH_TOKEN: ${{ github.token }}
       run: |
-        if [ -n "$RELEASE_TAG" ]; then export BEE_VERSION="${RELEASE_TAG#v}"; fi
-        make standalone BUILDER="$BUILDER_BINARY"
+        version="$REQUESTED_VERSION"
+        if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
+        make standalone BUILDER="$BUILDER_BINARY" BEE_VERSION="$version"
+    - name: Verify standalone desktop
+      if: matrix.goos == 'darwin'
+      run: make native-binary-check
     - name: Verify offline standalone desktop
+      if: matrix.goos == 'linux'
       run: sudo unshare --net -- env PATH="$PATH" make native-binary-check
     - name: Archive binary and provenance
       env:
         BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
-      run: |
-        "$BUILDER_BINARY" package dist/bee --output dist/bee-linux-amd64.tar.gz
+        TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}
+      run: '"$BUILDER_BINARY" package dist/bee --output "dist/bee-$TARGET.tar.gz"'
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: bee-linux-amd64
+        name: bee-${{ matrix.goos }}-${{ matrix.goarch }}
         path: |
-          dist/bee-linux-amd64.tar.gz
-          dist/bee-linux-amd64.tar.gz.sha256
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
         if-no-files-found: error
+  required:
+    name: Bee CI
+    if: always()
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Require every target
+      env:
+        RESULTS: ${{ join(needs.*.result, ',') }}
+      run: test "$RESULTS" = success,success
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: linux
+    needs: required
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        name: bee-linux-amd64
+        pattern: bee-*
+        merge-multiple: true
         path: artifacts
+    - name: Verify archive checksums
+      working-directory: artifacts
+      run: sha256sum -c *.sha256
     - name: Prepare draft release
       env:
         GH_TOKEN: ${{ github.token }}

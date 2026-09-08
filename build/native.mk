@@ -15,10 +15,21 @@ native-check: native-bootstrap-check
 	$(MAKE) -C native integration WIPPY="$(abspath $(NATIVE_WIPPY))"
 
 native-pack:
+	$(MAKE) lint WIPPY="$(abspath $(NATIVE_WIPPY))"
 	$(BUILDER) pack wippy.build.json --toolchain "$(abspath $(NATIVE_WIPPY))" $(if $(BEE_VERSION),--version "$(BEE_VERSION)",)
+	$(if $(BEE_MODE),$(BUILDER) seal wippy.build.json --mode "$(BEE_MODE)",@true)
 
 standalone: native-pack
 	$(BUILDER) build wippy.build.json --output "$(BEE_BINARY)"
 
 native-binary-check:
 	python3 tests/native_binary.py "$(BEE_BINARY)"
+
+BEE_RELEASE_ARCHIVE ?= dist/release/bee-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz
+.PHONY: release
+release: native-tools
+	$(MAKE) check WIPPY="$(abspath $(NATIVE_WIPPY))"
+	$(MAKE) native-check
+	$(MAKE) standalone
+	$(MAKE) native-binary-check
+	$(BUILDER) package "$(BEE_BINARY)" --output "$(BEE_RELEASE_ARCHIVE)"

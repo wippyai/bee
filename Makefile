@@ -5,12 +5,12 @@ setup:
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:
-	$(WIPPY) lint
+	$(WIPPY) lint --set lua.type_system.enabled=true --set lua.type_system.strict=true
 test:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 threads:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/threads.py
-pack:
+pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 

@@ -96,10 +96,12 @@ resource catalog or add a file browser to Bee.
 
 ## GitHub pipeline
 
-`.github/workflows/native.yml` builds the pinned native tools, runs Bee and native
-checks, assembles the binary, and runs standalone PTY acceptance with networking
-disabled. It uploads a Linux amd64 archive and checksum. Tags beginning with `v`
-also prepare a draft GitHub release, with write permission isolated to that job.
+`.github/workflows/native.yml` builds Linux and macOS binaries on amd64 and arm64
+runners and exercises each executable. Linux acceptance disables networking.
+Each target uploads an archive and checksum. Application tags also prepare a
+draft GitHub release, with write permission isolated to that job. The separate
+native-module workflow checks and releases the nested Go module. See the
+[release protocol](RELEASING.md) for local builds, required checks and tag rules.
 The reusable builder action is pinned by full commit and shared within the
 organization; native module fetching uses the consuming repository's token.
 

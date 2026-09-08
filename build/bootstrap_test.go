@@ -24,6 +24,10 @@ func TestGitUsesSelectedCheckoutInsideParentHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkout, err = filepath.EvalSymlinks(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if actual != checkout {
 		t.Fatalf("Git used %q, expected %q", actual, checkout)
 	}

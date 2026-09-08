@@ -47,6 +47,9 @@ source into a temporary directory and verifies patches before compiling.
 The dependency-notices patch pins Nexus annotations to the source revision
 containing its MIT license, as proposed in
 [runtime PR #677](https://github.com/wippyai/runtime/pull/677).
+The publish-dry-run patch allows credential-free publication packing with an
+explicit version; [runtime PR #684](https://github.com/wippyai/runtime/pull/684)
+prepares that fix upstream. Uploads still require credentials.
 
 `BEE_VERSION=0.1.0-dev make standalone` regenerates the pack and records its exact
 version and hash in the manifest. Bee exports one module root definition at

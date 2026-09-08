@@ -112,7 +112,12 @@ variable `BEE_HUB_VISIBILITY` to
 Existing module visibility is preserved. Local publication accepts the equivalent
 `HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
 
-The local dry run passed. No Hub version has been uploaded, and authenticated
+The local dry run passed with an empty home/config directory and no token.
+Bee carries the checksummed runtime fix from
+[PR #684](https://github.com/wippyai/runtime/pull/684), so pack-only publication
+validation does not request credentials. Linux CI runs this preflight before
+the foundation suite. Actual publication retains its authentication requirement.
+No Hub version has been uploaded, and authenticated
 publication plus a real Bee Hub update remain unverified. The local executable
 continues to start from its embedded pack. Authentication alone does not establish
 permission to publish `bee/bee`; verify organization access and token scope before

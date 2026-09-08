@@ -27,6 +27,10 @@
       {
         "path": "runtime/patches/registry-license.patch",
         "sha256": "015558288f98d531cb6cc650fbbd77dc8057bfd95f65230a727cdac6a1654bc5"
+      },
+      {
+        "path": "runtime/patches/publish-dry-run.patch",
+        "sha256": "0270668b230238c1e8bab935529f6780449a7688ffbcf4f09b5d19acac98e5b6"
       }
     ]
   },

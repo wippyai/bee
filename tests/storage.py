@@ -239,11 +239,10 @@ def client_storage():
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
         host = project / "src/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
+        next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
         configuration["entries"] += [
             {"name": "client_db_path", "kind": "env.variable", "storage": "bee:workspace_environment",
              "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True},
-            {"name": "client_db", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}",
-             "lifecycle": {"auto_start": True}},
         ]
         host.write_text(yaml.safe_dump(configuration, sort_keys=False))
         for name in (".wippy.yaml", "wippy.lock"):

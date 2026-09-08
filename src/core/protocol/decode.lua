@@ -2,6 +2,13 @@ local model = require("model")
 local appearance = require("appearance")
 local contract = require("contract")
 local M = {}
+-- Native process EXIT carries runtime.Result under event.result. A successful
+-- result.value is not a failure, even when the returned application value has
+-- an error-shaped field of its own.
+function M.exit_error(result: unknown): string?
+    if type(result) ~= "table" or result.error == nil then return nil end
+    return tostring(result.error)
+end
 type Reply = contract.Reply
 local function reply_op(value: unknown): contract.ReplyOp?
     if value == "open" then return "open" end

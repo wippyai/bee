@@ -45,7 +45,7 @@ function M.open(): Started?
                 local event = selected.value
                 if event.kind == process.event.CANCEL then return end
                 if event.kind == process.event.EXIT and tostring(event.from) == supervisor then
-                    error("Local supervisor exited before host readiness")
+                    error("Local supervisor exited before host readiness: " .. (decode.exit_error(event.result) or "without publishing a host"))
                 end
             else
                 local message = selected.value

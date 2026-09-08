@@ -46,6 +46,13 @@ new authority through the desktop merely because it is the visible client.
 
 ## Continuing the host/client work
 
+Public `bee` and `bee-app` select
+the independent client, with `bee:client_db` alongside the workspace database.
+Legacy migration, full `make check` and standalone acceptance pass. Older selected
+deployments may retain their code; `bee --base` selects the embedded baseline
+without resetting application databases.
+Use [client state](CLIENT_STATE.md) and the current command metadata for launch wiring.
+
 Read [client/host extraction](CLIENT_HOST_SPLIT.md) for current coupling and
 implementation gates, [workspace attachments](WORKSPACE_ATTACHMENTS.md) for
 identity, Hive and portable application content, and
@@ -55,41 +62,37 @@ Do not create a parallel mesh, naming system or registry reconciler.
 Current evidence: the broker retains ready producers without a presenter, its
 attachment module retains one recipient-and-grant record per instance, and stale
 mounts lose observation/input/resize authority after detach. The named-host fixture
-uses native LOCAL registration after startup readiness. A private `bee.host:main`
-now owns its broker and persistence without a physical TTY and has source/pack
-checkpoint/restart coverage. The local desktop does not use it yet; there is no
-headless launch profile, workspace switcher or `bee hive` CLI.
-The private host admits supervisor-selected client actors with explicit operation
+uses native LOCAL registration after startup readiness. `bee.host:main` owns its
+broker and persistence without a physical TTY. The local supervisor starts it;
+there is no headless launch profile, workspace switcher or `bee hive` CLI.
+The host admits supervisor-selected client actors with explicit operation
 permissions and connection IDs. Source/pack tests cover two clients, detach,
-re-admission, exit cleanup and retained native terminals. Public desktop attachment,
-legacy client-store migration remain unfinished; see the
-private admission contract in `CLIENT_HOST_SPLIT.md`.
+re-admission, exit cleanup and retained native terminals. See the internal
+admission contract in `CLIENT_HOST_SPLIT.md`; it is not a remote enrollment API.
 Admitted actors receive separate, connection-qualified catalog and live-view
 snapshots, including apps opened before admission. These descriptions carry no
 mounts or checkpoints. Source/pack checks cover title/exit updates and publication
-fencing on detach; the private desktop client consumes them, while normal launch
-still uses the combined owner. Private `bee.host.reply` results include a bounded
+fencing on detach; the desktop client consumes them. `bee.host.reply` results include a bounded
 inventory snapshot so independent channel ordering cannot resurrect a removed tab.
 The host also supports supervisor-selected renderer replacement under an existing
 client connection. Bind requests carry the current renderer generation. Source/pack
-tests cover old-grant denial, failed revocation, renderer exit and queued detach;
-normal desktop launch still uses its existing F12 path.
-The private `bee.client:main` now composes a display, session, presenter and client
+tests cover old-grant denial, failed revocation, renderer exit and queued detach.
+`bee.client:main` composes a display, session, presenter and client
 store against one admitted host. Source/pack checks prove two independent desktop
 actors, selected-tab isolation, F12 and fresh-client reattachment to a retained
 Terminal. Guarded-close dialogs are tested across F12 and client reattachment.
 Settings theme persistence, isolation, F12 and denied writes also have source/pack
-acceptance. The private local entry also proves presenter-crash recovery, bounded
+acceptance. The local entry also proves presenter-crash recovery, bounded
 pause for readiness or renderer timeouts, and supervised normal/emergency exit.
 Its supervisor explicitly grants workspace appearance: the host commits Settings
 writes before updating producer pages and client chrome. Ordinary clients retain
 independent chrome; see the appearance contract for cross-store recovery.
-Mixed workspaces and public launch migration remain unfinished. Do not substitute
-it for normal launch yet. See the private client
-acceptance section in `CLIENT_HOST_SPLIT.md`.
-`CLIENT_STATE.md` documents the private client store and import receipt. Its
-qualified layout and source/pack persistence tests pass, but normal desktop launch
-still uses the combined owner and does not migrate to that store yet.
+Mixed workspaces remain unimplemented. See the verified local client acceptance
+and remaining remote boundary in `CLIENT_HOST_SPLIT.md`.
+`CLIENT_STATE.md` documents the client store and import receipt. Source/pack
+migration tests now boot the actual old combined actor, then the public client:
+workspace/application identities, layout and the original migration ledger survive,
+and subsequent boots preserve later client edits.
 The short workspace ID in the header is informational.
 
 Establish the local owner boundary first; then the Hive and agent-integration

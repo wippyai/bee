@@ -4,7 +4,7 @@ local interaction = require("interaction")
 local arguments = require("arguments")
 type Bootstrap = {quit_mode: "detach" | "supervisor", legacy_desktop: unknown, arguments: {string}, fullscreen: boolean,
     secondary_application: string?, workspace_appearance: boolean}
-type Control = {op: "state" | "save" | "exit" | "pause", request_id: string, shutdown: interaction.Wire?}
+type Control = {op: "state" | "save" | "exit" | "pause", request_id: string, shutdown: interaction.Wire?, error: string?}
 local M = {}
 function M.bootstrap(value: unknown): Bootstrap?
     if value == nil then return {quit_mode = "detach", legacy_desktop = nil, arguments = {}, fullscreen = false,
@@ -29,21 +29,30 @@ function M.control(value: unknown, workspace_id: string): Control?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
     local request_id = contract.text(value.request_id, 80)
     if not request_id or request_id == "" then return nil end
+    if value.op ~= "state" and value.error ~= nil then return nil end
     if value.op == "exit" then
         if value.shutdown ~= nil then return nil end
-        return {op = "exit", request_id = request_id, shutdown = nil}
+        return {op = "exit", request_id = request_id, shutdown = nil, error = nil}
     end
     if value.op == "save" then
         if value.shutdown ~= nil then return nil end
-        return {op = "save", request_id = request_id, shutdown = nil}
+        return {op = "save", request_id = request_id, shutdown = nil, error = nil}
     end
     if value.op == "pause" then
         if value.shutdown ~= nil then return nil end
-        return {op = "pause", request_id = request_id, shutdown = nil}
+        return {op = "pause", request_id = request_id, shutdown = nil, error = nil}
     end
     if value.op ~= "state" then return nil end
+    local failure: string? = nil
+    if value.error ~= nil then
+        -- Match the host reply boundary: diagnostic text can include line
+        -- breaks and must not disappear while forwarding an accepted refusal.
+        if type(value.error) ~= "string" or #value.error > 4096 then return nil end
+        failure = value.error
+    end
     local question = interaction.shutdown(value)
     if value.shutdown ~= nil and not question then return nil end
-    return {op = "state", request_id = request_id, shutdown = question and interaction.wire(question) or nil}
+    if question and failure then return nil end
+    return {op = "state", request_id = request_id, shutdown = question and interaction.wire(question) or nil, error = failure}
 end
 return M

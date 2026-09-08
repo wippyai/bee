@@ -239,7 +239,10 @@ function M.request(state: State, caller: string, request: contract.Request, data
     elseif not clients.allowed(client, request) then code = "permission_denied"
     elseif request.workspace_id ~= state.workspace_id then code = "workspace_mismatch"
     elseif not ready then code = "busy" end
-    if code ~= "" then reject(state, client, request, code, "Client request rejected"); return true end
+    if code ~= "" then
+        reject(state, client, request, code, code == "workspace_mismatch" and "Request targets another workspace" or "Client request rejected")
+        return true
+    end
     local generation = request.op == "bind" and client.renderer_generation or ""
     local internal, hash_error = hash.sha256(client.connection_id .. "\0" .. generation .. "\0" .. request.request_id)
     if not internal then error(tostring(hash_error)) end
@@ -277,7 +280,18 @@ function M.request(state: State, caller: string, request: contract.Request, data
     end
     request.request_id = internal
     if request.op == "bind" then request.recipient = client.renderer end
-    assert(process.send(state.broker, "bee.app.request", request))
+    local sent, send_error = process.send(state.broker, "bee.app.request", request)
+    if not sent then
+        -- A refused enqueue has no broker outcome. Release only a reservation
+        -- created by this attempt; an older in-flight/replayed route still owns
+        -- its original request and recovery selection.
+        if not existing then
+            state.routes[internal] = nil
+            state.route_count = state.route_count - 1
+        end
+        request.request_id = route and route.request_id or request.request_id
+        reject(state, client, request, "delivery_failed", tostring(send_error))
+    end
     return true
 end
 local function release_renderer(client: clients.Client): (boolean, string?)

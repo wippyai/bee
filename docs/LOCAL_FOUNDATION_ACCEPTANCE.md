@@ -3,7 +3,7 @@
 This records the delivered local-foundation goal and the remaining host/client
 work. It is not a claim that Bee's proposed Hive, agent or installation APIs exist.
 
-## Verified checkpoint
+## Earlier verified checkpoint
 
 Production checkpoint `aaf3628` passed `make check` and rebuilt standalone binary
 acceptance. Attachment-only checks were subsequently strengthened through
@@ -13,6 +13,16 @@ main now requires a pull request and status checks. No PR was opened or merged.
 Uncommitted native packaging work owned by another contributor is not certified
 by this checkpoint.
 
+## Current local acceptance
+
+The public host/client launcher passes full `make check` (115 typed unit cases
+plus source/pack acceptance) and standalone executable checks. Verified behavior
+includes a real combined-owner database upgrade, once-only client import, retained
+layout and checkpoint identities, independent local clients, bounded presenter
+recovery, visible structural failures and retryable ordinary command failures.
+No applied workspace migration changed. The 16-app load check exited in 322 ms
+in this test environment. Remote/Hive operation is not established by these checks.
+
 | Goal requirement | Implementation and acceptance evidence |
 |---|---|
 | Settings and nostalgic themes | Standalone Settings provides DOS and Windows Classic among 16 themes, 11 backgrounds and tab appearance. `tests/tui_smoke.py`, `taskbar.py`, `personalization.py` and `console.py` exercise appearance, saved preferences and readable Classic terminal defaults. |
@@ -20,8 +30,8 @@ by this checkpoint.
 | Durable state and permissions | Storage, recovery and control-delivery checks cover migration integrity, stable workspace identity, stale-writer rejection, checkpoint receipts, cold recovery and interrupted core delivery. App scopes deny direct workspace SQL, registry mutation and foreign terminal access; native shells retain OS-user authority. |
 | Thread/subscriber prototype | `make threads` tests the isolated native actor/contract prototype: bounded replay, cursor resume, live catch-up, authenticated denial, duplicate/conflicting appends and migration checks. This is distinct from production subscriptions. |
 | Useful live test-status app | `tests/test_status.py` proves explicit launch arguments, actual shared-UI checks, completion after its view closes, reopen/cold replay, duplicate-run suppression and F12. Production views poll the local journal; durable scheduling and push subscriptions remain unimplemented. |
-| Standalone processes and typed contracts | Registry/import audits and strict lint cover the composed source and pack. Each app is a process. The broker owns producer capabilities and lifecycle; the workspace owns recovery; the session owns layout; the presenter is replaceable. |
-| Workspace/client design | `WORKSPACE_ATTACHMENTS.md` and `CLIENT_HOST_SPLIT.md` define qualified identities, host-selected admission, client layout ownership, controller/observer rights, migration receipts and native mesh routing. Current owner-only targeted binding and cross-actor observer tests prove prerequisites, not a complete client API. |
+| Standalone processes and typed contracts | Registry/import audits and strict lint cover source and pack. Each app is a process. The host owns checkpoints and broker; the client owns its store, session and replaceable presenter; the local supervisor coordinates lifetime. |
+| Workspace/client design | `WORKSPACE_ATTACHMENTS.md` and `CLIENT_HOST_SPLIT.md` define qualified identities and native mesh boundaries. Source/pack tests prove two local clients, independent layout/appearance, retained terminals, controller revocation and migration receipts. Mixed-workspace composition and remote attachment remain unimplemented. |
 | Cluster disabled by default | Source configuration declares no cluster/membership profile. The Linux source/pack UI check inspects the running Bee process's socket inodes after boot and rejects TCP listeners or bound UDP endpoints. This verifies the default test composition, not user-supplied profiles or arbitrary native commands. |
 | Accurate scope | Kickside compatibility, AI drivers, models, MCP, Hub activation and in-app self-update remain proposals. Command aliases launch installed native programs. Runtime cluster/Raft changes remain with their separate owner. |
 
@@ -46,14 +56,13 @@ There is no stable published release implied by these instructions.
 ## Still required for the requested Hive direction
 
 The local foundation does not complete the broader requested headless/Hive work.
-The next implementation must separate the stable workspace host from the physical
-terminal client, keeping broker and database ownership together. The broker
-currently monitors its owner and stops when that owner exits; simply renaming the
-current presenter or adding a headless flag does not establish that boundary.
+The stable workspace host is now separate from the physical terminal client,
+keeping broker and workspace persistence together. Public local launch passes
+the full acceptance suite. Its supervisor owns the host; client
+detach, app close and host shutdown are distinct operations. Two independently
+persisted local clients and retained terminals have source/pack acceptance.
 
-Implement client admission and detach separately from app close and host shutdown;
-retain pending questions without treating disconnection as consent. Then prove
-two independent client layouts, qualified tabs from two workspaces, and an actual
+The remaining remote milestone must prove qualified tabs from two workspaces and an actual
 remote Bee Terminal through destination admission. Native cross-host TTY tests do
 not substitute for those gates. Only then expose the headless profile, workspace
 switcher and Hive Manager. Fresh local launches must remain local-only.

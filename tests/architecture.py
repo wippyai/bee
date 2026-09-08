@@ -103,9 +103,16 @@ assert entries["bee.terminal:render"]["modules"] == ["tty"]
 for pure in ["bee.desktop:layout", "bee.terminal:bindings"]:
     assert not entries[pure].get("modules"), pure
 assert {i for i, e in entries.items() if e["kind"] == "terminal.host"} == {"bee:terminal"}
-assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee.threads:db"}
+assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db"}
 assert entries["bee:client_storage_policy"]["policy"] == {"actions": ["db.get"], "resources": ["bee:client_db"], "effect": "allow"}
-assert "bee:client_db" not in entries, "Client data resource belongs to the future client launcher"
+assert entries["bee:client_db"]["file"] == "${env:bee:workspace_db_path}.client"
+for identity, command in [("bee.client:desktop", "bee"), ("bee.client:application", "bee-app")]:
+    launch = entries[identity]["meta"]["command"]
+    assert launch["name"] == command
+    assert set(launch["security"]["policies"]) == {
+        "bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:local_launcher_spawn_policy"}
+    assert identity in entries["bee:core_spawn_boundary"]["policy"]["resources"]
+assert entries["bee:local_launcher_spawn_policy"]["policy"]["resources"] == ["bee.launch:supervisor"]
 assert "bee:client_db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
 assert not any(e["kind"] == "http.service" for e in entries.values())
 print(f"Architecture: {len(entries)} entries; on-demand default applications, closed imports, denied ambient app authority")

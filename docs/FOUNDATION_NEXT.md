@@ -31,13 +31,13 @@ The relevant checks live in `tests/threads.py`, `tests/thread_storage.py`,
 `tests/test_status.py`, `tests/console.py`, `tests/recovery.py` and
 `tests/native_binary.py`; a green local check does not prove remote operation.
 
-The next structural slice is the [client/host extraction](CLIENT_HOST_SPLIT.md):
-owner-held attachment records, one explicit input/resize controller, then a
-workspace host that can boot without a physical TTY. Broker readiness without a
-presenter is already implemented and tested. Independent client lifetimes,
-mixed-workspace layouts, remote attachments and the Hive profile are not.
-Preserve the current local launch and prove two local client owners before
-connecting separate runtimes. Runtime naming/Raft work remains separately owned.
+The [client/host extraction](CLIENT_HOST_SPLIT.md) now supplies a TTY-free host,
+explicit controller grants and independently persisted local clients. Source
+`bee` uses that topology; full local migration and failure-path acceptance pass.
+Two local clients and retained terminals have source/pack acceptance.
+Mixed-workspace composition, remote attachments and the Hive profile remain
+unimplemented. Prove the same contracts between two actual runtimes before
+claiming remote operation. Runtime naming/Raft work remains separately owned.
 
 The local foundation does not require implementing the full proposed thread
 contract below. AI drivers, local models, MCP, Hub installation and self-edit
@@ -317,8 +317,8 @@ negative permissions, lifecycle failures and durable recovery. That evidence doe
 not establish protection against arbitrary OS-user code or readiness for live
 package replacement. Carry the following gates into the first extension change:
 
-- Implemented for workspace-to-broker/session control: a rejected send reports
-  its topic/request ID, ends the local owner through its save path and preserves
+- Implemented for host/client structural control: a rejected send reports
+  its topic and native cause, ends the affected local owner and preserves
   recovery when structural control fails. Source/pack injection covers bind,
   restore, accepted shutdown and checkpoint receipts. Ordinary open/close and quit
   preparation failures preserve running apps and permit explicit retry.

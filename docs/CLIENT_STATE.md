@@ -1,9 +1,11 @@
 # Client layout persistence
 
-Status: the private client actor uses this store and typed layout. Source/pack
-tests cover independent desktop actors and client restart against retained host
-applications. Normal local launch still uses the workspace envelope. Automatic
-host-to-client migration and public independent desktop launch are not wired yet.
+Status: source `bee` and `bee-app` now select the independent client and this
+store. Source/pack migration acceptance proves import from the old combined
+desktop, retained application identities and placement, unchanged workspace
+migrations, F12, and preservation of later client edits on a second boot.
+Full UI, failure-path and standalone acceptance pass. This establishes local
+launch and attachment, not remote operation or automatic deployment replacement.
 Trusted private client bootstrap can now supply a final version-1 options record
 with `legacy_desktop`. It imports before client readiness and returns `import_receipt` in
 `bee.client.ready` only after the client-store commit. Without an offer, that field
@@ -17,7 +19,7 @@ the existing scene model plus one qualified target per window:
 
 `{tab_id, workspace_id, instance_id, view_id}`
 
-The private local launch selects workspace appearance: its supervisor grants
+The local launch selects workspace appearance: its supervisor grants
 host-owned preference writes, and bootstrap projects the fresh host preferences
 over any stale client copy. Layout and targets remain client-owned. The two stores
 do not share a transaction; the host value is authoritative for this local mode.
@@ -46,9 +48,9 @@ independent client. Names contain only letters, digits, underscores and hyphens;
 the whole resource ID is bounded to 160 bytes. File paths, wildcards and workspace
 database bindings are rejected before acquisition. Native `db.get` still requires
 an exact host-selected resource grant; a valid name grants nothing. Normal local
-boot does not yet declare that resource. The fixture declares it with an isolated
-`BEE_CLIENT_DB` path; the future client launcher must supply its persistent data
-binding. Merely disabling `auto_start` is insufficient: native SQLite resources
+boot declares `bee:client_db` at `${env:bee:workspace_db_path}.client`, alongside
+the selected workspace database. Public command arguments never select a database
+resource. Fixtures may supply isolated bindings. Merely disabling `auto_start` is insufficient: native SQLite resources
 open their files during registry loading. The client-storage policy grants only
 that default database; additional bindings require their own exact policy. The
 ordinary application boundary denies both the default resource and all
@@ -101,5 +103,5 @@ and native app database denial. These checks cover persistence. The separate
 The storage fixture also selects two client and two workspace resources, writes
 different state, restarts and verifies isolation in source and pack. Native
 checks reject ungranted resources and broad-grant attempts to bypass the core
-database boundary. Normal launch has not yet selected per-client stores; the
-private client acceptance fixture supplies explicit bindings.
+database boundary. Normal local launch selects the adjacent default client store;
+the multi-client fixture supplies separate explicit bindings for each client.

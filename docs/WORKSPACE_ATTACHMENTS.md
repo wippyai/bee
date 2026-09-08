@@ -4,9 +4,10 @@ Status: attachment design, not a callable API. The primary store now persists an
 opaque workspace ID through migration 2. Application launches carry it and the
 app SDK exposes a logical view reference. Broker replies and desktop windows now
 retain it too. Local application requests carry an explicit target checked by
-the workspace and broker; missing or foreign targets are rejected. Production
-still has one local workspace owner and one desktop
-session. [Workspace state](WORKSPACE_STATE.md) documents
+the host and broker; missing or foreign targets are rejected. Public local launch
+uses a separate workspace host and desktop client; independent-client fixtures
+prove detach and reattachment to retained terminals. Mixed-workspace composition
+and remote attachment remain proposals. [Workspace state](WORKSPACE_STATE.md) documents
 the implemented envelope. This design leaves cluster transport and naming to the
 runtime work; no remote discovery or network listener is enabled by it.
 
@@ -15,8 +16,8 @@ runtime work; no remote discovery or network listener is enabled by it.
 A workspace is a logical identity with an owning host, an application environment
 and resource bindings. Its identity is not a database filename or the caller's
 current directory. The registry owns definitions, configuration and registry
-history. The application-level workspace store owns desktop state and supported
-app checkpoints; the journal owns its events. Do not mirror registry definitions
+history. The workspace store owns supported app checkpoints and producer defaults;
+each client owns its layout store, and the journal owns its events. Do not mirror registry definitions
 into workspace tables and build a second registry reconciler there.
 
 The planned portable export separates declarative content from execution state:

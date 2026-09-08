@@ -50,7 +50,8 @@ local function main(client: string, database_resource: string?)
             if next_phase ~= "running" then deadline = time.after("10s") end
         end
         local function send(recipient: string, topic: string, value: unknown)
-            assert(process.send(recipient, topic, value))
+            local sent, err = process.send(recipient, topic, value)
+            if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
         end
         local function control(op: string)
             pending = uuid.v7()
@@ -78,7 +79,10 @@ local function main(client: string, database_resource: string?)
                 if event.kind == process.event.CANCEL then return end
                 if event.kind == process.event.EXIT then
                     if tostring(event.from) == client then return end
-                    if tostring(event.from) == host and phase ~= "finishing" and phase ~= "stopping" then error("Local workspace host exited during " .. phase) end
+                    local failure = decode.exit_error(event.result)
+                    if tostring(event.from) == host and (failure ~= nil or (phase ~= "finishing" and phase ~= "stopping")) then
+                        error("Local workspace host exited during " .. phase .. ": " .. (failure or "without completing cleanup"))
+                    end
                 end
             else
                 local message = selected.value
@@ -144,8 +148,14 @@ local function main(client: string, database_resource: string?)
                 elseif selected.channel == replies and sender == host then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
-                        if phase == "running" and quit_pending and reply.op == "quit" and reply.error_code == "" then
-                            advance("saving"); control("save")
+                        if phase == "running" and quit_pending and reply.op == "quit" then
+                            if reply.error_code == "" then
+                                advance("saving"); control("save")
+                            else
+                                quit_pending, question = false, nil
+                                send(client, "bee.client.control", {version = 1, workspace_id = workspace_id,
+                                    request_id = uuid.v7(), op = "state", error = reply.error})
+                            end
                         elseif phase == "stopping" and reply.op == "shutdown" and reply.request_id == pending then
                             if reply.error_code ~= "" then error("Workspace cleanup failed: " .. reply.error) end
                             advance("finishing"); control("exit")

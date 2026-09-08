@@ -111,6 +111,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local active = false
         local paused = false
         local waiting_presenter = false
+        local presenter_failures = 0
         local presenter_deadline = time.after("3s")
         local inbox_state: inbox.State? = nil
         local shutdown_question: interaction.Wire? = nil
@@ -121,7 +122,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local initial_request = ""
         local self = tostring(process.pid())
         local function send(recipient: string, topic: string, value: unknown)
-            assert(process.send(recipient, topic, value))
+            local sent, err = process.send(recipient, topic, value)
+            if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
         end
         local function scope(name: string): security.Scope
             local policy, err = security.policy(name)
@@ -315,10 +317,16 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     if event.kind == process.event.CANCEL then break end
                     if event.kind == process.event.EXIT then
                         local exited = tostring(event.from)
-                        if exited == owner or (exited == host and not saved_for_exit) or exited == session then break end
+                        local failure = decode.exit_error(event.result)
+                        if exited == owner or exited == session or (exited == host and (not saved_for_exit or failure ~= nil)) then
+                            error("Desktop dependency exited: " .. exited .. ": " .. (failure or "without completing its lifetime protocol"))
+                        end
                         if exited == presenter then
                             if saved_for_exit then break end
-                            pause_presenter()
+                            if not paused and presenter_failures < 3 then
+                                presenter_failures = presenter_failures + 1
+                                restart_presenter()
+                            else pause_presenter() end
                         end
                     end
                 elseif selected.channel == input then
@@ -393,6 +401,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 send(owner, "bee.client.exit_ready", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
                                 break
                             elseif not saved_for_exit then
+                                if control.error and active then
+                                    local reply = contract.reply(control.request_id, "quit", "delivery_failed", control.error)
+                                    reply.workspace_id = workspace_id
+                                    send(presenter, "bee.app.reply", reply)
+                                end
                                 shutdown_question = control.shutdown
                                 if not shutdown_question or shutdown_question.request_id ~= shutdown_answered then shutdown_answered = "" end
                                 if not shutdown_question then quit_request = "" end
@@ -630,4 +643,12 @@ local function local_application(database_resource: string, application: string,
     if not values then error("Invalid application arguments") end
     return local_entry(database_resource, application, {version = 1, arguments = values})
 end
-return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application}
+-- Public argv never selects a database resource. Composition owns that binding.
+local function desktop(name: string?, ...)
+    return local_command("bee:client_db", name, ...)
+end
+local function application(application_id: string, ...)
+    return local_application("bee:client_db", application_id, ...)
+end
+return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application,
+    desktop = desktop, application = application}

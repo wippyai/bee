@@ -1,15 +1,20 @@
 # Workspace host and desktop client extraction
 
-Status: extraction in progress; a private TTY-free host actor is implemented and
-tested separately from the current local desktop.
+Status: public local launch migration is implemented and verified. `bee` and `bee-app`
+enter `bee.client:desktop` and `bee.client:application`; the client owns physical
+input/display and a separate layout database. The local supervisor owns the
+TTY-free host. Full `make check` and standalone acceptance pass, including strict
+types, legacy migration, UI, failure handling and independent local clients.
+Previously selected deployments may retain older code; `bee --base` selects the
+executable's embedded application without deleting its databases. See [client state](CLIENT_STATE.md)
+for the current database binding and migration protocol.
 The existing desktop now uses `bee.terminal:display` for physical output, the
 presenter's virtual viewport, boot/recovery frames and viewport replacement.
 This owner-local library contains no application routing, database access or
 process supervision. The new client can reuse it without moving the physical
-output lease into the replaceable presenter. Normal desktop client launch remains pending.
+output lease into the replaceable presenter.
 The required behavior and native mesh boundary are in
-[workspace attachments](WORKSPACE_ATTACHMENTS.md). Local Bee still combines the
-physical terminal owner and workspace host. No headless profile exists yet.
+[workspace attachments](WORKSPACE_ATTACHMENTS.md). No headless profile exists yet.
 The current wide-terminal header shows the workspace's short durable ID; it is
 informational, not a workspace switcher. The generic idle "Ready" label is gone.
 The runtime registry stores definitions/history separately from the workspace
@@ -31,12 +36,11 @@ resource selection does not elect an owner or make shared writes safe.
 It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
-This private entry is not yet used by `bee` and has no public command or headless
-profile. It admits private desktop clients and delivers catalog/live-view and
-selected-question snapshots; normal launcher integration remains unfinished.
-Each private desktop client owns its separate layout store.
+The local supervisor starts this host for `bee`; the host itself has no public
+command or headless profile. It admits desktop clients and delivers catalog/live-view
+and selected-question snapshots. Each desktop client owns its separate layout store.
 Its supervisor is a stable owner, not a replaceable presenter; losing that
-supervisor ends the host. Local launch still uses the existing combined owner.
+supervisor ends the host.
 Do not run both owners against the same database: generation checks reject stale
 writes, but they are not host election or a multi-writer protocol.
 
@@ -102,8 +106,7 @@ grant-revocation path as other client delivery failures.
 
 Source/pack actor tests cover joining after another Terminal opened, observing
 an application's title and removal, fresh snapshots after re-admission, and no
-new inventory after detach. Inventory delivery is implemented in the private host;
-the current combined desktop has not switched to these streams yet.
+new inventory after detach. The public local client consumes these same streams.
 
 ## Private desktop client acceptance
 
@@ -111,13 +114,14 @@ the current combined desktop has not switched to these streams yet.
 now runs an independent desktop against one admitted host. Bootstrap requires
 the supervisor's `bee.client_owner` context. The supervisor supplies desktop
 permissions, `bee:client_spawn_policy` and an exact client-database grant; ordinary
-apps cannot spawn this entry. There is no public client command yet.
+apps cannot spawn this entry. Public local commands use the fixed-binding wrappers
+described below; they do not accept arbitrary host or database arguments.
 The optional version-1 bootstrap options carry `arguments` for the initial
 application and a boolean `fullscreen`. Arguments use the shared bounded decoder
 and are forwarded as literal values. Fullscreen applies to the correlated initial
 open result, without toggling an already-fullscreen saved tab back to floating.
 Source/pack acceptance checks both literal argument delivery and saved fullscreen
-state. Normal command aliases continue through the combined launcher until migration.
+state. Normal command aliases use the local supervisor topology below.
 
 The actor owns its physical display adapter, layout store, session and presenter.
 Its selected targets retain full workspace/instance/view identity, with separate
@@ -170,8 +174,7 @@ The fixture exercises supervisor quit through the actual host and broker:
 forwarded shutdown confirmation, cancellation, a fresh confirmation, accepted quit,
 client save, completed host cleanup, explicit client exit, and preserved saved tabs.
 It matches the broker's quit
-reply to the accepted question ID. This proves the actor protocol; the public
-local launcher still needs to perform that coordination.
+reply to the accepted question ID. The public local supervisor uses this coordination.
 The same source/pack fixture checks guarded Terminal close, confirmation isolation
 between clients, F12 with a pending question, cancellation retaining the shell,
 accepted close after client reattachment and stale-instance close rejection.
@@ -183,13 +186,13 @@ producer page defaults remain workspace-owned. The same source/pack fixture
 verifies a fresh Settings write after F12 and denial for a second client without
 the appearance grant. Reading current client preferences does not grant writes.
 
-This entry is still incomplete: it has no mixed-workspace composition, no automatic migration from the
-old workspace desktop, and no public launcher. Presenter exit retains the last
-physical frame with F12 retry. Host/session loss or admission failure ends the
-client; supervised renderer failure supports explicit retry
-as described below.
-These limitations are why normal `bee` continues to use
-the existing combined owner.
+Mixed-workspace composition is not implemented. Public local launch imports the
+old workspace desktop once, before admission. Unexpected presenter exit allows
+three automatic replacements per client execution, then preserves the last frame
+for explicit F12 retry. Explicit replacements do not consume that crash budget.
+Host/session loss or admission failure ends the client with an error. Native EXIT
+diagnostics come from `event.result.error`; the cause survives supervisor startup
+and cleanup instead of becoming a successful or unexplained exit.
 
 ## Named supervisor endpoint
 
@@ -220,16 +223,19 @@ application; Ctrl+P opens the second, which does not launch at boot. Those targe
 survive presenter replacement. Registered handlers preserve literal arguments and
 open fullscreen when declared. `bee.client:local_application(database_resource,
 application, ...)` accepts an explicit application ID and literal argument list,
-matching `bee-app`. Source/pack acceptance checks all these forms. Public command
-wiring still uses the combined entry.
+matching `bee-app`. Source/pack acceptance checks all these forms. The public
+`bee.client:desktop` and `bee.client:application` wrappers expose `bee` and
+`bee-app` with the fixed `bee:client_db` resource; argv cannot select storage.
 
 `bee.launch:bootstrap` owns local startup and returns the display and its single
 native input channel to the desktop in the same execution. It contains no window,
 session or application routing. The separate supervisor actor remains TTY-free.
 
-Before replacing normal launch, select the persistent client database alongside
-the workspace database and run the public-command migration checks. The private
-local supervisor now grants workspace appearance explicitly, preserving the local
+The persistent client database is `${env:bee:workspace_db_path}.client`, alongside
+the selected workspace database. Public-command migration checks cover a real
+combined-owner baseline, absent legacy window workspace IDs, unchanged migrations
+and repeated cold starts without resetting client edits. The local supervisor
+grants workspace appearance explicitly, preserving the local
 Settings effect on producer colors without client workspace-storage authority.
 
 The host finishes automatic recovery before admission. The first authoritative
@@ -266,11 +272,10 @@ own exact store grant and the session/presenter spawn scope.
 Local quit must keep the entry execution alive until its supervisor has finished
 host cleanup. The existing `exit_ready` protocol proves final client persistence,
 but a terminal entry returning can stop the runtime and its child processes.
-The private client supplies a save/finish handshake: save the client,
+The client supplies a save/finish handshake: save the client,
 finish host cleanup while the client retains the physical display, then release
 the client and observe exits. Cancellation leaves all owners running. A detached
-remote client keeps the current save-and-detach behavior. Public command migration
-is not yet complete; the private local-entry fixture
+independently admitted client keeps the save-and-detach behavior. The local-entry fixture
 verifies the finish handshake through actual host cleanup. Startup, admission,
 rendering and finish phases have ten-second failure deadlines; idle running has
 no supervisor polling timer. A rejected renderer replacement pauses the client
@@ -311,28 +316,29 @@ do not select privileged local identity. Existing actor messaging remains direct
 native routing; new execution and presence registration remain owner operations.
 The current fixture proves local named delivery only, not remote actor admission.
 
-## Current coupling to remove
+## Remaining local constraints
 
-`src/core/workspace/main.lua` starts the physical terminal before opening storage,
-spawns the session and broker, mounts the presenter, routes input and commits
-application checkpoints. `src/core/session/main.lua` accepts windows only for
-the single bootstrapped workspace. `src/core/applications/broker.lua` still selects
-one desktop recipient. Its private `attachment.lua` module owns the recipient-and-grant
-record held by each application instance and revokes before replacement.
-Broker open/readiness work without
-that recipient, and mount failures retain ready producers. The recovery envelope combines client layout with application
-state. These are explicit local assumptions, not reusable multi-client contracts.
+The old combined `src/core/workspace/main.lua` remains available only as a
+non-command entry for the migration baseline; public launch does not execute it.
+The client and `src/core/session/main.lua` still accept windows for one
+bootstrapped workspace. The broker's private `attachment.lua` holds one
+recipient-and-grant record per application instance and revokes before replacement.
+Independent clients can select different views; attaching the same producer does
+not create independent input/resize controllers. Broker readiness works without
+a recipient, and mount failures retain ready producers. The old recovery envelope
+retains legacy layout for import; current client layout has its own store.
 
 The private `bee.workspace:persistence` library now owns opening the configured
 store, loading its stable identity, decoding the saved envelope and serializing
-typed writes. It has no TTY dependency. The workspace actor still owns its lifetime
+typed writes. It has no TTY dependency. The workspace host owns its lifetime
 and decides when a checkpoint is committed. The recovery desktop type contains
 only scene, tabs and preferences; the live application catalog is not saved state.
 This extraction preserves the existing database format and migration ledger.
 
 Owner requests can now bind one exact workspace/instance/view independently.
 That operation leaves other view grants and the default recipient for future
-opens intact. The whole-broker bind remains for local presenter replacement.
+opens intact. The whole-broker bind remains for the old combined actor; the
+independent client replaces its renderer through host-selected per-view grants.
 This is a per-view controller boundary; production observer admission and
 independent desktop clients still require the steps below.
 Owner-only `unbind` additionally revokes controller grants by exact recipient PID
@@ -371,21 +377,20 @@ inventory snapshot can update selected tabs and offer other running views, but
 must not automatically bind every discovered view. Rejoin reacquires only that
 client's selected targets. Opening or explicitly selecting a view can request
 its attachment; joining a second client alone must not displace an existing
-controller. The private client implements selection isolation; normal launch still
-uses the combined workspace owner.
+controller. Both public local launch and the independent-client fixture use this
+selection isolation.
 
 Client preferences own wallpaper, desktop chrome and tab presentation. The
 workspace/application owns producer page defaults and application appearance.
 Two clients with different themes observe the same application pixels; neither
-may recolor the shared producer merely by attaching. Normal combined-launcher
-Settings changes both from one preference value. In the ordinary private client path,
+may recolor the shared producer merely by attaching. In the ordinary independent-client path,
 the broker routes Settings through its current native attachment recipient to
 the admitted client, which commits its preferences through its own session/store.
 The response is client-scoped and does not change workspace producer defaults.
 Unknown or replaced renderers cannot fall back to workspace preference writes.
 The Classic terminal palette belongs to producer appearance, not client chrome.
 
-The private local supervisor selects `workspace_appearance = true`. For such an
+The local supervisor selects `workspace_appearance = true`. For such an
 admission, the host commits Settings writes to the workspace database first and
 publishes revisioned producer defaults to the broker. It then asks the client to
 project the same preferences through its session and client store. The client
@@ -440,8 +445,8 @@ renderer actors. It verifies failed revocation/retry, stale generation denial,
 reused public bind IDs, recipient-bound mounts, renderer exit, deferred detach
 without timing sleeps, and unchanged Bash PIDs and variables across replacements.
 The old renderer loses observation, input and resize; a second client remains
-usable. The private desktop client uses this protocol for F12. The
-existing local F12 path and supervisor-owned pending questions remain unchanged.
+usable. The desktop client uses this protocol for F12; pending questions survive
+the renderer change through their stable host/client owners.
 
 ## Replaceable shell inbox
 
@@ -463,7 +468,7 @@ The private implementation uses `bee.client:inbox`, a pure module inside the
 stable client actor. A separate inbox process remains optional. The broker still
 owns pending requests; `bee.interaction:delivery` keeps only host-local selections
 and dispatched-answer state. Source/pack desktop acceptance covers Terminal close
-delivery and presenter replacement; this is not yet part of normal launch.
+delivery and presenter replacement, including the public local launch path.
 
 `bee.host.selection` carries workspace/connection identity, a monotonically
 increasing selection revision and at most 16 exact view/instance pairs. The host
@@ -560,8 +565,8 @@ Do not put a new network transport underneath Bee when native mesh provides it.
 The private [client state store](CLIENT_STATE.md) now supplies qualified layout
 values, a separate client identity/database, generation checks and atomic legacy
 import receipts. Source/pack fixtures verify retry after restart without replacing
-later client edits. The private desktop actor uses the store; automatic legacy
-import and host acknowledgement are not wired yet.
+later client edits. Public local bootstrap imports before readiness, and the
+supervisor requires the durable import receipt before host admission.
 
 The host retains workspace identity and app checkpoints. The client has an owned
 store for its identity, qualified tab references and layout. Fresh clients do not

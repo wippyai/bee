@@ -28,15 +28,22 @@ failed-presenter recovery bypasses negotiation.
 
 ## Ownership
 
+Public local launch uses the host/client split. Full source/pack and standalone
+acceptance pass. Older selected deployments retain their code until explicitly
+changed; `bee --base` selects the executable's embedded baseline and preserves
+application databases.
+
 | Owner | Responsibility | Replacement boundary |
 |---|---|---|
-| Workspace | Physical terminal, child bootstrap, recovery, routing authenticated messages | Workspace restart |
-| Session | Complete committed desktop projection: scene, stable tabs, preferences | Workspace restart |
-| Broker | Protected app admission, instance/process identities, producer viewports, app lifecycle | Workspace restart |
+| Local supervisor | Host bootstrap, client admission and coordinated local quit | Local launch restart |
+| Workspace host | Workspace persistence, recovery, client permissions and authoritative inventory | Host restart |
+| Desktop client | Physical terminal, client layout persistence and presenter recovery | Client restart |
+| Session | Complete committed desktop projection: scene, stable tabs, preferences | Client restart |
+| Broker | Protected app admission, instance/process identities, producer viewports, app lifecycle | Host restart |
 | Presenter | Input prediction, drag previews, menus, composition and delegated attachments | Live F12 rejoin |
 | Application | Its own content and child resources | Close/stop then fresh instance |
 
-The workspace caches the session projection; it does not independently edit tabs
+The client caches the session projection; it does not independently edit tabs
 or preferences. Rendering consumes values. App metadata supplies launcher groups
 and presentation roles; core code contains no bundled-app IDs. Shared UI helpers
 are optional; the Terminal uses Wippy's native PTY proxy directly.

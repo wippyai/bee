@@ -37,6 +37,18 @@ local function define_tests()
                 shutdown = {version = 1, request_id = "q", id = "application", instance_id = "instance",
                     kind = "confirm", title = "Stop?", message = "", accept = "Stop"}}, workspace))
             test.not_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "clear", op = "state"}, workspace))
+            local refused = lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = "Delivery refused"}, workspace)
+            if not refused then error("Missing failure control") end
+            test.eq(refused.error, "Delivery refused")
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = true}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = string.rep("x", 4097)}, workspace))
+            test.not_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = "Delivery refused\n" .. string.rep("x", 2048)}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "save",
+                error = "Must not commit"}, workspace))
         end)
     end)
 end

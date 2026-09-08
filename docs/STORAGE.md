@@ -1,7 +1,7 @@
 # Workspace storage
 
-`bee.storage:store` is the small persistence boundary for the workspace and
-session core. `open()` acquires `bee:workspace_db`; protected bootstrap may pass
+`bee.storage:store` is the persistence boundary for the workspace host.
+`open()` acquires `bee:workspace_db`; protected bootstrap may pass
 `open("bee.workspace.db:<name>")` to isolate additional workspace owners. Names
 contain only letters, digits, underscores and hyphens, with a 160-byte total ID
 limit. The root registry owns each resource's path and lifecycle. Callers cannot
@@ -15,6 +15,11 @@ The default workspace file is `.wippy/workspace.db`, and `BEE_WORKSPACE_DB`
 can provide an explicit path for an isolated workspace. Wippy registry history
 remains separate in `.wippy/registry.db` (or its configured
 `registry.history_path`).
+
+Local desktop layout belongs to `bee:client_db`, at the selected workspace path
+plus `.client`. The desktop client cannot acquire the workspace store. See
+[client persistence](CLIENT_STATE.md) for qualified tab identities, generation
+checks and the once-only import from older combined desktop state.
 
 The core-only storage API is:
 

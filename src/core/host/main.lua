@@ -62,7 +62,8 @@ local function main(owner: string, database_resource: string?)
         assert(process.send(owner, topic, value))
     end
     local function send(topic: string, value: unknown)
-        assert(process.send(broker, topic, value))
+        local sent, err = process.send(broker, topic, value)
+        if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
     end
     local appearance_revision = 0
     local function persist_preferences(preferences: appearance.Preferences, request_id: string): (boolean, string?)
@@ -118,7 +119,9 @@ local function main(owner: string, database_resource: string?)
             if selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then break end
-                if event.kind == process.event.EXIT and tostring(event.from) == broker then fatal = "Workspace broker exited"; break end
+                if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                    fatal = "Workspace broker exited: " .. (decode.exit_error(event.result) or "without completing cleanup"); break
+                end
                 if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
                 if event.kind == process.event.EXIT then
                     connections.exited(client_connections, tostring(event.from))
@@ -198,7 +201,12 @@ local function main(owner: string, database_resource: string?)
                     if response then send("bee.interaction.response", data) end
                 elseif selected.channel == shutdown_requests and message:from() == owner then
                     if ready and not stopping and type(data) == "table" and data.version == 1 and data.op == "prepare" then
-                        send("bee.application.shutdown", {version = 1, op = "prepare"})
+                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})
+                        if not sent then
+                            local reply = contract.reply("", "quit", "delivery_failed", tostring(err))
+                            reply.workspace_id = workspace_id
+                            deliver("bee.app.reply", reply)
+                        end
                     end
                 elseif selected.channel == preferences and message:from() == broker then
                     local handled, workspace_request = connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping)

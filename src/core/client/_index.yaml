@@ -54,6 +54,35 @@ entries:
   method: local_application
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
   imports: *client_imports
+- name: desktop
+  kind: process.lua
+  source: file://main.lua
+  method: desktop
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports: *client_imports
+  meta:
+    command:
+      name: bee
+      short: Open the Bee workspace desktop
+      security: &local_security
+        actor:
+          id: bee.local
+        policies:
+        - bee:desktop_policy
+        - bee:client_spawn_policy
+        - bee:client_storage_policy
+        - bee:local_launcher_spawn_policy
+- name: application
+  kind: process.lua
+  source: file://main.lua
+  method: application
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports: *client_imports
+  meta:
+    command:
+      name: bee-app
+      short: Open an application with explicit arguments
+      security: *local_security
 - name: store
   kind: library.lua
   source: file://store.lua

@@ -14,6 +14,16 @@ from workspace import ROOT, RUNTIME
 from recovery import stored
 
 
+def exhaust_presenter_recovery(ui):
+    for attempt in range(3):
+        ui.key(b"\x1b[21~")
+        ui.pump(.3)
+        ui.key(f"printf 'AUTO_%s_OK\\n' '{attempt}'\r".encode())
+        ui.wait(f"AUTO_{attempt}_OK")
+    ui.key(b"\x1b[21~")
+    ui.wait("Desktop paused")
+
+
 def run():
     with tempfile.TemporaryDirectory(prefix="bee-local-launcher-") as temporary:
         root = Path(temporary)
@@ -148,8 +158,7 @@ def run():
                 ui.pump(.3)
                 ui.key(b"printf 'REJOIN_%s_OK\\n' \"$bee_local\"\r")
                 ui.wait("REJOIN_alive_OK")
-                ui.key(b"\x1b[21~")
-                ui.wait("Desktop paused")
+                exhaust_presenter_recovery(ui)
                 ui.key(b"\x1b[24~")
                 ui.pump(.3)
                 ui.key(b"printf 'RECOVERED_%s_OK\\n' \"$bee_local\"\r")
@@ -168,7 +177,7 @@ def run():
                          command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
             try:
                 ui.wait("Terminal", timeout=12)
-                ui.key(b"\x1b[21~")
+                exhaust_presenter_recovery(ui)
                 ui.wait("Emergency exit")
                 elapsed = ui.quit()
                 print(f"Paused {'pack' if packed else 'source'}: supervised emergency cleanup; exit {elapsed:.3f}s", flush=True)
@@ -399,5 +408,91 @@ def run():
                 ui.close()
 
 
+def public_migration():
+    """Create real combined-owner state, then launch the public split twice."""
+    def frame(ui):
+        y, line = next((y, line) for y, line in enumerate(ui.screen.display, 1) if "╭─ Settings" in line)
+        left, right = line.index("╭"), line.rindex("╮")
+        bottom = next(row for row, text in enumerate(ui.screen.display, 1)
+                      if text[left:left + 1] == "╰" and text[right:right + 1] == "╯")
+        return left + 1, y, right + 1, bottom
+
+    def move(ui):
+        left, top, _, _ = frame(ui)
+        ui.mouse(0, left + 6, top)
+        ui.mouse(32, left + 8, top + 1)
+        ui.mouse(0, left + 8, top + 1, True)
+
+    with tempfile.TemporaryDirectory(prefix="bee-public-migration-") as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        shutil.copytree(ROOT / "src", project / "src")
+        for name in (".wippy.yaml", "wippy.lock"):
+            shutil.copy2(ROOT / name, project / name)
+        index = project / "src/core/workspace/_index.yaml"
+        document = yaml.safe_load(index.read_text())
+        next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {
+            "name": "legacy-desktop-probe", "short": "Migration baseline", "security": {
+                "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:core_spawn_policy",
+                    "bee:workspace_storage_policy"]}}}
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
+        pack = root / "migration.wapp"
+        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        for packed in (False, True):
+            folder = root / ("pack" if packed else "source")
+            folder.mkdir()
+            ui = Desktop(folder, project=project, command_name="legacy-desktop-probe", apps=("bee.settings:app",))
+            try:
+                ui.wait("BEE SETTINGS")
+                move(ui)
+                bounds = frame(ui)
+                ui.quit()
+            finally:
+                ui.close()
+            baseline = stored(folder)
+            # Older combined checkpoints omitted window workspace IDs. Import
+            # must qualify them with the durable host identity, without changing
+            # any applied migration or confusing client tab IDs with view IDs.
+            for window in baseline["desktop"]["scene"]["windows"]:
+                window.pop("workspace_id", None)
+            for record in baseline["applications"]:
+                if record.get("window"):
+                    record["window"].pop("workspace_id", None)
+            with sqlite3.connect(folder / "workspace.db") as db:
+                db.execute("UPDATE workspace_state SET value=? WHERE singleton=1", (json.dumps(baseline),))
+            before = [(r["id"], r["instance_id"]) for r in baseline["applications"]]
+            with sqlite3.connect(folder / "workspace.db") as db:
+                workspace_id = db.execute("SELECT workspace_id FROM workspace_identity").fetchone()[0]
+                migrations = db.execute("SELECT * FROM workspace_schema_migrations ORDER BY id").fetchall()
+            receipt = None
+            for attempt in range(2):
+                ui = Desktop(folder, packed, project=project, pack_file=pack)
+                try:
+                    ui.wait("BEE SETTINGS")
+                    assert frame(ui) == bounds, ("migration/reset lost placement", frame(ui), bounds)
+                    ui.key(b"\x1b[24~")
+                    ui.wait("BEE SETTINGS")
+                    assert frame(ui) == bounds
+                    move(ui)
+                    bounds = frame(ui)
+                    ui.quit()
+                finally:
+                    ui.close()
+                with sqlite3.connect(folder / "workspace.db") as db:
+                    assert db.execute("SELECT workspace_id FROM workspace_identity").fetchone()[0] == workspace_id
+                    assert db.execute("SELECT * FROM workspace_schema_migrations ORDER BY id").fetchall() == migrations
+                assert [(r["id"], r["instance_id"]) for r in stored(folder)["applications"]] == before
+                with sqlite3.connect(folder / "workspace.db.client") as db:
+                    imported, current, encoded = db.execute(
+                        "SELECT import_workspace, import_receipt, value FROM client_state WHERE singleton=1").fetchone()
+                assert imported == workspace_id and current
+                assert receipt is None or current == receipt, "Cold boot replaced the once-only import receipt"
+                receipt = current
+                layout = json.loads(encoded)
+                assert all(t["workspace_id"] == workspace_id for t in layout["targets"])
+            print(f"Public migration {'pack' if packed else 'source'}: legacy placement/checkpoint identity, F12, edited layout, once-only import and unchanged migration ledger", flush=True)
+
+
 if __name__ == "__main__":
+    public_migration()
     run()

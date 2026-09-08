@@ -15,10 +15,10 @@ install the executable using the README before testing global launch behavior.
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
-| `src/core/workspace` | Physical terminal lifetime, bootstrap and durable recovery orchestration |
-| `src/core/host` | Private TTY-free workspace host, client admission, renderer grants and live inventory |
+| `src/core/workspace` | Legacy combined actor and shared workspace persistence/checkpoint decoding during extraction |
+| `src/core/host` | TTY-free workspace host, client admission, renderer grants and live inventory |
 | `src/core/launch` | Local physical startup helper and separate TTY-free supervisor: admission, presenter selection and coordinated exit |
-| `src/core/client` | Private desktop client, qualified layout, owned client store and question projection |
+| `src/core/client` | Desktop client, public command entry, qualified layout, owned client store and question projection |
 | `src/core/interaction` | Bounded host/client question envelopes and host-owned delivery state |
 | `src/core/session` | Committed desktop projection |
 | `src/core/applications` | Admission, app lifecycle, producer capabilities and operation routing |
@@ -35,7 +35,7 @@ Registry IDs are public identities independent of file location. Existing
 their IDs. `main.lua` is an actor entry point, `app.lua` a default app entry point,
 and `view.lua` a renderer. Use domain names for helpers, not generic `utils.lua`.
 Extract by responsibility when an actor grows; do not create a universal manager.
-The private host/client path is still separate from normal launch. The broker
+Public local launch uses the verified host/client path. The broker
 owns application questions; host interaction delivery selects eligible clients,
 and the client inbox translates native view identities into its own tab identities.
 The presenter owns only dialog rendering and input. Keep admission and question

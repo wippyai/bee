@@ -32,6 +32,12 @@ Wippy nor the Bee checkout. The native Terminal still requires `/bin/bash` and
 runs with the OS user's authority. The current Linux build uses the platform's
 C library. Other platforms require separate build and application acceptance.
 
+Linux standalone acceptance also passes in a Debian Bookworm container with a
+numeric non-root UID, networking disabled, a read-only root and all capabilities
+dropped. Only the executable and test harness are mounted. The Terminal tolerates
+an unset `USER` through Wippy's explicit empty placeholder fallback. Container
+images still need Bash and a compatible C library.
+
 The runtime stays on Bee's existing pinned revision to preserve its TTY API.
 The checksummed foundation and application-host patches retain upstream MPL-2.0
 headers. Upstream changes are prepared as runtime PRs
@@ -121,8 +127,9 @@ resource catalog or add a file browser to Bee.
 
 ## GitHub pipeline
 
-`.github/workflows/native.yml` builds Linux and macOS binaries on amd64 and arm64
-runners and exercises each executable. Linux acceptance disables networking.
+`.github/workflows/native.yml` runs full Linux amd64 acceptance for PRs and main.
+Release tags and manual runs build Linux and macOS binaries on amd64 and arm64
+runners and exercise each executable. Linux acceptance disables networking.
 Each target uploads an archive and checksum. Application tags also prepare a
 draft GitHub release, with write permission isolated to that job. The separate
 native-module workflow checks and releases the nested Go module. See the

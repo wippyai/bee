@@ -24,6 +24,8 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    outputs:
+      targets: ${{ steps.targets.outputs.value }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -31,6 +33,16 @@ jobs:
     - name: Require release tags to belong to main
       if: github.ref_type == 'tag'
       run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+    - name: Select validation platforms
+      id: targets
+      env:
+        FULL_MATRIX: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+      run: |
+        targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"}]'
+        if [ "$FULL_MATRIX" = true ]; then
+          targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"},{"goos":"linux","goarch":"arm64","runner":"ubuntu-24.04-arm"},{"goos":"darwin","goarch":"amd64","runner":"macos-26-intel"},{"goos":"darwin","goarch":"arm64","runner":"macos-26"}]'
+        fi
+        echo "value=$targets" >> "$GITHUB_OUTPUT"
   build:
     name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: validate
@@ -39,11 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - {goos: linux, goarch: amd64, runner: ubuntu-24.04}
-        - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
-        - {goos: darwin, goarch: amd64, runner: macos-26-intel}
-        - {goos: darwin, goarch: arm64, runner: macos-26}
+        include: ${{ fromJSON(needs.validate.outputs.targets) }}
     env:
       BEE_MODE: ${{ inputs.mode || 'base' }}
     steps:

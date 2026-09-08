@@ -29,7 +29,7 @@ class NativeDesktop(Desktop):
         args = [str(BINARY), "--state-dir", str(state)]
         if application:
             args.extend(["--command", "bee-app", "run", application])
-        env = {key: value for key, value in os.environ.items() if key not in ("BEE_WORKSPACE_DB", "BEE_THREADS_DB", "BEE_RUNTIME")}
+        env = {key: value for key, value in os.environ.items() if key not in ("BEE_WORKSPACE_DB", "BEE_THREADS_DB", "BEE_RUNTIME", "USER")}
         env.update(TERM="xterm-256color", HOME=str(folder), PATH="/usr/bin:/bin")
         self.process = subprocess.Popen(args, cwd=folder, stdin=slave, stdout=slave, stderr=slave,
                                         start_new_session=True, env=env)

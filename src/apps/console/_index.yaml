@@ -37,7 +37,7 @@ entries:
   default_env:
     PATH: ${env:bee.console:path}
     HOME: ${env:bee.console:home}
-    USER: ${env:bee.console:user}
+    USER: ${env:bee.console:user|}
     LANG: ${env:bee.console:lang}
     TERM: xterm-256color
 - name: executor_policy

@@ -37,8 +37,8 @@ conversations and an up-to-date branch. Stale approvals are dismissed. These
 rules include administrators. Force pushes and branch deletion are disabled;
 merge with squash or rebase.
 
-The Bee matrix assembles and exercises the executable on Linux and macOS,
-each on amd64 and arm64. Linux amd64 also runs the full foundation suite.
+PR and main checks run Linux amd64 with the full foundation suite. Release tags
+and manual runs assemble and exercise Linux and macOS, each on amd64 and arm64.
 Both Linux targets run executable acceptance with networking disabled. Native
 module checks run on every Bee target, with a separate Linux module gate.
 Windows desktop support requires replacing the current Bash/POSIX terminal

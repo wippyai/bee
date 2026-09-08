@@ -27,17 +27,37 @@ Agent commands open fullscreen and receive the arguments you pass after their
 name. They must already be installed on PATH. These are native terminal sessions;
 Bee-specific agent hooks and MCP integration are not implemented yet.
 
-**Development preview.** Linux amd64 is the tested target. There is no stable
-release download yet. Install a locally built executable onto PATH:
+**Development preview.** Native builds target Linux and macOS on amd64 and arm64.
+There is no stable release download yet. Install a locally built executable onto PATH:
 
 ```sh
-install -Dm755 dist/bee "$HOME/.local/bin/bee"
+mkdir -p "$HOME/.local/bin"
+install -m755 dist/bee "$HOME/.local/bin/bee"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Keep `~/.local/bin` on PATH in your shell configuration. Native release packaging
-is still being prepared; source-development instructions are in the
+Keep `~/.local/bin` on PATH in your shell configuration. Source-development
+instructions are in the
 [development guide](docs/DEVELOPMENT.md).
+
+After the first application release is published, install its binary with:
+
+```sh
+curl -fsSL https://github.com/wippyai/bee/releases/latest/download/install.sh | sh
+```
+
+The installer selects Linux or macOS on amd64 or arm64, verifies the archive's
+SHA-256 checksum, and installs to `~/.local/bin` without sudo. To inspect it first
+or select a version and destination:
+
+```sh
+curl -fLO https://github.com/wippyai/bee/releases/latest/download/install.sh
+sh install.sh --version 0.1.0 --dir "$HOME/.local/bin"
+```
+
+The version must have a published release. Installing a new binary preserves
+Bee's workspace data. Archive checksums detect download corruption; they are
+served by the same GitHub release as the binary.
 
 ## Inside Bee
 

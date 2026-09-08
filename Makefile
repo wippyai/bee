@@ -14,7 +14,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-check: lint test threads pack
+check: installer-check lint test threads pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/architecture.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
@@ -33,3 +33,7 @@ check: lint test threads pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/test_status.py
 
 include build/native.mk
+.PHONY: installer-check
+installer-check:
+	sh -n install.sh tests/install.sh
+	sh tests/install.sh

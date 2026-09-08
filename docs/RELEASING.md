@@ -73,6 +73,14 @@ native module changes require a new Bee binary.
 The [dependency notice review](DEPENDENCY_NOTICES.md) records the remaining
 linked-module notices and their source evidence.
 
+## Binary installer
+
+Application releases also attach the repository's `install.sh`. It downloads
+published binaries for Linux/macOS on amd64/arm64, verifies the matching archive
+checksum, and replaces the executable through a temporary file in the destination
+directory. `make installer-check` covers installation and failure preservation;
+the full `make check` includes it. The installer does not change workspace data.
+
 ## Hub publication
 
 ```sh

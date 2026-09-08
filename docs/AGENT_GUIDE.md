@@ -64,6 +64,9 @@ permissions and connection IDs. Source/pack tests cover two clients, detach,
 re-admission, exit cleanup and retained native terminals. Desktop attachment,
 client layout storage and client question delivery remain unfinished; see the
 private admission contract in `CLIENT_HOST_SPLIT.md`.
+`CLIENT_STATE.md` documents the private client store and import receipt. Its
+qualified layout and source/pack persistence tests pass, but normal desktop launch
+still uses the combined owner and does not migrate to that store yet.
 The short workspace ID in the header is informational.
 
 Establish the local owner boundary first; then the Hive and agent-integration

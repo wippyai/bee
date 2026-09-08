@@ -104,6 +104,9 @@ for pure in ["bee.desktop:layout", "bee.terminal:bindings"]:
     assert not entries[pure].get("modules"), pure
 assert {i for i, e in entries.items() if e["kind"] == "terminal.host"} == {"bee:terminal"}
 assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee.threads:db"}
+assert entries["bee:client_storage_policy"]["policy"] == {"actions": ["db.get"], "resources": ["bee:client_db"], "effect": "allow"}
+assert "bee:client_db" not in entries, "Client data resource belongs to the future client launcher"
+assert "bee:client_db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
 assert not any(e["kind"] == "http.service" for e in entries.values())
 print(f"Architecture: {len(entries)} entries; on-demand default applications, closed imports, denied ambient app authority")
 
@@ -116,7 +119,7 @@ import tempfile
 
 runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol",
-           "bee.session", "bee.settings", "bee.processes", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.test_status"}
+           "bee.session", "bee.settings", "bee.processes", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.test_status", "bee.client"}
 
 def check_loaded(cwd, packed=False):
     loaded = json.loads(subprocess.check_output([str(runtime), "registry", "list", "--json"], cwd=cwd))

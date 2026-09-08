@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.client
+entries:
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, hash]
+  imports:
+    state: bee.client:state
+    contract: bee.protocol:application
+- name: state
+  kind: library.lua
+  source: file://state.lua
+  modules: [hash]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance

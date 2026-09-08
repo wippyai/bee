@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.client_storage_probe
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  imports:
+    store: bee.client:store
+    state: bee.client:state
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:client_storage_policy]
+  meta:
+    command:
+      name: client-storage-probe
+      short: Test client storage in an isolated database

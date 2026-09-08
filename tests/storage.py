@@ -230,5 +230,98 @@ def main():
     print("Storage: WAL, migration ledger integrity/newer-version rejection, generation CAS, close behavior, stable identity, legacy upgrade/rollback, relocation, fresh identity and corrupt identity denial")
 
 
+def client_storage():
+    """Native Lua owns the assertions; these files simulate process/DB failures."""
+    with tempfile.TemporaryDirectory(prefix="bee-client-storage-") as temporary:
+        root = Path(temporary)
+        project = root / "project"
+        shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
+        host = project / "src/_index.yaml"
+        configuration = yaml.safe_load(host.read_text())
+        configuration["entries"] += [
+            {"name": "client_db_path", "kind": "env.variable", "storage": "bee:workspace_environment",
+             "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True},
+            {"name": "client_db", "kind": "db.sql.sqlite", "file": "${env:bee:client_db_path}",
+             "lifecycle": {"auto_start": True}},
+        ]
+        host.write_text(yaml.safe_dump(configuration, sort_keys=False))
+        for name in (".wippy.yaml", "wippy.lock"):
+            shutil.copy2(ROOT / name, project / name)
+        subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
+        pack = root / "client-storage.wapp"
+        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+
+        def probe(folder, mode, packed=False, failure=None):
+            folder.mkdir(exist_ok=True)
+            args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
+            args += ["client-storage-probe", mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
+            result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
+                                    env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
+                                         "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
+            output = result.stdout + result.stderr
+            if failure is None:
+                assert result.returncode == 0, output
+            else:
+                assert result.returncode != 0 and failure in output, output
+
+        for packed in (False, True):
+            folder = root / ("packed" if packed else "source")
+            probe(folder, "seed", packed)
+            database = folder / "client.db"
+            with sqlite3.connect(database) as db:
+                original = db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone()
+                assert all(len(value) == 32 for value in original)
+                assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+            # Stop after the client commit, before any host-side acknowledgement.
+            # Reopen in another process, edit, and retry the original import.
+            probe(folder, "edit", packed)
+            probe(folder, "verify", packed)
+            with sqlite3.connect(database) as db:
+                assert db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone() == original
+                ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
+                db.execute("UPDATE client_schema_migrations SET checksum='changed' WHERE id=1")
+            probe(folder, "open", packed, "migration ledger")
+            with sqlite3.connect(database) as db:
+                db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
+                db.execute("INSERT INTO client_schema_migrations VALUES (2, 'future', 'future')")
+            probe(folder, "open", packed, "newer")
+            with sqlite3.connect(database) as db:
+                db.execute("DELETE FROM client_schema_migrations WHERE id=2")
+                saved_value = db.execute("SELECT value FROM client_state").fetchone()[0]
+                db.execute("UPDATE client_state SET value='{\"version\":2}'")
+            probe(folder, "open", packed, "Unsupported or corrupt client layout")
+            with sqlite3.connect(database) as db:
+                db.execute("UPDATE client_state SET value=?", (saved_value,))
+                db.execute("DELETE FROM client_state")
+            probe(folder, "open", packed, "identity row is corrupt")
+
+            fresh = root / ("existing-pack" if packed else "existing-source")
+            probe(fresh, "existing", packed)
+
+            interrupted = root / ("interrupted-pack" if packed else "interrupted-source")
+            probe(interrupted, "open", packed)
+            with sqlite3.connect(interrupted / "client.db") as db:
+                db.execute("CREATE TRIGGER fail_import BEFORE UPDATE ON client_state BEGIN SELECT RAISE(ABORT, 'injected import failure'); END")
+            probe(interrupted, "seed", packed, "injected import failure")
+            with sqlite3.connect(interrupted / "client.db") as db:
+                assert db.execute("SELECT generation, value, import_receipt FROM client_state").fetchone() == (0, None, "")
+                db.execute("DROP TRIGGER fail_import")
+            probe(interrupted, "seed", packed)
+        # A failed first migration must not leave a ledger claiming success or a
+        # half-created identity. Only this disposable staged source is changed.
+        staged_store = project / "src/core/client/store.lua"
+        healthy = staged_store.read_text()
+        staged_store.write_text(healthy.replace("INSERT INTO client_state", "INVALID MIGRATION;\nINSERT INTO client_state", 1))
+        failed_migration = root / "failed-migration"
+        probe(failed_migration, "open", failure="syntax error")
+        with sqlite3.connect(failed_migration / "client.db") as db:
+            assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
+        staged_store.write_text(healthy)
+        probe(failed_migration, "seed")
+    print("Client storage source/pack: stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial")
+
+
 if __name__ == "__main__":
     main()
+    client_storage()

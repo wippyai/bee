@@ -195,7 +195,14 @@ entries:
     - db.get
     resources:
     - bee:workspace_db
+    - bee:client_db
     effect: deny
+- name: client_storage_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee:client_db]
+    effect: allow
 - name: thread_storage_policy
   kind: security.policy
   policy:

@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.client
+entries:
+- name: state_test
+  kind: function.lua
+  source: file://state_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    state: bee.client:state
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance

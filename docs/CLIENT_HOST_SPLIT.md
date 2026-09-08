@@ -142,6 +142,22 @@ operation changes both from one preference value. Preserve that local experience
 during migration, then make the scope explicit when multiple clients are enabled.
 The Classic terminal palette belongs to producer appearance, not client chrome.
 
+### Presenter recipient ownership
+
+The existing presenter calls `tty.attach` itself. Native mounts are bound to that
+execution PID; forwarding a mount issued for the stable desktop client will not
+make it usable by the presenter. Current private client admission deliberately
+allows control mounts only for the admitted execution.
+
+Before connecting that admission to the replaceable presenter, implement an
+explicit renderer-recipient lifecycle under the stable client connection. The
+host must retain the selected recipient, revoke its grants before replacement,
+and revoke them on client detach or execution loss. A renderer change must not
+silently expand client operation permissions or discard pending app questions.
+Test F12 with the old renderer still holding a handle, failed revocation, and
+another client controlling a different application. This delegation is not yet a
+callable operation; do not loosen the current recipient check as a shortcut.
+
 ## Replaceable shell inbox
 
 The client may own a separate inbox actor that receives authorized, typed UI
@@ -237,6 +253,11 @@ control operations need explicit success, denial, disconnection or unknown outco
 Do not put a new network transport underneath Bee when native mesh provides it.
 
 ## Storage migration
+
+The private [client state store](CLIENT_STATE.md) now supplies qualified layout
+values, a separate client identity/database, generation checks and atomic legacy
+import receipts. Source/pack fixtures verify retry after restart without replacing
+later client edits. The desktop actor and host acknowledgement are not wired yet.
 
 The host retains workspace identity and app checkpoints. The client has an owned
 store for its identity, qualified tab references and layout. Fresh clients do not

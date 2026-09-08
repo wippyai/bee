@@ -16,6 +16,7 @@ install the executable using the README before testing global launch behavior.
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
 | `src/core/workspace` | Physical terminal lifetime, bootstrap and durable recovery orchestration |
+| `src/core/client` | Private qualified client layout and owned client store; desktop integration pending |
 | `src/core/session` | Committed desktop projection |
 | `src/core/applications` | Admission, app lifecycle, producer capabilities and operation routing |
 | `src/core/desktop` | Pure scene/reducer/layout values |

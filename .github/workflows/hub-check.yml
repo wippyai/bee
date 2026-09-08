@@ -29,7 +29,7 @@ jobs:
           echo "::error::Hub authentication returned HTTP $status."
           exit 1
         fi
-        if ! jq -e 'any(.[]; .org.name == "bee" and (.role == "owner" or .role == "admin"))' "$response" >/dev/null; then
+        if ! jq -e 'any(.[]; .org.name == "bee" and (.role == "owner" or .role == "admin"))' "$response" >/dev/null 2>&1; then
           echo '::error::The token needs an owner or admin role in bee.'
           exit 1
         fi
@@ -38,7 +38,7 @@ jobs:
           --header 'Connect-Protocol-Version: 1' \
           --data '{"module":{"name":{"org":"bee","name":"bee"}}}' \
           https://hub.wippy.ai/wippy.api.hub.publish.v1.PublishService/InitiatePublish)
-        if [ "$status" != 400 ] || ! jq -e '.code == "invalid_argument" and .message == "version or label is required"' "$response" >/dev/null; then
+        if [ "$status" != 400 ] || ! jq -e '.code == "invalid_argument" and .message == "version or label is required"' "$response" >/dev/null 2>&1; then
           echo "::error::Hub publish probe did not reach version validation (HTTP $status)."
           exit 1
         fi

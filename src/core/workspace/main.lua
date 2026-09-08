@@ -10,18 +10,12 @@ local model = require("model")
 local decode = require("decode")
 local decode_input = require("decode_input")
 local appearance = require("appearance")
-local chrome = require("chrome")
+local physical = require("physical")
 local persistence = require("persistence")
 local recovery = require("recovery")
 local interaction = require("interaction")
 local contract = require("contract")
 local command = require("command")
-
-local function new_display(width: integer, height: integer): tty.Viewport
-    local view, err = tty.viewport({width = width, height = height})
-    if not view then error(tostring(err)) end
-    return view
-end
 
 local arguments = require("arguments")
 local function main(initial_application: string?, secondary_application: string?, initial_arguments: {string}?, initial_fullscreen: boolean?)
@@ -43,12 +37,8 @@ local function main(initial_application: string?, secondary_application: string?
     local catalog_items: {decode.CatalogItem} = {}
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
-    assert(tty.start())
-    local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
-    assert(tty.mouse(true))
-    local width, height = tty.screen_size()
-    -- Present before waiting on any child. No artificial boot delay is added.
-    assert(output:present(chrome.boot(width, height), {cursor = {x = 1, y = 1, visible = false}}))
+    local display = physical.open()
+    local width, height = display.width, display.height
     local database, database_error = persistence.open()
     if not database then error(tostring(database_error)) end
     local workspace_id = database.workspace_id
@@ -83,13 +73,11 @@ local function main(initial_application: string?, secondary_application: string?
         :spawn_monitored("bee.applications:broker", "bee:workers", owner, preferences)))
     local scene = model.new(width, height)
     local tabs: {string} = {}
-    local display = new_display(width, height)
-    local updates = assert(display:updates())
+    local updates = assert(display.view:updates())
     local presenter = ""
     local active, presenter_ready, broker_ready = false, false, false
     local presented = false
     local paused = false
-    local last_rows: {string} = {}
     local initial_opened, quitting = false, false
     local initial_request = ""
     local shutdown_request = ""
@@ -224,7 +212,7 @@ local function main(initial_application: string?, secondary_application: string?
         end
     end
     local function spawn_presenter()
-        local grant = assert(display:grant())
+        local grant = assert(display.view:grant())
         presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace_id}):with_scope(presenter_scope)
             :spawn_monitored("bee.terminal:main", "bee:workers", owner, initial_application, secondary_application)))
         active, presenter_ready = false, false
@@ -234,12 +222,7 @@ local function main(initial_application: string?, secondary_application: string?
         deadline_ticks = 0
     end
     local function recovery_screen()
-        local canvas = tty.canvas(width, height)
-        canvas:clear(" ")
-        for y = 1, height do canvas:put(1, y, last_rows[y] or "", width) end
-        canvas:put(1, height, "\27[38;2;255;201;99;48;2;23;32;44m"
-            .. " Desktop paused. F12 Retry / Ctrl+Q Exit" .. string.rep(" ", width) .. "\27[0m", width)
-        output:present(canvas:rows(), {cursor = {x = 1, y = 1, visible = false}})
+        physical.paused(display)
     end
     local function pause_presenter()
         active, paused, presenter_ready = false, true, false
@@ -251,9 +234,8 @@ local function main(initial_application: string?, secondary_application: string?
         recovery_screen()
     end
     local function replace_presenter()
-        display:close()
-        display = new_display(width, height)
-        updates = assert(display:updates())
+        physical.replace(display)
+        updates = assert(display.view:updates())
         spawn_presenter()
     end
     local function bind_presenter()
@@ -480,10 +462,7 @@ local function main(initial_application: string?, secondary_application: string?
                 end
             end
         elseif selected.channel == updates then
-            local snapshot = display:snapshot()
-            if active and snapshot and #snapshot.rows == height then
-                output:present(snapshot.rows, {cursor = snapshot.cursor})
-                last_rows = snapshot.rows
+            if active and physical.present(display) then
                 presented = true
                 deadline_ticks = 0
             end
@@ -507,11 +486,11 @@ local function main(initial_application: string?, secondary_application: string?
                 end
                 if event.type == "resize" then
                     width, height = event.width, event.height
-                    display:resize(width, height)
+                    physical.resize(display, width, height)
                     send_control(session, "bee.desktop.command", {version = 1, op = "screen", width = width, height = height})
                     if paused then recovery_screen() end
                 elseif active and not quit_key then
-                    display:send(event)
+                    display.view:send(event)
                 end
             end
         end
@@ -527,9 +506,7 @@ local function main(initial_application: string?, secondary_application: string?
     process.unlisten(dialog_states); process.unlisten(dialog_answers)
     process.unlisten(catalogs)
     process.unlisten(checkpoints)
-    display:close()
-    output:close()
-    tty.stop()
+    physical.close(display)
     if fatal then error(fatal) end
 end
 local function launch(application: string, ...)

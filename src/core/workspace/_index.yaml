@@ -55,7 +55,7 @@ entries:
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
     appearance: bee.desktop:appearance
-    chrome: bee.terminal:chrome
+    physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
   meta:
@@ -89,7 +89,7 @@ entries:
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
     appearance: bee.desktop:appearance
-    chrome: bee.terminal:chrome
+    physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
   meta:

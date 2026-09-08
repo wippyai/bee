@@ -32,6 +32,10 @@ Registry IDs are public identities independent of file location. Existing
 their IDs. `main.lua` is an actor entry point, `app.lua` a default app entry point,
 and `view.lua` a renderer. Use domain names for helpers, not generic `utils.lua`.
 Extract by responsibility when an actor grows; do not create a universal manager.
+`bee.terminal:display` is the stable owner's physical display adapter. Its surface
+and viewport handles remain inside that owner; only a native viewport grant goes
+to a presenter. It handles boot, frame forwarding and the paused frame, while the
+owning actor decides when to restart a presenter or end the desktop.
 
 Core may import core/shared UI, shared UI may import shared UI, and apps may
 import their own helpers/shared UI. Apps may import the public `bee.threads:client` and `bee.threads:protocol`.

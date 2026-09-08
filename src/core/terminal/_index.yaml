@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.terminal
 entries:
+- name: display
+  kind: library.lua
+  source: file://display.lua
+  modules: [tty]
+  imports:
+    chrome: bee.terminal:chrome
 - name: main
   kind: process.lua
   source: file://main.lua

@@ -2,6 +2,11 @@
 
 Status: extraction in progress; a private TTY-free host actor is implemented and
 tested separately from the current local desktop.
+The existing desktop now uses `bee.terminal:display` for physical output, the
+presenter's virtual viewport, boot/recovery frames and viewport replacement.
+This owner-local library contains no application routing, database access or
+process supervision. The new client can reuse it without moving the physical
+output lease into the replaceable presenter. Desktop client launch remains pending.
 The required behavior and native mesh boundary are in
 [workspace attachments](WORKSPACE_ATTACHMENTS.md). Local Bee still combines the
 physical terminal owner and workspace host. No headless profile exists yet.

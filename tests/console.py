@@ -142,7 +142,55 @@ def exercise(packed, theme="honey"):
         finally:
             ui.close()
 
+def command_handlers(packed):
+    with tempfile.TemporaryDirectory(prefix="bee-handlers-") as temporary:
+        folder = Path(temporary)
+        project = folder / "project"
+        shutil.copytree(ROOT / "src", project / "src")
+        for name in ("wippy.lock", ".wippy.yaml"):
+            shutil.copy2(ROOT / name, project / name)
+        index = project / "src/apps/console/_index.yaml"
+        document = yaml.safe_load(index.read_text())
+        app = next(e for e in document["entries"] if e["name"] == "app")
+        # A newly registered name exercises discovery without core/provider edits.
+        app["meta"]["application"]["commands"].append({
+            "name": "probe", "arguments": ["/bin/cat"], "fullscreen": True})
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
+        pack = folder / "probe.wapp"
+        if packed:
+            subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        ui = Desktop(folder, packed, project=project, pack_file=pack, apps=("probe",))
+        try:
+            ui.wait("/bin/cat")
+            ui.key(b"HANDLER_READY\r")
+            ui.wait("HANDLER_READY")
+            assert any(row.startswith("HANDLER_READY") for row in ui.screen.display), ui.text()
+            ui.quit(confirm=True)
+        finally:
+            ui.close()
+        # Admitted duplicate aliases must not silently select one executable.
+        other = project / "src/apps/settings/_index.yaml"
+        settings = yaml.safe_load(other.read_text())
+        next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["commands"] = [{"name": "probe"}]
+        other.write_text(yaml.safe_dump(settings, sort_keys=False))
+        result = subprocess.run([str(RUNTIME), "run", "bee", "probe"], cwd=project,
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode != 0 and "Ambiguous Bee command: probe" in result.stdout + result.stderr
+        del next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["commands"]
+        other.write_text(yaml.safe_dump(settings, sort_keys=False))
+        host = project / "src/_index.yaml"
+        composition = yaml.safe_load(host.read_text())
+        admission = next(e for e in composition["entries"] if e["name"] == "application_admission")
+        admission["bindings"] = [b for b in admission["bindings"] if b["definition_id"] != "bee.console:app"]
+        host.write_text(yaml.safe_dump(composition, sort_keys=False))
+        result = subprocess.run([str(RUNTIME), "run", "bee", "probe"], cwd=project,
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode != 0 and "Unknown Bee command: probe" in result.stdout + result.stderr
+    print(f"Command handlers {'pack' if packed else 'source'}: metadata discovery, fullscreen and duplicate rejection")
+
 if __name__ == "__main__":
+    command_handlers(False)
+    command_handlers(True)
     exercise(False)
     exercise(True)
     exercise(False, "classic")

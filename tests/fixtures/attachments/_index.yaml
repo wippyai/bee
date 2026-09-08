@@ -1,12 +1,19 @@
 version: '1.0'
 namespace: bee.attachment_probe
 entries:
+- name: naming_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister]
+    resources: [bee.attachment_probe.host]
+    effect: allow
 - name: owner
   kind: process.lua
   source: file://owner.lua
   method: main
   modules: [process, channel, time, security, tty, json]
   imports:
+    terminal_probe: bee.attachment_probe:terminal
     decode: bee.protocol:decode
     model: bee.desktop:model
     appearance: bee.desktop:appearance
@@ -18,6 +25,14 @@ entries:
       security:
         actor: {id: attachment-test}
         policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy]
+- name: terminal
+  kind: library.lua
+  source: file://terminal.lua
+  modules: [process, security, tty, time]
+  imports:
+    decode: bee.protocol:decode
+    appearance: bee.desktop:appearance
+    store: bee.storage:store
 - name: app
   kind: process.lua
   source: file://app.lua

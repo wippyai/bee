@@ -25,7 +25,8 @@ binaries, registry stores, credentials or legacy source to the pack. Do not edit
 registry database tables directly to work around a source-loading problem.
 
 F12 replaces only the presenter. If workspace, broker or session logic changed,
-exit with Ctrl+Q and run `./run.sh` again. Preferences and opt-in application
+exit with Ctrl+Q and run `bee` again. For editable-source development, use
+`make run` as described in the development guide. Preferences and opt-in application
 checkpoints persist in the workspace database. Settings opts in; Terminal does
 not restore a dead PTY. See `APPLICATION_CONTRACTS.md` for the actual version-1
 protocol; native process stacks are not portable checkpoints.
@@ -40,3 +41,48 @@ The local journal and Test Status app establish the first durable communication
 slice; see [foundation next steps](FOUNDATION_NEXT.md). Agent drivers,
 thread subscriptions, MCP and publication are not implemented yet. Do not route
 new authority through the desktop merely because it is the visible client.
+
+## Continuing the host/client work
+
+Read [client/host extraction](CLIENT_HOST_SPLIT.md) for current coupling and
+implementation gates, [workspace attachments](WORKSPACE_ATTACHMENTS.md) for
+identity, Hive and portable application content, and
+[foundation next steps](FOUNDATION_NEXT.md) for the later driver/self-edit sequence.
+Do not create a parallel mesh, naming system or registry reconciler.
+
+Current evidence: the broker retains ready producers without a presenter, its
+attachment module retains one recipient-and-grant record per instance, and stale
+mounts lose observation/input/resize authority after detach. The named-host fixture
+uses native LOCAL registration after startup readiness. These are local proofs;
+there is no production headless host, workspace switcher or `bee hive` CLI yet.
+The short workspace ID in the header is informational.
+
+Establish the local owner boundary first; then the Hive and agent-integration
+branches can proceed independently:
+
+1. Complete explicit per-client attachments and the single-controller contract.
+   Keep full workspace/instance/view identity and fresh execution references.
+2. Separate the TTY-free workspace host from the desktop client. Prove two local
+   clients with independent layouts, retained apps on detach and denied stale control.
+3. Route the same owner operations through native mesh names. Destination owners
+   establish actor/scopes after admission. Prove two actual Bee runtimes before
+   claiming Hive support or publishing a remote workspace selector.
+4. Add the Hive Manager and compact switcher over those operations. Save explicit
+   join configuration once; fresh installs remain local-only.
+5. Once the local boundary in steps 1–2 is stable, add registry-bound harness
+   drivers, thread/run ownership and scoped hook/MCP configuration. This local
+   branch does not depend on completing remote discovery or Hive Manager.
+   Reviewed publication and the real self-edit demo follow its acceptance checks.
+
+The registry owns definitions/configuration/history. Workspace application state,
+journal events and exported application data retain their respective owners.
+Transfer declarative content and explicitly supported state, not local credentials,
+live PIDs or mounts. Legacy drivers are source references outside the repository,
+never runtime dependencies. The current `bee codex/claude/agy` aliases launch native
+programs; they do not yet configure Bee tools or recover harness conversations.
+
+Use `make check` for production changes. `tests/lifecycle.py::detached` is the
+named-owner/revocation gate; `tests/recovery.py` covers durable identity and state;
+`tests/native_binary.py` checks the assembled executable. Runtime TTY proofs do
+not substitute for Bee host/client acceptance. Leave cluster/Raft implementation
+to its existing owner, and reproduce a TTY gap before requesting a #653 change.

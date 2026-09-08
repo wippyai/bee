@@ -173,7 +173,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 else status = tostring(err or "View unavailable") end
             end
         end
-        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "workspace / local",
+        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. workspace_id:sub(1, 8),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus])
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})

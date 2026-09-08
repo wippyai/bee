@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.applications
 entries:
+- name: command_test
+  kind: function.lua
+  source: file://command_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    handler: bee.applications:command
+    native_command: bee.console:command
+    test: wippy.test:test
 - name: lifecycle_test
   kind: function.lua
   source: file://lifecycle_test.lua

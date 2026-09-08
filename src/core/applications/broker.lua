@@ -10,6 +10,7 @@ local ctx = require("ctx")
 local contract = require("contract")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
+local attachment = require("attachment")
 local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
@@ -17,7 +18,7 @@ local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
 type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, mount: string, launch_token: string,
+    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, launch_token: string,
     negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
@@ -100,7 +101,7 @@ local function main(owner: string, initial_preferences: unknown)
     local function identified(item: Instance, op: contract.ReplyOp, request_id: string, code: string?, message: string?): contract.Reply
         local reply = contract.reply(request_id, op, code, message)
         reply.workspace_id = workspace_id
-        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, item.mount
+        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, attachment.reference(item.attachment)
         reply.icon = item.descriptor.icon
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
@@ -117,9 +118,9 @@ local function main(owner: string, initial_preferences: unknown)
     end
     local function mount(item: Instance): string?
         if recipient == "" then return "Desktop is not attached" end
-        local value, err = item.view:mount(recipient, {observe = true, input = true, resize = true})
-        if not value then return tostring(err) end
-        item.mount = value
+        local result = attachment.replace(item.view, item.attachment, recipient)
+        item.attachment = result.attachment
+        if result.error ~= "" then return result.error end
         return nil
     end
     local function control_result(waiter: Waiter, code: string, message: string)
@@ -565,16 +566,13 @@ local function main(owner: string, initial_preferences: unknown)
                         recipient = req.recipient
                         local reply = contract.reply(req.request_id, "bind")
                         local function rebind(item: Instance)
-                            local view = item.view
-                            if item.mount ~= "" then
-                                local _, err = view:revoke(item.mount)
-                                if err then reply.error_code, reply.error = "revoke_failed", tostring(err) end
-                                item.mount = ""
-                            end
-                            if recipient ~= "" and item.opened then
-                                local err = mount(item)
-                                if err then reply.error_code, reply.error = "attachment_failed", err end
-                                emit(identified(item, "attached", req.request_id, err and "attachment_failed" or "", err))
+                            local result = attachment.replace(item.view, item.attachment, item.opened and recipient or "")
+                            item.attachment = result.attachment
+                            if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
+                            if result.error_code == "revoke_failed" or (recipient ~= "" and item.opened) then
+                                local response = identified(item, "attached", req.request_id, result.error_code, result.error)
+                                if result.error ~= "" then response.mount = "" end
+                                emit(response)
                             end
                         end
                         for _, item in pairs(instances) do rebind(item) end
@@ -623,7 +621,7 @@ local function main(owner: string, initial_preferences: unknown)
                                     if not pid then view:close(); emit(contract.reply(req.request_id, "open", "spawn_failed", tostring(spawn_err)), true)
                                     else
                                         instances[view_id] = {view_id = view_id, instance_id = instance_id, execution_pid = tostring(pid), view = view,
-                                            descriptor = descriptor, binding = binding, mount = "", launch_token = token,
+                                            descriptor = descriptor, binding = binding, launch_token = token,
                                             state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
                                     end
                                 end

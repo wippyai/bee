@@ -6,6 +6,12 @@ to create empty directories or web adapters in Bee.
 
 ## Placement and ownership
 
+User launch instructions use the globally installed `bee` executable. For an
+editable checkout, `make run WIPPY="$PWD/.wippy/bin/bee-wippy"` runs source through
+the development launcher in the repository directory. This is separate from
+normal `bee` launches, which preserve the caller's project directory. Build and
+install the executable using the README before testing global launch behavior.
+
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |

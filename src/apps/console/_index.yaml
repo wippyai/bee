@@ -12,6 +12,7 @@ entries:
   - channel
   imports:
     client: bee.application:client
+    command: bee.console:command
   meta:
     type: bee.application
     application:
@@ -23,6 +24,14 @@ entries:
       instance_policy: multiple
       group: ''
       role: terminal
+      commands:
+      - {name: terminal, fullscreen: true}
+      - {name: claude, arguments: [claude], fullscreen: true}
+      - {name: codex, arguments: [codex], fullscreen: true}
+      - {name: agy, arguments: [agy], fullscreen: true}
+- name: command
+  kind: library.lua
+  source: file://command.lua
 - name: executor
   kind: exec.native
   default_env:
@@ -44,8 +53,7 @@ entries:
   policy:
     actions:
     - exec.run
-    resources:
-    - /bin/bash -i
+    resources: '*'
     effect: allow
 - name: environment
   kind: env.storage.os

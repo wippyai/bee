@@ -16,6 +16,7 @@ local recovery = require("recovery")
 local json = require("json")
 local interaction = require("interaction")
 local contract = require("contract")
+local command = require("command")
 
 local function new_display(width: integer, height: integer): tty.Viewport
     local view, err = tty.viewport({width = width, height = height})
@@ -24,7 +25,7 @@ local function new_display(width: integer, height: integer): tty.Viewport
 end
 
 local arguments = require("arguments")
-local function main(initial_application: string?, secondary_application: string?, initial_arguments: {string}?)
+local function main(initial_application: string?, secondary_application: string?, initial_arguments: {string}?, initial_fullscreen: boolean?)
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local control = assert(process.listen("bee.workspace.control", {message = true}))
@@ -98,6 +99,7 @@ local function main(initial_application: string?, secondary_application: string?
     local paused = false
     local last_rows: {string} = {}
     local initial_opened, quitting = false, false
+    local initial_request = ""
     local shutdown_request = ""
     local requested_rejoin = false
     local binding = ""
@@ -149,10 +151,10 @@ local function main(initial_application: string?, secondary_application: string?
         end
     end
 
-    local function broker_request(op: string, definition_id: string, id: string, recipient: string)
+    local function broker_request(op: string, definition_id: string, id: string, recipient: string, launch_arguments: {string}?)
         local request_id = uuid.v7()
         local restored: recovery.Record? = nil
-        if op == "open" and (not initial_arguments or #initial_arguments == 0) then
+        if op == "open" and (not launch_arguments or #launch_arguments == 0) then
             for _, saved_id in ipairs(record_order) do
                 local record = records[saved_id]
                 if record and record.definition_id == definition_id then
@@ -166,7 +168,7 @@ local function main(initial_application: string?, secondary_application: string?
             definition_id = definition_id, id = id, recipient = recipient,
             restore_instance_id = restored and restored.instance_id or "", restore_view_id = restored and restored.id or "",
             resume_schema = restored and restored.resume_schema or "", resume_state = restored and restored.resume_state or "",
-            arguments = op == "open" and initial_arguments or nil}
+            arguments = op == "open" and launch_arguments or nil}
         if op == "open" then application_request(request)
         else send_control(broker, "bee.app.request", request) end
         return request_id
@@ -201,7 +203,7 @@ local function main(initial_application: string?, secondary_application: string?
                 send_control(session, "bee.desktop.command", {version = 1, op = "focus", id = restore_focus})
                 restore_focus = ""
             end
-            if initial_application and initial_application ~= "" then broker_request("open", initial_application, "", "") end
+            if initial_application and initial_application ~= "" then initial_request = broker_request("open", initial_application, "", "", initial_arguments) end
         end
     end
     local function restore_window(record: recovery.Record)
@@ -415,6 +417,11 @@ local function main(initial_application: string?, secondary_application: string?
                         send_control(session, "bee.desktop.command", {version = 1, op = "remove", id = reply.id})
                     end
                     if reply.request_id == restore_request and reply.op == "open" and not quitting then restore_next() end
+                    if initial_fullscreen and reply.request_id == initial_request and reply.error == ""
+                        and (reply.op == "open" or reply.op == "focus") then
+                        send_control(session, "bee.desktop.command", {version = 1, op = "maximize", id = reply.id})
+                        initial_request = ""
+                    end
                     if reply.op == "attached" then
                         if reply.request_id == binding or (active and reply.error_code == "attachment_failed") then
                             process.send(presenter, "bee.app.reply", reply)
@@ -541,4 +548,17 @@ local function launch(application: string, ...)
     if not decoded then error("Invalid application arguments") end
     return main(application, nil, decoded)
 end
-return {main = main, launch = launch}
+local function entry(application: string?, ...)
+    local decoded = arguments.decode({...})
+    if not decoded then error("Invalid application arguments") end
+    if not application or application == "" then return main() end
+    -- Preserve the existing explicit-ID desktop invocation and bee-app contract.
+    if application:find(":", 1, true) then
+        if #decoded > 1 then error("Use bee-app for explicit application arguments") end
+        return main(application, decoded[1])
+    end
+    local selected, err = command.resolve(application, decoded)
+    if not selected then error(err or "Command resolution failed") end
+    return main(selected.definition_id, nil, selected.arguments, selected.fullscreen)
+end
+return {main = entry, launch = launch}

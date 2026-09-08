@@ -70,9 +70,19 @@ function M.reduce(value: State, command: commands.Command): State
         local scene = model.focus(value.scene, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
-    elseif command.op == "fullscreen" then
+    elseif command.op == "fullscreen" or command.op == "maximize" then
         if not command.id then return value end
-        local scene = model.toggle_fullscreen(value.scene, command.id)
+        local source = value.scene
+        if command.op == "maximize" then
+            source = model.focus(source, command.id)
+            for _, window in ipairs(source.windows) do
+                if window.id == command.id and window.mode == "fullscreen" then
+                    if source == value.scene then return value end
+                    return next_state(value, source)
+                end
+            end
+        end
+        local scene = model.toggle_fullscreen(source, command.id)
         if scene == value.scene then return value end
         return next_state(value, scene)
     elseif command.op == "minimize" then

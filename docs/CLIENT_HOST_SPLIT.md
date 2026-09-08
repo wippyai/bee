@@ -4,14 +4,45 @@ Status: extraction plan; the broker readiness step below is now implemented.
 The required behavior and native mesh boundary are in
 [workspace attachments](WORKSPACE_ATTACHMENTS.md). Local Bee still combines the
 physical terminal owner and workspace host. No headless profile exists yet.
+The current wide-terminal header shows the workspace's short durable ID; it is
+informational, not a workspace switcher. The generic idle "Ready" label is gone.
+The runtime registry stores definitions/history separately from the workspace
+application store and journal; none of those storage paths is a UI workspace name.
+
+## Named supervisor endpoint
+
+Use the runtime's `process.registry.register(name, nil, scope)` and direct
+`process.send(name, topic, body)` addressing. The supervisor registers its own
+execution; successful spawn alone is not endpoint readiness. A startup response
+follows registration and initialization. Replies still authenticate the expected
+execution PID, correlation ID and workspace identity. Re-resolve after restart
+and establish a fresh attachment incarnation before accepting new control.
+
+The local fixture exercises LOCAL registration and sends broker operations through
+the name. Its catalog response gates the first named request. In the pinned runtime
+the local registration capability is `process.registry.register` on the exact
+name (not the `.local` spelling in the runtime spec). Wider scopes use their native
+scope-specific policies. LOCAL names alone are not cluster-wide discovery; the
+Hive profile must select an appropriate native scope and node-qualified identity.
+No separate Bee naming registry or mesh transport is required.
+
+Remote placement requests go to the destination supervisor or its workspace
+service. That owner authenticates the requesting peer/execution, resolves its
+admitted actor/resource mapping, establishes local security context and starts
+the admitted application. Payload actor IDs, display names and thread membership
+do not select privileged local identity. Existing actor messaging remains direct
+native routing; new execution and presence registration remain owner operations.
+The current fixture proves local named delivery only, not remote actor admission.
 
 ## Current coupling to remove
 
 `src/core/workspace/main.lua` starts the physical terminal before opening storage,
 spawns the session and broker, mounts the presenter, routes input and commits
 application checkpoints. `src/core/session/main.lua` accepts windows only for
-the single bootstrapped workspace. `src/core/applications/broker.lua` keeps one
-recipient and one mount per application. Broker open/readiness now work without
+the single bootstrapped workspace. `src/core/applications/broker.lua` still selects
+one desktop recipient. Its private `attachment.lua` module owns the recipient-and-grant
+record held by each application instance and revokes before replacement.
+Broker open/readiness work without
 that recipient, and mount failures retain ready producers. The recovery envelope combines client layout with application
 state. These are explicit local assumptions, not reusable multi-client contracts.
 
@@ -76,6 +107,19 @@ must be checked independently of the visual shell implementation.
    persistence before attachment, survival past the startup deadline, failed
    initial and later mounts, and reattachment to the same producer. Startup
    timeout and observed EXIT handling remain intact.
+   The fixture also keeps an old handle open across detach and proves that
+   observation, input, resize and reattachment are denied after revocation.
+   An injected revoke failure returns no replacement mount and preserves the
+   previous grant for a later retry. The pinned foundation patch makes revocation
+   idempotent after recipient cleanup, so an already removed grant is not a
+   handoff failure. Binding several applications is still a per-app operation,
+   not an atomic transfer of the entire desktop.
+   Its Terminal mode opens the real bundled `bee.console:app` without a physical
+   TTY, sends a shell command through its mount, detaches, and reconnects with a
+   fresh mount. It verifies the same Bash PID and shell variable remain, the old
+   grant cannot send input, and resize reaches `stty size`. Source and pack pass.
+   This is one local broker and a reconnecting consumer, not multi-client or remote
+   Bee attachment. Use this actual Terminal as the first remote application gate.
 2. Introduce owner-held attachment records for exact view references and actual
    recipient PIDs. Separate observe from input/resize grants. Keep one controller
    for each PTY; observers do not resize it to fit their own windows.

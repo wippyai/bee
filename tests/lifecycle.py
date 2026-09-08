@@ -155,6 +155,23 @@ def detached():
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
             shutil.copytree(ROOT / "tests/fixtures/attachments", project / "src/probe")
+            broker = project / "src/core/applications/broker.lua"
+            code = broker.read_text()
+            bootstrap = 'if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end'
+            assert code.count(bootstrap) == 1
+            code = code.replace(bootstrap, bootstrap + '\n    assert(process.registry.register("bee.attachment_probe.host", nil, process.registry.LOCAL))')
+            broker.write_text(code)
+            attachment = project / "src/core/applications/attachment.lua"
+            code = attachment.read_text()
+            anchor = "local _, err = view:revoke(previous.mount)"
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, '''local function revoke(): (boolean?, string?)
+                                    if recipient == previous.recipient then return nil, "Injected revocation failure" end
+                                    local ok, failure = view:revoke(previous.mount)
+                                    return ok, failure and tostring(failure) or nil
+                                end
+                                local _, err = revoke()''')
+            attachment.write_text(code)
             for name in (".wippy.yaml", "wippy.lock"):
                 shutil.copy2(ROOT / name, project / name)
             index = project / "src/_index.yaml"
@@ -169,12 +186,12 @@ def detached():
             pack = folder / "detached.wapp"
             if packed:
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-            for mode in ("detached", "failed-open"):
+            for mode in ("detached", "failed-open", "terminal"):
                 args = [str(RUNTIME), "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
                 assert result.returncode == 0, result.stdout + result.stderr
-    print("Detached broker source/pack: piped CLI with no physical TTY, checkpoint before attachment, readiness survives deadline, failed mount and reattach preserve producer", flush=True)
+    print("Detached broker source/pack: named endpoint, no physical TTY, checkpoint before attachment, failed revoke retains controller, stale rights denied, real Terminal retains Bash PID/state across rejoin and resizes", flush=True)
 
 
 if __name__ == "__main__":

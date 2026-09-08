@@ -7,6 +7,7 @@ entries:
   method: main
   modules: [security, process, channel, tty, uuid, registry, time, ctx]
   imports:
+    attachment: bee.applications:attachment
     contract: bee.protocol:application
     catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
@@ -19,6 +20,17 @@ entries:
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
+- name: attachment
+  kind: library.lua
+  source: file://attachment.lua
+  modules: [tty]
+- name: command
+  kind: library.lua
+  source: file://command.lua
+  modules: [registry]
+  imports:
+    catalog: bee.applications:catalog
+    arguments: bee.application:arguments
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

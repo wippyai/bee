@@ -10,6 +10,13 @@ must declare `ioevents` in `modules`. A process also needs explicit host-selecte
 `fs.get` and `ioevents.watch` grants for the named filesystem resource. Registry
 metadata and module import declarations do not authorize filesystem access.
 
+This is a filesystem-resource integration: callers select a registered resource,
+not an arbitrary host path. A future `filesystem:watch()` method requires a
+runtime-owned provider and authorization contract; this component does not mutate
+the built-in `fs` module. See the
+[native authoring SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
+for the boot path and the current revision-coupled scheduler APIs.
+
 Consumer example:
 
 ```lua

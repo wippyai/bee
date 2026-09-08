@@ -132,7 +132,7 @@ local function main(owner: string, database_resource: string?)
                 elseif selected.channel == requests then
                     local request = contract.request(data)
                     local caller = tostring(message:from())
-                    if request and not connections.request(client_connections, caller, request, data, ready and not stopping) and caller == owner then
+                    if request and not connections.request(client_connections, caller, request, data, ready and not stopping, snapshot.applications) and caller == owner then
                         if request.workspace_id ~= workspace_id or not ready or stopping then
                             local reply = contract.reply(request.request_id, request.op,
                                 request.workspace_id ~= workspace_id and "workspace_mismatch" or "busy", "Workspace request unavailable")

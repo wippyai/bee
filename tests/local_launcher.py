@@ -1,5 +1,6 @@
 """Physical terminal entry owns a TTY-free supervisor and workspace host."""
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +10,7 @@ import yaml
 
 from tui_smoke import Desktop
 from workspace import ROOT, RUNTIME
+from recovery import stored
 
 
 def run():
@@ -135,6 +137,81 @@ def run():
                 finally:
                     ui.close()
             print(f"Cold boot {'pack' if packed else 'source'}: recovered Settings retains its client tab and live view", flush=True)
+
+        # Manual recovery belongs to the host, even when the client has discarded
+        # its old tab. Opening from Start must receive the saved state and IDs.
+        client_file = project / "src/core/client/main.lua"
+        client_code = client_file.read_text()
+        send_anchor = '        local function send(recipient: string, topic: string, value: unknown)\n'
+        reply_anchor = '                            reply = result.reply\n'
+        assert client_code.count(send_anchor) == client_code.count(reply_anchor) == 1
+        replay_code = client_code.replace(send_anchor,
+            '        local replay_request: unknown = nil\n        local replay_id = ""\n        local conflict_seen = false\n' + send_anchor
+            + '            if topic == "bee.app.request" and type(value) == "table" and value.op == "open" then\n'
+            + '                replay_request = value; replay_id = tostring(value.request_id); conflict_seen = false\n'
+            + '                assert(process.send(recipient, topic, value))\n'
+            + '                assert(process.send(recipient, topic, {version = 1, op = "open", request_id = value.request_id,\n'
+            + '                    workspace_id = value.workspace_id, connection_id = value.connection_id,\n'
+            + '                    definition_id = value.definition_id, arguments = {"conflicting"}}))\n'
+            + '                return\n            end\n')
+        replay_code = replay_code.replace(reply_anchor, reply_anchor + '''                            if reply.request_id == replay_id then
+                                if reply.error_code == "request_conflict" then
+                                    conflict_seen = true
+                                elseif replay_request ~= nil then
+                                    assert(reply.error_code == "", "Initial recovery request failed")
+                                    local retry = replay_request; replay_request = nil
+                                    assert(process.send(host, "bee.app.request", retry))
+                                else
+                                    assert(reply.error_code == "" and reply.op == "focus", "Completed recovery retry changed its fingerprint")
+                                    assert(conflict_seen, "Changed retry was not rejected")
+                                    local selected_tab = tab(reply.id, reply.instance_id)
+                                    if not selected_tab then error("Retried recovery lost its tab") end
+                                    send(session, "bee.desktop.command", {version = 1, op = "announce", id = selected_tab,
+                                        instance_id = reply.instance_id, title = "Replay verified"})
+                                end
+                            end
+''')
+        client_file.write_text(replay_code)
+        settings_index = project / "src/apps/settings/_index.yaml"
+        original_settings = settings_index.read_text()
+        settings = yaml.safe_load(original_settings)
+        next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["restart_policy"] = "manual"
+        settings_index.write_text(yaml.safe_dump(settings, sort_keys=False))
+        subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, check=True)
+        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        for packed in (False, True):
+            folder = root / ("manual-pack" if packed else "manual-source")
+            folder.mkdir()
+            ui = Desktop(folder, packed, project=project, pack_file=pack,
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.settings:app"))
+            try:
+                ui.wait("Replay verified", timeout=12)
+                ui.wait("Honey", timeout=12)
+                ui.key(b"\t")
+                ui.wait("Solid")
+                ui.quit()
+            finally:
+                ui.close()
+            before = stored(folder)["applications"][0]
+            ui = Desktop(folder, packed, project=project, pack_file=pack,
+                         command_name="local-client-probe", apps=("bee.client.db:local",))
+            try:
+                ui.wait("Workspace ", timeout=12)
+                ui.pump(.3)
+                assert "Settings" not in ui.text(), ui.text()
+                ui.open_start(); ui.choose("Settings")
+                ui.wait("Replay verified")
+                ui.wait("Solid")
+                ui.quit()
+            finally:
+                ui.close()
+            after = stored(folder)["applications"][0]
+            assert len(stored(folder)["applications"]) == 1, "Recovery replay created another instance"
+            assert (after["id"], after["instance_id"]) == (before["id"], before["instance_id"]), (before, after)
+            assert json.loads(after["resume_state"]) == json.loads(before["resume_state"]), (before, after)
+            print(f"Manual recovery {'pack' if packed else 'source'}: Start restores checkpoint/identity, conflicting retry rejected, completed replay focuses same instance", flush=True)
+        settings_index.write_text(original_settings)
+        client_file.write_text(client_code)
 
         # A presenter can stay alive without announcing readiness. The stable
         # terminal owner must provide an exit path without that actor's help.

@@ -219,8 +219,7 @@ still use the combined entry.
 
 Before replacing normal launch, preserve its remaining behavior explicitly:
 select the persistent client database alongside the workspace database; support
-the existing two-application invocation and explicit argument command; route
-manual checkpoint recovery through the host; and preserve the local Settings
+the existing two-application invocation and explicit argument command; and preserve the local Settings
 effect on producer colors without giving the client workspace-storage authority.
 The independent-client tests intentionally keep chrome preferences separate from
 workspace-owned producer defaults. Public launch must resolve that distinction
@@ -232,6 +231,24 @@ did not recover (including dead native terminals). Source/pack cold boots also
 verify that recovered Settings retains its tab and live view. Subsequent inventories remove
 previously observed applications when they exit. This is an admitted host's
 complete inventory, not an inference from a timeout or a disconnected workspace.
+
+Explicit opens from admitted clients now select matching retained checkpoints in
+the host. Selection happens only after connection, workspace and operation-grant
+checks; client-supplied recovery fields remain forbidden. The host skips live view
+or instance IDs and checkpoints reserved by pending opens. A bounded correlation
+record retains the chosen recovery fields through completion so an identical
+retry reaches the broker with the same request fingerprint. The broker still
+checks the application's current resume schema and supplies fresh execution and
+mount capabilities. The client receives no checkpoint payload.
+Reusing a client request ID with changed operation fields or arguments is rejected
+before broker delivery, so that conflict cannot release the original open's
+checkpoint reservation. Source/pack tests inject both a conflicting request and
+an identical retry around the same open.
+Source/pack acceptance opens manually recoverable Settings from Start after a cold
+boot, verifies its saved pane and stable view/instance IDs, and replays the completed
+open to prove it focuses the same application. Selection tests also cover live and
+pending reservations. Direct supervisor requests keep their explicit restore
+authority; this selection applies to the admitted-client open route.
 
 The entry's private boot function constructs this local topology; the ordinary
 externally spawned client entry must retain its trusted-context checks. Separate

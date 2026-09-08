@@ -27,11 +27,19 @@ entries:
   source: file://clients.lua
   modules: [process, uuid, hash]
   imports:
+    recovery: bee.host:recovery
+    records: bee.workspace:recovery
     clients: bee.host:protocol
     contract: bee.protocol:application
     inventory: bee.host:inventory
     questions: bee.interaction:delivery
     interaction: bee.application:interaction
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  imports:
+    records: bee.workspace:recovery
+    inventory: bee.host:inventory
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

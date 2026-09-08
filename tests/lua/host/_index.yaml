@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.host
 entries:
+- name: recovery_test
+  kind: function.lua
+  source: file://recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    recovery: bee.host:recovery
+    records: bee.workspace:recovery
+    inventory: bee.host:inventory
 - name: inventory_test
   kind: function.lua
   source: file://inventory_test.lua

@@ -8,7 +8,10 @@ local contract = require("contract")
 local inventory = require("inventory")
 local questions = require("questions")
 local interaction = require("interaction")
-type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean, renderer_generation: string}
+local recovery = require("recovery")
+local records = require("records")
+type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean,
+    renderer_generation: string, fingerprint: string, resume: recovery.Resume?}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
 type AppearanceOp = "state" | "set"
@@ -225,7 +228,7 @@ local function reject(state: State, client: clients.Client, request: contract.Re
     reply.workspace_id = state.workspace_id
     deliver_reply(state, client, reply)
 end
-function M.request(state: State, caller: string, request: contract.Request, data: unknown, ready: boolean): boolean
+function M.request(state: State, caller: string, request: contract.Request, data: unknown, ready: boolean, saved: {records.Record}): boolean
     local client = state.admitted[caller]
     if not client then return false end
     local code = ""
@@ -240,15 +243,37 @@ function M.request(state: State, caller: string, request: contract.Request, data
     local generation = request.op == "bind" and client.renderer_generation or ""
     local internal, hash_error = hash.sha256(client.connection_id .. "\0" .. generation .. "\0" .. request.request_id)
     if not internal then error(tostring(hash_error)) end
+    local fingerprint = contract.argument_fingerprint({request.op, request.id, request.instance_id,
+        request.definition_id, request.recipient}) .. contract.argument_fingerprint(request.arguments)
+    local existing = state.routes[internal]
+    if existing and existing.fingerprint ~= fingerprint then
+        reject(state, client, request, "request_conflict", "Request ID was reused for another operation")
+        return true
+    end
     if not state.routes[internal] then
         while state.route_count >= 128 and #state.completed > 0 do
             local oldest = table.remove(state.completed, 1)
             if state.routes[oldest] then state.routes[oldest] = nil; state.route_count = state.route_count - 1 end
         end
         if state.route_count >= 128 then reject(state, client, request, "busy", "Client request capacity reached"); return true end
+        local resume: recovery.Resume? = nil
+        if request.op == "open" then
+            local reserved: {[string]: boolean} = {}
+            for _, route in pairs(state.routes) do
+                if not route.completed and route.resume then reserved[route.resume.instance_id] = true end
+            end
+            resume = recovery.select(saved, state.inventory, request.definition_id, reserved)
+        end
         state.routes[internal] = {recipient = client.recipient, connection_id = client.connection_id, request_id = request.request_id,
-            op = request.op, completed = false, renderer_generation = generation}
+            op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume}
         state.route_count = state.route_count + 1
+    end
+    -- Keep this selection on the correlation record, including after completion:
+    -- retries must reach the broker with the same recovery fingerprint.
+    local route = state.routes[internal]
+    if request.op == "open" and route and route.resume then
+        request.restore_view_id, request.restore_instance_id = route.resume.view_id, route.resume.instance_id
+        request.resume_schema, request.resume_state = route.resume.schema, route.resume.state
     end
     request.request_id = internal
     if request.op == "bind" then request.recipient = client.renderer end

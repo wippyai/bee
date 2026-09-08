@@ -17,6 +17,11 @@ local function define_tests()
             args[1] = "changed"
             test.eq(options.arguments[1], "space ; $HOME")
             test.is_true(options.fullscreen)
+            test.is_nil(lifecycle.bootstrap({version = 1, secondary_application = ""}))
+            test.is_nil(lifecycle.bootstrap({version = 1, secondary_application = "bad\napp"}))
+            local secondary = lifecycle.bootstrap({version = 1, secondary_application = "probe:app"})
+            if not secondary then error("Missing secondary launch") end
+            test.eq(secondary.secondary_application, "probe:app")
         end)
         test.it("refuses foreign workspace and ambiguous shutdown control", function()
             local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit"}

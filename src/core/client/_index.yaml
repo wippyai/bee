@@ -21,6 +21,7 @@ entries:
   method: main
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
   imports: &client_imports
+    launcher: bee.launch:bootstrap
     command: bee.applications:command
     arguments: bee.application:arguments
     store: bee.client:store
@@ -45,6 +46,12 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: local_command
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports: *client_imports
+- name: local_application
+  kind: process.lua
+  source: file://main.lua
+  method: local_application
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
   imports: *client_imports
 - name: store

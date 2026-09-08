@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: bootstrap
+  kind: library.lua
+  source: file://bootstrap.lua
+  modules: [process, channel, tty, security, time]
+  imports:
+    physical: bee.terminal:display
+    input_decode: bee.protocol:input
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

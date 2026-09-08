@@ -20,12 +20,12 @@ local lifecycle = require("lifecycle")
 local interaction = require("interaction")
 local command = require("command")
 local arguments = require("arguments")
+local launcher = require("launcher")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
-type Terminal = {display: physical.Display, input: tty.EventChannel}
 
-local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: Terminal?)
+local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: launcher.Terminal?)
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid client bootstrap options") end
     local owned_database: store.Store? = nil
@@ -245,7 +245,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             local grant = assert(display.view:grant())
             presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = self,
                 ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
-                    "bee.terminal:main", "bee:workers", self)))
+                    "bee.terminal:main", "bee:workers", self, initial_application, bootstrap.secondary_application)))
         end
         local function pause_presenter()
             active, paused, waiting_presenter, bindings = false, true, false, {}
@@ -584,72 +584,35 @@ end
 local function local_entry(database_resource: string, initial_application: string?, options: unknown)
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid local launch options") end
-    local boot, boot_error = process.listen("bee.launch.host", {message = true})
-    if not boot then error(tostring(boot_error)) end
-    local supervisor = ""
-    local display: physical.Display? = nil
+    local boot = launcher.open()
+    if not boot then return end
     local function run()
-        display = physical.open()
-        local events = assert(process.events())
-        local input, input_error = tty.events()
-        if not input then error(tostring(input_error)) end
-        local policies: {security.Policy} = {}
-        for _, name in ipairs({"bee:host_policy", "bee:local_supervisor_spawn_policy"}) do
-            local policy, err = security.policy(name)
-            if not policy then error(tostring(err)) end
-            policies[#policies + 1] = policy
-        end
-        local self = tostring(process.pid())
-        supervisor = tostring(assert(process.with_options({}):with_context({["bee.launch_owner"] = self})
-            :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:supervisor", "bee:workers", self)))
-        local deadline = time.after("10s")
-        while true do
-            local selected = channel.select({boot:case_receive(), events:case_receive(), input:case_receive(), deadline:case_receive()})
-            if not selected.ok or selected.channel == deadline then error("Local host startup timed out") end
-            if selected.channel == input then
-                local event = input_decode.decode(selected.value)
-                if event then
-                    if event.type == "close" or (event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release") then return end
-                    if event.type == "resize" and display then physical.resize(display, event.width, event.height) end
-                end
-            elseif selected.channel == events then
-                local event = selected.value
-                if event.kind == process.event.CANCEL then return end
-                if event.kind == process.event.EXIT and tostring(event.from) == supervisor then
-                    error("Local supervisor exited before host readiness")
-                end
-            else
-                local message = selected.value
-                if tostring(message:from()) == supervisor then
-                    local data: unknown = message:payload():data()
-                    if type(data) ~= "table" or data.version ~= 1 then error("Invalid local host bootstrap") end
-                    local workspace_id = contract.workspace_id(data.workspace_id)
-                    local host = contract.text(data.host, 160)
-                    local desktop = decode.desktop(data.desktop)
-                    if not workspace_id or not host or host == "" or not desktop then error("Invalid local host bootstrap") end
-                    if not display then error("Local terminal ownership lost") end
-                    local terminal: Terminal = {display = display, input = input}
-                    display = nil -- The client now owns cleanup, including failed boot.
-                    return run_client(supervisor, host, workspace_id, database_resource, initial_application,
-                        {version = 1, quit_mode = "supervisor", legacy_desktop = desktop,
-                            arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen}, true, terminal)
-                end
-            end
-        end
+        return run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
+            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop,
+                arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen,
+                secondary_application = bootstrap.secondary_application}, true, boot.terminal)
     end
     local ok, err = pcall(run)
-    process.unlisten(boot)
-    if supervisor ~= "" then process.terminate(supervisor) end
-    if display then physical.close(display) end
+    process.terminate(boot.supervisor)
     if not ok then error(err) end
 end
 -- Private command entry used to prove normal handler semantics before promotion.
-local function local_command(database_resource: string, name: string, ...)
+local function local_command(database_resource: string, name: string?, ...)
     local tail = arguments.decode({...})
     if not tail then error("Invalid application arguments") end
+    if not name or name == "" then return local_entry(database_resource, nil, nil) end
+    if name:find(":", 1, true) then
+        if #tail > 1 then error("Use bee-app for explicit application arguments") end
+        return local_entry(database_resource, name, {version = 1, secondary_application = tail[1]})
+    end
     local selected, err = command.resolve(name, tail)
     if not selected then error(err or "Command resolution failed") end
     return local_entry(database_resource, selected.definition_id,
         {version = 1, arguments = selected.arguments, fullscreen = selected.fullscreen})
 end
-return {main = main, local_entry = local_entry, local_command = local_command}
+local function local_application(database_resource: string, application: string, ...)
+    local values = arguments.decode({...})
+    if not values then error("Invalid application arguments") end
+    return local_entry(database_resource, application, {version = 1, arguments = values})
+end
+return {main = main, local_entry = local_entry, local_command = local_command, local_application = local_application}

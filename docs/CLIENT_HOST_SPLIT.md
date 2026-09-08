@@ -211,15 +211,22 @@ the same display to the client. A monitored supervisor exit during startup repor
 immediately and restores the terminal, without waiting for the startup deadline.
 Ctrl+Q remains responsive while waiting for host readiness; startup does not
 depend on a presenter to accept exit. Source/pack tests cover a stalled supervisor.
-Private `bee.client:local_command(database_resource, name, ...)` resolves the
-existing admitted command metadata, preserves literal arguments and opens the
-selected app fullscreen when declared. Source/pack acceptance checks that path
-and presenter replacement. Explicit multi-app launch and public command wiring
-still use the combined entry.
+Private `bee.client:local_command(database_resource, name?, ...)` accepts the
+existing desktop command forms: empty desktop, registered handler, or explicit
+application ID with an optional secondary shortcut target. Ctrl+N opens the first
+application; Ctrl+P opens the second, which does not launch at boot. Those targets
+survive presenter replacement. Registered handlers preserve literal arguments and
+open fullscreen when declared. `bee.client:local_application(database_resource,
+application, ...)` accepts an explicit application ID and literal argument list,
+matching `bee-app`. Source/pack acceptance checks all these forms. Public command
+wiring still uses the combined entry.
+
+`bee.launch:bootstrap` owns local startup and returns the display and its single
+native input channel to the desktop in the same execution. It contains no window,
+session or application routing. The separate supervisor actor remains TTY-free.
 
 Before replacing normal launch, preserve its remaining behavior explicitly:
-select the persistent client database alongside the workspace database; support
-the existing two-application invocation and explicit argument command; and preserve the local Settings
+select the persistent client database alongside the workspace database and preserve the local Settings
 effect on producer colors without giving the client workspace-storage authority.
 The independent-client tests intentionally keep chrome preferences separate from
 workspace-owned producer defaults. Public launch must resolve that distinction

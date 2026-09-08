@@ -49,6 +49,9 @@ def run():
         command_entry = next(e for e in document["entries"] if e["name"] == "local_command")
         command_entry["meta"] = {"command": {"name": "local-command-probe", "short": "Local handler acceptance",
             "security": entry["meta"]["command"]["security"]}}
+        application_entry = next(e for e in document["entries"] if e["name"] == "local_application")
+        application_entry["meta"] = {"command": {"name": "local-application-probe", "short": "Explicit argument acceptance",
+            "security": entry["meta"]["command"]["security"]}}
         index.write_text(yaml.safe_dump(document, sort_keys=False))
         index = project / "src/apps/console/_index.yaml"
         document = yaml.safe_load(index.read_text())
@@ -59,7 +62,40 @@ def run():
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, check=True)
         pack = root / "local.wapp"
         subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+        script = root / "literal ; $HOME.sh"
+        script.write_text('printf "EXPLICIT=<%s>\\n" "$1"\nexec /bin/cat\n')
         for packed in (False, True):
+            pair_folder = root / ("pair-pack" if packed else "pair-source")
+            pair_folder.mkdir()
+            ui = Desktop(pair_folder, packed, project=project, pack_file=pack,
+                         command_name="local-command-probe", apps=("bee.client.db:local", "bee.console:app", "bee.settings:app"))
+            try:
+                ui.wait("Terminal", timeout=12)
+                assert "Settings" not in ui.text(), "Secondary shortcut target opened at boot"
+                ui.key(b"\x10")
+                ui.wait("Honey")
+                ui.key(b"\x1b[24~")
+                ui.pump(.3)
+                ui.key(b"\x0e")
+                ui.pump(.3)
+                assert ui.screen.display[0].count("Terminal") == 2, ui.text()
+                ui.key(b"\x10")
+                ui.wait("Honey")
+                ui.quit(confirm=True)
+                print(f"Explicit pair {'pack' if packed else 'source'}: initial open, Ctrl+N/Ctrl+P targets survive F12", flush=True)
+            finally:
+                ui.close()
+            argument_folder = root / ("arguments-pack" if packed else "arguments-source")
+            argument_folder.mkdir()
+            ui = Desktop(argument_folder, packed, project=project, pack_file=pack,
+                         command_name="local-application-probe",
+                         apps=("bee.client.db:local", "bee.console:app", "/bin/bash", str(script), "space ; $HOME"))
+            try:
+                ui.wait("EXPLICIT=<space ; $HOME>", timeout=12)
+                ui.quit(confirm=True)
+                print(f"Explicit arguments {'pack' if packed else 'source'}: application ID and literal argv", flush=True)
+            finally:
+                ui.close()
             command_folder = root / ("command-pack" if packed else "command-source")
             command_folder.mkdir()
             ui = Desktop(command_folder, packed, project=project, pack_file=pack,
@@ -115,7 +151,7 @@ def run():
                 ui.close()
 
             ui = Desktop(folder, packed, project=project, pack_file=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local",))
+                         command_name="local-command-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Workspace ", timeout=12)
                 ui.pump(.5)

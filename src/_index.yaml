@@ -140,6 +140,7 @@ entries:
     - bee.client:main
     - bee.client:local
     - bee.client:local_command
+    - bee.client:local_application
     - bee.launch:supervisor
     - bee.session:main
     - bee.applications:broker

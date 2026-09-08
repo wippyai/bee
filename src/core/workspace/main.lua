@@ -11,9 +11,8 @@ local decode = require("decode")
 local decode_input = require("decode_input")
 local appearance = require("appearance")
 local chrome = require("chrome")
-local store = require("store")
+local persistence = require("persistence")
 local recovery = require("recovery")
-local json = require("json")
 local interaction = require("interaction")
 local contract = require("contract")
 local command = require("command")
@@ -50,17 +49,10 @@ local function main(initial_application: string?, secondary_application: string?
     local width, height = tty.screen_size()
     -- Present before waiting on any child. No artificial boot delay is added.
     assert(output:present(chrome.boot(width, height), {cursor = {x = 1, y = 1, visible = false}}))
-    local database, database_error = store.open()
+    local database, database_error = persistence.open()
     if not database then error(tostring(database_error)) end
-    local workspace_id, identity_error = database:identity()
-    if not workspace_id then database:close(); error(tostring(identity_error)) end
-    local encoded, read_error = database:read()
-    if read_error then database:close(); error(tostring(read_error)) end
-    local saved: recovery.Snapshot? = nil
-    if encoded then
-        saved = recovery.decode(encoded)
-        if not saved then database:close(); error("Unsupported or corrupt workspace checkpoint") end
-    end
+    local workspace_id = database.workspace_id
+    local saved = database.saved
     local preferences = saved and saved.desktop.preferences or appearance.defaults()
     local records: {[string]: recovery.Record} = {}
     local restore_queue: {recovery.Record} = {}
@@ -185,10 +177,8 @@ local function main(initial_application: string?, secondary_application: string?
         if saved and (not initial_opened or restore_request ~= "" or #restore_queue > 0) then
             persisted_scene, persisted_tabs = saved.desktop.scene, saved.desktop.tabs
         end
-        local value, err = json.encode({version = 1, desktop = {scene = persisted_scene, tabs = persisted_tabs,
+        return database:write({version = 1, desktop = {scene = persisted_scene, tabs = persisted_tabs,
             preferences = preferences}, applications = applications})
-        if err then return false, tostring(err) end
-        return database:write(value)
     end
     local function restore_next()
         local record = table.remove(restore_queue, 1)

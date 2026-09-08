@@ -12,7 +12,6 @@ entries:
   - channel
   - time
   - uuid
-  - json
   imports:
     command: bee.applications:command
     contract: bee.protocol:application
@@ -23,7 +22,7 @@ entries:
     decode_input: bee.protocol:input
     appearance: bee.desktop:appearance
     chrome: bee.terminal:chrome
-    store: bee.storage:store
+    persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
   meta:
     command:
@@ -47,7 +46,6 @@ entries:
   - channel
   - time
   - uuid
-  - json
   imports:
     command: bee.applications:command
     contract: bee.protocol:application
@@ -58,7 +56,7 @@ entries:
     decode_input: bee.protocol:input
     appearance: bee.desktop:appearance
     chrome: bee.terminal:chrome
-    store: bee.storage:store
+    persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
   meta:
     command:
@@ -71,12 +69,20 @@ entries:
         - bee:desktop_policy
         - bee:core_spawn_policy
         - bee:workspace_storage_policy
+- name: persistence
+  kind: library.lua
+  source: file://persistence.lua
+  modules: [json]
+  imports:
+    store: bee.storage:store
+    recovery: bee.workspace:recovery
 - name: recovery
   kind: library.lua
   source: file://recovery.lua
   modules:
   - json
   imports:
+    appearance: bee.desktop:appearance
     decode: bee.protocol:decode
     contract: bee.protocol:application
     model: bee.desktop:model

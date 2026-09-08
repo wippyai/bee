@@ -46,6 +46,13 @@ Broker open/readiness work without
 that recipient, and mount failures retain ready producers. The recovery envelope combines client layout with application
 state. These are explicit local assumptions, not reusable multi-client contracts.
 
+The private `bee.workspace:persistence` library now owns opening the configured
+store, loading its stable identity, decoding the saved envelope and serializing
+typed writes. It has no TTY dependency. The workspace actor still owns its lifetime
+and decides when a checkpoint is committed. The recovery desktop type contains
+only scene, tabs and preferences; the live application catalog is not saved state.
+This extraction preserves the existing database format and migration ledger.
+
 Owner requests can now bind one exact workspace/instance/view independently.
 That operation leaves other view grants and the default recipient for future
 opens intact. The whole-broker bind remains for local presenter replacement.

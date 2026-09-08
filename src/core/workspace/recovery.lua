@@ -3,9 +3,11 @@ local decode = require("decode")
 local contract = require("contract")
 local json = require("json")
 local model = require("model")
+local appearance = require("appearance")
 type Record = {id: string, instance_id: string, definition_id: string, resume_schema: string,
     restart_policy: string, resume_state: string, window: model.Window?}
-type Snapshot = {version: integer, desktop: decode.Desktop, applications: {Record}}
+type Desktop = {scene: model.Scene, tabs: {string}, preferences: appearance.Preferences}
+type Snapshot = {version: integer, desktop: Desktop, applications: {Record}}
 local M = {}
 function M.record(value: unknown): Record?
     if type(value) ~= "table" then return nil end
@@ -47,6 +49,6 @@ function M.decode(encoded: string): Snapshot?
         instances[item.instance_id] = true; views[item.id] = true
         records[#records + 1] = item
     end
-    return {version = 1, desktop = desktop, applications = records}
+    return {version = 1, desktop = {scene = desktop.scene, tabs = desktop.tabs, preferences = desktop.preferences}, applications = records}
 end
 return M

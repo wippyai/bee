@@ -19,6 +19,10 @@
       {
         "path": "runtime/patches/application-host.patch",
         "sha256": "6d251788d443a2e2a5ef1c70b3f7c06e864eefcf97992fcf203bdbfc6cf890f9"
+      },
+      {
+        "path": "runtime/patches/dependency-notices.patch",
+        "sha256": "f714b62a905dffe17f2fa7f6905d9c91edfd11de8dc4fb4d4a42ad3deee45fac"
       }
     ]
   },
@@ -35,7 +39,7 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "8a589725cf8678bd4da04b340296f713cdd8dfb0877be53704017288772317b3"
+        "sha256": "27a21c19aea63610407540533ace2d3cc339c7e76ccc10cb72eaa4d8ca48648e"
       }
     ]
   },

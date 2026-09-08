@@ -44,6 +44,9 @@ headers. Upstream changes are prepared as runtime PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
 [668](https://github.com/wippyai/runtime/pull/668). The builder checks out committed
 source into a temporary directory and verifies patches before compiling.
+The dependency-notices patch pins Nexus annotations to the source revision
+containing its MIT license, as proposed in
+[runtime PR #677](https://github.com/wippyai/runtime/pull/677).
 
 `BEE_VERSION=0.1.0-dev make standalone` regenerates the pack and records its exact
 version and hash in the manifest. Bee exports one module root definition at
@@ -143,8 +146,8 @@ organization; native module fetching uses the consuming repository's token.
 Archives contain the executable, input manifest provenance, effective Go module
 files, available dependency license notices and the runtime patch sources.
 Archive timestamps and ownership are normalized; pack timestamps and the native
-C toolchain still affect binary reproducibility. Two linked Go modules currently
-lack root license files in their pinned distributions; the inventory lists them.
+C toolchain still affect binary reproducibility. The linked registry Go bindings
+currently lack a root license file at their pinned version; the inventory lists them.
 See the [dependency notice review](DEPENDENCY_NOTICES.md) for the remaining work.
 Resolve those notices and review native target acceptance before publishing a
 stable release. No release tag is created by development checks.

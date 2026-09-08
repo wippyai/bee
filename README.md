@@ -1,116 +1,138 @@
+![Bee — a terminal workspace built on Wippy](docs/assets/banner.png)
+
 # Bee
 
-An extensible terminal workspace built on Wippy. MIT licensed.
+[![Foundation checks](https://github.com/wippyai/bee/actions/workflows/check.yml/badge.svg)](https://github.com/wippyai/bee/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-edbd59)](LICENSE)
+
+A terminal desktop with independent application processes, persistent workspace
+preferences, and a built-in shell. Built on [Wippy](https://github.com/wippyai/runtime).
+
+[Quick start](#quick-start) · [Applications](#applications) · [Build and test](#build-and-test) · [Documentation](docs/README.md)
+
+**Development preview.** Linux amd64 is the tested target. Native release
+workflows prepare drafts; stable releases and Bee Hub publication are pending.
+
+## Quick start
+
+From this checkout, build the native toolchain and standalone application:
 
 ```sh
-./run.sh
+make native-tools standalone
+./dist/bee
 ```
 
-A new workspace starts with an empty desktop. Preferences and opted-in apps
-(such as Settings) resume from the workspace database. **BEE / F1 → Tools** opens Settings or
-Process Manager or Test Status; **BEE / F1 → Terminal** opens a normal shell. Each application runs in its own process.
+Building requires Go 1.27.0, Git, a C compiler, and credentials for the selected
+private repositories. Terminal requires `/bin/bash`. The resulting `bee`
+executable contains Wippy, the Bee application pack, and its native modules.
 
-Settings offers 16 themes and 11 backgrounds. Process Manager shows live process
-and service state, heap and scheduler charts, GC counters and queue depth. It can
-end workspace applications through the broker; core processes remain protected.
-Settings → Tabs switches between labeled tabs and compact application icons.
-The choice is saved with workspace preferences.
+Press **F1** to open the menu. Choose **Terminal** for a shell or **Tools** for
+Settings, Process Manager, and Test Status. A fresh workspace starts with an empty
+desktop. Preferences and applications that support recovery resume on later boots.
 
-Test Status runs shared-UI checks in a separate worker and replays recorded results
-after its view closes. `./run.sh --app bee.test_status:app desktop-checks first-run`
-selects a thread and starts a run; repeating that run ID replays without rerunning.
-See [threads](docs/THREADS.md) for the local journal's API and scheduling limits.
+## Applications
 
-| Interaction | Action |
+| Application | What it does |
 |---|---|
-| Title controls | Minimize, maximize/restore, close |
-| Title drag / corner drag | Move / resize |
-| Right-click a title or app tab | Window actions, rename and accent |
-| Right-click the desktop | Appearance and desktop actions |
-| Alt+Tab / Alt+Shift+Tab | Switch applications; restore minimized tabs |
+| **Terminal** | Runs an interactive Bash session in its own process |
+| **Settings** | Selects from 16 themes, 11 backgrounds, and labeled or compact app tabs |
+| **Process Manager** | Shows process and service state, memory, scheduler activity, and queue depth |
+| **Test Status** | Runs UI checks in a background worker and replays their recorded results |
+
+Apps have independent lifetimes. Closing Test Status leaves its worker running;
+reopening the view loads the journal. Pressing **F12** replaces Bee's presenter
+while retaining live applications, layout, and preferences.
+
+| Control | Action |
+|---|---|
+| F1 | Open the application menu |
+| Alt+Tab / Alt+Shift+Tab | Switch applications |
 | Alt+F9 / F11 | Minimize / maximize |
-| Ctrl+W / Ctrl+Q | Close application / exit Bee |
-| F12 | Replace the presenter, retaining live apps and desktop state |
+| Ctrl+W / Ctrl+Q | Close the active application / exit Bee |
+| F12 | Reload the presenter |
+| Drag a title / corner | Move / resize a window |
+| Right-click a title or tab | Window actions, custom label, and accent |
 
-Terminal asks before closing its shell and running commands. When quitting Bee,
-guarded applications share one confirmation; Cancel leaves them running. Typing
-`exit` inside Terminal exits that shell directly. Apps may also request shell-owned
-confirmation or text dialogs; see [application contracts](docs/APPLICATION_CONTRACTS.md).
+Terminal asks for confirmation before closing a running shell. Native commands
+run with the local OS user's filesystem and network permissions.
 
-Start supports nested groups, hover selection and keyboard navigation. No app is
-autostarted in a new workspace. There is one application/status bar and no reserved desktop footer.
+## Build and test
 
-## Source organization
-
-| Directory | Responsibility |
-|---|---|
-| `src/core/workspace` | Stable workspace lifetime and physical terminal ownership |
-| `src/core/applications` | App admission, instances, producer lifecycle and delegated view mounts |
-| `src/core/session` | Committed scene, tabs and preferences |
-| `src/core/desktop` | Pure scene model and shared hit/draw geometry |
-| `src/core/terminal` | Replaceable presenter, rendering, menus and input routing |
-| `src/core/protocol` | Validation at process boundaries |
-| `src/core/storage` | Workspace state and verified migrations |
-| `src/ui` | App lifecycle helper, appearance tokens and wallpaper rendering |
-| `src/apps` | Default on-demand Terminal, Settings, Process Manager and Test Status |
-| `src/threads` | Native journal contract, typed consumer and owned SQLite storage |
-| `examples/fixtures` | Acceptance apps, excluded from production |
-| `tests` | Unit, registry and terminal acceptance checks |
-
-Registry identities remain independent of folder paths. The current production
-lock has no external dependencies. Bundling an app does not start it or give it
-ambient authority; admission and capabilities are explicit.
-
-## Development
-
-Build the pinned runtime first (`Go 1.27.0`, Git, a C compiler and Python required):
+The [Go builder](https://github.com/wippyai/builder) assembles the runtime, packs,
+and native components selected in [`wippy.build.json`](wippy.build.json).
+[`runtime/builder.lock.json`](runtime/builder.lock.json) pins the builder itself.
 
 ```sh
-make setup
+# Run editable source with the native development toolchain.
+BEE_RUNTIME="$PWD/.wippy/bin/bee-wippy" ./run.sh
+
+# Install the existing acceptance harness dependencies, then run the checks.
 python3 -m pip install -r tests/requirements.txt
+make check WIPPY="$PWD/.wippy/bin/bee-wippy"
+make native-check native-binary-check
+
+# Produce a portable Wippy application pack.
+make pack WIPPY="$PWD/.wippy/bin/bee-wippy"
 ```
 
-The ignored `.wippy/bin/wippy` is the default. `BEE_RUNTIME` overrides the launcher;
-`make WIPPY=/path/to/wippy check` selects another compatible test runtime.
+Checks exercise typed Lua, registry imports, process permissions, real terminal
+sessions, native filesystem events, persistence, and recovery. Fixtures run in
+temporary workspaces. See the [audit](docs/NATIVE_AUDIT.md) for verified behavior
+and remaining release work.
 
-```sh
-make check
-make pack
-```
+## Distribution and state
 
-Python test dependencies are listed in `tests/requirements.txt`. Tests stage
-isolated temporary workspaces and resolve their pinned test dependency from cache
-or Hub. They inspect both the actual source registry and the portable pack, then
-exercise real terminal sessions, colors, geometry, input isolation and recovery.
+The standalone binary seeds its embedded application on first boot and preserves
+installed selections on subsequent launches. Base mode provides explicit recovery
+from embedded code; bootstrap mode seeds only the initial deployment. Native code
+changes require a new executable.
 
-`dist/bee.wapp` runs without the source checkout. `make native-tools standalone`
-assembles a single native `bee` executable; see [native distribution](docs/NATIVE_DISTRIBUTION.md)
-for checks, update modes and release limits. Hub publication as `bee/bee` is still
-planned; no stable native release is published.
+Standalone state defaults to the OS user configuration directory under `bee`.
+Use `./dist/bee --state-dir /path/to/state` to select a different directory.
+Source launches use `.wippy/workspace.db`; `BEE_WORKSPACE_DB` overrides the
+workspace database path. Application data and runtime registry history have
+separate stores.
 
-## Current boundary
+The compiled [`ioevents` module](native/ioevents/README.md) exposes filesystem
+change hints through typed Wippy channels. Watches reference named filesystem
+resources and require explicit host-selected permissions. Linux Docker acceptance
+covers host-originated bind-mount events; macOS, Windows, and Docker Desktop
+acceptance remain pending.
 
-Presenter replacement preserves live app processes, their viewports, layout and
-appearance. Workspace state is persisted in `.wippy/workspace.db`, separately
-from registry history in `.wippy/registry.db`. Installation,
-Hub discovery, workspace overlays, self-editing, agent/MCP adapters and workspace filesystem resource discovery are planned.
-The optional native I/O events module is implemented with explicit resource permissions. The current broker is not yet an
-untrusted-code host.
+See [native distribution](docs/NATIVE_DISTRIBUTION.md) for update commands,
+release artifacts, state handling, and platform limits.
 
-See the [documentation map](docs/README.md),
-[foundation status](docs/FOUNDATION_STATUS.md),
-[package boundaries](docs/PACKAGE_BOUNDARIES.md),
-[workspace state](docs/WORKSPACE_STATE.md), and
-[agent development guide](docs/AGENT_GUIDE.md).
+## Repository layout
 
-The previous POC is archived outside the source tree and is neither loaded nor
-packed. Native runtime code and third-party dependencies retain their own licenses.
+| Path | Responsibility |
+|---|---|
+| [`src/core`](src/core) | Workspace, session, app admission, presenter, typed protocols, and storage |
+| [`src/ui`](src/ui) | Shared appearance and application lifecycle helpers |
+| [`src/apps`](src/apps) | Bundled application processes |
+| [`src/threads`](src/threads) | Thread journal, client API, and persistence |
+| [`native`](native) | Go components, Lua bindings, and native integration tests |
+| [`build`](build) | Pinned builder bootstrap and Make targets |
+| [`tests`](tests) | Model, registry, storage, and terminal acceptance checks |
+| [`docs`](docs) | Implementation contracts, development guide, and proposals |
 
-See [current foundation status](docs/FOUNDATION_STATUS.md) and
-[application contracts](docs/APPLICATION_CONTRACTS.md) for ownership and security.
-Terminal requires Bash at `/bin/bash` and runs `/bin/bash -i` with local user
-permissions; it is not an OS sandbox. Bash supplies interactive line editing and
-history navigation; a minimal POSIX shell such as Dash does not.
+Production loads `src/`. Registry identities remain stable across directory
+moves. The host selects app admission and permissions; each application owns its
+process and declared resources.
 
-Workspace state defaults to `.wippy/workspace.db`; set `BEE_WORKSPACE_DB` to
-select another local workspace store. This is separate from Wippy registry history.
+## Documentation
+
+- [Foundation status](docs/FOUNDATION_STATUS.md) — implemented behavior and ownership.
+- [Application contracts](docs/APPLICATION_CONTRACTS.md) — launch, messages, dialogs, and recovery.
+- [Development guide](docs/DEVELOPMENT.md) — code placement, types, permissions, and checks.
+- [Native SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md) — packs, boot components, and typed Lua modules.
+- [Package boundaries](docs/PACKAGE_BOUNDARIES.md) — current seams and planned installation work.
+
+Hub installation, workspace overlays, agent/MCP adapters, and filesystem resource
+discovery are proposals. The [documentation map](docs/README.md) distinguishes
+implemented contracts from design work.
+
+## License
+
+Bee-owned code is [MIT licensed](LICENSE). Wippy runtime patches retain MPL-2.0;
+third-party dependencies retain their own licenses. Release archives include
+available dependency notices and runtime patch sources.

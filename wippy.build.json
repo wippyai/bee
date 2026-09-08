@@ -35,14 +35,14 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "26a847574e6abfd53d4cd43e3165327451fd2809456737099a75cbfeec24c71d"
+        "sha256": "59933c9c1edc291eff62be22cf05dae2f6e0db10639c438d4cac8de7fe3f8737"
       }
     ]
   },
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260908001447-70917fa75697",
+      "version": "v0.0.0-20260908020612-39e56a73d8d4",
       "package": "github.com/wippyai/bee/native/ioevents",
       "factory": "Component",
       "private": true

@@ -6,6 +6,9 @@ assembler is [wippyai/builder](https://github.com/wippyai/builder); Bee selects 
 inputs in `wippy.build.json` and pins the assembler in `runtime/builder.lock.json`.
 Both repositories are currently private. No stable native release is published.
 
+See the [native distribution audit](NATIVE_AUDIT.md) for reviewed boundaries,
+fixed findings and validation evidence.
+
 The [application and native module SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
 documents pack/UI configuration, native factories, typed Lua exports and argument
 passing. Event adapters depend on pinned runtime engine APIs.

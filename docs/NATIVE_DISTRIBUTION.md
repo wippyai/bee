@@ -143,7 +143,8 @@ organization; native module fetching uses the consuming repository's token.
 Archives contain the executable, input manifest provenance, effective Go module
 files, available dependency license notices and the runtime patch sources.
 Archive timestamps and ownership are normalized; pack timestamps and the native
-C toolchain still affect binary reproducibility. Four upstream modules currently
-lack root license files in their Go distributions; the inventory lists them.
+C toolchain still affect binary reproducibility. Two linked Go modules currently
+lack root license files in their pinned distributions; the inventory lists them.
+See the [dependency notice review](DEPENDENCY_NOTICES.md) for the remaining work.
 Resolve those notices and review native target acceptance before publishing a
 stable release. No release tag is created by development checks.

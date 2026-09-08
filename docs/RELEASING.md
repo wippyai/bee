@@ -70,6 +70,9 @@ restricted secret storage; never attach them to releases or embed them in packs.
 Hub updates can replace compatible Lua application packs after publication;
 native module changes require a new Bee binary.
 
+The [dependency notice review](DEPENDENCY_NOTICES.md) records the remaining
+linked-module notices and their source evidence.
+
 ## Hub publication
 
 ```sh

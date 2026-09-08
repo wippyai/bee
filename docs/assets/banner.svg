@@ -1,16 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240" role="img" aria-labelledby="title description">
   <title id="title">Bee</title>
-  <desc id="description">A gold bee with pale wings beside the Bee wordmark.</desc>
+  <desc id="description">The terminal bee from the application's welcome screen.</desc>
   <rect width="1200" height="240" rx="12" fill="#10151b"/>
-  <g transform="translate(64 40)">
-  <g fill="#f0f3f6">
-    <path d="M75 70C48 64 39 42 50 31C64 18 85 37 88 65Z"/>
-    <path d="M88 65C86 38 99 24 111 31C126 41 114 62 99 71Z"/>
+  <g fill="#edbd59" font-family="DejaVu Sans Mono" font-size="24" xml:space="preserve">
+    <text x="64" y="68">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
+    <text x="64" y="92">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
+    <text x="64" y="116">&#160;╭──────┴─────╮&#160;&#160;</text>
+    <text x="64" y="140">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
+    <text x="64" y="164">&#160;╰────────────╯&#160;&#160;</text>
+    <text x="64" y="188">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
   </g>
-  <path d="M25 89 9 99l16 10Z" fill="#edbd59"/>
-  <rect x="22" y="68" width="126" height="62" rx="31" fill="#edbd59"/>
-  <path d="M60 68h16v62H60zm31 0h16v62H91z" fill="#10151b"/>
-  <circle cx="128" cy="91" r="5" fill="#10151b"/>
-  </g>
-  <text x="272" y="151" fill="#f0f3f6" font-family="DejaVu Sans, Arial, sans-serif" font-size="84" font-weight="bold">Bee</text>
+  <text x="376" y="151" fill="#f0f3f6" font-family="DejaVu Sans" font-size="84" font-weight="bold">Bee</text>
 </svg>

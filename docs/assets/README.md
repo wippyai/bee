@@ -2,7 +2,8 @@
 
 `banner.svg` is the banner used by the README; `banner.png` is its 2× raster export.
 `logo.svg` contains the standalone repository mark; `logo.png` is its raster export.
-The mark uses vector shapes, so it stays legible without terminal fonts.
+Both use the character artwork from the application's
+[welcome screen](../../src/core/terminal/chrome.lua), set in DejaVu Sans Mono.
 
 `desktop.gif` was captured on 2026-09-07 from the standalone Linux Bee binary
 built with the fullscreen handlers and subsequent workspace-header cleanup. It contains 14

@@ -125,6 +125,8 @@ Configure `WIPPY_HUB_TOKEN` in the GitHub `hub` environment with permission to
 publish `bee/bee`. Limit that environment to the `main` branch and `v*` tags;
 release-tag creation is restricted to administrators. Keep the token out of
 repository-wide secrets, which same-repository PR workflows can access.
+After replacing the token, run the **Hub credential check** workflow on main.
+It validates authentication and publish authorization without creating an upload.
 Pre-create the module in the Hub `bee` organization, or grant module-creation
 permission for its first publication.
 The runtime receives it as `WIPPY_TOKEN` only for publication. Set repository

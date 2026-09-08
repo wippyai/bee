@@ -24,9 +24,8 @@ See [SECURITY.md](../SECURITY.md) for private reports.
 
 ## Credential boundary
 
-`WIPPY_HUB_TOKEN` is an Actions secret in the `hub` environment. Only the Hub
-publication workflow references it, as `WIPPY_TOKEN` in the credential check and
-publication steps.
+`WIPPY_HUB_TOKEN` is an Actions secret in the `hub` environment. Hub publication
+and the manual credential check receive it as `WIPPY_TOKEN` in their request steps.
 The environment permits the `main` branch and `v*` tags, with no manual approval
 step. A separate ruleset limits release-tag creation to repository administrators.
 PR branches cannot use the environment, and the token has no repository-wide copy.
@@ -53,6 +52,11 @@ possible secret format.
 files with redacted output. It is part of the application validation and release gates.
 The downloaded platform archives and saved release proof logs also scanned clean.
 Direct scans of all four executable payloads found no Wippy or GitHub token patterns.
+
+Run the **Hub credential check** workflow manually on main after replacing the
+token. It verifies Bee membership and sends an incomplete publish request that
+must reach version validation. The request omits the version and upload payload,
+so it cannot create an upload. The job prints no response bodies or credentials.
 
 ## Release boundaries
 

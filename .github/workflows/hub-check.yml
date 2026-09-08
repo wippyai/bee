@@ -1,0 +1,34 @@
+name: Hub credential check
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  check:
+    environment: hub
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+    - name: Verify authentication and Bee publish authorization
+      shell: bash
+      env:
+        WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}
+      run: |
+        [[ "$WIPPY_TOKEN" =~ ^wpy_[A-Za-z0-9_.-]+$ ]]
+        response="$RUNNER_TEMP/hub-credential-check.json"
+        trap 'rm -f "$response"' EXIT
+        request() {
+          printf 'header = "Authorization: Bearer %s"\n' "$WIPPY_TOKEN" |
+            curl --config - --silent --show-error --max-time 30 \
+              --output "$response" --write-out '%{http_code}' "$@"
+        }
+        status=$(request https://hub.wippy.ai/api/v1/account/orgs)
+        test "$status" = 200
+        jq -e 'any(.[]; .org.name == "bee")' "$response" >/dev/null
+        status=$(request \
+          --header 'Content-Type: application/json' \
+          --header 'Connect-Protocol-Version: 1' \
+          --data '{"module":{"name":{"org":"bee","name":"bee"}}}' \
+          https://hub.wippy.ai/wippy.api.hub.publish.v1.PublishService/InitiatePublish)
+        test "$status" = 400
+        jq -e '.code == "invalid_argument" and .message == "version or label is required"' "$response" >/dev/null
+        echo 'Hub authentication and Bee publish authorization checks passed.'

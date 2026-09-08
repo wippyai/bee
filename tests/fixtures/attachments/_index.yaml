@@ -5,7 +5,7 @@ entries:
   kind: security.policy
   policy:
     actions: [process.spawn, process.spawn.monitored]
-    resources: [bee.attachment_probe:observer_producer]
+    resources: [bee.attachment_probe:observer_producer, bee.attachment_probe:observer_consumer]
     effect: allow
 - name: naming_policy
   kind: security.policy
@@ -40,6 +40,11 @@ entries:
   kind: process.lua
   source: file://observation.lua
   method: producer
+  modules: [process, channel, tty, time]
+- name: observer_consumer
+  kind: process.lua
+  source: file://observation.lua
+  method: observer
   modules: [process, channel, tty, time]
 - name: terminal
   kind: library.lua

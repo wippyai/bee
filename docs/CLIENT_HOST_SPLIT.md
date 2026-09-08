@@ -139,10 +139,12 @@ must be checked independently of the visual shell implementation.
    The isolated `observation` fixture proves the native prerequisite: separate
    controller and observer mounts receive updates from one producer, observer
    input/resize/redelegation are denied, and revocation closes the observer stream
-   while the controller continues receiving frames and resizing. It uses two
-   handles in one consumer actor; it does not prove separate client owners or
-   production observer admission. Bee's public broker operations still issue
-   controller mounts only.
+   while the controller continues receiving frames and resizing. The observer
+   runs in a separate actor and cannot attach the controller's unused grant;
+   the intended controller subsequently attaches that same grant successfully.
+   Status acknowledgements authenticate the observer's actual PID. This proves
+   native recipient isolation, not independent desktop client owners or production
+   observer admission. Bee's public broker operations still issue controller mounts only.
 3. Extract a host entry point with no `tty.start`, physical surface, input listener,
    session or render timer. Start it with explicit host-selected database and
    policy bindings. Do not expose arbitrary database paths as caller authority.

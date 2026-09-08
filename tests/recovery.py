@@ -30,6 +30,7 @@ local function main(value: unknown)
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     local saved = -1
+    local closing = false
     local function paint()
         local canvas = tty.canvas(width, height)
         canvas:clear(" ")
@@ -39,7 +40,7 @@ local function main(value: unknown)
         assert(output:present(canvas:rows()))
     end
     local function checkpoint()
-        local encoded = json.encode({count = count})
+        local encoded = json.encode({count = count, cleaned = closing})
         assert(client.checkpoint(launch, encoded))
     end
     paint(); client.ready(launch); checkpoint()
@@ -51,8 +52,11 @@ local function main(value: unknown)
         elseif event.channel == receipts then
             local msg = event.value
             local data: unknown = msg:payload():data()
-            if msg:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then saved = count; paint() end
-        elseif event.value.type == "close" then break
+            if msg:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then
+                if closing then break end
+                saved = count; paint()
+            end
+        elseif event.value.type == "close" then closing = true; checkpoint()
         elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
         elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
     end
@@ -102,6 +106,7 @@ def run(packed):
             old_execution = re.search(r"Execution: (\S+)", ui.text()).group(1)
             ui.key(b"\x1b[20;3~")
             ui.quit()
+            assert json.loads(stored(folder)["applications"][0]["resume_state"])["cleaned"], "Cooperative close checkpoint was lost"
         finally:
             ui.close()
         ui = boot()

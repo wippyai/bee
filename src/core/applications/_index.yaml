@@ -10,6 +10,9 @@ entries:
     contract: bee.protocol:application
     catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
+    shutdown: bee.applications:shutdown
+    interaction: bee.application:interaction
+    interactions: bee.applications:interactions
     appearance: bee.desktop:appearance
   security:
     policies: [bee:broker_policy]
@@ -22,3 +25,11 @@ entries:
   modules: [registry]
   imports:
     contract: bee.protocol:application
+- name: interactions
+  kind: library.lua
+  source: file://interactions.lua
+  imports:
+    protocol: bee.application:interaction
+- name: shutdown
+  kind: library.lua
+  source: file://shutdown.lua

@@ -14,6 +14,7 @@ local chrome = require("chrome")
 local store = require("store")
 local recovery = require("recovery")
 local json = require("json")
+local interaction = require("interaction")
 
 local function new_display(width: integer, height: integer): tty.Viewport
     local view, err = tty.viewport({width = width, height = height})
@@ -32,6 +33,10 @@ local function main(initial_application: string?, secondary_application: string?
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local scenes = assert(process.listen("bee.desktop.scene", {message = true}))
     local acknowledgements = assert(process.listen("bee.desktop.ack", {message = true}))
+    local dialog_states = assert(process.listen("bee.interaction.state", {message = true}))
+    local dialog_answers = assert(process.listen("bee.interaction.response", {message = true}))
+    local dialog_items: {interaction.Wire} = {}
+    local shutdown_dialog: interaction.Wire? = nil
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local appearance_pending: {[string]: boolean} = {}
     local catalog_items: {decode.CatalogItem} = {}
@@ -90,6 +95,7 @@ local function main(initial_application: string?, secondary_application: string?
     local paused = false
     local last_rows: {string} = {}
     local initial_opened, quitting = false, false
+    local shutdown_request = ""
     local requested_rejoin = false
     local binding = ""
     local fatal: string? = nil
@@ -146,6 +152,8 @@ local function main(initial_application: string?, secondary_application: string?
     local function restore_window(record: recovery.Record)
         local window = record.window
         if not window then return end
+        process.send(session, "bee.desktop.command", {version = 1, op = "personalize", id = record.id,
+            user_title = window.user_title or "", accent = window.accent or ""})
         local rect = window.normal_bounds
         process.send(session, "bee.desktop.command", {version = 1, op = "place", id = record.id,
             x = rect.x, y = rect.y, width = rect.width, height = rect.height})
@@ -155,7 +163,11 @@ local function main(initial_application: string?, secondary_application: string?
         end
         if window.mode == "minimized" then process.send(session, "bee.desktop.command", {version = 1, op = "minimize", id = record.id}) end
     end
+    local function send_dialogs()
+        if active then process.send(presenter, "bee.interaction.state", {version = 1, items = dialog_items, shutdown = shutdown_dialog}) end
+    end
     local function send_scene()
+        send_dialogs()
         if active then process.send(presenter, "bee.desktop.scene", {scene = scene, tabs = tabs, preferences = preferences, catalog = catalog_items}) end
     end
     local function send_appearance_state(request_id: string?, code: string?, message: string?)
@@ -205,7 +217,7 @@ local function main(initial_application: string?, secondary_application: string?
     spawn_presenter()
     while not quitting do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(), control:case_receive(),
-            commands:case_receive(), requests:case_receive(), appearance_requests:case_receive(), ready:case_receive(), catalogs:case_receive(), replies:case_receive(),
+            commands:case_receive(), requests:case_receive(), dialog_states:case_receive(), dialog_answers:case_receive(), appearance_requests:case_receive(), ready:case_receive(), catalogs:case_receive(), replies:case_receive(),
             scenes:case_receive(), checkpoints:case_receive(), acknowledgements:case_receive(), updates:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
@@ -222,14 +234,30 @@ local function main(initial_application: string?, secondary_application: string?
                     else replace_presenter() end
                 end
             end
+        elseif selected.channel == dialog_states and selected.value:from() == broker then
+            local payload: unknown = selected.value:payload():data()
+            local items = interaction.snapshot(payload)
+            local global = interaction.shutdown(payload)
+            if items and type(payload) == "table" and (payload.shutdown == nil or global) then
+                shutdown_dialog = global and interaction.wire(global) or nil
+                dialog_items = {}
+                for _, spec in ipairs(items) do dialog_items[#dialog_items + 1] = interaction.wire(spec) end
+                send_dialogs()
+            end
+        elseif selected.channel == dialog_answers and selected.value:from() == presenter and active then
+            local response = interaction.response(selected.value:payload():data())
+            if response then
+                process.send(broker, "bee.interaction.response", {version = 1, request_id = response.request_id,
+                    id = response.id, instance_id = response.instance_id, action = response.action, value = response.value})
+            end
         elseif selected.channel == control then
             local msg = selected.value
-            if msg:from() == presenter then
+            if msg:from() == presenter and shutdown_request == "" then
                 local data: unknown = msg:payload():data()
                 if type(data) == "table" then
                     if data.op == "ready" and not presenter_ready then
                         presenter_ready = true; bind_presenter()
-                    elseif data.op == "quit" then quitting = true
+                    elseif data.op == "quit" and active then process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})
                     elseif data.op == "rejoin" and active then
                         requested_rejoin = true
                         active = false
@@ -243,7 +271,7 @@ local function main(initial_application: string?, secondary_application: string?
         elseif selected.channel == ready then
             if selected.value:from() == broker then broker_ready = true; bind_presenter() end
         elseif selected.channel == requests then
-            if selected.value:from() == presenter and active then
+            if selected.value:from() == presenter and active and shutdown_request == "" then
                 local data: unknown = selected.value:payload():data()
                 if type(data) == "table" and (data.op == "open" or data.op == "close") then
                     if data.op == "open" then
@@ -284,11 +312,11 @@ local function main(initial_application: string?, secondary_application: string?
                 end
             end
         elseif selected.channel == commands then
-            if selected.value:from() == presenter and active then
+            if selected.value:from() == presenter and active and shutdown_request == "" then
                 local data: unknown = selected.value:payload():data()
                 -- Application lifecycle alone creates/removes logical windows.
                 if type(data) == "table" and (data.op == "focus" or data.op == "place" or data.op == "fullscreen"
-                    or data.op == "minimize" or data.op == "collapse" or data.op == "restore" or data.op == "snap") then
+                    or data.op == "minimize" or data.op == "collapse" or data.op == "restore" or data.op == "snap" or data.op == "personalize") then
                     process.send(session, "bee.desktop.command", data)
                 end
             end
@@ -296,7 +324,13 @@ local function main(initial_application: string?, secondary_application: string?
             if selected.value:from() == broker then
                 local reply = decode.reply(selected.value:payload():data())
                 if reply then
-                    if reply.op == "bind" and reply.request_id == binding then
+                    if reply.op == "quit" and reply.error == "" and shutdown_request == "" then
+                        -- Keep the store and event loop alive through cooperative app cleanup.
+                        shutdown_request = broker_request("shutdown", "", "", "")
+                    elseif reply.op == "shutdown" and reply.request_id == shutdown_request then
+                        if reply.error ~= "" then fatal = reply.error end
+                        quitting = true
+                    elseif reply.op == "bind" and reply.request_id == binding then
                         if reply.error_code ~= "" then
                             pause_presenter()
                         else
@@ -308,6 +342,9 @@ local function main(initial_application: string?, secondary_application: string?
                             restore_next()
                         end
                         end
+                    elseif reply.op == "title" and reply.error == "" then
+                        process.send(session, "bee.desktop.command", {version = 1, op = "announce", id = reply.id,
+                            instance_id = reply.instance_id, title = reply.title})
                     elseif reply.op == "page" then send_scene()
                     elseif reply.op == "open" and reply.error == "" then
                         process.send(session, "bee.desktop.command", {version = 1, op = "add", id = reply.id,
@@ -402,9 +439,13 @@ local function main(initial_application: string?, secondary_application: string?
             end
         elseif selected.channel == input then
             local event = decode_input.decode(selected.value)
-            if event then
+            if event and shutdown_request == "" then
                 if event.type == "close" then break end
-                if event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release" then break end
+                local quit_key = event.type == "key" and event.ctrl and event.key == "q" and event.action ~= "release"
+                if quit_key then
+                    if paused or not broker_ready then break end
+                    process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})
+                end
                 if paused and event.type == "key" and event.key_type == "f12" and event.action ~= "release" then
                     recoveries = 0
                     replace_presenter()
@@ -414,7 +455,7 @@ local function main(initial_application: string?, secondary_application: string?
                     display:resize(width, height)
                     process.send(session, "bee.desktop.command", {version = 1, op = "screen", width = width, height = height})
                     if paused then recovery_screen() end
-                elseif active then
+                elseif active and not quit_key then
                     display:send(event)
                 end
             end
@@ -424,10 +465,11 @@ local function main(initial_application: string?, secondary_application: string?
     local saved_ok, save_error = persist()
     if not saved_ok then fatal = "Workspace save failed: " .. tostring(save_error) end
     database:close()
-    broker_request("shutdown", "", "", "")
+    if shutdown_request == "" then broker_request("shutdown", "", "", "") end
     process.send(session, "bee.desktop.command", {version = 1, op = "shutdown"})
     if presenter ~= "" then process.terminate(presenter) end
     process.unlisten(appearance_requests)
+    process.unlisten(dialog_states); process.unlisten(dialog_answers)
     process.unlisten(catalogs)
     process.unlisten(checkpoints)
     display:close()

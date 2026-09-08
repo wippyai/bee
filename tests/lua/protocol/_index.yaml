@@ -37,3 +37,11 @@ entries:
     recovery: bee.workspace:recovery
     model: bee.desktop:model
     test: wippy.test:test
+- name: interaction_test
+  kind: function.lua
+  source: file://interaction_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    interaction: bee.application:interaction
+    test: wippy.test:test

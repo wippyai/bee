@@ -1,4 +1,7 @@
 local tty = require("tty")
+local title_editor = require("title_editor")
+local dialog = require("dialog")
+local interaction = require("interaction")
 local ctx = require("ctx")
 local process = require("process")
 local channel = require("channel")
@@ -20,6 +23,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local scenes = assert(process.listen("bee.desktop.scene", {message = true}))
     local acknowledgements = assert(process.listen("bee.desktop.ack", {message = true}))
+    local dialog_states = assert(process.listen("bee.interaction.state", {message = true}))
+    local dialogs: {[string]: dialog.State} = {}
+    local answered: {[string]: boolean} = {}
     local retire = assert(process.listen("bee.workspace.retire", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
@@ -38,6 +44,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local capture: layout.Capture? = nil
     local preview: model.Rect? = nil
     local awaiting_place = false
+    local editor: title_editor.State? = nil
     local preferences = appearance.defaults()
     local start: menu.State? = nil
     local captured_releases: {[string]: boolean} = {}
@@ -64,6 +71,13 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
     end
     local function input_focus(): string return routing_scene.focus end
+    local function dialog_target(): string
+        if dialogs["bee.workspace:shutdown"] then return "bee.workspace:shutdown" end
+        return input_focus()
+    end
+    local function request_quit()
+        process.send(owner, "bee.workspace.control", {version = 1, op = "quit"})
+    end
     local function command(op: string, id: string)
         local request_id = uuid.v7()
         if op == "focus" then
@@ -86,10 +100,23 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local function rectangle(win: model.Window): model.Rect
         return layout.rectangle(scene, win, capture, preview)
     end
+    local function personalize(id: string, title: string, accent: string)
+        local sent, err = process.send(owner, "bee.desktop.command", {version = 1, op = "personalize", id = id,
+            user_title = title, accent = accent, request_id = uuid.v7()})
+        if not sent then status = tostring(err) end
+    end
     local function invoke(action: string)
         local target = start and start.target or input_focus()
         start = nil
-        if action == "quit" then running = false
+        if action == "rename" then
+            for _, win in ipairs(scene.windows) do
+                if win.id == target then editor = title_editor.open(win.id, model.display_title(win), win.accent or ""); break end
+            end
+        elseif action:sub(1, 7) == "accent:" then
+            for _, win in ipairs(scene.windows) do
+                if win.id == target then personalize(win.id, win.user_title or "", action:sub(8)); break end
+            end
+        elseif action == "quit" then request_quit()
         elseif action:sub(1, 5) == "open:" then application("open", action:sub(6), "")
         elseif action == "initial" and initial_application then application("open", initial_application, "")
         elseif action == "close" then application("close", "", target)
@@ -120,6 +147,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
     end
     local function paint()
+        if editor then
+            local present = false
+            for _, win in ipairs(scene.windows) do if win.id == editor.id then present = true; break end end
+            if not present then editor = nil end
+        end
         local contents: {[string]: render.Content} = {}
         for _, win in ipairs(model.visible(scene)) do
             local attached = attachments[win.id]
@@ -139,7 +171,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             end
         end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "workspace / local",
-            preferences, start, initial_application ~= nil, catalog)
+            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus])
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
@@ -147,13 +179,30 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
-            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), ticks:case_receive()})
+            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), dialog_states:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
             if event.kind == process.event.CANCEL then break end
             if event.kind == process.event.EXIT and tostring(event.from) == owner then
                 status = "Desktop service exited"; fatal = status; running = false
+            end
+        elseif selected.channel == dialog_states and selected.value:from() == owner then
+            local payload: unknown = selected.value:payload():data()
+            local specs = interaction.snapshot(payload)
+            local global = interaction.shutdown(payload)
+            if specs and type(payload) == "table" and (payload.shutdown == nil or global) then
+                if global then specs[#specs + 1] = global end
+                local next_dialogs: {[string]: dialog.State} = {}
+                local next_answered: {[string]: boolean} = {}
+                for _, spec in ipairs(specs) do
+                    local previous = dialogs[spec.id]
+                    if previous and previous.spec.request_id == spec.request_id then next_dialogs[spec.id] = previous
+                    else next_dialogs[spec.id] = dialog.open(spec) end
+                    if answered[spec.request_id] then next_answered[spec.request_id] = true end
+                end
+                dialogs, answered = next_dialogs, next_answered
+                dirty = true
             end
         elseif selected.channel == retire then
             if selected.value:from() == owner then rejoining = true; running = false end
@@ -162,6 +211,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
             if msg:from() == owner then
                 local reply = decode.reply(msg:payload():data())
                 if reply then
+                    if reply.error == "" and (reply.op == "open" or reply.op == "attached" or reply.op == "focus" or reply.op == "close") then status = "" end
+                    if reply.op == "closing" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
                     if reply.error ~= "" then
                         status = reply.error
                         if reply.op == "close" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
@@ -217,8 +268,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         if not found then start = nil end
                     end
                     if state then tabs_order = state.tabs; preferences = state.preferences; catalog = state.catalog end
+                    if not hydrated and status == "Starting workspace" then status = "" end
                     hydrated = true
-                    status = ""
                     if not pending_request then adopt_routing() end
                 end
                 dirty = true
@@ -239,6 +290,38 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 captured_releases[kind] = nil; handled = true
             elseif event.type == "mouse" and event.action == "release" and captured_mouse then
                 captured_mouse = false; handled = true
+            elseif dialogs[dialog_target()] and event.type ~= "resize" and event.type ~= "close"
+                and not (not dialogs["bee.workspace:shutdown"] and event.type == "mouse" and event.y == 1 and type(event.x) == "number" and event.x > 7 and event.button == "left")
+                and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q") or (not dialogs["bee.workspace:shutdown"] and event.alt == true and kind == "tab"))) then
+                local current = dialogs[dialog_target()]
+                if current and not answered[current.spec.request_id] then
+                    local response = dialog.respond(current, event, width, height)
+                    dialogs[dialog_target()] = response.state
+                    if response.action == "accept" or response.action == "cancel" then
+                        local sent, err = process.send(owner, "bee.interaction.response", {version = 1,
+                            request_id = current.spec.request_id, id = current.spec.id, instance_id = current.spec.instance_id,
+                            action = response.action, value = response.value})
+                        if sent then answered[current.spec.request_id] = true else status = tostring(err) end
+                    end
+                end
+                if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
+                if event.type == "mouse" and event.action == "press" then captured_mouse = true end
+                handled = true; dirty = true
+            elseif editor and event.type ~= "resize" and event.type ~= "close" then
+                if event.type == "key" and event.ctrl == true and event.key == "q" then request_quit()
+                elseif event.type == "key" and kind == "f12" and event.action ~= "release" then
+                    editor = nil; rejoining = true
+                    process.send(owner, "bee.workspace.control", {version = 1, op = "rejoin"})
+                else
+                    local response = title_editor.respond(editor, event, title_editor.panel(width, height))
+                    editor = response.state
+                    if response.action == "save" then
+                        personalize(editor.id, editor.left .. editor.right, editor.accent); editor = nil
+                    elseif response.action == "cancel" then editor = nil end
+                end
+                if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
+                if event.type == "mouse" and event.action == "press" then captured_mouse = true end
+                handled = true; dirty = true
             elseif capture and not awaiting_place and event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release" then
                 capture, preview = nil, nil; awaiting_place = false
                 captured_releases[kind] = true; captured_mouse = true
@@ -277,7 +360,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     local action = bindings.action(tostring(event.key or ""), tostring(event.key_type or ""),
                         event.ctrl == true, event.alt == true, initial_application ~= nil, secondary_application ~= nil, event.shift == true)
                     if event.action ~= "release" then
-                        if action == "quit" then running = false
+                        if action == "quit" then request_quit()
                         elseif action == "initial" and initial_application then application("open", initial_application, "")
                         elseif action == "secondary" and secondary_application then application("open", secondary_application, "")
                         elseif action == "close" then application("close", "", input_focus())
@@ -395,6 +478,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         if dirty and hydrated then paint() end
     end
     ticker:stop()
+    process.unlisten(dialog_states)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
     for _, attached in pairs(attachments) do attached.view:close() end
     output:close()

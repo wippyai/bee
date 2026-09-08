@@ -15,6 +15,7 @@ entries:
   - json
   imports:
     arguments: bee.application:arguments
+    interaction: bee.application:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
@@ -47,6 +48,7 @@ entries:
   - json
   imports:
     arguments: bee.application:arguments
+    interaction: bee.application:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input

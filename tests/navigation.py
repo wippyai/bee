@@ -61,7 +61,7 @@ finally:
             ui.wait('NAV_READY_%d' % index)
             ui.key(sequence)
         ui.wait('NAV_COMPLETE')
-        ui.quit()
+        ui.quit(confirm=True)
     finally:
         ui.close()
 print('Navigation: 161 real PTY cases; arrows, Home/End, Insert/Delete, Page Up/Down, all modifier combinations, application cursor mode, Shift+Tab')

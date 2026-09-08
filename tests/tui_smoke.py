@@ -148,9 +148,13 @@ class Desktop:
                         right + (dx if "r" in edge else 0), bottom + (dy if "b" in edge else 0))
             assert got == expected, (edge, got, expected, self.text())
 
-    def quit(self):
+    def quit(self, confirm=False):
         start = time.monotonic()
         os.write(self.master, b"\x11")
+        if confirm:
+            self.wait("Quit Bee?")
+            start = time.monotonic()
+            os.write(self.master, b"\t\r")
         while self.process.poll() is None and time.monotonic() - start < 2:
             self.pump(.02)
         assert self.process.poll() == 0, self.text()
@@ -241,7 +245,7 @@ def exercise(packed, project, pack_file):
             ui.key(b"\x1b")
             ui.wait("Keys received here: 1")
             ui.key(b"\x1b[20;3~")  # Alt+F9 minimizes without stealing Enter/Ctrl+M.
-            ui.wait("██████╗")
+            ui.wait("╰──╲ ╱──╯")
             assert "− Welcome" in ui.screen.display[0], ui.text()
             ui.key(b"\x1b\t")  # All minimized: cycling must still restore an app.
             ui.wait("Keys received here: 1")
@@ -285,7 +289,7 @@ def exercise(packed, project, pack_file):
             ui.wait("Keys received here: 0")
             assert ui.screen.display[0].count("Welcome") == 2, ui.text()
             ui.key(b"\x1b[20;3~\x1b[20;3~ignored")
-            ui.wait("██████╗")
+            ui.wait("╰──╲ ╱──╯")
             ui.key(b"\x1b\t")
             ui.wait("Keys received here: 1")
             ui.key(b"\x1b\t")
@@ -364,8 +368,8 @@ def core_boot(packed):
         ui = Desktop(directory, packed, launcher=not packed)
         try:
             ui.wait("No applications open")
-            ui.wait("██████╗")
-            assert b"Starting your workspace" in ui.raw, "Boot frame was never presented"
+            ui.wait("╰──╲ ╱──╯")
+            assert "Starting…".encode() in ui.raw, "Boot frame was never presented"
             ui.mouse(0, 3, 1)
             ui.mouse(0, 3, 1, True)
             ui.wait("Tools")
@@ -374,7 +378,7 @@ def core_boot(packed):
             ui.wait("BEE SETTINGS")
             ui.settings_frame_colors()
             ui.window_control("−")
-            ui.wait("██████╗")
+            ui.wait("╰──╲ ╱──╯")
             tab_x = ui.screen.display[0].index("Settings") + 1
             ui.mouse(0, tab_x, 1)
             ui.mouse(0, tab_x, 1, True)
@@ -452,7 +456,7 @@ def core_boot(packed):
             ui.resize(1, 1)
             assert ui.process.poll() is None
             ui.resize(100, 30)
-            ui.wait("██████╗")
+            ui.wait("╰──╲ ╱──╯")
             ui.pump(.3)
             assert "Welcome" not in ui.text() and "Colors" not in ui.text(), ui.text()
             assert ui.process.poll() is None, ui.text()

@@ -7,7 +7,7 @@ function M.reply(value: unknown): Reply?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
     local op = value.op
     if op ~= "open" and op ~= "close" and op ~= "closed" and op ~= "focus" and op ~= "attached"
-        and op ~= "bind" and op ~= "page" and op ~= "shutdown" then return nil end
+        and op ~= "bind" and op ~= "page" and op ~= "title" and op ~= "closing" and op ~= "quit" and op ~= "shutdown" then return nil end
     local request_id, id = contract.text(value.request_id, 80), contract.text(value.id, 80)
     local instance, title = contract.text(value.instance_id, 80), contract.text(value.title, 80)
     local mount, code = contract.text(value.mount, 1024), contract.text(value.error_code, 80)
@@ -32,18 +32,42 @@ local function rect(value: unknown): model.Rect?
     if not x or not y or not width or not height or width < 1 or height < 1 then return nil end
     return {x = x, y = y, width = width, height = height}
 end
+local function accent(value: unknown): string?
+    if value == "" or value == "amber" or value == "cyan" or value == "green"
+        or value == "rose" or value == "violet" then
+        return value
+    end
+    return nil
+end
+local function window_mode(value: unknown): model.Mode?
+    if value == "floating" then return "floating" end
+    if value == "fullscreen" then return "fullscreen" end
+    if value == "minimized" then return "minimized" end
+    if value == "collapsed" then return "collapsed" end
+    return nil
+end
+local function restore_mode(value: unknown): model.RestoreMode?
+    if value == "floating" then return "floating" end
+    if value == "fullscreen" then return "fullscreen" end
+    if value == "collapsed" then return "collapsed" end
+    return nil
+end
 local function window(value: unknown): model.Window?
     if type(value) ~= "table" then return nil end
     if type(value.id) ~= "string" or type(value.instance_id) ~= "string" or type(value.title) ~= "string" then return nil end
     local bounds, normal = rect(value.bounds), rect(value.normal_bounds)
     if not bounds or not normal then return nil end
-    local mode = value.mode
-    if mode ~= "floating" and mode ~= "fullscreen" and mode ~= "minimized" and mode ~= "collapsed" then return nil end
-    local restore = value.restore_mode
-    if restore ~= "floating" and restore ~= "fullscreen" and restore ~= "collapsed" then return nil end
+    local mode = window_mode(value.mode)
+    local restore = restore_mode(value.restore_mode)
+    if not mode or not restore then return nil end
     local icon = contract.text(value.icon, 8)
     if value.icon ~= nil and not icon then return nil end
-    return {id = value.id, instance_id = value.instance_id, title = value.title, icon = icon,
+    local user_title = contract.text(value.user_title, 80)
+    if value.user_title ~= nil and not user_title then return nil end
+    local selected_accent = accent(value.accent)
+    if value.accent ~= nil and selected_accent == nil then return nil end
+    return {id = value.id, instance_id = value.instance_id, title = value.title,
+        user_title = user_title, accent = selected_accent, icon = icon,
         bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore}
 end
 function M.scene(value: unknown): model.Scene?

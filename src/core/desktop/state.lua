@@ -25,7 +25,7 @@ local function copy_window(value: model.Window): model.Window
     return {
         id = value.id,
         instance_id = value.instance_id,
-        title = value.title, icon = value.icon,
+        title = value.title, user_title = value.user_title, accent = value.accent, icon = value.icon,
         bounds = copy_rect(value.bounds),
         normal_bounds = copy_rect(value.normal_bounds),
         mode = value.mode,
@@ -83,6 +83,16 @@ function M.reduce(value: State, command: commands.Command): State
         local tabs = copy_tabs(value.tabs)
         tabs[#tabs + 1] = command.id
         return next_state(value, scene, tabs)
+    elseif command.op == "announce" then
+        if not command.id or not command.instance_id or not command.title then return value end
+        local scene = model.announce(value.scene, command.id, command.instance_id, command.title)
+        if scene == value.scene then return value end
+        return next_state(value, scene)
+    elseif command.op == "personalize" then
+        if not command.id or command.user_title == nil or command.accent == nil then return value end
+        local scene = model.personalize(value.scene, command.id, command.user_title, command.accent)
+        if scene == value.scene then return value end
+        return next_state(value, scene)
     elseif command.op == "focus" then
         if not command.id then return value end
         local scene = model.focus(value.scene, command.id)

@@ -15,7 +15,7 @@ local MAX_APPEARANCE_VALUE = 80
 local MAX_COORDINATE = 2147483647
 
 type Op = "screen" | "add" | "focus" | "fullscreen" | "minimize" | "collapse" | "restore"
-    | "snap" | "place" | "remove" | "appearance" | "snapshot" | "shutdown"
+    | "snap" | "place" | "remove" | "personalize" | "announce" | "appearance" | "snapshot" | "shutdown"
 type Command = {
     version: integer,
     request_id: string?,
@@ -25,6 +25,8 @@ type Command = {
     id: string?,
     instance_id: string?,
     title: string?,
+    user_title: string?,
+    accent: string?,
     icon: string?,
     side: string?,
     x: integer?,
@@ -45,6 +47,14 @@ local function text(value: unknown, maximum: integer, required: boolean): string
     if type(value) ~= "string" or #value > maximum or value:find("%c") then return nil end
     if required and #value == 0 then return nil end
     return value
+end
+
+local function accent(value: unknown): string?
+    if value == "" or value == "amber" or value == "cyan" or value == "green"
+        or value == "rose" or value == "violet" then
+        return value
+    end
+    return nil
 end
 
 local function target_op(value: unknown): Op?
@@ -107,6 +117,20 @@ function M.decode(value: unknown): Command?
         if not id or not x or not y or not width or not height then return nil end
         return {version = base.version, request_id = base.request_id, op = "place", id = id, x = x, y = y,
             width = width, height = height} :: Command
+    elseif value.op == "announce" then
+        local id = text(value.id, MAX_ID, true)
+        local instance_id = text(value.instance_id, MAX_INSTANCE_ID, true)
+        local title = text(value.title, 80, true)
+        if not id or not instance_id or not title then return nil end
+        return {version = base.version, request_id = base.request_id, op = "announce", id = id,
+            instance_id = instance_id, title = title} :: Command
+    elseif value.op == "personalize" then
+        local id = text(value.id, MAX_ID, true)
+        local user_title = text(value.user_title, MAX_APPEARANCE_VALUE, false)
+        local selected_accent = accent(value.accent)
+        if not id or not user_title or selected_accent == nil then return nil end
+        return {version = base.version, request_id = base.request_id, op = "personalize", id = id,
+            user_title = user_title, accent = selected_accent} :: Command
     elseif value.op == "appearance" then
         local theme = text(value.theme, MAX_APPEARANCE_VALUE, true)
         local background = text(value.background, MAX_APPEARANCE_VALUE, true)

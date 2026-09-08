@@ -47,6 +47,20 @@ function M.background_row(id: string, width: integer, y: integer, height: intege
 end
 -- Selection text is independent of wallpaper color (notably on classic navy).
 function M.selection_text(theme: Theme): string return theme.on_accent or theme.ground end
+-- Named instance accents affect chrome only. Each palette has a paired readable
+-- selection foreground; application page colors stay owned by the global theme.
+local accent_dark: {[string]: string} = {amber = "#ffc963", cyan = "#67dce5", green = "#a6df8a", rose = "#ffa5c5", violet = "#d3b0ff"}
+local accent_light: {[string]: string} = {amber = "#9c6200", cyan = "#006d80", green = "#28703a", rose = "#9f3158", violet = "#744394"}
+function M.instance_accent(theme: Theme, name: string?): (string, string)
+    if not name or name == "" then return theme.accent, M.selection_text(theme) end
+    local dark, light = accent_dark[name], accent_light[name]
+    if not dark or not light then return theme.accent, M.selection_text(theme) end
+    local r = tonumber(theme.surface:sub(2, 3), 16) or 0
+    local g = tonumber(theme.surface:sub(4, 5), 16) or 0
+    local b = tonumber(theme.surface:sub(6, 7), 16) or 0
+    if r * 0.299 + g * 0.587 + b * 0.114 > 128 then return light, "#ffffff" end
+    return dark, "#000000"
+end
 function M.themes(): {Theme} return themes end
 function M.backgrounds(): {string} return backgrounds end
 function M.defaults(): Preferences return {theme = "honey", background = "dots", taskbar = "labels"} end

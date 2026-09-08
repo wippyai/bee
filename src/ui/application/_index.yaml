@@ -7,6 +7,10 @@ entries:
   modules: [process, uuid]
   imports:
     arguments: bee.application:arguments
+    interaction: bee.application:interaction
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
+- name: interaction
+  kind: library.lua
+  source: file://interaction.lua

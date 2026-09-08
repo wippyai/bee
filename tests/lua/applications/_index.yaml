@@ -10,3 +10,20 @@ entries:
     lifecycle: bee.applications:lifecycle
     contract: bee.protocol:application
     test: wippy.test:test
+- name: interactions_test
+  kind: function.lua
+  source: file://interactions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    interactions: bee.applications:interactions
+    protocol: bee.application:interaction
+    test: wippy.test:test
+- name: shutdown_test
+  kind: function.lua
+  source: file://shutdown_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    shutdown: bee.applications:shutdown
+    test: wippy.test:test

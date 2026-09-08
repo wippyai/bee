@@ -29,19 +29,35 @@ function M.items(focused: boolean, initial: boolean, has_windows: boolean?, cata
     items[#items + 1] = {label = "Exit                     Ctrl+Q", action = "quit", enabled = true}
     return items
 end
+local function descend(items: {Item}, path: {integer}?): {Item}
+    for _, index in ipairs(path or {}) do
+        local item = items[index]
+        if item and item.children then items = item.children else break end
+    end
+    return items
+end
 function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: {Descriptor}?): {Item}
     if state.kind == "window" then
         for _, win in ipairs(scene.windows) do
             if win.id == state.target then
-                return {
+                return descend({
                     {label = "Restore", action = "restore", enabled = win.mode ~= "floating"},
                     {label = "Minimize                 Alt+F9", action = "minimize", enabled = win.mode ~= "minimized"},
                     {label = "Maximize / restore          F11", action = "fullscreen", enabled = win.mode ~= "minimized"},
                     {label = "Snap left", action = "snap_left", enabled = win.mode ~= "minimized"},
                     {label = "Snap right", action = "snap_right", enabled = win.mode ~= "minimized"},
                     {label = "Collapse", action = "collapse", enabled = win.mode == "floating"},
+                    {label = "Rename…", action = "rename", enabled = true},
+                    {label = "Accent  ›", action = "group:accent", enabled = true, children = {
+                        {label = "Theme default", action = "accent:", enabled = true},
+                        {label = "Amber", action = "accent:amber", enabled = true},
+                        {label = "Cyan", action = "accent:cyan", enabled = true},
+                        {label = "Green", action = "accent:green", enabled = true},
+                        {label = "Rose", action = "accent:rose", enabled = true},
+                        {label = "Violet", action = "accent:violet", enabled = true},
+                    }},
                     {label = "Close                    Ctrl+W", action = "close", enabled = true},
-                }
+                }, state.path)
             end
         end
         return {}
@@ -105,7 +121,7 @@ function M.respond(state: State, panel: Panel, items: {Item}, event: unknown): R
         for _, index in ipairs(next_state.path or {}) do path[#path + 1] = index end
         if #path == 0 then close = true; return end
         local selected = table.remove(path)
-        next_state = {selected = selected or 1, offset = 0, path = path}
+        next_state = {selected = selected or 1, offset = 0, path = path, kind = state.kind, target = state.target, x = state.x, y = state.y}
     end
     local function activate(index: integer)
         local item = items[index]
@@ -114,7 +130,7 @@ function M.respond(state: State, panel: Panel, items: {Item}, event: unknown): R
             local path: {integer} = {}
             for _, parent in ipairs(next_state.path or {}) do path[#path + 1] = parent end
             path[#path + 1] = index
-            next_state = {selected = 1, offset = 0, path = path}
+            next_state = {selected = 1, offset = 0, path = path, kind = state.kind, target = state.target, x = state.x, y = state.y}
         else action = item.action end
     end
     if type(event) == "table" then

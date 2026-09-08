@@ -49,13 +49,46 @@ local function define_tests()
         test.it("returns defensive envelopes", function()
             local current = state.new(80, 24)
             current = state.reduce(current, command("add", {id = "one", instance_id = "a", title = "One"}))
+            current = state.reduce(current, command("personalize", {id = "one", user_title = "Custom", accent = "violet"}))
             local envelope = state.envelope(current)
             envelope.tabs[1] = "changed"
             envelope.preferences.theme = "ocean"
             envelope.scene.windows[1].title = "Changed"
+            envelope.scene.windows[1].user_title = "Changed label"
+            envelope.scene.windows[1].accent = "rose"
             test.eq(current.tabs[1], "one")
             test.eq(current.preferences.theme, "honey")
             test.eq(current.scene.windows[1].title, "One")
+            test.eq(current.scene.windows[1].user_title, "Custom")
+            test.eq(current.scene.windows[1].accent, "violet")
+        end)
+
+        test.it("reduces personalization idempotently, clears values, and preserves focus", function()
+            local current = state.new(80, 24)
+            current = state.reduce(current, command("add", {id = "one", instance_id = "a", title = "One"}))
+            current = state.reduce(current, command("add", {id = "two", instance_id = "b", title = "Two"}))
+            local initial_revision = current.scene.revision
+            local initial_focus = current.scene.focus
+
+            current = state.reduce(current, command("personalize", {id = "one", user_title = "Renamed", accent = "amber"}))
+            test.eq(current.scene.revision, initial_revision + 1)
+            test.eq(current.scene.focus, initial_focus)
+            test.eq(current.scene.windows[1].title, "One")
+            test.eq(current.scene.windows[1].user_title, "Renamed")
+            test.eq(current.scene.windows[1].accent, "amber")
+
+            local repeated = state.reduce(current, command("personalize", {id = "one", user_title = "Renamed", accent = "amber"}))
+            test.eq(repeated.scene.revision, current.scene.revision)
+
+            local focused = state.reduce(current, command("focus", {id = "one"}))
+            test.eq(focused.scene.windows[#focused.scene.windows].user_title, "Renamed")
+            test.eq(focused.scene.windows[#focused.scene.windows].accent, "amber")
+
+            local cleared = state.reduce(focused, command("personalize", {id = "one", user_title = "", accent = ""}))
+            local cleared_window = cleared.scene.windows[#cleared.scene.windows]
+            test.is_nil(cleared_window.user_title)
+            test.is_nil(cleared_window.accent)
+            test.eq(cleared_window.title, "One")
         end)
 
         test.it("removes a tab with its window while preserving other order", function()

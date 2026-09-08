@@ -34,6 +34,27 @@ local function define_tests()
             test.is_nil(commands.decode({version = 1, op = "appearance", theme = "ocean", background = "grid",
                 expected_revision = 1.5}))
         end)
+
+        test.it("bounds personalization labels, IDs, controls, and named accents", function()
+            local decoded = commands.decode({version = 1, op = "personalize", id = "one",
+                user_title = string.rep("x", 80), accent = "violet"})
+            test.not_nil(decoded)
+            if decoded then
+                test.eq(decoded.user_title, string.rep("x", 80))
+                test.eq(decoded.accent, "violet")
+            end
+
+            local clear = commands.decode({version = 1, op = "personalize", id = "one",
+                user_title = "", accent = ""})
+            test.not_nil(clear)
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "", user_title = "x", accent = "cyan"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = string.rep("x", 161), user_title = "x", accent = "cyan"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "one\n", user_title = "x", accent = "cyan"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "one", user_title = string.rep("x", 81), accent = "cyan"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "one", user_title = "line\nbreak", accent = "cyan"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "one", user_title = "x", accent = "yellow"}))
+            test.is_nil(commands.decode({version = 1, op = "personalize", id = "one", user_title = "x", accent = 1}))
+        end)
     end)
 end
 

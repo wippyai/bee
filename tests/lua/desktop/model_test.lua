@@ -1,5 +1,6 @@
 local test = require("test")
 local model = require("model")
+local decode = require("decode")
 
 local function inside(rect: model.Rect, width: integer, height: integer): boolean
     local top = height >= 3 and 2 or 1
@@ -17,6 +18,21 @@ local function window(scene: model.Scene, id: string): model.Window
 end
 
 local function define_tests()
+    test.describe("Application title announcements", function()
+        test.it("preserves user labels, rejects a stale instance and reveals the latest title on clear", function()
+            local scene = model.add(model.new(80, 24), "view", "instance", "Original")
+            scene = model.personalize(scene, "view", "Pinned", "rose")
+            local next_scene = model.announce(scene, "view", "instance", "Current")
+            test.eq(model.display_title(next_scene.windows[1]), "Pinned")
+            test.eq(next_scene.windows[1].title, "Current")
+            test.eq(next_scene.windows[1].accent, "rose")
+            test.eq(model.announce(next_scene, "view", "stale", "Bad"), next_scene)
+            test.eq(model.announce(next_scene, "view", "instance", "Current"), next_scene)
+            local cleared = model.personalize(next_scene, "view", "", "rose")
+            test.eq(model.display_title(cleared.windows[1]), "Current")
+            test.eq(scene.windows[1].title, "Original")
+        end)
+    end)
     test.describe("Bee desktop model", function()
         test.it("creates bounded windows and keeps transforms immutable", function()
             local empty = model.new(80, 24)
@@ -29,9 +45,72 @@ local function define_tests()
             test.eq(scene.focus, "window-1")
             test.eq(added.mode, "floating")
             test.eq(added.restore_mode, "floating")
+            test.is_nil(added.user_title)
+            test.is_nil(added.accent)
+            test.eq(model.display_title(added), "Terminal")
             test.is_true(inside(added.bounds, scene.width, scene.height))
             test.is_true(added.bounds.y >= 2)
             test.eq(added.normal_bounds.y, added.bounds.y)
+        end)
+
+        test.it("personalizes bounded display data without changing identity or focus", function()
+            local scene = model.add(model.new(80, 24), "one", "instance-one", "Announced")
+            scene = model.add(scene, "two", "instance-two", "Other")
+            local personalized = model.personalize(scene, "one", "My Window", "cyan")
+            local changed = window(personalized, "one")
+
+            test.eq(changed.id, "one")
+            test.eq(changed.instance_id, "instance-one")
+            test.eq(changed.title, "Announced")
+            test.eq(changed.user_title, "My Window")
+            test.eq(changed.accent, "cyan")
+            test.eq(model.display_title(changed), "My Window")
+            test.eq(personalized.focus, scene.focus)
+            test.eq(personalized.revision, scene.revision + 1)
+
+            local repeated = model.personalize(personalized, "one", "My Window", "cyan")
+            test.eq(repeated.revision, personalized.revision)
+
+            local focused = model.focus(personalized, "one")
+            local focused_window = window(focused, "one")
+            test.eq(focused_window.user_title, "My Window")
+            test.eq(focused_window.accent, "cyan")
+
+            local cleared = model.personalize(focused, "one", "", "")
+            local cleared_window = window(cleared, "one")
+            test.is_nil(cleared_window.user_title)
+            test.is_nil(cleared_window.accent)
+            test.eq(model.display_title(cleared_window), "Announced")
+            test.eq(cleared_window.title, "Announced")
+        end)
+
+        test.it("preserves optional personalization through scene decoding", function()
+            local scene = model.add(model.new(80, 24), "one", "instance-one", "Announced")
+            scene = model.personalize(scene, "one", "Custom", "rose")
+            local decoded = decode.scene(scene)
+            test.not_nil(decoded)
+            if decoded then
+                test.eq(decoded.windows[1].title, "Announced")
+                test.eq(decoded.windows[1].user_title, "Custom")
+                test.eq(decoded.windows[1].accent, "rose")
+                decoded.windows[1].user_title = "Changed"
+                test.eq(scene.windows[1].user_title, "Custom")
+            end
+
+            local legacy = decode.scene(model.add(model.new(80, 24), "old", "instance-old", "Old"))
+            test.not_nil(legacy)
+            if legacy then
+                test.is_nil(legacy.windows[1].user_title)
+                test.is_nil(legacy.windows[1].accent)
+            end
+
+            scene.windows[1].user_title = string.rep("x", 81)
+            test.is_nil(decode.scene(scene))
+            scene.windows[1].user_title = "line\nbreak"
+            test.is_nil(decode.scene(scene))
+            scene.windows[1].user_title = "Custom"
+            scene.windows[1].accent = "yellow"
+            test.is_nil(decode.scene(scene))
         end)
 
         test.it("focuses independently from fullscreen mode", function()

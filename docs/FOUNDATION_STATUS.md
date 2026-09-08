@@ -10,6 +10,18 @@ implemented boundary. Older design documents are proposals where they differ.
 Settings provides 16 themes, 11 backgrounds and a Labels/Icons taskbar choice.
 These preferences persist with the workspace. Compact tabs retain admitted app
 icons, minimize/restore actions and the normal focus/overflow behavior.
+Title/tab context menus also support user labels and named accents. The session
+owns these values independently of application identity; supported recovery
+restores them. Apps can announce their own bounded titles through the authenticated
+broker; user labels retain precedence. Native PTY title forwarding is not implemented.
+
+Applications can request bounded confirmation and single-line text dialogs.
+The broker owns pending requests; the shell presents them and isolates input.
+Questions survive F12, while app exit clears them. Apps may opt into negotiated
+close at readiness; confirmation/cancellation and an unresponsive-app force-stop
+choice are implemented. Normal workspace quit gathers guarded-app decisions before cleanup. The bundled
+Terminal opts in and conservatively confirms every PTY close. Emergency exit from
+failed-presenter recovery bypasses negotiation.
 
 ## Ownership
 
@@ -27,11 +39,15 @@ and presentation roles; core code contains no bundled-app IDs. Shared UI helpers
 are optional; the Terminal uses Wippy's native PTY proxy directly.
 
 Applications receive identities before spawn and acknowledge readiness. A spawn
-alone is not an opened application. Readiness has a three-second deadline. Close
-first sends the producer a cooperative close event, then requests termination
-after 250ms. Records remain owned until EXIT; unsuccessful termination reports
+alone is not an opened application. Readiness has a three-second deadline. Unguarded close
+sends the producer a cooperative close event, then requests termination after
+250ms. Guarded apps enter this cleanup only after an accepted decision. Records remain owned until EXIT; unsuccessful termination reports
 uncertainty rather than claiming the process stopped. Workspace exit starts all
 child cleanup together and does not serially wait for each close deadline.
+The store remains available during cooperative cleanup; global shutdown preserves
+recovery records. Completion waits for observed exits and known writes, with a
+bounded error path for incomplete cleanup. Applications requiring a durable save
+before accepting close must wait for their checkpoint receipt.
 
 F12 retires only the presenter. The broker revokes old mounts and binds new ones
 to the fresh PID. App processes, PTYs, viewport content, geometry, tab order and

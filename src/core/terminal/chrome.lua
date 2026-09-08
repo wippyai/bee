@@ -13,17 +13,21 @@ function M.background(canvas: tty.Canvas, width: integer, height: integer, prefe
 end
 function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, starting: boolean)
     local theme = appearance.theme(preferences.theme)
+    -- A cell-native bee: folded wings, striped body and a small wordmark.
+    -- No timed splash or terminal-dependent emoji width.
     local lines: {string} = {
-        "██████╗ ███████╗███████╗",
-        "██╔══██╗██╔════╝██╔════╝",
-        "██████╔╝█████╗  █████╗  ",
-        "██╔══██╗██╔══╝  ██╔══╝  ",
-        "██████╔╝███████╗███████╗",
-        "╚═════╝ ╚══════╝╚══════╝"}
-    if width < 32 or height < 12 then lines = {"BEE"} end
+        "    ╭──╮ ╭──╮    ",
+        "    ╰──╲ ╱──╯    ",
+        " ╭──────┴─────╮  ",
+        "◂│ ██  ██  •  │  ",
+        " ╰────────────╯  ",
+        "       ╲ ╲       ",
+        "",
+        "b e e"}
+    if width < 24 or height < 14 then lines = {"bee"} end
     if starting and height >= 5 then
         lines[#lines + 1] = ""
-        lines[#lines + 1] = "Starting your workspace..."
+        lines[#lines + 1] = "Starting…"
     end
     local top = math.floor(math.max(2, (height - #lines) / 2))
     if height < 3 then top = 1 end
@@ -31,7 +35,7 @@ function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferen
         local y = top + index - 1
         if y < height or height < 3 then
             local x = math.floor(math.max(1, (width - tty.text.width(text)) / 2 + 1))
-            local color = starting and theme.accent or theme.pattern
+            local color = starting and theme.accent or theme.border
             canvas:put(x, y, appearance.style(color, theme.ground) .. text .. "\27[0m", math.floor(math.max(0, width - x + 1)))
         end
     end

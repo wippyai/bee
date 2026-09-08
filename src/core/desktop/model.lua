@@ -8,6 +8,8 @@ type Window = {
     id: string,
     instance_id: string,
     title: string,
+    user_title: string?,
+    accent: string?,
     icon: string?,
     bounds: Rect,
     normal_bounds: Rect,
@@ -42,7 +44,7 @@ local function copy_window(value: Window): Window
     return {
         id = value.id,
         instance_id = value.instance_id,
-        title = value.title, icon = value.icon,
+        title = value.title, user_title = value.user_title, accent = value.accent, icon = value.icon,
         bounds = copy_rect(value.bounds),
         normal_bounds = copy_rect(value.normal_bounds),
         mode = value.mode,
@@ -219,6 +221,39 @@ function M.add(scene: Scene, id: string, instance_id: string, title: string, ico
     local windows = copy_windows(scene.windows)
     windows[#windows + 1] = added
     return commit(scene, scene.width, scene.height, id, windows)
+end
+
+function M.display_title(window: Window): string
+    if window.user_title ~= nil and window.user_title ~= "" then return window.user_title end
+    return window.title
+end
+
+-- The broker supplies the current app title; a user label remains independent.
+function M.announce(scene: Scene, id: string, instance_id: string, title: string): Scene
+    local index = find_index(scene.windows, id)
+    if not index then return scene end
+    local current = scene.windows[index]
+    if current.instance_id ~= instance_id or current.title == title then return scene end
+    local windows = copy_windows(scene.windows)
+    windows[index].title = title
+    return commit(scene, scene.width, scene.height, scene.focus, windows)
+end
+
+function M.personalize(scene: Scene, id: string, user_title: string, accent: string): Scene
+    local index = find_index(scene.windows, id)
+    if index == nil then return scene end
+
+    local next_user_title: string? = user_title
+    if user_title == "" then next_user_title = nil end
+    local next_accent: string? = accent
+    if accent == "" then next_accent = nil end
+    local current = scene.windows[index]
+    if current.user_title == next_user_title and current.accent == next_accent then return scene end
+
+    local windows = copy_windows(scene.windows)
+    windows[index].user_title = next_user_title
+    windows[index].accent = next_accent
+    return commit(scene, scene.width, scene.height, scene.focus, windows)
 end
 
 function M.focus(scene: Scene, id: string): Scene

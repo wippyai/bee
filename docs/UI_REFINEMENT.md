@@ -78,15 +78,40 @@ remain readable on a teal desktop. Background choice remains independent; Solid
 is the closest match to the classic desktops.
 
 The reported Claude resize/repeated-text artifact remains unconfirmed, not fixed.
-The boot logo remains the current block wordmark; it has not received a new visual
-approval. Settings → Tabs now selects Labels or Icons. Admitted app icons travel
+The supplied screenshot was inspected: `Testing` appears to the right of the
+input cursor, but the image does not establish the source of that text. Native
+Terminal acceptance now types a wrapped line, resizes from all four corners,
+erases it and verifies that no stale input cells remain in source and pack.
+The boot and empty-desktop mark now use a compact cell-native bee with a lowercase
+wordmark, a plain small-terminal fallback and no timed splash delay. Settings →
+Tabs selects Labels or Icons. Admitted app icons travel
 with window state; icon tabs retain focus, minimize and overflow behavior, with
 a short title fallback for apps without icons. The preference survives cold
 restart and F12. Old preferences default to Labels. The legacy demo Studio/chat/training apps are not restored into the
 new core. Agent-driven layout/settings operations are not yet published through
 MCP. These requests must not disappear behind the subsystem roadmap.
 
-## Instance titles and accents (pending)
+## Instance titles and accents
+
+User labels and accents are implemented. Right-click a title or tab and choose
+Rename or Accent. Rename supports selection, cursor movement, grapheme deletion,
+bounded paste, Enter/Save and Escape/Cancel. An empty label restores the app title.
+The dialog consumes input; it does not type into the underlying terminal.
+
+The session owns `user_title` and `accent` independently of the application title.
+Labels are limited to 80 bytes with no control characters. Accents are named
+Amber, Cyan, Green, Rose or Violet, with a theme-default reset and contrasting
+light/dark palette variants. They color chrome only. Identity, permissions and
+application content colors do not change. Values survive F12 and supported cold
+application recovery; labels do not resurrect dead native PTYs.
+
+Source/pack acceptance covers two separately named terminals, modal input
+isolation, cancel/clear, accents, minimized restore and Settings cold recovery.
+A fixture also verifies that an app cannot submit a private personalization
+command directly to the workspace. Application title announcements are implemented
+through `bee.application:client.title`; native OSC forwarding remains future work.
+Test Status announces “Checks · started” and “Checks · complete” from journal
+replay; these describe recorded events, not proof of current worker liveness.
 
 Multiple terminals need distinguishable names. Keep the definition's launcher
 title, the application's announced instance title, and the user's title override

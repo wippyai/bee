@@ -7,6 +7,7 @@ local client = require("client")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
+    local closes = assert(process.listen("bee.application.close", {message = true}))
     local input = assert(tty.events())
     local events = assert(process.events())
     assert(tty.start())
@@ -17,13 +18,19 @@ local function main(value: unknown)
     local terminal, attach_error = child:attach_terminal()
     if not terminal then child:close(true); executor:release(); error(tostring(attach_error)) end
     -- Attachment creates the native proxy and transfers child ownership to it.
-    client.ready(launch)
+    client.ready(launch, {negotiate_close = true})
     local done = terminal:done()
     while true do
-        local selected = channel.select({input:case_receive(), events:case_receive(), done:case_receive()})
+        local selected = channel.select({input:case_receive(), events:case_receive(), done:case_receive(), closes:case_receive()})
         if not selected.ok or selected.channel == done then break end
         if selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
+        elseif selected.channel == closes then
+            local request = client.close_request(launch, tostring(selected.value:from()), selected.value:payload():data())
+            if request then
+                assert(client.close_reply(launch, request.request_id, {action = "confirm", title = "Close terminal?",
+                    message = "The shell and any running commands will stop.", accept = "Close terminal"}))
+            end
         elseif selected.channel == input then
             local event = selected.value
             if event.type == "close" then break end
@@ -33,6 +40,7 @@ local function main(value: unknown)
             end
         end
     end
+    process.unlisten(closes)
     terminal:close()
     executor:release()
     tty.stop()

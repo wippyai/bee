@@ -31,4 +31,5 @@ entries:
     suite: bee
   imports:
     model: bee.desktop:model
+    decode: bee.protocol:decode
     test: wippy.test:test

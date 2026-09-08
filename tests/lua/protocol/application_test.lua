@@ -17,6 +17,18 @@ local function define_tests()
             test.eq(launch.arguments[2], "run-a")
             test.eq(launch.arguments[3], "")
         end)
+        test.it("authenticates cancellation results before resuming work", function()
+            local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace",
+                instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
+                registry_revision = "1", launch_token = "token"}))
+            local reply = {version = 1, id = "view", instance_id = "instance", request_id = "close", action = "cancel"}
+            test.not_nil(client.close_result(launch, "broker", reply))
+            test.is_nil(client.close_result(launch, "stranger", reply))
+            reply.instance_id = "stale"
+            test.is_nil(client.close_result(launch, "broker", reply))
+            reply.instance_id = "instance"; reply.action = "accept"
+            test.is_nil(client.close_result(launch, "broker", reply))
+        end)
         test.it("rejects sparse, oversized and control-bearing payloads", function()
             test.is_nil(arguments.decode({[2] = "hole"}))
             test.is_nil(arguments.decode({project = "named"}))

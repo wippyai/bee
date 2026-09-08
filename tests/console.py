@@ -87,7 +87,15 @@ def exercise(packed):
             ui.key(b"\x1b[24~")
             ui.key(b"printf 'STATE_%s\\n' $bee_marker\r")
             ui.wait("STATE_keep")
+            # Redraw a wrapped, unsubmitted line through four corner resizes,
+            # then erase it. Stale cells must not survive the new prompt.
+            ui.key(b"printf '\\033[2J\\033[H'\r")
+            ui.key(b"BEE_RESIZE_GHOST_" * 6)
+            ui.wait("BEE_RESIZE_GHOST_")
             ui.corners()
+            ui.key(b"\x15printf 'CLEAN_%s\\n' INPUT\r")
+            ui.wait("CLEAN_INPUT")
+            assert "BEE_RESIZE_GHOST_" not in ui.text(), ui.text()
             left, top, right, bottom = ui.frame()
             ui.key(b"stty size\r")
             ui.wait(f"{bottom-top-1} {right-left-1}")
@@ -112,12 +120,17 @@ def exercise(packed):
             for y in range(top, bottom-1):
                 for x in range(left, right-1):
                     assert ui.screen.buffer[y][x].bg == background
-            elapsed = ui.quit()
+            ui.key(b"\x17")
+            ui.wait("Close terminal?")
+            ui.key(b"\x1b")
+            ui.key(b"printf 'CANCEL_%s\\n' $bee_marker\r")
+            ui.wait("CANCEL_keep")
+            elapsed = ui.quit(confirm=True)
             deadline = time.monotonic() + 1
             while Path(f"/proc/{native_pid}").exists() and time.monotonic() < deadline:
                 time.sleep(.02)
             assert not Path(f"/proc/{native_pid}").exists(), "Native shell leaked after workspace exit"
-            print(f"Terminal {'pack' if packed else 'source'}: command, resize, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
+            print(f"Terminal {'pack' if packed else 'source'}: command, wrapped-input resize/erase, interrupt, rejoin, independent PTYs, registry/TTY denial; exit {elapsed:.3f}s")
         finally:
             ui.close()
 

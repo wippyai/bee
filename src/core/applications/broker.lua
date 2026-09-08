@@ -11,16 +11,24 @@ local contract = require("contract")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
 local appearance = require("appearance")
+local interaction = require("interaction")
+local interactions = require("interactions")
+local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
 type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, mount: string, launch_token: string,
-    state: lifecycle.State, open_request: string, opened: boolean, ready_received: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
+    negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, ready_received: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end
     local requests = assert(process.listen("bee.app.request", {message = true}))
+    local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
+    local close_replies = assert(process.listen("bee.application.close.reply", {message = true}))
+    local queries = assert(process.listen("bee.application.query", {message = true}))
+    local answers = assert(process.listen("bee.interaction.response", {message = true}))
+    local titles = assert(process.listen("bee.application.title", {message = true}))
     local app_ready = assert(process.listen("bee.application.ready", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local appearance_states = assert(process.listen("bee.appearance.state", {message = true}))
@@ -34,6 +42,18 @@ local function main(owner: string, initial_preferences: unknown)
     local ticks = ticker:channel()
     local bindings = catalog.bindings()
     local instances: {[string]: Instance} = {}
+    local dialogs = interactions.new()
+    local shutdown_plan: shutdown.State? = nil
+    local shutdown_dialog: interaction.Spec? = nil
+    local quit_sent = false
+    local cleanup_request = ""
+    local cleanup_deadline = 0
+    local cleanup_complete = false
+    local function publish_dialogs()
+        local items: {interaction.Wire} = {}
+        for _, spec in ipairs(interactions.snapshot(dialogs)) do items[#items + 1] = interaction.wire(spec) end
+        process.send(owner, "bee.interaction.state", {version = 1, items = items, shutdown = shutdown_dialog and interaction.wire(shutdown_dialog) or nil})
+    end
     local pending: {[string]: boolean} = {}
     local fingerprints: {[string]: string} = {}
     local completed: {[string]: contract.Reply} = {}
@@ -74,7 +94,7 @@ local function main(owner: string, initial_preferences: unknown)
     end
     local function identified(item: Instance, op: contract.ReplyOp, request_id: string, code: string?, message: string?): contract.Reply
         local reply = contract.reply(request_id, op, code, message)
-        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.descriptor.title, item.mount
+        reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, item.mount
         reply.icon = item.descriptor.icon
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
@@ -100,11 +120,40 @@ local function main(owner: string, initial_preferences: unknown)
         process.send(waiter.recipient, "bee.application.result", {version = 1, request_id = waiter.request_id,
             error_code = code, error = message})
     end
+    local function refresh_shutdown()
+        local plan = shutdown_plan
+        if not plan then return end
+        if not shutdown.ready(plan) or quit_sent then return end
+        if not shutdown.needs_confirmation(plan) then
+            quit_sent = true
+            emit(contract.reply(plan.request_id, "quit"))
+            return
+        end
+        local decisions = shutdown.decisions(plan)
+        local names, unresponsive = "", 0
+        for _, decision in ipairs(decisions) do
+            if #names + #decision.title < 240 then names = names .. (names == "" and "" or ", ") .. decision.title end
+            if decision.force then unresponsive = unresponsive + 1 end
+        end
+        local message = "Stop all applications and running work? Unsaved changes may be lost. " .. names
+        if unresponsive > 0 then message = message .. ". " .. tostring(unresponsive) .. " application(s) did not respond." end
+        if not shutdown_dialog or shutdown_dialog.message ~= message then
+            shutdown_dialog = {request_id = uuid.v7(), id = "bee.workspace:shutdown", instance_id = "workspace",
+                kind = "confirm", title = "Quit Bee?", message = message, accept = "Quit Bee", initial = ""}
+            publish_dialogs()
+        end
+    end
     local function finish(item: Instance, failed: boolean)
+        if shutdown_plan then shutdown.remove(shutdown_plan, item.view_id) end
+        if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
         item.view:close()
         instances[item.view_id] = nil
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
+        end
+        if cleanup_request ~= "" then
+            -- Keep recovery records when the workspace itself is shutting down.
+            return
         end
         if not item.opened then
             emit(identified(item, "open", item.open_request, item.state.failure ~= "" and item.state.failure or "startup_failed", "Application did not become ready"), true)
@@ -116,7 +165,23 @@ local function main(owner: string, initial_preferences: unknown)
             else emit(identified(item, "close", waiter.request_id), true) end
         end
     end
-    local function transition(item: Instance, event: string)
+    local function discard_dialog(item: Instance)
+        local pending_dialog = interactions.remove(dialogs, item.view_id)
+        if pending_dialog then
+            if not pending_dialog.closing then
+                process.send(item.execution_pid, "bee.application.query.result", {version = 1,
+                    request_id = pending_dialog.client_request_id, id = item.view_id, instance_id = item.instance_id,
+                    action = "cancel", value = "", error = ""})
+            end
+            publish_dialogs()
+        end
+    end
+    local function close_prompt(item: Instance, title: string, message: string, accept: string)
+        local spec: interaction.Spec = {request_id = uuid.v7(), id = item.view_id, instance_id = item.instance_id,
+            kind = "confirm", title = title, message = message, accept = accept, initial = ""}
+        if interactions.add(dialogs, spec, item.close_request_id or "", item.execution_pid, true) then publish_dialogs() end
+    end
+    local function transition(item: Instance, event: lifecycle.Event)
         if event == "ready" then
             item.ready_received = true
             if recipient == "" then return end
@@ -133,10 +198,33 @@ local function main(owner: string, initial_preferences: unknown)
                 emit(identified(item, "open", item.open_request), true)
                 appearance_state(item)
             end
+        elseif effect == "query_close" then
+            discard_dialog(item)
+            process.send(item.execution_pid, "bee.application.close", {version = 1, request_id = item.close_request_id,
+                id = item.view_id, instance_id = item.instance_id})
+        elseif effect == "close_timeout" then
+            if shutdown_plan and shutdown_plan.pending[item.view_id] then
+                shutdown.record(shutdown_plan, item.view_id, item.announced_title or item.descriptor.title, "Application did not respond", true)
+                refresh_shutdown()
+            else close_prompt(item, "Application did not respond", "Force stopping may lose unsaved work.", "Force stop") end
+        elseif effect == "close_cancelled" then
+            discard_dialog(item)
+            process.send(item.execution_pid, "bee.application.close.result", {version = 1, request_id = item.close_request_id,
+                id = item.view_id, instance_id = item.instance_id, action = "cancel"})
+            item.close_request_id = nil
+            for _, waiter in ipairs(item.waiters) do
+                if waiter.control then control_result(waiter, "cancelled", "Close cancelled")
+                else emit(identified(item, "close", waiter.request_id, "cancelled", "Close cancelled"), true) end
+            end
+            item.waiters = {}
         elseif effect == "close" then
+            discard_dialog(item)
+            item.close_request_id = nil
             local _, err = item.view:send({type = "close"})
             if err then item.state = {phase = "stopping", deadline = now(), failure = item.state.failure} end
         elseif effect == "terminate" then
+            discard_dialog(item)
+            item.close_request_id = nil
             item.attempts = item.attempts + 1
             local _, err = process.terminate(item.execution_pid)
             if err or item.attempts >= 3 then
@@ -151,6 +239,11 @@ local function main(owner: string, initial_preferences: unknown)
         elseif effect == "closed" or effect == "failed" then finish(item, effect == "failed") end
     end
     local function stop(item: Instance, waiter: Waiter, force: boolean)
+        if shutdown_plan and not force then
+            if waiter.control then control_result(waiter, "busy", "Quit confirmation pending")
+            else emit(identified(item, "close", waiter.request_id, "busy", "Quit confirmation pending"), true) end
+            return
+        end
         if #item.waiters >= 16 then
             if waiter.control then control_result(waiter, "busy", "Too many pending stop requests")
             else emit(identified(item, "close", waiter.request_id, "busy", "Too many pending stop requests"), true) end
@@ -158,13 +251,59 @@ local function main(owner: string, initial_preferences: unknown)
         end
         item.waiters[#item.waiters + 1] = waiter
         if force then item.attempts = 0 end
-        transition(item, force and "force_stop" or "stop")
+        if not force and item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
+            or item.state.phase == "close_confirming" or item.state.phase == "close_unresponsive") then
+            if item.state.phase == "ready" then
+                item.close_request_id = uuid.v7()
+                transition(item, "request_close")
+            end
+            emit(identified(item, "closing", ""))
+        else transition(item, force and "force_stop" or "stop") end
     end
     assert(process.send(owner, "bee.application.catalog", {version = 1, items = catalog.items(bindings)}))
     assert(process.send(owner, "bee.app.ready", {version = 1}))
+    local function abort_shutdown()
+        local plan = shutdown_plan
+        shutdown_plan, shutdown_dialog, quit_sent = nil, nil, false
+        if plan then
+            for id, item in pairs(instances) do
+                if plan.pending[id] or plan.decisions[id] then transition(item, "cancel_close") end
+            end
+            emit(contract.reply(plan.request_id, "quit", "cancelled", "Quit cancelled"))
+        end
+        publish_dialogs()
+    end
+    local function prepare_shutdown()
+        if cleanup_request ~= "" then return end
+        if shutdown_plan then publish_dialogs(); return end
+        local ids: {string} = {}
+        for id, item in pairs(instances) do
+            if item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
+                or item.state.phase == "close_confirming" or item.state.phase == "close_unresponsive") then ids[#ids + 1] = id end
+        end
+        shutdown_plan = shutdown.start(uuid.v7(), ids)
+        local function ask(item: Instance)
+            if item.state.phase ~= "ready" then transition(item, "cancel_close") end
+            item.close_request_id = uuid.v7()
+            transition(item, "request_close")
+        end
+        for _, id in ipairs(ids) do local item = instances[id]; if item then ask(item) end end
+        refresh_shutdown()
+    end
+    local function accept_readiness(item: Instance, negotiate: boolean)
+        if item.state.phase == "starting" and not item.ready_received then item.negotiate_close = negotiate end
+        transition(item, "ready")
+    end
+    local function tick_instance(item: Instance)
+        transition(item, "tick")
+        if item.opened and lifecycle.accepts_updates(item.state) and item.title_dirty then
+            emit(identified(item, "title", ""))
+            item.title_dirty = false
+        end
+    end
     local running = true
     while running do
-        local selected = channel.select({requests:case_receive(), app_ready:case_receive(), appearance_requests:case_receive(),
+        local selected = channel.select({requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
             appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), events:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == events then
@@ -182,7 +321,97 @@ local function main(owner: string, initial_preferences: unknown)
                     checkpoint_waiters[id] = nil
                 end
             end
-            for _, item in pairs(instances) do transition(item, "tick") end
+            for _, item in pairs(instances) do tick_instance(item) end
+            refresh_shutdown()
+        elseif selected.channel == shutdown_requests and selected.value:from() == owner then
+            local data: unknown = selected.value:payload():data()
+            if type(data) == "table" and data.version == 1 and data.op == "prepare" then prepare_shutdown() end
+        elseif selected.channel == close_replies then
+            local message = selected.value
+            local item = find_pid(tostring(message:from()))
+            local data: unknown = message:payload():data()
+            if item and item.state.phase == "close_requested" and type(data) == "table" and data.version == 1
+                and data.id == item.view_id and data.instance_id == item.instance_id and data.launch_token == item.launch_token
+                and data.request_id == item.close_request_id then
+                if data.action == "accept" then
+                    if shutdown_plan and shutdown_plan.pending[item.view_id] then
+                        transition(item, "confirm_close")
+                        shutdown.record(shutdown_plan, item.view_id, item.announced_title or item.descriptor.title, "", false)
+                        refresh_shutdown()
+                    else transition(item, "accept_close") end
+                elseif data.action == "cancel" then
+                    if shutdown_plan and shutdown_plan.pending[item.view_id] then abort_shutdown()
+                    else transition(item, "cancel_close") end
+                elseif data.action == "confirm" then
+                    local spec = interaction.spec({version = 1, request_id = data.request_id, id = data.id,
+                        instance_id = data.instance_id, kind = "confirm", title = data.title, message = data.message,
+                        accept = data.accept, initial = ""})
+                    if spec then
+                        transition(item, "confirm_close")
+                        if shutdown_plan and shutdown_plan.pending[item.view_id] then
+                            shutdown.record(shutdown_plan, item.view_id, item.announced_title or item.descriptor.title,
+                                spec.message ~= "" and spec.message or spec.title, false)
+                            refresh_shutdown()
+                        else close_prompt(item, spec.title, spec.message, spec.accept) end
+                    end
+                end
+            end
+        elseif selected.channel == queries then
+            local message = selected.value
+            local item = find_pid(tostring(message:from()))
+            local data: unknown = message:payload():data()
+            if item and type(data) == "table"
+                and data.launch_token == item.launch_token then
+                local spec = interaction.spec(data)
+                if spec and spec.id == item.view_id and spec.instance_id == item.instance_id then
+                    local client_request_id = spec.request_id
+                    spec.request_id = uuid.v7()
+                    if (item.state.phase == "starting" or item.state.phase == "ready") and not shutdown_plan
+                        and interactions.add(dialogs, spec, client_request_id, item.execution_pid, false) then publish_dialogs()
+                    else
+                        process.send(item.execution_pid, "bee.application.query.result", {version = 1,
+                            request_id = client_request_id, id = item.view_id, instance_id = item.instance_id,
+                            action = "cancel", value = "", error = "busy"})
+                    end
+                end
+            end
+        elseif selected.channel == answers and selected.value:from() == owner and cleanup_request == "" then
+            local response = interaction.response(selected.value:payload():data())
+            if response and shutdown_dialog and response.id == shutdown_dialog.id and response.instance_id == shutdown_dialog.instance_id
+                and response.request_id == shutdown_dialog.request_id and response.value == "" then
+                if response.action == "cancel" then abort_shutdown()
+                elseif not quit_sent then quit_sent = true; emit(contract.reply(response.request_id, "quit")) end
+            elseif response then
+                local pending_dialog = interactions.resolve(dialogs, response)
+                if pending_dialog then
+                    local item = instances[response.id]
+                    if pending_dialog.closing and item then
+                        if response.action == "cancel" then transition(item, "cancel_close")
+                        elseif item.state.phase == "close_unresponsive" then transition(item, "force_stop")
+                        else transition(item, "accept_close") end
+                    else
+                        process.send(pending_dialog.execution_pid, "bee.application.query.result", {version = 1,
+                            request_id = pending_dialog.client_request_id, id = response.id, instance_id = response.instance_id,
+                            action = response.action, value = response.value, error = ""})
+                    end
+                    publish_dialogs()
+                end
+            end
+        elseif selected.channel == titles then
+            local message = selected.value
+            local item = find_pid(tostring(message:from()))
+            local data: unknown = message:payload():data()
+            if item and lifecycle.accepts_updates(item.state)
+                and type(data) == "table" and data.version == 1 and data.instance_id == item.instance_id
+                and data.id == item.view_id and data.launch_token == item.launch_token then
+                local title = contract.text(data.title, 80)
+                if title then
+                    if title == "" then title = item.descriptor.title end
+                    if title ~= (item.announced_title or item.descriptor.title) then
+                        item.announced_title = title; item.title_dirty = true
+                    end
+                end
+            end
         elseif selected.channel == checkpoints then
             local msg = selected.value
             local item = find_pid(tostring(msg:from()))
@@ -228,7 +457,10 @@ local function main(owner: string, initial_preferences: unknown)
             local item = find_pid(tostring(msg:from()))
             local data: unknown = msg:payload():data()
             if item and type(data) == "table" and data.version == 1 and data.instance_id == item.instance_id
-                and data.view_id == item.view_id and data.launch_token == item.launch_token then transition(item, "ready") end
+                and data.view_id == item.view_id and data.launch_token == item.launch_token
+                and (data.negotiate_close == nil or type(data.negotiate_close) == "boolean") then
+                accept_readiness(item, data.negotiate_close == true)
+            end
         elseif selected.channel == appearance_states then
             local msg = selected.value
             local data: unknown = msg:payload():data()
@@ -311,7 +543,17 @@ local function main(owner: string, initial_preferences: unknown)
                 elseif not pending[req.request_id] then
                     pending[req.request_id] = true
                     fingerprints[req.request_id] = fingerprint
-                    if req.op == "shutdown" then running = false
+                    if req.op == "shutdown" then
+                        if cleanup_request == "" then
+                            cleanup_request, cleanup_deadline = req.request_id, now() + 3.5
+                            shutdown_dialog = nil
+                            publish_dialogs()
+                            for _, item in pairs(instances) do
+                                if item.state.phase == "close_unresponsive" then transition(item, "force_stop")
+                                elseif item.state.phase == "close_requested" or item.state.phase == "close_confirming" then transition(item, "accept_close")
+                                else transition(item, "stop") end
+                            end
+                        end
                     elseif req.op == "bind" then
                         recipient = req.recipient
                         local reply = contract.reply(req.request_id, "bind")
@@ -335,6 +577,8 @@ local function main(owner: string, initial_preferences: unknown)
                         local item = instances[req.id]
                         if item then stop(item, {request_id = req.request_id, recipient = owner, control = false}, false)
                         else emit(contract.reply(req.request_id, "close", "not_found", "View is no longer open"), true) end
+                    elseif req.op == "open" and shutdown_plan then
+                        emit(contract.reply(req.request_id, "open", "busy", "Quit confirmation pending"), true)
                     elseif req.op == "open" then
                         local binding: contract.Binding? = nil
                         for _, candidate in ipairs(bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
@@ -384,10 +628,27 @@ local function main(owner: string, initial_preferences: unknown)
                 end
             end
         end
+        if cleanup_request ~= "" and not cleanup_complete then
+            local live, writes = false, false
+            for _ in pairs(instances) do live = true; break end
+            for _ in pairs(checkpoint_waiters) do writes = true; break end
+            if not live and not writes then
+                cleanup_complete = true
+                emit(contract.reply(cleanup_request, "shutdown"), true)
+            elseif now() >= cleanup_deadline then
+                cleanup_complete = true
+                emit(contract.reply(cleanup_request, "shutdown", "cleanup_incomplete",
+                    "Workspace cleanup timed out; some process exits or writes remain unacknowledged"), true)
+            end
+        end
     end
     ticker:stop()
-    -- Workspace exit is bounded; per-app graceful deadlines are for normal stop.
+    -- Owner loss is the emergency path; normal shutdown has already cooperated.
     for _, item in pairs(instances) do process.terminate(item.execution_pid); item.view:close() end
+    process.unlisten(shutdown_requests)
+    process.unlisten(close_replies)
+    process.unlisten(queries); process.unlisten(answers)
+    process.unlisten(titles)
     process.unlisten(requests); process.unlisten(app_ready); process.unlisten(appearance_requests)
     process.unlisten(appearance_states); process.unlisten(controls)
     process.unlisten(checkpoints); process.unlisten(persisted)

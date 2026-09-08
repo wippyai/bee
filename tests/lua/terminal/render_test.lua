@@ -1,4 +1,6 @@
 local test = require("test")
+local chrome = require("chrome")
+local tty = require("tty")
 local model = require("model")
 local layout = require("layout")
 local render = require("render")
@@ -11,6 +13,21 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("keeps the boot mark inside compact and full-size terminals", function()
+            for _, width in ipairs({1, 8, 23, 24, 80, 120}) do
+                for _, height in ipairs({1, 2, 5, 13, 14, 30}) do
+                    local rows = chrome.boot(width, height)
+                    test.eq(#rows, height)
+                    for _, row in ipairs(rows) do test.eq(tty.text.width(row), width) end
+                    if width >= 24 and height >= 14 then
+                        test.is_true(table.concat(rows):find("╰──╲ ╱──╯", 1, true) ~= nil)
+                    elseif width >= 3 then
+                        test.is_true(table.concat(rows):find("bee", 1, true) ~= nil)
+                    end
+                end
+            end
+        end)
+
         test.it("maps a focused cursor through the frame and hides clipped or collapsed cursors", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")
             scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 10})

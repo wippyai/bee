@@ -85,6 +85,8 @@ local function main(value: unknown)
             lines[#lines + 1] = tostring(event.seq) .. "  " .. event.run:sub(1, 8) .. "  " .. label .. "  " .. detail
             if #lines > 200 then table.remove(lines, 1) end
             last_recorded = label .. (detail ~= "" and (" · " .. detail) or "")
+            if event.kind == "test.run.started" then client.title(launch, "Checks · started")
+            elseif event.kind == "test.run.finished" then client.title(launch, "Checks · complete") end
         end
         status = "Last recorded: " .. last_recorded
         return true

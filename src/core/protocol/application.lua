@@ -1,7 +1,7 @@
 -- Versioned application boundary. Records contain values, never terminal handles.
 local arguments = require("arguments")
 local M = {}
-type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "page" | "shutdown"
+type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "page" | "title" | "closing" | "quit" | "shutdown"
 type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, instance_id: string,
     title: string, icon: string?, mount: string, definition_id: string, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string}
 type RequestOp = "open" | "close" | "bind" | "shutdown"

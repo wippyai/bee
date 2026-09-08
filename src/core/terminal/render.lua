@@ -1,5 +1,7 @@
 -- Draw a value snapshot. This library cannot launch, message or resize apps.
 local tty = require("tty")
+local title_editor = require("title_editor")
+local dialog = require("dialog")
 local model = require("model")
 local layout = require("layout")
 local appearance = require("appearance")
@@ -16,7 +18,7 @@ local function styled(style: string, text: string): string return style .. text 
 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
-    preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?): Frame
+    preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?, editor: title_editor.State?, modal: dialog.State?): Frame
     local prefs = preferences or appearance.defaults()
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
@@ -60,6 +62,8 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
         menu.draw(canvas, panel, menu.fit(start, panel, #items), items, prefs)
         cursor.visible = false
     end
+    if editor then cursor = title_editor.draw(canvas, editor, width, height, prefs) end
+    if modal then cursor = dialog.draw(canvas, modal, width, height, prefs) end
     return {rows = canvas:rows(), tabs = hits, cursor = cursor}
 end
 return M

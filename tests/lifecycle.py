@@ -83,6 +83,8 @@ def run():
                         ui.wait("Application did not become", timeout=6)
                         assert "No applications open" in ui.screen.display[0]
                         assert "READY /" not in ui.text()
+                        ui.resize(ui.width + 1, ui.height)
+                        ui.wait("Application did not become")
                     else:
                         ui.wait("READY / probe:" + name)
                         ui.pump(.3)

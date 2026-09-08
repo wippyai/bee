@@ -13,7 +13,7 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
     for _, id in ipairs(order) do
         for _, win in ipairs(scene.windows) do
             if win.id == id then
-                local title = tty.text.truncate(string.gsub(win.title, "%c", " "), math.floor(math.max(1, math.min(22, width - 7))), "…")
+                local title = tty.text.truncate(string.gsub(model.display_title(win), "%c", " "), math.floor(math.max(1, math.min(22, width - 7))), "…")
                 if icons then
                     title = tty.text.truncate(win.icon ~= nil and win.icon ~= "" and win.icon or title, 2, "")
                     if tty.text.width(title) == 0 then title = "•" end
@@ -80,7 +80,13 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
         if hit.x > position then text = text .. normal .. tty.text.cut(strip.text, position - 1, hit.x - 1) end
         local style = normal
         for _, win in ipairs(scene.windows) do if win.id == hit.id and win.mode == "minimized" then style = muted end end
-        if hit.id == scene.focus then style = active end
+        for _, win in ipairs(scene.windows) do
+            if win.id == hit.id then
+                local accent, foreground = appearance.instance_accent(theme, win.accent)
+                if hit.id == scene.focus then style = appearance.style(foreground, accent)
+                elseif win.mode ~= "minimized" and win.accent and win.accent ~= "" then style = appearance.style(accent, theme.surface) end
+            end
+        end
         text = text .. style .. tty.text.cut(strip.text, hit.x - 1, hit.x + hit.width - 1)
         position = hit.x + hit.width
         hits[#hits + 1] = {id = hit.id, x = hit.x + 7, width = hit.width}

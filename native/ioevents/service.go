@@ -92,7 +92,9 @@ func (manager *Manager) Start(ctx context.Context, owner, resource, root, relati
 		return nil, err
 	}
 	raw := make(chan notify.EventInfo, eventBuffer)
-	if err := notify.Watch(directory, raw, notify.All); err != nil {
+	// The backend interprets a trailing "..." as a recursive watch request.
+	// Append a literal directory separator so valid names retain their meaning.
+	if err := notify.Watch(directory+string(os.PathSeparator), raw, notify.All); err != nil {
 		release()
 		return nil, err
 	}

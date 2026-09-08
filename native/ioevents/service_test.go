@@ -72,6 +72,46 @@ func TestWatchRejectsTraversalAndSymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestWatchTreatsTrailingDotsAsLiteralDirectoryName(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "literal...")
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager()
+	defer stopManager(t, manager)
+	events := make(chan Event, eventBuffer)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	watch, err := manager.Start(ctx, "owner", "project:root", root, "literal...", func(event Event) error {
+		select {
+		case events <- event:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watch.Close()
+	if err := os.WriteFile(filepath.Join(directory, "file.txt"), []byte("change"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case event := <-events:
+			if event.Kind == "change" && event.Path == "literal.../file.txt" {
+				return
+			}
+		case <-deadline.C:
+			t.Fatal("missing event from directory with trailing dots")
+		}
+	}
+}
+
 func TestOwnerCancellationReleasesWatch(t *testing.T) {
 	manager := NewManager()
 	defer stopManager(t, manager)

@@ -10,7 +10,12 @@ import (
 
 // ModuleTypes describes every exported value to the Wippy type checker.
 func ModuleTypes() *io.Manifest {
-	event := typ.NewRecord().Field("kind", typ.NewUnion(typ.LiteralString("change"), typ.LiteralString("rescan"))).Field("resource", typ.String).Field("path", typ.String).Field("operation", typ.String).Build()
+	event := typ.NewRecord().
+		Field("kind", typ.NewUnion(typ.LiteralString("change"), typ.LiteralString("rescan"))).
+		Field("resource", typ.String).
+		Field("path", typ.String).
+		Field("operation", typ.String).
+		Build()
 	channel, ok := engine.ChannelModuleTypes().LookupType("Channel")
 	if !ok {
 		panic("runtime Channel type is unavailable")

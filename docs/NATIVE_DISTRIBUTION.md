@@ -8,8 +8,8 @@ Both repositories are currently private. No stable native release is published.
 
 The [application and native module SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
 documents pack/UI configuration, native factories, typed Lua exports and argument
-passing. Event adapters currently depend on pinned runtime engine APIs; no stable
-standalone event SDK or `filesystem:watch()` method is claimed.
+passing. Event adapters depend on pinned runtime engine APIs.
+`filesystem:watch()` remains a proposed runtime extension.
 
 ## Build and check
 
@@ -27,19 +27,19 @@ The Go assembler requires Git, Go 1.27.0, a C compiler and Git credentials that 
 read the selected private modules. Running the resulting binary needs neither Go,
 Wippy nor the Bee checkout. The native Terminal still requires `/bin/bash` and
 runs with the OS user's authority. The current Linux build uses the platform's
-C library; it is not a promise of a fully static or universal Linux executable.
+C library. Other platforms require separate build and application acceptance.
 
 The runtime stays on Bee's existing pinned revision to preserve its TTY API.
 The checksummed foundation and application-host patches retain upstream MPL-2.0
 headers. Upstream changes are prepared as runtime PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
 [668](https://github.com/wippyai/runtime/pull/668). The builder checks out committed
-source and verifies patches; dirty neighboring runtime trees are never inputs.
+source into a temporary directory and verifies patches before compiling.
 
 `BEE_VERSION=0.1.0-dev make standalone` regenerates the pack and records its exact
 version and hash in the manifest. Bee exports one module root definition at
 `bee:definition`. Child namespaces keep their existing library/process identities;
-the desktop model does not declare a second published module root.
+Bee has one published module root.
 
 ## Installed application and updates
 
@@ -57,7 +57,7 @@ The default state directory is the OS user configuration directory plus `bee`
 and thread databases use this state directory unless their explicit environment
 variables override it. Registry history is separate from application databases.
 
-On first boot the embedded pack seeds a canonical lock and vendor deployment.
+On first boot the embedded pack seeds a Wippy lock and vendor deployment.
 Later boots preserve the installed selection. `update` uses the normal Wippy Hub
 resolver in a staged deployment, lints against the compiled native modules,
 verifies artifact hashes, then switches the activation record. Failure retains
@@ -69,11 +69,11 @@ installation are not implemented by this change.
 The manifest's `base` mode provides explicit `--base` recovery using embedded code
 and separate registry history. `bootstrap` mode seeds only the first deployment
 and rejects `--base`. Neither mode resets application databases. Existing migration
-checks can reject older code against newer data. These modes do not provide
-transparent schema rollback or live application replacement.
+checks can reject older code against newer data. Code activation requires a
+restart; schema rollback requires an application-specific migration strategy.
 
-`runtime` exposes the canonical advanced CLI directly. In particular,
-`runtime update` does not use the standalone staging wrapper. Native code updates
+`runtime` exposes the Wippy CLI directly. `runtime update` modifies the selected
+deployment directly and bypasses standalone staging. Native code updates
 require a new executable; Hub updates replace application packs. Lint catches
 missing module exports and type incompatibilities, but a semantic native-version
 requirement gate is not implemented.

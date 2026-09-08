@@ -10,10 +10,9 @@ must declare `ioevents` in `modules`. A process also needs explicit host-selecte
 `fs.get` and `ioevents.watch` grants for the named filesystem resource. Registry
 metadata and module import declarations do not authorize filesystem access.
 
-This is a filesystem-resource integration: callers select a registered resource,
-not an arbitrary host path. A future `filesystem:watch()` method requires a
-runtime-owned provider and authorization contract; this component does not mutate
-the built-in `fs` module. See the
+Callers select a registered filesystem resource and a path relative to its root.
+A future `filesystem:watch()` method requires a runtime provider and
+authorization contract. See the
 [native authoring SDK](https://github.com/wippyai/builder/blob/main/docs/SDK.md)
 for the boot path and the current revision-coupled scheduler APIs.
 
@@ -41,12 +40,21 @@ or `rescan`; paths are relative to the filesystem root. Operations normalize to
 `create`, `write`, `rename`, `remove` or `other`. The first event requests a rescan,
 then another rescan is emitted every five seconds. Consumers must reconcile with
 the filesystem: the backend can coalesce or silently drop native notifications.
-A watch is not a durable event log or evidence that every change was observed.
+Consumers must tolerate lost and coalesced changes.
 
-Each process may own at most 32 watches and the host at most 128. Native event
-buffers and routed message retention are bounded. Runtime subscription epochs and
+Each process may own at most 32 watches and the host at most 128. The backend
+channel holds 128 events. Runtime message retention is limited to 128 items or
+1 MiB per watch; exceeding it closes the channel with an error and stops the
+producer. Reopen the watch and rescan to recover. `watch:close()` is idempotent;
+native cleanup completes asynchronously. Runtime subscription epochs and
 generations prevent events from an old subscription entering a recycled process.
-Lua values are constructed on the scheduler step, never on watcher goroutines.
+Lua values are constructed on the scheduler step.
+
+Linux amd64 is the tested target. Local Linux Docker acceptance also verifies
+host-originated bind-mount changes and permission denial, with networking disabled,
+all capabilities dropped and a non-root user. The backend supports macOS and
+Windows; Bee acceptance for those platforms is pending. Docker Desktop bind mounts
+can delay or lose native notifications; rescan handling remains necessary.
 
 Run `make native-check` after `make native-tools` for race tests, Go vet and Lua integration acceptance. Bee code is MIT;
 Wippy and its dependencies retain their upstream licenses. The backend's license

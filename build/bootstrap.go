@@ -12,17 +12,33 @@ import (
 	"strings"
 )
 
-func run(dir, name string, args ...string) error {
+func command(dir, name string, args ...string) *exec.Cmd {
+	if name == "git" {
+		args = append([]string{"-c", "core.autocrlf=false", "-c", "core.hooksPath=" + os.DevNull}, args...)
+	}
 	c := exec.Command(name, args...)
 	c.Dir = dir
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		switch key {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX", "GOWORK", "GOFLAGS":
+			continue
+		}
+		c.Env = append(c.Env, entry)
+	}
+	c.Env = append(c.Env, "GOWORK=off", "GOFLAGS=")
+	return c
+}
+
+func run(dir, name string, args ...string) error {
+	c := command(dir, name, args...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
 }
 func output(dir string, args ...string) (string, error) {
-	c := exec.Command("git", args...)
-	c.Dir = dir
+	c := command(dir, "git", args...)
 	b, err := c.Output()
 	return strings.TrimSpace(string(b)), err
 }
@@ -77,7 +93,7 @@ func bootstrap() error {
 	if err != nil {
 		return err
 	}
-	status, err := output(checkout, "status", "--porcelain", "--untracked-files=all")
+	status, err := output(checkout, "status", "--porcelain", "--untracked-files=all", "--ignored=matching")
 	if err != nil {
 		return err
 	}

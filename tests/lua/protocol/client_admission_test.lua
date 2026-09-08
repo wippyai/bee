@@ -72,6 +72,23 @@ local function define_tests()
             test.is_nil(clients.control(value))
             test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity, op = "render", recipient = "client"}))
         end)
+        test.it("requires a qualified bounded inventory alongside private operation results", function()
+            local reply = contract.reply("open", "open", "", "")
+            reply.workspace_id = identity
+            local value = {version = 1, reply = reply, views = {version = 1, workspace_id = identity,
+                connection_id = "connection", revision = 3, items = {}}}
+            local result = assert(clients.result(value))
+            test.eq(result.views.connection_id, "connection")
+            test.eq(result.views.revision, 3)
+            value.views.revision = 4
+            test.eq(result.views.revision, 3)
+            value.views.revision = -1
+            test.is_nil(clients.result(value))
+            value.views.revision = 3
+            value.views.workspace_id = "ffffffffffffffffffffffffffffffff"
+            test.is_nil(clients.result(value))
+            test.is_nil(clients.result(reply))
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

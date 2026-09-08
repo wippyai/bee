@@ -11,16 +11,29 @@ end
 function M.open(): Display
     assert(tty.start())
     local output, err = tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true})
-    if not output then error(tostring(err)) end
-    assert(tty.mouse(true))
-    local width, height = tty.screen_size()
-    -- Show the boot frame before waiting for a database or any child process.
-    assert(output:present(chrome.boot(width, height), {cursor = {x = 1, y = 1, visible = false}}))
-    return {output = output, view = viewport(width, height), width = width, height = height, last_rows = {}}
+    if not output then tty.stop(); error(tostring(err)) end
+    local result: Display? = nil
+    local function initialize()
+        assert(tty.mouse(true))
+        local width, height = tty.screen_size()
+        -- Show the boot frame before waiting for a database or any child process.
+        assert(output:present(chrome.boot(width, height), {cursor = {x = 1, y = 1, visible = false}}))
+        result = {output = output, view = viewport(width, height), width = width, height = height, last_rows = {}}
+    end
+    local ready, failure = pcall(initialize)
+    if not ready then output:close(); tty.stop(); error(tostring(failure)) end
+    if not result then output:close(); tty.stop(); error("Display initialization returned no resources") end
+    return result
 end
 function M.replace(value: Display)
     value.view:close()
     value.view = viewport(value.width, value.height)
+end
+-- A supervised handoff retires the returned viewport only after host revocation.
+function M.stage(value: Display): tty.Viewport
+    local previous = value.view
+    value.view = viewport(value.width, value.height)
+    return previous
 end
 function M.resize(value: Display, width: integer, height: integer)
     value.width, value.height = width, height

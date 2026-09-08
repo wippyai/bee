@@ -57,6 +57,37 @@ local function define_tests()
             test.is_nil(state.import_desktop(first_workspace, source))
             test.is_nil(state.import_desktop("invalid", legacy()))
         end)
+        test.it("keeps pending target identity across empty, added and removed projections", function()
+            local added = assert(state.import_desktop(first_workspace, legacy()))
+            local key = added.tabs[1]
+            local targets = {[key] = added.targets[1]}
+            local empty = state.empty(100, 30)
+            -- An initial snapshot can arrive after add and remove were queued.
+            local initial = assert(state.project(empty, empty, targets))
+            test.eq(#initial.targets, 0)
+            test.is_true(targets[key] ~= nil)
+            local visible = assert(state.project(initial, added, targets))
+            test.eq(#visible.targets, 1)
+            local removed = {scene = model.remove(visible.scene, key), tabs = {}, preferences = visible.preferences}
+            local final = assert(state.project(visible, removed, targets))
+            test.eq(#final.targets, 0)
+            test.is_true(targets[key] ~= nil)
+            -- A removal acknowledgement can beat the older scene channel.
+            test.is_nil(state.project(final, added, targets))
+            -- Owner prunes only after the correlated removal has committed.
+            targets[key] = nil
+            test.is_nil(state.project(initial, added, targets))
+        end)
+        test.it("rejects two tabs that control the same qualified producer", function()
+            local imported = assert(state.import_desktop(first_workspace, legacy()))
+            local duplicate = assert(state.import_desktop(first_workspace, legacy()))
+            duplicate.scene.windows[1].id = "second-tab"
+            duplicate.targets[1].tab_id = "second-tab"
+            imported.scene.windows[2] = duplicate.scene.windows[1]
+            imported.targets[2] = duplicate.targets[1]
+            imported.tabs[2] = "second-tab"
+            test.is_nil(state.decode(imported))
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

@@ -61,17 +61,25 @@ checkpoint/restart coverage. The local desktop does not use it yet; there is no
 headless launch profile, workspace switcher or `bee hive` CLI.
 The private host admits supervisor-selected client actors with explicit operation
 permissions and connection IDs. Source/pack tests cover two clients, detach,
-re-admission, exit cleanup and retained native terminals. Desktop attachment,
-client-store integration and client question delivery remain unfinished; see the
+re-admission, exit cleanup and retained native terminals. Public desktop attachment,
+legacy client-store migration and client question delivery remain unfinished; see the
 private admission contract in `CLIENT_HOST_SPLIT.md`.
 Admitted actors receive separate, connection-qualified catalog and live-view
 snapshots, including apps opened before admission. These descriptions carry no
 mounts or checkpoints. Source/pack checks cover title/exit updates and publication
-fencing on detach; the desktop does not consume these streams yet.
+fencing on detach; the private desktop client consumes them, while normal launch
+still uses the combined owner. Private `bee.host.reply` results include a bounded
+inventory snapshot so independent channel ordering cannot resurrect a removed tab.
 The host also supports supervisor-selected renderer replacement under an existing
 client connection. Bind requests carry the current renderer generation. Source/pack
 tests cover old-grant denial, failed revocation, renderer exit and queued detach;
-the actual desktop still uses its existing F12 path.
+normal desktop launch still uses its existing F12 path.
+The private `bee.client:main` now composes a display, session, presenter and client
+store against one admitted host. Source/pack checks prove two independent desktop
+actors, selected-tab isolation, F12 and fresh-client reattachment to a retained
+Terminal. It lacks dialogs, Settings routing, mixed workspaces and robust failure
+recovery; do not substitute it for normal launch yet. See the private client
+acceptance section in `CLIENT_HOST_SPLIT.md`.
 `CLIENT_STATE.md` documents the private client store and import receipt. Its
 qualified layout and source/pack persistence tests pass, but normal desktop launch
 still uses the combined owner and does not migrate to that store yet.

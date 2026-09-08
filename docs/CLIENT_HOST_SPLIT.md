@@ -6,7 +6,7 @@ The existing desktop now uses `bee.terminal:display` for physical output, the
 presenter's virtual viewport, boot/recovery frames and viewport replacement.
 This owner-local library contains no application routing, database access or
 process supervision. The new client can reuse it without moving the physical
-output lease into the replaceable presenter. Desktop client launch remains pending.
+output lease into the replaceable presenter. Normal desktop client launch remains pending.
 The required behavior and native mesh boundary are in
 [workspace attachments](WORKSPACE_ATTACHMENTS.md). Local Bee still combines the
 physical terminal owner and workspace host. No headless profile exists yet.
@@ -32,8 +32,9 @@ It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
 This private entry is not yet used by `bee` and has no public command or headless
-profile. It admits client actors and delivers catalog/live-view snapshots, but
-does not yet integrate desktop clients, deliver their questions or persist their layouts.
+profile. It admits private desktop clients and delivers catalog/live-view snapshots;
+client question delivery and normal launcher integration remain unfinished.
+Each private desktop client owns its separate layout store.
 Its supervisor is a stable owner, not a replaceable presenter; losing that
 supervisor ends the host. Local launch still uses the existing combined owner.
 Do not run both owners against the same database: generation checks reject stale
@@ -61,6 +62,14 @@ generations return `stale_renderer`; a transition returns `busy`, and a cleared
 renderer returns `unavailable`. Bind correlation includes the renderer generation,
 so repeating a public bind ID after replacement cannot replay a retired mount.
 Open/close correlation remains scoped to the unchanged client connection.
+
+Admitted clients receive `bee.host.reply` containing `{version, reply, views}`.
+`reply` retains the application result shape; `views` is the complete qualified
+inventory at that result. The public application protocol and supervisor's
+`bee.app.reply` route are unchanged. The snapshot costs at most sixteen view
+descriptions per operation result and avoids another retry queue or polling loop.
+Clients compare revisions across inventory and result channels: a newer removal
+prevents a late open result from selecting a dead app, and newer titles prevail.
 
 Detach disables further requests before revoking grants. A successful
 `bee.host.client_result` follows revocation and monitor removal. Failure retains
@@ -92,6 +101,52 @@ Source/pack actor tests cover joining after another Terminal opened, observing
 an application's title and removal, fresh snapshots after re-admission, and no
 new inventory after detach. Inventory delivery is implemented in the private host;
 the current combined desktop has not switched to these streams yet.
+
+## Private desktop client acceptance
+
+`bee.client:main(owner, host, workspace_id, database_resource, initial_application?)`
+now runs an independent desktop against one admitted host. Bootstrap requires
+the supervisor's `bee.client_owner` context. The supervisor supplies desktop
+permissions, `bee:client_spawn_policy` and an exact client-database grant; ordinary
+apps cannot spawn this entry. There is no public client command yet.
+
+The actor owns its physical display adapter, layout store, session and presenter.
+Its selected targets retain full workspace/instance/view identity, with separate
+local tab keys. It observes the host catalog and inventory but selects only saved
+targets or its own successful open requests. Presentation copies use local tab
+keys; requests to the host retain native target IDs. Pending operations and bind
+requests are bounded, and bind replies are fenced by renderer generation.
+Initial catalog/view channels remain queued until admission supplies the connection
+identity. Session projections preserve pending target records; only a correlated
+removal acknowledgement can retire one. Duplicate qualified targets are rejected
+even when their local tab keys differ. Graceful exit asks the session for a full
+snapshot, committing commands already forwarded by the client before closing its
+store. This wait has a one-second failure deadline, not a fixed exit delay.
+It does not yet fence presenter input or commands still queued at the client;
+that final input-drain protocol remains an acceptance requirement.
+
+The supervisor receives `bee.client.ready`, admits that actual execution, then
+receives `bee.client.renderer` when its presenter is ready. It selects that exact
+renderer through the existing host `render` operation. F12 repeats this handoff
+with a separate viewport; the old renderer stays alive until revocation finishes.
+Repeating the active renderer/generation notification does not schedule new binds.
+Startup and the event loop share cleanup of acquired stores, displays, children
+and subscriptions; the display adapter also releases a partially initialized surface.
+The session accepts a validated initial layout from its authenticated owner.
+
+`tests/client_desktop.py` exercises two real desktop actors in source and pack,
+independent screen geometry and selected tabs, native Terminal input, F12, client
+exit without stopping the Terminal, and fresh-client reattachment using the saved
+layout and the same live shell variable. Ctrl+Q detaches this private client;
+it does not negotiate shutdown of the host's applications.
+
+This entry is still incomplete: it has no client dialog delivery or Settings
+appearance route, no mixed-workspace composition, no automatic migration from the
+old workspace desktop, and no public launcher. Unexpected presenter/host loss
+ends the client; supervised admission/replacement timeouts and paused recovery
+still need implementation. Application close requiring a dialog is not usable
+through this entry yet. These limitations are why normal `bee` continues to use
+the existing combined owner.
 
 ## Named supervisor endpoint
 
@@ -178,7 +233,8 @@ inventory snapshot can update selected tabs and offer other running views, but
 must not automatically bind every discovered view. Rejoin reacquires only that
 client's selected targets. Opening or explicitly selecting a view can request
 its attachment; joining a second client alone must not displace an existing
-controller. These selection rules are not yet wired into the desktop actor.
+controller. The private client implements selection isolation; normal launch still
+uses the combined workspace owner.
 
 Client preferences own wallpaper, desktop chrome and tab presentation. The
 workspace/application owns producer page defaults and application appearance.
@@ -219,7 +275,7 @@ renderer actors. It verifies failed revocation/retry, stale generation denial,
 reused public bind IDs, recipient-bound mounts, renderer exit, deferred detach
 without timing sleeps, and unchanged Bash PIDs and variables across replacements.
 The old renderer loses observation, input and resize; a second client remains
-usable. This private protocol is not wired to the desktop's F12 flow yet. The
+usable. The private desktop client uses this protocol for F12. The
 existing local F12 path and supervisor-owned pending questions remain unchanged.
 
 ## Replaceable shell inbox
@@ -321,7 +377,8 @@ Do not put a new network transport underneath Bee when native mesh provides it.
 The private [client state store](CLIENT_STATE.md) now supplies qualified layout
 values, a separate client identity/database, generation checks and atomic legacy
 import receipts. Source/pack fixtures verify retry after restart without replacing
-later client edits. The desktop actor and host acknowledgement are not wired yet.
+later client edits. The private desktop actor uses the store; automatic legacy
+import and host acknowledgement are not wired yet.
 
 The host retains workspace identity and app checkpoints. The client has an owned
 store for its identity, qualified tab references and layout. Fresh clients do not

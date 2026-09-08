@@ -160,7 +160,7 @@ local function main(owner: string, database_resource: string?)
                             live_inventory = next_inventory
                             if ready then connections.publish(client_connections, live_inventory, "views") end
                         end
-                        if not connections.reply(client_connections, reply) then
+                        if not connections.reply(client_connections, reply, live_inventory) then
                             if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
                                 deliver("bee.host.restore_result", reply)
                                 restore_next()

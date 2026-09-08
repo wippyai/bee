@@ -52,6 +52,7 @@ entries:
     decode: bee.protocol:decode
     contract: bee.protocol:application
     inventory: bee.workspace:inventory
+    client_protocol: bee.workspace:client_protocol
 - name: client
   kind: process.lua
   source: file://clients.lua
@@ -61,6 +62,7 @@ entries:
     decode: bee.protocol:decode
     contract: bee.protocol:application
     inventory: bee.workspace:inventory
+    client_protocol: bee.workspace:client_protocol
 - name: renderer
   kind: process.lua
   source: file://clients.lua
@@ -70,6 +72,7 @@ entries:
     decode: bee.protocol:decode
     contract: bee.protocol:application
     inventory: bee.workspace:inventory
+    client_protocol: bee.workspace:client_protocol
 - name: host
   kind: library.lua
   source: file://host.lua

@@ -137,6 +137,7 @@ entries:
     - bee.workspace:host
     - bee.workspace:main
     - bee.workspace:launch
+    - bee.client:main
     - bee.session:main
     - bee.applications:broker
     - bee.terminal:main
@@ -158,6 +159,12 @@ entries:
   policy:
     actions: [process.send, process.monitor, process.unmonitor, process.terminate, process.host, process.context, process.security, security.policy.get, security.scope.create]
     resources: '*'
+    effect: allow
+- name: client_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.session:main, bee.terminal:main]
     effect: allow
 - name: host_spawn_policy
   kind: security.policy

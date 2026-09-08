@@ -1,8 +1,9 @@
 # Client layout persistence
 
-Status: private store and typed layout values implemented and tested; the local
-desktop still uses its existing workspace envelope. Automatic host-to-client
-migration and independent desktop launch are not wired yet.
+Status: the private client actor uses this store and typed layout. Source/pack
+tests cover independent desktop actors and client restart against retained host
+applications. Normal local launch still uses the workspace envelope. Automatic
+host-to-client migration and public independent desktop launch are not wired yet.
 
 The workspace host owns application membership, checkpoints and producer
 appearance. A desktop client owns placement, tab order, focus, personal titles,
@@ -78,9 +79,10 @@ integrated; `BEE_CLIENT_DB` is not currently a public workspace-selector command
 `make test` checks mixed-workspace and malformed target values. `make check`
 also runs the source/pack Lua storage fixture, restart/retry, existing-layout
 protection, failed import and migration rollback, stale writers, schema corruption
-and native app database denial. These are persistence checks, not evidence that
-two interactive desktop clients are implemented.
+and native app database denial. These checks cover persistence. The separate
+`client_desktop` fixture exercises two actual private desktop actors.
 The storage fixture also selects two client and two workspace resources, writes
 different state, restarts and verifies isolation in source and pack. Native
 checks reject ungranted resources and broad-grant attempts to bypass the core
-database boundary. Production bootstrap has not yet selected per-client stores.
+database boundary. Normal launch has not yet selected per-client stores; the
+private client acceptance fixture supplies explicit bindings.

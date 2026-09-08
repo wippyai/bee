@@ -11,5 +11,6 @@ entries:
     commands: bee.protocol:commands
     state: bee.desktop:state
     appearance: bee.desktop:appearance
+    decode: bee.protocol:decode
   security:
     policies: [bee:session_policy]

@@ -23,18 +23,39 @@ function M.decode(value: unknown): State?
         windows[window.id] = window
     end
     local targets: {Target} = {}
+    local identities: {[string]: boolean} = {}
     for index = 1, count do
         local item: unknown = value.targets[index]
         if type(item) ~= "table" then return nil end
         local tab_id, instance_id = contract.text(item.tab_id, 80), contract.text(item.instance_id, 80)
         local workspace_id, view_id = contract.workspace_id(item.workspace_id), contract.text(item.view_id, 80)
         if not tab_id or tab_id == "" or not instance_id or instance_id == "" or not workspace_id or not view_id or view_id == "" then return nil end
+        local identity = workspace_id .. "\0" .. instance_id .. "\0" .. view_id
+        if identities[identity] then return nil end
+        identities[identity] = true
         local window = windows[tab_id]
         if not window or window.workspace_id ~= workspace_id or window.instance_id ~= instance_id then return nil end
         windows[tab_id] = nil
         targets[#targets + 1] = {tab_id = tab_id, workspace_id = workspace_id, instance_id = instance_id, view_id = view_id}
     end
     return {version = 1, scene = desktop.scene, tabs = desktop.tabs, preferences = desktop.preferences, targets = targets}
+end
+-- A projection can precede queued add/remove commands. Build its durable target
+-- list without pruning the owner's pending target records.
+function M.project(current: State, value: unknown, targets: {[string]: Target}): (State?, string?)
+    local desktop = decode.desktop(value)
+    if not desktop then return nil, "Invalid session projection" end
+    if desktop.scene.revision < current.scene.revision then return nil, nil end
+    local selected: {Target} = {}
+    for _, window in ipairs(desktop.scene.windows) do
+        local target = targets[window.id]
+        if not target then return nil, "Session produced an unknown tab" end
+        selected[#selected + 1] = target
+    end
+    local result = M.decode({version = 1, scene = desktop.scene, tabs = desktop.tabs,
+        preferences = desktop.preferences, targets = selected})
+    if not result then return nil, "Session target identity mismatch" end
+    return result, nil
 end
 function M.empty(width: integer, height: integer): State
     local tabs: {string} = {}

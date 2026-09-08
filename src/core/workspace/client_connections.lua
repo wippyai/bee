@@ -10,11 +10,13 @@ type Route = {recipient: string, connection_id: string, request_id: string, op: 
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
+    inventory: inventory.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string}}
 local M = {}
 function M.new(owner: string, broker: string, workspace_id: string): State
     return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()),
+        inventory = inventory.new(workspace_id),
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {}}
 end
 local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)
@@ -132,6 +134,7 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
 end
 function M.publish(state: State, value: inventory.State, kind: "catalog" | "views", recipient: string?)
     if value.workspace_id ~= state.workspace_id then error("Foreign workspace inventory") end
+    state.inventory = value
     for _, client in pairs(state.admitted) do
         if not client.detaching and (recipient == nil or recipient == client.recipient) then
             local sent = false
@@ -144,10 +147,14 @@ function M.publish(state: State, value: inventory.State, kind: "catalog" | "view
         end
     end
 end
+local function deliver_reply(state: State, client: clients.Client, reply: contract.Reply)
+    if not process.send(client.recipient, "bee.host.reply", {version = 1, reply = reply,
+        views = inventory.views_message(state.inventory, client.connection_id)}) then detach(state, client, "") end
+end
 local function reject(state: State, client: clients.Client, request: contract.Request, reason: string, message: string)
     local reply = contract.reply(request.request_id, request.op, reason, message)
     reply.workspace_id = state.workspace_id
-    if not process.send(client.recipient, "bee.app.reply", reply) then detach(state, client, "") end
+    deliver_reply(state, client, reply)
 end
 function M.request(state: State, caller: string, request: contract.Request, data: unknown, ready: boolean): boolean
     local client = state.admitted[caller]
@@ -187,7 +194,9 @@ local function release_renderer(client: clients.Client): (boolean, string?)
     client.renderer = ""
     return true, nil
 end
-function M.reply(state: State, reply: contract.Reply): boolean
+function M.reply(state: State, reply: contract.Reply, current: inventory.State): boolean
+    if current.workspace_id ~= state.workspace_id then error("Foreign workspace result inventory") end
+    state.inventory = current
     local changed = state.changes[reply.request_id]
     if changed and reply.op == "unbind" then
         state.changes[reply.request_id] = nil
@@ -242,7 +251,7 @@ function M.reply(state: State, reply: contract.Reply): boolean
         and (route.op ~= "bind" or (not client.rendering and route.renderer_generation == client.renderer_generation)) then
         reply.request_id, reply.resume_state = route.request_id, ""
         if reply.op ~= "attached" then reply.mount = "" end
-        if not process.send(client.recipient, "bee.app.reply", reply) then detach(state, client, "") end
+        deliver_reply(state, client, reply)
     end
     return true
 end

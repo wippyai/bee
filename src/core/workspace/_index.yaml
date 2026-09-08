@@ -35,6 +35,8 @@ entries:
   source: file://client_protocol.lua
   imports:
     contract: bee.protocol:application
+    decode: bee.protocol:decode
+    inventory: bee.workspace:inventory
 - name: main
   kind: process.lua
   source: file://main.lua

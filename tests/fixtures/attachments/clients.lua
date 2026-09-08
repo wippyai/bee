@@ -6,6 +6,7 @@ local time = require("time")
 local decode = require("decode")
 local contract = require("contract")
 local inventory = require("inventory")
+local client_protocol = require("client_protocol")
 local channel = require("channel")
 type View = {id: string, instance_id: string, native_pid: string}
 local M = {}
@@ -24,7 +25,7 @@ local function wait_for(view: tty.Viewport, pattern: string): string
 end
 function M.client(owner: string, host: string, workspace_id: string, label: string)
     local admissions = assert(process.listen("bee.host.admitted", {message = true}))
-    local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local replies = assert(process.listen("bee.host.reply", {message = true}))
     local commands = assert(process.listen("bee.client.command", {message = true}))
     local presentations = assert(process.listen("bee.host.presentation", {message = true}))
     local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
@@ -45,8 +46,16 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         while true do
             local message = assert(replies:receive())
             assert(message:from() == host)
-            local value = decode.reply(message:payload():data())
-            if not value then error("Invalid client reply") end
+            local envelope = client_protocol.result(message:payload():data())
+            if not envelope then error("Invalid client reply") end
+            local value = envelope.reply
+            if value.op == "open" and value.error_code == "" then
+                local found = false
+                for _, item in ipairs(envelope.views.items) do
+                    if item.view_id == value.id and item.instance_id == value.instance_id then found = true end
+                end
+                assert(found, "Open result must carry its committed host inventory")
+            end
             assert(decode.belongs(value, workspace_id))
             if value.request_id == id and value.op == op then return value end
         end

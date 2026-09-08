@@ -5,10 +5,11 @@ local contract = require("contract")
 local commands = require("commands")
 local state = require("state")
 local appearance = require("appearance")
+local decode = require("decode")
 
 -- Only the attachment owner can mutate this private desktop session.
 -- No application launch, terminal lease, or opaque handle enters its state.
-local function main(owner: string, width: integer, height: integer, preferences: unknown)
+local function main(owner: string, width: integer, height: integer, preferences: unknown, initial: unknown)
     local command_channel = assert(process.listen("bee.desktop.command", {message = true}))
     local lifecycle = assert(process.events())
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
@@ -17,6 +18,15 @@ local function main(owner: string, width: integer, height: integer, preferences:
     if not workspace_id then error("Invalid workspace identity bootstrap") end
     assert(process.monitor(owner))
     local desktop = state.new(width, height, appearance.decode(preferences))
+    if initial ~= nil then
+        local restored = decode.desktop(initial)
+        if not restored then error("Invalid session layout bootstrap") end
+        for _, window in ipairs(restored.scene.windows) do
+            if window.workspace_id ~= workspace_id then error("Foreign session layout bootstrap") end
+        end
+        desktop = {scene = restored.scene, tabs = restored.tabs, preferences = restored.preferences}
+        desktop = state.reduce(desktop, {version = 1, op = "screen", width = width, height = height})
+    end
 
     local function send_scene()
         assert(process.send(owner, "bee.desktop.scene", state.envelope(desktop)))

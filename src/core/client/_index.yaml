@@ -1,6 +1,20 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports:
+    store: bee.client:store
+    state: bee.client:state
+    decode: bee.protocol:decode
+    input_decode: bee.protocol:input
+    contract: bee.protocol:application
+    inventory: bee.workspace:inventory
+    host_protocol: bee.workspace:client_protocol
+    physical: bee.terminal:display
 - name: store
   kind: library.lua
   source: file://store.lua

@@ -1,0 +1,34 @@
+version: '1.0'
+namespace: bee.desktop_client_probe
+entries:
+- name: root_policy
+  kind: security.policy
+  policy:
+    actions: ['*']
+    resources: ['*']
+    effect: allow
+- name: left_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:left]
+    effect: allow
+- name: right_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:right]
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, security, tty, time]
+  imports:
+    store: bee.client:store
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: desktop-client-probe
+      short: Verify two independent desktop clients

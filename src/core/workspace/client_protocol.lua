@@ -1,11 +1,22 @@
 -- MIT. Supervisor-selected authority for an exact client execution.
 local contract = require("contract")
+local decode = require("decode")
+local inventory = require("inventory")
+type Result = {version: integer, reply: contract.Reply, views: inventory.Views}
 type Permissions = {open: boolean, close: boolean, control: boolean}
 type ControlOp = "admit" | "detach" | "render"
 type Client = {recipient: string, connection_id: string, permissions: Permissions, detaching: boolean,
     renderer: string, renderer_generation: string, rendering: boolean}
 type Control = {request_id: string, workspace_id: string, op: ControlOp, recipient: string, permissions: Permissions?, renderer: string}
 local M = {}
+-- A bounded full snapshot makes an operation result self-contained even when
+-- its independent inventory channel is consumed before or after the result.
+function M.result(value: unknown): Result?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local reply, views = decode.reply(value.reply), inventory.views(value.views)
+    if not reply or not views or reply.workspace_id ~= views.workspace_id then return nil end
+    return {version = 1, reply = reply, views = views}
+end
 local function control_op(value: unknown): ControlOp?
     if value == "admit" then return "admit" end
     if value == "detach" then return "detach" end

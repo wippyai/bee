@@ -1,7 +1,6 @@
-WIPPY ?= .wippy/bin/wippy
+WIPPY ?= .wippy/bin/bee-wippy
 .PHONY: setup run lint test threads pack check
-setup:
-	python3 scripts/runtime_setup.py
+setup: native-tools
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:

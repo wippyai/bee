@@ -99,12 +99,11 @@ mutation is denied to applications today.
 
 ## Reproducible runtime and validation
 
-`make setup` builds the commit and checksum-verified patch in `runtime/lock.json`.
-It disables ambient Go workspaces and never consumes a checkout's dirty files.
-The patch preserves the native startup, full-width surface and scheduler shutdown
-fixes needed by this desktop. These runtime files retain their upstream MPL-2.0
-license; Bee's own source is MIT. The runtime patch should move upstream before
-a public stable release; carrying it here makes this development checkpoint reproducible.
+`make setup` uses the Go builder and `wippy.build.json`, the same runtime and native
+components used for standalone releases. The builder disables ambient Go workspaces
+and verifies its pinned checkout. Bee's own source is MIT; the remaining runtime
+patches retain MPL-2.0. Removing those patches requires the upstream changes tracked
+in [runtime upstream work](RUNTIME_UPSTREAM.md).
 
 The workspace alone opens `bee:workspace_db`, a separate SQLite store from runtime
 registry history. Its append-only migration ledger verifies names and checksums;

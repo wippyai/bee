@@ -47,7 +47,7 @@ func bootstrap() error {
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "runtime", "builder.lock.json"))
+	data, err := os.ReadFile(filepath.Join(root, "build", "builder.lock.json"))
 	if err != nil {
 		return err
 	}

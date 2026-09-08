@@ -267,7 +267,7 @@ integration and the profile CLI are separate, unimplemented slices.
 
 ## Verified runtime boundary
 
-Inspected the runtime commit pinned by `runtime/lock.json`,
+Inspected the runtime commit pinned by `wippy.build.json`,
 `055505effbb0816ee833fb85c817d2954f6a0ccc`, rather than a dirty development tree:
 
 - `system/tty/service.go` creates virtual viewports from actor context without a

@@ -11,7 +11,7 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 PROBE = r'''local storage = require("store")
 

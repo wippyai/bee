@@ -39,20 +39,13 @@ dropped. Only the executable and test harness are mounted. The Terminal tolerate
 an unset `USER` through Wippy's explicit empty placeholder fallback. Container
 images still need Bash and a compatible C library.
 
-The runtime stays on Bee's existing pinned revision to preserve its TTY API.
-The checksummed foundation and application-host patches retain upstream MPL-2.0
-headers. Upstream changes are prepared as runtime PRs
-[667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668). The builder checks out committed
-source into a temporary directory and verifies patches before compiling.
-The complete [upstream dependency list](RUNTIME_UPSTREAM.md) tracks removal of the
-patch inputs and Bee's `runtime/` directory.
-The dependency-notices patch pins Nexus annotations to the source revision
-containing its MIT license, as proposed in
-[runtime PR #677](https://github.com/wippyai/runtime/pull/677).
-The publish-dry-run patch allows credential-free publication packing with an
-explicit version; [runtime PR #684](https://github.com/wippyai/runtime/pull/684)
-prepares that fix upstream. Uploads still require credentials.
+The runtime pin selects merged upstream source with the application host, TTY
+fixes and licensed dependencies. The builder checks out that commit in a temporary
+directory and compiles it without patches. Bee's repository owns application and
+native component code; Wippy owns the runtime implementation. See
+[runtime integration](RUNTIME_UPSTREAM.md) for the merged changes and acceptance.
+Publication dry runs accept an explicit version without Hub credentials; uploads
+require an authorized Hub token.
 
 `BEE_VERSION=0.1.0-dev make standalone` regenerates the pack and records its exact
 version and hash in the manifest. Bee exports one module root definition at
@@ -151,7 +144,7 @@ The reusable builder action is pinned by full commit and shared within the
 organization; native module fetching uses the consuming repository's token.
 
 Archives contain the executable, input manifest provenance, effective Go module
-files, available dependency license notices and the runtime patch sources.
+files and available dependency license notices.
 Archive timestamps and ownership are normalized; pack timestamps and the native
 C toolchain still affect binary reproducibility. The Linux amd64 inventory has
 root notices for all linked Go modules, including the pinned MPL-2.0 registry bindings.

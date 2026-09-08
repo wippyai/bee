@@ -3,35 +3,13 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "055505effbb0816ee833fb85c817d2954f6a0ccc",
+    "commit": "fdad09cef2b766e17b95c52c0aa01183601a9243",
     "go": "1.27.0",
     "tags": [
       "fts5",
       "sqlite_vec",
       "treesitter",
       "sqlite_preupdate_hook"
-    ],
-    "patches": [
-      {
-        "path": "runtime/patches/foundation.patch",
-        "sha256": "aa3ccfb9b78d5ba75e59278a4010ea6eaea3032e0f260fa859a26df680992ec3"
-      },
-      {
-        "path": "runtime/patches/application-host.patch",
-        "sha256": "6d251788d443a2e2a5ef1c70b3f7c06e864eefcf97992fcf203bdbfc6cf890f9"
-      },
-      {
-        "path": "runtime/patches/dependency-notices.patch",
-        "sha256": "f714b62a905dffe17f2fa7f6905d9c91edfd11de8dc4fb4d4a42ad3deee45fac"
-      },
-      {
-        "path": "runtime/patches/registry-license.patch",
-        "sha256": "015558288f98d531cb6cc650fbbd77dc8057bfd95f65230a727cdac6a1654bc5"
-      },
-      {
-        "path": "runtime/patches/publish-dry-run.patch",
-        "sha256": "0270668b230238c1e8bab935529f6780449a7688ffbcf4f09b5d19acac98e5b6"
-      }
     ]
   },
   "application": {
@@ -47,7 +25,7 @@
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "f76f110810975a5182665a4cdc87d2c50ca73f6c4066cbd8b3ee3bf5758bd0fb"
+        "sha256": "099dfa37ebd3a8057d3c92b720eec30d9ec42f257fdd86dc1b4cfdd449cd0dd6"
       }
     ]
   },

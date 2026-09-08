@@ -75,8 +75,8 @@ through a reviewed workflow change if a product needs bootstrap-only releases.
 Production packs select `src/`; architecture acceptance checks loaded entries
 and the source/pack boundary. Tests, local databases, credentials and development
 stores must stay outside the application pack. The release archive contains the
-binary, provenance, effective Go module files, available dependency notices and
-runtime patch sources. Runtime patches retain their upstream MPL-2.0 license.
+binary, provenance, effective Go module files and available dependency notices.
+Bee builds the pinned upstream Wippy source without local runtime patches.
 
 Resolve missing dependency notices before a stable public release. Signing and
 Hub credentials require separate configuration. Keep private keys in
@@ -136,7 +136,7 @@ Existing module visibility is preserved. Local publication accepts the equivalen
 `HUB_VISIBILITY` variable and Wippy's normal credential store or token environment.
 
 The local dry run passed with an empty home/config directory and no token.
-Bee carries the checksummed runtime fix from
+Bee's runtime includes the merged fix from
 [PR #684](https://github.com/wippyai/runtime/pull/684), so pack-only publication
 validation does not request credentials. Linux CI runs this preflight before
 the foundation suite. Actual publication retains its authentication requirement.

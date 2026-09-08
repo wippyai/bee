@@ -15,7 +15,7 @@ package these same pages with status and version, not maintain a second copy.
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
 | Local journal, Test Status and future subscriptions | [Threads](THREADS.md) |
 | Native binary, update modes and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
-| Runtime PRs and removal of local patches | [Runtime upstream work](RUNTIME_UPSTREAM.md) |
+| Runtime source pin and upstream changes | [Runtime integration](RUNTIME_UPSTREAM.md) |
 | Local artifacts, CI gates and release tags | [Releasing](RELEASING.md) |
 | GitHub protections, credentials and repository settings | [GitHub setup](GITHUB.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |

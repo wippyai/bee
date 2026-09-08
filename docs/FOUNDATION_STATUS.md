@@ -101,9 +101,9 @@ mutation is denied to applications today.
 
 `make setup` uses the Go builder and `wippy.build.json`, the same runtime and native
 components used for standalone releases. The builder disables ambient Go workspaces
-and verifies its pinned checkout. Bee's own source is MIT; the remaining runtime
-patches retain MPL-2.0. Removing those patches requires the upstream changes tracked
-in [runtime upstream work](RUNTIME_UPSTREAM.md).
+and verifies its pinned checkout. Bee's own source is MIT; Wippy retains MPL-2.0.
+The required runtime changes are merged upstream. Bee carries no runtime patches;
+see [runtime integration](RUNTIME_UPSTREAM.md) for the source pin and validation.
 
 The workspace alone opens `bee:workspace_db`, a separate SQLite store from runtime
 registry history. Its append-only migration ledger verifies names and checksums;

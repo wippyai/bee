@@ -23,7 +23,8 @@ local function define_tests()
         end)
         test.it("denies foreign control, host recovery and lifecycle authority", function()
             local client: clients.Client = {recipient = "client", connection_id = "connection",
-                permissions = {open = true, close = false, control = true}, detaching = false}
+                permissions = {open = true, close = false, control = true}, detaching = false,
+                renderer = "client", renderer_generation = "generation", rendering = false}
             local request = assert(contract.request({version = 1, request_id = "r", op = "open", definition_id = "test:app"}))
             test.eq(clients.allowed(client, request), true)
             request.resume_state = "{}"
@@ -41,12 +42,35 @@ local function define_tests()
             request.instance_id = "instance"; client.detaching = true
             test.eq(clients.allowed(client, request), false)
             client.detaching = false
+            request.recipient = ""; client.renderer = "selected-renderer"
+            test.eq(clients.allowed(client, request), true)
+            request.recipient = "selected-renderer"
+            test.eq(clients.allowed(client, request), false)
+            request.recipient = ""; client.rendering = true
+            test.eq(clients.allowed(client, request), false)
+            request.op = "open"
+            test.eq(clients.allowed(client, request), true)
+            request.op = "bind"; client.rendering = false; client.renderer = ""
+            test.eq(clients.allowed(client, request), false)
             request.op = "close"
             test.eq(clients.allowed(client, request), false)
             request.op = "shutdown"
             test.eq(clients.allowed(client, request), false)
             request.op = "unbind"
             test.eq(clients.allowed(client, request), false)
+        end)
+        test.it("requires an explicit bounded renderer selection", function()
+            local value = {version = 1, request_id = "render", workspace_id = identity, op = "render", recipient = "client", renderer = "renderer"}
+            local selected = assert(clients.control(value))
+            test.eq(selected.renderer, "renderer")
+            test.is_nil(selected.permissions)
+            value.renderer = ""
+            test.not_nil(clients.control(value))
+            value.renderer = string.rep("x", 161)
+            test.is_nil(clients.control(value))
+            value.renderer = "renderer\n"
+            test.is_nil(clients.control(value))
+            test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity, op = "render", recipient = "client"}))
         end)
     end)
 end

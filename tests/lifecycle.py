@@ -160,7 +160,33 @@ def detached():
             bootstrap = 'if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end'
             assert code.count(bootstrap) == 1
             code = code.replace(bootstrap, bootstrap + '\n    if ctx.get("bee.host_owner") == nil then assert(process.registry.register("bee.attachment_probe.host", nil, process.registry.LOCAL)) end')
+            code = code.replace(bootstrap, bootstrap + '\n    local fail_renderer_once = ctx.get("bee.test.fail_renderer_once") == true')
+            unbind = 'elseif req.op == "unbind" then'
+            assert code.count(unbind) == 1
+            code = code.replace(unbind, '''elseif req.op == "unbind" and fail_renderer_once then
+                        fail_renderer_once = false
+                        emit(contract.reply(req.request_id, "unbind", "revoke_failed", "Injected renderer revocation failure"), true)
+                    ''' + unbind)
+            # Hold one unbind at the real broker until the supervisor has queued
+            # detach. This exercises ordering without depending on sleep timing.
+            code = code.replace(unbind, unbind + '''
+                        local test_payload: unknown = selected.value:payload():data()
+                        if type(test_payload) == "table" and test_payload.test_gate == true then
+                            local test_supervisor = ctx.get("bee.host_owner")
+                            if type(test_supervisor) ~= "string" then error("Missing test supervisor") end
+                            local release = assert(process.listen("bee.test.release_unbind", {message = true}))
+                            assert(process.send(test_supervisor, "bee.test.unbind_pending", {}))
+                            local released = assert(release:receive())
+                            assert(released:from() == test_supervisor)
+                            process.unlisten(release)
+                        end
+''')
             broker.write_text(code)
+            connections = project / "src/core/workspace/client_connections.lua"
+            code = connections.read_text()
+            gate = 'op = "unbind", recipient ='
+            assert code.count(gate) == 1
+            connections.write_text(code.replace(gate, 'test_gate = request_id == "queued-render", ' + gate))
             attachment = project / "src/core/applications/attachment.lua"
             code = attachment.read_text()
             anchor = "local _, err = view:revoke(previous.mount)"
@@ -194,7 +220,7 @@ def detached():
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
-    print("Source/pack: detached Terminal rebind, observer isolation, host restore, two admitted clients and exit revocation", flush=True)
+    print("Source/pack: detached Terminal, observer isolation, host restore, two clients, renderer replacement/failure, stale generation and queued detach", flush=True)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,10 @@ permissions and connection IDs. Source/pack tests cover two clients, detach,
 re-admission, exit cleanup and retained native terminals. Desktop attachment,
 client layout storage and client question delivery remain unfinished; see the
 private admission contract in `CLIENT_HOST_SPLIT.md`.
+The host also supports supervisor-selected renderer replacement under an existing
+client connection. Bind requests carry the current renderer generation. Source/pack
+tests cover old-grant denial, failed revocation, renderer exit and queued detach;
+the actual desktop still uses its existing F12 path.
 `CLIENT_STATE.md` documents the private client store and import receipt. Its
 qualified layout and source/pack persistence tests pass, but normal desktop launch
 still uses the combined owner and does not migrate to that store yet.

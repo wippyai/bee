@@ -32,19 +32,25 @@ writes, but they are not host election or a multi-writer protocol.
 ### Private client admission
 
 Only the bootstrapped supervisor may send `bee.host.client` with version 1,
-request ID, workspace ID, exact recipient PID and `admit` or `detach`. Admission
+request ID, workspace ID, exact recipient PID and `admit`, `detach` or `render`. Admission
 requires explicit `open`, `close` and `control` booleans. The host monitors that
-execution and supplies a fresh connection ID through `bee.host.admitted`.
+execution and supplies a fresh connection ID through `bee.host.admitted`, along
+with `renderer`, `renderer_generation` and `renderer_pending`.
 Requests must match both the actual sender and the connection ID; metadata does
 not grant access. Changing permissions requires completed detach first.
 
 Client requests use `bee.app.request`. The host isolates request IDs by connection,
-forces targeted bind recipients to the admitted execution and denies host recovery,
+forces targeted bind recipients to the supervisor-selected renderer and denies host recovery,
 whole-workspace binding, unbind and shutdown. There are at most eight admissions
 and 128 retained request routes; exhausted pending capacity returns `busy`.
 Completed routes are evictable, so this is bounded correlation, not durable
 exactly-once execution. Open replies omit resume state and mounts; targeted bind
 returns the recipient-bound mount in `attached`.
+Bind requests additionally require the current `renderer_generation`. Stale
+generations return `stale_renderer`; a transition returns `busy`, and a cleared
+renderer returns `unavailable`. Bind correlation includes the renderer generation,
+so repeating a public bind ID after replacement cannot replay a retired mount.
+Open/close correlation remains scoped to the unchanged client connection.
 
 Detach disables further requests before revoking grants. A successful
 `bee.host.client_result` follows revocation and monitor removal. Failure retains
@@ -101,8 +107,8 @@ This extraction preserves the existing database format and migration ledger.
 Owner requests can now bind one exact workspace/instance/view independently.
 That operation leaves other view grants and the default recipient for future
 opens intact. The whole-broker bind remains for local presenter replacement.
-This is a per-view controller boundary; observers, client admission and independent
-client layouts still require the steps below.
+This is a per-view controller boundary; production observer admission and
+independent desktop clients still require the steps below.
 Owner-only `unbind` additionally revokes controller grants by exact recipient PID
 and clears a matching default recipient. Its source/pack Terminal test uses a
 second consumer actor to prove that detaching one recipient leaves the other's
@@ -146,17 +152,35 @@ The Classic terminal palette belongs to producer appearance, not client chrome.
 
 The existing presenter calls `tty.attach` itself. Native mounts are bound to that
 execution PID; forwarding a mount issued for the stable desktop client will not
-make it usable by the presenter. Current private client admission deliberately
-allows control mounts only for the admitted execution.
+make it usable by the presenter. A client initially renders through its own
+execution. Its supervisor may select one different renderer using
+`bee.host.client` with `op = "render"`, the admitted client `recipient`, and an
+explicit `renderer` PID. An empty renderer clears presentation. Client `control`
+permission is required; core owners, other clients and their selected or pending
+renderers cannot be chosen. Client bind payloads still cannot select recipients.
 
-Before connecting that admission to the replaceable presenter, implement an
-explicit renderer-recipient lifecycle under the stable client connection. The
-host must retain the selected recipient, revoke its grants before replacement,
-and revoke them on client detach or execution loss. A renderer change must not
-silently expand client operation permissions or discard pending app questions.
-Test F12 with the old renderer still holding a handle, failed revocation, and
-another client controlling a different application. This delegation is not yet a
-callable operation; do not loosen the current recipient check as a shortcut.
+`bee.workspace:client_connections` owns admissions, correlation and renderer
+transitions inside the host actor. Replacement fences bind requests and old bind
+replies, revokes the old recipient's grants, removes its monitor, then monitors
+and selects the replacement. `bee.host.presentation` informs the stable client
+with workspace/connection identity, renderer, `generation`, `pending` and error
+fields. The supervisor receives a correlated `bee.host.client_result`. Selecting
+the same ready renderer is an idempotent state notification.
+
+Failed revocation retains the old renderer and bind fence for retry. A missing
+replacement leaves presentation cleared. Renderer exit clears its grants while
+retaining the client connection and apps. Client detach revokes its selected
+renderer; detach queued during replacement cancels that replacement before
+completing cleanup. Queues are bounded to one active transition and one deferred
+detach per client. No new actor or polling timer is introduced.
+
+The source/pack `clients` fixture uses actual native Terminals and separate
+renderer actors. It verifies failed revocation/retry, stale generation denial,
+reused public bind IDs, recipient-bound mounts, renderer exit, deferred detach
+without timing sleeps, and unchanged Bash PIDs and variables across replacements.
+The old renderer loses observation, input and resize; a second client remains
+usable. This private protocol is not wired to the desktop's F12 flow yet. The
+existing local F12 path and supervisor-owned pending questions remain unchanged.
 
 ## Replaceable shell inbox
 

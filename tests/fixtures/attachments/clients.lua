@@ -24,6 +24,8 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local admissions = assert(process.listen("bee.host.admitted", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local commands = assert(process.listen("bee.client.command", {message = true}))
+    local presentations = assert(process.listen("bee.host.presentation", {message = true}))
+    local renderer_generation = ""
     local function status(phase: string, view: View?)
         assert(process.send(owner, "bee.client.status", {phase = phase, view = view}))
     end
@@ -31,7 +33,8 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         local message = assert(admissions:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
-        if type(data) ~= "table" or data.workspace_id ~= workspace_id or type(data.connection_id) ~= "string" then error("Invalid admission") end
+        if type(data) ~= "table" or data.workspace_id ~= workspace_id or type(data.connection_id) ~= "string" or type(data.renderer_generation) ~= "string" then error("Invalid admission") end
+        renderer_generation = data.renderer_generation
         return data.connection_id
     end
     local function reply(id: string, op: string): decode.Reply
@@ -47,12 +50,21 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     end
     status("ready")
     local connection_id = admission()
+    local function presentation(renderer: string, code: string)
+        local message = assert(presentations:receive())
+        assert(message:from() == host)
+        local data: unknown = message:payload():data()
+        if type(data) ~= "table" or data.connection_id ~= connection_id or data.workspace_id ~= workspace_id
+            or data.renderer ~= renderer or data.error_code ~= code or type(data.generation) ~= "string" then error("Invalid renderer state") end
+        assert(renderer_generation ~= data.generation, "Renderer generation was reused")
+        renderer_generation = data.generation
+    end
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = workspace_id,
         connection_id = connection_id, definition_id = "bee.console:app"}))
     local opened = reply("open", "open")
     assert(opened.error_code == "" and opened.mount == "" and opened.resume_state == "")
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = workspace_id,
-        connection_id = connection_id, id = opened.id, instance_id = opened.instance_id}))
+        connection_id = connection_id, renderer_generation = renderer_generation, id = opened.id, instance_id = opened.instance_id}))
     local bound = reply("bind", "attached")
     assert(bound.error_code == "" and reply("bind", "bind").error_code == "")
     local view, view_error = tty.attach(bound.mount)
@@ -64,7 +76,30 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         local message = assert(commands:receive())
         assert(message:from() == owner)
         local op: unknown = message:payload():data()
-        if op == "check" then
+        if type(op) == "table" and op.op == "render" and type(op.renderer) == "string" then
+            local retired_generation = renderer_generation
+            presentation(op.renderer, "")
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "stale-render", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = retired_generation, id = opened.id, instance_id = opened.instance_id}))
+            assert(reply("stale-render", "bind").error_code == "stale_renderer")
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = opened.id, instance_id = opened.instance_id}))
+            local attached = reply("bind", "attached")
+            assert(attached.error_code == "" and reply("bind", "bind").error_code == "")
+            local foreign, foreign_error = tty.attach(attached.mount)
+            assert(not foreign and foreign_error, "Stable client consumed the renderer's mount")
+            assert(process.send(op.renderer, "bee.renderer.mount", {mount = attached.mount, native_pid = native_pid, label = label}))
+            status("delegated")
+        elseif op == "render-failed" or op == "unrendered" then
+            presentation(op == "render-failed" and tostring(process.pid()) or "", op == "render-failed" and "revoke_failed" or "")
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "blocked-bind", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = opened.id, instance_id = opened.instance_id}))
+            assert(reply("blocked-bind", "bind").error_code == (op == "render-failed" and "busy" or "unavailable"))
+            status(op)
+        elseif op == "render-cancelled" then
+            presentation("", "cancelled")
+            status("render-cancelled")
+        elseif op == "check" then
             command(view, "printf 'BEE_CHECK_%s_%s\\n' \"$bee_client\" \"$$\"")
             wait_for(view, "BEE_CHECK_" .. label .. "_" .. native_pid)
             status("checked")
@@ -88,13 +123,43 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         else error("Invalid client test command") end
     end
     -- Deliberately rely on execution cleanup; the host must retire this admission.
-    for _, subscription in ipairs({admissions, replies, commands}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({admissions, replies, commands, presentations}) do process.unlisten(subscription) end
+end
+function M.renderer(owner: string, client: string)
+    local mounts = assert(process.listen("bee.renderer.mount", {message = true}))
+    local commands = assert(process.listen("bee.renderer.command", {message = true}))
+    local function status(phase: string) assert(process.send(owner, "bee.renderer.status", phase)) end
+    status("ready")
+    local mounted = assert(mounts:receive())
+    assert(mounted:from() == client)
+    local data: unknown = mounted:payload():data()
+    if type(data) ~= "table" or type(data.mount) ~= "string" or type(data.native_pid) ~= "string" or type(data.label) ~= "string" then error("Invalid renderer mount") end
+    local view, err = tty.attach(data.mount)
+    if not view then error(tostring(err)) end
+    command(view, "printf 'BEE_RENDERER_%s_%s\\n' \"$bee_client\" \"$$\"")
+    wait_for(view, "BEE_RENDERER_" .. data.label .. "_" .. data.native_pid)
+    status("mounted")
+    while true do
+        local message = assert(commands:receive())
+        assert(message:from() == owner)
+        local op: unknown = message:payload():data()
+        if op == "exit" then break end
+        assert(op == "stale")
+        local frame, frame_error = view:snapshot()
+        local sent, send_error = view:send({type = "key", key = "x", key_type = "runes", action = "press"})
+        local resized, resize_error = view:resize(20, 10)
+        assert(not frame and frame_error and not sent and send_error and not resized and resize_error, "Retired renderer retained authority")
+        status("stale")
+    end
+    process.unlisten(mounts); process.unlisten(commands)
 end
 function M.main()
     local owner = tostring(process.pid())
     local ready = assert(process.listen("bee.host.ready", {message = true}))
     local results = assert(process.listen("bee.host.client_result", {message = true}))
     local statuses = assert(process.listen("bee.client.status", {message = true}))
+    local renderers = assert(process.listen("bee.renderer.status", {message = true}))
+    local gates = assert(process.listen("bee.test.unbind_pending", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:host_policy", "bee:host_spawn_policy", "bee:workspace_storage_policy"}) do
@@ -103,7 +168,7 @@ function M.main()
         policies[#policies + 1] = policy
     end
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-        :with_context({["bee.host_owner"] = owner}):spawn_monitored("bee.workspace:host", "bee:workers", owner)))
+        :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true}):spawn_monitored("bee.workspace:host", "bee:workers", owner)))
     local started = assert(ready:receive())
     assert(started:from() == host)
     local boot: unknown = started:payload():data()
@@ -149,11 +214,58 @@ function M.main()
     local second_view = status(second, "opened")
     if not second_view then error("Missing second view") end
     assert(first_view.id ~= second_view.id and first_view.native_pid ~= second_view.native_pid, "Client request IDs collided")
+    local function renderer_status(pid: string, phase: string)
+        local message = assert(renderers:receive())
+        assert(message:from() == pid and message:payload():data() == phase, "Unexpected renderer status")
+    end
+    local function renderer(): string
+        local pid = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:renderer", "bee:workers", owner, first)))
+        renderer_status(pid, "ready")
+        return pid
+    end
+    local function select_renderer(id: string, client: string, target: string, expected: string)
+        assert(process.send(host, "bee.host.client", {version = 1, request_id = id, op = "render", workspace_id = workspace_id, recipient = client, renderer = target}))
+        result(id, client, expected)
+    end
+    local function delegate(target: string)
+        assert(process.send(first, "bee.client.command", {op = "render", renderer = target}))
+        status(first, "delegated"); renderer_status(target, "mounted")
+    end
+    local function stale_renderer(target: string)
+        assert(process.send(target, "bee.renderer.command", "stale")); renderer_status(target, "stale")
+    end
+    local original_renderer = renderer()
+    select_renderer("injected-failure", first, original_renderer, "revoke_failed")
+    assert(process.send(first, "bee.client.command", "render-failed")); status(first, "render-failed")
+    assert(process.send(first, "bee.client.command", "check")); status(first, "checked")
+    select_renderer("first-renderer", first, original_renderer, ""); delegate(original_renderer)
+    assert(process.send(first, "bee.client.command", "stale")); status(first, "stale")
+    select_renderer("foreign-renderer", second, original_renderer, "permission_denied")
+    local replacement = renderer()
+    select_renderer("replacement", first, replacement, ""); delegate(replacement)
+    stale_renderer(original_renderer)
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(replacement, "bee.renderer.command", "exit"))
+    result("", first, "")
+    assert(process.send(first, "bee.client.command", "unrendered")); status(first, "unrendered")
+    local final_renderer = renderer()
+    select_renderer("final-renderer", first, final_renderer, ""); delegate(final_renderer)
     admit("cannot-replace", first, false, "busy")
-    detach("detach-first", first)
+    assert(process.send(host, "bee.host.client", {version = 1, request_id = "queued-render", op = "render", workspace_id = workspace_id, recipient = first, renderer = original_renderer}))
+    local gated = assert(gates:receive())
+    assert(process.send(host, "bee.host.client", {version = 1, request_id = "detach-first", op = "detach", workspace_id = workspace_id, recipient = first}))
+    select_renderer("while-detaching", first, original_renderer, "busy")
+    assert(process.send(gated:from(), "bee.test.release_unbind", {}))
+    result("queued-render", first, "cancelled")
+    result("detach-first", first, "")
+    assert(process.send(first, "bee.client.command", "render-cancelled")); status(first, "render-cancelled")
+    stale_renderer(final_renderer)
+    assert(process.send(original_renderer, "bee.renderer.command", "exit"))
+    assert(process.send(final_renderer, "bee.renderer.command", "exit"))
     assert(process.send(first, "bee.client.command", "stale")); status(first, "stale")
     assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
     admit("readmit-first", first, false, "")
+    select_renderer("ungranted-renderer", first, second, "permission_denied")
     assert(process.send(first, "bee.client.command", "readmit")); status(first, "denied")
     assert(process.send(second, "bee.client.command", "exit"))
     result("", second, "")
@@ -182,6 +294,6 @@ function M.main()
     end
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "stop", op = "shutdown", workspace_id = workspace_id}))
     assert(reply("stop", "shutdown").error_code == "")
-    for _, subscription in ipairs({ready, results, statuses, replies}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({ready, results, statuses, replies, renderers, gates}) do process.unlisten(subscription) end
 end
 return M

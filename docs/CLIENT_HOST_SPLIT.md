@@ -12,8 +12,9 @@ application store and journal; none of those storage paths is a UI workspace nam
 
 `bee.workspace:host` owns its broker, configured persistence, automatic app
 restoration and checkpoint receipts. Its bootstrap is restricted by host context
-and exact core-spawn policy. It accepts application operations only from its
-bootstrapped supervisor PID; ordinary applications cannot spawn it. The `host`
+and exact core-spawn policy. Its supervisor selects admitted client executions
+and their open, close and control permissions; ordinary applications cannot spawn
+the host or admit clients. The `host`
 fixture opens and checkpoints without a physical TTY, detaches a view, stops the
 host and proves stable workspace/view/instance identities on automatic restart.
 The fixture selects the host's process and storage policies explicitly.
@@ -21,11 +22,37 @@ It also sends a correctly addressed open from a different actor and verifies
 that the unauthorized application never appears in the restored membership.
 
 This private entry is not yet used by `bee` and has no public command or headless
-profile. It does not admit independent client owners or persist their layouts.
+profile. It admits client actors but does not yet integrate desktop clients,
+deliver their catalogs or questions, or persist their layouts.
 Its supervisor is a stable owner, not a replaceable presenter; losing that
 supervisor ends the host. Local launch still uses the existing combined owner.
 Do not run both owners against the same database: generation checks reject stale
 writes, but they are not host election or a multi-writer protocol.
+
+### Private client admission
+
+Only the bootstrapped supervisor may send `bee.host.client` with version 1,
+request ID, workspace ID, exact recipient PID and `admit` or `detach`. Admission
+requires explicit `open`, `close` and `control` booleans. The host monitors that
+execution and supplies a fresh connection ID through `bee.host.admitted`.
+Requests must match both the actual sender and the connection ID; metadata does
+not grant access. Changing permissions requires completed detach first.
+
+Client requests use `bee.app.request`. The host isolates request IDs by connection,
+forces targeted bind recipients to the admitted execution and denies host recovery,
+whole-workspace binding, unbind and shutdown. There are at most eight admissions
+and 128 retained request routes; exhausted pending capacity returns `busy`.
+Completed routes are evictable, so this is bounded correlation, not durable
+exactly-once execution. Open replies omit resume state and mounts; targeted bind
+returns the recipient-bound mount in `attached`.
+
+Detach disables further requests before revoking grants. A successful
+`bee.host.client_result` follows revocation and monitor removal. Failure retains
+the disabled admission for retry. Execution exit initiates the same cleanup;
+application processes remain alive. The `clients` fixture proves two actor
+clients with equal public request IDs, stale-grant denial, permission replacement
+rules, fresh connection IDs, automatic exit cleanup and retained native shell
+state in source and pack. These actors are not independent desktop sessions yet.
 
 ## Named supervisor endpoint
 

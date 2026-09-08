@@ -189,12 +189,12 @@ def detached():
             pack = folder / "detached.wapp"
             if packed:
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-            for mode in ("detached", "failed-open", "terminal", "observation", "host"):
+            for mode in ("detached", "failed-open", "terminal", "observation", "host", "clients"):
                 args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
-    print("Source/pack: detached broker and independent Terminal rebind; native observer isolation; stable host checkpoint, supervisor admission and cold restore", flush=True)
+    print("Source/pack: detached Terminal rebind, observer isolation, host restore, two admitted clients and exit revocation", flush=True)
 
 
 if __name__ == "__main__":

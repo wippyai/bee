@@ -156,7 +156,7 @@ entries:
 - name: host_policy
   kind: security.policy
   policy:
-    actions: [process.send, process.monitor, process.terminate, process.host, process.context, process.security, security.policy.get, security.scope.create]
+    actions: [process.send, process.monitor, process.unmonitor, process.terminate, process.host, process.context, process.security, security.policy.get, security.scope.create]
     resources: '*'
     effect: allow
 - name: host_spawn_policy

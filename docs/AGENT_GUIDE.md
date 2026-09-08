@@ -59,6 +59,11 @@ uses native LOCAL registration after startup readiness. A private `bee.workspace
 now owns its broker and persistence without a physical TTY and has source/pack
 checkpoint/restart coverage. The local desktop does not use it yet; there is no
 headless launch profile, workspace switcher or `bee hive` CLI.
+The private host admits supervisor-selected client actors with explicit operation
+permissions and connection IDs. Source/pack tests cover two clients, detach,
+re-admission, exit cleanup and retained native terminals. Desktop attachment,
+client layout storage and client question delivery remain unfinished; see the
+private admission contract in `CLIENT_HOST_SPLIT.md`.
 The short workspace ID in the header is informational.
 
 Establish the local owner boundary first; then the Hive and agent-integration

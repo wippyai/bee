@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://host.lua
   method: main
-  modules: [process, channel, security, ctx, uuid]
+  modules: [process, channel, security, ctx, uuid, hash]
   imports:
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
@@ -14,6 +14,12 @@ entries:
     model: bee.desktop:model
     appearance: bee.desktop:appearance
     interaction: bee.application:interaction
+    clients: bee.workspace:client_protocol
+- name: client_protocol
+  kind: library.lua
+  source: file://client_protocol.lua
+  imports:
+    contract: bee.protocol:application
 - name: main
   kind: process.lua
   source: file://main.lua

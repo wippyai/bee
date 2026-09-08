@@ -13,7 +13,10 @@ jobs:
       env:
         WIPPY_TOKEN: ${{ secrets.WIPPY_HUB_TOKEN }}
       run: |
-        [[ "$WIPPY_TOKEN" =~ ^wpy_[A-Za-z0-9_.-]+$ ]]
+        if ! [[ "$WIPPY_TOKEN" =~ ^wpy_[A-Za-z0-9_.-]+$ ]]; then
+          echo '::error::Configure a valid WIPPY_HUB_TOKEN in the hub environment.'
+          exit 1
+        fi
         response="$RUNNER_TEMP/hub-credential-check.json"
         trap 'rm -f "$response"' EXIT
         request() {
@@ -22,13 +25,21 @@ jobs:
               --output "$response" --write-out '%{http_code}' "$@"
         }
         status=$(request https://hub.wippy.ai/api/v1/account/orgs)
-        test "$status" = 200
-        jq -e 'any(.[]; .org.name == "bee" and (.role == "owner" or .role == "admin"))' "$response" >/dev/null
+        if [ "$status" != 200 ]; then
+          echo "::error::Hub authentication returned HTTP $status."
+          exit 1
+        fi
+        if ! jq -e 'any(.[]; .org.name == "bee" and (.role == "owner" or .role == "admin"))' "$response" >/dev/null; then
+          echo '::error::The token needs an owner or admin role in bee.'
+          exit 1
+        fi
         status=$(request \
           --header 'Content-Type: application/json' \
           --header 'Connect-Protocol-Version: 1' \
           --data '{"module":{"name":{"org":"bee","name":"bee"}}}' \
           https://hub.wippy.ai/wippy.api.hub.publish.v1.PublishService/InitiatePublish)
-        test "$status" = 400
-        jq -e '.code == "invalid_argument" and .message == "version or label is required"' "$response" >/dev/null
+        if [ "$status" != 400 ] || ! jq -e '.code == "invalid_argument" and .message == "version or label is required"' "$response" >/dev/null; then
+          echo "::error::Hub publish probe did not reach version validation (HTTP $status)."
+          exit 1
+        fi
         echo 'Hub authentication and Bee publish authorization checks passed.'

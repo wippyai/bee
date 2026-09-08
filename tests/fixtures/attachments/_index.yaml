@@ -5,7 +5,7 @@ entries:
   kind: security.policy
   policy:
     actions: [process.spawn, process.spawn.monitored]
-    resources: [bee.attachment_probe:observer_producer, bee.attachment_probe:observer_consumer, bee.attachment_probe:host_guest]
+    resources: [bee.attachment_probe:observer_producer, bee.attachment_probe:observer_consumer, bee.attachment_probe:host_guest, bee.attachment_probe:controller]
     effect: allow
 - name: naming_policy
   kind: security.policy
@@ -72,6 +72,11 @@ entries:
     decode: bee.protocol:decode
     appearance: bee.desktop:appearance
     store: bee.storage:store
+- name: controller
+  kind: process.lua
+  source: file://controller.lua
+  method: main
+  modules: [process, tty, time]
 - name: app
   kind: process.lua
   source: file://app.lua

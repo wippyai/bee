@@ -21,4 +21,11 @@ function M.replace(view: tty.Viewport, previous: Record?, recipient: string): Re
     return {attachment = {recipient = recipient, mount = mount}, error_code = "", error = ""}
 end
 
+function M.remove_recipient(view: tty.Viewport, previous: Record?, recipient: string): Result
+    if not previous or previous.recipient ~= recipient then
+        return {attachment = previous, error_code = "", error = ""}
+    end
+    return M.replace(view, previous, "")
+end
+
 return M

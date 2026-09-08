@@ -10,6 +10,7 @@ local function reply_op(value: unknown): contract.ReplyOp?
     if value == "focus" then return "focus" end
     if value == "attached" then return "attached" end
     if value == "bind" then return "bind" end
+    if value == "unbind" then return "unbind" end
     if value == "page" then return "page" end
     if value == "title" then return "title" end
     if value == "closing" then return "closing" end

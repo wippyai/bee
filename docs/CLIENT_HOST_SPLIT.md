@@ -76,6 +76,11 @@ That operation leaves other view grants and the default recipient for future
 opens intact. The whole-broker bind remains for local presenter replacement.
 This is a per-view controller boundary; observers, client admission and independent
 client layouts still require the steps below.
+Owner-only `unbind` additionally revokes controller grants by exact recipient PID
+and clears a matching default recipient. Its source/pack Terminal test uses a
+second consumer actor to prove that detaching one recipient leaves the other's
+command input and observations usable. Applications stay running, and revocation
+errors preserve failed records rather than reporting a completed detach.
 
 ## Owners after extraction
 

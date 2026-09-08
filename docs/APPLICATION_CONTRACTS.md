@@ -141,13 +141,19 @@ app. A later bind can attach to the same producer. The local workspace launcher
 still requires a physical desktop; this broker capability is not a headless profile.
 
 Broker owner requests use `bee.app.request`: `version: 1`, nonempty `request_id`,
-`op: open|close|bind|shutdown`, with the operation's definition/view/recipient.
+`op: open|close|bind|unbind|shutdown`, with the operation's definition/view/recipient.
 For `bind`, supplying both `id` and `instance_id` targets that exact live view
 within `workspace_id`. A mismatched instance returns `not_found` without revoking
 any grant. An empty recipient detaches only that view; other controllers and the
 default recipient for future opens remain unchanged. Omitting both identifiers
 retains the local desktop's whole-broker bind. Supplying only one is malformed.
 Both forms remain restricted to the trusted broker owner, not arbitrary clients.
+`unbind` requires a nonempty recipient PID and no view/instance target. It clears
+that recipient as the default for future opens, then revokes its current controller
+grants. Other recipients and the application processes remain intact. Revocation
+is per grant: an error retains the failed grant's owner record and is returned to
+the caller; it does not claim the whole recipient detached. A retry uses a new
+request ID. This is a trusted owner operation, not client admission by itself.
 Replies use `bee.app.reply`, version 1, correlated request ID, operation, view ID
 (`id`), instance ID, title, mount, and explicit `error_code`/`error` strings.
 Unsolicited `closed` is emitted on EXIT. Duplicate successful opens focus the

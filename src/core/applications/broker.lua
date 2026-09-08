@@ -588,6 +588,19 @@ local function main(owner: string, initial_preferences: unknown)
                             else rebind(item) end
                         end
                         emit(reply, true)
+                    elseif req.op == "unbind" then
+                        -- Fence future default mounts before revoking the current grants.
+                        if recipient == req.recipient then recipient = "" end
+                        local reply = contract.reply(req.request_id, "unbind")
+                        local function detach(item: Instance)
+                            local result = attachment.remove_recipient(item.view, item.attachment, req.recipient)
+                            item.attachment = result.attachment
+                            if result.error ~= "" then
+                                reply.error_code, reply.error = result.error_code, result.error
+                            end
+                        end
+                        for _, item in pairs(instances) do detach(item) end
+                        emit(reply, true)
                     elseif req.op == "close" then
                         local item = instances[req.id]
                         if item then stop(item, {request_id = req.request_id, recipient = owner, control = false}, false)

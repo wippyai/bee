@@ -5,7 +5,7 @@ tests cover independent desktop actors and client restart against retained host
 applications. Normal local launch still uses the workspace envelope. Automatic
 host-to-client migration and public independent desktop launch are not wired yet.
 Trusted private client bootstrap can now supply a final version-1 options record
-with `legacy_desktop`. It imports before opening the display and returns `import_receipt` in
+with `legacy_desktop`. It imports before client readiness and returns `import_receipt` in
 `bee.client.ready` only after the client-store commit. Without an offer, that field
 is empty. The source/pack desktop fixture retries the same offer after client exit
 and verifies the receipt and later layout are retained.

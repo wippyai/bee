@@ -21,6 +21,8 @@ entries:
   method: main
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
   imports: &client_imports
+    command: bee.applications:command
+    arguments: bee.application:arguments
     store: bee.client:store
     state: bee.client:state
     decode: bee.protocol:decode
@@ -37,6 +39,12 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: local_entry
+  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  imports: *client_imports
+- name: local_command
+  kind: process.lua
+  source: file://main.lua
+  method: local_command
   modules: [process, channel, tty, ctx, security, uuid, hash, time]
   imports: *client_imports
 - name: store

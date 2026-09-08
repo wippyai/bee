@@ -119,7 +119,8 @@ local function main()
                 "bee.client:main", "bee:workers", owner, host, workspace_id, "bee.client.db:" .. label,
                 launch and "bee.console:app" or nil, {version = 1, quit_mode = label == "right" and "supervisor" or "detach",
                     fullscreen = label == "left",
-                    arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"} or nil,
+                    arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
+                        or {"bash", "--noprofile", "--norc", "-i"},
                     legacy_desktop = label == "left" and legacy_desktop or nil})))
         local ready = assert(clients:receive())
         assert(tostring(ready:from()) == client)
@@ -142,7 +143,8 @@ local function main()
         assert(process.send(host, "bee.host.client", {version = 1, request_id = label .. "-render", op = "render",
             workspace_id = workspace_id, recipient = client, renderer = value.renderer}))
         result(label .. "-render")
-        wait_text(screen, label == "left" and "bash-" or "Terminal")
+        -- A title precedes the attachment. Wait for real PTY output before input.
+        wait_text(screen, "bash-")
         if launch then
             command(screen, "bee_desktop=" .. label .. "; printf 'DESKTOP_%s_OK\\n' \"$bee_desktop\"")
             wait_text(screen, "DESKTOP_" .. label .. "_OK")

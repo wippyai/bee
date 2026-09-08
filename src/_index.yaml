@@ -139,6 +139,7 @@ entries:
     - bee.workspace:launch
     - bee.client:main
     - bee.client:local
+    - bee.client:local_command
     - bee.launch:supervisor
     - bee.session:main
     - bee.applications:broker

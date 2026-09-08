@@ -201,11 +201,37 @@ The supervisor admits the entry client and selects its presenter through the
 same private host protocol exercised by the fixtures. No second physical display
 adapter or forwarding compositor is needed.
 
-`bee.client:local(database_resource, initial_application?)` constructs this topology
+`bee.client:local(database_resource, initial_application?, options?)` constructs this topology
 using `bee.launch:supervisor`. It has no public command metadata. The terminal
 fixture supplies an exact client-store binding and narrow spawn/database policies.
 Source/pack acceptance verifies physical-terminal boot, native execution, F12,
 quit cancellation and coordinated exit without a second compositor.
+The entry paints the existing boot logo before starting its supervisor and hands
+the same display to the client. A monitored supervisor exit during startup reports
+immediately and restores the terminal, without waiting for the startup deadline.
+Ctrl+Q remains responsive while waiting for host readiness; startup does not
+depend on a presenter to accept exit. Source/pack tests cover a stalled supervisor.
+Private `bee.client:local_command(database_resource, name, ...)` resolves the
+existing admitted command metadata, preserves literal arguments and opens the
+selected app fullscreen when declared. Source/pack acceptance checks that path
+and presenter replacement. Explicit multi-app launch and public command wiring
+still use the combined entry.
+
+Before replacing normal launch, preserve its remaining behavior explicitly:
+select the persistent client database alongside the workspace database; support
+the existing two-application invocation and explicit argument command; route
+manual checkpoint recovery through the host; and preserve the local Settings
+effect on producer colors without giving the client workspace-storage authority.
+The independent-client tests intentionally keep chrome preferences separate from
+workspace-owned producer defaults. Public launch must resolve that distinction
+instead of silently changing the local theme behavior.
+
+The host finishes automatic recovery before admission. The first authoritative
+inventory reconciles saved client targets, removing tabs for applications that
+did not recover (including dead native terminals). Source/pack cold boots also
+verify that recovered Settings retains its tab and live view. Subsequent inventories remove
+previously observed applications when they exit. This is an admitted host's
+complete inventory, not an inference from a timeout or a disconnected workspace.
 
 The entry's private boot function constructs this local topology; the ordinary
 externally spawned client entry must retain its trusted-context checks. Separate

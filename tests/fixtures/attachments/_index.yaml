@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.attachment_probe
 entries:
+- name: observation_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.attachment_probe:observer_producer]
+    effect: allow
 - name: naming_policy
   kind: security.policy
   policy:
@@ -11,9 +17,10 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, time, security, tty, json]
+  modules: [process, channel, time, security, tty, json, logger]
   imports:
     terminal_probe: bee.attachment_probe:terminal
+    observation_probe: bee.attachment_probe:observation
     decode: bee.protocol:decode
     model: bee.desktop:model
     appearance: bee.desktop:appearance
@@ -24,7 +31,16 @@ entries:
       name: attachment-probe
       security:
         actor: {id: attachment-test}
-        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy]
+        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy, bee.attachment_probe:observation_policy]
+- name: observation
+  kind: library.lua
+  source: file://observation.lua
+  modules: [process, channel, tty, time]
+- name: observer_producer
+  kind: process.lua
+  source: file://observation.lua
+  method: producer
+  modules: [process, channel, tty, time]
 - name: terminal
   kind: library.lua
   source: file://terminal.lua

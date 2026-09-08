@@ -180,18 +180,21 @@ def detached():
             # currently drops --host and still needs a passive terminal entry.
             if not packed:
                 document["entries"] = [e for e in document["entries"] if e["kind"] != "terminal.host"]
+            for entry in document["entries"]:
+                if entry["kind"] == "terminal.host":
+                    entry["hide_logs"] = False
             next(e for e in document["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
             index.write_text(yaml.safe_dump(document, sort_keys=False))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
             pack = folder / "detached.wapp"
             if packed:
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-            for mode in ("detached", "failed-open", "terminal"):
-                args = [str(RUNTIME), "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
+            for mode in ("detached", "failed-open", "terminal", "observation"):
+                args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
-                assert result.returncode == 0, result.stdout + result.stderr
-    print("Detached broker source/pack: named endpoint, no physical TTY, checkpoint before attachment, failed revoke retains controller, stale rights denied, real Terminal retains Bash PID/state across rejoin and resizes", flush=True)
+                assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
+    print("Detached broker source/pack: named endpoint, checkpoint before attachment, stale rights denied, independent Terminal rebind; native observer fan-out, rights denial and stream closure preserve controller", flush=True)
 
 
 if __name__ == "__main__":

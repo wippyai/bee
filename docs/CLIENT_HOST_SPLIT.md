@@ -129,6 +129,13 @@ must be checked independently of the visual shell implementation.
 2. Introduce owner-held attachment records for exact view references and actual
    recipient PIDs. Separate observe from input/resize grants. Keep one controller
    for each PTY; observers do not resize it to fit their own windows.
+   The isolated `observation` fixture proves the native prerequisite: separate
+   controller and observer mounts receive updates from one producer, observer
+   input/resize/redelegation are denied, and revocation closes the observer stream
+   while the controller continues receiving frames and resizing. It uses two
+   handles in one consumer actor; it does not prove separate client owners or
+   production observer admission. Bee's public broker operations still issue
+   controller mounts only.
 3. Extract a host entry point with no `tty.start`, physical surface, input listener,
    session or render timer. Start it with explicit host-selected database and
    policy bindings. Do not expose arbitrary database paths as caller authority.

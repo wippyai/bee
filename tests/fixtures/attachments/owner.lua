@@ -10,7 +10,14 @@ local appearance = require("appearance")
 local recovery = require("recovery")
 local store = require("store")
 local terminal_probe = require("terminal_probe")
+local observation_probe = require("observation_probe")
+local logger = require("logger")
 local function main(mode: string?)
+    if mode == "observation" then
+        local ok, err = pcall(observation_probe.main)
+        if not ok then logger:error("Observation probe failed", {error = tostring(err)}); error(err) end
+        return
+    end
     if mode == "terminal" then return terminal_probe.main() end
     -- Deliberately no physical tty.start, surface or input listener.
     local owner = tostring(process.pid())

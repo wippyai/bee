@@ -160,7 +160,7 @@ jobs:
         path: artifacts
     - name: Verify archive checksums
       working-directory: artifacts
-      run: sha256sum -c *.sha256
+      run: sha256sum -c ./*.sha256
     - name: Prepare draft release
       env:
         GH_TOKEN: ${{ github.token }}

@@ -9,7 +9,8 @@ separates current contracts from proposals. For community standards, follow the
 ## Development
 
 Use the pinned Go version and native prerequisites in
-[native distribution](docs/NATIVE_DISTRIBUTION.md), then run:
+[native distribution](docs/NATIVE_DISTRIBUTION.md). Install ShellCheck for workflow
+validation, then run:
 
 ```sh
 make native-tools

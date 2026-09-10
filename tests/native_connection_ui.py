@@ -22,6 +22,12 @@ def exercise(binary):
             ui.wait('Display ', timeout=10)
             assert 'destination node is not configured' not in ui.text(), ui.text()
             assert 'client' in ui.text(), ui.text()
+            ui.key(b'\x1b[20;3~')  # Alt+F9 retains the window minimize shortcut.
+            ui.wait('− Hive Manager')
+            assert 'CONNECTION' not in ui.text(), ui.text()
+            ui.mouse(0, 12, 1)
+            ui.mouse(0, 12, 1, True)
+            ui.wait('HIVE MANAGER')
             ui.key(b'\x1b[20~')
             ui.wait('CONNECTION')
             ui.wait('Service running')

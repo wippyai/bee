@@ -7,8 +7,8 @@ TLS certificate/key/CA configuration. Selected TLS never falls back to plaintext
 from `hive/localtls` after validating loopback discovery and before enrolling the
 client. It bounds the client lifetime by credential expiry. Missing or invalid
 credentials fail without enrollment, plaintext fallback or owner startup.
-Certificate provisioning is available to the lock-held owner bootstrap; public
-launcher selection remains unimplemented.
+Certificate provisioning belongs to the lock-held owner bootstrap and is selected
+by the installed local native launcher.
 The zero TLS configuration is retained for local mechanism fixtures. It reads an
 existing same-account discovery directory, enrolls a fresh random node/signing
 identity, and starts Wippy's native membership and internode stack on automatic
@@ -44,8 +44,9 @@ Race tests and vet cover a separate client OS process authenticating to a live
 owner with a generated key, normal and failed-admission cleanup, unchanged owner
 lock exclusion, missing-owner behavior, stale-endpoint refusal and transport
 lifetime beyond the startup deadline. The subprocess is an acceptance harness,
-not the public `bee` command. Production supervisor admission and Bee retained-desktop composition remain
-the next integration step.
+not the public `bee` command. Separate installed-executable acceptance covers
+production supervisor admission, retained desktops, independent displays and
+controller/observer reconnect; see [foundation status](../../../docs/FOUNDATION_STATUS.md).
 
 ## Native process and viewport composition
 
@@ -100,8 +101,11 @@ It currently fails: a remote monitor call is accepted, a FIFO barrier confirms
 later delivery, and the target actor completes, but no EXIT reaches the watcher.
 This gate must pass before claiming remote process observation or reliable owner
 cleanup of departed controllers. Do not implement the missing monitor protocol
-inside Bee. Public launch, supervisor admission, departed-controller cleanup and LAN
-acceptance remain incomplete.
+inside Bee. Public local launch and supervisor admission pass. Departed-node
+LINK_DOWN cleanup revokes attachments and has client-crash acceptance; it does
+not establish exact-actor EXIT observation while a transport remains live. LAN
+fixture acceptance passes with explicit enrollment. Public remote invitations,
+same-name immediate rejoin and established-link recovery remain separate gates.
 
 ## Supervisor discovery
 
@@ -112,7 +116,8 @@ ends before mesh shutdown; it opens no application registry or workspace store.
 `bee.hive.supervisor/<owner-node>` name and validates its node, protected host and
 nonempty process identity. It returns an address only. Missing names do not start
 an owner, and discovery does not grant admission or terminal rights. The actor's
-lifetime and caller cancellation still fence lookups. Public launch is unchanged.
+lifetime and caller cancellation still fence lookups. The installed launcher
+uses this same name lookup before supervisor admission.
 
 TLS startup failure tests cover invalid certificates and a plaintext owner.
 They prove the callback is not entered and protected enrollment is unchanged.
@@ -122,3 +127,8 @@ The same-account loopback client sets the existing membership gossip interval to
 local gossip frequency; it does not change the owner's profile, failure-detection
 contract or remote/LAN defaults. The real-owner composition checks retain normal
 membership cleanup and bounded physical-client exit.
+
+The physical client advertises `bee.role=client` in native membership metadata.
+Hive Manager uses that explicit role to display a client without probing it for
+a Bee service. Metadata does not authorize calls, imply health, or grant control;
+a node name beginning with `bee-client-` alone establishes none of these facts.

@@ -7,11 +7,16 @@ and `bee observe`. It creates no owner,
 workspace database, transport implementation or registry deployment.
 
 The host selects a protected discovery directory, an explicit control/observe
-mode, and optionally an exact workspace/desktop pair. With no pair, precisely
-one desktop must exist. Empty and ambiguous catalogs are errors; discovery order
-never selects a workspace. Each call owns a fresh actor and one mount. Attachment requests
-and input are never replayed. Supervisor discovery and catalog readiness share
-a 15-second deadline. Only definite UNAVAILABLE catalog refusals trigger another
+mode, and optionally an exact workspace/desktop pair. With no pair, selection
+requires either one desktop or one explicit default in one workspace. Empty and
+ambiguous catalogs are errors; discovery order never selects a workspace.
+Ordinary control launch receiving a definite DESKTOP_CONTROLLED refusal tries
+other durable identities before allocating one. Explicit selections and observe
+never take that fallback; uncertain outcomes never authorize it. Each call owns
+a fresh actor and one mount. Attachment requests and input are never replayed.
+Supervisor discovery and catalog readiness share a 60-second deadline; subsequent
+desktop admission has its own 60-second ceiling. Successful stages advance
+immediately, and caller cancellation remains active. Only definite UNAVAILABLE catalog refusals trigger another
 read, after 50 ms with a fresh key; all other failures return immediately. Cleanup requests supervisor detach within a bounded
 context and keeps operation and cleanup failures visible. Detach has a 200 ms deadline;
 it does not wait for the normal operation deadline.

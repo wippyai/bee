@@ -4,7 +4,8 @@
 component. Ordinary launch runs a foreground native client; explicit `start`
 selects the host's headless owner command. The owner and its DesktopService are
 separate host-selected boot components. Update/tooling/base operations retain
-the runtime's existing paths. This composition is not installed in global Bee.
+the runtime's existing paths. The installed global candidate uses this composition;
+see [current acceptance](../../docs/FOUNDATION_STATUS.md) for its runtime pin and limits.
 
 The foreground starts the same executable as a detached owner contender with
 literal selected state/command arguments and the original project directory.
@@ -51,8 +52,10 @@ and automatic cold startup from an empty state directory. The foreground has
 an empty bundle, invalid data bindings and failing owner hooks so accidental
 deployment/owner startup fails. See localowner's README for the source/toolchain
 requirements. This proof still supplies fixture activation, naming/execute
-policies and a headless wait entry. Production entry selection, executable
-assembly, overlay preservation and global-binary acceptance remain unfinished.
+policies and a headless wait entry. Production entry selection, executable assembly, embedded-default startup and
+global-binary acceptance now pass in the assembled Bee candidate. Registry
+history is preserved. Governed overlay activation is a separate subsystem; this
+launcher neither admits edits nor implements publication.
 
 Concurrent explicit-start acceptance holds the winning child in preparation for
 one second under the real lock. The losing start waits for publication, performs

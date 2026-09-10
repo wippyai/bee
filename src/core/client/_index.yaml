@@ -122,3 +122,22 @@ entries:
     contract: bee.protocol:application
     model: bee.desktop:model
     appearance: bee.desktop:appearance
+- name: list_desktops
+  kind: function.lua
+  source: file://desktop_storage.lua
+  method: list
+  modules: [security]
+  imports: &desktop_storage_imports
+    store: bee.client:store
+    binding: bee.storage:binding
+    contract: bee.protocol:application
+  security:
+    policies: [bee:client_storage_policy]
+- name: allocate_desktop
+  kind: function.lua
+  source: file://desktop_storage.lua
+  method: allocate
+  modules: [security]
+  imports: *desktop_storage_imports
+  security:
+    policies: [bee:client_storage_policy]

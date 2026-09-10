@@ -338,3 +338,28 @@ without returning a partial catalog. No migration or permission change is needed
 `make client-storage-check` verifies source and pack, catalog recovery across
 process restarts, capacity/corruption refusal and unchanged populated-v1 upgrade.
 The public supervisor allocation/selection path remains unfinished.
+
+The implemented function entries `bee.client:list_desktops` and
+`bee.client:allocate_desktop` expose this storage boundary without passing a SQL
+handle to their caller. Both accept `{version = 1, database_resource = ...}`;
+allocation additionally requires a caller-retained `desktop_id`. They reject
+unknown fields and non-client resource references. The caller must have
+`bee.client.desktops.read` or `bee.client.desktops.allocate` for that exact
+resource, respectively. Permission to call the function alone is insufficient.
+The entry's host-selected database policy supplies the store access only during
+the operation; the caller has no additional SQL authority afterwards.
+
+Replies contain `code`, `message`, `desktop_id` and `desktops`. Codes are `OK`,
+`INVALID_ARGUMENT`, `DENIED`, `UNAVAILABLE`, `CAPACITY` and `CONFLICT`. Listing
+returns identities only; allocation returns its supplied identity and no catalog.
+Repeating an allocation with the same identity is idempotent, including at
+capacity. Allocating the default identity conflicts. An unavailable allocation
+reply does not prove that the row is absent: keep the same identity on retry.
+These methods neither start a desktop process nor admit a physical client.
+No ordinary application or current supervisor has been given these new grants;
+public creation and selection still need host integration.
+
+The source/pack acceptance calls the real function entries with authorized,
+read-only and unauthorized scopes. It proves caller SQL denial before and after
+calls, no schema creation on denied calls, durable retry across process restarts,
+read-only allocation denial, resource fencing and strict request decoding.

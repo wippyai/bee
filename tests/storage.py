@@ -270,6 +270,14 @@ def client_storage():
         v1_checksum = hashlib.sha256(("client_layout_v1\n" + v1_sql).encode()).hexdigest()
         assert v1_checksum == "f35f913f50cfd4b0dbe6c8b448a063f2de35be2c2a469c04b26f7720faa029e6"
         for packed in (False, True):
+            authority = root / ("authority-pack" if packed else "authority-source")
+            probe(authority, "none", packed, command="client-desktop-unauthorized")
+            with sqlite3.connect(authority / "client.db") as db:
+                assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='client_state'").fetchone()[0] == 0
+            probe(authority, "seed", packed, command="client-desktop-authority")
+            probe(authority, "verify", packed, command="client-desktop-authority")
+            probe(authority, "reader", packed, command="client-desktop-reader")
+            probe(authority, "none", packed, command="client-desktop-unauthorized")
             folder = root / ("packed" if packed else "source")
             probe(folder, "seed", packed, command="client-storage-bindings")
             probe(folder, "verify", packed, command="client-storage-bindings")

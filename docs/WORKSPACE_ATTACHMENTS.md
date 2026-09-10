@@ -462,3 +462,45 @@ They do not implement a live workspace picker, remote enrollment or composition
 of applications from several hosts. Neutral physical displays remain independent
 of their selected workspace; the command's DISPLAY identifies its attachment
 target, not a permanent workspace binding for the physical client.
+
+### Next implementation boundary: one display, several workspace attachments
+
+This is a proposal, not an available switcher API. The current client still
+requires one workspace at bootstrap. Keep that guard until all host messages and
+operations below route through a qualified attachment.
+
+| Identity | Owns | Changes when selecting another workspace? |
+|---|---|---|
+| Physical client execution | Terminal input, physical size and clipboard output | No; its runtime actor is replaced only on execution restart |
+| Durable display | Layout, focused tab and presentation preferences | No |
+| Workspace attachment | Selected workspace host, current admission and renderer generation | Yes |
+| Application instance | Application process, content and owned resources | No; execution stays at its host |
+
+The display's saved targets already include workspace, instance and view IDs.
+They must not persist execution PIDs, mount grants or admission tokens. On rejoin,
+the supervisor resolves and authorizes each target again. A node address is a
+current route to an owner, not a replacement for durable workspace identity.
+
+The client currently has one `host`, `connection_id`, `renderer_generation`,
+catalog, view revision and question inbox in `core/client/main.lua`. Those values
+must belong to each admitted workspace attachment. The display/session owns the
+combined layout and focus. Incoming messages match the native sender, workspace,
+connection and relevant generation before changing a tab, question or binding.
+Outgoing input, close, bind and question answers select the attachment of their
+specific target. Changing the focused workspace must not redirect an older reply
+or callback. The launcher catalog for a new app must also name its selected
+workspace explicitly.
+
+Host loss retires only that host's live bindings and reports unavailable targets;
+it cannot delete another workspace's tabs or invent application completion.
+Presenter replacement keeps the display identity and rebinds each admitted host.
+The physical client's clipboard stays local even for a remotely executed app.
+
+Acceptance must exercise two hosts with colliding instance/view names, two
+independent physical clients, workspace changes with delayed replies, one shared
+application observed without respawning it, controller refusal, denied foreign
+messages, F12 and client crash/rejoin. Check each application's original process
+and retained shell state. A second local desktop or command-line selection alone
+does not satisfy these checks. Live Hive Manager browsing additionally needs a
+host-authorized catalog route; exposing the native client's control route to
+ordinary applications is not an implementation of that read permission.

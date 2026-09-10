@@ -5100,3 +5100,22 @@ upgrade checks pass via make client-storage-check (session90810, exit0), with
 lint clean (session12982, exit0). Evidence /tmp/bee-desktop-catalog-storage.log.
 Public allocation and selection still require integration into the supervisor;
 the existing global binary and running Bee are unchanged.
+
+## 2026-09-10 — Scoped storage methods and window-retirement correction
+
+The real source/pack function test passes for bee.client:list_desktops and
+bee.client:allocate_desktop: exact resource grants, separate read/write authority,
+caller SQL denial before/after, no schema creation on denied calls, durable retries,
+default-ID conflict and strict inputs. No current app/supervisor gained these grants.
+Evidence /tmp/bee-desktop-storage-authority-check.log, session11407 exit0.
+
+Full catalog run57240 ended exit2 in Process Manager's Settings-stop check:
+Settings was removed but its revoked-view message survived. The presenter now
+retires delivery on committed scene removal as well as close replies, and binds
+view errors to their window identity. A deterministic injected-failure regression
+fails on the old presenter (41881 exit2) and passes on fixed source/pack (58455
+exit0); the original Process Manager source/pack check passes (32780 exit0).
+Initial regression setups41231/5316 failed at foreground selection and are not
+causal evidence; the final probe closes Settings through its window menu.
+No runtime changes; this is not a fix for the distinct retained-node mesh failure.
+The installed observer binary is unchanged. Combined full verification is next.

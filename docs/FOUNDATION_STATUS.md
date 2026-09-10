@@ -16,7 +16,7 @@ shell. Bee's supervisors handle existing LINK_DOWN events and revoke the
 attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
-The current source now passes one uninterrupted `make check`, including
+The source used by the installed observer build passed one uninterrupted `make check`, including
 486 Lua tests, source/pack architecture at 517 entries, storage and subscription
 restart checks, all desktop/client/launcher/recovery gates and the bundled apps.
 The 16-window load check exited in 323 ms. Both previously intermittent startup
@@ -328,3 +328,11 @@ The next source revision adds a private durable desktop catalog to the client
 store: one default identity and up to 32 allocated identities, with no layout
 content or live-availability claims. Source/pack storage and upgrade checks pass;
 this helper is not installed globally or exposed as public desktop selection yet.
+
+The subsequent catalog source full run stopped on a presenter bug: a committed
+window removal could leave its expired-view error in the header. The source fix
+retires the removed attachment and clears only that window's error. A regression
+fails on the old presenter and passes on fixed source/pack; the original Process
+Manager scenario also passes. This does not fix or explain the separate retained
+node's intermittent mesh disconnection. The protected desktop storage methods and
+this presenter fix are not installed globally; their combined full gate is pending.

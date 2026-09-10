@@ -64,6 +64,18 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local pending_clipboard_at: integer? = nil
     local CLIPBOARD_TIMEOUT_NS: integer = 10 * 1000 * 1000 * 1000
     local status: string = "Starting workspace"
+    local window_failure: {id: string, text: string}? = nil
+    local function set_window_error(id: string, title: string, message: string)
+        status = "[" .. title .. "] " .. message
+        window_failure = {id = id, text = status}
+    end
+    local function retire_window(id: string)
+        delivery.close(id)
+        if window_failure and window_failure.id == id then
+            if status == window_failure.text then status = "" end
+            window_failure = nil
+        end
+    end
     local fatal: string? = nil
     local dirty = true
     local running = true
@@ -269,7 +281,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     local resized, resize_error = delivery.resize(win.id, body.width, body.height)
                     if not resized and resize_error then
                         local title = model.display_title(win)
-                        status = "[" .. title .. "] " .. tostring(resize_error)
+                        set_window_error(win.id, title, tostring(resize_error))
                     end
                 end
                 local content, err = delivery.content(win.id, body.width, body.height)
@@ -285,7 +297,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     contents[win.id] = {rows = content.rows, cursor = cur}
                 elseif err and not delivery.is_failed(win.id) and err ~= "Attaching" and err ~= "Resizing" then
                     local title = model.display_title(win)
-                    status = "[" .. title .. "] " .. tostring(err)
+                    set_window_error(win.id, title, tostring(err))
                 end
             end
         end
@@ -382,11 +394,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         if not attached and err then
                             local title = "Window"
                             for _, win in ipairs(scene.windows) do if win.id == reply.id then title = model.display_title(win); break end end
-                            status = "[" .. title .. "] " .. tostring(err)
+                            set_window_error(reply.id, title, tostring(err))
                         end
                         if active_selection and not selection_body(active_selection) then cancel_selection() end
                     elseif (reply.op == "close" and reply.error == "") or reply.op == "closed" then
-                        delivery.close(reply.id)
+                        retire_window(reply.id)
                         if active_selection and selection.binding(active_selection).view_id == reply.id then cancel_selection() end
                         for i = #tabs_order, 1, -1 do if tabs_order[i] == reply.id then table.remove(tabs_order, i) end end
                         routing_scene = model.remove(routing_scene, reply.id)
@@ -415,6 +427,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 local state = decode.desktop(raw)
                 local next_scene = state and state.scene
                 if next_scene and next_scene.revision >= scene.revision then
+                    -- Inventory-driven removal need not carry a close reply.
+                    -- Retire only previously committed windows; an attachment
+                    -- may arrive before the scene that first introduces it.
+                    local present: {[string]: boolean} = {}
+                    for _, win in ipairs(next_scene.windows) do present[win.id] = true end
+                    for _, win in ipairs(scene.windows) do
+                        if not present[win.id] then retire_window(win.id) end
+                    end
                     scene = next_scene
                     if awaiting_place and capture and preview then
                         local settled = true
@@ -461,7 +481,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         break
                     end
                 end
-                status = "[" .. title .. "] " .. f.error
+                set_window_error(f.id, title, f.error)
                 dirty = true
             end
         elseif selected.channel == input and not rejoining then
@@ -634,7 +654,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                             if not sent and err then
                                 local title = "Window"
                                 for _, win in ipairs(scene.windows) do if win.id == target then title = model.display_title(win); break end end
-                                status = "[" .. title .. "] " .. tostring(err)
+                                set_window_error(target, title, tostring(err))
                                 dirty = true
                             end
                         end
@@ -711,7 +731,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                                         local sent, err = delivery.send(win.id, {type = "mouse", x = x - body.x + 1, y = y - body.y + 1,
                                             action = event.action == "release" and "release" or (event.action == "wheel" and "wheel" or (event.action == "motion" and "motion" or "press")), button = tostring(event.button or ""), ctrl = event.ctrl == true, alt = event.alt == true, shift = event.shift == true})
                                         if not sent and err then
-                                            status = "[" .. model.display_title(win) .. "] " .. tostring(err)
+                                            set_window_error(win.id, model.display_title(win), tostring(err))
                                             dirty = true
                                         end
                                     end
@@ -734,7 +754,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         if not sent and err then
                             local title = "Window"
                             for _, win in ipairs(scene.windows) do if win.id == target then title = model.display_title(win); break end end
-                            status = "[" .. title .. "] " .. tostring(err)
+                            set_window_error(target, title, tostring(err))
                             dirty = true
                         end
                     end

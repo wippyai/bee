@@ -23,6 +23,12 @@ terminal-selection-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_selection.py
 terminal-scroll-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_scroll.py
+.PHONY: process-manager-check
+process-manager-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import tui_smoke; tui_smoke.process_manager(False); tui_smoke.process_manager(True)'
+.PHONY: window-retirement-check
+window-retirement-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_retirement.py
 .PHONY: layout-ack-check
 layout-ack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import personalization; personalization.acknowledged_layout()'
@@ -58,6 +64,7 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/close_confirmation.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/drag_failure.py
+	$(MAKE) window-retirement-check WIPPY="$(abspath $(WIPPY))"
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/console.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/terminal_scroll.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/navigation.py

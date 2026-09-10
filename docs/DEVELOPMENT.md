@@ -141,6 +141,10 @@ Test negative permissions and failures, not only successful UI frames.
 The headless acceptance also inspects service failure events from the actual boot;
 workspace readiness and a clean exit do not excuse a failed background service.
 New runtime patches require upstream Go tests, a refreshed checksum and a clean pinned build.
+`make -C native patched-check` tests native source against the manifest runtime.
+It resolves that runtime's dependency graph in temporary copies of `go.mod` and
+`go.sum`, then runs race tests and vet with read-only module resolution. The
+repository's module files remain unchanged.
 Pure documentation edits need link/source consistency checks, not a repeat of
 every PTY test. Update current status/contracts with the code, including limits
 and unimplemented guarantees. No machine-specific paths, secrets or local stores

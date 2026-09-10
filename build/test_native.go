@@ -126,6 +126,12 @@ func testNative(manifestPath, module string) error {
 	if err := nativeTestRun(module, env, "go", "mod", "edit", modfile, "-replace=github.com/wippyai/runtime="+source); err != nil {
 		return err
 	}
+	// The replacement runtime may require a different dependency graph from the
+	// module's release baseline. Resolve only the disposable mod/sum copies;
+	// test and vet then consume that graph read-only.
+	if err := nativeTestRun(module, env, "go", "mod", "tidy", modfile); err != nil {
+		return err
+	}
 	if err := nativeTestRun(module, env, "go", "test", modfile, "-mod=readonly", "-race", "-tags", strings.Join(manifest.Runtime.Tags, ","), "./..."); err != nil {
 		return err
 	}

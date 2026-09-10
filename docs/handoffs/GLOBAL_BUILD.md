@@ -117,3 +117,14 @@ trial still waited 5.5 seconds in that source-based diagnostic versus 6 seconds
 before it; this is insufficient evidence of a fix and was not adopted. Both
 composition runs passed race/vet. Logs: `/tmp/bee-cold-start-stages.log`,
 `/tmp/bee-cold-native-stages.log`, `/tmp/bee-cold-owner-gossip-stages.log`.
+
+The follow-up service-event trace distinguishes late application activation from
+name propagation in the source-based diagnostic: client lookup began at
+11:45:57.226819, Hive activation started at 11:46:02.936028, and lookup completed
+6.450557 seconds after it began (about 0.741 seconds after activation started).
+Thus most of that diagnostic's delay precedes activation; faster gossip cannot
+remove it. This is not a timing breakdown of the installed binary. Temporary Lua
+logger markers were silent in the fixture profile; the measured boundaries use
+its existing native service-event capture. The composition passes race/vet:
+`/tmp/bee-cold-service-stages.log`. No production logging or runtime changes were
+introduced by this investigation.

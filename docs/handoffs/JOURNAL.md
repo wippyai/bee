@@ -5550,3 +5550,22 @@ Hive Manager is under Tools. The corrected87211 is live with its first60s idle
 interval, log `/tmp/bee-hive-manager-idle-r2.log`, fixture
 `/tmp/bee-hive-manager-idle-nhjncua8`. Do not treat the first fixture's dump as
 user-failure evidence. Hour50459 remains live. Checkpointdcd0905 is pushed.
+
+### Overlapping-display failure — journal 915
+
+The current global binary reproduced detach uncertainty under concurrent display
+reconnects: temporary probe round 10, then the repository diagnostic at round 9.
+In the latter case the service still answered a read-only catalog request in
+0.291s, before the fixture stack was captured. Evidence:
+`/tmp/bee-overlapping-reconnect-check.log`, fixture
+`/tmp/bee-native-reconnect-xd2wivrb`. This differs from the actual-user expired
+mount followed by a 60-second catalog timeout; that cause remains unresolved.
+Another 30-round overlapping probe passed. Idle diagnostic 87211 completed all
+ten reconnects; hour-idle 50459 passed on the earlier candidate.
+
+A private candidate increases detach acknowledgment from 200 to 750 ms, with
+exit-under-one-second acceptance still required. Native session race/vet passed
+57592. Native checkpoint `094d0c4416dd` is pushed; build 64032 is pending at
+`/tmp/bee-detach-budget-build.log`. Nothing new is installed. The opt-in
+`make native-reconnect-check` preserves failed disposable fixtures and probes
+service responsiveness before stack capture.

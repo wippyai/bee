@@ -66,6 +66,12 @@ native-client-check:
 native-client-retention-check:
 	python3 tests/native_client.py "$(BEE_BINARY)" --idle-reconnects
 
+# Opt-in overlapping-display diagnostic. Failure preserves disposable evidence.
+RECONNECT_ROUNDS ?= 30
+.PHONY: native-reconnect-check
+native-reconnect-check:
+	python3 tests/native_reconnect.py "$(BEE_BINARY)" --rounds "$(RECONNECT_ROUNDS)"
+
 .PHONY: native-desktop-selection-check
 native-desktop-selection-check:
 	python3 tests/native_desktop_selection.py "$(BEE_BINARY)"

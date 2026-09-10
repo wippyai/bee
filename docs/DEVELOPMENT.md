@@ -158,3 +158,13 @@ separate build manifest; `make standalone` passes it to the pinned builder.
 `make pack` continues producing the single source/pack acceptance snapshot.
 These are different artifacts with different ownership requirements. See
 `NATIVE_DISTRIBUTION.md`; bundled modules are not independently published packages.
+
+For intermittent physical-client reconnect failures, run
+`make native-reconnect-check BEE_BINARY=/absolute/path/to/bee`. This opt-in Linux
+diagnostic retains Hive Manager and repeatedly joins three physical clients
+concurrently, requiring each detach to succeed within one second. Set
+`RECONNECT_ROUNDS` (default 30) to change its duration. It uses disposable stores;
+on failure it preserves terminal frames, probes the catalog while draining live
+clients, and captures only its own retained process through a held pidfd. The
+printed fixture directory may contain private test credentials and is not a
+release artifact. Passing this test does not prove public remote recovery.

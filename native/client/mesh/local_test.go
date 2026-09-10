@@ -169,6 +169,9 @@ func TestLocalClientSubprocess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	if err := Local(ctx, LocalConfig{Directory: dir}, func(ctx context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		if stack.Membership.LocalNode().Meta["bee.role"] != "client" {
+			return errors.New("physical client role was not advertised")
+		}
 		if owner.Node != "owner" {
 			return errors.New("wrong owner")
 		}

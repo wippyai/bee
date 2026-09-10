@@ -67,7 +67,7 @@ presentation cancellation before transport/actor retirement; canceling all of
 them together raced detach and viewport revocation.
 
 Ordinary launch immediately prints `Starting Bee…` when the runtime state lock is
-free, or `Connecting to Bee…` when it is busy. The latter is a routing status,
+free, or `Connecting to Hive…` when it is busy. The latter is a routing status,
 not an authenticated readiness claim. Owner startup remains local on the free
 path; no network discovery timeout precedes that decision. Catalog cancellation
 before an attach request is reported as a canceled read, while uncertainty after

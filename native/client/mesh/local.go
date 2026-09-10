@@ -141,7 +141,7 @@ func local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 		InternodeTLS:             config.TLS,
 		InternodeTrustedPeerKeys: map[string]string{node: base64.RawStdEncoding.EncodeToString(public), descriptor.Node: descriptor.PublicKey},
 		JoinAddrs:                []string{descriptor.Gossip},
-		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", internode.MetadataSurfaceProtocol: "1"},
+		Meta:                     clusterapi.NodeMeta{"raft_eligible": "false", "bee.role": "client", internode.MetadataSurfaceProtocol: "1"},
 	})
 	if err != nil {
 		return err

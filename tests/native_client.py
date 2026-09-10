@@ -196,9 +196,46 @@ def crashed_client(binary):
     print('Client SIGKILL: native node departure revokes attachment; same owner and shell reconnect')
 
 
+def command_launches(binary):
+    """Cold and retained-owner aliases use the same admitted launch route."""
+    with tempfile.TemporaryDirectory(prefix='bee-native-command-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner = None
+        ui = NativeDesktop(binary, folder, state, arguments=(
+            'terminal', 'bash', '-c',
+            'printf "%s\\n" "$1"; exec bash -i',
+            'bee-command', 'COLD_LITERAL ; $(exit 4) words'))
+        try:
+            ui.wait('COLD_LITERAL ; $(exit 4) words', timeout=15)
+            owner = owner_handle(ui, binary, state)
+            ui.key(b"BEE_ALIAS_SHELL=$$; printf 'ALIAS_%s\\n' READY\r")
+            ui.wait('ALIAS_READY')
+            ui.quit()
+            ui.close()
+            ui = NativeDesktop(binary, folder, state, arguments=(
+                'terminal', 'bash', '-c',
+                'printf "%s\\n" "$1"; exec bash -i',
+                'bee-command', 'WARM_LITERAL ; $(exit 4) words'))
+            ui.wait('WARM_LITERAL ; $(exit 4) words', timeout=15)
+            assert not select.select([owner], [], [], 0)[0], 'Alias replaced owner'
+            ui.quit()
+            ui.close()
+            ui = NativeDesktop(binary, folder, state)
+            ui.wait('WARM_LITERAL ; $(exit 4) words', timeout=15)
+            ui.key(b'\x1b[24~')
+            ui.wait('WARM_LITERAL ; $(exit 4) words')
+            ui.quit()
+        finally:
+            ui.close()
+            stop_owner(owner)
+    print('Cold and warm command aliases preserve literal arguments and retained owner')
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
     run(binary)
+    command_launches(binary)
     stalled_detach(binary)
     preparing_owner(binary)
     crashed_client(binary)

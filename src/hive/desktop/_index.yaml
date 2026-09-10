@@ -5,6 +5,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
+    arguments: bee.application:arguments
     bounds: bee.hive:bounds
     contract: bee.protocol:application
 - name: owner

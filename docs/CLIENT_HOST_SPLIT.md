@@ -647,3 +647,25 @@ then retire the actor. The owner remains independent. Actual-source SIGTERM
 acceptance restores terminal settings and a fresh client reads the retained shell
 variable afterward. This is a local native composition proof; the combined runtime
 needed for standalone clipboard support remains a separate gate.
+
+## Retained command launch candidate
+
+The native foreground client now carries named command arguments through the
+existing `bee.desktop:launch` operation after controller admission. The detached
+owner starts without those arguments. Its desktop client resolves the name using
+`bee.applications:command.resolve`, including the admitted handler's argument and
+fullscreen policy, then uses the existing broker open operation. Success carries
+the broker's view and instance identities; queued delivery is not success.
+
+Requests carry the owner execution, workspace, desktop and controller session.
+Observer and substituted sessions are refused. Arguments remain literal values
+under the shared bounds. The existing deadline-bound receipt preserves identical
+replays and rejects changed input under a reused key. The foreground client never
+retries a launch automatically; an uncertain reply requires explicit user action.
+
+The native mesh composition proves literal arguments, controller checks, unknown
+commands, identical replay and conflicting reuse. CLI routing and session checks
+also pass. Standalone cold/warm command acceptance is staged in
+`tests/native_client.py`; the installed global binary still predates this route
+until its candidate build and acceptance finish. Explicit `--base` and qualified
+application-ID development launches retain their existing routes.

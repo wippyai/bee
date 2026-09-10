@@ -256,9 +256,11 @@ local function main(configuration: unknown)
         local desktop_ready = desktop and desktop.ready
         local desktop_results = desktop and desktop.results
         local desktop_copies = desktop and desktop.copies
+        local desktop_launches = desktop and desktop.launches
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
+            if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
             if desktop_ready and desktop_results then
                 cases[#cases + 1] = desktop_ready:case_receive()
                 cases[#cases + 1] = desktop_results:case_receive()
@@ -295,6 +297,8 @@ local function main(configuration: unknown)
                 desktop_owner.ready(desktop, selected.value)
             elseif desktop_results and selected.channel == desktop_results and desktop then
                 desktop_owner.result(desktop, selected.value, now_ms)
+            elseif desktop_launches and selected.channel == desktop_launches and desktop then
+                desktop_owner.launched(desktop, selected.value, now_ms)
             elseif desktop_copies and selected.channel == desktop_copies and desktop then
                 desktop_owner.copied(desktop, selected.value, now_ms)
             elseif selected.channel == hellos then

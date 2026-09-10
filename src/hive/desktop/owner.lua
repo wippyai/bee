@@ -11,12 +11,12 @@ local retained = require("retained")
 local M = {}
 type Channel = channel.Channel
 type Session = {id: string, mount: string, mode: "control" | "observe"}
-type Pending = {id: string, op: "attach" | "detach" | "copy", call: types.Call?, cache_key: string?, digest: string?, due: integer}
+type Pending = {id: string, op: "attach" | "detach" | "copy" | "launch", call: types.Call?, cache_key: string?, digest: string?, due: integer}
 type Client = {recipient: string, session: Session?, pending: Pending?, closing: boolean, dirty: boolean}
 type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires: integer}
 type State = {
     config: protocol.Configuration, node: string, supervisor: string,
-    ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>,
+    ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
     workspace_id: string, desktop_id: string, allowed: {[string]: boolean},
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     expires_at: time.Time, stopped: boolean,
@@ -48,19 +48,20 @@ function M.start(config: protocol.Configuration, node: string): State
     local ready = listen("bee.retained.ready")
     local results = listen("bee.retained.result")
     local copies = listen("bee.retained.copied")
+    local launches = listen("bee.retained.launched")
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy"}) do
         local policy, err = security.policy(name)
-        if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); error(tostring(err)) end
+        if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); error(tostring(err)) end
         policies[#policies + 1] = policy
     end
     local self = tostring(process.pid())
     local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
         :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, config.application)
-    if not owner then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); error(tostring(err)) end
+    if not owner then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); error(tostring(err)) end
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}
-    return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies,
+    return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies, launches = launches,
         workspace_id = "", desktop_id = "", allowed = allowed, clients = clients, receipts = receipts,
         client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
 end
@@ -72,6 +73,13 @@ local function forget(state: State, recipient: string)
     end
 end
 local function request_core(state: State, client: Client, pending: Pending, mode: string?): boolean
+    if pending.op == "launch" then
+        local input = pending.call and protocol.input(protocol.LAUNCH, pending.call.input) or nil
+        if not input or not input.name or not input.arguments then return false end
+        return send(state.supervisor, "bee.retained.launch", {version = 1, workspace_id = state.workspace_id,
+            desktop_id = state.desktop_id, request_id = pending.id, recipient = client.recipient,
+            name = input.name, arguments = input.arguments})
+    end
     return send(state.supervisor, "bee.retained.request", {version = 1, workspace_id = state.workspace_id,
         desktop_id = state.desktop_id, request_id = pending.id, recipient = client.recipient, op = pending.op, mode = mode})
 end
@@ -192,10 +200,10 @@ function M.request(state: State, message: process.Message, now: integer)
     if operation ~= protocol.ATTACH and (not client.session or client.session.id ~= input.session_id) then
         failure(sender, call.request_id, "DENIED", "Desktop session does not match"); return
     end
-    if operation == protocol.COPY and (not client.session or client.session.mode ~= "control") then
-        failure(sender, call.request_id, "DENIED", "Copy requires the active desktop controller"); return
+    if (operation == protocol.COPY or operation == protocol.LAUNCH) and (not client.session or client.session.mode ~= "control") then
+        failure(sender, call.request_id, "DENIED", "Operation requires the active desktop controller"); return
     end
-    local pending: Pending = {id = uuid.v7(), op = operation == protocol.ATTACH and "attach" or (operation == protocol.COPY and "copy" or "detach"),
+    local pending: Pending = {id = uuid.v7(), op = operation == protocol.ATTACH and "attach" or (operation == protocol.COPY and "copy" or (operation == protocol.LAUNCH and "launch" or "detach")),
         call = call, cache_key = key, digest = digest, due = now + remaining}
     state.receipt_count = state.receipt_count + 1
     client.pending = pending
@@ -215,6 +223,32 @@ function M.request(state: State, message: process.Message, now: integer)
         client.pending = nil
         if not client.session then forget(state, sender) end
     elseif pending.op == "attach" then client.dirty = true end
+end
+function M.launched(state: State, message: process.Message, now: integer)
+    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local result = retained.launch_result(message:payload():data(), state.workspace_id, state.desktop_id)
+    if not result then return end
+    for _, client in pairs(state.clients) do
+        local pending = client.pending
+        if pending and pending.op == "launch" and pending.id == result.request_id and pending.call then
+            local session = client.session
+            if not session then return end
+            local reply: types.Reply
+            if result.error_code ~= "" then
+                local code = "UNAVAILABLE"
+                if result.error_code == "DENIED" or result.error_code == "BUSY" or result.error_code == "INVALID_ARGUMENT" then code = result.error_code end
+                reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))
+            else
+                reply = types.reply_ok(pending.call.request_id, {owner_execution = state.config.execution,
+                    workspace_id = state.workspace_id, desktop_id = state.desktop_id, session_id = session.id,
+                    id = result.id, instance_id = result.instance_id})
+            end
+            remember(state, client, pending, reply, now)
+            client.pending = nil
+            if client.closing then revoke(state, client, now) end
+            return
+        end
+    end
 end
 function M.copied(state: State, message: process.Message, now: integer)
     if tostring(message:from()) ~= state.supervisor or state.stopped then return end
@@ -325,7 +359,7 @@ function M.event(state: State, event: process.Event, now: integer)
 end
 function M.close(state: State)
     state.stopped = true
-    process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies)
+    process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
     process.terminate(state.supervisor)
 end

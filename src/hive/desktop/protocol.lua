@@ -1,15 +1,17 @@
 -- MIT. Desktop operations use Hive envelopes; this module grants no authority.
 local bounds = require("bounds")
 local contract = require("contract")
+local arguments = require("arguments")
 local M = {}
 M.SERVICE = "bee.desktop"
 M.LIST = "bee.desktop:list"
 M.ATTACH = "bee.desktop:attach"
 M.DETACH = "bee.desktop:detach"
 M.COPY = "bee.desktop:copy"
+M.LAUNCH = "bee.desktop:launch"
 M.CLIENT_HOST = "bee.client:native"
 type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?}
-type DesktopInput = {execution: string, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?}
+type DesktopInput = {execution: string, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?, arguments: {string}?}
 function M.configuration(value: unknown): (Configuration?, string?)
     local object = bounds.object(value)
     if not object then return nil, "desktop configuration must be an object" end
@@ -39,7 +41,7 @@ function M.input(operation: string, value: unknown): DesktopInput?
     if not execution then return nil end
     if operation == M.LIST then
         if bounds.fields(object, {"owner_execution"}) then return nil end
-        return {execution = execution, workspace_id = nil, desktop_id = nil, session_id = nil, mode = "observe"}
+        return {execution = execution, workspace_id = nil, desktop_id = nil, session_id = nil, mode = "observe", name = nil, arguments = nil}
     end
     local workspace = contract.workspace_id(object.workspace_id)
     local desktop = contract.workspace_id(object.desktop_id)
@@ -48,12 +50,21 @@ function M.input(operation: string, value: unknown): DesktopInput?
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "mode"})
             or (object.mode ~= "control" and object.mode ~= "observe") then return nil end
         return {execution = execution, workspace_id = workspace, desktop_id = desktop,
-            mode = object.mode == "control" and "control" or "observe"}
+            mode = object.mode == "control" and "control" or "observe", name = nil, arguments = nil}
+    elseif operation == M.LAUNCH then
+        if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "session_id", "name", "arguments"}) then return nil end
+        local session = bounds.id(object.session_id)
+        local name = contract.text(object.name, 40)
+        if not session or not name or not name:match("^[a-z][a-z0-9_-]*$") or object.arguments == nil then return nil end
+        local values = arguments.decode(object.arguments)
+        if not values then return nil end
+        return {execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session,
+            mode = "control", name = name, arguments = values}
     elseif operation == M.DETACH or operation == M.COPY then
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "session_id"}) then return nil end
         local session = bounds.id(object.session_id)
         if not session then return nil end
-        return {execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session, mode = "observe"}
+        return {execution = execution, workspace_id = workspace, desktop_id = desktop, session_id = session, mode = "observe", name = nil, arguments = nil}
     end
     return nil
 end

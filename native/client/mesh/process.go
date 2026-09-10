@@ -15,6 +15,7 @@ import (
 	"github.com/wippyai/runtime/api/registry"
 	"github.com/wippyai/runtime/api/relay"
 	"github.com/wippyai/runtime/api/runtime"
+	"github.com/wippyai/runtime/api/topology"
 	"sync"
 	"sync/atomic"
 )
@@ -73,6 +74,19 @@ func (p *nativeActor) Step(events []process.Event, out *process.StepOutput) erro
 		pkg, ok := event.Data.(*relay.Package)
 		if !ok || pkg == nil {
 			continue
+		}
+		// The native scheduler sends typed cancellation from its reserved system
+		// identity. It is lifecycle control, not a remote application reply.
+		if samePID(pkg.Source, topology.SystemPID) && samePID(pkg.Target, p.actor.id) {
+			for _, message := range pkg.Messages {
+				if message == nil || message.Topic != topology.TopicEvents || len(message.Payloads) != 1 || message.Payloads[0] == nil {
+					continue
+				}
+				if event, ok := message.Payloads[0].Data().(*topology.CancelEvent); ok && event != nil && event.Kind == topology.Cancel {
+					out.Done(nil)
+					return nil
+				}
+			}
 		}
 		// Application control replies must come from the enrolled owner node.
 		// Remote admission requires runtime source-provenance enforcement (a release

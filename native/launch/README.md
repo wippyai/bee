@@ -72,3 +72,11 @@ not an authenticated readiness claim. Owner startup remains local on the free
 path; no network discovery timeout precedes that decision. Catalog cancellation
 before an attach request is reported as a canceled read, while uncertainty after
 an actual attach or detach request remains intact.
+
+`bee observe` selects the same attachment route with observation-only rights.
+It requires an already-running Bee for the selected state directory and refuses
+an absent Bee before creating an owner process, log or database. The runtime
+lock is only a routing hint; native authentication and supervisor admission still
+apply. Application arguments are refused. Ctrl+Q or Ctrl+] detaches this display
+without affecting the controller or applications. This is local same-account
+observation; external enrollment and public desktop selection remain separate.

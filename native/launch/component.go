@@ -67,7 +67,15 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 			return application.LaunchPlan{}, nil
 		}
 		selected := *l.client
-		if len(request.Arguments) > 0 {
+		observe := len(request.Arguments) > 0 && request.Arguments[0] == "observe"
+		if observe {
+			if len(request.Arguments) != 1 {
+				return application.LaunchPlan{}, errors.New("bee observe takes no application arguments")
+			}
+			selected.Mode = hive.Observe
+			selected.Launch = nil
+		}
+		if len(request.Arguments) > 0 && !observe {
 			// Explicit application IDs retain their existing recovery/development
 			// entry. Named handlers resolve only through the retained owner.
 			if strings.Contains(request.Arguments[0], ":") {

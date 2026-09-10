@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	application "github.com/wippyai/runtime/api/application"
@@ -42,6 +43,9 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, request)
+	}
+	if c.Mode == hive.Observe {
+		return errors.New("No running Bee to observe; start bee first")
 	}
 	if _, err := fmt.Fprintln(c.Stdout, "Starting Bee…"); err != nil {
 		return err

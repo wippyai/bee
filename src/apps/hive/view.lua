@@ -140,7 +140,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         else
             for _, desktop in ipairs(catalog.desktops) do
                 local key = model.desktop_key(desktop.workspace_id, desktop.desktop_id)
-                local session = state.sessions[key]
+                local session = model.session(state, selected.node_id, desktop.workspace_id, desktop.desktop_id)
                 local item = (desktop.label ~= "" and desktop.label or desktop.desktop_id) .. "  workspace " .. desktop.workspace_id
                 if desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller else item = item .. "  no controller" end
                 if desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end

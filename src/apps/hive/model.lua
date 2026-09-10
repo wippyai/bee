@@ -20,13 +20,14 @@ type Status = "unknown" | "reachable" | "unavailable"
 type Node = {node_id: string, label: string, client_only: boolean, is_local: boolean, addr: string, member: boolean, departed_at: integer, status: Status, detail: string,
     role: string, cluster_size: integer, sampled_at: string, heap: integer?, goroutines: integer?}
 type Session = {session_id: string, mode: string}
+type NodeSessions = {owner_generation: string, desktops: {[string]: Session}}
 type Pane = "nodes" | "desktops"
 type Hive = "unknown" | "running" | "unavailable"
 type State = {
     source: string, source_label: string, hive: Hive, hive_detail: string, membership_detail: string, generation: integer,
     nodes: {Node}, index: {[string]: Node}, names: {[string]: string}, catalogs: {[string]: Catalog},
     selected_node: string?, selected_desktop: string?, wanted_node: string?, wanted_desktop: string?,
-    pane: Pane, pending: Attach?, outcome: string, sessions: {[string]: Session}, technical: boolean,
+    pane: Pane, pending: Attach?, outcome: string, sessions: {[string]: NodeSessions}, technical: boolean,
 }
 type Object = {[string]: unknown}
 function M.text(value: unknown, limit: integer?): string
@@ -91,6 +92,7 @@ local function evict(state: State)
         local removed = table.remove(state.nodes, victim)
         state.index[removed.node_id] = nil
         state.catalogs[removed.node_id] = nil
+        state.sessions[removed.node_id] = nil
         if state.selected_node == removed.node_id then state.selected_node = nil; state.selected_desktop = nil end
     end
 end
@@ -114,6 +116,7 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
             node.label = state.names[node.node_id] or ("Display " .. node.node_id:sub(-6))
             node.status, node.detail = "unknown", ""
             state.catalogs[node.node_id] = nil
+            state.sessions[node.node_id] = nil
         else node.label = label_of(state, node.node_id) end
     end
     for _, node in ipairs(state.nodes) do
@@ -166,6 +169,16 @@ end
 function M.apply_catalog(state: State, node_id: string, catalog: Catalog)
     local node = state.index[node_id]
     if not node or node.client_only then return end
+    local remembered = state.sessions[node_id]
+    if remembered then
+        if not catalog.available or remembered.owner_generation ~= catalog.owner_generation then
+            state.sessions[node_id] = nil
+        else
+            local present: {[string]: boolean} = {}
+            for _, desktop in ipairs(catalog.desktops) do present[M.desktop_key(desktop.workspace_id, desktop.desktop_id)] = true end
+            for key in pairs(remembered.desktops) do if not present[key] then remembered.desktops[key] = nil end end
+        end
+    end
     state.catalogs[node_id] = catalog
     if state.selected_node == node_id and state.wanted_desktop then
         for _, desktop in ipairs(catalog.desktops) do
@@ -182,6 +195,14 @@ function M.apply_catalog(state: State, node_id: string, catalog: Catalog)
         end
         if not found then state.selected_desktop = nil end
     end
+end
+-- A session belongs to one node execution. Display IDs copied to another
+-- node or reused by a replacement owner cannot carry session state with them.
+function M.session(state: State, node_id: string, workspace_id: string, desktop_id: string): Session?
+    local catalog = state.catalogs[node_id]
+    local remembered = state.sessions[node_id]
+    if not catalog or not catalog.available or not remembered or remembered.owner_generation ~= catalog.owner_generation then return nil end
+    return remembered.desktops[M.desktop_key(workspace_id, desktop_id)]
 end
 function M.selected(state: State): Node?
     if not state.selected_node then return nil end
@@ -248,7 +269,7 @@ function M.can_control(state: State): boolean
     local desktop = M.selected_desktop(state)
     if not desktop then return false end
     if desktop.controller == "" then return true end
-    local session = state.sessions[state.selected_desktop :: string]
+    local session = M.session(state, node.node_id, desktop.workspace_id, desktop.desktop_id)
     return session ~= nil and session.mode == "control"
 end
 -- A pending request whose outcome is unknown is replayed with the same
@@ -296,8 +317,26 @@ function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
     end
     if state.pending and state.pending.idempotency_key == intent.idempotency_key then state.pending = nil end
     if outcome.ok then
-        state.sessions[key] = {session_id = M.text(outcome.session_id, 80), mode = M.text(outcome.mode or intent.mode, 16)}
-        state.outcome = "Attached " .. state.sessions[key].mode .. " session " .. state.sessions[key].session_id .. " on " .. intent.desktop_id
+        local catalog = state.catalogs[intent.node_id]
+        local present = false
+        if catalog and catalog.available and catalog.owner_generation == intent.owner_generation then
+            for _, desktop in ipairs(catalog.desktops) do
+                if M.desktop_key(desktop.workspace_id, desktop.desktop_id) == key then present = true; break end
+            end
+        end
+        if not present then
+            state.outcome = "Attachment completed for an earlier catalog; refresh before using the session"
+            return
+        end
+        local remembered: NodeSessions? = state.sessions[intent.node_id]
+        if not remembered then
+            local desktops: {[string]: Session} = {}
+            remembered = {owner_generation = intent.owner_generation, desktops = desktops}
+        end
+        local session: Session = {session_id = M.text(outcome.session_id, 80), mode = M.text(outcome.mode or intent.mode, 16)}
+        remembered.desktops[key] = session
+        state.sessions[intent.node_id] = remembered
+        state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. intent.desktop_id
     else
         state.outcome = M.text(outcome.code .. ": " .. outcome.message)
     end

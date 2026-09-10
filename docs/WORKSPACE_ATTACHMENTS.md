@@ -428,3 +428,19 @@ check the actual PR revision and reproduce the missing behavior through native
 contracts. Required end-to-end evidence remains two Bee runtimes with remote
 input/resize, recipient denial, safe controller handoff, disconnect/reconnect
 and tab identity preserved. Current local broker tests do not satisfy that gate.
+
+### Neutral displays and qualified attachment state
+
+Several clients on one machine are separate displays, each able to choose a
+workspace. A display identity must not encode its machine, node or chosen
+workspace. Changing that choice changes its attachments; it must not recreate
+applications or transfer execution implicitly. The installed local independent
+desktops are a foundation for this behavior, not completed workspace switching.
+
+Hive Manager session presentation now records node and owner generation around
+each workspace/display reference. Identical IDs on another node cannot inherit
+"your session" or its control affordance. Owner replacement, removed catalog
+items and evicted nodes retire the corresponding displayed session state; late
+old-owner outcomes cannot restore it. This bookkeeping grants no permissions
+and binds an attachment, not the neutral display's identity. Focused Lua tests
+pass; this follow-up is not yet installed globally.

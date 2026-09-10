@@ -5423,3 +5423,22 @@ disposable state `/tmp/bee-retained-reconnect-soak-_4xcpep_`. Initial Terminal
 state is retained; after 3600 seconds it will allow 65 seconds to observe rejoin.
 This is pending evidence, not a claim that the earlier hour-idle hang is fixed.
 The actual user's Bee is untouched. Shared journal checkpoint 886.
+
+### Neutral display identity follow-up
+
+User reiterated multiple clients on one machine, each a neutral display choosing
+a workspace. Display identity must remain independent of node/workspace choice.
+The session attachment carries those targets; switching must not recreate apps.
+
+Checkpoint c3b2c9f (`checkpoint/hive-session-identity-20260910`) qualifies Hive
+Manager's session labels/control affordance by node and owner generation.
+Matching workspace/display IDs on another node cannot inherit the first node's
+session. Owner replacement and catalog removal retire stale labels, and delayed
+old-owner outcomes cannot restore them. All 20 focused Wippy tests pass; source/
+pack Hive Manager app, slow-query responsiveness and confirmation regressions
+pass (69779 terminal exit 0, `/tmp/bee-hive-session-identity-app.log`).
+This follow-up is not installed yet. Full old-source gate 46307 and hour-idle
+diagnostic 50459 remain live; do not restart them. After 46307 finishes, run the
+new source's full gate and executable verification before installing c3b2c9f.
+Native manifest remains 5172d7dc2396; docs-only native head is 15631f7.
+Global remains SHA440890d7..., retained PID2197478. Journal evidence890.

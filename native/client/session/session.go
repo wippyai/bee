@@ -74,6 +74,19 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// Another ordinary launch may already hold the runtime lock while its
+	// owner is still preparing. Wait for its discovery publication before
+	// entering native authentication; absence is not a reason to start a peer.
+	store, err := rendezvous.New(cfg.Directory)
+	if err != nil {
+		return err
+	}
+	publication, cancelPublication := context.WithTimeout(ctx, 15*time.Second)
+	err = awaitPublication(publication, store.Read)
+	cancelPublication()
+	if err != nil {
+		return fmt.Errorf("wait for owner discovery: %w", err)
+	}
 	transport, closeTransport := cleanupLifetime(ctx)
 	defer closeTransport()
 	return mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {

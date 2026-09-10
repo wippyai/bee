@@ -94,7 +94,7 @@ function M.activate(state: State, value: unknown)
     if count >= 32 then answer(state, id, request, "BUSY", "Active desktop capacity reached"); return end
     local resource, err = desktops.start(state.resources, {host = state.host, workspace_id = state.workspace_id,
         database = "bee:client_db", width = 100, height = 32,
-        options = {version = 1, desktop_id = id, quit_mode = "supervisor", workspace_appearance = false}}, state.scope)
+        options = {version = 1, desktop_id = id, quit_mode = "supervisor", workspace_appearance = false, hive_supervisor = state.owner}}, state.scope)
     if not resource then answer(state, id, request, "UNAVAILABLE", tostring(err)); return end
     state.children[id] = {id = id, resource = resource, phase = "boot", connection = "", pending = "",
         ready = false, activation = request, deadline = time.after("10s")}

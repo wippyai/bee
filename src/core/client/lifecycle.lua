@@ -3,12 +3,12 @@ local contract = require("contract")
 local interaction = require("interaction")
 local arguments = require("arguments")
 type Bootstrap = {quit_mode: "detach" | "supervisor", legacy_desktop: unknown, arguments: {string}, fullscreen: boolean,
-    secondary_application: string?, workspace_appearance: boolean, desktop_id: string?}
+    secondary_application: string?, workspace_appearance: boolean, desktop_id: string?, hive_supervisor: string?}
 type Control = {op: "state" | "save" | "exit" | "pause", request_id: string, shutdown: interaction.Wire?, error: string?}
 local M = {}
 function M.bootstrap(value: unknown): Bootstrap?
     if value == nil then return {quit_mode = "detach", legacy_desktop = nil, arguments = {}, fullscreen = false,
-        secondary_application = nil, workspace_appearance = false, desktop_id = nil} end
+        secondary_application = nil, workspace_appearance = false, desktop_id = nil, hive_supervisor = nil} end
     if type(value) ~= "table" or value.version ~= 1 then return nil end
     local desktop_id: string? = nil
     if value.desktop_id ~= nil then
@@ -26,9 +26,14 @@ function M.bootstrap(value: unknown): Bootstrap?
         secondary = contract.text(value.secondary_application, 160)
         if not secondary or secondary == "" then return nil end
     end
+    local hive_supervisor: string? = nil
+    if value.hive_supervisor ~= nil then
+        hive_supervisor = contract.text(value.hive_supervisor, 160)
+        if not hive_supervisor or hive_supervisor == "" then return nil end
+    end
     return {quit_mode = mode, legacy_desktop = value.legacy_desktop, arguments = args,
         fullscreen = value.fullscreen == true, secondary_application = secondary,
-        workspace_appearance = value.workspace_appearance == true, desktop_id = desktop_id}
+        workspace_appearance = value.workspace_appearance == true, desktop_id = desktop_id, hive_supervisor = hive_supervisor}
 end
 function M.control(value: unknown, workspace_id: string): Control?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end

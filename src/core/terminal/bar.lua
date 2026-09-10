@@ -86,7 +86,8 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     local restore = restore_id ~= "" and width >= 36 and " −  ◇  × " or ""
     local right = ""
     if status ~= "" and width >= 36 then right = " " .. status .. " "
-    elseif width >= 60 then right = " " .. label .. " " end
+    elseif width >= 60 then right = " " .. label .. " ▾ "
+    elseif width >= 24 then right = " Status ▾ " end
     right = tty.text.truncate(right, math.floor(math.max(0, width // 2)))
     local room = math.floor(math.max(0, width - 7 - tty.text.width(right) - tty.text.width(restore)))
     local strip = tabstrip(scene, order, room, preferences.taskbar == "icons", badges)
@@ -134,6 +135,9 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
             hits[#hits + 1] = {id = restore_id, x = 8 + room + (index - 1) * 3, width = 3, action = action}
         end
         text = text .. appearance.style(theme.accent, theme.surface) .. restore
+    end
+    if right ~= "" then
+        hits[#hits + 1] = {id = "", x = width - tty.text.width(right) + 1, width = tty.text.width(right), action = "connection"}
     end
     text = text .. muted .. right .. "\27[0m"
     return {text = text, hits = hits}

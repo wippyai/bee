@@ -362,3 +362,13 @@ session denial. The native binding and 490 Lua tests pass. This is not installed
 automatic public second-launch selection and executable acceptance remain pending.
 The runtime's separate exact remote actor EXIT recovery gate still fails. See
 [client state](CLIENT_STATE.md) for the source contract and limits.
+
+
+The next source UI adds a compact connection dropdown to the existing workspace
+label (mouse or F9). It separates the local Hive service, executing node, workspace
+identity/readiness and durable display identity/size. Hive service information is
+supplied by the trusted retained-supervisor bootstrap; unreported legacy sessions
+show "Not reported". This is not remote-peer health or a physical-client identity.
+The presenter performs no discovery or networking. Source/pack tests cover mouse,
+Escape, F12 and a 42×12 terminal. Hive Manager keeps readiness in view at narrow
+widths and moves addresses and full IDs to Details. Native build/install pending.

@@ -54,6 +54,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if state.hive == "running" then hive_line = "Hive: supervisor running on this node"
     elseif state.hive == "unavailable" then hive_line = "Hive supervisor unavailable: " .. state.hive_detail end
     line(2, hive_line, theme.muted)
+    if state.source ~= "fixture" and width >= 52 then
+        local online = 0
+        for _, node in ipairs(state.nodes) do if node.status == "reachable" then online = online + 1 end end
+        local summary = tostring(#state.nodes) .. (#state.nodes == 1 and " node · " or " nodes · ") .. tostring(online) .. " ready"
+        local span = tty.text.width(summary)
+        put(width - span, 1, summary, span, theme.accent)
+    end
     local selected = model.selected(state)
     local catalog = model.catalog(state)
     local desktop_rows = 0
@@ -72,8 +79,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             end
         end
     end
-    local name_width = math.floor(math.max(12, math.min(40, width - 46)))
-    line(3, string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-12s %s", "", "MEMBERSHIP", "NODE", "BEE SERVICE", "ADDRESS"), theme.muted)
+    local compact = width < 64
+    local membership_width = compact and 7 or 12
+    local show_address = state.technical and width >= 100
+    local name_width = math.floor(math.max(8, math.min(40, width - (show_address and 46 or (membership_width + 22)))))
+    local pattern = "%-4s %-" .. tostring(membership_width) .. "s %-" .. tostring(name_width) .. "s %-12s %s"
+    line(3, string.format(pattern, "", compact and "LINK" or "MEMBERSHIP", "NODE", "BEE SERVICE", show_address and "ADDRESS" or ""), theme.muted)
     if #nodes == 0 then line(list_first, "No nodes reported", theme.muted) end
     for slot = 1, capacity do
         local node = nodes[next_offset + slot]
@@ -84,10 +95,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local fg = focus and appearance.selection_text(theme) or (active and theme.accent or theme.text)
         local bg = focus and theme.accent or theme.surface
         local name = node.label
-        if node.label ~= node.node_id then name = node.label .. " (" .. node.node_id .. ")" end
-        local tail = node.addr
-        if node.status == "unavailable" and node.detail ~= "" then tail = tail .. (tail ~= "" and "  " or "") .. node.detail end
-        local label = string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-12s %s", node.is_local and "this" or "", node.member and "present" or "left",
+        if state.technical and node.label ~= node.node_id then name = node.label .. " (" .. node.node_id .. ")" end
+        local tail = show_address and node.addr or ""
+        local label = string.format(pattern, node.is_local and "this" or "", node.member and "present" or "left",
             tty.text.truncate(name, name_width, "…"), status_word(node), tail)
         line(y, label, fg, bg)
         hits[#hits + 1] = {kind = "node", index = next_offset + slot, key = node.node_id, x = 1, y = y, width = width, height = 1}
@@ -98,7 +108,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local lines: {string} = {}
         local keys: {string} = {}
         local head = "Node " .. selected.label
-        if selected.status == "reachable" then head = head .. "  cluster " .. tostring(selected.cluster_size) .. "  sampled " .. selected.sampled_at
+        if selected.status == "reachable" then
+            head = head .. "  ·  Ready"
+            if state.technical then head = head .. "  cluster " .. tostring(selected.cluster_size) .. "  sampled " .. selected.sampled_at end
         elseif selected.status == "unavailable" then head = head .. "  Bee service unavailable: " .. selected.detail end
         if state.technical then
             head = head .. "  Raft role " .. (selected.role ~= "" and selected.role or "unknown")
@@ -161,6 +173,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if message == "" then message = state.outcome end
     if message == "" and state.pending then message = "Waiting for the desktop owner…" end
     if message == "" and state.membership_detail ~= "" then message = "Membership: " .. state.membership_detail end
+    if message == "" then message = "↑↓ Choose node   Enter Open   Tab Displays   R Refresh" end
     line(height, message, theme.muted)
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
 end

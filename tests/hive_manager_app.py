@@ -24,7 +24,7 @@ def exercise():
             text = ui.text()
             assert "FIXTURE DATA" not in text, text
             assert "this present" in text, text
-            assert "UNAVAILABLE" in text, text
+            assert "unavailable" in text, text
             ui.key(b"\r")
             ui.wait("Desktops unavailable", timeout=5)
             ui.key(b"c")

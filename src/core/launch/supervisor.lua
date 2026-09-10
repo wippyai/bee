@@ -240,7 +240,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                         local started, start_error = desktops.start(retained,
                             {host = host, workspace_id = workspace_id, database = "bee:client_db", width = 100, height = 32,
                                 application = initial_application, options = {version = 1, quit_mode = "supervisor",
-                                    legacy_desktop = value.desktop, workspace_appearance = true}}, security.new_scope(client_policies))
+                                    legacy_desktop = value.desktop, workspace_appearance = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
                         if not started then error(tostring(start_error)) end
                         desktop, client = started, started.pid
                     else

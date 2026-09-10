@@ -20,6 +20,7 @@ local menu = require("menu")
 local appearance = require("appearance")
 local delivery = require("delivery")
 local selection = require("selection")
+local connection = require("connection")
 
 local function main(owner: string, initial_application: string?, secondary_application: string?)
     if ctx.get("bee.workspace_owner") ~= owner or owner == "" then error("Untrusted presenter bootstrap") end
@@ -56,6 +57,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local editor: title_editor.State? = nil
     local preferences = appearance.defaults()
     local start: menu.State? = nil
+    local connection_open = false
+    local connection_info = connection.new(owner, workspace_id, ctx.get("bee.display_id"), ctx.get("bee.hive_supervisor"))
     local captured_releases: {[string]: boolean} = {}
     local captured_mouse = false
     local active_selection: selection.State? = nil
@@ -309,7 +312,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. workspace_id:sub(1, 8),
-            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection)
+            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
@@ -585,6 +588,21 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 -- and clicks outside its body; the model clamps drag endpoints.
                 handled = true
                 dirty = true
+            elseif event.type == "key" and kind == "f9" and event.action ~= "release" then
+                connection_open = not connection_open
+                start = nil
+                capture, preview = nil, nil; awaiting_place = false
+                captured_releases[kind] = true
+                handled = true; dirty = true
+            elseif connection_open and event.type ~= "resize" and event.type ~= "close"
+                and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q"))) then
+                if (event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release")
+                    or (event.type == "mouse" and event.action == "press") then
+                    connection_open = false
+                end
+                if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
+                if event.type == "mouse" and event.action == "press" then captured_mouse = true end
+                handled = true; dirty = true
             elseif capture and not awaiting_place and event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release" then
                 capture, preview = nil, nil; awaiting_place = false
                 captured_releases[kind] = true; captured_mouse = true
@@ -685,7 +703,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
                             for _, hit in ipairs(tab_hits) do
                                 if x >= hit.x and x < hit.x + hit.width then
                                     hit_tab = true
-                                    if event.button == "right" then
+                                    if hit.action == "connection" then
+                                        connection_open = true; start = nil; dirty = true
+                                    elseif event.button == "right" then
                                         start = {selected = 1, offset = 0, kind = "window", target = hit.id, x = x, y = y + 1}
                                         dirty = true
                                     elseif hit.action == "close" then application("close", "", hit.id)

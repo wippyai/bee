@@ -308,7 +308,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             presenter_deadline = time.after("3s")
             local grant = assert(display.view:grant())
             presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = self,
-                ["bee.workspace_id"] = workspace_id}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
+                ["bee.workspace_id"] = workspace_id, ["bee.display_id"] = database.client_id,
+                ["bee.hive_supervisor"] = bootstrap.hive_supervisor}):with_scope(scope("bee:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self, initial_application, bootstrap.secondary_application)))
         end
         local function pause_presenter()

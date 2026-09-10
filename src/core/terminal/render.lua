@@ -11,6 +11,7 @@ local selection = require("selection")
 local bar = require("bar")
 local window_chrome = require("window_chrome")
 local surface = require("surface")
+local connection = require("connection")
 type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string}
 local text = tty.text :: Text
 type Cursor = {x: integer, y: integer, visible: boolean}
@@ -23,7 +24,7 @@ local function styled(style: string, text: string): string return style .. text 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
     preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?, editor: title_editor.State?, modal: dialog.State?,
-    badges: {[string]: surface.Badge}?, active_selection: selection.State?): Frame
+    badges: {[string]: surface.Badge}?, active_selection: selection.State?, connection_info: connection.Info?, connection_open: boolean?, ready: boolean?): Frame
     local prefs = preferences or appearance.defaults()
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
@@ -83,6 +84,10 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
         local items = menu.entries(start, scene, initial == true, catalog)
         local panel = menu.panel(width, height, #items, start)
         menu.draw(canvas, panel, menu.fit(start, panel, #items), items, prefs)
+        cursor.visible = false
+    end
+    if connection_open and connection_info then
+        connection.draw(canvas, width, height, prefs, connection_info, ready == true)
         cursor.visible = false
     end
     if editor then cursor = title_editor.draw(canvas, editor, width, height, prefs) end

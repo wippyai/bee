@@ -5156,3 +5156,22 @@ The installed presenter now retires a removed window's attachment and its own
 error. Protected desktop catalog/allocation methods are installed, but public
 creation/selection is not yet wired. Whole-client mesh disconnection, immediate
 crash/rejoin and external enrollment remain separate unfinished boundaries.
+
+## 2026-09-10 — Retained supervisor storage adapter (source only)
+
+Checkpoint6b0b545 connects the retained actor to protected catalog/allocation
+functions asynchronously, with exact default-client-resource grants, a single
+pending request, strict result decoding and a five-second uncertain timeout.
+Normal and deliberately slow source/pack probes passed58228. Physical attachment
+and shell input continue while storage is delayed; late completion cannot satisfy
+a subsequent correlation. Reply delivery failure is logged without killing the
+desktop. No public extra-desktop activation is claimed.
+
+Full make check9543 is active in /tmp/bee-supervisor-catalog-full-check;
+log /tmp/bee-supervisor-catalog-full-check.log. Poll that handle, do not restart it.
+Global d65ff900 and retainedPID1322000 remain on the previously verified build.
+Journal830 records this checkpoint. The screenshot's second-controller refusal
+remains: next work is additional desktop activation on the existing host, followed
+by public selection. Hive Manager has no authoritative display-only-role field;
+do not infer that role from a node-name prefix or relabel a failed service query
+as confirmed service health.

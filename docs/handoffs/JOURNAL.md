@@ -5130,3 +5130,29 @@ session96064 exited0; it is a test-only addition after the frozen source snapsho
 Full make check38854 remains live in /tmp/bee-desktop-authority-check-089e1c2;
 output /tmp/bee-desktop-authority-foundation-check.log. Poll that same handle.
 Global c1f5d8 and retainedPID839818 remain unchanged. Shared journal823.
+
+## 2026-09-10 — Combined candidate installed and actual-user launch verified
+
+Full `make check` session38854 exited0: 486 Lua tests, 519 source/pack entries,
+storage and migration proofs, delivery failures, window retirement, desktop and
+launcher recovery, and bundled apps all passed. Evidence:
+`/tmp/bee-desktop-authority-foundation-check.log`. Native standalone session6869
+and the additional scoped allocation-capacity check96064 had already passed.
+
+Global `/home/wolfy-j/.local/bin/bee` now has SHA256
+`d65ff9000d0949f5e6a5bf17d551ba886e243ad1d95890f08d1d177c7d224632`.
+It uses source089e1c2, native142e753 and runtime674b58a1; later checkpoint changes
+are documentation and the separately verified capacity test. No runtime change.
+The previous executable is archived as `bee.previous-20260910T203656Z`.
+
+The verified retained process839818 was stopped and replaced by1322000, whose
+executable digest matches the installed binary. Existing databases were preserved.
+Actual-user cold startup reached the Bee header in1.568s; warm control in0.222s;
+observe in0.219s. Detach took0.085s,0.091s and0.086s respectively. Evidence:
+`/tmp/bee-retirement-user-install.log` and
+`/tmp/bee-retirement-user-reconnect.log`.
+
+The installed presenter now retires a removed window's attachment and its own
+error. Protected desktop catalog/allocation methods are installed, but public
+creation/selection is not yet wired. Whole-client mesh disconnection, immediate
+crash/rejoin and external enrollment remain separate unfinished boundaries.

@@ -324,10 +324,10 @@ package; X11/macOS implementations are not integrated. Native race tests, vet
 and Windows build/VM checks pass. The full foundation check was attempted and
 stopped at 23 existing Lua lint errors; no passing full-suite claim is made.
 
-The next source revision adds a private durable desktop catalog to the client
+The installed revision includes a private durable desktop catalog in the client
 store: one default identity and up to 32 allocated identities, with no layout
 content or live-availability claims. Source/pack storage and upgrade checks pass;
-this helper is not installed globally or exposed as public desktop selection yet.
+this helper is not exposed as public desktop selection yet.
 
 The subsequent catalog source full run stopped on a presenter bug: a committed
 window removal could leave its expired-view error in the header. The source fix
@@ -335,4 +335,7 @@ retires the removed attachment and clears only that window's error. A regression
 fails on the old presenter and passes on fixed source/pack; the original Process
 Manager scenario also passes. This does not fix or explain the separate retained
 node's intermittent mesh disconnection. The protected desktop storage methods and
-this presenter fix are not installed globally; their combined full gate is pending.
+this presenter fix passed their combined full gate (486 tests, 519 entries) and
+are installed globally. The actual-user smoke reached the desktop in 1.568s
+cold, 0.222s on warm reconnect, and 0.219s through `bee observe`; all three
+detached in under 100 ms. See the global build handoff for exact evidence.

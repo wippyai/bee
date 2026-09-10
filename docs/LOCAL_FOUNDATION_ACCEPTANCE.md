@@ -17,9 +17,9 @@ rollback are in [the global build handoff](handoffs/GLOBAL_BUILD.md).
 
 Immediate exact-actor EXIT while its transport remains live is still a runtime
 gate. The latest full `make check` passed through taskbar checks, then failed
-the initial Settings wait in personalization. The failed and remaining desktop
-recipes are being rerun without changing their time limits; there is no passing
-uninterrupted full-suite claim. Cold owner startup still captures
+the initial Settings wait in personalization. The failed and all remaining desktop
+recipes subsequently passed without changing their time limits; there is no
+passing uninterrupted full-suite claim. Cold owner startup still captures
 output in an owner log file. The user's already-running older owner is not
 hot-replaced by installing a new executable.
 

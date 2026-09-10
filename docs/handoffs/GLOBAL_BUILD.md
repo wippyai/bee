@@ -6,12 +6,12 @@ on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
 performed for the latest Bee-only link-loss fix.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
-- Native Bee: `1abf5b28a0e5`, `checkpoint/native-client-binding-20260910`.
+- Native Bee: `d4b427d90a2e`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- Build output: `/tmp/bee-linkdown-fixed2`.
-- SHA256: `285a51bf448f212cdfc67e8eea51b6a9a296da8d5ab221f3e3f2562b289bcb0a`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T145306Z`.
+- Build output: `/tmp/bee-startup-responsive`.
+- SHA256: `c8847373cfa079a2835e2c567376bb2b7ae25273f80813e817aec6739d8d077a`.
+- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T153642Z`.
 
 ## Launch and ownership
 
@@ -33,11 +33,11 @@ candidate does not yet consume a released runtime main revision.
 
 ## Verified behavior and limits
 
-`/tmp/bee-linkdown-native-acceptance.log` passes the actual executable's cold
+`/tmp/bee-startup-responsive-acceptance.log` passes the actual executable's cold
 owner/client launch, exact clipboard copy, F12, retained explicit reconnect,
 bounded stalled-owner exit with uncertainty preserved, delayed owner publication,
 and SIGKILL followed by reconnect to the same shell. Warm reconnect measured
-0.213 seconds. The SIGKILL test waits 40 seconds for native node-departure delivery;
+0.218 seconds. The SIGKILL test waits 40 seconds for native node-departure delivery;
 it does not establish immediate crash detection.
 
 Both Bee supervisors now use the existing `trap_links` option. LINK_DOWN revokes
@@ -51,7 +51,7 @@ succeeds but no EXIT arrives when the target finishes while transport stays aliv
 See [the runtime handoff](STATUS_RUNTIME_GATE.md). No Bee polling substitute,
 parallel transport or new ingress API is used.
 
-Timing probes found fresh-owner startup at 1.53–2.58 seconds, terminal restoration
+Before the loopback profile adjustment, timing probes found fresh-owner startup at 1.53–2.58 seconds, terminal restoration
 at about 21 ms, and clean process exits at 0.84–0.92 seconds. An earlier clean exit
 at 1.008 seconds failed the existing one-second limit; it has not been erased by
 the later passing samples. Test-only stage timings place 0.37–0.95 seconds in the
@@ -63,7 +63,7 @@ checks, source/pack architecture at 517 entries, desktop smoke, fresh pack and
 taskbar checks. It then failed personalization's initial four-second Settings
 wait while boot logs were visible. Ten isolated source/pack Settings starts passed
 under 1.4 seconds; personalization subsequently passed in the resumed recipes.
-Remaining desktop recipes are still running with unchanged limits. Evidence:
+All remaining desktop recipes subsequently passed with unchanged limits. Evidence:
 `/tmp/bee-linkdown-foundation-check.log`, `/tmp/bee-settings-startup-observe.log`,
 `/tmp/bee-linkdown-remaining-desktop.log`. This is not an uninterrupted full-suite
 pass. The earlier intermittent wallpaper-only startup failure remains unexplained.
@@ -84,3 +84,19 @@ make native-client-check native-binary-check
 make native-upgrade-check PREVIOUS_BEE=/path/to/pre-Hive-Manager/bee
 make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 ```
+
+## Startup responsiveness
+
+Native checkpoint `d4b427d90a2e` adds immediate Starting/Connecting feedback,
+separates cancellation of read-only discovery from uncertain attachment outcomes,
+and sets the existing loopback-client gossip interval to 50 ms. This increases
+local gossip frequency while retaining graceful leave; it changes no runtime API,
+owner profile or remote failure-detection contract. Session and launcher race/vet
+checks and the actual-owner composition pass. The standalone candidate is installed and passes the full native-client gate,
+including the unchanged one-second exit limit and retained-shell crash/rejoin.
+Its predecessor failed that exit gate at 1.005 seconds; that failure motivated the
+local profile adjustment.
+
+A free state lock starts the owner directly without network discovery. Measured
+cold startup is still 1.5–2.6 seconds, not instantaneous. A busy lock routes to the
+existing owner; an unresponsive owner must not cause a competing database owner.

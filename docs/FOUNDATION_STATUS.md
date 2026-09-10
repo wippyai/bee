@@ -16,7 +16,8 @@ exact-actor EXIT while transport remains live is still a failing runtime gate.
 The latest full foundation run passed through taskbar checks, then failed the
 four-second initial Settings wait in `tests/personalization.py` while runtime
 startup logs were still visible. Ten isolated source/pack Settings starts passed
-under 1.4 seconds; the failed recipe and remaining desktop checks are being rerun.
+under 1.4 seconds; the failed recipe and all remaining desktop recipes then passed
+without changing their time limits. This is not an uninterrupted full-suite pass.
 The earlier intermittent blank frame in `tests/drag_failure.py` remains unexplained.
 See the current [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md).
 Older gate descriptions below refer to earlier candidates.

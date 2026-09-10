@@ -132,6 +132,9 @@ func local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 	stack, err := stackpkg.AssembleStack(stackpkg.StackConfig{
 		NodeName: node, Logger: zap.NewNop(), Bus: bus, Collector: collector, Transcoder: payload.NewTranscoder(),
 		MembershipBindAddr: loopback, MembershipAdvertise: loopback, InternodeBindAddr: loopback,
+		// This client only joins over loopback. A shorter gossip interval keeps
+		// graceful membership leave responsive, at the cost of more local gossip.
+		MembershipGossipInterval: 50 * time.Millisecond,
 		SecretKey:                base64.StdEncoding.EncodeToString(snapshot.GossipKey()),
 		InternodeIdentityKey:     base64.RawStdEncoding.EncodeToString(private),
 		InternodeTLS:             config.TLS,

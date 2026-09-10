@@ -116,3 +116,9 @@ lifetime and caller cancellation still fence lookups. Public launch is unchanged
 
 TLS startup failure tests cover invalid certificates and a plaintext owner.
 They prove the callback is not entered and protected enrollment is unchanged.
+
+The same-account loopback client sets the existing membership gossip interval to
+50 ms so graceful leave does not wait for the default gossip tick. This increases
+local gossip frequency; it does not change the owner's profile, failure-detection
+contract or remote/LAN defaults. The real-owner composition checks retain normal
+membership cleanup and bounded physical-client exit.

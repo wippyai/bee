@@ -235,6 +235,30 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 					if err := probeObserverCopy(frame, filepath.Join(state, DirectoryName), w.ID, w.Desktops[0].ID); err != nil {
 						return err
 					}
+					if _, err := client.Launch(frame, "wrong-session-launch", forged, hiveclient.DesktopCommand{Name: "terminal"}); !copyDenied(err, "DENIED") {
+						return fmt.Errorf("launch with substituted session not denied: %v", err)
+					}
+					if _, err := client.Launch(frame, "unknown-command", mount, hiveclient.DesktopCommand{Name: "missing-command"}); !copyDenied(err, "INVALID_ARGUMENT") {
+						return fmt.Errorf("unknown command not refused: %v", err)
+					}
+					launchContext, cancelLaunch := context.WithTimeout(frame, 10*time.Second)
+					defer cancelLaunch()
+					command := hiveclient.DesktopCommand{Name: "terminal", Arguments: []string{"bash", "-c", "printf '%s\\n' \"$1\"; exec bash -i", "bee-launch", "MESH_LITERAL ; $(exit 4) words"}}
+					launched, err := client.Launch(launchContext, "literal-launch", mount, command)
+					if err != nil || launched.ID == "" || launched.Instance == "" {
+						return fmt.Errorf("owner launch identities: %+v %v", launched, err)
+					}
+					replayed, err := client.Launch(launchContext, "literal-launch", mount, command)
+					if err != nil || replayed != launched {
+						return fmt.Errorf("launch replay changed broker identities: %+v %+v %v", launched, replayed, err)
+					}
+					if _, err := client.Launch(launchContext, "literal-launch", mount, hiveclient.DesktopCommand{Name: "terminal"}); !copyDenied(err, "CONFLICT") {
+						return fmt.Errorf("changed launch under existing key was not refused: %v", err)
+					}
+					if err := awaitDesktopText(frame, view, "MESH_LITERAL ; $(exit 4) words"); err != nil {
+						return err
+					}
+
 				}
 				command := "bee_probe=retained; printf 'BEE_OWNER_%s_OK\\n' \"$bee_probe\""
 				expected := "BEE_OWNER_retained_OK"
@@ -309,6 +333,11 @@ func probeObserverCopy(parent context.Context, directory, workspace, desktopID s
 			}
 			if _, err := client.Copy(frame, "observer-copy", mounted); !copyDenied(err, "DENIED") {
 				return fmt.Errorf("observer could request controller selection: %v", err)
+			}
+			forged := mounted
+			forged.Mode = hiveclient.Control
+			if _, err := client.Launch(frame, "observer-launch", forged, hiveclient.DesktopCommand{Name: "terminal"}); !copyDenied(err, "DENIED") {
+				return fmt.Errorf("observer forged control to launch: %v", err)
 			}
 			return client.Detach(frame, "observer-detach", mounted)
 		})

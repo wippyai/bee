@@ -6,6 +6,7 @@ package launch
 import (
 	"context"
 	"errors"
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/session"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"os"
@@ -61,16 +62,30 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 	if request.Operation != application.RunApplication || request.Command != l.command {
 		return application.LaunchPlan{}, nil
 	}
-	if len(request.Arguments) == 0 {
+	if len(request.Arguments) == 0 || request.Arguments[0] != "start" {
 		if l.client == nil || request.Base {
 			return application.LaunchPlan{}, nil
 		}
+		selected := *l.client
+		if len(request.Arguments) > 0 {
+			// Explicit application IDs retain their existing recovery/development
+			// entry. Named handlers resolve only through the retained owner.
+			if strings.Contains(request.Arguments[0], ":") {
+				return application.LaunchPlan{}, nil
+			}
+			command := hive.DesktopCommand{Name: request.Arguments[0], Arguments: append([]string{}, request.Arguments[1:]...)}
+			if !command.Valid() {
+				return application.LaunchPlan{}, errors.New("invalid Bee command arguments")
+			}
+			selected.Launch = &command
+		}
+		// The owner child starts empty. Exactly this foreground session submits
+		// the command after admission; spawning it must not execute the command.
+		startup := request
+		startup.Arguments = nil
 		foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return application.LaunchPlan{Handled: true}, l.client.Run(foreground, request)
-	}
-	if request.Arguments[0] != "start" {
-		return application.LaunchPlan{}, nil
+		return application.LaunchPlan{Handled: true}, selected.Run(foreground, startup)
 	}
 	if request.Base || len(request.Arguments) != 1 {
 		return application.LaunchPlan{}, errors.New("bee start requires ordinary startup with no extra arguments")

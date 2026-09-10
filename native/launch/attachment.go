@@ -25,6 +25,7 @@ import (
 type Client struct {
 	Command   string
 	Selection session.Selection
+	Launch    *hive.DesktopCommand
 	Mode      hive.DesktopMode
 	Stdin     *os.File
 	Stdout    io.Writer
@@ -36,7 +37,7 @@ func (c Client) Attach(ctx context.Context, request application.LaunchRequest) e
 	}
 	return session.Join(ctx, session.Config{
 		Directory: filepath.Join(request.StateDir, rendezvous.DirectoryName),
-		Selection: c.Selection, Mode: c.Mode,
+		Selection: c.Selection, Mode: c.Mode, Command: c.Launch,
 	}, c.Stdin, c.Stdout)
 }
 
@@ -45,7 +46,8 @@ func (c Client) validate(ctx context.Context, request application.LaunchRequest)
 		c.Command == "" || request.Command != c.Command || len(request.Arguments) != 0 ||
 		!filepath.IsAbs(request.StateDir) || c.Stdin == nil || c.Stdout == nil ||
 		(c.Mode != hive.Control && c.Mode != hive.Observe) ||
-		((c.Selection.Workspace == "") != (c.Selection.Desktop == "")) {
+		((c.Selection.Workspace == "") != (c.Selection.Desktop == "")) ||
+		(c.Launch != nil && (!c.Launch.Valid() || c.Mode != hive.Control)) {
 		return errors.New("unsupported Bee client attachment request")
 	}
 	return ctx.Err()

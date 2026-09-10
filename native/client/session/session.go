@@ -34,6 +34,7 @@ const detachTimeout = 200 * time.Millisecond
 type Config struct {
 	Directory string
 	Selection Selection
+	Command   *hive.DesktopCommand
 	Mode      hive.DesktopMode
 }
 
@@ -68,7 +69,8 @@ func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection,
 func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) error {
 	if ctx == nil || stdin == nil || stdout == nil || cfg.Directory == "" ||
 		(cfg.Mode != hive.Control && cfg.Mode != hive.Observe) ||
-		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) {
+		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) ||
+		(cfg.Command != nil && (!cfg.Command.Valid() || cfg.Mode != hive.Control)) {
 		return errors.New("invalid native client session configuration")
 	}
 	if err := ctx.Err(); err != nil {
@@ -128,6 +130,11 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))
 		}
 	}()
+	if cfg.Command != nil {
+		if _, err := client.Launch(operations, "session-launch", mounted, *cfg.Command); err != nil {
+			return err
+		}
+	}
 	service := tty.GetService(ctx)
 	if service == nil {
 		return errors.New("native viewport service unavailable")

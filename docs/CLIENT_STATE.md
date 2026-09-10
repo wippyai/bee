@@ -433,8 +433,9 @@ outcome is not equivalent to "nothing happened".
 
 Renderer and quit events for additional desktops continue while the default
 presenter's admission is pending. The default keeps at most its latest deferred
-renderer and quit request. A pending workspace quit holds a default renderer
-replacement until cancellation or shutdown resolves. The withheld-renderer probe
+renderer and quit request. A pending quit dialog permits renderer replacement so
+the user can still answer after F12. Accepted shutdown waits for an in-flight
+renderer bind to settle before issuing save with a new request identity. The withheld-renderer probe
 fails on the earlier supervisor, then passes with the additional presenter
 replaced while the default waits and the default subsequently recovered by F12.
 Normal source/pack launch-exit, copy-exit and withheld-renderer probes pass.
@@ -462,7 +463,7 @@ same workspace host before requesting a mount. Observe never activates a dormant
 desktop. Each physical actor's session and pending cleanup retain its exact target;
 attach, detach, launch, copy and replies cannot substitute the default desktop.
 Changing desktop while a session exists requires detach first. A controller
-collision is BUSY and retires the refused client's empty record immediately;
+collision is DESKTOP_CONTROLLED and retires the refused client's empty record immediately;
 unknown admission/revocation outcomes retain cleanup responsibility.
 
 `make hive-desktop-catalog-check` proves this route over two actual runtimes:
@@ -474,3 +475,19 @@ public executable's automatic second-launch choice. Native binding race/vet chec
 cover Create identity/uncertainty and strict default catalog decoding. The separate
 `hive-desktop-admission-check` still exposes the runtime's unresolved remote actor
 EXIT cleanup failure; catalog acceptance does not waive that gate.
+
+
+### Automatic physical desktop selection (source; executable acceptance pending)
+
+An ordinary control launch first attempts the default desktop. Only an explicit
+DESKTOP_CONTROLLED refusal permits trying other durable identities, in stable
+order within the same workspace. If all are controlled, it allocates one new
+identity and attaches there. Explicit selections and observers never allocate or
+fall back. Catalog contention retries the same allocation identity; capacity is
+LIMIT_EXCEEDED, and uncertain mutation outcomes stop without a replacement.
+
+Cold node startup, supervisor readiness, attachment admission and native Hive
+calls allow up to 60 seconds per bounded stage. Successful operations proceed
+immediately; caller cancellation and the shorter detach bound still apply. These
+are connection/operation ceilings, not changes to native membership failure
+detection, nor proof of automatic reconnect after established transport loss.

@@ -17,7 +17,7 @@ M.MAX_INPUT_BYTES = 65536
 M.MAX_OUTPUT_BYTES = 262144
 M.MODES = {"open", "approval", "policy"}
 M.CODES = {"INVALID_ARGUMENT", "UNSUPPORTED_SCHEMA", "UNSUPPORTED_CAPABILITY", "DENIED", "NOT_FOUND", "CONFLICT",
-    "LIMIT_EXCEEDED", "INVALID_STATE", "BUSY", "UNAVAILABLE", "DEADLINE_EXCEEDED", "UNCERTAIN", "INTERNAL"}
+    "LIMIT_EXCEEDED", "INVALID_STATE", "DESKTOP_CONTROLLED", "BUSY", "UNAVAILABLE", "DEADLINE_EXCEEDED", "UNCERTAIN", "INTERNAL"}
 type Mode = "open" | "approval" | "policy"
 -- identity: on an UNCERTAIN fault, the stable operation and idempotency
 -- identity a caller uses for status or an identical replay; prose never

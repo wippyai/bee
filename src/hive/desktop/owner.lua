@@ -312,7 +312,7 @@ function M.result(state: State, message: process.Message, now: integer)
                 local reply: types.Reply
                 if result.error_code ~= "" then
                     local code = "UNAVAILABLE"
-                    if result.error_code == "busy" then code = "BUSY"
+                    if result.error_code == "busy" then code = "DESKTOP_CONTROLLED"
                     elseif result.error_code == "not_found" then code = "NOT_FOUND"
                     elseif result.error_code == "mode_conflict" then code = "CONFLICT"
                     elseif result.error_code == "invalid_argument" then code = "INVALID_ARGUMENT" end

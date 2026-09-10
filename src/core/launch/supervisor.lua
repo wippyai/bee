@@ -67,6 +67,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local phase: Phase = "booting"
         local pending = ""
         local quit_pending = false
+        local quit_accepted = false
         local deferred_renderer: string? = nil
         local deferred_quit: protocol.Quit? = nil
         local question: interaction.Spec? = nil
@@ -122,8 +123,11 @@ local function run_supervisor(client: string, database_resource: string?, retain
         while true do
             if phase == "running" then
                 local quitting, rendering = deferred_quit, deferred_renderer
-                if quitting then deferred_quit = nil; primary_quit(quitting)
-                elseif rendering and not quit_pending then deferred_renderer = nil; primary_renderer(rendering) end
+                if quit_accepted then
+                    quit_accepted = false
+                    advance("saving"); control("save")
+                elseif quitting then deferred_quit = nil; primary_quit(quitting)
+                elseif rendering then deferred_renderer = nil; primary_renderer(rendering) end
             end
             local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
@@ -371,7 +375,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     if data.workspace_id == workspace_id and data.connection_id == connection_id then
                         local renderer = contract.text(data.renderer, 160)
                         if not renderer or renderer == "" then error("Invalid local renderer") end
-                        if phase == "running" and not quit_pending then primary_renderer(renderer)
+                        if phase == "running" then primary_renderer(renderer)
                         elseif phase == "running" or phase == "rendering" then deferred_renderer = renderer end
                     end
                 elseif selected.channel == quits and sender == client then
@@ -390,7 +394,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                                 request_id = uuid.v7(), op = "state", shutdown = current and interaction.wire(current) or nil})
                         end
                     end
-                elseif selected.channel == answers and sender == client and phase == "running" then
+                elseif selected.channel == answers and sender == client and (phase == "running" or phase == "rendering") then
                     local response = interaction.response(data)
                     if protocol.request(data, workspace_id) and response and question and response.request_id == question.request_id
                         and response.id == question.id and response.instance_id == question.instance_id and response.value == "" then
@@ -399,9 +403,10 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 elseif selected.channel == replies and sender == host then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
-                        if phase == "running" and quit_pending and reply.op == "quit" then
+                        if (phase == "running" or phase == "rendering") and quit_pending and reply.op == "quit" then
                             if reply.error_code == "" then
-                                advance("saving"); control("save")
+                                -- Finish an in-flight renderer bind before replacing its correlation with save.
+                                quit_accepted = true
                             else
                                 quit_pending, question = false, nil
                                 send(client, "bee.client.control", {version = 1, workspace_id = workspace_id,

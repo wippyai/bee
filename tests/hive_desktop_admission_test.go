@@ -111,6 +111,25 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
+		ownerOS := "Linux"
+		if remote != nil {
+			ownerOS = remote.platform
+		} else if runtime.GOOS == "darwin" {
+			ownerOS = "Darwin"
+		}
+		clientFixture := filepath.Join(folder, "src", "hive_probe", "client.lua")
+		clientSource, err := os.ReadFile(clientFixture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(clientSource)
+		if strings.Count(text, "__BEE_OWNER_OS__") != 1 || strings.Count(text, "__BEE_OWNER_PROOF__") != 1 {
+			t.Fatal("missing destination proof markers")
+		}
+		text = strings.ReplaceAll(strings.ReplaceAll(text, "__BEE_OWNER_OS__", ownerOS), "__BEE_OWNER_PROOF__", ownerProof)
+		if err := os.WriteFile(clientFixture, []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
 			t.Fatal(err)
 		}

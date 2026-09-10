@@ -310,16 +310,97 @@ def idle_reconnects(binary):
             stop_owner(owner)
 
 
+
+def independent_desktops(binary):
+    """The actual launcher reuses a detached desktop without stealing control."""
+    import sqlite3
+    with tempfile.TemporaryDirectory(prefix='bee-native-desktops-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner = None
+        clients = []
+        def client(*arguments):
+            ui = NativeDesktop(binary, folder, state, arguments=arguments)
+            clients.append(ui)
+            return ui
+        def additional_count():
+            database = state / 'workspace.db.client'
+            assert database.exists(), f'Missing client store: {database}'
+            with sqlite3.connect(f'file:{database}?mode=ro', uri=True) as db:
+                return db.execute('SELECT count(*) FROM client_desktops').fetchone()[0]
+        try:
+            first = client()
+            first.wait(' BEE ', timeout=15)
+            owner = owner_handle(first, binary, state)
+            first.open_start()
+            first.choose('Terminal')
+            first.wait('$ ')
+            first.key(b"BEE_FIRST=original; clear; printf 'FIRST_%s\\n' READY\r")
+            first.wait('FIRST_READY')
+            second = client()
+            second.wait(' BEE ', timeout=15)
+            assert 'FIRST_READY' not in second.text(), second.text()
+            second.open_start()
+            second.choose('Terminal')
+            second.wait('$ ')
+            second.key(b"BEE_SECOND=retained; clear; printf 'SECOND_%s\\n' READY\r")
+            second.wait('SECOND_READY')
+            first.key(b"printf 'FIRST_STILL_%s\\n' \"$BEE_FIRST\"\r")
+            first.wait('FIRST_STILL_original')
+            assert additional_count() == 1, 'Second launch allocated duplicate desktops'
+            observer = client('observe')
+            observer.wait('FIRST_STILL_original', timeout=15)
+            assert 'SECOND_READY' not in observer.text(), observer.text()
+            observer.quit()
+            observer.close()
+            clients.remove(observer)
+            second.key(b'\x1b[24~')
+            second.wait('SECOND_READY')
+            second.key(b"printf 'SECOND_F12_%s\\n' \"$BEE_SECOND\"\r")
+            second.wait('SECOND_F12_retained')
+            second.quit()
+            second.close()
+            clients.remove(second)
+            second = client()
+            second.wait('SECOND_F12_retained', timeout=15)
+            second.key(b"printf 'SECOND_REJOIN_%s\\n' \"$BEE_SECOND\"\r")
+            second.wait('SECOND_REJOIN_retained')
+            assert additional_count() == 1, 'Reconnect allocated another desktop'
+            third = client('terminal')
+            third.wait('$ ', timeout=15)
+            third.key(b"BEE_THIRD=independent; clear; printf 'THIRD_%s\\n' \"$BEE_THIRD\"\r")
+            third.wait('THIRD_independent')
+            assert 'SECOND_REJOIN_retained' not in third.text(), third.text()
+            assert additional_count() == 2, 'Third controller did not get one independent desktop'
+            second.key(b"printf 'SECOND_WITH_THIRD_%s\\n' \"$BEE_SECOND\"\r")
+            second.wait('SECOND_WITH_THIRD_retained')
+            first.key(b"printf 'FIRST_WITH_THIRD_%s\\n' \"$BEE_FIRST\"\r")
+            first.wait('FIRST_WITH_THIRD_original')
+            third.quit()
+            second.quit()
+            first.quit()
+            assert not select.select([owner], [], [], 0)[0], 'Last display detach killed its applications'
+        finally:
+            for ui in reversed(clients):
+                ui.close()
+            stop_owner(owner)
+    print('Public native Bee: three independent desktops, first-controller continuity, default observer, F12 and reuse without allocation passed')
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
     if sys.argv[2:] == ['--idle-reconnects']:
         idle_reconnects(binary)
+        sys.exit(0)
+    if sys.argv[2:] == ['--desktops']:
+        independent_desktops(binary)
         sys.exit(0)
     if sys.argv[2:] == ['--observe']:
         observers(binary)
         sys.exit(0)
     run(binary)
     observers(binary)
+    independent_desktops(binary)
     command_launches(binary)
     stalled_detach(binary)
     preparing_owner(binary)

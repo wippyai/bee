@@ -7,6 +7,8 @@ local uuid = require("uuid")
 local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
+local OWNER_OS = "__BEE_OWNER_OS__"
+local OWNER_PROOF = "__BEE_OWNER_PROOF__"
 local function main(execution: string, scenario: string?, parent: string?)
     local replies, reply_error = process.listen(types.TOPIC_REPLY, {message = true})
     if not replies then error(tostring(reply_error)) end
@@ -35,8 +37,9 @@ local function main(execution: string, scenario: string?, parent: string?)
                 if tostring(message:from()) ~= target then
                     error("invalid desktop reply sender")
                 end
-                local reply = types.decode_reply(message:payload():data())
-                if not reply or reply.request_id ~= id then error("invalid desktop reply correlation") end
+                local reply, decode_error = types.decode_reply(message:payload():data())
+                if not reply then error("invalid " .. operation .. " reply: " .. tostring(decode_error)) end
+                if reply.request_id ~= id then error("invalid desktop reply correlation for " .. operation) end
                 return reply
             end
         end
@@ -63,7 +66,7 @@ local function main(execution: string, scenario: string?, parent: string?)
         local reply = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = mode})
         for _ = 1, 100 do
             if reply.ok then break end
-            if not reply.error or (reply.error.code ~= "BUSY" and reply.error.code ~= "UNAVAILABLE") then break end
+            if not reply.error or (reply.error.code ~= "BUSY" and reply.error.code ~= "DESKTOP_CONTROLLED" and reply.error.code ~= "UNAVAILABLE") then break end
             -- These are definite refusal replies. Unknown outcomes are never retried.
             time.sleep("20ms")
             reply = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = mode})
@@ -122,6 +125,10 @@ local function main(execution: string, scenario: string?, parent: string?)
     end
     if scenario == "exit" then return end
     text(view, "$ ")
+    command(view, "printf 'OWNER_OS_%s\\n' \"$(uname -s)\"")
+    text(view, "OWNER_OS_" .. OWNER_OS)
+    command(view, "printf 'OWNER_FILE_%s\\n' \"$(cat desktop-owner-proof)\"")
+    text(view, "OWNER_FILE_" .. OWNER_PROOF)
     if scenario == "crash" then
         command(view, "bee_crash=retained; printf 'CRASH_%s_OK\\n' \"$bee_crash\"")
         text(view, "CRASH_retained_OK")
@@ -174,7 +181,7 @@ local function main(execution: string, scenario: string?, parent: string?)
     end
     held_reply("ready")
     local busy = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = "control"})
-    if not busy.error or busy.error.code ~= "BUSY" then error("controller conflict is not a definite busy refusal") end
+    if not busy.error or busy.error.code ~= "DESKTOP_CONTROLLED" then error("controller conflict is not a typed controller refusal") end
     local default_id = desktop_id
     desktop_id = "cccccccccccccccccccccccccccccccc"
     local create_input = {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id}

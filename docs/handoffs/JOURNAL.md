@@ -5285,3 +5285,28 @@ log /tmp/bee-public-desktop-full-check.log. Poll the same handle; do not restart
 on an observation timeout. This run includes the public Hive adapter and all
 prior retained-desktop cleanup changes, unlike completed snapshots9543/87444.
 The two-node catalog gate20135 remains separate from make check and passed.
+
+## 2026-09-10 — Codex: cold-node patience and quit/presenter correction (in progress)
+
+User accepts a 60-second connection allowance for cold/flaky nodes. Source now
+extends native mesh startup, supervisor readiness, attachment admission and Hive
+call ceilings to 60 seconds; local publication and bounded detach retain their
+existing limits. Successful calls do not wait out the deadline. The launch text
+is `Connecting to Hive…`. This is not installed; reconnect presentation and the
+reported current global hang remain unresolved.
+
+The combined source acceptance found a real F12-during-quit deadlock: replacement
+was deferred while quit waited for the presenter to answer its confirmation.
+The source permits replacement during the dialog and defers accepted shutdown
+until an in-flight renderer bind settles, preserving its request correlation.
+The strengthened check requires a changed presenter identity before answering.
+Evidence is pending in `/tmp/bee-close-confirm-render-fix.log`; native deadline
+checks run in `/tmp/bee-node-deadline-check.log`.
+
+User direction for the Hub lane: Bees can specialize, including a remote storage
+Bee configured through governed installation and exposed typed operations.
+Supervisor authorization/dispatch must stay asynchronous and bounded; application
+workers own storage work, with correlated replies, cancellation and explicit retry
+semantics. This is a requirement, not a claim that public remote installation or
+recovery is complete. Mac/Linux catalog acceptance passed in the preceding unit;
+its added owner-OS/file assertion still needs rerunning.

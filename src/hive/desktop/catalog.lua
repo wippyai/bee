@@ -81,7 +81,7 @@ function M.result(state: State, value: unknown, workspace: string, execution: st
         answer(pending.recipient, uncertain(pending)); return
     end
     if result.code ~= "OK" then
-        local code = result.code == "CAPACITY" and "BUSY" or result.code
+        local code = result.code == "CAPACITY" and "LIMIT_EXCEEDED" or result.code
         answer(pending.recipient, types.reply_error(pending.call.request_id, types.fault(code, result.message)))
     elseif pending.desktop_id then
         answer(pending.recipient, types.reply_ok(pending.call.request_id, {owner_execution = execution,

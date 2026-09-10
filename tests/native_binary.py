@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import tempfile
 from native_workspace import NativeDesktop, STORE_NAMES
+from native_client import owner_handle, stop_owner
 from terminal_selection import begin, copies
 from terminal_scroll import scroll_terminal
 
@@ -62,10 +63,13 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
         executable = commands / alias
         executable.write_text("#!/bin/sh\nprintf 'ARG=<%s>\\n' \"$@\"\nprintf 'LAUNCH_READY\\n'\nexec /bin/cat\n")
         executable.chmod(0o755)
-        ui = NativeDesktop(BINARY, folder, Path(temporary) / alias, arguments=(
+        alias_state = Path(temporary) / alias
+        owner = None
+        ui = NativeDesktop(BINARY, folder, alias_state, arguments=(
             alias, "two words", "", "a'b", "$(touch SHOULD_NOT_EXIST)", "--sample"))
         try:
             ui.wait("LAUNCH_READY", timeout=10)
+            owner = owner_handle(ui, BINARY, alias_state)
             ui.pump(.5)
             for value in ("two words", "", "a'b", "$(touch SHOULD_NOT_EXIST)", "--sample"):
                 assert f"ARG=<{value}>" in ui.text(), ui.text()
@@ -75,8 +79,13 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
             assert not (folder / "SHOULD_NOT_EXIST").exists()
             ui.key(b"\x1b[24~")
             ui.wait("LAUNCH_READY")
-            ui.quit(confirm=True)
+            ui.quit()
+            ui.close()
+            ui = NativeDesktop(BINARY, folder, alias_state)
+            ui.wait("LAUNCH_READY", timeout=10)
+            ui.quit()
         finally:
             ui.close()
+            stop_owner(owner)
     assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
 print("Standalone Bee: embedded boot, Settings recovery, terminal, wheel/burst scrolling, physical selection/copy, fullscreen aliases, literal arguments and presenter rejoin passed")

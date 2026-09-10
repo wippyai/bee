@@ -23,6 +23,11 @@ access. If the owner is still preparing discovery, the client waits cancellably
 for publication before authenticating. Warm launch creates no owner contender or
 additional owner log. Cold startup still captures output in `owner-*.log`.
 
+The first owner starts in the launching process's project directory. Later clients
+using that same state directory join the existing owner; they do not change its
+working directory. Newly opened Terminals inherit that owner's directory. Dynamic
+project/workspace selection is not implemented by this attachment route.
+
 Installing a new executable does not hot-replace an already-running owner. The
 user's older owner and its apps have not been stopped. An older owner's failure
 cannot be repaired merely by launching a newer client against it.

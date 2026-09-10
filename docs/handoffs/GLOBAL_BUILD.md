@@ -10,6 +10,28 @@ restored access; the cause remains unresolved. Journal909 records the actual
 process stack and reproduction. Passing acceptance below does not prove sustained
 reconnect reliability. The current retained process after recovery is2493278.
 
+## Reconnect investigation
+
+The opt-in `make native-reconnect-check` reproduced detach uncertainty twice
+with three overlapping clients and retained Hive Manager. In one failure the
+service still answered the following catalog request in 0.291s. A separate
+30-round run passed, so this remains intermittent. Ten idle reconnects with
+Hive Manager also passed.
+
+A private 750 ms detach-budget candidate (`094d0c4416dd`, binary
+`/tmp/bee-detach-budget-candidate`, SHA256
+`deb6a3e888e04ba178aeb61577eaa47289e6f1581152ab6f06bf72ac3fb788db`)
+passed native race/vet, client acceptance and standalone acceptance. Its longer
+stress check failed at round 46: successful detach took 1.090s, exceeding the
+one-second exit requirement; the subsequent catalog took 1.739s. It is **not
+installed or selected for builds**. The native pin remains `ced4008999f4`.
+
+A longer acknowledgment budget alone is insufficient. Diagnosis must distinguish
+detach acknowledgment from native client shutdown. No cause or fix is established
+for the separate actual-user expired mount and 60-second catalog stall.
+Evidence: `/tmp/bee-detach-budget-reconnect-check.log`, fixture
+`/tmp/bee-native-reconnect-i94l7w7b`.
+
 ## Installed
 
 `/home/wolfy-j/.local/bin/bee` is the explicit-selection and Hive session-identity candidate:

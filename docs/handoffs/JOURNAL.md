@@ -5569,3 +5569,15 @@ exit-under-one-second acceptance still required. Native session race/vet passed
 `/tmp/bee-detach-budget-build.log`. Nothing new is installed. The opt-in
 `make native-reconnect-check` preserves failed disposable fixtures and probes
 service responsiveness before stack capture.
+
+### Candidate exit gate failed — journal 916
+
+The 750 ms acknowledgment candidate is not installed. Native client5945 and
+standalone71778 passed; stress20084 failed round46 at successful exit1.090s,
+above the one-second limit. Post-failure catalog answered in1.739s. Evidence:
+`/tmp/bee-detach-budget-reconnect-check.log`, fixture
+`/tmp/bee-native-reconnect-i94l7w7b`. Build pin is restored to nativeced4008999f4;
+the published experimental native branch remains separate. External syscall
+diagnostic49371 is live against the original candidate, output
+`/tmp/bee-reconnect-syscalls.log` and `.trace`. Trace overhead invalidates direct
+timing comparisons; use it to locate detach versus teardown stages.

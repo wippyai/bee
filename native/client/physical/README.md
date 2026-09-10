@@ -1,14 +1,16 @@
 # Native physical client candidate
 
 This package is gated by `physicalclient` pending public startup integration.
-Ordinary Bee does not call it yet.
+The combined candidate uses it for ordinary Bee startup; the release manifest
+has not switched to this component yet.
 
 `Run` presents an admitted Wippy native mesh viewport using the runtime surface
 and input reader. It imports no Bee display protocol and creates no listener.
 The caller supplies the recipient's live runtime frame and selected observation,
 input and resize rights. The native grant authorizes those rights before terminal
 setup and checks operations during use. Observer clients forward neither input
-nor resize; Ctrl+] still detaches locally.
+nor resize; Ctrl+] and Ctrl+Q detach locally, including while host input is stalled.
+These physical-client exits retain the owner and its applications.
 
 Input admission is bounded by a 256-slot queue and 2 MiB of outstanding event
 data. The worker retains each byte charge until delivery completes. Overflow

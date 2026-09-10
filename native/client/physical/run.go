@@ -62,7 +62,7 @@ type Viewport interface {
 // events to forward; the native grant still authorizes every operation.
 // Run never creates a transport or a producer. The caller owns
 // stdin and stdout. Canceling ctx detaches this client, without stopping the host.
-// Ctrl+] is a local detach key and never waits behind network input.
+// Ctrl+] and Ctrl+Q detach locally and never wait behind network input.
 func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os.File, stdout io.Writer) (result error) {
 	return RunWithCopy(ctx, client, rights, stdin, stdout, nil)
 }
@@ -103,7 +103,7 @@ func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, s
 		if ctx.Err() != nil {
 			return
 		}
-		if event.Type == "key" && event.Action == "press" && event.Ctrl && event.Key == "]" {
+		if event.Type == "key" && event.Action == "press" && event.Ctrl && !event.Alt && (event.Key == "]" || event.Key == "q") {
 			cancel(nil)
 			return
 		}

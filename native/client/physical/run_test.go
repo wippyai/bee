@@ -112,33 +112,38 @@ func restored(t *testing.T, slave *os.File, before *term.State) {
 var control = tty.MountRights{Observe: true, Input: true, Resize: true}
 
 func TestLocalDetachRestoresTerminalWithStalledHost(t *testing.T) {
-	master, slave, before := terminalPair(t)
-	v := newViewport(control)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- Run(ctx, v, control, slave, io.Discard) }()
-	select {
-	case <-v.submitted:
-	case <-ctx.Done():
-		t.Fatal("resize not submitted")
-	}
-	if _, err := master.Write([]byte{0x1d}); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("detach blocked behind host input")
-	}
-	restored(t, slave, before)
-	select {
-	case <-v.closed:
-	default:
-		t.Fatal("mount not closed")
+	for name, key := range map[string]byte{"detach": 0x1d, "quit": 0x11} {
+		t.Run(name, func(t *testing.T) {
+			master, slave, before := terminalPair(t)
+			v := newViewport(control)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- Run(ctx, v, control, slave, io.Discard) }()
+			select {
+			case <-v.submitted:
+			case <-ctx.Done():
+				t.Fatal("resize not submitted")
+			}
+			if _, err := master.Write([]byte{key}); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("detach blocked behind host input")
+			}
+			restored(t, slave, before)
+			select {
+			case <-v.closed:
+			default:
+				t.Fatal("mount not closed")
+			}
+
+		})
 	}
 }
 

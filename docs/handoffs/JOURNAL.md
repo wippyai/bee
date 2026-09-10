@@ -5524,3 +5524,23 @@ Cold1.486s, warm.215s, observe.221s; all detach under.1s. Evidence:
 two durable targets. Shared native manifest now matches the verified build.
 One-hour50459 is still live on the preceding immutable candidate. Workspace
 switching, multi-host composition and public remote recovery remain incomplete.
+
+### Fresh global reconnect failure — journal909
+
+The user reproduced mount-expired/revoked and detach timeout on the newly
+installed cbb6d6a5 binary. The same process2452472 then failed a read-only
+`bee desktops` after60.045s. Evidence:
+`/tmp/bee-user-failure-catalog-20260910.log`. Exact pidfd/executable/state checks
+preceded SIGQUIT capture to `/tmp/bee-user-stuck-owner-2452472.stack` (432731 bytes).
+The selected stack extract is `-selected.stack`. TLS reader was waiting for a
+frame and writer was idle; no blocked TLS writer was established. Cause remains
+unassigned; short passing acceptance is not proof this is fixed.
+Same binary and databases restarted as2493278: cold1.439s, warm control.208s,
+observe.209s, detach.078–.099s. Logs are `/tmp/bee-user-failure-restart-20260910.log`
+and `/tmp/bee-user-failure-reconnect-20260910.log`.
+
+Neutral-session branch `/tmp/bee-neutral-session-20260910` exists at65a5196 but
+has no code changes. Refactor paused for the live failure. One-hour50459 still
+runs untouched. New diagnostic99066 runs `/tmp/bee-hive-manager-idle.py`, logging
+`/tmp/bee-hive-manager-idle.log`: Hive Manager retained plus another desktop,
+ten60s detach/rejoin cycles, disposable state only, stack capture on failure.

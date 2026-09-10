@@ -4,6 +4,12 @@ This page describes the current global executable and its verified capabilities.
 [Earlier build history](GLOBAL_BUILD_HISTORY.md) preserves failed runs and older
 measurements; those entries do not describe the current install.
 
+The user has since reproduced a mount-expired/revoked failure on this installed
+build, followed by a60-second read-only catalog timeout. A guarded restart
+restored access; the cause remains unresolved. Journal909 records the actual
+process stack and reproduction. Passing acceptance below does not prove sustained
+reconnect reliability. The current retained process after recovery is2493278.
+
 ## Installed
 
 `/home/wolfy-j/.local/bin/bee` is the explicit-selection and Hive session-identity candidate:
@@ -79,8 +85,9 @@ browsing/attachment, multi-host tab composition and public remote enrollment are
 not implemented by the explicit local commands. See
 [workspace attachments](../WORKSPACE_ATTACHMENTS.md).
 
-The user's older idle connection failure is not explained by successful short
-reconnect tests. Runtime owner-isolation/session-loss completion recovery remains
+The user's current reconnect failure is not explained by successful short
+reconnect tests. New evidence: `/tmp/bee-user-failure-catalog-20260910.log` and
+`/tmp/bee-user-stuck-owner-2452472.stack`. Runtime owner-isolation/session-loss completion recovery remains
 a cluster-lane gate (journal894); no Bee monitor substitute is being added.
 The candidate does not consume a released runtime main revision.
 

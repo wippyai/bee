@@ -42,7 +42,7 @@ function M.start(state: State, selected: Selection, scope: security.Scope): (Des
             selected.application, {version = 1, quit_mode = bootstrap.quit_mode,
                 desktop_id = bootstrap.desktop_id, legacy_desktop = bootstrap.legacy_desktop, arguments = bootstrap.arguments,
                 fullscreen = bootstrap.fullscreen, secondary_application = bootstrap.secondary_application,
-                workspace_appearance = bootstrap.workspace_appearance})
+                workspace_appearance = bootstrap.workspace_appearance, hive_supervisor = bootstrap.hive_supervisor})
     if not pid then view:close(); return nil, tostring(spawn_error) end
     local desktop: Desktop = {pid = tostring(pid), database = database, view = view, grants = attachments.new(view)}
     state.desktops[reservation] = desktop

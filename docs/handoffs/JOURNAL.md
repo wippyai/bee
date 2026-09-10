@@ -5193,3 +5193,25 @@ Journal833 has details and failed approaches. Before exposing the public route,
 audit pending copy/launch cleanup on an additional child EXIT and primary-phase
 gating of additional lifecycle messages. Next: Hive catalog/session target mapping,
 then native creation/selection on controller conflict, with public binary proof.
+
+## 2026-09-10 — Desktop interruption and renderer independence
+
+22416ff is pushed. Launch-exit baseline35278 failed with a missing reply; fixed
+source/pack26258 passes and the launched Terminal's file proves the operation
+committed before its reply was lost. Pending launch is retired as UNCERTAIN, and
+the Hive adapter preserves its operation/idempotency identity. Copy-exit39312
+passes: no text returned, slot cleared, next desktop copy succeeds.
+
+Primary-render delay baseline85514 on be1a22a failed to replace the additional
+presenter. Fixed source/pack58849 passes: additional F12 while the primary reply
+is withheld, then primary timeout/F12 recovery. The default now keeps bounded
+latest deferred renderer/quit values while additional lifecycle messages continue.
+
+Full runs9543 (storage snapshot6b0b545) and87444 (activation snapshotbe1a22a)
+remain live; they do not cover these subsequent changes. Preserve/poll their
+separate logs/handles. The pinned linter exits0 but reports an InterprocFacts
+convergence warning for desktop_lifecycle; evidence is preserved in
+/tmp/bee-desktop-lifecycle-cleanup-lint.log. No cache reset or runtime edit.
+Global d65ff900/PID1322000 remains unchanged. Journal836. Public catalog/create/
+selection is the next integration boundary; second bee is not fixed in the
+installed launcher yet.

@@ -50,3 +50,9 @@ deployment/owner startup fails. See localowner's README for the source/toolchain
 requirements. This proof still supplies fixture activation, naming/execute
 policies and a headless wait entry. Production entry selection, executable
 assembly, overlay preservation and global-binary acceptance remain unfinished.
+
+Concurrent explicit-start acceptance holds the winning child in preparation for
+one second under the real lock. The losing start waits for publication, performs
+read-only owner verification and exits successfully; exactly one child remains
+alive with the state lock. The pre-fix failure and passing race/vet are preserved
+in the shared journal. No second lock or transport was added.

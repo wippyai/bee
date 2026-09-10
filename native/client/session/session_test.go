@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/bee/native/hive/rendezvous"
 )
 
 func TestDesktopSelectionNeverUsesDiscoveryOrder(t *testing.T) {
@@ -93,5 +94,27 @@ func TestCatalogWaitCancellationStopsFurtherRequests(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) || calls != 1 {
 		t.Fatal(calls, err)
+	}
+}
+
+func TestProbeWaitsForPublicationWithoutCreatingOwnerState(t *testing.T) {
+	directory := t.TempDir() + "/missing"
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := Probe(ctx, directory); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("missing owner did not wait", err)
+	}
+	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("probe created owner state", err)
+	}
+}
+
+func TestPublicationWaitDoesNotHideCorruptionOrPermissionFailure(t *testing.T) {
+	for _, failure := range []error{rendezvous.ErrDescriptor, os.ErrPermission} {
+		calls := 0
+		err := awaitPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) { calls++; return rendezvous.Descriptor{}, failure })
+		if err != failure || calls != 1 {
+			t.Fatal(err, calls)
+		}
 	}
 }

@@ -145,6 +145,13 @@ func Probe(ctx context.Context, directory string) error {
 	}
 	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	store, err := rendezvous.New(directory)
+	if err != nil {
+		return err
+	}
+	if err := awaitPublication(bounded, store.Read); err != nil {
+		return err
+	}
 	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			_, _, err := readyDesktop(frame, actor, owner)
@@ -178,4 +185,29 @@ func readyDesktop(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descr
 		return nil, hive.DesktopCatalog{}, err
 	}
 	return client, catalog, nil
+}
+
+// The winner may hold the application lock before publishing discovery. Waiting
+// reads only; it creates no files, enrollments or desktop attachments. A decoded
+// descriptor remains only a hint and is authenticated by SameAccount afterward.
+func awaitPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error)) error {
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		_, err := read(ctx)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
 }

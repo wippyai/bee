@@ -29,3 +29,9 @@ fixture-issued viewport grants. See the localowner README for the command.
 Join but creates no attachment. It is bounded to 15 seconds including transport
 startup, and is used by explicit start when another runtime owns the state lock.
 It does not select control, resize a viewport or claim delivery obligations.
+
+When an elected owner is still preparing under the application lock, Probe waits
+for missing discovery within its existing 15-second budget before authenticating.
+The wait only reads; it creates no owner state. Corruption and permission errors
+return immediately. This prevents a concurrent losing `start` invocation from
+failing solely because the winner has not published yet.

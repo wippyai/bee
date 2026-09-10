@@ -270,6 +270,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 			t.Fatal("automatic first launch:", err)
 		}
 	}
+	probeConcurrentStarts(t, ctx, filepath.Join(stage, "concurrent-state"), stage)
 }
 
 // The helper re-enters the application's real argument parser before Go's test
@@ -385,7 +386,73 @@ func (h recordingHost) PrepareLaunch(ctx context.Context, request applicationapi
 		if err := os.WriteFile(filepath.Join(selected.StateDir, "owner-test-pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
 			return applicationapi.OwnerPlan{}, err
 		}
+		if os.Getenv("BEE_OWNER_TEST_PREPARE_DELAY") == "1" {
+			select {
+			case <-ctx.Done():
+				return applicationapi.OwnerPlan{}, ctx.Err()
+			case <-time.After(time.Second):
+			}
+		}
 		return prepare(ctx, selected)
 	}
 	return plan, nil
+}
+
+func probeConcurrentStarts(t *testing.T, ctx context.Context, state, project string) {
+	t.Helper()
+	t.Setenv("BEE_OWNER_TEST_PREPARE_DELAY", "1")
+	children := make([]*beelaunch.OwnerProcess, 0, 2)
+	logs := []string{}
+	defer func() {
+		for _, child := range children {
+			_ = child.Abort()
+		}
+		for _, child := range children {
+			_ = child.Wait(context.Background())
+		}
+		if t.Failed() {
+			for _, name := range logs {
+				data, _ := os.ReadFile(name)
+				t.Log(string(data))
+			}
+		}
+	}()
+	for i := 0; i < 2; i++ {
+		log, err := os.CreateTemp(project, "concurrent-owner-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer log.Close()
+		logs = append(logs, log.Name())
+		child, err := beelaunch.StartOwner(ctx, applicationapi.LaunchRequest{Operation: applicationapi.RunApplication, Command: "bee", StateDir: state, Directory: project}, log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		children = append(children, child)
+	}
+	var loser, winner *beelaunch.OwnerProcess
+	select {
+	case <-children[0].Done():
+		loser, winner = children[0], children[1]
+	case <-children[1].Done():
+		loser, winner = children[1], children[0]
+	case <-ctx.Done():
+		t.Fatal("concurrent start did not converge", ctx.Err())
+	}
+	if err := loser.Wait(ctx); err != nil {
+		t.Fatal("losing start failed before owner publication:", err)
+	}
+	select {
+	case <-winner.Done():
+		t.Fatal("both owner contenders exited", winner.Wait(ctx))
+	default:
+	}
+	release, err := statelock.Acquire(state)
+	if err == nil {
+		_ = release()
+		t.Fatal("successful start has no owner lock")
+	}
+	if !errors.Is(err, statelock.ErrBusy) {
+		t.Fatal(err)
+	}
 }

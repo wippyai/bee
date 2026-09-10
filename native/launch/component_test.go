@@ -20,7 +20,7 @@ func TestStartRouteDefersPreparationToRuntimeLock(t *testing.T) {
 	}
 	request := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", Arguments: []string{"start"}}
 	plan, err := launcher.PrepareLaunch(context.Background(), request)
-	if err != nil || plan.Command != "retained-owner" || plan.Arguments == nil || len(plan.Arguments) != 0 || plan.PrepareOwner == nil || plan.Attach != nil || plan.Handled || calls != 0 {
+	if err != nil || plan.Command != "retained-owner" || plan.Arguments == nil || len(plan.Arguments) != 0 || plan.PrepareOwner == nil || plan.Attach == nil || plan.Handled || calls != 0 {
 		t.Fatalf("invalid start plan: %+v %v calls=%d", plan, err, calls)
 	}
 	if _, err := plan.PrepareOwner(context.Background(), request); err != nil || calls != 1 {

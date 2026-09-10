@@ -74,26 +74,7 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 }
 
 func present(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {
-	ready, cancelReady := context.WithTimeout(ctx, 15*time.Second)
-	defer cancelReady()
-	tick := time.NewTicker(50 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		if _, err := actor.OwnerSupervisor(ready); err == nil {
-			break
-		}
-		select {
-		case <-ready.Done():
-			return fmt.Errorf("discover owner supervisor: %w", ready.Err())
-		case <-tick.C:
-		}
-	}
-	client, err := hive.NewDesktop(ctx, actor, owner.Node, owner.Execution)
-	if err != nil {
-		return err
-	}
-	// A fresh actor has its own owner-qualified request/idempotency namespace.
-	catalog, err := waitCatalog(ready, client.List)
+	client, catalog, err := readyDesktop(ctx, actor, owner)
 	if err != nil {
 		return err
 	}
@@ -153,4 +134,48 @@ func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.D
 		case <-timer.C:
 		}
 	}
+}
+
+// Probe authenticates the owner and reads its catalog without creating a desktop
+// attachment. It is used by an explicit start that loses the runtime lock race.
+// Successful lock contention alone is never reported as an available owner.
+func Probe(ctx context.Context, directory string) error {
+	if ctx == nil || directory == "" {
+		return errors.New("invalid owner probe")
+	}
+	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			_, _, err := readyDesktop(frame, actor, owner)
+			return err
+		})
+	})
+}
+
+func readyDesktop(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {
+	ready, cancelReady := context.WithTimeout(ctx, 15*time.Second)
+	defer cancelReady()
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := actor.OwnerSupervisor(ready); err == nil {
+			break
+		}
+		select {
+		case <-ready.Done():
+			return nil, hive.DesktopCatalog{}, fmt.Errorf("discover owner supervisor: %w", ready.Err())
+		case <-tick.C:
+		}
+	}
+	client, err := hive.NewDesktop(ctx, actor, owner.Node, owner.Execution)
+	if err != nil {
+		return nil, hive.DesktopCatalog{}, err
+	}
+	// A fresh actor has its own owner-qualified request/idempotency namespace.
+	catalog, err := waitCatalog(ready, client.List)
+	if err != nil {
+		return nil, hive.DesktopCatalog{}, err
+	}
+	return client, catalog, nil
 }

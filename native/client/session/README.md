@@ -24,3 +24,8 @@ checks selection and validation plus race/vet. The stronger optional
 presents the retained Terminal through an OS PTY, reads the earlier client's shell
 variable, and detaches. It uses actual Bee modules and supervisor admission, not
 fixture-issued viewport grants. See the localowner README for the command.
+
+`Probe(ctx, directory)` shares authenticated supervisor/catalog readiness with
+Join but creates no attachment. It is bounded to 15 seconds including transport
+startup, and is used by explicit start when another runtime owns the state lock.
+It does not select control, resize a viewport or claim delivery obligations.

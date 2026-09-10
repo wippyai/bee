@@ -1,7 +1,7 @@
 //go:build meshclient && physicalclient
 
 // SPDX-License-Identifier: MIT
-package localowner
+package localowner_test
 
 import (
 	"context"
@@ -13,23 +13,29 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	hiveclient "github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/mesh"
+	"github.com/wippyai/bee/native/desktop"
+	"github.com/wippyai/bee/native/hive/localowner"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	"github.com/wippyai/bee/native/ioevents"
 	beelaunch "github.com/wippyai/bee/native/launch"
 	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/tty"
 	"github.com/wippyai/runtime/application"
+	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
 )
 
+const DirectoryName = localowner.DirectoryName
+
 var physicalSessionProbe func(context.Context, string) error
+var physicalStartupProbe func(context.Context, string) error
 
 type desktopBundle struct {
 	Bundle  application.Bundle
@@ -52,56 +58,6 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 	t.Logf("snapshotting Bee application source from %s", repo)
 	stage := t.TempDir()
 	if err := os.CopyFS(filepath.Join(stage, "src"), os.DirFS(filepath.Join(repo, "src"))); err != nil {
-		t.Fatal(err)
-	}
-	fixture := filepath.Join(stage, "src", "owner_fixture")
-	if err := os.Mkdir(fixture, 0700); err != nil {
-		t.Fatal(err)
-	}
-	manifest := `version: '1.0'
-namespace: bee
-entries:
-- name: owner_fixture_names
-  kind: security.policy
-  policy:
-    actions: [process.registry.register, process.registry.register.local, process.registry.register.eventual, process.registry.lookup, process.registry.unregister]
-    resources: '*'
-    effect: allow
-- name: owner_fixture_execute
-  kind: security.policy
-  policy:
-    actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute]
-    effect: allow
-- name: owner_fixture_main
-  kind: process.lua
-  source: file://main.lua
-  method: main
-  modules: [process]
-  meta:
-    command:
-      name: owner-desktop-proof
-`
-	if err := os.WriteFile(filepath.Join(fixture, "_index.yaml"), []byte(manifest), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(fixture, "main.lua"), []byte(`local process = require("process")
-local function main()
- local events, err = process.events()
- if not events then error(tostring(err)) end
- while true do
-  local event = events:receive()
-  if not event or event.kind == process.event.CANCEL then return 0 end
- end
-end
-return {main = main}`), 0600); err != nil {
-		t.Fatal(err)
-	}
-	activation := filepath.Join(stage, "src", "hive_activation")
-	if err := os.Mkdir(activation, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(activation, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.hive\nentries:\n- name: activation\n  kind: bee.hive.activation\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stage, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
@@ -163,7 +119,7 @@ return {main = main}`), 0600); err != nil {
 	if err := os.WriteFile(pack, encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	state := filepath.Join(stage, "state")
 	t.Setenv("BEE_OWNER_DESKTOP_PACK", pack)
@@ -306,6 +262,14 @@ return {main = main}`), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
+
+	if physicalStartupProbe != nil {
+		coldState := filepath.Join(stage, "cold-state")
+		defer stopRecordedFixtureOwner(t, coldState)
+		if err := physicalStartupProbe(ctx, filepath.Join(coldState, DirectoryName)); err != nil {
+			t.Fatal("automatic first launch:", err)
+		}
+	}
 }
 
 // The helper re-enters the application's real argument parser before Go's test
@@ -327,11 +291,7 @@ func runOwnerDesktop(args []string) error {
 	if err != nil {
 		return err
 	}
-	owner, err := New(Options{Node: "owner-desktop", Lifetime: time.Minute})
-	if err != nil {
-		return err
-	}
-	service, err := owner.DesktopService([]string{"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy", "bee:hive_dispatch_policy", "bee:owner_fixture_names", "bee:owner_fixture_execute", "bee.hive.desktop:host_policy"}, "bee.console:app")
+	host, err := desktop.New(desktop.Options{Node: "owner-desktop", Lifetime: time.Minute, Application: "bee.console:app"})
 	if err != nil {
 		return err
 	}
@@ -339,13 +299,9 @@ func runOwnerDesktop(args []string) error {
 	if err := json.Unmarshal(data, &bundle); err != nil {
 		return err
 	}
-	launcher, err := beelaunch.NewOwnerLauncher("bee", "owner-desktop-proof", owner.PrepareOwner)
-	if err != nil {
-		return err
-	}
 	return application.Run(context.Background(), application.Options{
 		Name: "bee-owner-desktop", Mode: "base", Command: "bee", Bundle: bundle.Bundle,
-		Components: []boot.Component{launcher, owner, service, ioevents.Component()}, DataEnv: bundle.DataEnv,
+		Components: []boot.Component{recordingHost{host}}, DataEnv: bundle.DataEnv,
 	}, args)
 }
 
@@ -366,4 +322,70 @@ func awaitDesktopText(ctx context.Context, view tty.Viewport, text string) error
 		case <-tick.C:
 		}
 	}
+}
+
+func stopRecordedFixtureOwner(t *testing.T, state string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(state, "owner-test-pid"))
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	pid, err := strconv.Atoi(string(data))
+	if err != nil || pid <= 0 {
+		t.Error("invalid fixture child PID")
+		return
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer process.Release()
+	if err := process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		t.Error(err)
+	}
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		release, err := statelock.Acquire(state)
+		if err == nil {
+			_ = release()
+			return
+		}
+		if !errors.Is(err, statelock.ErrBusy) {
+			t.Error(err)
+			return
+		}
+		select {
+		case <-deadline.C:
+			t.Error("fixture owner did not release lock after cleanup")
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// Record only the test child actually elected under the application lock, for
+// bounded cleanup of a cold owner started by the automatic foreground route.
+type recordingHost struct{ *desktop.Host }
+
+func (h recordingHost) PrepareLaunch(ctx context.Context, request applicationapi.LaunchRequest) (applicationapi.LaunchPlan, error) {
+	plan, err := h.Host.PrepareLaunch(ctx, request)
+	if err != nil || plan.PrepareOwner == nil {
+		return plan, err
+	}
+	prepare := plan.PrepareOwner
+	plan.PrepareOwner = func(ctx context.Context, selected applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
+		if err := os.WriteFile(filepath.Join(selected.StateDir, "owner-test-pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+			return applicationapi.OwnerPlan{}, err
+		}
+		return prepare(ctx, selected)
+	}
+	return plan, nil
 }

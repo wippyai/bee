@@ -1,7 +1,7 @@
 //go:build meshclient && physicalclient && !windows
 
 // SPDX-License-Identifier: MIT
-package localowner
+package localowner_test
 
 import (
 	"bytes"
@@ -33,9 +33,21 @@ func (b *sessionOutput) Write(data []byte) (int, error) {
 }
 func (b *sessionOutput) text() string { b.Lock(); defer b.Unlock(); return b.Buffer.String() }
 
-func init() { physicalSessionProbe = probePhysicalSession }
+func init() {
+	physicalSessionProbe = probePhysicalSession
+	physicalStartupProbe = func(ctx context.Context, directory string) error {
+		return probePhysicalSessionMode(ctx, directory, true, true)
+	}
+}
 
 func probePhysicalSession(parent context.Context, directory string) error {
+	if err := probePhysicalSessionMode(parent, directory, false, false); err != nil {
+		return err
+	}
+	return probePhysicalSessionMode(parent, directory, true, false)
+}
+
+func probePhysicalSessionMode(parent context.Context, directory string, automatic, initialize bool) error {
 	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	master, slave, err := pty.Open()
@@ -52,12 +64,24 @@ func probePhysicalSession(parent context.Context, directory string) error {
 	var sessionErr error
 	go func() {
 		adapter := beelaunch.Client{Command: "bee", Mode: hive.Control, Stdin: slave, Stdout: &output}
+		var launcher boot.Component = busyClientLauncher{adapter}
+		if automatic {
+			selected, err := beelaunch.NewLauncher(adapter, "bee-owner", func(context.Context, applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
+				return applicationapi.OwnerPlan{}, errors.New("foreground client must not become owner")
+			})
+			if err != nil {
+				sessionErr = err
+				close(done)
+				return
+			}
+			launcher = selected
+		}
 		// Invalid data binding and empty bundle would fail on the owner path.
 		// A live owner's real application lock must route directly to Attach.
 		sessionErr = application.Run(ctx, application.Options{
 			Name: "bee-owner-desktop", Mode: "base", Command: "bee",
 			DataEnv:    map[string]string{"INVALID=BINDING": "never-opened.db"},
-			Components: []boot.Component{busyClientLauncher{adapter}},
+			Components: []boot.Component{launcher},
 		}, []string{"--state-dir", filepath.Dir(directory)})
 		close(done)
 	}()
@@ -86,7 +110,11 @@ func probePhysicalSession(parent context.Context, directory string) error {
 		return err
 	}
 	// The prior client set this variable. Its literal value is not in the command.
-	if _, err := master.Write([]byte("printf 'BEE_PHYSICAL_%s_OK\\n' \"$bee_probe\"\r")); err != nil {
+	command := "printf 'BEE_PHYSICAL_%s_OK\\n' \"$bee_probe\"\r"
+	if initialize {
+		command = "bee_probe=retained; " + command
+	}
+	if _, err := master.Write([]byte(command)); err != nil {
 		return err
 	}
 	if err := await("BEE_PHYSICAL_retained_OK"); err != nil {

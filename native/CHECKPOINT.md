@@ -31,3 +31,9 @@ fixture still selects its headless wait entry, activation and naming/execute
 policies. Public first-launch discovery/readiness and assembly remain unfinished.
 Linux proves the child survives launcher exit without a controlling terminal;
 Windows process flags remain unverified.
+
+The next native checkpoint adds automatic cold start/reuse and the single
+`desktop.Component` builder factory. The current external Bee application source
+now supplies the activation, headless wait command and supervisor policies; the
+acceptance no longer injects them. An ioevents-only toolchain cannot load the new
+activation kind; use the desktop factory or explicit Hive listener.

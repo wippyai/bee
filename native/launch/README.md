@@ -1,55 +1,52 @@
-# Native launch attachment
+# Native Bee launch
 
-The compiled host selects `Client{Command, Mode, Selection, Stdin, Stdout}` and
-installs its `Attach` method as `LaunchPlan.Attach`. Wippy calls that method only
-when its actual application lock is busy, before configuring application data or
-opening the deployment. Bee uses the selected state directory's protected native
-discovery directory and the existing session/admission path. Lock contention
-alone authorizes nothing; the supervisor still admits the fresh native actor.
+`NewLauncher(client, ownerCommand, prepareOwner)` is one compiled launch-preparer
+component. Ordinary launch runs a foreground native client; explicit `start`
+selects the host's headless owner command. The owner and its DesktopService are
+separate host-selected boot components. Update/tooling/base operations retain
+the runtime's existing paths. This composition is not installed in global Bee.
 
-The adapter rejects base recovery, update/runtime operations, different commands,
-unhandled arguments and relative state paths. The caller owns physical streams
-and signal cancellation. It does not start an owner or retry input.
+The foreground starts the same executable as a detached owner contender with
+literal selected state/command arguments and the original project directory.
+The child arbitrates through the runtime's actual application lock. A winner
+prepares the native owner under that lock and publishes a new execution. A loser
+authenticates the existing owner and reads its catalog without mounting a desktop.
+A successful loser exit or changed descriptor lets the foreground attempt fresh
+supervisor admission once. Hints and lock contention grant no access.
 
-`make -C native client-launch-check MESH_RUNTIME=/absolute/reviewed/runtime` checks
-request rejection with race/vet. The actual-source local-owner composition test
-also calls `application.Run` through this adapter while a separate owner holds
-the lock: retained shell state is readable and Ctrl+] detaches. Its deliberately
-invalid data binding and failing owner-preparation callback prove those paths are
-not reached. See the localowner README for that test's runtime/source requirements.
+Startup publication has a 30-second deadline. Unchanged stale discovery does not
+prove readiness; child failure never falls back to stale discovery. Invalid
+discovery fails closed. Attachment/input are not replayed. The native session
+separately bounds transport/supervisor readiness and requires explicit selection
+when the catalog is ambiguous. Each invocation currently starts one contender;
+this favors using the runtime's existing lock over adding another owner election.
 
-This is not yet registered in the global executable. First-owner background
-startup and the complete public command routing remain unfinished.
+`Client.Attach` also directly supplies a runtime `LaunchPlan.Attach` callback. It
+rejects unrelated operations/commands, unhandled arguments and invalid paths
+before discovery. The callback runs before deployment/application data bindings.
+`NewOwnerLauncher` exposes only explicit-start routing for host compositions that
+do not select the automatic foreground route.
 
-`StartOwner(ctx, request, log)` now supplies the process-lifetime half of first
-startup. It invokes this executable with literal selected state/command arguments
-and the `start` route, preserves the project directory, and starts a separate OS
-session/process group. Stdin is null and output uses a caller-owned regular log
-file, so foreground pipes and terminal ownership cannot keep the child attached.
-The caller must provide a protected log; this function does not create one.
+`StartOwner` separates OS process lifetime: null stdin, caller-owned regular log,
+and a new session/process group. The automatic route creates an owner-only log
+in the selected state directory and reports its path on failure. Client detach,
+exit, cancellation and `OwnerProcess.Wait` cancellation do not stop an already
+started owner. `Abort` explicitly force-stops the particular child; only fixture
+cleanup currently uses it. It is not a public workspace shutdown operation.
 
-An already canceled start creates no process. Once started, observing/canceling
-`OwnerProcess.Wait` does not kill the owner. The launching process reaps the child
-while it lives; after launcher exit normal OS orphan handling applies. Child
-creation is not readiness, and does not establish lock ownership or admission.
-The Linux subprocess proof waits for the launcher to exit before the child writes
-its evidence, checks independent process group/no controlling TTY, then allows
-the child to finish. Windows has a detached-process implementation but no runtime
-acceptance yet. The native explicit `start` routing is now implemented and tested against a
-host-selected fixture command. Production entry selection, readiness/error
-handling, and automatic first-launch composition remain unwired. Do not install
-this as the public launcher until those checks pass.
+## Acceptance
 
-`NewOwnerLauncher(publicCommand, ownerCommand, prepareOwner)` provides the single
-native launch-preparer component for explicit `start`. It selects the supplied
-headless command and clears the consumed argument; the runtime subsequently
-invokes owner preparation under its existing application lock. Base start and
-extra arguments are rejected. Update/tooling and ordinary launches are left
-unchanged. The host separately installs the owner and its DesktopService.
+Run `make -C native client-launch-check MESH_RUNTIME=/absolute/reviewed/runtime`.
+Race/vet covers routing, stale hints, child failure, cancellation, literal argument
+preservation and independent OS process lifetime. The Linux subprocess proof
+waits for the launcher to exit before the child writes evidence and checks that
+the child has no controlling terminal. Windows flags exist but remain unverified.
 
-The actual-source owner test now invokes `StartOwner`, re-enters the same binary
-through the real standalone argument parser, selects the headless fixture entry,
-then attaches a fresh physical client through the runtime lock-busy callback.
-It proves retained Terminal state and Ctrl+] detach. The fixture still supplies
-activation, naming/execute policies and the headless wait entry; it is not proof
-of public production composition.
+The actual-source localowner composition additionally proves explicit detached
+self-exec, runtime lock-busy attachment, automatic reuse of a retained Terminal,
+and automatic cold startup from an empty state directory. The foreground has
+an empty bundle, invalid data bindings and failing owner hooks so accidental
+deployment/owner startup fails. See localowner's README for the source/toolchain
+requirements. This proof still supplies fixture activation, naming/execute
+policies and a headless wait entry. Production entry selection, executable
+assembly, overlay preservation and global-binary acceptance remain unfinished.

@@ -1,20 +1,20 @@
 # Global Bee candidate — September 10, 2026
 
 The installed executable is a development candidate built from source
-in `/tmp/bee-global-checkpoint-20260910` at production checkpoint `ad23c45`
+in `/tmp/bee-global-checkpoint-20260910` at production checkpoint `7d4a7f1`
 on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
-performed for this update. The complete foundation gate and standalone suites
-pass; see the installed responsive Hive Manager acceptance below.
+performed for this update. The new standalone suites pass. The full foundation gate for this revision is
+still running; the earlier responsive-Hive build passed its complete gate.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
 - Native Bee: `a36ac552880d`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- Build output: `/tmp/bee-responsive-hive-candidate-final`.
-- SHA256: `53c7ce500d06546cbf44df6656dc6aee308374bb06de2da2a4d39634d76af1d0`.
-- Previous binary archive: `/home/wolfy-j/.local/bin/bee.previous-20260910T190536Z`.
-  This update appends client-store migration 2; the archive is not a supported
-  database downgrade.
+- Build output: `/tmp/bee-membership-global-candidate`.
+- SHA256: `dd674d645a59bd9ec3708ac2626e225f0934e0eed68c0d0912df5de4f2550eeb`.
+- Previous binary archive: `/home/wolfy-j/.local/bin/bee.previous-20260910T192800Z`.
+  This UI update adds no migration. The preceding build appended client-store
+  migration 2; older archives are not supported database downgrades.
 
 ## Launch and ownership
 
@@ -292,3 +292,21 @@ passes against the candidate (`/tmp/bee-native-client-retention-check.log`), wit
 reconnects between 0.106 and 0.229 seconds. This roughly three-minute probe does
 not establish long-running or network-loss recovery. The earlier one-off probe
 also passed (`/tmp/bee-retained-reconnect-soak.log`).
+
+## Membership presentation update installed
+
+The installed Hive Manager separates native MEMBERSHIP from BEE SERVICE readiness;
+Raft role is only in Details. Native presence alone does not establish a Bee
+supervisor route or grant authority. The standalone suites pass in
+`/tmp/bee-membership-standalone-check.log`; the app smoke shows the new columns
+in `/tmp/bee-membership-candidate-hive-smoke.log` (first frame1.542s, detach0.168s).
+Authorized restart preserved the user stores: frame1.398s, detach0.109s,
+retained Bee PID839818, `/tmp/bee-membership-global-install.log`. Warm reconnect
+is recorded in `/tmp/bee-membership-user-reconnect.log`.
+
+The full frozen-source check remains running as session69756, with output in
+`/tmp/bee-membership-foundation-check.log`. It is not yet a passing full-run claim.
+The separate-runtime physical SIGKILL proof passes within the existing
+node-departure window (`/tmp/bee-mesh-physical-crash-proof-r3.log`); a five-second
+cleanup bound still fails. Same-name/new-port rejoin and the user's intermittent
+mount/connection failure remain unresolved. No runtime changes were made.

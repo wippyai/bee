@@ -5042,3 +5042,12 @@ one compiled fixture process, apply only to typed explicit negative receipts,
 and never replay uncertain outcomes. Native runtime code is unchanged. The
 same-name rejoin issue and user's intermittent retained-Bee mount failure remain
 unresolved. Global binary is unchanged pending the membership UI build/gates.
+
+## 2026-09-10 — Membership UI installed, complete gate pending
+
+Global bee SHA dd674d645a59bd9ec3708ac2626e225f0934e0eed68c0d0912df5de4f2550eeb
+is installed from source7d4a7f1 with unchanged runtime/native production pins.
+Standalone checks and the actual Hive Manager smoke pass. User stores survived
+the authorized restart; PID839818, first frame1.398s, warm reconnect0.225s,
+detach0.109s. See GLOBAL_BUILD.md. Shared journal checkpoint805.
+Full foundation check69756 remains running; poll it before claiming a pass.

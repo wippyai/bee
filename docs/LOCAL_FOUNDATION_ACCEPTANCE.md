@@ -7,12 +7,14 @@ work. It is not a claim that Bee's proposed Hive, agent or installation APIs exi
 
 Global `bee` now starts or attaches to a retained local owner using the native
 mesh and embedded code with shared registry history. Explicit detach retains
-applications. The latest Bee-only change handles native LINK_DOWN in the two
-supervisors instead of letting client loss terminate the retained desktop.
+applications. Both supervisors handle native LINK_DOWN instead of letting client
+loss terminate the retained desktop. Startup reports Starting/Connecting immediately;
+the loopback client uses the existing 50 ms gossip interval for responsive graceful
+leave. The runtime and remote failure-detection contract are unchanged.
 Actual-executable acceptance proves normal reconnect, clipboard/F12, bounded
 stalled-owner detach, delayed owner publication, and client SIGKILL followed by
 same-shell reconnect after a 40-second node-departure observation interval.
-The current source checkpoint is `18caf09`; exact executable pins, hash and
+The current integration checkpoint is `74c3efa`; exact executable pins, hash and
 rollback are in [the global build handoff](handoffs/GLOBAL_BUILD.md).
 
 Immediate exact-actor EXIT while its transport remains live is still a runtime
@@ -126,28 +128,28 @@ bee codex
 ```
 
 Run from the desired project directory. The native program must be installed on
-PATH. Existing runtime registry state may retain an earlier selected deployment;
-`bee --base` selects the embedded base while preserving application databases.
+PATH. The current candidate selects embedded code by default while preserving shared
+registry history and application databases. `bee --base` is an explicit recovery
+mode, not the normal way to select fresh code. Installing a new executable does
+not replace an already-running owner.
 See `README.md` and `DEVELOPMENT.md` for the distribution/development distinction.
 There is no stable published release implied by these instructions.
 
 ## Still required for the requested Hive direction
 
-The local foundation does not complete the broader requested headless/Hive work.
-The stable workspace host is now separate from the physical terminal client,
-keeping broker and workspace persistence together. Public local launch passes
-the full acceptance suite. Its supervisor owns the host; client
-detach, app close and host shutdown are distinct operations. Two independently
-persisted local client actors and retained terminals have source/pack acceptance.
-These actors run inside a runtime; this does not prove that a second ordinary
-`bee` invocation attaches as an independent physical client. Automatic host reuse
-and client-profile allocation remain required. The current candidate uses Wippy's
-native mesh and native TLS, with no Bee listener sidecar. The separately compiled
-client now obtains supervisor admission to a retained desktop and passes a real
-PTY check: shell input, F12 with the same shell, resize, bounded detach and terminal
-attribute restoration. This proof uses explicit fixture enrollment and the
-candidate runtime's terminal-dispatcher correction; it does not activate public
-startup. See [client state](CLIENT_STATE.md#native-mesh-rendezvous-candidate).
+The local foundation does not complete the broader requested Hive work.
+The stable workspace host is separate from the physical terminal client and owns
+its broker, application processes and persistence. The current standalone build
+starts that owner on the first ordinary `bee` and attaches to it on subsequent
+same-state launches. Explicit detach and client node departure preserve retained
+applications. These are actual executable checks, in addition to the earlier
+source/pack fixtures for independent client layout and permissions.
+
+Public independent desktop allocation and remote selection remain open. The
+compiled remote-client fixtures prove admission, input, F12, resize and bounded
+detach under explicit enrollment; they do not prove public enrollment, discovery
+or remote startup. Bee uses native mesh and TLS with no listener sidecar. See
+[client state](CLIENT_STATE.md#native-mesh-rendezvous-candidate).
 
 | Public client gate | Current evidence |
 |---|---|
@@ -160,8 +162,10 @@ The remaining public remote milestone must prove discovery, destination admissio
 and remote Terminal use through ordinary Bee launch, plus qualified tabs from
 two workspaces. Existing desktop fixtures exercise the actual client against a
 remote host with preselected admission; they do not prove the public enrollment
-or discovery path. Only after these gates expose the managed headless profile,
-workspace switcher and Hive Manager. Fresh local launches must remain local-only.
+or discovery path. A managed headless profile and workspace switcher still require these gates.
+Hive Manager is already shipped and reports supervisor and peer availability;
+its presence does not prove public remote attachment. Fresh launches use the
+same-machine owner/client mesh; external enrollment remains explicit.
 
 Application drivers and installation/self-edit subsystems are subsequent work,
 not extra responsibilities to put into the desktop loop.

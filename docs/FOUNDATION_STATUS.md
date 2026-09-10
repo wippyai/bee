@@ -49,36 +49,26 @@ choice are implemented. Normal workspace quit gathers guarded-app decisions befo
 Terminal opts in and conservatively confirms every PTY close. Emergency exit from
 failed-presenter recovery bypasses negotiation.
 
-The current candidate adds **Select text** to window context menus. Right-click
-the body, title or tab; Shift-right-click in the body goes to the application: freeze one
-body, left-drag, then Ctrl+C to request local physical clipboard output. Source
-and pack acceptance decodes exact foreground text with two overlapping Terminals;
-selection never enters persisted state. This requires native text extraction
-and clipboard PRs #720/#722. The tested candidate is now installed as the global
-Bee at the user's request. Ordinary launch may still select older persisted code;
-`bee --base` selects its fresh embedded baseline through a different registry path.
-This difference is an unresolved deployment bug, not the intended Bee workflow. The
-selected release runtime has not yet adopted these PRs. Remote physical-client
-clipboard routing remains unimplemented.
+The installed candidate adds **Select text** to window context menus. Right-click
+the body, title or tab; Shift-right-click in the body goes to the application.
+Selection freezes one body; left-drag selects text and Ctrl+C requests clipboard
+output from the physical client. Source/pack and standalone checks prove exact
+foreground text with overlapping Terminals. Selection is absent from persisted
+state and viewport snapshots. The native owner/client route sends a session-qualified
+Copy request through the existing supervisor protocol; F12 and reconnect do not
+replay it. Native text extraction and clipboard capabilities come from the candidate
+runtime, not a released runtime main pin. Public remote selection remains open.
 See [selection and its acceptance limits](handoffs/TEXT_SELECTION.md).
-
-The native owner/client candidate now has a session-qualified Copy request over
-the existing supervisor protocol. Copy is driven by the requesting physical
-client, and selected text is absent from viewport snapshots. Isolated native
-clipboard output and actual-owner ordinary Ctrl+C checks pass; full selected-window
-copy through the new launcher still needs the combined runtime. This candidate
-has not replaced the installed global executable. See the same selection handoff
-for the remaining observer, reconnect and release gates.
 
 
 ## Ownership
 
-Public local launch uses the host/client split. Full source/pack and standalone
-acceptance pass. Older selected deployments can still retain their code;
-`bee --base` selects the executable's embedded baseline and preserves application
-databases, but does not establish preservation of the existing registry overlays.
-The required default is embedded code with retained overlays and application state;
-see [the runtime cutover handoff](handoffs/RUNTIME_UPSTREAM_CUTOVER.md).
+Public local launch uses the host/client split and the installed candidate's
+embedded-default policy. It preserves shared registry history and application
+state. `bee --base` is an explicit recovery path; it is not required for ordinary
+launches to use embedded code. An already-running owner keeps its loaded code
+until restarted. The runtime changes remain on the candidate pin; see
+[the runtime cutover handoff](handoffs/RUNTIME_UPSTREAM_CUTOVER.md).
 
 | Owner | Responsibility | Replacement boundary |
 |---|---|---|

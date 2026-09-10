@@ -100,3 +100,9 @@ local profile adjustment.
 A free state lock starts the owner directly without network discovery. Measured
 cold startup is still 1.5–2.6 seconds, not instantaneous. A busy lock routes to the
 existing owner; an unresponsive owner must not cause a competing database owner.
+
+The installed responsive build was also measured in three fresh disposable
+workspaces: cold desktop readiness was 2.591, 1.856 and 1.429 seconds; clean exit
+was 81, 89 and 97 ms. Evidence: `/tmp/bee-responsive-cold-timings.log`.
+These samples confirm responsive shutdown, not instantaneous cold boot or a
+universal timing guarantee. The user's existing owner was not touched.

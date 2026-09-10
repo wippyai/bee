@@ -5,10 +5,14 @@ unavailable with its reason, a control request is refused before any owner is
 asked, refresh works, and the app closes without enabling anything."""
 import sys
 import tempfile
+import time
+import yaml
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tui_smoke import Desktop  # noqa: E402
+from workspace import fixture_workspace, pack_fixture
+
 
 
 def exercise():
@@ -36,5 +40,45 @@ def exercise():
     print("Hive Manager app: boots under the broker, shows the unavailable supervisor honestly, reports the desktop catalog reason, refuses control without a desktop, closes cleanly")
 
 
+def slow_query(packed=False):
+    # Delay the directory boundary in the disposable app, not the runtime.
+    # Before the fix this prevents ready and every subsequent input event.
+    with fixture_workspace(unit_tests=False) as project, tempfile.TemporaryDirectory(prefix="bee-hive-slow-") as directory:
+        manifest = project / "src/apps/hive/_index.yaml"
+        data = yaml.safe_load(manifest.read_text())
+        for entry in data["entries"]:
+            if entry["name"] == "directory":
+                entry["modules"] = ["time"]
+            elif entry["name"] == "source":
+                entry["data"]["kind"] = "fixture"
+        manifest.write_text(yaml.safe_dump(data, sort_keys=False))
+        source = project / "src/apps/hive/directory.lua"
+        code = source.read_text().replace('local types = require("types")', 'local types = require("types")\nlocal time = require("time")')
+        code = code.replace('        local node = find(node_id)', '        time.sleep("8s")\n        local node = find(node_id)')
+        source.write_text(code)
+        pack = Path(directory) / "bee.wapp"
+        if packed:
+            pack_fixture(project, pack)
+        ui = Desktop(directory, project=project, packed=packed, pack_file=pack, apps=("bee.hive_manager:app",))
+        try:
+            ui.wait("HIVE MANAGER", timeout=5)
+            ui.wait("FIXTURE DATA", timeout=1)
+            ui.key(b"t")
+            ui.wait("Less", timeout=1)
+            ui.key(b"r")
+            ui.wait("Query in progress", timeout=1)
+            start = time.monotonic()
+            ui.key(b"\x1b")
+            while "HIVE MANAGER" in ui.text() and time.monotonic() - start < 1:
+                ui.pump(.05)
+            assert "HIVE MANAGER" not in ui.text(), ui.text()
+            ui.quit()
+        finally:
+            ui.close()
+    print("Hive Manager slow query: first frame, keyboard and close stay responsive", "pack" if packed else "source")
+
+
 if __name__ == "__main__":
     exercise()
+    slow_query()
+    slow_query(packed=True)

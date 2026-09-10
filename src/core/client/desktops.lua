@@ -29,7 +29,8 @@ function M.start(state: State, selected: Selection, scope: security.Scope): (Des
     if selected.width < 1 or selected.width > 4096 or selected.height < 1 or selected.height > 4096 then
         return nil, "Invalid desktop dimensions"
     end
-    if state.desktops[database] then return nil, "Desktop store already has a retained owner" end
+    local reservation = bootstrap.desktop_id and (database .. "#" .. bootstrap.desktop_id) or database
+    if state.desktops[reservation] then return nil, "Desktop store already has a retained owner" end
     local view, view_error = tty.viewport({width = selected.width, height = selected.height})
     if not view then return nil, tostring(view_error) end
     local grant, grant_error = view:grant()
@@ -39,12 +40,12 @@ function M.start(state: State, selected: Selection, scope: security.Scope): (Des
         :with_context({["bee.client_owner"] = owner}):with_scope(scope):spawn_monitored(
             "bee.client:main", "bee:workers", owner, host, selected.workspace_id, database,
             selected.application, {version = 1, quit_mode = bootstrap.quit_mode,
-                legacy_desktop = bootstrap.legacy_desktop, arguments = bootstrap.arguments,
+                desktop_id = bootstrap.desktop_id, legacy_desktop = bootstrap.legacy_desktop, arguments = bootstrap.arguments,
                 fullscreen = bootstrap.fullscreen, secondary_application = bootstrap.secondary_application,
                 workspace_appearance = bootstrap.workspace_appearance})
     if not pid then view:close(); return nil, tostring(spawn_error) end
     local desktop: Desktop = {pid = tostring(pid), database = database, view = view, grants = attachments.new(view)}
-    state.desktops[database] = desktop
+    state.desktops[reservation] = desktop
     return desktop
 end
 

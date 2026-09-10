@@ -29,9 +29,13 @@ using that same state directory join the existing owner; they do not change its
 working directory. Newly opened Terminals inherit that owner's directory. Dynamic
 project/workspace selection is not implemented by this attachment route.
 
-Installing a new executable does not hot-replace an already-running owner. The
-user's older owner and its apps have not been stopped. An older owner's failure
-cannot be repaired merely by launching a newer client against it.
+Installing a new executable does not hot-replace an already-running owner.
+After the user authorized restarting Bee, the stale owner was stopped gracefully
+and the installed executable started a fresh owner on the same workspace store.
+Actual user-state readiness took 1.396 seconds; reconnect took 0.114 seconds and
+detach took 0.082–0.100 seconds. Evidence:
+`/tmp/bee-user-owner-restart-check.log`. An older owner's failure cannot be
+repaired merely by launching a newer client against it.
 
 Explicit `--base` remains a recovery mode. The embedded-default deployment policy
 is in runtime PR #726, stacked on #703 and assigned to Rodrigo (`skhaz`); the

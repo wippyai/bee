@@ -12,12 +12,17 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(workspace_appearance=False, command="desktop-client-probe"):
+def run(workspace_appearance=False, command="desktop-client-probe", shared_store=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        if shared_store:
+            fixture_manifest = project / "src/client_probe/_index.yaml"
+            data = yaml.safe_load(fixture_manifest.read_text())
+            next(entry for entry in data["entries"] if entry["name"] == "right_policy")["policy"]["resources"] = ["bee.client.db:left"]
+            fixture_manifest.write_text(yaml.safe_dump(data, sort_keys=False))
         if workspace_appearance:
             fixture = project / "src/client_probe/main.lua"
             code = fixture.read_text()
@@ -59,9 +64,14 @@ def run(workspace_appearance=False, command="desktop-client-probe"):
             # Optional subsystem stores use .wippy defaults inside this disposable host.
             ((folder if packed else project) / ".wippy").mkdir(exist_ok=True)
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
-            args += [command, "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
-            result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
-                                    env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
+            args += [command] + (["shared-store"] if shared_store else []) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
+            try:
+                result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
+                                        env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
+            except subprocess.TimeoutExpired as error:
+                output = error.stdout or b""
+                errors = error.stderr or b""
+                raise AssertionError(f"Desktop fixture timed out; stdout={output!r}; stderr={errors!r}") from error
             logs = result.stdout + result.stderr
             assert result.returncode == 0, logs
             marker = {
@@ -78,11 +88,12 @@ def run(workspace_appearance=False, command="desktop-client-probe"):
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")
         return
-    print(f"Desktop clients source/pack ({'workspace appearance' if workspace_appearance else 'independent appearance'}): separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
+    print(f"Desktop clients source/pack ({'shared store' if shared_store else 'workspace appearance' if workspace_appearance else 'independent appearance'}): separate displays, qualified tabs, PTY isolation, F12 dialogs, import retry, retained-terminal restart, isolated Settings and negotiated host shutdown")
 
 
 if __name__ == "__main__":
     run()
     run(True)
+    run(shared_store=True)
     run(command="retained-supervisor-probe")
     run(command="thread-status-probe")

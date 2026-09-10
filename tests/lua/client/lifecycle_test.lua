@@ -25,6 +25,15 @@ local function define_tests()
             if not secondary then error("Missing secondary launch") end
             test.eq(secondary.secondary_application, "probe:app")
         end)
+        test.it("accepts only opaque supervisor-selected desktop identities", function()
+            local selected = lifecycle.bootstrap({version = 1, desktop_id = workspace})
+            if not selected then error("Missing desktop selection") end
+            test.eq(selected.desktop_id, workspace)
+            test.is_nil(assert(lifecycle.bootstrap(nil)).desktop_id)
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = ""}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = "../other"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = 7}))
+        end)
         test.it("refuses foreign workspace and ambiguous shutdown control", function()
             local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit"}
             test.not_nil(lifecycle.control(value, workspace))

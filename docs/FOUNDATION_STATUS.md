@@ -229,7 +229,11 @@ proves discovery by native node-qualified names, calls in both directions,
 sibling rejection and supervisor restart. It uses explicit fixture enrollment
 and boot scopes. The current standalone launcher now starts the same-account
 owner supervisor automatically; public external enrollment is still separate.
-Hive Manager refreshes supervisor lookup, membership and owner telemetry. A failed
+Hive Manager refreshes supervisor lookup, membership and owner telemetry. The
+source app now draws before querying nodes and performs directory calls in one
+asynchronous worker, keeping input and close responsive during slow queries.
+Concurrent refresh requests are refused visibly instead of accumulating work;
+results remain keyed to their node. This change is not yet in the global binary. A failed
 lookup is shown as **Hive supervisor unavailable** with its reason; it does not
 infer that Hive is disabled or that enrollment would repair the failure. A found
 supervisor is reported separately from each peer's reachability and desktop

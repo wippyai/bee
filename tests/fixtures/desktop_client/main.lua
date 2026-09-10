@@ -66,7 +66,19 @@ local function wait_absent(view: tty.Viewport, text: string, phase: string, even
     local last = view:snapshot()
     error("Desktop retained question after " .. phase .. ": " .. text .. "\n" .. (last and table.concat(last.rows, "\n") or "No frame"))
 end
-local function main()
+local function main(mode: string?)
+    local shared_store = mode == "shared-store"
+    local selected_id = string.rep("b", 32)
+    local function open_store(resource: string): (store.Store?, string?)
+        if shared_store and resource == "bee.client.db:right" then return store.open("bee.client.db:left", selected_id) end
+        return store.open(resource)
+    end
+    if shared_store then
+        local allocator, allocation_error = store.open("bee.client.db:left")
+        if not allocator then error(tostring(allocation_error)) end
+        assert(store.allocate(allocator, selected_id))
+        assert(store.close(allocator))
+    end
     local owner = tostring(process.pid())
     local retained_desktops = desktops.new()
     local hosts = assert(process.listen("bee.host.ready", {message = true}))
@@ -118,9 +130,9 @@ local function main()
     end
     local function start(label: string, width: integer, launch: boolean): (string, tty.Viewport)
         local selection: desktops.Selection = {host = host, workspace_id = workspace_id,
-            database = "bee.client.db:" .. label, width = width, height = 32,
+            database = "bee.client.db:" .. (shared_store and label == "right" and "left" or label), width = width, height = 32,
             application = launch and "bee.console:app" or nil,
-            options = {version = 1, quit_mode = label == "right" and "supervisor" or "detach",
+            options = {version = 1, desktop_id = shared_store and label == "right" and selected_id or nil, quit_mode = label == "right" and "supervisor" or "detach",
                 fullscreen = label == "left",
                 arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
                     or {"bash", "--noprofile", "--norc", "-i"},
@@ -136,6 +148,7 @@ local function main()
         assert(tostring(ready:from()) == client)
         local ready_data = launch_protocol.ready(ready:payload():data(), workspace_id, label == "left")
         if not ready_data then error("Invalid desktop readiness or missing required import") end
+        if shared_store and label == "right" then assert(ready_data.client_id == selected_id) end
         if label == "left" then
             assert(#ready_data.import_receipt == 32, "Import was not committed before readiness")
             if imported_receipt ~= "" then assert(ready_data.import_receipt == imported_receipt, "Import retry changed its receipt") end
@@ -243,7 +256,7 @@ local function main()
     detach_physical(physical, physical_screen, false)
     process.unlisten(physical_boot)
     process.unlisten(physical_ready)
-    local probe_store, probe_error = store.open("bee.client.db:left")
+    local probe_store, probe_error = open_store("bee.client.db:left")
     if not probe_store then error(tostring(probe_error)) end
     local probe_state = store.read(probe_store)
     if not probe_state or not probe_state.targets[1] then error("Missing close target") end
@@ -252,7 +265,7 @@ local function main()
     assert(store.close(probe_store))
     -- Seed a separate desktop's declared target through the store API before
     -- its sole writer starts. No mount, PID or grant is copied.
-    local observer_store = assert(store.open("bee.client.db:observer"))
+    local observer_store = assert(open_store("bee.client.db:observer"))
     assert(store.write(observer_store, probe_state))
     assert(store.close(observer_store))
     command(left_screen, "bee_size=$(stty size); bee_observer=clean; printf 'OBSERVER_BASE_%s_END\\n' \"$$\"")
@@ -315,7 +328,7 @@ local function main()
     command(left_screen, "printf 'REJOINED_%s_OK\\n' \"$bee_desktop\"")
     wait_text(left_screen, "REJOINED_left_OK")
     for _, label in ipairs({"left", "right"}) do
-        local database, err = store.open("bee.client.db:" .. label)
+        local database, err = open_store("bee.client.db:" .. label)
         if not database then error(tostring(err)) end
         local saved, read_error = store.read(database)
         if not saved then error(tostring(read_error)) end
@@ -336,7 +349,7 @@ local function main()
     end
     command(right_screen, "printf 'SURVIVED_%s_EXIT\\n' \"$bee_desktop\"")
     wait_text(right_screen, "SURVIVED_right_EXIT")
-    local database, database_error = store.open("bee.client.db:left")
+    local database, database_error = open_store("bee.client.db:left")
     if not database then error(tostring(database_error)) end
     local saved, saved_error = store.read(database)
     if not saved then error(tostring(saved_error)) end
@@ -357,7 +370,7 @@ local function main()
     local resumed, resumed_screen = start("left", 100, false)
     -- Abrupt client loss has no save/quit handshake. The host must retain the
     -- application while a fresh client recovers the committed desktop identity.
-    local before_crash = assert(store.open("bee.client.db:left"))
+    local before_crash = assert(open_store("bee.client.db:left"))
     local desktop_id = before_crash.client_id
     assert(store.close(before_crash))
     assert(process.terminate(resumed))
@@ -371,7 +384,7 @@ local function main()
         end
     end
     resumed, resumed_screen = start("left", 100, false)
-    local after_crash = assert(store.open("bee.client.db:left"))
+    local after_crash = assert(open_store("bee.client.db:left"))
     local recovered = assert(store.read(after_crash))
     assert(after_crash.client_id == desktop_id, "Client loss replaced the durable desktop identity")
     assert(#recovered.targets == 1 and recovered.targets[1].instance_id == target.instance_id
@@ -383,7 +396,7 @@ local function main()
     key(resumed_screen, "enter")
     wait_absent(resumed_screen, "Close terminal?", "accept", events)
     local closed = false
-    local final_store, final_error = store.open("bee.client.db:left")
+    local final_store, final_error = open_store("bee.client.db:left")
     if not final_store then error(tostring(final_error)) end
     for _ = 1, 500 do
         local final_state = store.read(final_store)
@@ -392,10 +405,10 @@ local function main()
     end
     assert(store.close(final_store))
     assert(closed, "Confirmed close did not retire the selected target")
-    local appearance_store = store.open("bee.client.db:left")
+    local appearance_store = open_store("bee.client.db:left")
     if not appearance_store then error("Cannot open client appearance store") end
     local before = assert(store.read(appearance_store))
-    local other_store = store.open("bee.client.db:right")
+    local other_store = open_store("bee.client.db:right")
     if not other_store then error("Cannot open other client store") end
     local other_before = assert(store.read(other_store))
     key(resumed_screen, "f1")
@@ -526,8 +539,8 @@ local function main()
     process.terminate(host)
     log:info("DESKTOP_CLIENT_PROBE_COMPLETE")
 end
-local function checked_main()
-    local ok, failure = pcall(main)
+local function checked_main(mode: string?)
+    local ok, failure = pcall(main, mode)
     if not ok then
         log:error("DESKTOP_CLIENT_PROBE_FAILURE", {error = tostring(failure)})
         error(failure)

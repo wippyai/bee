@@ -73,11 +73,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         end
         local host_monitored, host_error = process.monitor(host)
         if not host_monitored then error("Monitor workspace host: " .. tostring(host_error)) end
-        local database, database_error = store.open(database_resource)
+        local database, database_error = store.open(database_resource, bootstrap.desktop_id)
         if not database then error(tostring(database_error)) end
         owned_database = database
         local import_receipt = ""
-        if bootstrap.legacy_desktop ~= nil then
+        if bootstrap.legacy_desktop ~= nil and bootstrap.desktop_id == nil then
             local receipt, import_error = store.import_legacy(database, workspace_id, bootstrap.legacy_desktop)
             if not receipt then error(tostring(import_error)) end
             import_receipt = receipt

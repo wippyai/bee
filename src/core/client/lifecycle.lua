@@ -3,13 +3,18 @@ local contract = require("contract")
 local interaction = require("interaction")
 local arguments = require("arguments")
 type Bootstrap = {quit_mode: "detach" | "supervisor", legacy_desktop: unknown, arguments: {string}, fullscreen: boolean,
-    secondary_application: string?, workspace_appearance: boolean}
+    secondary_application: string?, workspace_appearance: boolean, desktop_id: string?}
 type Control = {op: "state" | "save" | "exit" | "pause", request_id: string, shutdown: interaction.Wire?, error: string?}
 local M = {}
 function M.bootstrap(value: unknown): Bootstrap?
     if value == nil then return {quit_mode = "detach", legacy_desktop = nil, arguments = {}, fullscreen = false,
-        secondary_application = nil, workspace_appearance = false} end
+        secondary_application = nil, workspace_appearance = false, desktop_id = nil} end
     if type(value) ~= "table" or value.version ~= 1 then return nil end
+    local desktop_id: string? = nil
+    if value.desktop_id ~= nil then
+        desktop_id = contract.workspace_id(value.desktop_id)
+        if not desktop_id then return nil end
+    end
     local mode = value.quit_mode
     if mode == nil then mode = "detach" end
     if mode ~= "detach" and mode ~= "supervisor" then return nil end
@@ -23,7 +28,7 @@ function M.bootstrap(value: unknown): Bootstrap?
     end
     return {quit_mode = mode, legacy_desktop = value.legacy_desktop, arguments = args,
         fullscreen = value.fullscreen == true, secondary_application = secondary,
-        workspace_appearance = value.workspace_appearance == true}
+        workspace_appearance = value.workspace_appearance == true, desktop_id = desktop_id}
 end
 function M.control(value: unknown, workspace_id: string): Control?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end

@@ -308,7 +308,10 @@ The calling supervisor must reserve one live writer per selected identity and
 apply its normal permission checks before opening a record.
 
 This component does not yet allocate or select additional desktops in public
-launch. Supervisor readiness, catalog publication, client bootstrap selection and
-writer-lifetime integration remain required. The global installed binary still
+launch. Client bootstrap now accepts the selected record identity, and the
+retained-desktop helper reserves one writer per database/identity until actual
+desktop EXIT. Source/pack acceptance runs two desktops over the same SQL resource,
+including independent layouts, Settings, F12 and retained Terminal reattachment.
+Public allocation, supervisor readiness and catalog publication remain required. The global installed binary still
 uses the accepted single-desktop store; do not treat this source migration as an
 installed multi-display feature.

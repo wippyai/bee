@@ -5277,3 +5277,11 @@ Earlier full snapshots9543 (storage) and87444 (activation) both completed exit0.
 Neither covers this new Hive route. Global d65ff900/PID1322000 is unchanged.
 Remaining: automatic public second-client selection/reuse, actual executable
 multi-client proof and full combined foundation validation before installation.
+
+Bee8a1180e is pushed; Journal841 records the above. Full combined foundation
+validation is now running on that frozen source in
+/tmp/bee-public-desktop-full-check, session2617,
+log /tmp/bee-public-desktop-full-check.log. Poll the same handle; do not restart
+on an observation timeout. This run includes the public Hive adapter and all
+prior retained-desktop cleanup changes, unlike completed snapshots9543/87444.
+The two-node catalog gate20135 remains separate from make check and passed.

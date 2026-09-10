@@ -3,7 +3,7 @@
 ## Current global candidate — 2026-09-10
 
 Global `/home/wolfy-j/.local/bin/bee` now uses combined runtime `674b58a1a1`
-and Bee native `f02e10111c36`. The pinned builder produced the executable from
+and Bee native `08a5761b809d`. The pinned builder produced the executable from
 frozen source `/tmp/bee-global-final-crjl7na9`; no runtime or Bee PR was merged.
 Runtime PR #726 (stacked on #703, assigned to skhaz) supplies embedded-default
 selection with shared registry history. Earlier blockers below are historical.
@@ -17,8 +17,8 @@ Evidence: `/tmp/bee-final-binary-acceptance.log` and
 `/tmp/bee-combined-baseline-overlay.log`. The final full foundation run failed at the initial blank-frame wait in
 `tests/drag_failure.py`; see `/tmp/bee-final-full-check.log`. No full-suite pass.
 
-Installed SHA256: `8be60049802226257b2f71c89b54a120598d1c259314418cd32b524891636dd9`.
-Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T135712Z`.
+Installed SHA256: `434be069787e26e8395ab158e2338d66acf3685c0f6ba7c73b1b67342fe3031d`.
+Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T141438Z`.
 Public remote enrollment, independent observer selection and the runtime main
 release cutover remain separate unfinished work.
 

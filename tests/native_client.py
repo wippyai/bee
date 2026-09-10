@@ -66,8 +66,12 @@ def run(binary):
             ui.quit()
             ui.close()
             assert not select.select([owner], [], [], 0)[0], 'Client quit killed the owner'
+            owner_logs = set(state.glob('owner-*.log'))
+            rejoin_started = time.monotonic()
             ui = NativeDesktop(binary, folder, state)
             ui.wait('BEE_CLIENT_SELECTED', timeout=15)
+            print(f'Warm client ready in {time.monotonic() - rejoin_started:.3f}s', flush=True)
+            assert set(state.glob('owner-*.log')) == owner_logs, 'Warm client spawned another owner contender'
             ui.key(b"printf 'BEE_REJOIN_%s\\n' \"$BEE_RETAINED\"\r")
             ui.wait('BEE_REJOIN_alive')
             ui.key(b'\x1b[24~')

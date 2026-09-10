@@ -4959,3 +4959,16 @@ reconnects and 45 seconds idle. Unexpected mount retirement is not reproduced;
 immediate reconnect after abrupt death can still encounter a controller busy
 refusal. Full make check failed at drag_failure initial blank-frame wait. No
 user owner was stopped and no user database was modified by these probes.
+
+## 2026-09-10 — Warm launch and reproducible crashed-owner failure
+
+Codex installed native `08a5761b809d` with unchanged runtime `674b58a1a1`.
+The runtime application lock routes warm launch directly to admission, avoiding
+the redundant owner contender, read-only probe and per-invocation log. Actual
+standalone retained desktop readiness measured 0.204s; launch race/vet and full
+native-client acceptance pass. GLOBAL_BUILD.md records digest and rollback.
+The broader crash test now reproduces the user's failure: controller busy after
+SIGKILL, then readiness timeouts after roughly30s. Test-only owner stack captured
+at /tmp/bee-crashed-client-owner-stack.txt. Luna is investigating the cause;
+production crash recovery is not fixed. No user process was stopped. Cold-start
+file-based error reporting remains to be corrected.

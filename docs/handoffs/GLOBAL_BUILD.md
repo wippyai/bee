@@ -5,11 +5,11 @@ frozen source at `/tmp/bee-global-final-crjl7na9`. Runtime and Bee changes remai
 on branches; no PR or main merge was performed.
 
 - Runtime: `674b58a1a1`, `integration/bee-launch-selection-20260910`.
-- Native Bee: `f02e10111c36`, `checkpoint/native-client-binding-20260910`.
+- Native Bee: `08a5761b809d`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- SHA256: `8be60049802226257b2f71c89b54a120598d1c259314418cd32b524891636dd9`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T135712Z`.
+- SHA256: `434be069787e26e8395ab158e2338d66acf3685c0f6ba7c73b1b67342fe3031d`.
+- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T141438Z`.
 
 Run `bee` normally. Its foreground client automatically starts or authenticates
 an owner for the selected state. Ctrl+Q and Ctrl+] detach locally, retaining
@@ -61,9 +61,26 @@ make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 The installed candidate has a user report of mount retirement followed by a slow
 detach. A private copy of the user databases passes both launch modes, five
 large-terminal reconnects, and normal exits under one second. Stalling a fixture
-owner reproduces a 3.9-second Ctrl+Q exit. Native candidate `f02e10111c36` limits
+owner reproduces a 3.9-second Ctrl+Q exit. Native candidate `08a5761b809d` limits
 explicit detach acknowledgment to 200 ms and preserves uncertain outcomes; the rebuilt global executable passes
 `native-client-check`, including stalled-owner exit within two seconds, terminal
 restoration, preserved uncertainty, and retained owner. Session race tests and
 vet pass. Evidence: `/tmp/bee-detach-fixed-acceptance.log`. Unexpected mount retirement and
 immediate reconnect after abrupt client death remain under investigation.
+
+## Warm launch and crash reproduction
+
+Native `08a5761b809d` uses the runtime's existing application-state lock for
+routing: busy means direct authenticated attachment; a free probe releases the
+lock before the existing cold-owner contender path. No new election or lock is
+introduced. Warm startup creates no child contender or owner log. The installed
+binary reaches the retained desktop in 0.204 seconds in the disposable acceptance
+fixture; that is not a timing guarantee for an unhealthy owner. Client-launch
+race/vet and the actual native-client checks pass, including the stalled-owner
+exit regression. Evidence: `/tmp/bee-warm-fixed-acceptance.log`.
+
+Abrupt-client-death acceptance is still failing: controller-busy refusals persist
+for about twenty seconds, then the retained owner's readiness requests time out
+around the mount lease boundary. A test-owner stack dump shows idle mesh workers,
+not a confirmed mutex deadlock. The user owner was not stopped. Cold-start logs
+still exist; their reporting and lifecycle remain under review.

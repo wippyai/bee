@@ -278,6 +278,7 @@ def client_storage():
             probe(authority, "verify", packed, command="client-desktop-authority")
             probe(authority, "reader", packed, command="client-desktop-reader")
             probe(authority, "none", packed, command="client-desktop-unauthorized")
+            probe(authority, "capacity", packed, command="client-desktop-authority")
             folder = root / ("packed" if packed else "source")
             probe(folder, "seed", packed, command="client-storage-bindings")
             probe(folder, "verify", packed, command="client-storage-bindings")

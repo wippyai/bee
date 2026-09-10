@@ -25,6 +25,14 @@ local function main(mode: string)
     if mode == "none" then
         call("list_desktops", list, "DENIED")
         call("allocate_desktop", allocate, "DENIED")
+    elseif mode == "capacity" then
+        for index = 1, 31 do
+            call("allocate_desktop", {version = 1, database_resource = "bee:client_db", desktop_id = string.format("%032x", index)}, "OK")
+        end
+        count(call("list_desktops", list, "OK"), 33)
+        call("allocate_desktop", {version = 1, database_resource = "bee:client_db", desktop_id = string.rep("f", 32)}, "CAPACITY")
+        call("allocate_desktop", allocate, "OK")
+        count(call("list_desktops", list, "OK"), 33)
     elseif mode == "reader" then
         count(call("list_desktops", list, "OK"), 2)
         call("allocate_desktop", {version = 1, database_resource = "bee:client_db", desktop_id = string.rep("f", 32)}, "DENIED")

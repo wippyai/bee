@@ -5119,3 +5119,14 @@ Initial regression setups41231/5316 failed at foreground selection and are not
 causal evidence; the final probe closes Settings through its window menu.
 No runtime changes; this is not a fix for the distinct retained-node mesh failure.
 The installed observer binary is unchanged. Combined full verification is next.
+
+## 2026-09-10 — Combined candidate built; full gate remains active
+
+Checkpoints27b4f0c (scoped desktop operations) and089e1c2 (window retirement) are
+pushed. The uninstalled candidate /tmp/bee-retirement-global-candidate has SHA
+ d65ff9000d0949f5e6a5bf17d551ba886e243ad1d95890f08d1d177c7d224632.
+Standalone session6869 exited0. The additional function-level capacity/retry proof
+session96064 exited0; it is a test-only addition after the frozen source snapshot.
+Full make check38854 remains live in /tmp/bee-desktop-authority-check-089e1c2;
+output /tmp/bee-desktop-authority-foundation-check.log. Poll that same handle.
+Global c1f5d8 and retainedPID839818 remain unchanged. Shared journal823.

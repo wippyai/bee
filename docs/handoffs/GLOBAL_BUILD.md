@@ -333,3 +333,17 @@ The same Lua source's full foundation run69756 passed (exit 0). All 365 producti
 files match the observer build. Native changes
 are limited to selecting the existing observer mode and refusing observer startup
 when the state lock is free; runtime674b58a1 is unchanged.
+
+## Uninstalled window-retirement candidate
+
+`/tmp/bee-retirement-global-candidate` was built from source089e1c2 with the same
+native/runtime pins. SHA256:
+`d65ff9000d0949f5e6a5bf17d551ba886e243ad1d95890f08d1d177c7d224632`.
+It adds the protected desktop storage operations and retires a removed window's
+attachment/error even when removal arrives through its committed scene alone.
+Source/pack regression and the original Process Manager check pass. Native client
+and binary suites also pass (`/tmp/bee-retirement-standalone-check.log`, session6869).
+The combined full run38854 is still active in
+`/tmp/bee-desktop-authority-foundation-check.log`; the candidate is not installed.
+The earlier catalog-only run57240 failed on the stale Settings error; that evidence
+remains in `/tmp/bee-desktop-catalog-foundation-check.log`.

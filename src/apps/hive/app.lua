@@ -77,7 +77,7 @@ local function main(value: unknown)
     local announced = false
     local last_checkpoint = ""
     local running, dirty = true, true
-    local dialog: {request_id: string, mode: directory.Mode}? = nil
+    local dialog: {request_id: string, intent: directory.Attach}? = nil
     local ticker = assert(time.ticker(POLL))
     local ticks = ticker:channel()
     -- The Hive client has one reply listener: serialize calls in one worker,
@@ -145,10 +145,10 @@ local function main(value: unknown)
         end
         dirty = true
     end
-    local function act(mode: directory.Mode)
+    local function act(confirmed: directory.Attach)
         local intent: directory.Attach? = model.pending_intent(state)
         local refused: string? = nil
-        if not intent then intent, refused = model.attach_intent(state, mode, uuid.v4()) end
+        if intent ~= confirmed then intent, refused = model.confirm_intent(state, confirmed) end
         if not intent then status = refused or ""; dirty = true; return end
         status = ""
         dirty = true
@@ -161,16 +161,19 @@ local function main(value: unknown)
     -- shell; a selection or a key alone requests nothing of an owner.
     local function ask(mode: directory.Mode)
         if dialog then return end
-        if state.pending then perform(function() act(mode) end); return end
+        local pending = model.pending_intent(state)
+        if pending then perform(function() act(pending) end); return end
         local desktop = model.selected_desktop(state)
         local node = model.selected(state)
         if not desktop or not node then status = "Select a desktop first"; dirty = true; return end
         if mode == "control" and not model.can_control(state) then status = "Desktop is controlled by " .. desktop.controller .. "; choose observe"; dirty = true; return end
+        local intent, refused = model.preview_intent(state, mode, uuid.v4())
+        if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
         local title = mode == "control" and "Take control of this desktop?" or "Observe this desktop?"
         local message = model.text((desktop.label ~= "" and desktop.label or desktop.desktop_id) .. " on " .. node.label .. ", workspace " .. desktop.workspace_id, 512)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
-        dialog = {request_id = request_id, mode = mode}
+        dialog = {request_id = request_id, intent = intent}
         dirty = true
     end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
@@ -210,7 +213,7 @@ local function main(value: unknown)
             if result and dialog and result.request_id == dialog.request_id then
                 local asked = dialog
                 dialog = nil
-                if result.action == "accept" then perform(function() act(asked.mode) end) else status = "Cancelled"; dirty = true end
+                if result.action == "accept" then perform(function() act(asked.intent) end) else status = "Cancelled"; dirty = true end
             end
         else
             local data = event.value

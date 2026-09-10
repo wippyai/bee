@@ -375,4 +375,14 @@ widths and moves addresses and full IDs to Details. The native UI build is insta
 including stable display identity after reconnect. Hive Manager recognizes explicit
 native client-role metadata as display clients and does not query them as Bee
 services. This metadata grants no authority; names alone never establish roles.
-The full repository check for this newer UI revision is still running.
+The full check for that installed UI revision passed Lua and storage gates, then
+caught an F9 modifier regression: Alt+F9 opened the dropdown instead of minimizing.
+The following source correction restricts the dropdown to unmodified F9.
+
+The next Hive Manager safety fix binds an attachment confirmation to the exact
+node, workspace, desktop, owner generation and mode shown in the question.
+Selection or owner changes require a new confirmation; an unconfirmed proposal
+cannot become a retryable pending operation. Source/pack regression checks pass.
+Live desktop browsing/attachment in the app remains unavailable: the existing
+catalog is admitted to native clients only. This fix grants no new access and
+is not yet in the installed global build.

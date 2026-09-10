@@ -5377,3 +5377,19 @@ isolated worktree had no default runtime binary, then was rerun with the explici
 candidate runtime. Two 600-second idle reconnects passed in 0.241s and 0.235s,
 retaining the same shell. This does not resolve the earlier hour-idle hang.
 Both checkpoint branches are pushed; no runtime changes or main merge.
+
+### UI safety follow-up and preserved full-gate failure
+
+Installed UI source full gate 31926 is terminal exit 2. Lua/storage passed, then
+Process Manager acceptance proved unmodified-F9 handling was also swallowing
+Alt+F9 minimize. The source now checks modifiers explicitly. Failed evidence:
+`/tmp/bee-hive-role-full-check.log`.
+
+A separate confirmation regression proved the old app attached a replacement
+desktop after asking about the original. The pure model now previews without
+pending state and compares node/workspace/desktop/owner generation on confirmation.
+The app retains the exact proposed intent through its question. The old source
+failed with the wrong fixture-session receipt; fixed source and pack pass, as do
+all 19 Hive Manager Lua tests. These changes add no catalog or attachment grants.
+Live app catalog browsing still needs an authorized read contract; do not expose
+the native-client route indiscriminately. Journal evidence 881.

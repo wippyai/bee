@@ -588,7 +588,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 -- and clicks outside its body; the model clamps drag endpoints.
                 handled = true
                 dirty = true
-            elseif event.type == "key" and kind == "f9" and event.action ~= "release" then
+            elseif event.type == "key" and kind == "f9" and event.action ~= "release"
+                and event.alt ~= true and event.ctrl ~= true and event.shift ~= true then
                 connection_open = not connection_open
                 start = nil
                 capture, preview = nil, nil; awaiting_place = false

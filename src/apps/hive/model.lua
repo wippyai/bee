@@ -256,7 +256,7 @@ end
 function M.pending_intent(state: State): Attach?
     return state.pending
 end
-function M.attach_intent(state: State, mode: Mode, idempotency_key: string): (Attach?, string?)
+function M.preview_intent(state: State, mode: Mode, idempotency_key: string): (Attach?, string?)
     if state.pending then return nil, "a desktop request is already pending" end
     local node = M.selected(state)
     if not node then return nil, "select a node first" end
@@ -269,8 +269,24 @@ function M.attach_intent(state: State, mode: Mode, idempotency_key: string): (At
     if mode == "control" and not M.can_control(state) then return nil, "desktop is controlled by " .. desktop.controller .. "; choose observe" end
     local intent: Attach = {node_id = node.node_id, workspace_id = desktop.workspace_id, desktop_id = desktop.desktop_id,
         owner_generation = catalog.owner_generation, mode = mode, idempotency_key = idempotency_key}
-    state.pending = intent
     return intent, nil
+end
+-- Confirmation applies only to the identity shown in the question. A refresh
+-- or changed selection requires a new question; it cannot redirect consent.
+function M.confirm_intent(state: State, confirmed: Attach): (Attach?, string?)
+    local current, err = M.preview_intent(state, confirmed.mode, confirmed.idempotency_key)
+    if not current then return nil, err end
+    if current.node_id ~= confirmed.node_id or current.workspace_id ~= confirmed.workspace_id
+        or current.desktop_id ~= confirmed.desktop_id or current.owner_generation ~= confirmed.owner_generation then
+        return nil, "Desktop selection changed; confirm the current desktop again"
+    end
+    state.pending = current
+    return current, nil
+end
+function M.attach_intent(state: State, mode: Mode, idempotency_key: string): (Attach?, string?)
+    local intent, err = M.preview_intent(state, mode, idempotency_key)
+    if not intent then return nil, err end
+    return M.confirm_intent(state, intent)
 end
 function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
     local key = M.desktop_key(intent.workspace_id, intent.desktop_id)

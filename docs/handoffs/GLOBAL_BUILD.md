@@ -243,3 +243,32 @@ All 365 production files matched the frozen source before atomic installation.
 The installed executable also passed isolated cold/warm command launch, literal
 arguments, retained rejoin and F12: `/tmp/bee-global-command-install-check.log`.
 The user's existing owner and applications were not restarted.
+
+## Responsive Hive Manager candidate (not installed)
+
+Checkpoint `ad23c45` draws local supervisor/membership state before per-node
+queries, then runs directory calls in one asynchronous worker. This preserves the
+Hive client's single reply listener and keeps UI input and close responsive.
+Source and pack regression tests inject an eight-second directory delay; this is
+a test-only stall, not a production discovery timeout. Both pass. The candidate
+also includes selected desktop-record bootstrap and per-record writer reservations;
+public allocation and multiple-display selection remain unimplemented.
+
+Binary `/tmp/bee-responsive-hive-candidate-final` has SHA256
+`53c7ce500d06546cbf44df6656dc6aee308374bb06de2da2a4d39634d76af1d0`.
+Native client and binary suites pass (`/tmp/bee-responsive-hive-standalone-check.log`).
+A real Start-menu launch shows Hive Manager in 1.229 seconds, with physical detach
+in 0.108 seconds (`/tmp/bee-responsive-hive-native-smoke.log`). The full foundation
+check remains running in `/tmp/bee-responsive-hive-foundation-check.log`; this is
+not yet an installed update or a completed full-gate claim.
+
+The user subsequently reported another rejected viewport followed by detach
+uncertainty on the installed binary. A display probe then remained at Connecting
+without receiving a frame. Under the user's explicit authorization to restart
+Bee, the running node was stopped and restarted with its databases preserved.
+The actual user desktop appeared in 1.389 seconds and detached in 0.109 seconds
+(`/tmp/bee-user-node-recovery-r2.log`). This restores access but does not establish
+the cause of the recurring failure. The fresh-candidate tests above do not prove
+that this retained-node failure is fixed. Refer to the user-visible topology as
+Bees in a Hive; "owner" in implementation contracts denotes state authority, not
+another service the user should manage.

@@ -264,6 +264,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 	}
 
 	if physicalStartupProbe != nil {
+		t.Setenv("BEE_OWNER_TEST_EMPTY_DESKTOP", "1")
 		coldState := filepath.Join(stage, "cold-state")
 		defer stopRecordedFixtureOwner(t, coldState)
 		if err := physicalStartupProbe(ctx, filepath.Join(coldState, DirectoryName)); err != nil {
@@ -292,7 +293,11 @@ func runOwnerDesktop(args []string) error {
 	if err != nil {
 		return err
 	}
-	host, err := desktop.New(desktop.Options{Node: "owner-desktop", Lifetime: 90 * time.Second, Application: "bee.console:app"})
+	initial := "bee.console:app"
+	if os.Getenv("BEE_OWNER_TEST_EMPTY_DESKTOP") == "1" {
+		initial = ""
+	}
+	host, err := desktop.New(desktop.Options{Node: "owner-desktop", Lifetime: 90 * time.Second, Application: initial})
 	if err != nil {
 		return err
 	}

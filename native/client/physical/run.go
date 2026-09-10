@@ -19,6 +19,18 @@ import (
 const maxPendingEvents = 256
 const maxPendingBytes = 2 * 1024 * 1024
 
+// DeliveryError preserves a failed native operation separately from observation
+// retirement. The operation may have been admitted; the client never replays it.
+type DeliveryError struct {
+	Operation string
+	Cause     error
+}
+
+func (e *DeliveryError) Error() string {
+	return "physical " + e.Operation + " delivery failed: " + e.Cause.Error()
+}
+func (e *DeliveryError) Unwrap() error { return e.Cause }
+
 var ErrInputOverflow = errors.New("physical client: input buffer full; viewport detached without replay")
 
 // output serializes native surface writes with input-mode setup and cleanup.
@@ -62,7 +74,7 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 	} {
 		if requested.enabled {
 			if err := client.Check(ctx, requested.right); err != nil {
-				return err
+				return observationError(ctx, err)
 			}
 		}
 	}
@@ -116,6 +128,9 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 			case <-ctx.Done():
 				return
 			case item := <-events:
+				if ctx.Err() != nil {
+					return
+				}
 				var err error
 				if item.event.Type == "start" || item.event.Type == "resize" {
 					err = client.ResizeContext(ctx, item.event.Width, item.event.Height)
@@ -126,8 +141,12 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 				pendingBytes -= item.bytes
 				budget.Unlock()
 				if err != nil {
-					workerErr = err
-					cancel(err)
+					operation := "input"
+					if item.event.Type == "start" || item.event.Type == "resize" {
+						operation = "resize"
+					}
+					workerErr = &DeliveryError{Operation: operation, Cause: err}
+					cancel(workerErr)
 					return
 				}
 			}
@@ -153,7 +172,7 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 		return err
 	}
 	if err := present(); err != nil {
-		return err
+		return observationError(ctx, err)
 	}
 	for {
 		select {
@@ -167,11 +186,25 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 			return reader.Err()
 		case _, ok := <-client.Updates():
 			if !ok {
-				return tty.ErrMountExpired
+				return observationError(ctx, tty.ErrMountExpired)
 			}
 			if err := present(); err != nil {
-				return err
+				return observationError(ctx, err)
 			}
 		}
 	}
+}
+
+// A canceled local observation may race mount retirement. Report its local
+// cancellation cause rather than inventing an external revocation. Delivery
+// worker errors are preserved independently and are never normalized here.
+func observationError(ctx context.Context, err error) error {
+	if ctx.Err() != nil && errors.Is(err, tty.ErrMountExpired) {
+		cause := context.Cause(ctx)
+		if errors.Is(cause, context.Canceled) {
+			return nil
+		}
+		return cause
+	}
+	return err
 }

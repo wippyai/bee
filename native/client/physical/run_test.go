@@ -210,3 +210,60 @@ func TestDeniedRightsLeaveTerminalUntouched(t *testing.T) {
 		t.Fatal("denied attachment leaked")
 	}
 }
+
+type retiringObservation struct {
+	*stalledViewport
+	cancel context.CancelFunc
+}
+
+func (v *retiringObservation) Check(context.Context, string) error {
+	if v.cancel != nil {
+		v.cancel()
+	}
+	return tty.ErrMountExpired
+}
+func TestLocalCancellationAndExternalRevocationStayDistinct(t *testing.T) {
+	for _, local := range []bool{false, true} {
+		_, slave, before := terminalPair(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		view := &retiringObservation{stalledViewport: newViewport(tty.MountRights{Observe: true})}
+		if local {
+			view.cancel = cancel
+		}
+		err := Run(ctx, view, tty.MountRights{Observe: true}, slave, io.Discard)
+		cancel()
+		if local && err != nil {
+			t.Fatal("local cancellation became external revocation", err)
+		}
+		if !local && !errors.Is(err, tty.ErrMountExpired) {
+			t.Fatal("external revocation hidden", err)
+		}
+		restored(t, slave, before)
+	}
+}
+
+func TestCancellationKeepsLateDeliveryFailure(t *testing.T) {
+	_, slave, before := terminalPair(t)
+	view := newViewport(control)
+	lost := errors.New("input outcome unavailable after cancellation")
+	view.operationError = lost
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, view, control, slave, io.Discard) }()
+	select {
+	case <-view.submitted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("input worker did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, lost) {
+			t.Fatal("delivery failure erased", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("cancel did not exit")
+	}
+	restored(t, slave, before)
+}

@@ -106,7 +106,9 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		}
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
-		result = errors.Join(result, client.Detach(cleanup, "session-detach", mounted))
+		if err := client.Detach(cleanup, "session-detach", mounted); err != nil {
+			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))
+		}
 	}()
 	service := tty.GetService(ctx)
 	if service == nil {
@@ -124,7 +126,10 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	display, cancelDisplay := context.WithDeadline(operations, mounted.Expires)
 	defer cancelDisplay()
 	rights := tty.MountRights{Observe: true, Input: cfg.Mode == hive.Control, Resize: cfg.Mode == hive.Control}
-	return physical.Run(display, remote, rights, stdin, stdout)
+	if err := physical.Run(display, remote, rights, stdin, stdout); err != nil {
+		return fmt.Errorf("present desktop: %w", err)
+	}
+	return nil
 }
 
 // waitCatalog tolerates an owner still starting, within the caller's discovery

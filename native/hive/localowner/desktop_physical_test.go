@@ -18,9 +18,11 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/bee/native/client/physical"
 	beelaunch "github.com/wippyai/bee/native/launch"
 	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
+	"github.com/wippyai/runtime/api/tty"
 	"github.com/wippyai/runtime/application"
 	"golang.org/x/term"
 )
@@ -128,6 +130,23 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 			}
 		}
 	}
+	if initialize {
+		if err := await(" BEE "); err != nil {
+			return err
+		}
+		if strings.Contains(output.text(), "$ ") {
+			return errors.New("fresh desktop unexpectedly started a shell")
+		}
+		if _, err := master.Write([]byte("\x1bOP")); err != nil {
+			return err
+		}
+		if err := await("Terminal"); err != nil {
+			return err
+		}
+		if _, err := master.Write([]byte("\r")); err != nil {
+			return err
+		}
+	}
 	if err := await("$ "); err != nil {
 		return err
 	}
@@ -161,6 +180,13 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 			return errors.New("physical client did not restore terminal settings")
 		}
 		if signalExit && errors.Is(sessionErr, context.Canceled) {
+			return nil
+		}
+		var delivery *physical.DeliveryError
+		if signalExit && errors.As(sessionErr, &delivery) && errors.Is(delivery, tty.ErrMountExpired) {
+			// A signal can interrupt the last native input acknowledgement. The
+			// product reports this error; the proof must still verify restoration
+			// and a fresh retained-shell rejoin rather than erase the failure.
 			return nil
 		}
 		return sessionErr

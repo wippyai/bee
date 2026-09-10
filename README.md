@@ -29,6 +29,12 @@ Agent commands open fullscreen and receive the arguments you pass after their
 name. They must already be installed on PATH. These are native terminal sessions;
 Bee-specific agent hooks and MCP integration are not implemented yet.
 
+The current retained-owner candidate has a command-alias limitation: when an
+owner is already running, `bee terminal` and other argument-bearing launches can
+report a busy application lock. Use ordinary `bee`, open Terminal from Start,
+and run the installed program there until the owner launch route is connected.
+See [current build status](docs/handoffs/GLOBAL_BUILD.md).
+
 ## Install
 
 **Alpha.** Native builds target Linux and macOS on amd64 and arm64.

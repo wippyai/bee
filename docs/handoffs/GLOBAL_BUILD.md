@@ -135,3 +135,22 @@ logger markers were silent in the fixture profile; the measured boundaries use
 its existing native service-event capture. The composition passes race/vet:
 `/tmp/bee-cold-service-stages.log`. No production logging or runtime changes were
 introduced by this investigation.
+
+## Retained-owner command alias gap
+
+The installed build's automatic route handles argument-free `bee`, but command
+aliases such as `bee terminal` still enter the in-process launcher. With a retained
+owner running, both `bee terminal` and `bee --command bee run terminal` fail with
+`application lock is busy`. Reproduction with disposable state and successful
+fixture cleanup: `/tmp/bee-retained-alias-probe-clean.log`. The full foundation
+suite tests aliases in the in-process composition; it does not cover this public
+retained-owner case. Until corrected, launch ordinary `bee`, open Terminal from
+Start, and run the installed program there.
+
+The missing behavior needs an owner-authorized launch operation over the existing
+Hive desktop contract. Resolve command names at the owner using the existing
+`bee.applications:command` resolver and admitted catalog; preserve literal arguments
+and fullscreen metadata. The current desktop wire operations are list, attach,
+detach and copy only. Do not add a second command-name table to native code or
+bypass the broker. Admission, duplicate/retry behavior, controller exclusion and
+uncertain outcomes need acceptance before exposing the route.

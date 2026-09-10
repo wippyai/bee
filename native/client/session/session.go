@@ -90,6 +90,7 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	selected, err := selectDesktop(catalog, cfg.Selection)
 	if err != nil {
 		return err
@@ -125,6 +126,8 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	}
 	display, cancelDisplay := context.WithDeadline(operations, mounted.Expires)
 	defer cancelDisplay()
+	display, stopInbox := withInboxLifetime(display, client.Done(), client.Err)
+	defer stopInbox()
 	rights := tty.MountRights{Observe: true, Input: cfg.Mode == hive.Control, Resize: cfg.Mode == hive.Control}
 	if err := physical.Run(display, remote, rights, stdin, stdout); err != nil {
 		return fmt.Errorf("present desktop: %w", err)
@@ -176,7 +179,10 @@ func Probe(ctx context.Context, directory string) error {
 	}
 	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			_, _, err := readyDesktop(frame, frame, actor, owner)
+			client, _, err := readyDesktop(frame, frame, actor, owner)
+			if client != nil {
+				client.Close()
+			}
 			return err
 		})
 	})
@@ -204,6 +210,7 @@ func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.A
 	// A fresh actor has its own owner-qualified request/idempotency namespace.
 	catalog, err := waitCatalog(ready, client.List)
 	if err != nil {
+		client.Close()
 		return nil, hive.DesktopCatalog{}, err
 	}
 	return client, catalog, nil

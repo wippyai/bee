@@ -65,7 +65,9 @@ func fixture(t *testing.T) (*Client, *scripted, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	s := &scripted{body: make(chan wireCall, 8), replies: make(chan mesh.Message, 8)}
-	return &Client{actor: s, ctx: ctx, owner: "owner", gate: make(chan struct{}, 1)}, s, cancel
+	client := newClient(ctx, s, "owner")
+	t.Cleanup(client.Close)
+	return client, s, cancel
 }
 func operation() Operation {
 	return Operation{Owner: Owner{Node: "owner", Service: "bee.desktop"}, Ref: DesktopList, Key: "retained-key", Input: json.RawMessage(`{}`)}

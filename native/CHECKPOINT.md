@@ -33,3 +33,9 @@ APIs but lacks clipboard support; the selection candidate supplies clipboard but
 lacks those launcher APIs. A reviewed combination and full Bee checks are still
 required before replacing the installed global Bee. Remote physical clipboard
 routing is unimplemented. Windows launch flags remain unverified.
+
+The binding now exclusively reads the native inbox and separates bounded Hive
+reply and clipboard queues. Overflow retires physical presentation; close joins
+the reader. Routing grants no clipboard authority and performs no copy yet.
+Hive/session race and vet checks pass; full real-source composition passes
+55.502s, preserving cold start, Start/Terminal, signal restore and retained rejoin.

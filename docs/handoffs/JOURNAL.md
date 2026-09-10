@@ -5088,3 +5088,15 @@ standalone checks passed separately. Evidence /tmp/bee-membership-foundation-che
 shared journal813 supersedes the earlier pending-gate notes. The full goal remains
 open for public external enrollment, desktop selection, immediate crash recovery,
 and the recurring retained-Bee viewport failure.
+
+## 2026-09-10 — Durable desktop catalog ready for supervisor integration
+
+The private client store now lists `{desktop_id, is_default}` using one bounded
+query, default first and stable ID ordering. No layout content, availability or
+permissions are inferred. Selected-desktop/closed handles refuse the operation;
+ambiguous IDs and excess rows fail without partial output. No migration or
+permission change. Source/pack catalog restart, capacity, corruption and populated
+upgrade checks pass via make client-storage-check (session90810, exit0), with
+lint clean (session12982, exit0). Evidence /tmp/bee-desktop-catalog-storage.log.
+Public allocation and selection still require integration into the supervisor;
+the existing global binary and running Bee are unchanged.

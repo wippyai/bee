@@ -60,6 +60,11 @@ local function main(mode: string)
         assert(store.allocate(left, first_id))
         assert(store.allocate(left, first_id))
         assert(store.allocate(left, second_id))
+        local catalog, catalog_error = store.catalog(left)
+        if not catalog then error(tostring(catalog_error)) end
+        assert(#catalog == 3 and catalog[1].desktop_id == identity and catalog[1].is_default)
+        assert(catalog[2].desktop_id == first_id and not catalog[2].is_default)
+        assert(catalog[3].desktop_id == second_id and not catalog[3].is_default)
         local first, first_error = store.open(nil, first_id)
         if not first then error(tostring(first_error)) end
         local stale, stale_error = store.open(nil, first_id)
@@ -76,6 +81,8 @@ local function main(mode: string)
         assert(not imported and import_error)
         local allocated, allocation_error = store.allocate(first, string.rep("c", 32))
         assert(not allocated and allocation_error)
+        local catalog, catalog_error = store.catalog(first)
+        assert(not catalog and catalog_error, "Selected desktop listed sibling identities")
         assert(read(left).scene.windows[1].user_title == "Edited after import")
         for index = 1, 30 do assert(store.allocate(left, string.format("%032x", index))) end
         local full, full_error = store.allocate(left, string.rep("d", 32))
@@ -83,6 +90,11 @@ local function main(mode: string)
         assert(store.allocate(left, first_id), "Capacity rejected an identical allocation")
         assert(store.close(first)); assert(store.close(stale)); assert(store.close(second))
     elseif mode == "verify_desktops" then
+        local catalog, catalog_error = store.catalog(left)
+        if not catalog then error(tostring(catalog_error)) end
+        assert(#catalog == 33 and catalog[1].desktop_id == identity and catalog[1].is_default)
+        assert(catalog[32].desktop_id == string.rep("a", 32) and not catalog[32].is_default)
+        assert(catalog[33].desktop_id == string.rep("b", 32) and not catalog[33].is_default)
         local first, first_error = store.open(nil, string.rep("a", 32))
         if not first then error(tostring(first_error)) end
         local second, second_error = store.open(nil, string.rep("b", 32))
@@ -90,6 +102,9 @@ local function main(mode: string)
         assert(read(first).scene.width == 91 and read(second).scene.width == 113)
         assert(read(left).scene.windows[1].user_title == "Edited after import")
         assert(store.close(first)); assert(store.close(second))
+    elseif mode == "catalog" then
+        local catalog, err = store.catalog(left)
+        if not catalog then error(tostring(err)) end
     elseif mode == "existing" then
         assert(store.write(left, state.empty(80, 24)))
         local receipt, err = store.import_legacy(left, workspace_id, legacy())
@@ -100,6 +115,8 @@ local function main(mode: string)
         if err then error(err) end
     else error("Unknown client storage test mode") end
     assert(store.close(left))
+    local catalog, catalog_error = store.catalog(left)
+    assert(not catalog and catalog_error)
     local closed, closed_error = store.read(left)
     assert(not closed and closed_error)
     local written, write_error = store.write(left, state.empty(80, 24))

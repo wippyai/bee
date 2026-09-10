@@ -286,6 +286,18 @@ def client_storage():
             probe(folder, "verify", packed)
             probe(folder, "desktops", packed)
             probe(folder, "verify_desktops", packed)
+            # The durable catalog must refuse an oversized or ambiguous set;
+            # only this disposable database is changed for fault injection.
+            with sqlite3.connect(database) as db:
+                db.execute("INSERT INTO client_desktops (client_id) VALUES (?)", ("c" * 32,))
+            probe(folder, "catalog", packed, "Desktop catalog is corrupt")
+            with sqlite3.connect(database) as db:
+                db.execute("DELETE FROM client_desktops WHERE client_id = ?", ("c" * 32,))
+                db.execute("UPDATE client_desktops SET client_id = ? WHERE client_id = ?", (original[0], "a" * 32))
+            probe(folder, "catalog", packed, "Desktop catalog identity is corrupt")
+            with sqlite3.connect(database) as db:
+                db.execute("UPDATE client_desktops SET client_id = ? WHERE client_id = ?", ("a" * 32, original[0]))
+            probe(folder, "verify_desktops", packed)
             legacy = root / ("v1-packed" if packed else "v1-source")
             legacy.mkdir()
             with sqlite3.connect(database) as current:
@@ -345,7 +357,7 @@ def client_storage():
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
         staged_store.write_text(healthy)
         probe(failed_migration, "seed")
-    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop isolation/CAS/capacity/restart and populated-v1 upgrade")
+    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop catalog/isolation/CAS/capacity/restart, catalog corruption denial and populated-v1 upgrade")
 
 
 if __name__ == "__main__":

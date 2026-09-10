@@ -151,8 +151,8 @@ An explicit desktop quit still uses the existing guarded save/shutdown sequence.
 The source/pack supervisor fixture proves startup/admission, forged-sender
 denial, competing-controller denial, automatic display EXIT cleanup, explicit
 detach/rejoin to the same shell and negotiated shutdown without failed runtime
-services. Ordinary `bee` still uses its existing local launcher. No additional
-listener, remote enrollment or physical-client runtime transport is enabled.
+services. Ordinary `bee` now uses the installed native owner/client composition.
+Public external enrollment remains separate from this same-account route.
 
 `bee.client:desktops` holds virtual desktop resources inside a supervising actor.
 The caller serializes access and selects an existing workspace host, exact client
@@ -167,7 +167,8 @@ Only an observed desktop process exit releases that desktop's viewport and store
 reservation through `exited`. A physical display exit does not match it. The
 source/pack desktop fixture uses this component for all of its desktop actors,
 including duplicate rejection, display replacement, desktop restart and resource
-cleanup. The default local launcher has not yet adopted this composition.
+cleanup. The installed retained launcher uses this composition for the default
+desktop; public creation and selection of additional desktops remain pending.
 
 `bee.client:attachments` is a private supervisor helper for one retained virtual
 desktop viewport. It reuses the existing native grant/revocation implementation,
@@ -273,13 +274,14 @@ physical client's successful detach/rejoin does not establish these guarantees.
 
 ## Native mesh rendezvous candidate
 
-The unregistered native `hive/rendezvous` component publishes the running owner's
+The native `hive/rendezvous` component publishes the running owner's
 execution ID, node ID, literal-IP mesh endpoints and public key in a protected
 discovery file. It reuses the native cluster listener. Reads create no state and
 open no application databases; the owner publishes after cluster startup while
 holding the application-state lock. A stale descriptor does not prove liveness
 or permission. Client admission must authenticate the execution and obtain fresh
-grants. Public `bee` does not select this component yet.
+grants. Public `bee` selects this same-account native path; this does not establish
+public external Hive enrollment.
 
 See [the native contract](../native/hive/rendezvous/README.md). The focused
 Makefile check includes a live native stack, retained socket, owner exclusion,
@@ -317,3 +319,22 @@ Public allocation, supervisor readiness and catalog publication remain required.
 The global installed binary includes this migration and bootstrap support,
 but its public launch still selects one retained desktop. Do not treat the
 internal source/pack proof as an installed multiple-display selector.
+
+
+### Durable desktop catalog
+
+The private client store's `catalog(default_store)` returns typed
+`{desktop_id, is_default}` values: the default identity first, followed by up to
+32 allocated identities in stable ID order. One bounded query provides the
+snapshot. It reads no saved layout bodies and reports no live readiness or
+control availability. Those values must come from the supervising actor before
+selection and admission.
+
+Closed handles and handles opened for a selected desktop refuse catalog access;
+the allocation/catalog entry point uses the default store under the host's
+existing database policy. This library check is not an authorization grant.
+Duplicate identities, an inconsistent default identity, and excess rows fail
+without returning a partial catalog. No migration or permission change is needed.
+`make client-storage-check` verifies source and pack, catalog recovery across
+process restarts, capacity/corruption refusal and unchanged populated-v1 upgrade.
+The public supervisor allocation/selection path remains unfinished.

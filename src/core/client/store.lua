@@ -5,6 +5,7 @@ local hash = require("hash")
 local state = require("state")
 local contract = require("contract")
 local binding = require("binding")
+type DesktopIdentity = {desktop_id: string, is_default: boolean}
 type Row = {client_id: string, generation: integer, value: state.State?, workspace_id: string, receipt: string}
 type Store = {
     db: sql.DB, closed: boolean, client_id: string, generation: integer, desktop_id: string?,
@@ -174,6 +175,28 @@ function M.close(store: Store): (boolean, string?)
     store.closed = true
     local released, err = store.db:release()
     return released == true, err and tostring(err) or nil
+end
+-- A durable catalog, not live availability or an admission grant. One bounded
+-- query supplies a coherent snapshot without reading any desktop's layout.
+function M.catalog(store: Store): ({DesktopIdentity}?, string?)
+    if store.closed then return nil, "Client store is closed" end
+    if store.desktop_id then return nil, "Desktop catalog requires the default store" end
+    local rows, err = store.db:query([[SELECT client_id, 1 AS is_default FROM client_state
+        UNION ALL SELECT client_id, 0 AS is_default FROM client_desktops
+        ORDER BY is_default DESC, client_id LIMIT 34]])
+    if not rows then return nil, tostring(err) end
+    if #rows < 1 or #rows > 33 then return nil, "Desktop catalog is corrupt" end
+    local result: {DesktopIdentity} = {}
+    local seen: {[string]: boolean} = {}
+    for index, value in ipairs(rows) do
+        local id = contract.workspace_id(value.client_id)
+        if not id or seen[id] then return nil, "Desktop catalog identity is corrupt" end
+        if (index == 1 and (value.is_default ~= 1 or id ~= store.client_id))
+            or (index > 1 and value.is_default ~= 0) then return nil, "Desktop catalog default is corrupt" end
+        seen[id] = true
+        result[#result + 1] = {desktop_id = id, is_default = index == 1}
+    end
+    return result, nil
 end
 -- The supervisor allocates opaque identities explicitly; opening a missing
 -- identity never silently creates a replacement for a lost desktop.

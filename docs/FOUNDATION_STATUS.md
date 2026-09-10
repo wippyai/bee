@@ -323,3 +323,8 @@ notifications remain acceptance gates. Linux uses a transport fixture in this
 package; X11/macOS implementations are not integrated. Native race tests, vet
 and Windows build/VM checks pass. The full foundation check was attempted and
 stopped at 23 existing Lua lint errors; no passing full-suite claim is made.
+
+The next source revision adds a private durable desktop catalog to the client
+store: one default identity and up to 32 allocated identities, with no layout
+content or live-availability claims. Source/pack storage and upgrade checks pass;
+this helper is not installed globally or exposed as public desktop selection yet.

@@ -11,7 +11,9 @@ test:
 .PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py
-.PHONY: client-desktop-check local-launcher-check
+.PHONY: client-desktop-check local-launcher-check client-storage-check
+client-storage-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import storage; storage.client_storage()'
 client-desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/client_desktop.py
 local-launcher-check:

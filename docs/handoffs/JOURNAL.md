@@ -5468,3 +5468,15 @@ The installed-source run 46307 passed navigation/selection/lifecycle and is
 now in client-desktop acceptance. Its 16-window load fixture used 2% of one CPU
 core and exited in 0.374s. Both full gates and hour-idle 50459 remain active.
 Do not restart any of these jobs while their exact handles are live.
+
+### Installed corrected UI full gate passed
+
+Session 46307 is terminal exit 0. `/tmp/bee-hive-safe-full-check.log` proves
+full make check for installed production 0b44b0f: 493 Lua tests, 525 registry
+entries, source/pack dropdown, Alt+F9, exact-target confirmation, storage/journal
+upgrades, permissions, client lifetimes, cold recovery and bundled app checks.
+The existing desktop_lifecycle InterprocFacts convergence warning remains.
+This does not waive runtime owner-isolation/session-loss recovery (journal894).
+Global SHA440890d7... remains installed; no restart or reinstall this turn.
+Newer candidate full 61042 and one-hour diagnostic 50459 remain live.
+Do not poll/restart completed 46307. Journal milestone900.

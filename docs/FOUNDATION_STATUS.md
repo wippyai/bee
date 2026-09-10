@@ -1,5 +1,20 @@
 # Foundation status
 
+The currently installed September 10 UI candidate (production 0b44b0f, native
+5172d7dc2396, runtime 674b58a1) passed the full repository check: 493 Lua tests,
+525 source/pack registry entries, storage and subscription restart, window and
+permission checks, client lifecycle, cold recovery and bundled apps. This includes
+plain-F9 status, Alt+F9 minimize and exact-target attachment confirmation.
+Evidence: `/tmp/bee-hive-safe-full-check.log`, session 46307, exit 0. The existing
+`desktop_lifecycle` type-convergence warning remains. This is local foundation
+acceptance, not a public remote recovery or runtime-release claim.
+
+The later session-identity candidate qualifies Hive Manager session presentation
+by node and owner generation. Its focused Lua and executable multi-client checks
+pass; its full check (61042) is running and it is not installed. A separate
+one-hour idle reconnect diagnostic (50459) is still pending. Workspace choice
+and switching for neutral displays remain unfinished.
+
 The latest September 10 global candidate now selects an independent desktop when
 another physical client controls the default. It reuses an available durable
 identity before allocating another; explicit selection and observe do not fall
@@ -386,5 +401,6 @@ cannot become a retryable pending operation. Source/pack regression checks pass.
 Live desktop browsing/attachment in the app remains unavailable: the existing
 catalog is admitted to native clients only. This fix grants no new access and
 is now in the installed global build. Alt+F9 minimize and plain-F9 status pass
-source/pack and executable checks. The updated full repository check is running
-against the frozen safety checkpoint; it has no final result yet.
+source/pack and executable checks. The corrected safety checkpoint has passed its full repository check
+(493 Lua tests, 525 registry entries); the later session-identity follow-up is
+being validated separately.

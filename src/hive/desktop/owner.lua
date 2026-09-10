@@ -234,7 +234,10 @@ function M.launched(state: State, message: process.Message, now: integer)
             local session = client.session
             if not session then return end
             local reply: types.Reply
-            if result.error_code ~= "" then
+            if result.error_code == "UNCERTAIN" then
+                reply = types.reply_error(pending.call.request_id, types.uncertain(result.error,
+                    {operation_ref = protocol.LAUNCH, idempotency_key = pending.call.idempotency_key}))
+            elseif result.error_code ~= "" then
                 local code = "UNAVAILABLE"
                 if result.error_code == "DENIED" or result.error_code == "BUSY" or result.error_code == "INVALID_ARGUMENT" then code = result.error_code end
                 reply = types.reply_error(pending.call.request_id, types.fault(code, result.error))

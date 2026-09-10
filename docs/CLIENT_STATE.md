@@ -418,3 +418,23 @@ live shell, and the first desktop remains usable. This does not yet expose publi
 creation, automatic selection on a controller conflict or Hive Manager control.
 The Hive-facing owner still publishes one desktop; its catalog/session mapping
 and the native launch choice remain the next integration boundary.
+
+### Desktop interruption and concurrent presenter recovery (source)
+
+An additional desktop EXIT retires its outstanding launch and copy requests.
+A launch may already have committed at the host; its reply is UNCERTAIN, with the
+original operation/idempotency identity preserved by the Hive adapter. The
+supervisor clears the pending slot without replaying the launch. Copy retirement
+returns no text and an explicit failure. Neither keeps another desktop's launch
+or copy path busy. A fault fixture exits after an actual Terminal launch commits
+but before its reply; a file written by that Terminal establishes the unknown
+outcome is not equivalent to "nothing happened".
+
+Renderer and quit events for additional desktops continue while the default
+presenter's admission is pending. The default keeps at most its latest deferred
+renderer and quit request. A pending workspace quit holds a default renderer
+replacement until cancellation or shutdown resolves. The withheld-renderer probe
+fails on the earlier supervisor, then passes with the additional presenter
+replaced while the default waits and the default subsequently recovered by F12.
+Normal source/pack launch-exit, copy-exit and withheld-renderer probes pass.
+These source changes are not installed globally yet.

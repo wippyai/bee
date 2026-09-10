@@ -67,6 +67,8 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local phase: Phase = "booting"
         local pending = ""
         local quit_pending = false
+        local deferred_renderer: string? = nil
+        local deferred_quit: protocol.Quit? = nil
         local question: interaction.Spec? = nil
         local deadline = time.after("10s")
         local function advance(next_phase: Phase)
@@ -80,6 +82,20 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local function control(op: string)
             pending = uuid.v7()
             send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = pending, op = op})
+        end
+        local function primary_renderer(renderer: string)
+            pending = uuid.v7(); advance("rendering")
+            send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
+                op = "render", recipient = client, renderer = renderer})
+        end
+        local function primary_quit(request: protocol.Quit)
+            if request.emergency then
+                quit_pending = true
+                advance("saving"); control("save")
+            elseif not quit_pending then
+                quit_pending = true
+                send(host, "bee.application.shutdown", {version = 1, op = "prepare"})
+            end
         end
         local function find_desktop(id: string): desktops.Desktop?
             if id == desktop_id then return desktop end
@@ -104,15 +120,20 @@ local function run_supervisor(client: string, database_resource: string?, retain
             end
         end
         while true do
+            if phase == "running" then
+                local quitting, rendering = deferred_quit, deferred_renderer
+                if quitting then deferred_quit = nil; primary_quit(quitting)
+                elseif rendering and not quit_pending then deferred_renderer = nil; primary_renderer(rendering) end
+            end
             local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
                 saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
-            if phase == "running" then
+            if phase == "running" or additional then
                 cases[#cases + 1] = renderers:case_receive()
                 cases[#cases + 1] = quits:case_receive()
             end
-            if retained_owner and phase == "running" then
+            if retained_owner and (phase == "running" or phase == "rendering") then
                 cases[#cases + 1] = attachment_requests:case_receive()
                 cases[#cases + 1] = launch_requests:case_receive()
                 cases[#cases + 1] = storage_requests:case_receive()
@@ -153,6 +174,22 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 elseif event.kind == process.event.EXIT then
                     if retained_owner and tostring(event.from) == retained_owner then return end
                     if tostring(event.from) == client then desktops.exited(retained, event); return end
+                    if retained_owner then
+                        local exited = tostring(event.from)
+                        local launching = launch_pending
+                        if launching and launching.client == exited then
+                            launch_pending = nil
+                            send(retained_owner, "bee.retained.launched", {version = 1, workspace_id = workspace_id,
+                                desktop_id = launching.desktop_id, request_id = launching.id, id = "", instance_id = "",
+                                error_code = "UNCERTAIN", error = "Desktop exited before reporting the launch outcome"})
+                        end
+                        local copying = copy_pending
+                        if copying and (copying.client == exited or copying.recipient == exited) then
+                            copy_pending = nil
+                            send(retained_owner, "bee.retained.copied", {version = 1, request_id = copying.id,
+                                selected = false, text = "", error = "Desktop copy attachment exited"})
+                        end
+                    end
                     if desktop then
                         local detached = attachments.detach(desktop.grants, tostring(event.from))
                         if detached.error_code ~= "" then error("Desktop detach failed: " .. detached.error) end
@@ -331,21 +368,17 @@ local function run_supervisor(client: string, database_resource: string?, retain
                             request_id = request.request_id, mount = result.mount, error_code = result.error_code, error = result.error})
                     end
                 elseif selected.channel == renderers and sender == client and type(data) == "table" and data.version == 1 then
-                    if data.workspace_id == workspace_id and data.connection_id == connection_id and phase == "running" then
+                    if data.workspace_id == workspace_id and data.connection_id == connection_id then
                         local renderer = contract.text(data.renderer, 160)
                         if not renderer or renderer == "" then error("Invalid local renderer") end
-                        pending = uuid.v7(); advance("rendering")
-                        send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
-                            op = "render", recipient = client, renderer = renderer})
+                        if phase == "running" and not quit_pending then primary_renderer(renderer)
+                        elseif phase == "running" or phase == "rendering" then deferred_renderer = renderer end
                     end
-                elseif selected.channel == quits and sender == client and phase == "running" then
+                elseif selected.channel == quits and sender == client then
                     local request = protocol.quit(data, workspace_id)
-                    if request and request.emergency then
-                        quit_pending = true
-                        advance("saving"); control("save")
-                    elseif request and not quit_pending then
-                        quit_pending = true
-                        send(host, "bee.application.shutdown", {version = 1, op = "prepare"})
+                    if request then
+                        if phase == "running" then primary_quit(request)
+                        elseif phase == "rendering" then deferred_quit = request end
                     end
                 elseif selected.channel == questions and sender == host and (phase == "running" or phase == "rendering") then
                     local current = interaction.shutdown(data)

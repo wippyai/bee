@@ -1,52 +1,81 @@
 # Global Bee candidate — September 10, 2026
 
-The installed global executable is a tested development candidate built from the
-frozen source at `/tmp/bee-global-final-crjl7na9`. Runtime and Bee changes remain
-on branches; no PR or main merge was performed.
+The installed executable is a development candidate built from the frozen source
+at `/tmp/bee-global-final-crjl7na9`. The functional source checkpoint is `18caf09`
+on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
+performed for the latest Bee-only link-loss fix.
 
-- Runtime: `674b58a1a1`, `integration/bee-launch-selection-20260910`.
+- Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
 - Native Bee: `1abf5b28a0e5`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
+- Build output: `/tmp/bee-linkdown-fixed2`.
 - SHA256: `285a51bf448f212cdfc67e8eea51b6a9a296da8d5ab221f3e3f2562b289bcb0a`.
 - Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T145306Z`.
 
-Run `bee` normally. Its foreground client automatically starts or authenticates
-an owner for the selected state. Ctrl+Q and Ctrl+] detach locally, retaining
-applications. An already running older executable must exit before the upgraded
-owner can take its state lock. This does not hot-replace a running owner.
+## Launch and ownership
 
-Ordinary app launches use the executable's embedded code and the selected state's
-shared registry history. Explicit `--base` remains a separate recovery mode.
-[Runtime PR 726](https://github.com/wippyai/runtime/pull/726), stacked on PR 703
-and assigned to Rodrigo (`skhaz`), adds that host-selected deployment policy.
-Other combined runtime slices retain their existing upstream PRs.
+Run `bee` normally. It loads embedded code with shared registry history and
+starts or authenticates the same-state owner through the native mesh. Ctrl+Q and
+Ctrl+] detach the physical client while retaining the owner and applications.
+A busy application-state lock routes to authenticated attachment; it grants no
+access. If the owner is still preparing discovery, the client waits cancellably
+for publication before authenticating. Warm launch creates no owner contender or
+additional owner log. Cold startup still captures output in `owner-*.log`.
 
-## Evidence
+Installing a new executable does not hot-replace an already-running owner. The
+user's older owner and its apps have not been stopped. An older owner's failure
+cannot be repaired merely by launching a newer client against it.
 
-`/tmp/bee-final-binary-acceptance.log` passes all three actual-executable targets:
+Explicit `--base` remains a recovery mode. The embedded-default deployment policy
+is in runtime PR #726, stacked on #703 and assigned to Rodrigo (`skhaz`); the
+candidate does not yet consume a released runtime main revision.
 
-- `native-client-check`: cold owner/client, exact clipboard copy, local quit,
-  retained shell after reconnect, F12, and no clipboard replay. Fixture cleanup
-  uses a PID handle to stop only its own retained owner.
-- `native-binary-check`: explicit app launches, Settings recovery, clipboard,
-  discrete wheel and burst scrolling, fullscreen aliases and literal arguments.
-- `native-upgrade-check`: upgrade from the Sep 8 executable without `--base`,
-  fresh app catalog, retained Ocean theme/workspace identity and unchanged applied
-  migrations.
+## Verified behavior and limits
 
-Native mesh/physical race tests pass. Runtime application, terminal/proxy/TTY and
-Lua module race tests pass. The history/changed-baseline tests pass, including the
-SQLite-backed authored-entry preservation proof in
-`TestDependencyHandler_DeploymentRootSelfUpdateRepairsStoredResolution`.
+`/tmp/bee-linkdown-native-acceptance.log` passes the actual executable's cold
+owner/client launch, exact clipboard copy, F12, retained explicit reconnect,
+bounded stalled-owner exit with uncertainty preserved, delayed owner publication,
+and SIGKILL followed by reconnect to the same shell. Warm reconnect measured
+0.213 seconds. The SIGKILL test waits 40 seconds for native node-departure delivery;
+it does not establish immediate crash detection.
 
-The final frozen `make check` failed at `tests/drag_failure.py`: its initial
-four-second wait saw a blank desktop. An isolated diagnostic passed; the
-full-suite failure remains unresolved. Evidence: `/tmp/bee-final-full-check.log`.
-Public external Hive enrollment, independent observer selection, and consuming a
-released runtime main revision remain outstanding.
+Both Bee supervisors now use the existing `trap_links` option. LINK_DOWN revokes
+the physical attachment without declaring its actor dead or terminating retained
+applications. The real-owner diagnostic rejects failed service states and passes
+race/vet: `/tmp/bee-owner-linkdown-fixed2.log` and its companion trace. This fixes
+the earlier link-loss-induced supervisor failure and stale-name restart loop.
 
-Reproduce the build using the candidate's pinned `wippy.build.json` and Makefile:
+The exact-actor monitor gate remains failing on the current runtime: registration
+succeeds but no EXIT arrives when the target finishes while transport stays alive.
+See [the runtime handoff](STATUS_RUNTIME_GATE.md). No Bee polling substitute,
+parallel transport or new ingress API is used.
+
+Timing probes found fresh-owner startup at 1.53–2.58 seconds, terminal restoration
+at about 21 ms, and clean process exits at 0.84–0.92 seconds. An earlier clean exit
+at 1.008 seconds failed the existing one-second limit; it has not been erased by
+the later passing samples. Test-only stage timings place 0.37–0.95 seconds in the
+native stack's shutdown, with naming cleanup taking microseconds. Evidence:
+`/tmp/bee-global-launch-timings.log`, `/tmp/bee-client-close-stages.log`, journal716.
+
+The full foundation run passed Lua/module/headless/storage/subscription/resource
+checks, source/pack architecture at 517 entries, desktop smoke, fresh pack and
+taskbar checks. It then failed personalization's initial four-second Settings
+wait while boot logs were visible. Ten isolated source/pack Settings starts passed
+under 1.4 seconds; personalization subsequently passed in the resumed recipes.
+Remaining desktop recipes are still running with unchanged limits. Evidence:
+`/tmp/bee-linkdown-foundation-check.log`, `/tmp/bee-settings-startup-observe.log`,
+`/tmp/bee-linkdown-remaining-desktop.log`. This is not an uninterrupted full-suite
+pass. The earlier intermittent wallpaper-only startup failure remains unexplained.
+
+Prior standalone Settings/Terminal/scrolling/selection and old-binary upgrade
+acceptance is recorded in `/tmp/bee-final-binary-acceptance.log`; those results
+precede this Lua-only link-loss correction. Public external Hive enrollment,
+remote selection and mixed-workspace client composition remain open.
+
+## Rebuild
+
+Use the candidate's pinned `wippy.build.json` and Makefile:
 
 ```sh
 make native-tools
@@ -55,74 +84,3 @@ make native-client-check native-binary-check
 make native-upgrade-check PREVIOUS_BEE=/path/to/pre-Hive-Manager/bee
 make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 ```
-
-## Reported attachment failure
-
-The installed candidate has a user report of mount retirement followed by a slow
-detach. A private copy of the user databases passes both launch modes, five
-large-terminal reconnects, and normal exits under one second. Stalling a fixture
-owner reproduces a 3.9-second Ctrl+Q exit. Native candidate `08a5761b809d` limits
-explicit detach acknowledgment to 200 ms and preserves uncertain outcomes; the rebuilt global executable passes
-`native-client-check`, including stalled-owner exit within two seconds, terminal
-restoration, preserved uncertainty, and retained owner. Session race tests and
-vet pass. Evidence: `/tmp/bee-detach-fixed-acceptance.log`. Unexpected mount retirement and
-immediate reconnect after abrupt client death remain under investigation.
-
-## Warm launch and crash reproduction
-
-Native `08a5761b809d` uses the runtime's existing application-state lock for
-routing: busy means direct authenticated attachment; a free probe releases the
-lock before the existing cold-owner contender path. No new election or lock is
-introduced. Warm startup creates no child contender or owner log. The installed
-binary reaches the retained desktop in 0.204 seconds in the disposable acceptance
-fixture; that is not a timing guarantee for an unhealthy owner. Client-launch
-race/vet and the actual native-client checks pass, including the stalled-owner
-exit regression. Evidence: `/tmp/bee-warm-fixed-acceptance.log`.
-
-Abrupt-client-death acceptance is still failing: controller-busy refusals persist
-for about twenty seconds, then the retained owner's readiness requests time out
-around the mount lease boundary. A test-owner stack dump shows idle mesh workers,
-not a confirmed mutex deadlock. The user owner was not stopped. Cold-start logs
-still exist; their reporting and lifecycle remain under review.
-
-The native monitor gate was rerun against runtime `674b58a1a1`: registration and a
-later FIFO message succeed, but no EXIT arrives after the target actor finishes
-with its transport still alive. `make -C native mesh-monitor-check` fails at
-`monitor_gate_test.go:77`. This is current evidence, not a historical blocker;
-the runtime lane handoff is Bee Harness seq698. No Bee polling workaround is
-being substituted for native process observation.
-
-## Preparing-owner race correction
-
-The installed native revision is now `1abf5b28a0e5`. When a second launch sees the
-runtime state lock before discovery exists, it waits for publication (up to15s,
-cancellable), then authenticates normally. It writes no owner state and never
-treats the lock or descriptor as admission. The previous binary failed this
-window with a missing `mesh-owner.json` error. Actual standalone acceptance now
-holds the runtime lock, starts a waiting client, releases the lock, starts the
-owner, and proves the original client reaches the desktop and detaches while
-retaining the owner. Normal warm readiness measured0.208s. Session and launcher
-race/vet pass. Evidence: `/tmp/bee-publication-fixed-acceptance.log` and
-`/tmp/bee-preparing-owner-before.log`. The remote EXIT and full-suite gates above
-are still open.
-
-
-### Link-down handling installed
-
-The global executable now includes the Bee-only link-loss fix in the Hive and
-retained desktop supervisors. Both use the existing `trap_links` process option
-and revoke disconnected physical attachments without claiming process completion.
-No runtime changes were made. `/tmp/bee-linkdown-native-acceptance.log` passes
-normal client acceptance (warm reconnect 0.213 seconds), stalled detach, delayed
-owner publication, and client SIGKILL followed by same-shell reconnect after a
-40-second native node-departure observation interval. The isolated supervisor
-trace also rejects failed service states and passes race/vet.
-
-This replaces the earlier crash-induced supervisor restart failure for new owners.
-It does not hot-replace the user's running owner, and does not prove immediate
-exact-actor EXIT with a live transport. Full foundation verification in `/tmp/bee-linkdown-foundation-check.log` passed
-through taskbar checks, then failed the initial four-second Settings wait in
-personalization while boot logs were still visible. Ten isolated source/pack
-Settings launches passed under 1.4 seconds. Unchanged failed/remaining recipes
-are running in `/tmp/bee-linkdown-remaining-desktop.log`; the earlier intermittent
-initial-frame failure is not yet cleared. Cold startup still creates an owner output log.

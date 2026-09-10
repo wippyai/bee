@@ -67,3 +67,11 @@ application input. A definite selection refusal leaves the client running.
 The installed candidate includes this operation and passes selected-window copy
 acceptance. Copy uses the same serialized call/reply reader. Release runtime
 cutover and public remote selection remain separate gates.
+
+Set `BEE_NATIVE_DESKTOP_PHYSICAL_OBSERVER=1` for a controller plus a separately
+enrolled observer process, each with its own physical PTY. The observer uses an
+observation-only native mount, checks denied input/resize authority, sees the
+controller's shell variable, and cannot change it by typing. Observer detach
+preserves the controller; F12 and resize then retain the same shell. This passes
+on runtime674b58a1 (`/tmp/bee-mesh-observer-proof.log`), with explicit fixture
+enrollment. It does not expose a public observer selector.

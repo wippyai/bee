@@ -270,9 +270,13 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 	keyPrefix := fmt.Sprintf("physical-%d-%d", os.Getpid(), time.Now().UnixNano())
 	// This crash proof allows the existing 40-second node-departure window;
 	// it does not claim prompt exact-actor exit notification.
+	mode := hive.Control
+	if os.Getenv("BEE_NATIVE_DESKTOP_OBSERVER") == "1" {
+		mode = hive.Observe
+	}
 	var mounted hive.DesktopMount
 	for attempt := 0; ; attempt++ {
-		mounted, err = client.Attach(ctx, fmt.Sprintf("%s-attach-%d", keyPrefix, attempt), workspace.ID, workspace.Desktops[0].ID, hive.Control)
+		mounted, err = client.Attach(ctx, fmt.Sprintf("%s-attach-%d", keyPrefix, attempt), workspace.ID, workspace.Desktops[0].ID, mode)
 		if err == nil || os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_CRASH") != "1" || attempt >= 159 {
 			break
 		}
@@ -307,6 +311,13 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 		view.Close()
 		return errors.New("physical mount lacks checked native interface")
 	}
+	rights := tty.MountRights{Observe: true, Input: mode == hive.Control, Resize: mode == hive.Control}
+	if mode == hive.Observe {
+		if remote.Check(ctx, tty.RightInput) == nil || remote.Check(ctx, tty.RightResize) == nil {
+			view.Close()
+			return errors.New("observer acquired input or resize authority")
+		}
+	}
 	display, cancel := context.WithDeadline(ctx, mounted.Expires)
 	defer cancel()
 	stopped := make(chan struct{})
@@ -319,7 +330,7 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 		}
 	}()
 	diagnosticPhase("physical-run")
-	err = physical.Run(display, remote, tty.MountRights{Observe: true, Input: true, Resize: true}, os.Stdin, os.Stdout)
+	err = physical.Run(display, remote, rights, os.Stdin, os.Stdout)
 	cancel()
 	<-stopped
 	if err != nil {

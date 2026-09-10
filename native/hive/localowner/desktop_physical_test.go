@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	vt "github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/physical"
@@ -30,11 +31,17 @@ import (
 type sessionOutput struct {
 	sync.Mutex
 	bytes.Buffer
+	screen *vt.SafeEmulator
 }
 
 func (b *sessionOutput) Write(data []byte) (int, error) {
 	b.Lock()
 	defer b.Unlock()
+	if b.screen != nil {
+		if _, err := b.screen.Write(data); err != nil {
+			return 0, err
+		}
+	}
 	return b.Buffer.Write(data)
 }
 func (b *sessionOutput) text() string { b.Lock(); defer b.Unlock(); return b.Buffer.String() }
@@ -42,7 +49,13 @@ func (b *sessionOutput) text() string { b.Lock(); defer b.Unlock(); return b.Buf
 func init() {
 	physicalSessionProbe = probePhysicalSession
 	physicalStartupProbe = func(ctx context.Context, directory string) error {
-		return probePhysicalSessionMode(ctx, directory, true, true)
+		if err := probePhysicalSessionMode(ctx, directory, true, true); err != nil {
+			return err
+		}
+		if os.Getenv("BEE_OWNER_TEST_COPY") == "1" {
+			return probePhysicalSessionMode(ctx, directory, true, false)
+		}
+		return nil
 	}
 }
 
@@ -80,6 +93,10 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 		return err
 	}
 	var output sessionOutput
+	if os.Getenv("BEE_OWNER_TEST_COPY") == "1" {
+		output.screen = vt.NewSafeEmulator(100, 32)
+		output.screen.SetScrollbackSize(1)
+	}
 	done := make(chan struct{})
 	var sessionErr error
 	go func() {
@@ -177,6 +194,14 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 		if err := await("BEE_INTERRUPT_good_DONE"); err != nil {
 			return err
 		}
+		if os.Getenv("BEE_OWNER_TEST_COPY") == "1" {
+			if err := probeSelectedCopy(ctx, master, &output, done, func() error { return sessionErr }); err != nil {
+				return err
+			}
+		}
+	}
+	if !initialize && os.Getenv("BEE_OWNER_TEST_COPY") == "1" && strings.Contains(output.text(), "\x1b]52;") {
+		return errors.New("rejoined physical client replayed clipboard output")
 	}
 	if signalExit {
 		// This is the isolated Go test process, whose foreground launch has already

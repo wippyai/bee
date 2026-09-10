@@ -57,3 +57,18 @@ passes1.039s. The expanded actual-source composition passes60.585s: a second
 native client observes but cannot copy; substituted and detached sessions are
 refused; the original controller continues using its shell. Independent observer
 selection and combined-runtime release acceptance remain unproved.
+
+`local-owner-selection-check` is the explicit full selected-window release gate.
+Set `BEE_OWNER_TEST_WIPPY`, `BEE_OWNER_TEST_SOURCE` and `MESH_RUNTIME` as above.
+It uses a native VT emulator to locate actual rendered Terminal text, opens
+Select text, drags, sends Ctrl+C immediately after release, checks one exact
+OSC52 payload, then reconnects and rejects replay. It never injects selected
+text or substitutes a local-only display.
+
+The initial full-path run reached selection but timed out waiting for the owner.
+A compiled-module preflight now reports the missing `tty.text.plain` and physical
+`Clipboard` APIs directly. This test is red on runtime944736c999; the complete
+selected-window flow remains unverified. Default `local-owner-check` includes
+this gate when its explicit toolchain is provided; the narrower
+`LOCAL_OWNER_TEST_RUN=TestFreshClientDesktopComposition` remains the ordinary
+owner/client proof and must not be described as selected-window acceptance.

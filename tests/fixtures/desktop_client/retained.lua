@@ -11,12 +11,13 @@ local function main()
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local replies = assert(process.listen("bee.retained.result", {message = true}))
     local launches = assert(process.listen("bee.retained.launched", {message = true}))
+    local catalogs = assert(process.listen("bee.retained.desktops_result", {message = true}))
     local boots = assert(process.listen("physical.boot", {message = true}))
     local displays = assert(process.listen("physical.ready", {message = true}))
     local events = assert(process.events())
     local forged = assert(process.listen("forged.sent", {message = true}))
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy"}) do
+    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     local supervisor = tostring(assert(process.with_options({}):with_context({["bee.retained_owner"] = owner})
@@ -97,6 +98,29 @@ local function main()
         assert(screen:send({type = "paste", text = text}))
         assert(screen:send({type = "key", key = "", key_type = "enter", action = "press"}))
     end
+    local function storage(op: string, identity: string?, expected: string, count: integer)
+        sequence = sequence + 1
+        local id = "storage-" .. tostring(sequence)
+        assert(process.send(supervisor, "bee.retained.desktops", {version = 1, workspace_id = workspace_id,
+            request_id = id, op = op, desktop_id = identity}))
+        local response = channel.select({catalogs:case_receive(), time.after("6s"):case_receive()})
+        assert(response.ok and response.channel == catalogs, "Missing desktop storage reply")
+        local reply = response.value
+        assert(tostring(reply:from()) == supervisor)
+        local data: unknown = reply:payload():data()
+        assert(type(data) == "table" and data.request_id == id and data.workspace_id == workspace_id
+            and data.code == expected and type(data.desktops) == "table" and #data.desktops == count,
+            "Invalid desktop storage result")
+        if count > 0 then
+            local first: unknown = data.desktops[1]
+            assert(type(first) == "table" and first.desktop_id == desktop_id and first.is_default == true)
+        end
+    end
+    storage("list", nil, "OK", 1)
+    storage("allocate", string.rep("a", 32), "OK", 0)
+    storage("allocate", string.rep("a", 32), "OK", 0)
+    storage("allocate", desktop_id, "CONFLICT", 0)
+    storage("list", nil, "OK", 2)
     local first, first_screen = attach()
     command(first_screen, "bee_owner=alive; printf 'OWNER_%s_OK\\n' \"$bee_owner\"")
     wait_text(first_screen, "OWNER_alive_OK")
@@ -157,6 +181,8 @@ local function forger(owner: string, supervisor: string, workspace_id: string, d
         desktop_id = desktop_id, request_id = "forged", recipient = owner, op = "attach", mode = "control"}))
     assert(process.send(supervisor, "bee.retained.launch", {version = 1, workspace_id = workspace_id,
         desktop_id = desktop_id, request_id = "forged-launch", recipient = owner, name = "terminal", arguments = {}}))
+    assert(process.send(supervisor, "bee.retained.desktops", {version = 1, workspace_id = workspace_id,
+        request_id = "forged-storage", op = "allocate", desktop_id = string.rep("b", 32)}))
     assert(process.send(owner, "forged.sent", {}))
 end
 return {main = checked_main, forger = forger}

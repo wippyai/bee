@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(workspace_appearance=False, command="desktop-client-probe", shared_store=False):
+def run(workspace_appearance=False, command="desktop-client-probe", shared_store=False, storage_delay=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
@@ -52,6 +52,33 @@ def run(workspace_appearance=False, command="desktop-client-probe", shared_store
             label = '"Workspace " .. workspace_id:sub(1, 8)'
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"
             presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
+        if storage_delay:
+            operations = project / "src/core/client/desktop_storage.lua"
+            code = operations.read_text().replace('local security = require("security")', 'local security = require("security")\nlocal time = require("time")')
+            code = code.replace('function M.allocate(value: unknown): Reply', 'function M.allocate(value: unknown): Reply\n    if type(value) == "table" and value.desktop_id == string.rep("c", 32) then time.sleep("6s") end')
+            operations.write_text(code)
+            manifest = project / "src/core/client/_index.yaml"
+            values = yaml.safe_load(manifest.read_text())
+            for entry in values["entries"]:
+                if entry.get("source") == "file://desktop_storage.lua": entry["modules"].append("time")
+            manifest.write_text(yaml.safe_dump(values, sort_keys=False))
+            fixture = project / "src/client_probe/retained.lua"
+            code = fixture.read_text()
+            code = code.replace('    local first, first_screen = attach()', '''    assert(process.send(supervisor, "bee.retained.desktops", {version = 1, workspace_id = workspace_id,
+        request_id = "slow-allocation", op = "allocate", desktop_id = string.rep("c", 32)}))
+    storage("list", nil, "BUSY", 0)
+    local first, first_screen = attach()''', 1)
+            code = code.replace('    wait_text(first_screen, "OWNER_alive_OK")', '''    wait_text(first_screen, "OWNER_alive_OK")
+    local slow = channel.select({catalogs:case_receive(), time.after("6s"):case_receive()})
+    assert(slow.ok and slow.channel == catalogs, "Storage timeout did not reply")
+    local slow_message = slow.value
+    assert(tostring(slow_message:from()) == supervisor)
+    local slow_data: unknown = slow_message:payload():data()
+    assert(type(slow_data) == "table" and slow_data.request_id == "slow-allocation"
+        and slow_data.code == "UNAVAILABLE" and slow_data.desktop_id == string.rep("c", 32))
+    time.sleep("1500ms")
+    storage("allocate", string.rep("a", 32), "OK", 0)''', 1)
+            fixture.write_text(code)
         for name in (".wippy.yaml", "wippy.lock"):
             shutil.copy2(ROOT / name, project / name)
         lint = subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, capture_output=True, text=True)
@@ -83,7 +110,7 @@ def run(workspace_appearance=False, command="desktop-client-probe", shared_store
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if command == "retained-supervisor-probe":
-        print("Retained supervisor source/pack: startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
+        print(f"Retained supervisor source/pack (slow storage={storage_delay}): authorized catalog/allocation and retry, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
         return
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")
@@ -96,4 +123,5 @@ if __name__ == "__main__":
     run(True)
     run(shared_store=True)
     run(command="retained-supervisor-probe")
+    run(command="retained-supervisor-probe", storage_delay=True)
     run(command="thread-status-probe")

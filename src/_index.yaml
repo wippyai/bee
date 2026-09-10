@@ -202,6 +202,18 @@ entries:
     actions: [process.spawn, process.spawn.monitored]
     resources: [bee.applications:broker]
     effect: allow
+- name: desktop_catalog_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.client:list_desktops, bee.client:allocate_desktop]
+    effect: allow
+- name: desktop_catalog_resource_policy
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.read, bee.client.desktops.allocate]
+    resources: [bee:client_db]
+    effect: allow
 - name: retained_supervisor_spawn_policy
   kind: security.policy
   policy:

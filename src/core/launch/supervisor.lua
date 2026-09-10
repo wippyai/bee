@@ -12,6 +12,7 @@ local contract = require("contract")
 local decode = require("decode")
 local interaction = require("interaction")
 local desktops = require("desktops")
+local desktop_storage = require("desktop_storage")
 local attachments = require("attachments")
 local retained_protocol = require("retained_protocol")
 type Channel = channel.Channel
@@ -20,6 +21,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
     local retained = desktops.new()
     local desktop: desktops.Desktop? = nil
     local desktop_id = ""
+    local storage_pending: desktop_storage.Pending? = nil
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
     local host = ""
@@ -34,6 +36,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         -- dependencies. Link loss revokes a mount, not the retained workspace.
         local trapping, trap_error = process.set_options({trap_links = true})
         if not trapping then error("Cannot handle desktop link loss: " .. tostring(trap_error)) end
+        local storage_requests = listen("bee.retained.desktops")
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
         local launch_requests = listen("bee.retained.launch")
@@ -75,7 +78,19 @@ local function run_supervisor(client: string, database_resource: string?, retain
             pending = uuid.v7()
             send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = pending, op = op})
         end
+        local function storage_reply(request: desktop_storage.Request, reply: desktop_storage.Reply)
+            if retained_owner then
+                local sent, delivery_error = process.send(retained_owner, "bee.retained.desktops_result", {version = 1, workspace_id = workspace_id,
+                    request_id = request.request_id, code = reply.code, message = reply.message,
+                    desktop_id = reply.desktop_id, desktops = reply.desktops})
+                if not sent then
+                    log:warn("Desktop storage reply delivery failed", {request_id = request.request_id,
+                        error = tostring(delivery_error)})
+                end
+            end
+        end
         while true do
+            local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
                 saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
@@ -86,11 +101,21 @@ local function run_supervisor(client: string, database_resource: string?, retain
             if retained_owner and phase == "running" then
                 cases[#cases + 1] = attachment_requests:case_receive()
                 cases[#cases + 1] = launch_requests:case_receive()
+                cases[#cases + 1] = storage_requests:case_receive()
+            end
+            if current_storage then
+                cases[#cases + 1] = current_storage.response:case_receive()
+                cases[#cases + 1] = current_storage.deadline:case_receive()
             end
             if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
-            if selected.channel == deadline then
+            if current_storage and (selected.channel == current_storage.response or selected.channel == current_storage.deadline) then
+                storage_pending = nil
+                local reply = selected.channel == current_storage.response and desktop_storage.complete(current_storage)
+                    or desktop_storage.cancel(current_storage)
+                storage_reply(current_storage.request, reply)
+            elseif selected.channel == deadline then
                 if phase ~= "rendering" then error("Local supervisor timed out during " .. phase) end
                 -- The host may still complete revocation. Preserve its ownership
                 -- and let an explicit retry reconcile with that outcome.
@@ -120,7 +145,20 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 local message = selected.value
                 local sender = tostring(message:from())
                 local data: unknown = message:payload():data()
-                if selected.channel == hosts and sender == host and phase == "booting" then
+                if selected.channel == storage_requests and sender == retained_owner and announced then
+                    local request = desktop_storage.request(data, workspace_id)
+                    if request then
+                        if storage_pending then
+                            storage_reply(request, desktop_storage.failure(request, "BUSY", "A desktop storage operation is pending"))
+                        else
+                            local started = desktop_storage.start(request)
+                            storage_pending = started
+                            if not started then
+                                storage_reply(request, desktop_storage.failure(request, "UNAVAILABLE", "Desktop storage dispatch failed"))
+                            end
+                        end
+                    end
+                elseif selected.channel == hosts and sender == host and phase == "booting" then
                     local value = protocol.host(data)
                     if not value then error("Invalid local host readiness") end
                     workspace_id = value.workspace_id
@@ -301,6 +339,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         end
     end
     local ok, err = pcall(run)
+    if storage_pending then desktop_storage.cancel(storage_pending) end
     if retained_owner and client ~= "" then process.terminate(client) end
     if host ~= "" then process.terminate(host) end
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end

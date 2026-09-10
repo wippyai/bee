@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: desktop_storage
+  kind: library.lua
+  source: file://desktop_storage.lua
+  modules: [funcs, channel, time]
+  imports:
+    contract: bee.protocol:application
 - name: retained_protocol
   kind: library.lua
   source: file://retained_protocol.lua
@@ -44,6 +50,7 @@ entries:
   method: main
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
+    desktop_storage: bee.launch:desktop_storage
     desktops: bee.client:desktops
     attachments: bee.client:attachments
     retained_protocol: bee.launch:retained_protocol

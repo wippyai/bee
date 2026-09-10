@@ -50,7 +50,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local copies = listen("bee.retained.copied")
     local launches = listen("bee.retained.launched")
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy"}) do
+    for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
         local policy, err = security.policy(name)
         if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); error(tostring(err)) end
         policies[#policies + 1] = policy

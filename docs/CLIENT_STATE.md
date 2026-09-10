@@ -356,10 +356,36 @@ Repeating an allocation with the same identity is idempotent, including at
 capacity. Allocating the default identity conflicts. An unavailable allocation
 reply does not prove that the row is absent: keep the same identity on retry.
 These methods neither start a desktop process nor admit a physical client.
-No ordinary application or current supervisor has been given these new grants;
-public creation and selection still need host integration.
+No ordinary application receives these grants. The source retained supervisor now
+receives exact grants for `bee:client_db`; public creation and selection still
+need activation and client integration.
 
 The source/pack acceptance calls the real function entries with authorized,
 read-only and unauthorized scopes. It proves caller SQL denial before and after
 calls, no schema creation on denied calls, durable retry across process restarts,
 read-only allocation denial, resource fencing and strict request decoding.
+
+### Supervisor storage requests (source; not installed)
+
+The retained supervisor accepts `bee.retained.desktops` only from its authenticated
+bootstrap owner after initial desktop readiness. Requests contain version 1,
+workspace_id, request_id and op (`list` or `allocate`); allocation also requires
+a caller-retained desktop_id. Unknown fields and other workspace identities are
+rejected. Callers cannot select a database resource through this protocol.
+
+The `bee.launch:desktop_storage` adapter calls the two protected function entries
+asynchronously against `bee:client_db`. One request may be in flight; another
+gets BUSY. The actor continues handling attachment and desktop events. Completion
+is decoded into bounded identity-only values and returned through
+`bee.retained.desktops_result` with the workspace and request IDs. Five seconds
+without a result cancels the future and reports UNAVAILABLE with the supplied
+allocation identity: the write may have committed, so an explicit retry must keep
+that identity. Late responses cannot become a subsequent operation's result.
+Supervisor shutdown cancels an outstanding future.
+
+This reserves durable records only. It does not start another workspace host,
+activate an additional desktop, transfer control, or enable a public create command.
+The already installed global build predates this adapter. The focused
+`make retained-desktop-check` exercises the real actor from source and pack,
+including unauthorized senders, allocation replay/default conflict and slow storage
+while the physical desktop remains usable.

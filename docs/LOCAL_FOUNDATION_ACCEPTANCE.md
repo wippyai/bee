@@ -18,10 +18,11 @@ The current integration checkpoint is `74c3efa`; exact executable pins, hash and
 rollback are in [the global build handoff](handoffs/GLOBAL_BUILD.md).
 
 Immediate exact-actor EXIT while its transport remains live is still a runtime
-gate. The latest full `make check` passed through taskbar checks, then failed
-the initial Settings wait in personalization. The failed and all remaining desktop
-recipes subsequently passed without changing their time limits; there is no
-passing uninterrupted full-suite claim. Cold owner startup still captures
+gate. The current frozen source passes one uninterrupted `make check` with
+482 Lua tests and all source/pack, storage, desktop/client, launcher, recovery and
+bundled-app recipes. Evidence: `/tmp/bee-responsive-foundation-check.log`.
+The previous initial Settings/drag startup failures did not recur and no limits
+were increased; their causes remain unexplained. Cold owner startup still captures
 output in an owner log file. The user's already-running older owner is not
 hot-replaced by installing a new executable.
 

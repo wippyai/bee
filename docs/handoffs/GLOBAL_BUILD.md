@@ -58,15 +58,22 @@ the later passing samples. Test-only stage timings place 0.37–0.95 seconds in 
 native stack's shutdown, with naming cleanup taking microseconds. Evidence:
 `/tmp/bee-global-launch-timings.log`, `/tmp/bee-client-close-stages.log`, journal716.
 
-The full foundation run passed Lua/module/headless/storage/subscription/resource
-checks, source/pack architecture at 517 entries, desktop smoke, fresh pack and
-taskbar checks. It then failed personalization's initial four-second Settings
-wait while boot logs were visible. Ten isolated source/pack Settings starts passed
-under 1.4 seconds; personalization subsequently passed in the resumed recipes.
-All remaining desktop recipes subsequently passed with unchanged limits. Evidence:
-`/tmp/bee-linkdown-foundation-check.log`, `/tmp/bee-settings-startup-observe.log`,
-`/tmp/bee-linkdown-remaining-desktop.log`. This is not an uninterrupted full-suite
-pass. The earlier intermittent wallpaper-only startup failure remains unexplained.
+The frozen production source now passes one uninterrupted full `make check`:
+482 Lua tests; module/headless/resource/storage/subscription restart checks;
+source/pack architecture at 517 entries; desktop smoke and fresh-pack inventory;
+appearance, titles, dialogs, close confirmation and control-delivery failures;
+drag recovery, Terminal/scrolling, 161 navigation cases and selection; lifecycle,
+16-window load (394 ms exit), detached/observer/client/status checks; launcher and
+legacy migration, recovery, Inbox, Hive Manager and Timeline. The command exited
+successfully in unified exec session 94747. Evidence:
+`/tmp/bee-responsive-foundation-check.log`. All 365 production files matched the
+frozen source at run start; the run used `/tmp/bee-wippy-combined-final`.
+
+Earlier full runs stopped at Settings or drag startup. Both gates pass in this
+uninterrupted run with unchanged time limits; their causes are not established.
+Historical evidence remains in `/tmp/bee-linkdown-foundation-check.log`,
+`/tmp/bee-settings-startup-observe.log`, `/tmp/bee-linkdown-remaining-desktop.log`
+and `/tmp/bee-final-full-check.log`. No intermittent-failure fix is claimed.
 
 Prior standalone Settings/Terminal/scrolling/selection and old-binary upgrade
 acceptance is recorded in `/tmp/bee-final-binary-acceptance.log`; those results

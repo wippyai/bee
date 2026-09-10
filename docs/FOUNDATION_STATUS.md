@@ -13,12 +13,13 @@ shell. Bee's supervisors handle existing LINK_DOWN events and revoke the
 attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
-The latest full foundation run passed through taskbar checks, then failed the
-four-second initial Settings wait in `tests/personalization.py` while runtime
-startup logs were still visible. Ten isolated source/pack Settings starts passed
-under 1.4 seconds; the failed recipe and all remaining desktop recipes then passed
-without changing their time limits. This is not an uninterrupted full-suite pass.
-The earlier intermittent blank frame in `tests/drag_failure.py` remains unexplained.
+The current frozen source now passes one uninterrupted `make check`, including
+482 Lua tests, source/pack architecture at 517 entries, storage and subscription
+restart checks, all desktop/client/launcher/recovery gates and the bundled apps.
+The 16-window load check exited in 394 ms. Both previously intermittent startup
+failure points passed without increasing time limits; their causes remain
+unexplained, so this run is not a claim that those intermittent failures are fixed.
+Evidence: `/tmp/bee-responsive-foundation-check.log`.
 See the current [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md).
 Older gate descriptions below refer to earlier candidates.
 

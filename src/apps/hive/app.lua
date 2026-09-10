@@ -95,7 +95,8 @@ local function main(value: unknown)
             local ok, failure = pcall(operation)
             busy = false
             if not running then return end
-            if not ok then status = "Query failed: " .. tostring(failure) end
+            if not ok then status = "Query failed: " .. tostring(failure)
+            elseif status == "Query in progress" then status = "" end
             changed()
         end)
     end

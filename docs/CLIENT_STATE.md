@@ -284,3 +284,31 @@ See [the native contract](../native/hive/rendezvous/README.md). The focused
 Makefile check includes a live native stack, retained socket, owner exclusion,
 strict decoding and atomic file publication; it does not prove public client
 attachment or enrollment.
+
+## Independent desktop records (source component)
+
+Migration 2 adds `client_desktops` beside the existing singleton `client_state`.
+Migration 1, the default desktop's identity, layout and legacy-import receipt stay
+unchanged. Each additional desktop has an opaque identity, its own layout and a
+compare-and-swap generation. Its identity is neither a node identity nor a physical
+client actor. A shared SQL resource does not make the layouts interchangeable.
+
+The trusted owner can call `bee.client:store.allocate(default_store, desktop_id)`
+to reserve an empty record. The supplied identity must be 32 lowercase hexadecimal
+characters and differ from the default identity. Identical allocation is idempotent.
+There are at most 32 additional records; capacity never silently evicts a resumable
+layout. Only a default store handle can allocate. This is an internal persistence
+surface, not application or remote admission authority.
+
+`store.open(database_resource, desktop_id)` opens an existing additional record;
+missing identities fail rather than minting replacements. Omitting the identity
+keeps the original default-store behavior. Reads, writes and generations address
+only that record. Additional desktops cannot import the legacy default layout.
+The calling supervisor must reserve one live writer per selected identity and
+apply its normal permission checks before opening a record.
+
+This component does not yet allocate or select additional desktops in public
+launch. Supervisor readiness, catalog publication, client bootstrap selection and
+writer-lifetime integration remain required. The global installed binary still
+uses the accepted single-desktop store; do not treat this source migration as an
+installed multi-display feature.

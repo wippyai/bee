@@ -52,6 +52,44 @@ local function main(mode: string)
         local foreign, foreign_error = store.import_legacy(left, "ffffffffffffffffffffffffffffffff", legacy())
         assert(not foreign and foreign_error)
         assert(store.import_legacy(left, workspace_id, legacy()) == receipt)
+    elseif mode == "desktops" then
+        local first_id = string.rep("a", 32)
+        local second_id = string.rep("b", 32)
+        local missing, missing_error = store.open(nil, first_id)
+        assert(not missing and missing_error == "Desktop identity not found")
+        assert(store.allocate(left, first_id))
+        assert(store.allocate(left, first_id))
+        assert(store.allocate(left, second_id))
+        local first, first_error = store.open(nil, first_id)
+        if not first then error(tostring(first_error)) end
+        local stale, stale_error = store.open(nil, first_id)
+        if not stale then error(tostring(stale_error)) end
+        local second, second_error = store.open(nil, second_id)
+        if not second then error(tostring(second_error)) end
+        assert(first.client_id == first_id and second.client_id == second_id)
+        assert(store.write(first, state.empty(91, 29)))
+        assert(store.write(second, state.empty(113, 37)))
+        local overwritten, overwrite_error = store.write(stale, state.empty(66, 22))
+        assert(not overwritten and overwrite_error, "Stale desktop writer was accepted")
+        assert(read(first).scene.width == 91 and read(second).scene.width == 113)
+        local imported, import_error = store.import_legacy(first, workspace_id, legacy())
+        assert(not imported and import_error)
+        local allocated, allocation_error = store.allocate(first, string.rep("c", 32))
+        assert(not allocated and allocation_error)
+        assert(read(left).scene.windows[1].user_title == "Edited after import")
+        for index = 1, 30 do assert(store.allocate(left, string.format("%032x", index))) end
+        local full, full_error = store.allocate(left, string.rep("d", 32))
+        assert(not full and full_error == "Desktop capacity reached")
+        assert(store.allocate(left, first_id), "Capacity rejected an identical allocation")
+        assert(store.close(first)); assert(store.close(stale)); assert(store.close(second))
+    elseif mode == "verify_desktops" then
+        local first, first_error = store.open(nil, string.rep("a", 32))
+        if not first then error(tostring(first_error)) end
+        local second, second_error = store.open(nil, string.rep("b", 32))
+        if not second then error(tostring(second_error)) end
+        assert(read(first).scene.width == 91 and read(second).scene.width == 113)
+        assert(read(left).scene.windows[1].user_title == "Edited after import")
+        assert(store.close(first)); assert(store.close(second))
     elseif mode == "existing" then
         assert(store.write(left, state.empty(80, 24)))
         local receipt, err = store.import_legacy(left, workspace_id, legacy())

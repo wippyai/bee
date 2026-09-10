@@ -264,6 +264,11 @@ def client_storage():
             else:
                 assert result.returncode != 0 and failure in output, output
 
+        # Seed the actual v1 schema and preserve a populated default layout.
+        # The fixed checksum prevents this proof from accepting edits to v1 SQL.
+        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "src/core/client/store.lua").read_text(), re.S).group(1).removeprefix("\n")
+        v1_checksum = hashlib.sha256(("client_layout_v1\n" + v1_sql).encode()).hexdigest()
+        assert v1_checksum == "f35f913f50cfd4b0dbe6c8b448a063f2de35be2c2a469c04b26f7720faa029e6"
         for packed in (False, True):
             folder = root / ("packed" if packed else "source")
             probe(folder, "seed", packed, command="client-storage-bindings")
@@ -279,6 +284,25 @@ def client_storage():
             # Reopen in another process, edit, and retry the original import.
             probe(folder, "edit", packed)
             probe(folder, "verify", packed)
+            probe(folder, "desktops", packed)
+            probe(folder, "verify_desktops", packed)
+            legacy = root / ("v1-packed" if packed else "v1-source")
+            legacy.mkdir()
+            with sqlite3.connect(database) as current:
+                populated = current.execute("SELECT * FROM client_state").fetchone()
+            with sqlite3.connect(legacy / "client.db") as old:
+                old.executescript(v1_sql)
+                old.execute("DELETE FROM client_state")
+                old.execute("INSERT INTO client_state VALUES (?, ?, ?, ?, ?, ?)", populated)
+                old.execute("CREATE TABLE client_schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, checksum TEXT NOT NULL)")
+                old.execute("INSERT INTO client_schema_migrations VALUES (1, 'client_layout_v1', ?)", (v1_checksum,))
+            probe(legacy, "verify", packed)
+            probe(legacy, "desktops", packed)
+            probe(legacy, "verify_desktops", packed)
+            with sqlite3.connect(legacy / "client.db") as upgraded:
+                assert upgraded.execute("SELECT * FROM client_state").fetchone() == populated
+                assert upgraded.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0] == v1_checksum
+                assert upgraded.execute("SELECT count(*) FROM client_schema_migrations").fetchone()[0] == 2
             with sqlite3.connect(database) as db:
                 assert db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
@@ -286,10 +310,10 @@ def client_storage():
             probe(folder, "open", packed, "migration ledger")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
-                db.execute("INSERT INTO client_schema_migrations VALUES (2, 'future', 'future')")
+                db.execute("INSERT INTO client_schema_migrations VALUES (3, 'future', 'future')")
             probe(folder, "open", packed, "newer")
             with sqlite3.connect(database) as db:
-                db.execute("DELETE FROM client_schema_migrations WHERE id=2")
+                db.execute("DELETE FROM client_schema_migrations WHERE id=3")
                 saved_value = db.execute("SELECT value FROM client_state").fetchone()[0]
                 db.execute("UPDATE client_state SET value='{\"version\":2}'")
             probe(folder, "open", packed, "Unsupported or corrupt client layout")
@@ -321,7 +345,7 @@ def client_storage():
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
         staged_store.write_text(healthy)
         probe(failed_migration, "seed")
-    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial")
+    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop isolation/CAS/capacity/restart and populated-v1 upgrade")
 
 
 if __name__ == "__main__":

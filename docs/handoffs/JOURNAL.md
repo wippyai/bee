@@ -5544,3 +5544,9 @@ has no code changes. Refactor paused for the live failure. One-hour50459 still
 runs untouched. New diagnostic99066 runs `/tmp/bee-hive-manager-idle.py`, logging
 `/tmp/bee-hive-manager-idle.log`: Hive Manager retained plus another desktop,
 ten60s detach/rejoin cycles, disposable state only, stack capture on failure.
+
+Diagnostic correction:99066 exited1 during menu setup, not an idle failure.
+Hive Manager is under Tools. The corrected87211 is live with its first60s idle
+interval, log `/tmp/bee-hive-manager-idle-r2.log`, fixture
+`/tmp/bee-hive-manager-idle-nhjncua8`. Do not treat the first fixture's dump as
+user-failure evidence. Hour50459 remains live. Checkpointdcd0905 is pushed.

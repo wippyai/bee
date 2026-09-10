@@ -49,3 +49,22 @@ rendezvous-check:
 	if test -n "$(MESH_RUNTIME)"; then go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; fi; \
 	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous ./internal/privatefile; \
 	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous
+
+# Same-account credential provisioning uses the normal native TLS configuration.
+.PHONY: local-tls-check
+local-tls-check:
+	@test -n "$(MESH_RUNTIME)" || { echo "MESH_RUNTIME must name the reviewed runtime checkout" >&2; exit 1; }
+	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
+	cp go.mod go.sum "$$testmod/"; \
+	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient" ./hive/localtls; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient" ./hive/localtls
+
+.PHONY: local-owner-check
+local-owner-check:
+	@test -n "$(MESH_RUNTIME)" || { echo "MESH_RUNTIME must name the reviewed runtime checkout" >&2; exit 1; }
+	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
+	cp go.mod go.sum "$$testmod/"; \
+	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient" ./hive/localowner; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient" ./hive/localowner

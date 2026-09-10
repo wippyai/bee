@@ -3,7 +3,12 @@
 `Local(ctx, LocalConfig, callback)` is a compiled client startup path, gated by
 `meshclient`. The native launcher selects the discovery directory and the runtime
 TLS certificate/key/CA configuration. Selected TLS never falls back to plaintext.
-Certificate provisioning and public launcher selection remain unimplemented.
+`SameAccount(ctx, directory, callback)` loads protected execution-bound credentials
+from `hive/localtls` after validating loopback discovery and before enrolling the
+client. It bounds the client lifetime by credential expiry. Missing or invalid
+credentials fail without enrollment, plaintext fallback or owner startup.
+Certificate provisioning is available to the lock-held owner bootstrap; public
+launcher selection remains unimplemented.
 The zero TLS configuration is retained for local mechanism fixtures. It reads an
 existing same-account discovery directory, enrolls a fresh random node/signing
 identity, and starts Wippy's native membership and internode stack on automatic

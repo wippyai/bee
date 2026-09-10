@@ -17,6 +17,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
@@ -47,7 +48,18 @@ type LocalConfig struct {
 // still obtain supervisor admission and fresh recipient-bound viewport grants.
 // The stack and credentials are valid only for run's duration; run must honor ctx.
 // The owner is never started as a fallback. No launch request or input is retried.
-func Local(ctx context.Context, config LocalConfig, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) (result error) {
+func Local(ctx context.Context, config LocalConfig, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) error {
+	return local(ctx, config, run, false)
+}
+
+// SameAccount loads execution-bound TLS credentials after checking loopback
+// discovery. It never starts an owner or falls back to plaintext. Supervisor
+// admission is still required; this is not remote enrollment.
+func SameAccount(ctx context.Context, directory string, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) error {
+	return local(ctx, LocalConfig{Directory: directory}, run, true)
+}
+
+func local(ctx context.Context, config LocalConfig, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error, sameAccount bool) (result error) {
 	if ctx == nil || run == nil {
 		return errors.New("mesh client: context and client callback are required")
 	}
@@ -71,6 +83,16 @@ func Local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 	}
 	if endpoint.Addr().Is4() != transport.Addr().Is4() {
 		return errors.New("mesh client: owner address families differ")
+	}
+	if sameAccount {
+		credentials, err := localtls.Load(ctx, config.Directory, descriptor.Execution)
+		if err != nil {
+			return fmt.Errorf("mesh client: local TLS credentials: %w", err)
+		}
+		config.TLS = credentials.TLS
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, credentials.ExpiresAt)
+		defer cancel()
 	}
 	enrollment, err := rendezvous.NewEnrollment(config.Directory)
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
@@ -33,6 +34,10 @@ func localOwner(t *testing.T) (context.Context, string, *stackpkg.Stack, *rendez
 }
 
 func localOwnerTLS(t *testing.T, transport internode.ManagerTLSConfig) (context.Context, string, *stackpkg.Stack, *rendezvous.Enrollment, rendezvous.Descriptor) {
+	return localOwnerTransport(t, transport, false)
+}
+
+func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, provision bool) (context.Context, string, *stackpkg.Stack, *rendezvous.Enrollment, rendezvous.Descriptor) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	t.Cleanup(cancel)
@@ -48,6 +53,13 @@ func localOwnerTLS(t *testing.T, transport internode.ManagerTLSConfig) (context.
 		t.Fatal(err)
 	}
 	execution := "0123456789abcdef0123456789abcdef"
+	if provision {
+		credentials, err := localtls.Prepare(ctx, dir, execution, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		transport = credentials.TLS
+	}
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		t.Fatal(err)

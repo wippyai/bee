@@ -18,8 +18,11 @@ Startup publication has a 30-second deadline. Unchanged stale discovery does not
 prove readiness; child failure never falls back to stale discovery. Invalid
 discovery fails closed. Attachment/input are not replayed. The native session
 separately bounds transport/supervisor readiness and requires explicit selection
-when the catalog is ambiguous. Each invocation currently starts one contender;
-this favors using the runtime's existing lock over adding another owner election.
+when the catalog is ambiguous. Warm launches probe the runtime's existing `statelock.Acquire` lock and go
+directly to authenticated attachment when it is busy. They create no contender
+or owner log. A free probe releases the lock before spawning; the child still
+arbitrates ownership under that same runtime lock, including races with other
+launchers. Filesystem errors do not count as contention.
 
 `Client.Attach` also directly supplies a runtime `LaunchPlan.Attach` callback. It
 rejects unrelated operations/commands, unhandled arguments and invalid paths

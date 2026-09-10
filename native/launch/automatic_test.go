@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
+	"github.com/wippyai/runtime/application/statelock"
 )
 
 func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
@@ -54,5 +55,28 @@ func TestMissingPublicationRemainsCancelable(t *testing.T) {
 	}, rendezvous.Descriptor{}, make(chan struct{}), func(context.Context) error { return nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestWarmLaunchUsesRuntimeLockAndFreeProbeReleasesIt(t *testing.T) {
+	state := t.TempDir()
+	busy, err := ownerLockBusy(state)
+	if err != nil || busy {
+		t.Fatal(busy, err)
+	}
+	unlock, err := statelock.Acquire(state)
+	if err != nil {
+		t.Fatal("free probe retained lock", err)
+	}
+	defer unlock()
+	busy, err = ownerLockBusy(state)
+	if err != nil || !busy {
+		t.Fatal("live runtime lock was not recognized", busy, err)
+	}
+}
+
+func TestOwnerProbeDoesNotTreatFilesystemFailureAsContention(t *testing.T) {
+	if busy, err := ownerLockBusy(t.TempDir() + "/missing"); err == nil || busy {
+		t.Fatal("filesystem failure was accepted as an owner", busy, err)
 	}
 }

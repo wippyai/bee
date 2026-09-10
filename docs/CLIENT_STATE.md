@@ -491,5 +491,7 @@ LIMIT_EXCEEDED, and uncertain mutation outcomes stop without a replacement.
 Cold node startup, supervisor readiness, attachment admission and native Hive
 calls allow up to 60 seconds per bounded stage. Successful operations proceed
 immediately; caller cancellation and the shorter detach bound still apply. These
-are connection/operation ceilings, not changes to native membership failure
-detection, nor proof of automatic reconnect after established transport loss.
+are client-side ceilings. Destination operation limits still apply: the desktop
+owner caps a dispatched request at 30 seconds and catalog/storage stages have
+their own shorter bounds. These changes do not alter native membership failure
+detection or prove automatic reconnect after established transport loss.

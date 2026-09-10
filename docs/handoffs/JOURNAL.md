@@ -5340,3 +5340,18 @@ the global executable. Actual-user cold frame took 1.572s and detach 0.103s; new
 retained process is 1992601. Warm/observe evidence is in
 `/tmp/bee-independent-global-reconnect.log`. Full repository gate remains running
 (session 90930); the old idle-disconnection cause remains open. Journal fact 851.
+
+### Idle reconnect evidence and lane coordination
+
+Eight fresh physical clients rejoined one retained Bee after 20-second idle gaps;
+all took 0.214–0.223s, retained the same Terminal variable and detached within one
+second (`/tmp/bee-independent-idle-reconnects.log`, exit 0). This short soak does
+not explain or resolve the former hour-old user's connection hang. Full frozen
+source acceptance remains live at session 90930; source/pack storage, resources,
+architecture and desktop smoke have passed.
+
+Journal 852 assigns generic native mesh Stream work to the runtime lane; journal
+853 assigns the private registry planner to another Bee agent. This lane remains
+launch, client attachment and reconnect. Client-side 60-second connection/call
+ceilings do not change destination operation limits, membership death detection,
+or establish automatic live recovery. Journal evidence 856.

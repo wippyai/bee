@@ -665,7 +665,9 @@ retries a launch automatically; an uncertain reply requires explicit user action
 
 The native mesh composition proves literal arguments, controller checks, unknown
 commands, identical replay and conflicting reuse. CLI routing and session checks
-also pass. Standalone cold/warm command acceptance is staged in
-`tests/native_client.py`; the installed global binary still predates this route
-until its candidate build and acceptance finish. Explicit `--base` and qualified
+also pass. The assembled candidate passes standalone cold/warm command acceptance
+in `tests/native_client.py`, the explicit `--command bee run terminal` form, and
+unknown-command refusal followed by rejoin to the retained Terminal. The full
+native-client gate also passes. The installed global binary still predates this
+route while the full foundation gate runs. Explicit `--base` and qualified
 application-ID development launches retain their existing routes.

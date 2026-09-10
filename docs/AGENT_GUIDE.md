@@ -55,6 +55,8 @@ the independent client, with `bee:client_db` alongside the workspace database.
 Legacy migration, full `make check` and standalone acceptance pass. Older selected
 deployments may retain their code; `bee --base` selects the embedded baseline
 without resetting application databases.
+`bee observe` joins the running local Bee read-only through the same native mesh;
+it never starts a new Bee or displaces the controller.
 Use [client state](CLIENT_STATE.md) and the current command metadata for launch wiring.
 
 Read [client/host extraction](CLIENT_HOST_SPLIT.md) for current coupling and

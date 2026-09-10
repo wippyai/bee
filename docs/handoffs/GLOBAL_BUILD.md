@@ -3,8 +3,8 @@
 The installed executable is a development candidate built from source
 in `/tmp/bee-global-checkpoint-20260910` at source checkpoint `9ca211b` with the observer native pin below
 on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
-performed for this update. The new standalone suites pass. The full foundation gate for this revision is
-still running; the earlier responsive-Hive build passed its complete gate.
+performed for this update. The standalone suites and the full foundation gate pass. The foundation run
+checked the same Lua source, and the observer native change passed its own gates.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
 - Native Bee: `142e75380203`, `checkpoint/native-client-binding-20260910`.
@@ -304,8 +304,8 @@ Authorized restart preserved the user stores: frame1.398s, detach0.109s,
 retained Bee PID839818, `/tmp/bee-membership-global-install.log`. Warm reconnect
 is recorded in `/tmp/bee-membership-user-reconnect.log`.
 
-The full frozen-source check remains running as session69756, with output in
-`/tmp/bee-membership-foundation-check.log`. It is not yet a passing full-run claim.
+The full frozen-source check completed as session69756, exit 0, with output in
+`/tmp/bee-membership-foundation-check.log`: 486 Lua tests and 517 source/pack entries.
 The separate-runtime physical SIGKILL proof passes within the existing
 node-departure window (`/tmp/bee-mesh-physical-crash-proof-r3.log`); a five-second
 cleanup bound still fails. Same-name/new-port rejoin and the user's intermittent
@@ -323,12 +323,13 @@ layout, not independent workspaces or public remote enrollment.
 Native launch race/vet passes (`/tmp/bee-observe-launch-check.log`). The built
 executable passes the public observer proof plus the complete native client and
 binary suites (`/tmp/bee-observe-public-check.log`,
-`/tmp/bee-observe-standalone-check.log`, session97094 exit0). The new client also
+`/tmp/bee-observe-standalone-check.log`, session97094 exit 0). The new client also
 joined the existing user Bee in0.219s and detached in0.085s. The global binary was
 replaced atomically without restarting PID839818 or its applications. Its `/proc`
 executable therefore still refers to the preceding binary image; this is expected.
 Installed smoke: `/tmp/bee-observe-installed-check.log`.
 
-The same Lua source's full foundation run69756 is still pending. Native changes
+The same Lua source's full foundation run69756 passed (exit 0). All 365 production
+files match the observer build. Native changes
 are limited to selecting the existing observer mode and refusing observer startup
 when the state lock is free; runtime674b58a1 is unchanged.

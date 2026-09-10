@@ -208,8 +208,9 @@ Keep three identities separate:
 
 The desktop owner is the sole layout writer. Multiple physical presentations of
 one desktop must share that owner, rather than open competing writers on its
-database. The first implementation should admit one controlling attachment and
-make any additional presentation explicitly observational. Independent monitor
+database. The current physical attachment path admits one controller and
+explicit observers; `bee observe` opens a read-only view of the current local
+desktop without another layout writer. Independent monitor
 layouts use separate desktops; presentation alone cannot take control or resize
 another controller's application. Broader simultaneous editing requires its own
 explicit concurrency contract.

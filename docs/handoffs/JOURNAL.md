@@ -2878,7 +2878,7 @@ admission. Log `/tmp/bee-desktop-abrupt-rejoin.log`. Disposable hosts now create
 Runtime seq135 reports before/after reproduction and a shared TLS abort fix in
 `/tmp/wippy-cluster-hardening`, with focused race tests passing and broader
 checks pending. Consumer attachment contract remains unresolved; no Bee cutover.
-Agy fixture session33555 completed exit0; its output remains in
+Agy fixture session33555 completed exit 0; its output remains in
 `/tmp/bee-local-client-fixture` and is not integrated. Its report claims lint but
 root has not independently verified that result. It still uses detach mode while
 sending supervisor-only save controls and requires correction if ever reused.
@@ -2892,7 +2892,7 @@ is preserved. The actual desktop fixture uses true for its legacy-offer client
 and false for the other, retaining valid client identity and rejecting missing
 or malformed receipts in both modes. No schema or transport change.
 
-`make lint test client-desktop-check` completed exit0: strict lint, 296 tests,
+`make lint test client-desktop-check` completed exit 0: strict lint, 296 tests,
 and source/pack desktop acceptance in both appearance modes, including abrupt
 client loss/rejoin. Log `/tmp/bee-client-readiness-check.log`.
 Full `make check` is now running; inspect `/tmp/bee-readiness-full-check.log`
@@ -2924,7 +2924,7 @@ It changes test isolation only. Session21527 is running the retry; log
 `/tmp/bee-readiness-local-launcher.log`. Source/pack public legacy migration has
 already passed, but await the complete result before claiming the whole target.
 
-Local launcher session21527 completed exit0. The full focused source/pack target
+Local launcher session21527 completed exit 0. The full focused source/pack target
 passes: public migration, aliases/arguments, appearance, F12, manual recovery,
 client/presenter failure paths, failed/stalled startup and bounded cleanup.
 Log `/tmp/bee-readiness-local-launcher.log`. This validates the unchanged local
@@ -2971,7 +2971,7 @@ and module verification completed; build still pending. Once complete, run
 failure to current runtime source. No public binary/manifest changes or gate
 relaxation. Observer Agy session74788 remains live and isolated.
 
-Journal seq146: fresh toolchain build session84783 completed exit0. Headless
+Journal seq146: fresh toolchain build session84783 completed exit 0. Headless
 session86516 passes source and pack with /tmp/bee-validation-toolchain. The old
 executable caused the packed host-selection failure; current manifest behavior
 is correct for that gate. Full make check with the fresh temp toolchain is now
@@ -3007,7 +3007,7 @@ partial and must not be copied into shared source.
 
 ### Root observer implementation copy (2026-09-08)
 
-Agy CLI session74788 returned exit0 at its 15-minute print bound with partial
+Agy CLI session74788 returned exit 0 at its 15-minute print bound with partial
 output and turn still in progress; no report exists. Do not treat this as a
 completed implementation or assume its remote worker stopped. Preserve that
 scratch directory. Root works separately in `/tmp/bee-observer-root`.
@@ -3839,7 +3839,7 @@ and internode ports (owner seed port +1/+2) for each restarted node-1 process.
 Thus the preceding LAN crash proofs establish same-endpoint recovery only. They
 do not prove automatic-port crash recovery and must not be cited as that gate.
 The final checked-in Python branch also passed at these stable endpoints:
-`/tmp/bee-hive-physical-desktop-lan-crash-final.log`, session7472 exit0, 41.66s.
+`/tmp/bee-hive-physical-desktop-lan-crash-final.log`, session7472 exit 0, 41.66s.
 Root is testing a frozen driver that preserves Python SIGKILL behavior but disables
 the Go helper's port override; session44314,
 `/tmp/bee-hive-physical-desktop-lan-crash-auto.log`. Port arithmetic is not approved
@@ -5030,7 +5030,7 @@ claim that the UI scheduling change fixed transport recovery.
 Pinned runtime674b58a1 and the compiled native client pass the physical
 SIGKILL/rejoin proof with a single replacement mesh process. The destination
 shell and its variable survive; detach and terminal settings restore correctly.
-Evidence: /tmp/bee-mesh-physical-crash-proof-r3.log (session24761, exit0).
+Evidence: /tmp/bee-mesh-physical-crash-proof-r3.log (session24761, exit 0).
 The test allows the established 40-second node-departure window; it does not
 prove immediate actor exit. A five-second retry bound still refused the new
 controller (r2 log, session71589, exit2).
@@ -5059,7 +5059,7 @@ with the race-enabled native fixture. One controller and one separately enrolled
 observer have separate PTYs; both see the same shell variable. Native input and
 resize checks deny observer authority, observer typing does not mutate the shell,
 and observer detach preserves the controller. F12 and resize retain the shell.
-Evidence /tmp/bee-mesh-observer-proof.log, session44191 exit0 (57.62s test).
+Evidence /tmp/bee-mesh-observer-proof.log, session44191 exit 0 (57.62s test).
 Only test harnesses/docs changed; public observer/desktop selection remains open.
 
 ## 2026-09-10 — Public bee observe installed
@@ -5076,3 +5076,15 @@ now names the old unlinked image, so the earlier restart helper's exact executab
 path assertion must be revised against verified binary identity before reuse.
 Installed observer0.221s, detach0.081s. Runtime remains674b58a1; native pin142e753.
 Full foundation check69756 still running; do not report it passed until terminal.
+
+
+## 2026-09-10 — Foundation run completed successfully
+
+Session69756 is terminal exit 0; do not poll it again. Full make check passes:
+486 Lua tests, 517 source/pack entries, storage and migration proofs, source/pack
+UI/client/launcher/recovery and bundled apps. 16-window exit 0.323s. All 365 frozen
+production files match the installed observer build. Native observer race/vet and
+standalone checks passed separately. Evidence /tmp/bee-membership-foundation-check.log;
+shared journal813 supersedes the earlier pending-gate notes. The full goal remains
+open for public external enrollment, desktop selection, immediate crash recovery,
+and the recurring retained-Bee viewport failure.

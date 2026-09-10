@@ -17,12 +17,14 @@ attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
 The current source now passes one uninterrupted `make check`, including
-485 Lua tests, source/pack architecture at 517 entries, storage and subscription
+486 Lua tests, source/pack architecture at 517 entries, storage and subscription
 restart checks, all desktop/client/launcher/recovery gates and the bundled apps.
-The 16-window load check exited in 336 ms. Both previously intermittent startup
+The 16-window load check exited in 323 ms. Both previously intermittent startup
 failure points passed without increasing time limits; their causes remain
 unexplained, so this run is not a claim that those intermittent failures are fixed.
-Evidence: `/tmp/bee-responsive-hive-foundation-check.log`.
+Evidence: `/tmp/bee-membership-foundation-check.log` (session69756, exit0).
+The observer build uses the same 365 production source files; its native launcher
+and standalone suites pass separately on native142e753.
 Named commands such as `bee terminal` now launch through controller admission to
 the retained owner. Cold/warm command launches, literal arguments, replay, denied
 observer launches and fullscreen provider aliases pass; the global binary is
@@ -244,7 +246,7 @@ availability. Detailed startup phases require an authoritative lifecycle source.
 The installed revision separates the MEMBERSHIP and BEE SERVICE columns:
 presence in the native member list does not imply a configured supervisor route.
 Raft role is shown only under Details. This presentation change grants no access and does not establish peer connectivity.
-Its standalone checks pass; the full source/pack run is still in progress.
+Its standalone and full source/pack checks pass.
 See [the supervisor boundary](HIVE_SUPERVISOR.md) for remaining activation gates.
 `make hive-presenter-check` additionally drives the real presenter while the
 destination runtime is stopped for fault injection. Start opens and F12 retires

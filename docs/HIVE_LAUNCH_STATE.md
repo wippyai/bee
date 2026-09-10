@@ -144,10 +144,11 @@ database binding is not yet that automatic public profile allocation.
 ### Local physical client boundary under validation
 
 The selected candidate is Wippy's native mesh, not a Bee socket service.
-`native/client/local`, `native/client/display` and `native/client/owner` are
-abandoned transport experiments. Do not register their listeners or Lua modules
-in public launch. Their historical passing tests are not acceptance evidence
-for the selected path.
+The abandoned `native/client/local`, `native/client/display` and
+`native/client/owner` transport experiments and their test targets have been
+removed from the source tree. They remain in Git history and were already absent
+from the pinned native module. Public launch uses only the native mesh path;
+prototype test results are not acceptance evidence for that path.
 
 `native/client/mesh` enrolls an ephemeral physical client in a protected
 same-account rendezvous directory, starts native loopback membership and

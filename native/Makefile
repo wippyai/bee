@@ -49,19 +49,6 @@ config-windows-check:
 	GOOS=windows CGO_ENABLED=0 go test -c -o "$$testbin/config.test.exe" ./hive/config; \
 	GOOS=windows CGO_ENABLED=0 go vet ./hive/config
 
-# Native viewport mechanism proof; extra runtime test dependencies stay temporary.
-.PHONY: display-check display-windows-check
-display-check:
-	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
-	cp go.mod go.sum "$$testmod/"; \
-	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) displayintegration" ./client/display; \
-	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) displayintegration" ./client/display
-
-display-windows-check:
-	@set -eu; testbin=$$(mktemp -d); trap 'rm -rf "$$testbin"' EXIT; \
-	GOOS=windows CGO_ENABLED=0 go test -c -o "$$testbin/display.test.exe" ./client/display; \
-	GOOS=windows CGO_ENABLED=0 go vet ./client/display
-
 # Requires a review checkout with runtime/research/physical-input.patch applied.
 .PHONY: physical-client-check
 physical-client-check:
@@ -71,19 +58,6 @@ physical-client-check:
 	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(PHYSICAL_RUNTIME))"; \
 	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) physicalclient" ./client/physical; \
 	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) physicalclient" ./client/physical
-
-.PHONY: local-client-windows-check
-local-client-windows-check:
-	@set -eu; testbin=$$(mktemp -d); trap 'rm -rf "$$testbin"' EXIT; \
-	GOOS=windows CGO_ENABLED=0 go test -c -o "$$testbin/local.test.exe" ./client/local; \
-	GOOS=windows CGO_ENABLED=0 go vet ./client/local
-
-.PHONY: display-owner-check
-display-owner-check:
-	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
-	cp go.mod go.sum "$$testmod/"; \
-	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) ownerintegration" ./client/owner; \
-	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) ownerintegration" ./client/owner
 
 .PHONY: mesh-client-check
 mesh-client-check:

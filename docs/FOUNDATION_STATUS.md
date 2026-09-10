@@ -1,19 +1,22 @@
 # Foundation status
 
-The currently installed September 10 UI candidate (production 0b44b0f, native
-5172d7dc2396, runtime 674b58a1) passed the full repository check: 493 Lua tests,
-525 source/pack registry entries, storage and subscription restart, window and
-permission checks, client lifecycle, cold recovery and bundled apps. This includes
-plain-F9 status, Alt+F9 minimize and exact-target attachment confirmation.
-Evidence: `/tmp/bee-hive-safe-full-check.log`, session 46307, exit 0. The existing
-`desktop_lifecycle` type-convergence warning remains. This is local foundation
-acceptance, not a public remote recovery or runtime-release claim.
+The currently installed September 10 candidate (production c3b2c9f, native
+ced4008999f4, runtime674b58a1) passed full `make check`: 494 Lua tests,
+525 source/pack entries, storage/restart, permissions, desktop/client lifetimes,
+recovery and bundled apps. Evidence: `/tmp/bee-hive-session-identity-full-check.log`,
+session61042, exit0. The existing desktop_lifecycle convergence warning remains.
+Native-client and standalone gates74144/79123 also passed. The global executable
+SHA starts `cbb6d6a5`; [the build handoff](handoffs/GLOBAL_BUILD.md) records full pins.
 
-The later session-identity candidate qualifies Hive Manager session presentation
-by node and owner generation. Its focused Lua and executable multi-client checks
-pass; its full check (61042) is running and it is not installed. A separate
-one-hour idle reconnect diagnostic (50459) is still pending. Workspace choice
-and switching for neutral displays remain unfinished.
+`bee desktops`, `bee attach WORKSPACE DISPLAY` and `bee observe WORKSPACE DISPLAY`
+now select existing local desktop identities through authenticated supervisor
+admission. Occupied/foreign selections refuse without allocation. Hive Manager
+session presentation is qualified by node and owner generation. Actual-user
+cold/warm/observe frames took1.486s/0.215s/0.221s; detach took0.077–0.086s.
+The user databases were preserved. One-hour diagnostic50459 remains pending on
+the previous build. Live workspace switching, multi-host composition and public
+remote recovery remain unfinished. Earlier dated measurements below describe
+previous candidates, not newer acceptance.
 
 The latest September 10 global candidate now selects an independent desktop when
 another physical client controls the default. It reuses an available durable

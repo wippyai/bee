@@ -33,6 +33,18 @@ Run `bee observe` in another terminal to view the running Bee read-only. It shar
 the retained desktop; typing cannot control its apps. Ctrl+Q or Ctrl+] detaches
 that display. If no Bee is running, observation refuses without starting one.
 
+To choose an existing local desktop explicitly, copy its identities from the list:
+
+```sh
+bee desktops
+bee attach WORKSPACE DISPLAY
+bee observe WORKSPACE DISPLAY
+```
+
+An occupied desktop refuses control; observation remains an explicit choice.
+These commands use the Bee selected by `--state-dir`. Live workspace switching
+and public remote enrollment are still in development.
+
 Named commands attach to the selected owner and launch through its admitted
 catalog. Ctrl+Q detaches while retaining applications. An already-running owner
 keeps its loaded code after a binary update; new command routing requires an owner

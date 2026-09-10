@@ -443,7 +443,7 @@ each workspace/display reference. Identical IDs on another node cannot inherit
 items and evicted nodes retire the corresponding displayed session state; late
 old-owner outcomes cannot restore it. This bookkeeping grants no permissions
 and binds an attachment, not the neutral display's identity. Focused Lua tests
-pass; this follow-up is not yet installed globally.
+pass; this follow-up is installed globally.
 
 ### Explicit desktop selection candidate
 
@@ -457,7 +457,7 @@ independent-desktop behavior.
 
 Executable acceptance proves selected observation, occupied/foreign refusal,
 unchanged catalog on refusal, exact retained-shell reattachment and continued
-input on the other display. These commands are not yet installed globally.
+input on the other display. These commands are installed globally after full foundation and native acceptance.
 They do not implement a live workspace picker, remote enrollment or composition
 of applications from several hosts. Neutral physical displays remain independent
 of their selected workspace; the command's DISPLAY identifies its attachment

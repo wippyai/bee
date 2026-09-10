@@ -680,8 +680,9 @@ has observation-only rights, cannot type into or resize the desktop, and can
 detach without disturbing the controller. This shares the desktop's layout; it
 does not create a second workspace, application process or independent layout.
 No running Bee means a prompt refusal before owner startup. Extra application
-arguments are rejected. Explicit desktop selection and external Hive enrollment
-remain unimplemented.
+arguments are rejected. Explicit `bee observe WORKSPACE DISPLAY` and `bee attach WORKSPACE DISPLAY`
+are now installed; `bee desktops` lists authenticated local targets. Live
+workspace switching and external Hive enrollment remain unimplemented.
 
 The separate-runtime fixture proves controller/observer shared shell content,
 denied input/resize rights and controller continuity after observer detach. The

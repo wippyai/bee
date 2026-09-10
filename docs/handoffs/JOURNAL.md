@@ -5508,3 +5508,19 @@ attachment boundary. Its production Lua is unchanged from the61042 full-gate
 source. Full61042 and idle50459 remain running; global440890d7 is unchanged.
 The guarded installer `/tmp/bee-install-explicit-selection.py` is prepared but
 has not run. Do not reuse the previous install script with outdated digests.
+
+### Global explicit-selection build installed — journal908
+
+Full61042 is terminal exit0:494 Lua tests,525 registry entries, complete
+foundation gates. Standalone79123 and native-client74144 also exited0.
+Do not poll/restart those completed jobs. Global Bee now has SHA
+`cbb6d6a5bc71b5c37b281f2b3075122e990296c50830d641c8fa21939f389e59`,
+productionc3b2c9f/nativeced4008999f4/runtime674b58a1. Installer86645 exited0;
+old2197478 was retired with exact identity/digest guards and current user Bee
+is2452472. Databases preserved; archive `bee.previous-20260910T232822Z`.
+Cold1.486s, warm.215s, observe.221s; all detach under.1s. Evidence:
+`/tmp/bee-explicit-selection-global-install.log`,
+`/tmp/bee-explicit-selection-global-reconnect.log`. Actual `bee desktops` lists
+two durable targets. Shared native manifest now matches the verified build.
+One-hour50459 is still live on the preceding immutable candidate. Workspace
+switching, multi-host composition and public remote recovery remain incomplete.

@@ -274,7 +274,7 @@ def observers(binary):
     print('Public bee observe: absent Bee refused promptly; shared shell, denied typing, bounded detach and retained controller')
 
 
-def idle_reconnects(binary):
+def idle_reconnects(binary, idle_seconds=20, attempts=8):
     """Repeated graceful departures with idle gaps, against one retained Bee."""
     with tempfile.TemporaryDirectory(prefix='bee-idle-reconnects-') as temporary:
         folder = Path(temporary)
@@ -292,8 +292,8 @@ def idle_reconnects(binary):
             ui.quit()
             ui.close()
             ui = None
-            for attempt in range(8):
-                time.sleep(20)
+            for attempt in range(attempts):
+                time.sleep(idle_seconds)
                 started = time.monotonic()
                 ui = NativeDesktop(binary, folder, state)
                 ui.wait('IDLE_READY', timeout=8)
@@ -303,7 +303,7 @@ def idle_reconnects(binary):
                 ui.quit()
                 ui.close()
                 ui = None
-            print('Eight idle reconnects retain the same Terminal and detach within one second')
+            print(f'{attempts} reconnects after {idle_seconds}s idle gaps retain the same Terminal and detach within one second')
         finally:
             if ui is not None:
                 ui.close()
@@ -389,6 +389,9 @@ def independent_desktops(binary):
 
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
+    if sys.argv[2:] == ['--long-idle-reconnects']:
+        idle_reconnects(binary, idle_seconds=600, attempts=2)
+        sys.exit(0)
     if sys.argv[2:] == ['--idle-reconnects']:
         idle_reconnects(binary)
         sys.exit(0)

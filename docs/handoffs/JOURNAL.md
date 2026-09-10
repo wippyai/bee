@@ -5329,3 +5329,14 @@ test now expects `Connecting to Hive` and is rerunning. Full frozen source
 acceptance is running at `/tmp/bee-independent-desktops-full-check`, session 90930.
 Global installation is still pending. Actual-user reconnect on the old global
 binary remained stuck at 15 seconds; no root-cause claim is made.
+
+### Global installed after native executable acceptance
+
+Native launcher suite passed in full. Global Bee now has candidate SHA256
+`49ea75a692680d8cc20a3a34035ecd23f9fd0ed9bab3fbe830dc3da4ba88bd74`, from source
+f227945, native 9750955, runtime 674b58a1. Verified old process 1322000 was stopped
+through its pidfd; no database was deleted. Previous binary was archived beside
+the global executable. Actual-user cold frame took 1.572s and detach 0.103s; new
+retained process is 1992601. Warm/observe evidence is in
+`/tmp/bee-independent-global-reconnect.log`. Full repository gate remains running
+(session 90930); the old idle-disconnection cause remains open. Journal fact 851.

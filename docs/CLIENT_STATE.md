@@ -439,9 +439,9 @@ renderer bind to settle before issuing save with a new request identity. The wit
 fails on the earlier supervisor, then passes with the additional presenter
 replaced while the default waits and the default subsequently recovered by F12.
 Normal source/pack launch-exit, copy-exit and withheld-renderer probes pass.
-These source changes are not installed globally yet.
+These changes are included in the September 10 independent-desktop global candidate.
 
-### Hive desktop catalog and selected sessions (source; not installed)
+### Hive desktop catalog and selected sessions
 
 The native-client route now exposes `bee.desktop:list` and `bee.desktop:create`
 through the same supervisor admission as attachment. List carries owner_execution
@@ -471,13 +471,15 @@ allocation replay, explicit default identity, dormant observer refusal, simultan
 controllers on separate desktops, target-qualified launch/copy rejection, default
 shell continuity during the other desktop's work, and explicit detach/reconnect.
 It uses fixture-selected enrollment and native-client-role Lua actors, not the
-public executable's automatic second-launch choice. Native binding race/vet checks
+public executable's automatic second-launch choice. The separate native executable
+suite proves three simultaneous desktops, default observation, F12 and reusing
+a detached desktop without another allocation. Native binding race/vet checks
 cover Create identity/uncertainty and strict default catalog decoding. The separate
 `hive-desktop-admission-check` still exposes the runtime's unresolved remote actor
 EXIT cleanup failure; catalog acceptance does not waive that gate.
 
 
-### Automatic physical desktop selection (source; executable acceptance pending)
+### Automatic physical desktop selection
 
 An ordinary control launch first attempts the default desktop. Only an explicit
 DESKTOP_CONTROLLED refusal permits trying other durable identities, in stable

@@ -1,5 +1,17 @@
 # Foundation status
 
+The latest September 10 global candidate now selects an independent desktop when
+another physical client controls the default. It reuses an available durable
+identity before allocating another; explicit selection and observe do not fall
+back. The public native suite proves three simultaneous desktops, F12, reuse,
+clipboard, bounded detach, retained shells and client-crash reconnect. Quit-dialog
+presenter replacement also passes source/pack acceptance. Cold-node connection
+stages allow 60 seconds, with immediate successful progress and cancellation.
+The actual user state booted in 1.572 seconds after the authorized restart.
+The combined full repository check is still running; this is not full-release
+acceptance. The older retained node's idle connection hang remains unexplained.
+
+
 The global candidate installed September 10 now uses the native owner/client
 launcher. Ordinary `bee` loads embedded code with shared registry history and
 attaches through the same-machine native mesh. Ctrl+Q and Ctrl+] detach the

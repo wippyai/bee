@@ -2,7 +2,8 @@
 
 This `meshclient`-gated package binds the existing `bee.hive@1` protocol to one
 native `mesh.Actor`. It creates no transport, principal, listener, database or
-application permission. Public launch does not construct it yet.
+application permission. The installed same-account launcher constructs this
+binding for native client attachment; external enrollment remains unfinished.
 
 `New(lifetime, actor, ownerNode)` receives a cancellable context owned by the
 client actor's caller. One binding exclusively consumes that actor's control
@@ -33,28 +34,26 @@ separately from the common envelope.
 Run `make -C native hive-client-check MESH_RUNTIME=/path/to/client-runtime`.
 Unit/race checks cover sender and reply correlation, owner replacement,
 cancellation and no replay, plus strict reply and desktop decoders. These are
-binding tests; actual supervisor round trips, physical attachment, invitation
-redemption and public second-`bee` behavior still need integration acceptance.
-The ordinary desktop runtime candidate lacks native mesh surface/TLS APIs; use
-the client runtime supplied by its lane without changing the release manifest.
+binding tests. The separate-runtime physical fixture also proves supervisor
+admission, destination shell input, F12 presenter replacement with the same shell,
+resize and bounded detach on runtime `674b58a1`. This uses explicit disposable
+enrollment; it does not establish public remote enrollment.
 
-The compiled `testfixture` now builds through
+Build the compiled fixture through
 `make -C native hive-desktop-client-fixture MESH_RUNTIME=... FIXTURE_OUTPUT=...`.
-The current real-supervisor round trip is **failing**: both nodes reach readiness,
-but a sent operation receives no validated reply before its deadline. Evidence:
-`/tmp/bee-hive-client-supervisor-current.log`. This used the typed desktop runtime
-as owner and the existing native mesh runtime for the compiled client. A Bee inbox bug was isolated and fixed: it previously discarded Wippy's normalized
-Lua map replies because it accepted JSON bytes only. Mesh race/vet and the
-actor-boundary regression pass. The supervisor round trip still times out after
-that fix (`/tmp/bee-hive-client-supervisor-map.log`), so that was not the only gap.
-An isolated trace shows no request handler delivery with either the typed
-listener or an untyped diagnostic copy (`/tmp/bee-hive-map-untyped-trace.log`).
-Production retains the typed listener. The remaining gap precedes Bee's handler;
-native-client diagnostics now identify a TLS mismatch: the owner candidate sends
-a non-TLS handshake to the TLS client (`/tmp/bee-hive-client-transport-trace.log`).
-Use a compatible owner runtime; do not disable TLS to pass the test. The runtime
-handoff is in `docs/handoffs/RUNTIME_UPSTREAM_CUTOVER.md`.
-Public launch must remain gated until this integration passes.
+Run it with `tests/fixtures/hive_desktop_admission/physical.py` through
+`make hive-desktop-admission-check`. The physical F12 oracle renders complete
+frames and compares test-only presenter identity, since unchanged shell cells
+need not be emitted again.
+
+The crash variant retains one replacement client process during admission
+cleanup. Only typed explicit refusals can be retried with new mutation keys;
+uncertain outcomes stop the proof. Its bounded retries allow the documented
+40-second node-departure window, not immediate exact-actor exit. Restarting the
+replacement for each refusal previously introduced same-name/new-port membership
+conflicts and could not isolate attachment cleanup. That native rejoin case
+remains separate. See the current evidence in
+[the handoff](../../../docs/handoffs/JOURNAL.md).
 
 ## Session-qualified copy
 
@@ -65,8 +64,6 @@ It does not write the clipboard or replay a request. The physical input worker
 performs the write for explicit Ctrl+C; an unselected reply preserves ordinary
 application input. A definite selection refusal leaves the client running.
 
-The current external Bee source must include this owner operation, the retained
-input marker and presenter response path. Ordinary public releases do not expose
-it yet. The separate unsolicited inbox experiment was removed; copy uses the
-same existing serialized call/reply reader. Full selected-window acceptance still
-requires the combined launcher/clipboard runtime.
+The installed candidate includes this operation and passes selected-window copy
+acceptance. Copy uses the same serialized call/reply reader. Release runtime
+cutover and public remote selection remain separate gates.

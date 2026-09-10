@@ -1,4 +1,4 @@
-# Local owner startup
+# Local Bee startup
 
 This native component prepares one local owner execution through Wippy's
 lock-held `LaunchPlan.PrepareOwner` hook. It provisions protected, finite-lived
@@ -19,7 +19,8 @@ lock while supervised processes drain. Credentials expire within at most 30 days
 renewal is not implemented. Stale discovery files remain hints, and cleanup never
 deletes a successor's files.
 
-The package is gated by `meshclient` and is not registered in public Bee launch.
+The package is gated by `meshclient` and is registered by the standalone Bee
+launcher for ordinary same-account node/client startup.
 It requires the reviewed runtime candidate's owner-preparation, parent-context,
 normal-boot TLS and cluster-cancellation changes. Run its real-process acceptance
 with `make -C native local-owner-check MESH_RUNTIME=/path/to/runtime`. That target
@@ -33,9 +34,9 @@ A separate native process service also returns success and denial through the
 existing Hive envelope, exercising `client/hive` against ordinary Lua tables.
 It issues no desktop grant.
 Fixture permissions name only its registration and send actions. The same proof
-checks transport expiry while Lua drains, and lock retention followed by release. Supervisor
-admission, ordinary first/second `bee` attachment and LAN Terminal remain separate
-gates.
+checks transport expiry while Lua drains, and lock retention followed by release. The installed standalone also passes supervisor admission and ordinary
+first/second `bee` attachment. Public external enrollment remains separate;
+fixture-selected LAN Terminal proofs do not provide a public remote selector.
 
 `ClientPolicy()` returns an unpublished native security policy for one prepared
 owner execution. The host may attach it only to the Hive supervisor's isolated
@@ -45,8 +46,8 @@ current protected enrollment and owner lifetime. Unknown clients, foreign actors
 retired enrollment and replaced executions are denied. Other actions are left
 undefined. A positive answer permits desktop admission to proceed; it is not a
 viewport/input grant. The native Hive service can receive it through Desktop.ClientPolicy and forks
-its sealed lifecycle frame before adding it. Public launch does not select this
-configuration yet. No new Lua module or runtime change is required.
+its sealed lifecycle frame before adding it. The standalone launcher selects this configuration. No new Lua module or
+runtime change is required.
 
 `DesktopService(policies, application)` connects the prepared execution and its
 local-client policy to the existing native Hive service. The host still selects

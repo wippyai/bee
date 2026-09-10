@@ -247,9 +247,11 @@ func waitText(ctx context.Context, view tty.Viewport, needle string) error {
 }
 
 func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
+	diagnosticPhase("discover")
 	if err := awaitSupervisor(ctx, actor); err != nil {
 		return err
 	}
+	diagnosticPhase("supervisor-found")
 	client, err := hive.NewDesktop(ctx, actor, "node-0", strings.Repeat("a", 32))
 	if err != nil {
 		return err
@@ -261,14 +263,36 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 	if len(catalog.Workspaces) != 1 || len(catalog.Workspaces[0].Desktops) != 1 {
 		return errors.New("unexpected physical catalog")
 	}
+	diagnosticPhase("catalog-received")
 	workspace := catalog.Workspaces[0]
 	// A fresh OS client must never reuse a mutation key from a prior process;
 	// the owner may retain that receipt after retiring the old attachment.
 	keyPrefix := fmt.Sprintf("physical-%d-%d", os.Getpid(), time.Now().UnixNano())
-	mounted, err := client.Attach(ctx, keyPrefix+"-attach", workspace.ID, workspace.Desktops[0].ID, hive.Control)
+	// This crash proof allows the existing 40-second node-departure window;
+	// it does not claim prompt exact-actor exit notification.
+	var mounted hive.DesktopMount
+	for attempt := 0; ; attempt++ {
+		mounted, err = client.Attach(ctx, fmt.Sprintf("%s-attach-%d", keyPrefix, attempt), workspace.ID, workspace.Desktops[0].ID, hive.Control)
+		if err == nil || os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_CRASH") != "1" || attempt >= 159 {
+			break
+		}
+		// Keep one mesh incarnation while the old controller is retired. Only
+		// definitive refusals permit a new mutation key; never retry uncertainty.
+		var rejected *hive.Rejected
+		if !errors.As(err, &rejected) || !retryableCrashRefusal(rejected) {
+			break
+		}
+		diagnosticPhase("attachment-refused-awaiting-cleanup")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("physical attach: %w", err)
 	}
+	diagnosticPhase("attachment-admitted")
 	service := tty.GetService(ctx)
 	if service == nil {
 		return errors.New("missing physical viewport service")
@@ -277,6 +301,7 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 	if err != nil {
 		return fmt.Errorf("physical viewport attach: %w", err)
 	}
+	diagnosticPhase("viewport-attached")
 	remote, ok := view.(physical.Viewport)
 	if !ok {
 		view.Close()
@@ -293,11 +318,34 @@ func physicalProbe(ctx context.Context, actor *mesh.Actor) error {
 			cancel()
 		}
 	}()
+	diagnosticPhase("physical-run")
 	err = physical.Run(display, remote, tty.MountRights{Observe: true, Input: true, Resize: true}, os.Stdin, os.Stdout)
 	cancel()
 	<-stopped
 	if err != nil {
 		return fmt.Errorf("physical run: %w", err)
 	}
+	diagnosticPhase("physical-stopped")
 	return client.Detach(ctx, keyPrefix+"-detach", mounted)
+}
+
+func diagnosticPhase(phase string) {
+	if os.Getenv("BEE_NATIVE_DESKTOP_DIAGNOSTICS") == "1" {
+		fmt.Fprintln(os.Stderr, "BEE_CLIENT_PHASE", phase)
+	}
+}
+
+// Fixture-only retry policy for explicit negative attachment receipts.
+func retryableCrashRefusal(err *hive.Rejected) bool {
+	if err.Fault.Code == "BUSY" {
+		return err.Fault.Message == "Desktop request already pending"
+	}
+	if err.Fault.Code != "UNAVAILABLE" {
+		return false
+	}
+	switch err.Fault.Message {
+	case "Desktop is starting", "Desktop already has a controller", "Previous connection is being revoked", "Desktop session is closing":
+		return true
+	}
+	return false
 }

@@ -3,7 +3,25 @@
 This records the delivered local-foundation goal and the remaining host/client
 work. It is not a claim that Bee's proposed Hive, agent or installation APIs exist.
 
-## Installed candidate (2026-09-10)
+## Current installed candidate (2026-09-10)
+
+Global `bee` now starts or attaches to a retained local owner using the native
+mesh and embedded code with shared registry history. Explicit detach retains
+applications. The latest Bee-only change handles native LINK_DOWN in the two
+supervisors instead of letting client loss terminate the retained desktop.
+Actual-executable acceptance proves normal reconnect, clipboard/F12, bounded
+stalled-owner detach, delayed owner publication, and client SIGKILL followed by
+same-shell reconnect after a 40-second node-departure observation interval.
+The current source checkpoint is `18caf09`; exact executable pins, hash and
+rollback are in [the global build handoff](handoffs/GLOBAL_BUILD.md).
+
+Immediate exact-actor EXIT while its transport remains live is still a runtime
+gate. A full `make check` is running against the frozen build source; earlier
+passing subsets do not establish its result. Cold owner startup still captures
+output in an owner log file. The user's already-running older owner is not
+hot-replaced by installing a new executable.
+
+## Earlier selection candidate (2026-09-10)
 
 The global Bee now contains the tested local selection/scrolling candidate at the
 user's request. `bee --base` selects its embedded baseline while preserving

@@ -87,19 +87,7 @@ func New(lifetime context.Context, actor *mesh.Actor, ownerNode string) (*Client
 	if lifetime == nil || lifetime.Done() == nil || actor == nil || !identifier(ownerNode) {
 		return nil, errors.New("invalid native Hive client")
 	}
-	return newClient(lifetime, actor, ownerNode), nil
-}
-
-func newClient(lifetime context.Context, actor transport, ownerNode string) *Client {
-	inbox := newInbox(lifetime, actor)
-	return &Client{actor: inbox, ctx: inbox.ctx, owner: ownerNode, gate: make(chan struct{}, 1)}
-}
-
-// Close joins the native inbox reader. It does not close the caller-owned actor.
-func (c *Client) Close() {
-	if inbox, ok := c.actor.(*inbox); ok {
-		inbox.close()
-	}
+	return &Client{actor: actor, ctx: lifetime, owner: ownerNode, gate: make(chan struct{}, 1)}, nil
 }
 
 func live(lifetime <-chan struct{}) bool {

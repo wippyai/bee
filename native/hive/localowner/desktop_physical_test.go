@@ -161,6 +161,23 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 	if err := await("BEE_PHYSICAL_retained_OK"); err != nil {
 		return err
 	}
+	if initialize {
+		if _, err := master.Write([]byte("printf 'BEE_INTERRUPT_%s_READY\\n' wait; sleep 20\r")); err != nil {
+			return err
+		}
+		if err := await("BEE_INTERRUPT_wait_READY"); err != nil {
+			return err
+		}
+		if _, err := master.Write([]byte{3}); err != nil {
+			return err
+		}
+		if _, err := master.Write([]byte("printf 'BEE_INTERRUPT_%s_DONE\\n' good\r")); err != nil {
+			return err
+		}
+		if err := await("BEE_INTERRUPT_good_DONE"); err != nil {
+			return err
+		}
+	}
 	if signalExit {
 		// This is the isolated Go test process, whose foreground launch has already
 		// installed NotifyContext. The owner is a different detached OS process.

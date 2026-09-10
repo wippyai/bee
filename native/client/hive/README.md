@@ -56,17 +56,17 @@ Use a compatible owner runtime; do not disable TLS to pass the test. The runtime
 handoff is in `docs/handoffs/RUNTIME_UPSTREAM_CUTOVER.md`.
 Public launch must remain gated until this integration passes.
 
-## Bounded client inbox
+## Session-qualified copy
 
-The binding now owns one background reader of the native actor for its lifetime.
-Hive replies and `bee.clipboard.request` messages have separate eight-message
-queues. Unknown topics are ignored. Routing is not authorization: messages retain
-the native sender and the clipboard consumer must still validate its exact
-sender, active attachment and typed request before output. Clipboard delivery
-is not implemented by this dispatcher.
+`Desktop.Copy` requests selected text using the existing `bee.desktop:copy`
+operation and the exact live desktop session. It validates the response's owner
+execution, workspace, desktop, session, expiry and plain text before returning it.
+It does not write the clipboard or replay a request. The physical input worker
+performs the write for explicit Ctrl+C; an unselected reply preserves ordinary
+application input. A definite selection refusal leaves the client running.
 
-Each message is bounded by the existing 16 KiB actor contract. Overflow on either
-queue retires the binding with an error; queued messages cannot be consumed after
-retirement. The physical session stops presentation/input on inbox failure.
-`Close` cancels and joins the reader, without closing the caller-owned actor.
-Session cleanup detaches before closing the binding. No input or copy is replayed.
+The current external Bee source must include this owner operation, the retained
+input marker and presenter response path. Ordinary public releases do not expose
+it yet. The separate unsolicited inbox experiment was removed; copy uses the
+same existing serialized call/reply reader. Full selected-window acceptance still
+requires the combined launcher/clipboard runtime.

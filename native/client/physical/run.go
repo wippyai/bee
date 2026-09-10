@@ -33,6 +33,11 @@ func (e *DeliveryError) Unwrap() error { return e.Cause }
 
 var ErrInputOverflow = errors.New("physical client: input buffer full; viewport detached without replay")
 
+// ErrCopyRefused means the owner definitively refused this selection and has
+// reported the reason in the desktop UI. It neither interrupts the application
+// nor ends the client.
+var ErrCopyRefused = errors.New("copy selection refused")
+
 // output serializes native surface writes with input-mode setup and cleanup.
 type output struct {
 	sync.Mutex
@@ -59,6 +64,14 @@ type Viewport interface {
 // stdin and stdout. Canceling ctx detaches this client, without stopping the host.
 // Ctrl+] is a local detach key and never waits behind network input.
 func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os.File, stdout io.Writer) (result error) {
+	return RunWithCopy(ctx, client, rights, stdin, stdout, nil)
+}
+
+// CopySelection performs one session-qualified selection request for an explicit
+// Ctrl+C. A false selection preserves the original application key event.
+type CopySelection func(context.Context) (text string, selected bool, err error)
+
+func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os.File, stdout io.Writer, copySelection CopySelection) (result error) {
 	if ctx == nil || client == nil || stdin == nil || stdout == nil {
 		return errors.New("physical client: missing terminal or viewport")
 	}
@@ -123,6 +136,7 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 	workers.Add(1)
 	go func() {
 		defer workers.Done()
+		copyReleasePending := false
 		for {
 			select {
 			case <-ctx.Done():
@@ -132,8 +146,43 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 					return
 				}
 				var err error
+				operation := "input"
+				if item.event.Type == "key" && item.event.Action == "press" && item.event.Key == "c" {
+					copyReleasePending = false
+				}
 				if item.event.Type == "start" || item.event.Type == "resize" {
+					operation = "resize"
 					err = client.ResizeContext(ctx, item.event.Width, item.event.Height)
+				} else if copyReleasePending && item.event.Type == "key" && item.event.Action == "release" && item.event.Key == "c" {
+					copyReleasePending = false
+				} else if copySelection != nil && item.event.Type == "key" && item.event.Action == "press" && item.event.Ctrl && !item.event.Alt && item.event.Key == "c" {
+					operation = "copy"
+					var text string
+					var selected bool
+					text, selected, err = copySelection(ctx)
+					refused := errors.Is(err, ErrCopyRefused)
+					if refused {
+						err = nil
+						copyReleasePending = true
+					}
+					if err == nil && ctx.Err() != nil {
+						err = context.Cause(ctx)
+					}
+					if err == nil && selected && !refused {
+						err = client.Check(ctx, tty.RightObserve)
+					}
+					if err == nil && selected && !refused {
+						clipboard, ok := any(surface).(interface{ Clipboard(string) error })
+						if !ok {
+							err = errors.New("physical clipboard output unsupported")
+						} else {
+							err = clipboard.Clipboard(text)
+							copyReleasePending = err == nil
+						}
+					} else if err == nil && !refused {
+						operation = "input"
+						err = client.SendContext(ctx, item.event)
+					}
 				} else {
 					err = client.SendContext(ctx, item.event)
 				}
@@ -141,10 +190,6 @@ func Run(ctx context.Context, client Viewport, rights tty.MountRights, stdin *os
 				pendingBytes -= item.bytes
 				budget.Unlock()
 				if err != nil {
-					operation := "input"
-					if item.event.Type == "start" || item.event.Type == "resize" {
-						operation = "resize"
-					}
 					workerErr = &DeliveryError{Operation: operation, Cause: err}
 					cancel(workerErr)
 					return

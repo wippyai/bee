@@ -43,14 +43,6 @@ func NewDesktop(lifetime context.Context, actor *mesh.Actor, ownerNode, executio
 	}
 	return &Desktop{client: client, owner: ownerNode, execution: execution, recipient: recipient}, nil
 }
-
-// Close retires and joins the inbox reader after outstanding operations end.
-func (d *Desktop) Close() { d.client.Close() }
-
-// Done and Err expose retirement without exposing the native authority frame.
-func (d *Desktop) Done() <-chan struct{} { return d.client.ctx.Done() }
-func (d *Desktop) Err() error            { return context.Cause(d.client.ctx) }
-
 func (d *Desktop) call(ctx context.Context, operation, key string, input any) (Reply, error) {
 	if d == nil || d.client == nil {
 		return Reply{}, errors.New("desktop client unavailable")

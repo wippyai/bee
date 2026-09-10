@@ -34,8 +34,19 @@ lacks those launcher APIs. A reviewed combination and full Bee checks are still
 required before replacing the installed global Bee. Remote physical clipboard
 routing is unimplemented. Windows launch flags remain unverified.
 
-The binding now exclusively reads the native inbox and separates bounded Hive
-reply and clipboard queues. Overflow retires physical presentation; close joins
-the reader. Routing grants no clipboard authority and performs no copy yet.
-Hive/session race and vet checks pass; full real-source composition passes
-55.502s, preserving cold start, Start/Terminal, signal restore and retained rejoin.
+The native client now requests selection text through `bee.desktop:copy` for
+explicit Ctrl+C. The current external Bee source must include that operation,
+the retained supervisor's ordered `bee.copy` input marker and presenter result
+path. The source is not part of this native-only checkpoint. The unused inbox
+push experiment was removed; copy uses the existing serialized Hive call/reply.
+
+The native binding fences reply session/expiry and plain-text bounds. Physical
+output rechecks the native mount, serializes clipboard/frame writes, consumes
+copy key releases, preserves ordinary Ctrl+C and refuses unknown outcomes without
+replay. Definite selection refusals leave the client running. Isolated physical
+copy tests pass against the clipboard-capable runtime; binding/session tests and
+actual-source ordinary-interrupt/cold/rejoin composition pass against the launcher
+runtime (58.096s for composition). Lint and pack architecture pass on current Bee
+source, with 517 entries. Full Lua boot remains blocked by the old toolchain's
+missing activation listener. Full selected-window native-client acceptance and
+an installed global build remain unproven until the runtime APIs are combined.

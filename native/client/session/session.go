@@ -90,7 +90,6 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 	selected, err := selectDesktop(catalog, cfg.Selection)
 	if err != nil {
 		return err
@@ -126,10 +125,20 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	}
 	display, cancelDisplay := context.WithDeadline(operations, mounted.Expires)
 	defer cancelDisplay()
-	display, stopInbox := withInboxLifetime(display, client.Done(), client.Err)
-	defer stopInbox()
 	rights := tty.MountRights{Observe: true, Input: cfg.Mode == hive.Control, Resize: cfg.Mode == hive.Control}
-	if err := physical.Run(display, remote, rights, stdin, stdout); err != nil {
+	copySequence := uint64(0) // accessed only by the serialized physical input worker
+	copySelection := func(ctx context.Context) (string, bool, error) {
+		copySequence++
+		request, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		selected, err := client.Copy(request, fmt.Sprintf("session-copy-%d", copySequence), mounted)
+		var rejected *hive.Rejected
+		if errors.As(err, &rejected) && rejected.Fault.Code == "INVALID_STATE" {
+			return "", false, physical.ErrCopyRefused
+		}
+		return selected.Text, selected.Selected, err
+	}
+	if err := physical.RunWithCopy(display, remote, rights, stdin, stdout, copySelection); err != nil {
 		return fmt.Errorf("present desktop: %w", err)
 	}
 	return nil
@@ -179,10 +188,7 @@ func Probe(ctx context.Context, directory string) error {
 	}
 	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			client, _, err := readyDesktop(frame, frame, actor, owner)
-			if client != nil {
-				client.Close()
-			}
+			_, _, err := readyDesktop(frame, frame, actor, owner)
 			return err
 		})
 	})
@@ -210,7 +216,6 @@ func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.A
 	// A fresh actor has its own owner-qualified request/idempotency namespace.
 	catalog, err := waitCatalog(ready, client.List)
 	if err != nil {
-		client.Close()
 		return nil, hive.DesktopCatalog{}, err
 	}
 	return client, catalog, nil

@@ -38,6 +38,10 @@ local function nonce(): string
     return value
 end
 local function main(configuration: unknown)
+    -- Native node loss reports LINK_DOWN to remote monitors too. The supervisor
+    -- owns attachment revocation; losing a client must not kill this service.
+    local trapping, trap_error = process.set_options({trap_links = true})
+    if not trapping then error("Cannot handle Hive link loss: " .. tostring(trap_error)) end
     local config = bounds.object(configuration)
     if not config or bounds.fields(config, {"configured_nodes", "desktop"}) then error("Invalid Hive supervisor configuration") end
     local nodes, config_error = bounds.ids(config.configured_nodes)

@@ -30,6 +30,10 @@ local function run_supervisor(client: string, database_resource: string?, retain
         return value
     end
     local function run()
+        -- This owner monitors remote physical recipients as well as local
+        -- dependencies. Link loss revokes a mount, not the retained workspace.
+        local trapping, trap_error = process.set_options({trap_links = true})
+        if not trapping then error("Cannot handle desktop link loss: " .. tostring(trap_error)) end
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
         local copy_pending: {id: string, recipient: string, mount: string}? = nil
@@ -89,7 +93,12 @@ local function run_supervisor(client: string, database_resource: string?, retain
             elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then return end
-                if event.kind == process.event.EXIT then
+                if event.kind == process.event.LINK_DOWN then
+                    if desktop then
+                        local detached = attachments.detach(desktop.grants, tostring(event.from))
+                        if detached.error_code ~= "" then error("Desktop detach failed: " .. detached.error) end
+                    end
+                elseif event.kind == process.event.EXIT then
                     if retained_owner and tostring(event.from) == retained_owner then return end
                     if tostring(event.from) == client then desktops.exited(retained, event); return end
                     if desktop then

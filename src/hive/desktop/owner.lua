@@ -312,12 +312,14 @@ function M.tick(state: State, now: integer)
     end
 end
 function M.event(state: State, event: process.Event, now: integer)
-    if event.kind ~= process.event.EXIT then return end
+    if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
-    if sender == state.supervisor then
+    if sender == state.supervisor and event.kind == process.event.EXIT then
         state.stopped = true
         error("Retained desktop owner exited")
     end
+    -- Revoking this attachment is our authority, even when the remote actor's
+    -- outcome is unknown. This does not declare that actor or its apps exited.
     local client = state.clients[sender]
     if client then revoke(state, client, now) end
 end

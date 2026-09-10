@@ -7,12 +7,15 @@ physical client while retaining its owner and applications. Standalone startup,
 selection/copy, scrolling, explicit-detach reconnect and old-binary upgrade checks
 pass. Warm launch now reuses the existing runtime lock and skips an extra owner
 process; one standalone probe reached the retained desktop in 0.204 seconds.
-Abrupt client death is **not** covered by that passing reconnect result: the
-current runtime accepts a remote monitor but fails to deliver the client EXIT,
-leaving its controller claimed. The later owner-readiness timeout remains under
-investigation. The full foundation run failed at an intermittent initial-frame
-wait in `tests/drag_failure.py`; isolated passing runs do not clear it. See the current
-[runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md) for exact pins and evidence.
+Abrupt client death now has a standalone regression: after a 40-second native
+node-departure observation interval, a fresh client rejoins the same retained
+shell. Bee's supervisors handle existing LINK_DOWN events and revoke the
+attachment without terminating the owner or declaring remote process completion.
+The isolated owner-service trace has no failures and passes race/vet. Immediate
+exact-actor EXIT while transport remains live is still a failing runtime gate.
+The prior full foundation run failed at an intermittent initial-frame wait in
+`tests/drag_failure.py`; a new full run is underway, not yet a passing claim.
+See the current [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md).
 Older gate descriptions below refer to earlier candidates.
 
 

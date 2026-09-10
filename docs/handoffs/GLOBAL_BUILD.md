@@ -8,8 +8,8 @@ on branches; no PR or main merge was performed.
 - Native Bee: `1abf5b28a0e5`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- SHA256: `282c1a2169c04da3cf410fc60bebe2db0247e8c3cf301c496d34866ab51f4731`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T143654Z`.
+- SHA256: `285a51bf448f212cdfc67e8eea51b6a9a296da8d5ab221f3e3f2562b289bcb0a`.
+- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T145306Z`.
 
 Run `bee` normally. Its foreground client automatically starts or authenticates
 an owner for the selected state. Ctrl+Q and Ctrl+] detach locally, retaining
@@ -105,3 +105,21 @@ retaining the owner. Normal warm readiness measured0.208s. Session and launcher
 race/vet pass. Evidence: `/tmp/bee-publication-fixed-acceptance.log` and
 `/tmp/bee-preparing-owner-before.log`. The remote EXIT and full-suite gates above
 are still open.
+
+
+### Link-down handling installed
+
+The global executable now includes the Bee-only link-loss fix in the Hive and
+retained desktop supervisors. Both use the existing `trap_links` process option
+and revoke disconnected physical attachments without claiming process completion.
+No runtime changes were made. `/tmp/bee-linkdown-native-acceptance.log` passes
+normal client acceptance (warm reconnect 0.213 seconds), stalled detach, delayed
+owner publication, and client SIGKILL followed by same-shell reconnect after a
+40-second native node-departure observation interval. The isolated supervisor
+trace also rejects failed service states and passes race/vet.
+
+This replaces the earlier crash-induced supervisor restart failure for new owners.
+It does not hot-replace the user's running owner, and does not prove immediate
+exact-actor EXIT with a live transport. Full foundation verification is running
+in `/tmp/bee-linkdown-foundation-check.log`; the earlier intermittent initial-frame
+failure is not yet cleared. Cold startup still creates an owner output log.

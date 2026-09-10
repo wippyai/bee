@@ -158,8 +158,44 @@ def preparing_owner(binary):
     print('Preparing owner: busy-lock client waits for publication, then authenticates and attaches')
 
 
+def crashed_client(binary):
+    with tempfile.TemporaryDirectory(prefix='bee-native-crashed-client-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner = None
+        ui = NativeDesktop(binary, folder, state)
+        try:
+            ui.wait(' BEE ', timeout=15)
+            owner = owner_handle(ui, binary, state)
+            ui.open_start()
+            ui.choose('Terminal')
+            ui.wait('Terminal')
+            ui.key(b"BEE_CRASH_SHELL=$$; printf 'BEE_CRASH_%s\\n' READY\r")
+            ui.wait('BEE_CRASH_READY')
+            ui.process.kill()
+            ui.process.wait(timeout=5)
+            ui.close()
+            ui = None
+            # Exercise native node-departure delivery, not a synthetic EXIT.
+            # Immediate exact-actor completion remains a separate runtime gate.
+            time.sleep(40)
+            assert not select.select([owner], [], [], 0)[0], 'Client crash killed the owner'
+            ui = NativeDesktop(binary, folder, state)
+            ui.wait('BEE_CRASH_READY', timeout=15)
+            ui.key(b"test \"$BEE_CRASH_SHELL\" = \"$$\" && printf 'BEE_CRASH_%s\\n' RETAINED\r")
+            ui.wait('BEE_CRASH_RETAINED')
+            ui.quit()
+            assert not select.select([owner], [], [], 0)[0], 'Reconnect stopped the owner'
+        finally:
+            if ui is not None:
+                ui.close()
+            stop_owner(owner)
+    print('Client SIGKILL: native node departure revokes attachment; same owner and shell reconnect')
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
     run(binary)
     stalled_detach(binary)
     preparing_owner(binary)
+    crashed_client(binary)

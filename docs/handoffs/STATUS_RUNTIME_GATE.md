@@ -190,3 +190,37 @@ fixture that publishes an overlay through its authorized owner, upgrades, then
 proves that overlay survives and remains authorized. The current upgrade test does
 not establish overlay preservation. A combined launch/selection runtime alone does
 not resolve this independent release gate.
+
+### September 10: crash timeout localized to Hive activation
+
+A disposable owner/client crash probe now identifies the later readiness failure:
+`bee.hive:activation` first fails with `linked process failed`, then its restart
+fails repeatedly at supervisor name publication with `eventualreg: name already
+registered`. Evidence: `/tmp/bee-owner-crash-trace7.log`; the isolated diagnostic's
+race test and vet completed successfully (`/tmp/bee-owner-crash-diagnostic7.log`).
+That diagnostic success means capture succeeded, not crash recovery acceptance.
+No production runtime or user owner was changed.
+
+On runtime `674b58a1a117fa79398f723c4311201cca8472e1`,
+`Topology.HandleNodeExit` sends `LinkDown` to both remote watchers and linked
+processes. Lua terminates on that event unless `trap_links` is enabled. Bee's
+supervisor currently does not enable it. The next Bee correction should use the
+existing process option and explicitly handle connection uncertainty; a lost link
+must not be fabricated into authoritative process completion. The separate missing
+remote EXIT gate remains open. Runtime naming cleanup stays with its existing lane;
+no Bee-specific ingress, transport or monitoring fallback is justified by this trace.
+
+The Bee correction now passes the isolated real-owner crash/reconnect probe:
+`process.set_options({trap_links = true})` is enabled in both Hive and retained
+desktop supervisors, which monitor physical recipients. Native link loss revokes
+only the attachment via existing owner operations. Only an EXIT declares the
+retained owner stopped. The first outer-supervisor-only change was insufficient;
+its inner retained supervisor also needed this handling.
+
+`/tmp/bee-owner-linkdown-fixed2.log` passes the race test and vet (52.758 seconds).
+The strengthened diagnostic kills the physical client, waits 40 seconds for native
+node departure, rejoins the retained shell and rejects owner service failures.
+`/tmp/bee-owner-linkdown-fixed2-trace.log` contains no failed service state. The
+standalone regression is `tests/native_client.py::crashed_client`; actual binary
+acceptance and installation remain pending. This does not prove immediate actor
+EXIT while transport remains alive; that runtime gate is unchanged.

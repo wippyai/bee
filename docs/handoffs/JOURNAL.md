@@ -5175,3 +5175,21 @@ remains: next work is additional desktop activation on the existing host, follow
 by public selection. Hive Manager has no authoritative display-only-role field;
 do not infer that role from a node-name prefix or relabel a failed service query
 as confirmed service health.
+
+## 2026-09-10 — Additional desktop activation checkpoint
+
+be1a22a is pushed. Normal and slow source/pack retained-desktop checks82600 pass:
+allocated identity activation/replay, separate Terminals on one host, additional
+F12, desktop save/reactivation with the same live shell, and first-desktop
+continuity. The public Hive owner still publishes one desktop, so second-bee
+automatic creation is not implemented or installed. Named desktops use independent
+appearance; only the default uses legacy workspace-appearance bootstrap.
+
+Full activation check87444 is live in /tmp/bee-desktop-activation-full-check,
+log /tmp/bee-desktop-activation-full-check.log. The earlier storage-only check9543
+is separately live in /tmp/bee-supervisor-catalog-full-check. Poll each exact
+handle; their source snapshots differ. Global d65ff900/PID1322000 is unchanged.
+Journal833 has details and failed approaches. Before exposing the public route,
+audit pending copy/launch cleanup on an additional child EXIT and primary-phase
+gating of additional lifecycle messages. Next: Hive catalog/session target mapping,
+then native creation/selection on controller conflict, with public binary proof.

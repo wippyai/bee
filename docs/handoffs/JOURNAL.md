@@ -5407,3 +5407,19 @@ Actual-user cold frame 4.027s, detach 0.141s; no timing-cause claim.
 Full corrected frozen check session 46307 remains active, log
 `/tmp/bee-hive-safe-full-check.log`. Do not rerun the terminal failed31926.
 Checkpoint branch `checkpoint/hive-confirmation-20260910` is pushed.
+
+### Full UI gate coverage and one-hour idle diagnostic
+
+Checkpoint ea6ff95 moves the connection dropdown acceptance into `desktop-check`,
+so `make check` includes it. Production source remains the installed 0b44b0f.
+Full run 46307 has passed Lua, architecture (525 entries), storage, thread
+subscription restart and resource checks, and has entered desktop acceptance.
+Native documentation-only checkpoint 15631f7 corrects installed behavior and
+deadline descriptions; the executable's native pin remains 5172d7dc2396.
+
+One-hour idle reconnect diagnostic 50459 is live, log `/tmp/bee-one-hour-idle.log`,
+script `/tmp/bee-one-hour-idle.py`. It uses `/tmp/bee-hive-safe-candidate` and
+disposable state `/tmp/bee-retained-reconnect-soak-_4xcpep_`. Initial Terminal
+state is retained; after 3600 seconds it will allow 65 seconds to observe rejoin.
+This is pending evidence, not a claim that the earlier hour-idle hang is fixed.
+The actual user's Bee is untouched. Shared journal checkpoint 886.

@@ -185,3 +185,43 @@ used the supervisor's already-monitored parent; it was replaced with a distinct
 physical display actor, preserving the monitor contract. Hive wire admission,
 receipt/deadline handling and native CLI routing still need integration; global
 `bee terminal` is not fixed or rebuilt by this internal checkpoint.
+
+## Command routing candidate awaiting the full gate
+
+A newer, uninstalled candidate at `/tmp/bee-command-launch-candidate` uses native
+checkpoint `a36ac552880d` and source checkpoint `689e3b0`, with the same runtime
+and builder pins. Its SHA256 is
+`f5063813d7a82ffc84a6753953220174d1f4dd53b07b0cdaefe245ee746cb40a`.
+Frozen source is `/tmp/bee-command-candidate-nqwpkmi3`.
+
+Named commands now attach as a controller and submit one launch through the
+retained owner's existing desktop contract. The owner resolves its admitted
+command catalog; the detached owner child receives no startup command arguments.
+Explicit qualified application IDs and `--base` retain their existing routes.
+Installing this client cannot add the operation to an older running owner.
+
+Verified on the assembled candidate:
+
+- The full native-client gate, including cold/warm command launches, clipboard,
+  stalled-owner exit, delayed startup and native-departure crash/rejoin:
+  `/tmp/bee-command-native-client-check.log` (warm attachment 0.216 seconds).
+- The standalone Settings, Terminal, scrolling, selection/copy, fullscreen
+  Claude/Codex/Agy aliases, literal arguments, F12 and retained rejoin:
+  `/tmp/bee-command-native-binary-check-r2.log`.
+- Explicit `--command bee run terminal`, unknown-command refusal and rejoin to
+  the surviving Terminal: `/tmp/bee-command-explicit-refusal-check.log`.
+- Native mesh authorization, command refusal and deadline-bound replay returning
+  the same broker identities: `/tmp/bee-launch-replay-owner-check.log`.
+
+The first foundation run stopped at a missing declaration of the desktop
+protocol's shared argument decoder in the architecture audit. The exact interface
+is now admitted under the existing transitive purity check; source and pack pass
+at 517 entries. The first standalone alias check expected whole-workspace quit;
+it now checks detach and retained rejoin and cleans up its disposable owner.
+Both fixes are test-only. These failures remain recorded in
+`/tmp/bee-command-foundation-check.log` and
+`/tmp/bee-command-native-binary-check.log`.
+
+The full foundation rerun is still pending in
+`/tmp/bee-command-foundation-check-r2.log`; standalone success is not a full-gate
+claim. The installed executable and the user's existing owner remain unchanged.

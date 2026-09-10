@@ -8,8 +8,8 @@ clipboard, bounded detach, retained shells and client-crash reconnect. Quit-dial
 presenter replacement also passes source/pack acceptance. Cold-node connection
 stages allow 60 seconds, with immediate successful progress and cancellation.
 The actual user state booted in 1.572 seconds after the authorized restart.
-The combined full repository check is still running; this is not full-release
-acceptance. The older retained node's idle connection hang remains unexplained.
+The independent-desktop source passed the combined full repository check
+(490 Lua tests, 524 registry entries). This is not full-release acceptance. The older retained node's idle connection hang remains unexplained.
 
 
 The global candidate installed September 10 now uses the native owner/client
@@ -371,4 +371,8 @@ supplied by the trusted retained-supervisor bootstrap; unreported legacy session
 show "Not reported". This is not remote-peer health or a physical-client identity.
 The presenter performs no discovery or networking. Source/pack tests cover mouse,
 Escape, F12 and a 42×12 terminal. Hive Manager keeps readiness in view at narrow
-widths and moves addresses and full IDs to Details. Native build/install pending.
+widths and moves addresses and full IDs to Details. The native UI build is installed globally and its executable acceptance passes,
+including stable display identity after reconnect. Hive Manager recognizes explicit
+native client-role metadata as display clients and does not query them as Bee
+services. This metadata grants no authority; names alone never establish roles.
+The full repository check for this newer UI revision is still running.

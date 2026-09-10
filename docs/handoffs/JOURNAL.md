@@ -5355,3 +5355,25 @@ Journal 852 assigns generic native mesh Stream work to the runtime lane; journal
 launch, client attachment and reconnect. Client-side 60-second connection/call
 ceilings do not change destination operation limits, membership death detection,
 or establish automatic live recovery. Journal evidence 856.
+
+### Compact Hive UI installed — September 10
+
+Global Bee is now source 9b58e4f, native 5172d7dc2396, runtime 674b58a1.
+SHA256: `18ae084a81ade1deb9b71ed0108909449d5f1cdbc6e9ad2bd619721cdd4cb21c`.
+The previous executable was archived and process 1992601 was verified and stopped
+through its pidfd. Databases were preserved; retained process is now 2137218.
+Actual-user cold frame: 1.558s; detach: 0.113s.
+
+F9 or the workspace label opens a read-only Hive/node/workspace/display dropdown.
+Hive Manager distinguishes explicitly advertised display clients from services,
+keeps compact readiness counts, and moves full IDs/addresses to Details. Client
+metadata suppresses irrelevant service probes; it never grants access. Native UI
+acceptance and visual review passed. Shared Lua: 495 tests passed.
+
+The earlier f227945 full check finished successfully (490 tests, 524 entries).
+The newer frozen UI full check is running: session 31926,
+`/tmp/bee-hive-role-full-check.log`; its first invocation failed because the
+isolated worktree had no default runtime binary, then was rerun with the explicit
+candidate runtime. Two 600-second idle reconnects passed in 0.241s and 0.235s,
+retaining the same shell. This does not resolve the earlier hour-idle hang.
+Both checkpoint branches are pushed; no runtime changes or main merge.

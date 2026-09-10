@@ -5442,3 +5442,17 @@ diagnostic 50459 remain live; do not restart them. After 46307 finishes, run the
 new source's full gate and executable verification before installing c3b2c9f.
 Native manifest remains 5172d7dc2396; docs-only native head is 15631f7.
 Global remains SHA440890d7..., retained PID2197478. Journal evidence890.
+
+### Session identity executable acceptance
+
+Isolated candidate `/tmp/bee-hive-session-identity-candidate` built from
+3d149fe/c3b2c9f production source, native 5172d7dc2396 and runtime 674b58a1.
+SHA256 `eddd5347ce277587541635f0b948ef7d6e3d1dc7b677be46044db6f8b9ced2b5`.
+Build 20971 and native gate 84624 are terminal exit 0. Native status UI, three
+independent desktops, first-controller continuity, default observer, F12 and
+reconnect without new allocation pass. Logs: `/tmp/bee-hive-session-identity-native-ui.log`
+and `/tmp/bee-hive-session-identity-desktops.log`. Candidate is not installed.
+Full previous-source 46307 remains live, now Terminal acceptance after control
+delivery, drag and window retirement. One-hour diagnostic 50459 remains live.
+The next full-source run must use this isolated identity checkpoint, not the
+shared checkout's unrelated new node/sync lane. No runtime implementation changed.

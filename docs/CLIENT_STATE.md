@@ -389,3 +389,32 @@ The already installed global build predates this adapter. The focused
 `make retained-desktop-check` exercises the real actor from source and pack,
 including unauthorized senders, allocation replay/default conflict and slow storage
 while the physical desktop remains usable.
+
+### Additional retained activation (source; not installed)
+
+After initial readiness, the bootstrap owner can send `bee.retained.activate`
+with version 1, workspace_id, desktop_id and request_id. The identity must already
+be allocated. `bee.launch:desktop_lifecycle` starts that client record on the
+existing host, checks its actual readiness identity, admits it and binds its
+renderer before replying on `bee.retained.activated`. An active identity is reused;
+an activation or shutdown already in progress returns BUSY. Missing records fail
+rather than allocating replacements. At most 32 additional actors are retained,
+and reservations are released only on their actual EXIT.
+
+Additional desktops have independent layouts and appearance, without legacy import.
+They share the workspace's application owner. Activation itself opens no application;
+launch requests are qualified by desktop and its current controller. Physical
+attach/detach and copy select that desktop's grants. A recipient still attached to
+another desktop keeps its monitor when one attachment ends. Additional F12 uses
+its own host correlation and lifetime state. Save/exit of an additional desktop
+preserves the host and applications; the default desktop's explicit workspace
+shutdown remains unchanged. Reactivation reuses the durable record and can attach
+to its still-running Terminal.
+
+Source/pack normal and slow-storage retained-desktop probes pass: forged activation
+is ignored, repeated activation reuses the identity, separate desktops run separate
+Terminals, additional F12 replaces its presenter, save/reactivation retains its
+live shell, and the first desktop remains usable. This does not yet expose public
+creation, automatic selection on a controller conflict or Hive Manager control.
+The Hive-facing owner still publishes one desktop; its catalog/session mapping
+and the native launch choice remain the next integration boundary.

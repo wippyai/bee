@@ -13,6 +13,7 @@ local decode = require("decode")
 local interaction = require("interaction")
 local desktops = require("desktops")
 local desktop_storage = require("desktop_storage")
+local desktop_lifecycle = require("desktop_lifecycle")
 local attachments = require("attachments")
 local retained_protocol = require("retained_protocol")
 type Channel = channel.Channel
@@ -21,6 +22,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
     local retained = desktops.new()
     local desktop: desktops.Desktop? = nil
     local desktop_id = ""
+    local additional: desktop_lifecycle.State? = nil
     local storage_pending: desktop_storage.Pending? = nil
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
@@ -36,13 +38,14 @@ local function run_supervisor(client: string, database_resource: string?, retain
         -- dependencies. Link loss revokes a mount, not the retained workspace.
         local trapping, trap_error = process.set_options({trap_links = true})
         if not trapping then error("Cannot handle desktop link loss: " .. tostring(trap_error)) end
+        local activations = listen("bee.retained.activate")
         local storage_requests = listen("bee.retained.desktops")
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
         local launch_requests = listen("bee.retained.launch")
         local launch_results = listen("bee.client.launched")
-        local launch_pending: string? = nil
-        local copy_pending: {id: string, recipient: string, mount: string}? = nil
+        local launch_pending: {id: string, desktop_id: string, client: string}? = nil
+        local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
         local hosts, ready = listen("bee.host.ready"), listen("bee.client.ready")
         local renderers, results = listen("bee.client.renderer"), listen("bee.host.client_result")
         local quits, answers = listen("bee.client.quit"), listen("bee.client.shutdown_answer")
@@ -78,6 +81,17 @@ local function run_supervisor(client: string, database_resource: string?, retain
             pending = uuid.v7()
             send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = pending, op = op})
         end
+        local function find_desktop(id: string): desktops.Desktop?
+            if id == desktop_id then return desktop end
+            return additional and desktop_lifecycle.find(additional, id) or nil
+        end
+        local function has_attachment(recipient: string): boolean
+            for _, resource in pairs(retained.desktops) do
+                local grants = resource.grants
+                if (grants.controller and grants.controller.recipient == recipient) or grants.observers[recipient] then return true end
+            end
+            return false
+        end
         local function storage_reply(request: desktop_storage.Request, reply: desktop_storage.Reply)
             if retained_owner then
                 local sent, delivery_error = process.send(retained_owner, "bee.retained.desktops_result", {version = 1, workspace_id = workspace_id,
@@ -102,6 +116,10 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 cases[#cases + 1] = attachment_requests:case_receive()
                 cases[#cases + 1] = launch_requests:case_receive()
                 cases[#cases + 1] = storage_requests:case_receive()
+                cases[#cases + 1] = activations:case_receive()
+            end
+            if additional then
+                for _, timer in ipairs(desktop_lifecycle.deadlines(additional)) do cases[#cases + 1] = timer:case_receive() end
             end
             if current_storage then
                 cases[#cases + 1] = current_storage.response:case_receive()
@@ -110,7 +128,9 @@ local function run_supervisor(client: string, database_resource: string?, retain
             if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
-            if current_storage and (selected.channel == current_storage.response or selected.channel == current_storage.deadline) then
+            if additional and desktop_lifecycle.timeout(additional, selected.channel) then
+                -- This deadline belongs only to the selected desktop.
+            elseif current_storage and (selected.channel == current_storage.response or selected.channel == current_storage.deadline) then
                 storage_pending = nil
                 local reply = selected.channel == current_storage.response and desktop_storage.complete(current_storage)
                     or desktop_storage.cancel(current_storage)
@@ -123,6 +143,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = uuid.v7(), op = "pause"})
             elseif selected.channel == events then
                 local event = selected.value
+                if additional then desktop_lifecycle.event(additional, event) end
                 if event.kind == process.event.CANCEL then return end
                 if event.kind == process.event.LINK_DOWN then
                     if desktop then
@@ -145,7 +166,14 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 local message = selected.value
                 local sender = tostring(message:from())
                 local data: unknown = message:payload():data()
-                if selected.channel == storage_requests and sender == retained_owner and announced then
+                local topic = selected.channel == ready and "ready" or selected.channel == results and "result"
+                    or selected.channel == renderers and "renderer" or selected.channel == quits and "quit"
+                    or selected.channel == saved and "saved" or selected.channel == finished and "finished" or ""
+                if additional and topic ~= "" and desktop_lifecycle.receive(additional, topic, sender, data) then
+                    -- The additional desktop owns this lifecycle message.
+                elseif selected.channel == activations and sender == retained_owner and additional and announced then
+                    desktop_lifecycle.activate(additional, data)
+                elseif selected.channel == storage_requests and sender == retained_owner and announced then
                     local request = desktop_storage.request(data, workspace_id)
                     if request then
                         if storage_pending then
@@ -200,58 +228,80 @@ local function run_supervisor(client: string, database_resource: string?, retain
                             connection_id = token; pending = ""; advance("running")
                             if retained_owner and rendered and not announced then
                                 announced = true
+                                additional = desktop_lifecycle.new(retained_owner, host, workspace_id, desktop_id, retained)
                                 send(retained_owner, "bee.retained.ready", {version = 1, workspace_id = workspace_id,
                                     desktop_id = desktop_id})
                             end
                         end
                     end
-                elseif selected.channel == copy_results and sender == client and retained_owner and desktop then
+                elseif selected.channel == copy_results and retained_owner then
                     local result = retained_protocol.copy_result(data)
                     local pending_copy = copy_pending
-                    if result and pending_copy and result.request_id == pending_copy.id then
+                    if result and pending_copy and sender == pending_copy.client and result.request_id == pending_copy.id then
                         copy_pending = nil
-                        local controller = desktop.grants.controller
+                        local source = find_desktop(pending_copy.desktop_id)
+                        local controller = source and source.grants.controller or nil
                         if not controller or controller.recipient ~= pending_copy.recipient or controller.mount ~= pending_copy.mount then
                             result = {request_id = result.request_id, selected = false, text = "", error = "Copy attachment retired"}
                         end
                         send(retained_owner, "bee.retained.copied", {version = 1, request_id = result.request_id,
                             selected = result.selected, text = result.text, error = result.error})
                     end
-                elseif selected.channel == launch_results and sender == client and retained_owner then
-                    local result = retained_protocol.launch_result(data, workspace_id, desktop_id)
-                    if result and result.request_id == launch_pending then
+                elseif selected.channel == launch_results and retained_owner then
+                    local waiting = launch_pending
+                    local result = waiting and sender == waiting.client and retained_protocol.launch_result(data, workspace_id, waiting.desktop_id) or nil
+                    if result and waiting and result.request_id == waiting.id then
                         launch_pending = nil
                         send(retained_owner, "bee.retained.launched", {version = 1, workspace_id = workspace_id,
-                            desktop_id = desktop_id, request_id = result.request_id, id = result.id,
+                            desktop_id = waiting.desktop_id, request_id = result.request_id, id = result.id,
                             instance_id = result.instance_id, error_code = result.error_code, error = result.error})
                     end
-                elseif selected.channel == launch_requests and sender == retained_owner and desktop and announced then
-                    local request = retained_protocol.launch(data, workspace_id, desktop_id)
+                elseif selected.channel == launch_requests and sender == retained_owner and announced then
+                    local target = type(data) == "table" and contract.workspace_id(data.desktop_id) or nil
+                    local resource = target and find_desktop(target) or nil
+                    local request = target and retained_protocol.launch(data, workspace_id, target) or nil
                     if request then
-                        local controller = desktop.grants.controller
+                        local controller = resource and resource.grants.controller or nil
                         local code, message = "", ""
-                        if not controller or controller.recipient ~= request.recipient then
+                        if not resource then code, message = "NOT_FOUND", "Desktop is not active"
+                        elseif not controller or controller.recipient ~= request.recipient then
                             code, message = "DENIED", "Launch requires the active desktop controller"
                         elseif launch_pending then
                             code, message = "BUSY", "A desktop launch is already pending"
                         end
                         if code ~= "" then
                             send(retained_owner, "bee.retained.launched", {version = 1, workspace_id = workspace_id,
-                                desktop_id = desktop_id, request_id = request.request_id, id = "", instance_id = "",
+                                desktop_id = target, request_id = request.request_id, id = "", instance_id = "",
                                 error_code = code, error = message})
-                        else
-                            launch_pending = request.request_id
-                            send(client, "bee.client.launch", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
+                        elseif resource and target then
+                            launch_pending = {id = request.request_id, desktop_id = target, client = resource.pid}
+                            send(resource.pid, "bee.client.launch", {version = 1, workspace_id = workspace_id, desktop_id = target,
                                 request_id = request.request_id, recipient = request.recipient, name = request.name, arguments = request.arguments})
                         end
                     end
                 elseif selected.channel == attachment_requests and sender == retained_owner and desktop and announced then
-                    local request = retained_protocol.request(data, workspace_id, desktop_id)
-                    if request and request.op == "copy" then
-                        local controller = desktop.grants.controller
-                        if controller and controller.recipient == request.recipient then
-                            copy_pending = {id = request.request_id, recipient = request.recipient, mount = controller.mount}
-                            local sent, err = desktop.view:send({type = "key", key_type = "bee.copy", key = request.request_id, action = "press", ctrl = false, alt = false, shift = false})
+                    local requested_id = type(data) == "table" and contract.workspace_id(data.desktop_id) or nil
+                    local selected_desktop = requested_id and find_desktop(requested_id) or nil
+                    local request = requested_id and retained_protocol.request(data, workspace_id, requested_id) or nil
+                    if request and not selected_desktop then
+                        if request.op == "copy" then
+                            send(retained_owner, "bee.retained.copied", {version = 1, request_id = request.request_id,
+                                selected = false, text = "", error = "Desktop is not active"})
+                        else
+                            send(retained_owner, "bee.retained.result", {version = 1, workspace_id = workspace_id,
+                                desktop_id = requested_id, request_id = request.request_id, mount = "",
+                                error_code = request.op == "detach" and "" or "not_found",
+                                error = request.op == "detach" and "" or "Desktop is not active"})
+                        end
+                    elseif request and selected_desktop and requested_id and request.op == "copy" then
+                        local controller = selected_desktop.grants.controller
+                        if copy_pending then
+                            send(retained_owner, "bee.retained.copied", {version = 1, request_id = request.request_id,
+                                selected = false, text = "", error = "A desktop copy is already pending"})
+                        elseif controller and controller.recipient == request.recipient then
+                            copy_pending = {id = request.request_id, recipient = request.recipient, mount = controller.mount,
+                                desktop_id = requested_id, client = selected_desktop.pid}
+                            local sent, err = selected_desktop.view:send({type = "key", key_type = "bee.copy", key = request.request_id, action = "press", ctrl = false, alt = false, shift = false})
                             if not sent then
                                 copy_pending = nil
                                 send(retained_owner, "bee.retained.copied", {version = 1, request_id = request.request_id,
@@ -261,23 +311,23 @@ local function run_supervisor(client: string, database_resource: string?, retain
                             send(retained_owner, "bee.retained.copied", {version = 1, request_id = request.request_id,
                                 selected = false, text = "", error = "Copy requires the active desktop attachment"})
                         end
-                    elseif request then
-                        if copy_pending and copy_pending.recipient == request.recipient then copy_pending = nil end
+                    elseif request and selected_desktop then
+                        if copy_pending and copy_pending.recipient == request.recipient and copy_pending.desktop_id == requested_id then copy_pending = nil end
                         local result: attachments.Result
-                        if request.op == "attach" then result = attachments.attach(desktop.grants, request.recipient, request.mode)
-                        else result = attachments.detach(desktop.grants, request.recipient) end
+                        if request.op == "attach" then result = attachments.attach(selected_desktop.grants, request.recipient, request.mode)
+                        else result = attachments.detach(selected_desktop.grants, request.recipient) end
                         if result.error_code == "" and request.op == "attach" then
                             local monitored, monitor_error = process.monitor(request.recipient)
                             if not monitored then
-                                local removed = attachments.detach(desktop.grants, request.recipient)
+                                local removed = attachments.detach(selected_desktop.grants, request.recipient)
                                 if removed.error_code ~= "" then error("Desktop grant cleanup failed: " .. removed.error) end
                                 result = {mount = "", error_code = "monitor_failed", error = tostring(monitor_error)}
                             end
                         elseif result.error_code == "" and request.recipient ~= retained_owner
-                            and request.recipient ~= client and request.recipient ~= host then
+                            and request.recipient ~= client and request.recipient ~= host and not has_attachment(request.recipient) then
                             process.unmonitor(request.recipient)
                         end
-                        send(sender, "bee.retained.result", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
+                        send(sender, "bee.retained.result", {version = 1, workspace_id = workspace_id, desktop_id = requested_id,
                             request_id = request.request_id, mount = result.mount, error_code = result.error_code, error = result.error})
                     end
                 elseif selected.channel == renderers and sender == client and type(data) == "table" and data.version == 1 then
@@ -340,6 +390,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
     end
     local ok, err = pcall(run)
     if storage_pending then desktop_storage.cancel(storage_pending) end
+    if additional then desktop_lifecycle.close(additional) end
     if retained_owner and client ~= "" then process.terminate(client) end
     if host ~= "" then process.terminate(host) end
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end

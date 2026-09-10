@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: desktop_lifecycle
+  kind: library.lua
+  source: file://desktop_lifecycle.lua
+  modules: [process, security, channel, time, uuid]
+  imports:
+    desktops: bee.client:desktops
+    attachments: bee.client:attachments
+    decode: bee.protocol:decode
+    protocol: bee.launch:protocol
+    contract: bee.protocol:application
 - name: desktop_storage
   kind: library.lua
   source: file://desktop_storage.lua
@@ -50,6 +60,7 @@ entries:
   method: main
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
+    desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
     desktops: bee.client:desktops
     attachments: bee.client:attachments

@@ -43,7 +43,7 @@ def run(workspace_appearance=False, command="desktop-client-probe", shared_store
         value["entries"].append({"name": "client_db_path", "kind": "env.variable", "storage": "bee:workspace_environment",
                                  "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True})
         config.write_text(yaml.safe_dump(value, sort_keys=False))
-        if command == "thread-status-probe":
+        if command in ("thread-status-probe", "retained-supervisor-probe"):
             # The disposable presenter copy stamps each frame with its PID.
             # This lets the fixture distinguish an F12 replacement from the
             # retained output of the viewport it replaced.
@@ -110,7 +110,7 @@ def run(workspace_appearance=False, command="desktop-client-probe", shared_store
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if command == "retained-supervisor-probe":
-        print(f"Retained supervisor source/pack (slow storage={storage_delay}): authorized catalog/allocation and retry, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
+        print(f"Retained supervisor source/pack (slow storage={storage_delay}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
         return
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")

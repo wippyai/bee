@@ -128,11 +128,9 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	if err != nil {
 		return err
 	}
-	selected, err := selectDesktop(catalog, cfg.Selection)
-	if err != nil {
-		return err
-	}
-	mounted, err := client.Attach(operations, "session-attach", selected.Workspace, selected.Desktop, cfg.Mode)
+	admission, cancelAdmission := context.WithTimeout(operations, 60*time.Second)
+	mounted, err := attachDesktop(admission, client, catalog, cfg.Selection, cfg.Mode)
+	cancelAdmission()
 	if err != nil {
 		return err
 	}
@@ -246,7 +244,7 @@ func Probe(ctx context.Context, directory string) error {
 }
 
 func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {
-	ready, cancelReady := context.WithTimeout(operations, 15*time.Second)
+	ready, cancelReady := context.WithTimeout(operations, 60*time.Second)
 	defer cancelReady()
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()

@@ -30,7 +30,8 @@ import (
 	"go.uber.org/zap"
 )
 
-const startupTimeout = 15 * time.Second
+// Cold network links may need time to become usable; cancellation remains immediate.
+const startupTimeout = 60 * time.Second
 const cleanupTimeout = 3 * time.Second
 
 // LocalConfig is selected by the native launcher, not by remote metadata.

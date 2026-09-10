@@ -37,7 +37,7 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		return err
 	}
 	if busy {
-		if _, err := fmt.Fprintln(c.Stdout, "Connecting to Bee…"); err != nil {
+		if _, err := fmt.Fprintln(c.Stdout, "Connecting to Hive…"); err != nil {
 			return err
 		}
 		// The runtime lock is only a routing hint. Attach independently

@@ -112,7 +112,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 		return Reply{}, errors.New("invalid Hive call context")
 	}
 	// Bound both waiting for this client and waiting for the owner.
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	stop := context.AfterFunc(c.ctx, cancel)
 	defer stop()

@@ -11,6 +11,8 @@ import (
 
 func TestReplyMatchesLuaEmptyListAndTypedFault(t *testing.T) {
 	for _, raw := range []string{
+		`{"protocol_revision":"bee.hive@1","request_id":"r","ok":false,"error":{"code":"DESKTOP_CONTROLLED","message":"already controlled","retryable":false},"grants":{}}`,
+		`{"protocol_revision":"bee.hive@1","request_id":"r","ok":false,"error":{"code":"LIMIT_EXCEEDED","message":"desktop capacity","retryable":false},"grants":{}}`,
 		`{"protocol_revision":"bee.hive@1","request_id":"r","ok":true,"value":{},"grants":{}}`,
 		`{"protocol_revision":"bee.hive@1","request_id":"r","ok":true,"value":null,"grants":[]}`,
 		`{"protocol_revision":"bee.hive@1","request_id":"r","ok":false,"error":{"code":"UNCERTAIN","message":"disconnected","retryable":false,"identity":{"operation_ref":"op","idempotency_key":"key"}},"grants":{}}`,

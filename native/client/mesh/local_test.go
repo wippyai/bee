@@ -39,7 +39,7 @@ func localOwnerTLS(t *testing.T, transport internode.ManagerTLSConfig) (context.
 
 func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, provision bool) (context.Context, string, *stackpkg.Stack, *rendezvous.Enrollment, rendezvous.Descriptor) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), startupTimeout+25*time.Second)
 	t.Cleanup(cancel)
 	state := t.TempDir()
 	unlock, err := statelock.Acquire(state)

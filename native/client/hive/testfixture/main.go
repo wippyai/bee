@@ -348,6 +348,9 @@ func diagnosticPhase(phase string) {
 
 // Fixture-only retry policy for explicit negative attachment receipts.
 func retryableCrashRefusal(err *hive.Rejected) bool {
+	if err.Fault.Code == "DESKTOP_CONTROLLED" {
+		return true
+	}
 	if err.Fault.Code == "BUSY" {
 		return err.Fault.Message == "Desktop request already pending" || err.Fault.Message == "Desktop already has a controller"
 	}

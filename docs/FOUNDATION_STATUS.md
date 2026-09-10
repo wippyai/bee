@@ -238,6 +238,10 @@ slow-query checks pass. A failed lookup is shown as **Hive supervisor unavailabl
 infer that Hive is disabled or that enrollment would repair the failure. A found
 supervisor is reported separately from each peer's reachability and desktop
 availability. Detailed startup phases require an authoritative lifecycle source.
+The next source revision separates the MEMBERSHIP and BEE SERVICE columns:
+presence in the native member list does not imply a configured supervisor route.
+Raft role is shown only under Details. This presentation change is not installed
+yet; it grants no access and does not establish peer connectivity.
 See [the supervisor boundary](HIVE_SUPERVISOR.md) for remaining activation gates.
 `make hive-presenter-check` additionally drives the real presenter while the
 destination runtime is stopped for fault injection. Start opens and F12 retires

@@ -4,6 +4,7 @@ import errno
 import fcntl
 import os
 import pty
+import re
 import select
 import signal
 import struct
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import termios
 import time
+import pyte
 
 
 MAX_OUTPUT = 8 * 1024 * 1024
@@ -31,11 +33,22 @@ def probe():
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 100, 0, 0))
     original_attributes = termios.tcgetattr(slave)
     output = bytearray()
+    pending_frame = bytearray()
+    screen = pyte.Screen(100, 32)
+    stream = pyte.ByteStream(screen)
     children = []
 
     def append_output(data):
         if data:
             output.extend(data)
+            pending_frame.extend(data)
+            # Publish complete physical frames; a diff may contain only a PID
+            # suffix, and unchanged Terminal text remains on the screen.
+            end_frame = b"\x1b[?2026l"
+            while (end := pending_frame.find(end_frame)) >= 0:
+                end += len(end_frame)
+                stream.feed(bytes(pending_frame[:end]))
+                del pending_frame[:end]
             if len(output) > MAX_OUTPUT:
                 raise AssertionError("physical output exceeded bound")
 
@@ -97,6 +110,21 @@ def probe():
         child.wait()
         drain_after_exit(child)
         return child.returncode
+
+    def presenter():
+        match = re.search(r" P:([^\s]+)", screen.display[0])
+        return match.group(1) if match else None
+
+    def wait_for_replacement(child, previous):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            read_available(child)
+            if presenter() not in (None, previous) and "PHYSICAL_alive_OK" in "\n".join(screen.display):
+                return
+            if child.poll() is not None:
+                raise child_error(child, "client exited during F12 replacement:")
+            select.select([master], [], [], .05)
+        raise child_error(child, "F12 did not replace presenter with retained content:")
 
     def child_error(child, description):
         return AssertionError(
@@ -203,10 +231,14 @@ def probe():
             if not wait_for_prompt(child, b"PHYSICAL_alive_OK"):
                 raise child_error(child, "physical marker missing:")
             # F12 is handled by the retained desktop; its Terminal stays alive.
+            read_available(child)
+            previous = presenter()
+            if previous is None:
+                raise AssertionError("missing fixture presenter marker")
             os.write(master, b"\x1b[24~")
             output.clear()
-            if not wait_for_prompt(child, b"PHYSICAL_alive_OK"):
-                raise child_error(child, "physical F12 marker missing:")
+            wait_for_replacement(child, previous)
+            screen.resize(40, 120)
             fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
             os.killpg(child.pid, signal.SIGWINCH)
             command("printf 'RESIZED_%s_OK\\n' \"$native_pty\"")

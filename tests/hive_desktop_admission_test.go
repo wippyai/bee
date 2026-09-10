@@ -45,6 +45,23 @@ func TestHiveDesktopAdmission(t *testing.T) {
 	if err := os.CopyFS(sourceSnapshot, os.DirFS(filepath.Join(repository, "src"))); err != nil {
 		t.Fatal(err)
 	}
+	if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_BINARY") != "" {
+		// Mark actual presenter replacement in the disposable source. Identical
+		// retained content need not emit fresh terminal bytes after F12.
+		presenter := filepath.Join(sourceSnapshot, "core", "terminal", "main.lua")
+		body, err := os.ReadFile(presenter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		anchor := `"Workspace " .. workspace_id:sub(1, 8)`
+		if strings.Count(string(body), anchor) != 1 {
+			t.Fatal("unexpected presenter label anchor")
+		}
+		body = []byte(strings.Replace(string(body), anchor, anchor+` .. " P:" .. tostring(process.pid()):sub(-8)`, 1))
+		if err := os.WriteFile(presenter, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// This headless owner has no physical console to protect from logs. Keep
 	// lifecycle diagnostics visible when an actual client acceptance fails.
 	rootManifest := filepath.Join(sourceSnapshot, "_index.yaml")

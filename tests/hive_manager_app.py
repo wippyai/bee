@@ -23,7 +23,7 @@ def exercise():
             ui.wait("Hive supervisor unavailable", timeout=10)
             text = ui.text()
             assert "FIXTURE DATA" not in text, text
-            assert "this unavailable" in text, text
+            assert "this present" in text, text
             assert "UNAVAILABLE" in text, text
             ui.key(b"\r")
             ui.wait("Desktops unavailable", timeout=5)

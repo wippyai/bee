@@ -17,7 +17,7 @@ function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
     return nil
 end
 local function status_word(node: model.Node): string
-    if node.status == "reachable" then return "reachable" end
+    if node.status == "reachable" then return "ready" end
     if node.status == "unavailable" then return "unavailable" end
     return "unknown"
 end
@@ -72,8 +72,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             end
         end
     end
-    local name_width = math.floor(math.max(12, math.min(40, width - 44)))
-    line(3, string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-10s %s", "", "STATUS", "NODE", "ROLE", "ADDRESS"), theme.muted)
+    local name_width = math.floor(math.max(12, math.min(40, width - 46)))
+    line(3, string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-12s %s", "", "MEMBERSHIP", "NODE", "BEE SERVICE", "ADDRESS"), theme.muted)
     if #nodes == 0 then line(list_first, "No nodes reported", theme.muted) end
     for slot = 1, capacity do
         local node = nodes[next_offset + slot]
@@ -87,8 +87,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if node.label ~= node.node_id then name = node.label .. " (" .. node.node_id .. ")" end
         local tail = node.addr
         if node.status == "unavailable" and node.detail ~= "" then tail = tail .. (tail ~= "" and "  " or "") .. node.detail end
-        local label = string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-10s %s", node.is_local and "this" or "", status_word(node),
-            tty.text.truncate(name, name_width, "…"), tty.text.truncate(node.role, 10, "…"), tail)
+        local label = string.format("%-4s %-12s %-" .. tostring(name_width) .. "s %-12s %s", node.is_local and "this" or "", node.member and "present" or "left",
+            tty.text.truncate(name, name_width, "…"), status_word(node), tail)
         line(y, label, fg, bg)
         hits[#hits + 1] = {kind = "node", index = next_offset + slot, key = node.node_id, x = 1, y = y, width = width, height = 1}
     end
@@ -97,10 +97,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         put(1, y, string.rep("─", width), width, theme.border)
         local lines: {string} = {}
         local keys: {string} = {}
-        local head = "Desktops of " .. selected.label
+        local head = "Node " .. selected.label
         if selected.status == "reachable" then head = head .. "  cluster " .. tostring(selected.cluster_size) .. "  sampled " .. selected.sampled_at
-        elseif selected.status == "unavailable" then head = head .. "  unavailable: " .. selected.detail end
+        elseif selected.status == "unavailable" then head = head .. "  Bee service unavailable: " .. selected.detail end
         if state.technical then
+            head = head .. "  Raft role " .. (selected.role ~= "" and selected.role or "unknown")
             head = head .. "  heap " .. bytes(selected.heap) .. "  goroutines " .. (selected.goroutines and tostring(selected.goroutines) or "-")
             if catalog and catalog.owner_generation ~= "" then head = head .. "  owner generation " .. catalog.owner_generation end
         end

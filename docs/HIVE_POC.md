@@ -268,3 +268,20 @@ supervisors are actor services, not stdin command interpreters. Reader/control
 isolation remains a native runtime issue to verify separately; do not increase
 Bee's three-second application readiness deadline to conceal it. The fixture's
 stdin bootstrap is test-only and is not a proposed Hive protocol.
+
+
+## September 10: current physical reattachment probe
+
+The separate-runtime physical probe has been rerun against runtime `674b58a1`.
+The fixture stamps the presenter identity into a disposable copy of its header
+and decodes complete synchronized output frames. F12 must change that identity
+while retaining the shell content. Requiring unchanged text to be printed again
+was an invalid oracle because the physical renderer may emit only changed cells.
+No presenter marker is added to production.
+
+The revised probe passes real TLS/mesh admission, destination shell proof, input,
+F12 replacement with the same shell, resize, detach, and terminal-attribute
+restoration (`/tmp/bee-mesh-physical-proof-r2.log`, 35.04 seconds). This is a
+same-machine, separate-runtime test with explicit fixture enrollment. Public
+remote enrollment/selection and the recurring user connection fault are not
+proved by it. Abrupt-client recovery is checked separately.

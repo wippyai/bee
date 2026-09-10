@@ -8,10 +8,17 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
+
+def database_environment(directory, **overrides):
+    """Keep every booted subsystem store inside the fixture's disposable root."""
+    root = Path(directory)
+    names = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway")
+    return {**os.environ, **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
+
 
 @contextmanager
-def fixture_workspace(presenter_probe=False):
+def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=True):
     with tempfile.TemporaryDirectory(prefix="bee-fixtures-") as temporary:
         folder = Path(temporary)
         shutil.copytree(ROOT / "src", folder / "src")
@@ -27,8 +34,19 @@ def fixture_workspace(presenter_probe=False):
             assert anchor in text
             text = text.replace(anchor, 'if event.key_type == "f10" then error("Injected presenter failure") end\n                ' + anchor)
             presenter.write_text(text)
-        shutil.copytree(ROOT / "tests/lua", folder / "src/tests")
+        if managed_gateway and not unit_tests:
+            raise ValueError("The managed gateway belongs to the unit-test composition")
+        if unit_tests:
+            shutil.copytree(ROOT / "tests/lua", folder / "src/tests")
+        else:
+            (folder / "src/tests").mkdir()
+        # Managed harness tests own their loopback listener. Desktop proofs
+        # must retain the default composition's no-listener boundary.
+        if not managed_gateway:
+            shutil.rmtree(folder / "src/tests/managed", ignore_errors=True)
         shutil.copytree(ROOT / "examples/fixtures", folder / "src/fixtures")
+        shutil.copytree(ROOT / "tests/fixtures/drivers", folder / "fixtures/drivers")
+        shutil.copytree(ROOT / "tests/fixtures/harness", folder / "fixtures/harness")
         shutil.copy2(ROOT / ".wippy.yaml", folder / ".wippy.yaml")
         lock = yaml.safe_load((ROOT / "wippy.lock").read_text())
         lock.setdefault("modules", [])
@@ -62,7 +80,8 @@ def pack_fixture(folder, destination):
     for index in (folder / "src").rglob("_index.yaml"):
         document = yaml.safe_load(index.read_text())
         for entry in document["entries"]:
-            if entry.get("meta", {}).get("type") == "test":
+            meta = entry.get("meta", {})
+            if meta.get("type") in {"test", "test_support"} or meta.get("test_support") is True:
                 excluded.add(f'{document["namespace"]}:{entry["name"]}')
     args = [str(RUNTIME), "pack", "--exclude-ns", "wippy.test"]
     for identity in sorted(excluded):

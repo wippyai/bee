@@ -1,17 +1,29 @@
 -- Versioned application boundary. Records contain values, never terminal handles.
 local arguments = require("arguments")
+local thread_bounds = require("thread_bounds")
 local M = {}
 type ReplyOp = "open" | "close" | "closed" | "focus" | "attached" | "bind" | "unbind" | "page" | "title" | "closing" | "quit" | "shutdown"
 type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, instance_id: string, workspace_id: string?,
-    title: string, icon: string?, mount: string, definition_id: string, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string}
+    title: string, icon: string?, mount: string, definition_id: string, thread_id: string?, resume_schema: string, restart_policy: string, resume_state: string, error: string, error_code: string, observer: boolean?}
 type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"
-type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}}
+type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, thread_id: string?, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}, observer: boolean?}
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string}
 type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean}
+local function request_op(value: unknown): RequestOp?
+    if value == "open" then return "open" end
+    if value == "close" then return "close" end
+    if value == "bind" then return "bind" end
+    if value == "unbind" then return "unbind" end
+    if value == "shutdown" then return "shutdown" end
+    return nil
+end
 function M.workspace_id(value: unknown): string?
     if type(value) == "string" and #value == 32 and not value:find("[^0-9a-f]") then return value end
     return nil
+end
+function M.thread_id(value: unknown): string?
+    return thread_bounds.id(value)
 end
 function M.text(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
@@ -23,8 +35,8 @@ function M.request(value: unknown): Request?
     if value.workspace_id ~= nil and not workspace_id then return nil end
     local request_id = M.text(value.request_id, 80)
     if not request_id or request_id == "" then return nil end
-    local op = value.op
-    if op ~= "open" and op ~= "close" and op ~= "bind" and op ~= "unbind" and op ~= "shutdown" then return nil end
+    local op = request_op(value.op)
+    if not op then return nil end
     local id = M.text(value.id or "", 80)
     local instance_id = M.text(value.instance_id or "", 80)
     local definition_id = M.text(value.definition_id or "", 160)
@@ -34,7 +46,17 @@ function M.request(value: unknown): Request?
     if op ~= "bind" and op ~= "close" and instance_id ~= "" then return nil end
     if op == "unbind" and (recipient == "" or id ~= "") then return nil end
     if op == "open" and definition_id == "" then return nil end
+    local thread_id: string? = nil
+    if value.thread_id ~= nil then
+        thread_id = thread_bounds.id(value.thread_id)
+        if not thread_id or op ~= "open" then return nil end
+    end
     if op == "close" and id == "" then return nil end
+    if value.observer ~= nil and type(value.observer) ~= "boolean" then return nil end
+    local observer: boolean? = nil
+    if value.observer == true then observer = true end
+    if op ~= "bind" and value.observer ~= nil then return nil end
+    if op == "bind" and observer and (id == "" or instance_id == "") then return nil end
     local restore_instance = M.text(value.restore_instance_id or "", 80)
     local restore_view = M.text(value.restore_view_id or "", 80)
     local schema = M.text(value.resume_schema or "", 80)
@@ -43,15 +65,15 @@ function M.request(value: unknown): Request?
     if (restore_instance == "") ~= (restore_view == "") then return nil end
     local args = arguments.decode(value.arguments)
     if not args or (op ~= "open" and #args > 0) then return nil end
-    return {version = 1, request_id = request_id, op = op, workspace_id = workspace_id, id = id, instance_id = instance_id, definition_id = definition_id, recipient = recipient,
-        restore_instance_id = restore_instance, restore_view_id = restore_view, resume_schema = schema, resume_state = state, arguments = args}
+    return {version = 1, request_id = request_id, op = op, workspace_id = workspace_id, id = id, instance_id = instance_id, definition_id = definition_id, thread_id = thread_id, recipient = recipient,
+        restore_instance_id = restore_instance, restore_view_id = restore_view, resume_schema = schema, resume_state = state, arguments = args, observer = observer}
 end
 function M.argument_fingerprint(values: {string}): string
     return arguments.fingerprint(values)
 end
 function M.reply(request_id: string, op: ReplyOp, code: string?, message: string?): Reply
     return {version = 1, request_id = request_id, op = op, id = "", instance_id = "", title = "", mount = "",
-        error_code = code or "", error = message or "", definition_id = "", resume_schema = "", restart_policy = "never", resume_state = ""}
+        error_code = code or "", error = message or "", definition_id = "", thread_id = nil, resume_schema = "", restart_policy = "never", resume_state = ""}
 end
 function M.descriptor(id: string, value: unknown): Descriptor?
     if type(value) ~= "table" or value.api_version ~= 1 or value.lifetime ~= "view" then return nil end

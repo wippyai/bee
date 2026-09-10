@@ -60,13 +60,76 @@ Neither the manager nor a shell selection transfers ownership or authorization.
 These UI and remote operations remain proposals until their contracts and
 acceptance checks exist.
 
+The default workflow supports several project hosts and several independent
+client windows. A client is not permanently assigned to one node or workspace:
+its picker changes the browsing target and destination for new opens, while
+existing tabs retain their full owner references. It can retain admitted
+attachments to several owners concurrently. Switching focus must not restart
+applications, dispose another client's layout or implicitly close a connection.
+Reuse a valid attachment when returning to an owner; expired or revoked
+permissions require fresh admission. Show owner labels on mixed-host tabs and
+distinguish an unreachable owner from an empty workspace. The current single-host
+client composition must be extended to support this workflow; the fixture's
+remote-client success does not prove multi-owner composition.
+
+## Multiple displays and desktop extension
+
+Proposal requested by the user: a client may attach as an independent desktop
+or join an existing desktop as another named display. A display corresponds to
+one terminal window; the operating system places it on a physical monitor.
+Node, workspace, desktop group and display identities remain distinct.
+
+A client may also organize several virtual displays inside one terminal window.
+Neither physical nor virtual displays are assigned permanently to a node: each
+can compose owner-qualified views from several nodes at once. A display may have
+a preferred browsing/launch destination without restricting the origins of its
+existing views. Moving a view between displays transfers presentation and input
+control, not the application's execution or filesystem. Launching on another
+node and any future execution migration are separate admitted operations.
+
+Independent clients already have separate layout state. Extending one desktop
+requires an explicit shared display group and an owner for window placement.
+That owner coordinates moving a window between displays while its application
+and native shell remain on their existing workspace host. Layout stores should
+reference stable display identities, not a renderer PID or monitor coordinates.
+Presenter replacement and reconnection must reacquire a fresh attachment.
+
+A move must revoke the old input controller before granting the new controller;
+an uncertain revocation cannot produce two controllers. Observation on several
+displays is a separate permission from input. Display loss must retain the app
+and offer an explicit move to an available display without silently stealing
+control from a temporarily disconnected client. Shared display groups, handoff,
+and their recovery UI are not implemented. The current remote fixture proves
+independent-client attachment and shell retention, not an extended desktop.
+
+Several clients viewing one application must share its producer and application
+state. Native controller/observer mounts already provide the transport primitive;
+the existing observation fixture covers updates and recipient-rights isolation.
+Bee's broker currently publishes controller mounts only. Extend its owner-held
+attachment records to admit bounded observers without replacing the controller.
+The initial policy is many viewers with one input/resize controller. Observers
+fit or clip the owner's viewport; they cannot repeatedly resize the shared PTY
+to match their own windows. Prove independent observer revocation and continued
+controller operation before exposing this in the client UI.
+
+The input actor is a live routing endpoint, not the durable identity of the
+person or agent controlling the application. Future admission must bind an
+authenticated principal to the exact owner-qualified view, permitted operations
+and a revocable attachment generation. The owner checks that binding; a saved
+client ID, node display name or payload PID cannot establish it. Presenter
+replacement changes the recipient and requires a fresh mount without changing
+the application instance or the principal's identity. The richer principal and
+delegation contract remains proposed; current mounts enforce exact recipient
+and operation rights.
+
 ## Setup without repeated keys
 
 Pairing is a proposed Bee convenience layer over native configuration. The pinned
 runtime example (`boot/components/system/cluster.example.yaml`) provides seed
 addresses, stable unique node names, membership secret configuration and server/
 client roles. It does not establish the proposed one-time invitation protocol.
-Do not advertise `bee hive init/invite/join` as implemented commands yet.
+The current proposed commands and machine/node/workspace mapping are in
+[Hive topology](HIVE_TOPOLOGY.md); none of its setup commands are implemented yet.
 
 An explicit first setup should persist the selected profile, native node identity,
 seed addresses and protected credential references. Subsequent `bee` launches
@@ -268,7 +331,7 @@ integration and the profile CLI are separate, unimplemented slices.
 
 ## Verified runtime boundary
 
-Inspected the runtime commit pinned by `runtime/lock.json`,
+Inspected the runtime commit pinned by `wippy.build.json`,
 `055505effbb0816ee833fb85c817d2954f6a0ccc`, rather than a dirty development tree:
 
 - `system/tty/service.go` creates virtual viewports from actor context without a

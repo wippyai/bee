@@ -1,6 +1,24 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: clipboard
+  kind: library.lua
+  source: file://clipboard.lua
+- name: desktops
+  kind: library.lua
+  source: file://desktops.lua
+  modules: [process, tty, security]
+  imports:
+    binding: bee.storage:binding
+    contract: bee.protocol:application
+    lifecycle: bee.client:lifecycle
+    attachments: bee.client:attachments
+- name: attachments
+  kind: library.lua
+  source: file://attachments.lua
+  modules: [tty]
+  imports:
+    attachment: bee.applications:attachment
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
@@ -19,8 +37,9 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: &client_imports
+    clipboard: bee.client:clipboard
     launcher: bee.launch:bootstrap
     command: bee.applications:command
     arguments: bee.application:arguments
@@ -30,6 +49,8 @@ entries:
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     inventory: bee.host:inventory
+    status_bindings: bee.session:bindings
+    status_surface: bee.application:status_surface
     host_protocol: bee.host:protocol
     inbox: bee.client:inbox
     lifecycle: bee.client:lifecycle
@@ -40,25 +61,25 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: local_entry
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: *client_imports
 - name: local_command
   kind: process.lua
   source: file://main.lua
   method: local_command
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: *client_imports
 - name: local_application
   kind: process.lua
   source: file://main.lua
   method: local_application
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: *client_imports
 - name: desktop
   kind: process.lua
   source: file://main.lua
   method: desktop
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: *client_imports
   meta:
     command:
@@ -76,7 +97,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: application
-  modules: [process, channel, tty, ctx, security, uuid, hash, time]
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: *client_imports
   meta:
     command:

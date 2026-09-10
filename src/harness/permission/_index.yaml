@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.harness.permission
+entries:
+- name: adapter
+  kind: library.lua
+  source: file://adapter.lua
+  modules: [hash, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    driver_types: bee.driver:types
+- name: acceptance
+  kind: library.lua
+  source: file://acceptance.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical

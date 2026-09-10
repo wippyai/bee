@@ -128,6 +128,9 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local native_pid = wait_for(view, "BEE_CLIENT_" .. label .. "_(%d+)")
     wait_views(label == "A" and 1 or 2)
     status("opened", {id = opened.id, instance_id = opened.instance_id, native_pid = native_pid})
+    local observed: tty.Viewport? = nil
+    local check_sequence = 0
+    local observe_sequence = 0
     while true do
         local message = assert(commands:receive())
         assert(message:from() == owner)
@@ -169,9 +172,50 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
                 assert(not value or #value.items <= 2, "Detached client received a newly opened application")
             end
             status("inventory-detached")
+        elseif type(op) == "table" and op.op == "observe" then
+            if type(op.id) ~= "string" or type(op.instance_id) ~= "string" or type(op.native_pid) ~= "string" then error("Invalid observer target") end
+            observe_sequence = observe_sequence + 1
+            local observe_request = "observe-" .. tostring(observe_sequence)
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = observe_request, op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = op.id, instance_id = op.instance_id, observer = false}))
+            local attached = reply(observe_request, "attached")
+            if op.expect_error == true then
+                assert(attached.error_code == "revoke_failed" and attached.mount == "", "Failed revoke disclosed a grant")
+                assert(reply(observe_request, "bind").error_code == "revoke_failed")
+                if not observed then error("Lost previous observer") end
+                assert(observed:snapshot(), "Failed revoke unexpectedly retired old observer")
+                status("observe-failed")
+            else
+                assert(attached.error_code == "" and attached.observer == true, "Host did not clamp observer rights")
+                assert(reply(observe_request, "bind").error_code == "")
+                local mounted, mount_error = tty.attach(attached.mount)
+                if not mounted then error(tostring(mount_error)) end
+                if observed then
+                    local stale, stale_error = observed:snapshot()
+                    assert(not stale and stale_error, "Replaced observer mount remained readable")
+                end
+                observed = mounted
+                wait_for(mounted, "BEE_CHECK_B_" .. op.native_pid)
+                local sent, send_error = mounted:send({type = "key", key = "x", key_type = "runes", action = "press"})
+                local resized, resize_error = mounted:resize(20, 10)
+                assert(not sent and send_error and not resized and resize_error, "Observer gained control")
+                status("observed")
+            end
+        elseif op == "observer-live" then
+            if not observed then error("Missing observer attachment") end
+            assert(observed:snapshot(), "Failed detach lost the owned grant")
+            status("observer-live")
+        elseif op == "observer-stale" then
+            if not observed then error("Missing observer attachment") end
+            local frame, frame_error = observed:snapshot()
+            local sent, send_error = observed:send({type = "key", key = "x", key_type = "runes", action = "press"})
+            local resized, resize_error = observed:resize(20, 10)
+            assert(not frame and frame_error and not sent and send_error and not resized and resize_error, "Detached observer retained authority")
+            status("observer-stale")
         elseif op == "check" then
-            command(view, "printf 'BEE_CHECK_%s_%s\\n' \"$bee_client\" \"$$\"")
-            wait_for(view, "BEE_CHECK_" .. label .. "_" .. native_pid)
+            check_sequence = check_sequence + 1
+            command(view, "printf 'BEE_CHECK_%s_%s_%s\\n' \"$bee_client\" \"$$\" " .. tostring(check_sequence))
+            wait_for(view, "BEE_CHECK_" .. label .. "_" .. native_pid .. "_" .. tostring(check_sequence))
             status("checked")
         elseif op == "stale" then
             local frame, err = view:snapshot()
@@ -368,9 +412,26 @@ function M.main()
     admit("readmit-first", first, false, "")
     select_renderer("ungranted-renderer", first, second, "permission_denied")
     assert(process.send(first, "bee.client.command", "readmit")); status(first, "denied")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(first, "bee.client.command", {op = "observe", id = second_view.id,
+        instance_id = second_view.instance_id, native_pid = second_view.native_pid})); status(first, "observed")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(first, "bee.client.command", {op = "observe", id = second_view.id, expect_error = true,
+        instance_id = second_view.instance_id, native_pid = second_view.native_pid})); status(first, "observe-failed")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(first, "bee.client.command", {op = "observe", id = second_view.id,
+        instance_id = second_view.instance_id, native_pid = second_view.native_pid})); status(first, "observed")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    assert(process.send(host, "bee.host.client", {version = 1, request_id = "observer-detach-failure", op = "detach",
+        workspace_id = workspace_id, recipient = first}))
+    result("observer-detach-failure", first, "revoke_failed")
+    assert(process.send(first, "bee.client.command", "observer-live")); status(first, "observer-live")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    detach("detach-again", first)
+    assert(process.send(first, "bee.client.command", "observer-stale")); status(first, "observer-stale")
+    assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
     assert(process.send(second, "bee.client.command", "exit"))
     result("", second, "")
-    detach("detach-again", first)
     assert(process.send(first, "bee.client.command", "exit"))
     for index, state in ipairs({first_view, second_view}) do
         local id = "inspect-" .. tostring(index)

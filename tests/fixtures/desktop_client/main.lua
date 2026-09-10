@@ -4,9 +4,14 @@ local security = require("security")
 local tty = require("tty")
 local time = require("time")
 local channel = require("channel")
+local logger = require("logger")
+local log = logger:named("bee.desktop_client_probe")
 type Channel = channel.Channel
 local store = require("store")
+local desktops = require("desktops")
+local desktop_attachments = require("desktop_attachments")
 local decode = require("decode")
+local launch_protocol = require("launch_protocol")
 local interaction = require("interaction")
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
@@ -63,6 +68,7 @@ local function wait_absent(view: tty.Viewport, text: string, phase: string, even
 end
 local function main()
     local owner = tostring(process.pid())
+    local retained_desktops = desktops.new()
     local hosts = assert(process.listen("bee.host.ready", {message = true}))
     local clients = assert(process.listen("bee.client.ready", {message = true}))
     local renderers = assert(process.listen("bee.client.renderer", {message = true}))
@@ -111,21 +117,25 @@ local function main()
         end
     end
     local function start(label: string, width: integer, launch: boolean): (string, tty.Viewport)
-        local screen, err = tty.viewport({width = width, height = 32})
-        if not screen then error(tostring(err)) end
-        local grant = assert(screen:grant())
-        local client = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.client_owner"] = owner}):with_scope(scope({
-            "bee:desktop_policy", "bee:client_spawn_policy", "bee.desktop_client_probe:" .. label .. "_policy"})):spawn_monitored(
-                "bee.client:main", "bee:workers", owner, host, workspace_id, "bee.client.db:" .. label,
-                launch and "bee.console:app" or nil, {version = 1, quit_mode = label == "right" and "supervisor" or "detach",
-                    fullscreen = label == "left",
-                    arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
-                        or {"bash", "--noprofile", "--norc", "-i"},
-                    legacy_desktop = label == "left" and legacy_desktop or nil})))
+        local selection: desktops.Selection = {host = host, workspace_id = workspace_id,
+            database = "bee.client.db:" .. label, width = width, height = 32,
+            application = launch and "bee.console:app" or nil,
+            options = {version = 1, quit_mode = label == "right" and "supervisor" or "detach",
+                fullscreen = label == "left",
+                arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
+                    or {"bash", "--noprofile", "--norc", "-i"},
+                legacy_desktop = label == "left" and legacy_desktop or nil}}
+        local client_scope = scope({"bee:desktop_policy", "bee:client_spawn_policy",
+            "bee.desktop_client_probe:" .. label .. "_policy"})
+        local desktop, start_error = desktops.start(retained_desktops, selection, client_scope)
+        if not desktop then error(tostring(start_error)) end
+        local duplicate, duplicate_error = desktops.start(retained_desktops, selection, client_scope)
+        assert(not duplicate and duplicate_error ~= nil, "Duplicate desktop store owner admitted")
+        local client, screen = desktop.pid, desktop.view
         local ready = assert(clients:receive())
         assert(tostring(ready:from()) == client)
-        local ready_data: unknown = ready:payload():data()
-        if type(ready_data) ~= "table" or type(ready_data.import_receipt) ~= "string" then error("Missing import result") end
+        local ready_data = launch_protocol.ready(ready:payload():data(), workspace_id, label == "left")
+        if not ready_data then error("Invalid desktop readiness or missing required import") end
         if label == "left" then
             assert(#ready_data.import_receipt == 32, "Import was not committed before readiness")
             if imported_receipt ~= "" then assert(ready_data.import_receipt == imported_receipt, "Import retry changed its receipt") end
@@ -134,7 +144,7 @@ local function main()
             assert(ready_data.import_receipt == "", "Client without legacy offer imported state")
         end
         assert(process.send(host, "bee.host.client", {version = 1, request_id = label .. "-admit", op = "admit",
-            workspace_id = workspace_id, recipient = client, permissions = {open = true, close = true, control = true, appearance = label == "left"}}))
+            workspace_id = workspace_id, recipient = client, permissions = {open = label ~= "observer", close = label ~= "observer", control = label ~= "observer", appearance = label == "left"}}))
         result(label .. "-admit")
         local selected = assert(renderers:receive())
         assert(tostring(selected:from()) == client)
@@ -152,7 +162,7 @@ local function main()
                 command(screen, "printf 'ARG_%s_END\\n' \"$BEE_LAUNCH_LITERAL\"")
                 wait_text(screen, "ARG_space ; $HOME_END")
             end
-        else
+        elseif label ~= "observer" then
             command(screen, "printf 'RESUMED_%s_OK\\n' \"$bee_desktop\"")
             wait_text(screen, "RESUMED_" .. label .. "_OK")
         end
@@ -160,6 +170,79 @@ local function main()
     end
     local left, left_screen = start("left", 100, true)
     local right, right_screen = start("right", 120, true)
+    -- Physical presentations attach to the retained virtual desktop. Replacing
+    -- one must not recreate the desktop actor, its store, presenter or shell.
+    local physical_boot = assert(process.listen("physical.boot", {message = true}))
+    local physical_ready = assert(process.listen("physical.ready", {message = true}))
+    local left_desktop = retained_desktops.desktops["bee.client.db:left"]
+    assert(left_desktop)
+    local desktop_grants = left_desktop.grants
+    local function attach_physical(): (string, tty.Viewport, string)
+        local screen, screen_error = tty.viewport({width = 100, height = 32})
+        if not screen then error(tostring(screen_error)) end
+        local pid = tostring(assert(process.with_options({terminal = assert(screen:grant())})
+            :with_scope(scope({"bee:desktop_policy"})):spawn_monitored(
+                "bee.desktop_client_probe:physical", "bee:workers", owner)))
+        local booted = assert(physical_boot:receive())
+        assert(tostring(booted:from()) == pid)
+        local attached = desktop_attachments.attach(desktop_grants, pid, "control")
+        assert(attached.error_code == "", attached.error)
+        local mount = attached.mount
+        local competing = desktop_attachments.attach(desktop_grants, right, "control")
+        assert(competing.error_code == "busy" and competing.mount == "", "New display stole control")
+        local downgraded = desktop_attachments.attach(desktop_grants, pid, "observe")
+        assert(downgraded.error_code == "mode_conflict", "Controller silently changed mode")
+        local observed = desktop_attachments.attach(desktop_grants, owner, "observe")
+        assert(observed.error_code == "", observed.error)
+        local observer_view = assert(tty.attach(observed.mount))
+        assert(observer_view:snapshot())
+        local sent, denied = observer_view:send({type = "paste", text = "FORBIDDEN_DESKTOP_INPUT"})
+        assert(not sent and denied ~= nil, "Desktop observer received input authority")
+        local promoted = desktop_attachments.attach(desktop_grants, owner, "control")
+        assert(promoted.error_code == "mode_conflict", "Observer silently gained control")
+        assert(desktop_attachments.detach(desktop_grants, owner).error_code == "")
+        local stale, stale_error = observer_view:snapshot()
+        assert(not stale and stale_error ~= nil, "Detached desktop observer remained usable")
+        observer_view:close()
+        assert(process.send(pid, "physical.configure", {mount = mount}))
+        local ready = assert(physical_ready:receive())
+        assert(tostring(ready:from()) == pid)
+        return pid, screen, mount
+    end
+    local function detach_physical(pid: string, screen: tty.Viewport, graceful: boolean)
+        if graceful then assert(screen:send({type = "close"}))
+        else assert(process.terminate(pid)) end
+        local deadline = time.after("3s")
+        while true do
+            local selected = channel.select({events:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel == deadline then error("Physical display did not exit") end
+            local event = selected.value
+            if event.kind == process.event.EXIT then
+                assert(tostring(event.from) == pid, "Desktop or application exited with its physical client")
+                assert(not desktops.exited(retained_desktops, event), "Display exit released desktop ownership")
+                break
+            end
+        end
+        local detached = desktop_attachments.detach(desktop_grants, pid)
+        assert(detached.error_code == "", detached.error)
+        screen:close()
+    end
+    local physical, physical_screen, physical_mount = attach_physical()
+    command(physical_screen, "bee_physical=retained; printf 'PHYSICAL_%s_OK\\n' \"$bee_physical\"")
+    wait_text(physical_screen, "PHYSICAL_retained_OK")
+    detach_physical(physical, physical_screen, false)
+    command(left_screen, "printf 'DETACHED_%s_OK\\n' \"$bee_physical\"")
+    wait_text(left_screen, "DETACHED_retained_OK")
+    physical, physical_screen, physical_mount = attach_physical()
+    command(physical_screen, "printf 'REATTACHED_%s_OK\\n' \"$bee_physical\"")
+    wait_text(physical_screen, "REATTACHED_retained_OK")
+    detach_physical(physical, physical_screen, true)
+    physical, physical_screen, physical_mount = attach_physical()
+    command(physical_screen, "printf 'CLOSED_%s_OK\\n' \"$bee_physical\"")
+    wait_text(physical_screen, "CLOSED_retained_OK")
+    detach_physical(physical, physical_screen, false)
+    process.unlisten(physical_boot)
+    process.unlisten(physical_ready)
     local probe_store, probe_error = store.open("bee.client.db:left")
     if not probe_store then error(tostring(probe_error)) end
     local probe_state = store.read(probe_store)
@@ -167,6 +250,40 @@ local function main()
     local close_target = probe_state.targets[1]
     assert(probe_state.scene.windows[1].mode == "fullscreen", "Initial fullscreen option was not applied")
     assert(store.close(probe_store))
+    -- Seed a separate desktop's declared target through the store API before
+    -- its sole writer starts. No mount, PID or grant is copied.
+    local observer_store = assert(store.open("bee.client.db:observer"))
+    assert(store.write(observer_store, probe_state))
+    assert(store.close(observer_store))
+    command(left_screen, "bee_size=$(stty size); bee_observer=clean; printf 'OBSERVER_BASE_%s_END\\n' \"$$\"")
+    local observer, observer_screen = start("observer", 75, false)
+    wait_text(observer_screen, "OBSERVER_BASE_")
+    command(observer_screen, "bee_observer=changed")
+    wait_text(observer_screen, "View is read-only")
+    assert(observer_screen:resize(65, 26))
+    key(observer_screen, "f12")
+    local observer_renderer = assert(renderers:receive())
+    assert(tostring(observer_renderer:from()) == observer)
+    local observer_data: unknown = observer_renderer:payload():data()
+    if type(observer_data) ~= "table" or type(observer_data.renderer) ~= "string" then error("Missing observer renderer") end
+    assert(process.send(host, "bee.host.client", {version = 1, request_id = "observer-f12", op = "render",
+        workspace_id = workspace_id, recipient = observer, renderer = observer_data.renderer}))
+    result("observer-f12")
+    command(left_screen, "test \"$bee_observer\" = clean && test \"$bee_size\" = \"$(stty size)\" && printf 'OBSERVER_F12_%s_END\\n' \"$bee_observer\"")
+    wait_text(left_screen, "OBSERVER_F12_clean_END")
+    wait_text(observer_screen, "OBSERVER_F12_clean_END")
+    assert(process.terminate(observer))
+    local observer_deadline = time.after("3s")
+    while true do
+        local selected = channel.select({events:case_receive(), observer_deadline:case_receive()})
+        if not selected.ok or selected.channel == observer_deadline then error("Observer desktop did not exit") end
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == observer then
+            assert(desktops.exited(retained_desktops, event)); break
+        end
+    end
+    command(left_screen, "printf 'OBSERVER_GONE_%s_END\\n' \"$bee_observer\"")
+    wait_text(left_screen, "OBSERVER_GONE_clean_END")
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "stale-close", op = "close",
         workspace_id = workspace_id, id = close_target.view_id, instance_id = "another-instance"}))
     assert(host_reply("stale-close", "close").error_code == "stale_instance", "Close did not enforce the target instance")
@@ -213,7 +330,9 @@ local function main()
     assert(left_screen:send({type = "key", key = "q", key_type = "runes", ctrl = true, action = "press"}))
     while true do
         local event = assert(events:receive())
-        if event.kind == process.event.EXIT and tostring(event.from) == left then break end
+        if event.kind == process.event.EXIT and tostring(event.from) == left then
+            assert(desktops.exited(retained_desktops, event)); break
+        end
     end
     command(right_screen, "printf 'SURVIVED_%s_EXIT\\n' \"$bee_desktop\"")
     wait_text(right_screen, "SURVIVED_right_EXIT")
@@ -236,6 +355,28 @@ local function main()
     retained:close()
     -- A fresh client execution imports no host checkpoint and selects no new app.
     local resumed, resumed_screen = start("left", 100, false)
+    -- Abrupt client loss has no save/quit handshake. The host must retain the
+    -- application while a fresh client recovers the committed desktop identity.
+    local before_crash = assert(store.open("bee.client.db:left"))
+    local desktop_id = before_crash.client_id
+    assert(store.close(before_crash))
+    assert(process.terminate(resumed))
+    local crash_deadline = time.after("3s")
+    while true do
+        local selected = channel.select({events:case_receive(), crash_deadline:case_receive()})
+        if not selected.ok or selected.channel == crash_deadline then error("Crashed client did not exit") end
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == resumed then
+            assert(desktops.exited(retained_desktops, event)); break
+        end
+    end
+    resumed, resumed_screen = start("left", 100, false)
+    local after_crash = assert(store.open("bee.client.db:left"))
+    local recovered = assert(store.read(after_crash))
+    assert(after_crash.client_id == desktop_id, "Client loss replaced the durable desktop identity")
+    assert(#recovered.targets == 1 and recovered.targets[1].instance_id == target.instance_id
+        and recovered.targets[1].view_id == target.view_id, "Client loss replaced the retained application")
+    assert(store.close(after_crash))
     key(resumed_screen, "w", true)
     wait_text(resumed_screen, "Close terminal?")
     key(resumed_screen, "tab")
@@ -375,9 +516,21 @@ local function main()
         "Host shutdown erased saved client tabs")
     assert(store.close(appearance_store)); assert(store.close(other_store))
     process.terminate(resumed)
-    resumed_screen:close()
     process.terminate(right)
+    local cleanup_deadline = time.after("3s")
+    while next(retained_desktops.desktops) ~= nil do
+        local selected = channel.select({events:case_receive(), cleanup_deadline:case_receive()})
+        if not selected.ok or selected.channel == cleanup_deadline then error("Desktop resource cleanup did not complete") end
+        desktops.exited(retained_desktops, selected.value)
+    end
     process.terminate(host)
-    left_screen:close(); right_screen:close()
+    log:info("DESKTOP_CLIENT_PROBE_COMPLETE")
 end
-return {main = main}
+local function checked_main()
+    local ok, failure = pcall(main)
+    if not ok then
+        log:error("DESKTOP_CLIENT_PROBE_FAILURE", {error = tostring(failure)})
+        error(failure)
+    end
+end
+return {main = checked_main}

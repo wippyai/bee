@@ -1,0 +1,113 @@
+version: '1.0'
+namespace: bee.placement.native
+entries:
+- name: project_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/placement-project
+  auto_init: true
+- name: readonly_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/placement-readonly
+  auto_init: true
+- name: sentinel_storage
+  kind: env.storage.memory
+  meta: {type: test_support}
+  lifecycle:
+    auto_start: true
+- name: sentinel_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:sentinel_storage
+  variable: BEE_PLACEMENT_SENTINEL_KEY
+  default: placement-sentinel-4e5f6a
+  readonly: true
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, process.registry.lookup, process.terminate]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop,
+      bee.placement.native:reconcile, bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach,
+      bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.credentials:define, bee.credentials:issue_projection, bee.credentials:revoke]
+    effect: allow
+- name: request_test
+  kind: function.lua
+  source: file://request_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    request: bee.placement:request
+    transitions: bee.placement:transitions
+    protocol: bee.placement.native:protocol
+    types: bee.placement:types
+- name: codex_test_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    test_support: true
+  data:
+    schema_revision: bee.codex-provider@1
+    name: bee
+    base_url: https://gateway.example.net/v1
+    model: gpt-5
+- name: test_launch_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The host launch policy the placement suite's requests name; it selects the test provider
+  data:
+    schema_revision: bee.launch-policy@1
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    codex_provider_ref: bee.placement.native:codex_test_provider
+- name: test_launch_policy_without_provider
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The same policy selecting no provider, for the unauthorized-provider refusal
+  data:
+    schema_revision: bee.launch-policy@1
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+- name: native_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, hash]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_store_policy, bee:credential_store_policy, bee:resource_resolve_policy, bee:credential_materialize_policy]
+  imports:
+    configuration: bee.driver.codex:configuration
+    test: wippy.test:test
+    service: bee.placement.native:service
+    store: bee.placement.native:store
+    protocol: bee.placement.native:protocol
+    homes: bee.placement.native:homes
+    types: bee.placement:types

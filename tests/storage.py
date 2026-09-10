@@ -1,4 +1,5 @@
 """Workspace storage migration and generation-CAS acceptance checks."""
+from workspace import database_environment
 from pathlib import Path
 import hashlib
 import re
@@ -11,7 +12,7 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 PROBE = r'''local storage = require("store")
 
@@ -77,7 +78,7 @@ return {main = main}
 
 
 def run_probe(project, folder, expect_success=True):
-    environment = {**os.environ, "BEE_WORKSPACE_DB": str(folder / "workspace.db")}
+    environment = database_environment(folder)
     result = subprocess.run(
         [str(RUNTIME), "run", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
         cwd=project,
@@ -256,8 +257,7 @@ def client_storage():
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
             args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
-                                    env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
-                                         "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
+                                    env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
             output = result.stdout + result.stderr
             if failure is None:
                 assert result.returncode == 0, output

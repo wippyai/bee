@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.driver
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver
+  readme: file://README.md
+  meta:
+    title: Bee driver contract
+    comment: The driver contract, its binding schema and transport-neutral envelopes; no I/O, no placement
+- name: types
+  kind: library.lua
+  source: file://types.lua
+- name: profile
+  kind: library.lua
+  source: file://profile.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: driver
+  kind: contract.definition
+  methods:
+  - name: prepare
+    description: Return the declarative launch specification for a profile and a brief
+  - name: dispatch
+    description: Return the declarative input for a turn or control operation on a running attempt
+  - name: normalize
+    description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report

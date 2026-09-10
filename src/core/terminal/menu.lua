@@ -48,6 +48,7 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
                     {label = "Snap right", action = "snap_right", enabled = win.mode ~= "minimized"},
                     {label = "Collapse", action = "collapse", enabled = win.mode == "floating"},
                     {label = "Rename…", action = "rename", enabled = true},
+                    {label = "Select text", action = "select_text", enabled = win.mode ~= "collapsed"},
                     {label = "Accent", action = "group:accent", enabled = true, children = {
                         {label = "Theme default", action = "accent:", enabled = true},
                         {label = "Amber", action = "accent:amber", enabled = true},

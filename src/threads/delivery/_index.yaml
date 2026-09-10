@@ -1,0 +1,216 @@
+version: '1.0'
+namespace: bee.threads.delivery
+entries:
+- name: claims
+  kind: library.lua
+  source: file://claims.lua
+  modules: [sql]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    values: bee.threads.records:values
+    record_types: bee.threads.records:types
+    access: bee.threads.service:access
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    owner: bee.threads.persist:owner
+    authority: bee.threads.service:authority
+- name: subscriptions
+  kind: library.lua
+  source: file://subscriptions.lua
+  modules: [sql, hash, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    values: bee.threads.records:values
+    record: bee.threads.records:record
+    record_types: bee.threads.records:types
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    owner: bee.threads.persist:owner
+    authority: bee.threads.service:authority
+- name: waits
+  kind: library.lua
+  source: file://waits.lua
+  modules: [sql, process, channel, time, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    record: bee.threads.records:record
+    record_types: bee.threads.records:types
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    claims: bee.threads.delivery:claims
+- name: waiter
+  kind: process.lua
+  source: file://waiter.lua
+  method: main
+  modules: [process, channel, time]
+  imports:
+    waits: bee.threads.delivery:waits
+- name: waiter_service
+  kind: process.service
+  process: bee.threads.delivery:waiter
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.threads.waiter}
+      policies: [bee:thread_waiter_policy]
+    restart:
+      max_attempts: 10
+- name: claim
+  kind: function.lua
+  source: file://claim_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: ack
+  kind: function.lua
+  source: file://ack_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: release
+  kind: function.lua
+  source: file://release_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: expire
+  kind: function.lua
+  source: file://expire_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: reconcile
+  kind: function.lua
+  source: file://reconcile_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: subscribe
+  kind: function.lua
+  source: file://subscribe_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: page
+  kind: function.lua
+  source: file://page_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: ack_page
+  kind: function.lua
+  source: file://ack_page_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: unsubscribe
+  kind: function.lua
+  source: file://unsubscribe_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: close_subscription
+  kind: function.lua
+  source: file://close_subscription_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: forget_subscription
+  kind: function.lua
+  source: file://forget_subscription_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: resume
+  kind: function.lua
+  source: file://resume_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: wait
+  kind: function.lua
+  source: file://wait_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    waits: bee.threads.delivery:waits
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: watch
+  kind: function.lua
+  source: file://watch_method.lua
+  method: handle
+  modules: [process, channel, time, uuid]
+  imports:
+    boundary: bee.threads.service:boundary
+    waits: bee.threads.delivery:waits
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: session
+  kind: library.lua
+  source: file://session.lua

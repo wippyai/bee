@@ -13,8 +13,9 @@ entries:
   lifecycle:
     auto_start: true
 - name: broker_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: 'action != "process.host" || resource == "bee:workers"'
     actions:
     - tty.mount
     - tty.observe
@@ -48,8 +49,9 @@ entries:
     - supervisor
     effect: allow
 - name: desktop_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: 'action != "process.host" || resource == "bee:workers"'
     actions:
     - registry.get
     - tty.mount
@@ -86,11 +88,15 @@ entries:
     - process.monitor
     resources: '*'
     effect: allow
+- name: session_status_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.projection:status_read, bee.threads.projection:status_update, bee.threads.delivery:watch]
+    effect: allow
 - name: application_admission
   kind: registry.entry
   bindings:
-  - definition_id: bee.test_status:app
-    policies: [bee:thread_read_client_policy, bee:test_run_client_policy]
   - definition_id: bee.settings:app
     policies: []
     appearance_write: true
@@ -102,6 +108,16 @@ entries:
     policies:
     - bee.console:executor_policy
     - bee.console:command_policy
+  - definition_id: bee.inbox:app
+    policies:
+    - bee:approval_decide_policy
+    - bee.inbox:client_policy
+  - definition_id: bee.hive_manager:app
+    policies:
+    - bee.hive_manager:client_policy
+  - definition_id: bee.timeline:app
+    policies:
+    - bee.timeline:client_policy
 - name: terminal
   kind: terminal.host
   hide_logs: true
@@ -133,6 +149,9 @@ entries:
     actions:
     - process.spawn
     - process.spawn.monitored
+    - process.spawn.linked
+    - process.exec
+    - process.host
     resources:
     - bee.host:main
     - bee.workspace:main
@@ -144,9 +163,13 @@ entries:
     - bee.client:desktop
     - bee.client:application
     - bee.launch:supervisor
+    - bee.launch:headless
     - bee.session:main
     - bee.applications:broker
     - bee.terminal:main
+    - bee.hive:supervisor
+    - bee.hive.supervisor:main
+    - bee.hive:supervisor_host
     effect: deny
 - name: core_spawn_policy
   kind: security.policy
@@ -161,8 +184,9 @@ entries:
     - bee.terminal:main
     effect: allow
 - name: host_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: 'action != "process.host" || resource == "bee:workers"'
     actions: [process.send, process.monitor, process.unmonitor, process.terminate, process.host, process.context, process.security, security.policy.get, security.scope.create]
     resources: '*'
     effect: allow
@@ -177,6 +201,12 @@ entries:
   policy:
     actions: [process.spawn, process.spawn.monitored]
     resources: [bee.applications:broker]
+    effect: allow
+- name: retained_supervisor_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.host:main, bee.client:main]
     effect: allow
 - name: local_supervisor_spawn_policy
   kind: security.policy
@@ -220,6 +250,8 @@ entries:
     effect: allow
 - name: workspace_storage_boundary
   kind: security.policy
+  meta:
+    comment: Stores no application may open, even through a method that attaches its own store policy; the approvals store is reached only inside the approval owner's methods, which the inbox application calls under its own actor, so it is not listed
   policy:
     actions:
     - db.get
@@ -228,6 +260,9 @@ entries:
     - bee:client_db
     - bee.client.db:*
     - bee.workspace.db:*
+    - bee.placement.native:db
+    - bee.resources:db
+    - bee.credentials:db
     effect: deny
 - name: client_storage_policy
   kind: security.policy
@@ -235,11 +270,56 @@ entries:
     actions: [db.get]
     resources: [bee:client_db]
     effect: allow
+- name: placement_store_policy
+  kind: security.policy
+  meta:
+    comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
+  policy:
+    actions: [db.get, registry.get, fs.get, exec.get, system.read]
+    resources: [bee.placement.native:db, bee.placement.native:database_ref, bee.placement.native:root_ref, bee.placement.native:runner_host_ref,
+      bee.placement.native:admitted_roots, bee.placement.native:root, bee.placement.native:host_files, bee.placement.native:executor, cwd]
+    effect: allow
+- name: placement_exec_policy
+  kind: security.policy
+  meta:
+    comment: Commands and host environment values resolve at launch; the request names them, the host admits them
+  policy:
+    actions: [exec.run, env.get, registry.get]
+    resources: '*'
+    effect: allow
+- name: placement_service_policy
+  kind: security.policy
+  meta:
+    comment: The service spawns runners on the workers host and talks to them
+  policy:
+    actions: [process.spawn, process.host, process.monitor, process.unmonitor, process.send]
+    resources: [bee.placement.native:runner, bee:workers, '*']
+    effect: allow
+- name: placement_sweeper_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register]
+    resources: '*'
+    effect: allow
+- name: placement_runner_policy
+  kind: security.policy
+  meta:
+    comment: A runner answers its starter and its bound recipient, and watches the recipient so a lost carrier retires the gateway binding
+  policy:
+    actions: [process.send, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
 - name: thread_storage_policy
   kind: security.policy
   policy:
     actions: [db.get]
     resources: [bee.threads:db]
+    effect: allow
+- name: thread_resource_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: [bee.threads:database_ref]
     effect: allow
 - name: thread_read_client_policy
   kind: security.policy
@@ -253,15 +333,385 @@ entries:
     actions: [contract.open, contract.call, funcs.call]
     resources: [bee.threads:local, claim, append, bee.threads:claim, bee.threads:append]
     effect: allow
-- name: test_run_client_policy
+- name: thread_authority_client_policy
   kind: security.policy
   policy:
     actions: [contract.open, contract.call, funcs.call]
-    resources: [bee.test_status:local_runner, start, bee.test_status:start]
+    resources: [bee.threads:authority_local, create, get, list, join, leave, close, record, read_after,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:join,
+      bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after]
     effect: allow
-- name: test_run_spawn_policy
+- name: thread_lifecycle_client_policy
   kind: security.policy
   policy:
-    actions: [process.spawn, process.host]
-    resources: [bee.test_status:worker, bee.test_status:workers]
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:lifecycle_local, admit_action, prepare_attempt, start_attempt, request_turn, end_turn, receipt,
+      bee.threads.service:admit_action, bee.threads.service:prepare_attempt, bee.threads.service:start_attempt, bee.threads.service:request_turn,
+      bee.threads.service:end_turn, bee.threads.service:receipt]
+    effect: allow
+- name: thread_delivery_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:delivery_local, claim, dispatch, ack, release, expire, reconcile, subscribe, page, ack_page, unsubscribe, resume, close_subscription, forget_subscription, wait, watch,
+      bee.threads.delivery:claim, bee.threads.delivery:dispatch, bee.threads.delivery:ack, bee.threads.delivery:release,
+      bee.threads.delivery:expire, bee.threads.delivery:reconcile, bee.threads.delivery:subscribe, bee.threads.delivery:page,
+      bee.threads.delivery:ack_page, bee.threads.delivery:unsubscribe, bee.threads.delivery:resume, bee.threads.delivery:close_subscription, bee.threads.delivery:forget_subscription, bee.threads.delivery:wait, bee.threads.delivery:watch]
+    effect: allow
+- name: thread_projection_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:projection_local, recap_read, recap_update, recap_rebuild, status_read, status_update, status_rebuild,
+      bee.threads.projection:recap_read, bee.threads.projection:recap_update, bee.threads.projection:recap_rebuild,
+      bee.threads.projection:status_read, bee.threads.projection:status_update, bee.threads.projection:status_rebuild]
+    effect: allow
+- name: harness_activation
+  kind: registry.entry
+  meta:
+    type: bee.harness_activation
+    comment: Driver bindings this host activates; discovery alone activates nothing
+  data:
+    bindings: [bee.driver.claude:binding, bee.driver.codex:binding]
+- name: thread_create_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.create]
+    resources: '*'
+    effect: allow
+- name: thread_observe_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.observe]
+    resources: '*'
+    effect: allow
+- name: thread_lifecycle_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.lifecycle]
+    resources: '*'
+    effect: allow
+- name: launch_spawn_policy
+  kind: security.policy
+  meta:
+    comment: Launch start spawns the carrier on the workers host as the requester; the requester's own scope supplies everything else
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.monitor, process.context]
+    resources: [bee.harness.carrier:process, bee:workers, context]
+    effect: allow
+- name: launch_policy_managed
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Managed harness launches; inert until the combined runtime and the credential failure gates are pinned, since prepare refuses it on the pinned runtime
+  data:
+    schema_revision: bee.launch-policy@1
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: carrier_policy
+  kind: security.policy
+  meta:
+    comment: A carrier process calls the thread, placement and driver facades and reads the catalog and its launch policy; it holds no executor
+  policy:
+    actions: [funcs.call, registry.get, process.send, bee.threads.lifecycle, bee.threads.carrier, bee.threads.observe, bee.gateway.admit]
+    resources: '*'
+    effect: allow
+- name: credential_sources
+  kind: registry.entry
+  meta:
+    type: bee.credential_sources
+    comment: env.variable entries a workspace may define credentials from, with the audience, provider and projection kinds each admits; host policy, never a workspace choice
+  data:
+    sources: []
+- name: credential_store_policy
+  kind: security.policy
+  meta:
+    comment: The credential broker's store, its linked references, node identity and the admitted sources it reads at materialization
+  policy:
+    actions: [db.get, registry.get, system.read, env.get]
+    resources: [bee.credentials:db, bee.credentials:database_ref, bee.credentials:sources_ref, bee:credential_sources, node, '*']
+    effect: allow
+- name: credential_manage_policy
+  kind: security.policy
+  policy:
+    actions: [bee.credentials.manage]
+    resources: '*'
+    effect: allow
+- name: credential_issue_policy
+  kind: security.policy
+  policy:
+    actions: [bee.credentials.issue]
+    resources: '*'
+    effect: allow
+- name: credential_materialize_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service and runner entries only
+  policy:
+    actions: [bee.credentials.materialize, funcs.call]
+    resources: ['*', bee.credentials:check, bee.credentials:materialize]
+    effect: allow
+- name: gateway_endpoint
+  kind: registry.entry
+  meta:
+    type: bee.gateway_endpoint
+    comment: The one loopback address the managed host's listener serves; open refuses any other and the readiness policy is pinned to it
+  data:
+    address: 127.0.0.1:18790
+- name: gateway_store_policy
+  kind: security.policy
+  meta:
+    comment: The gateway authority's store, its linked references, the host endpoint and the listener service state; no network
+  policy:
+    actions: [db.get, registry.get, system.read]
+    resources: [bee.gateway:db, bee.gateway:database_ref, bee.gateway:listener_ref, bee:gateway_endpoint, supervisor]
+    effect: allow
+- name: gateway_readiness_policy
+  kind: security.policy
+  meta:
+    comment: The readiness probe may request exactly the configured loopback endpoint's ready path and nothing else
+  policy:
+    actions: [http_client.request, http_client.private_ip]
+    resources: [http://127.0.0.1:18790/ready, 127.0.0.1]
+    effect: allow
+- name: gateway_admit_policy
+  kind: security.policy
+  meta:
+    comment: A carrier admits and revokes gateway bindings for the actions it runs
+  policy:
+    actions: [bee.gateway.admit]
+    resources: '*'
+    effect: allow
+- name: gateway_materialize_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement runner entries only; the runner receives a binding's token bytes once for the attempt it runs
+  policy:
+    actions: [bee.gateway.materialize, funcs.call]
+    resources: ['*', bee.gateway:materialize, bee.gateway:check, bee.gateway:revoke, bee.gateway:seal]
+    effect: allow
+- name: gateway_supervision_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service entries and the sweeper only; placement checks and retires the bindings of the attempts it supervises, independently of any carrier
+  policy:
+    actions: [bee.gateway.manage, funcs.call]
+    resources: [bindings, bee.gateway:check, bee.gateway:revoke_attempt, bee.gateway:authorize_materialization]
+    effect: allow
+- name: gateway_manage_policy
+  kind: security.policy
+  meta:
+    comment: The managed host opens and drains the listener and may revoke any binding
+  policy:
+    actions: [bee.gateway.manage]
+    resources: [listener, bindings]
+    effect: allow
+- name: gateway_execute_policy
+  kind: security.policy
+  meta:
+    comment: The MCP endpoint may invoke exactly the two tool operations, as the bound subject under the tool's host-named scope; the thread owner authorizes each call by membership, and the endpoint holds no thread authority of its own
+  policy:
+    actions: [funcs.security, security.scope.create, security.actor.create, security.policy.get, funcs.call]
+    resources: ['*', bee.threads.service:read_after, bee.threads.delivery:watch]
+    effect: allow
+- name: gateway_tool_read_policy
+  kind: security.policy
+  meta:
+    comment: The scope a bound subject runs thread_read and thread_wait under; membership is still checked by the thread owner
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:read_after, bee.threads.delivery:watch]
+    effect: allow
+- name: resource_store_policy
+  kind: security.policy
+  meta:
+    comment: The resource authority's store, its linked references and node identity
+  policy:
+    actions: [db.get, registry.get, system.read]
+    resources: [bee.resources:db, bee.resources:database_ref, bee.resources:roots_ref, bee.placement.native:admitted_roots, node, '*']
+    effect: allow
+- name: resource_manage_policy
+  kind: security.policy
+  meta:
+    comment: Workspace managers associate roots, list, revoke any grant and advance the authorization epoch
+  policy:
+    actions: [bee.resources.manage]
+    resources: '*'
+    effect: allow
+- name: resource_grant_policy
+  kind: security.policy
+  meta:
+    comment: A principal takes grants for itself
+  policy:
+    actions: [bee.resources.grant]
+    resources: '*'
+    effect: allow
+- name: resource_resolve_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service entries only; a caller cannot resolve grants on its own
+  policy:
+    actions: [bee.resources.resolve, funcs.call]
+    resources: ['*', bee.resources:resolve]
+    effect: allow
+- name: thread_carrier_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.carrier]
+    resources: '*'
+    effect: allow
+- name: approval_store_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner's store, its linked references, node identity and the wake it sends its worker
+  policy:
+    actions: [db.get, registry.get, system.read, process.send]
+    resources: [bee.approvals:db, bee.approvals:database_ref, bee.approvals:policies_ref, bee.approvals:approver_policies, node, '*']
+    effect: allow
+- name: approval_owner_policy
+  kind: security.policy
+  meta:
+    comment: Held by the approval owner's worker only; reconciles expiry and retention and registers the worker name
+  policy:
+    actions: [bee.approvals.own, process.registry.register, funcs.call]
+    resources: ['*']
+    effect: allow
+- name: approval_request_policy
+  kind: security.policy
+  meta:
+    comment: Operation owners that may ask for approval in a workspace
+  policy:
+    actions: [bee.approvals.request]
+    resources: '*'
+    effect: allow
+- name: approval_decide_policy
+  kind: security.policy
+  meta:
+    comment: Principals that may decide and read the inbox; the approver policy still has to list them
+  policy:
+    actions: [bee.approvals.decide]
+    resources: '*'
+    effect: allow
+- name: approval_consume_policy
+  kind: security.policy
+  meta:
+    comment: Effect owners that consume approved decisions in a workspace before acting on them
+  policy:
+    actions: [bee.approvals.consume]
+    resources: '*'
+    effect: allow
+- name: approval_manage_policy
+  kind: security.policy
+  meta:
+    comment: Workspace managers read any request and return exhausted deliveries to the queue
+  policy:
+    actions: [bee.approvals.manage]
+    resources: '*'
+    effect: allow
+- name: thread_approval_policy
+  kind: security.policy
+  meta:
+    comment: Held by the approval authority's delivery worker only
+  policy:
+    actions: [bee.threads.approval]
+    resources: '*'
+    effect: allow
+- name: thread_approval_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:approvals_local, append, bee.threads.approvals:append]
+    effect: allow
+- name: thread_carrier_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:carrier_local, claim, commit, checkpoint, bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint]
+    effect: allow
+- name: hive_telemetry_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node, cluster, memory, goroutines]
+    effect: allow
+- name: hive_catalog_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find]
+    resources: '*'
+    effect: allow
+- name: hive_exposure_policy
+  kind: security.policy
+  meta:
+    comment: The host ceiling; telemetry and the threads capabilities report may be open in this composition, and the two thread operations may reach forwarded principals under the destination's own policy
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list, bee.threads:capabilities]
+    effect: allow
+- name: hive_thread_invoke_policy
+  kind: security.policy
+  meta:
+    comment: What a mapped principal's own scope must carry to invoke the thread operations; the host names it in a principal mapping, never in a worker
+  policy:
+    actions: [hive.invoke, funcs.call]
+    resources: [bee.threads.service:send, bee.threads.service:send_status, bee.hive.supervisor:invoke_check]
+    effect: allow
+- name: hive_thread_exposure_policy
+  kind: security.policy
+  meta:
+    comment: The host ceiling for forwarded thread operations; the destination thread owner still decides membership and the principal table still decides admission
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.threads.service:send, bee.threads.service:send_status]
+    effect: allow
+- name: hive_supervisor_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: hive_dispatch_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list, bee.threads:capabilities]
+    effect: allow
+- name: hive_supervisor_spawn_deny
+  kind: security.policy
+  meta:
+    comment: Attached by the supervisor lane to ordinary application and launch scopes
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.spawn.linked, process.host]
+    resources: [bee.hive:supervisor, bee.hive:supervisor_host]
+    effect: deny
+- name: thread_waiter_policy
+  kind: security.policy.expr
+  policy:
+    actions: [process.registry.register, process.send]
+    resources: '*'
+    expression: 'action == "process.send" || resource == "bee.threads.waiter"'
+    effect: allow
+
+- name: hive_names_policy
+  kind: security.policy
+  meta:
+    comment: Selected only by the native Hive supervisor host for native name publication and discovery
+  policy:
+    actions: [process.registry.register, process.registry.register.local, process.registry.register.eventual, process.registry.lookup, process.registry.unregister]
+    resources: '*'
+    effect: allow
+- name: hive_execute_policy
+  kind: security.policy
+  meta:
+    comment: The native supervisor host may call its own admitted-operation executor
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.supervisor:execute]
     effect: allow

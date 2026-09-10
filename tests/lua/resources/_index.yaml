@@ -1,0 +1,41 @@
+version: '1.0'
+namespace: bee.resources
+entries:
+- name: project_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/resources-project
+  auto_init: true
+- name: shared_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/resources-shared
+  auto_init: true
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.resources:revoke_all, bee.resources:resolve, bee.resources:list, bee.resources:capabilities]
+    effect: allow
+- name: authority_test
+  kind: function.lua
+  source: file://authority_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, time, sql]
+  security:
+    policies: [bee.resources:apply_test_policy, bee:resource_store_policy]
+  imports:
+    test: wippy.test:test
+    authority: bee.resources:authority
+    migrations: bee.resources:migrations
+    persist: bee.persist:database
+    resources: bee.resources:resources

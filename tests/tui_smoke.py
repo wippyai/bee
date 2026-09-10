@@ -3,6 +3,7 @@
 Requires pyte (terminal emulator). Run `make pack` first. All processes and state
 are owned by this harness and cleaned in finally blocks.
 """
+from workspace import database_environment
 import codecs
 import fcntl
 import os
@@ -21,7 +22,7 @@ import pyte
 from workspace import fixture_workspace, pack_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 
 class Desktop:
@@ -45,7 +46,7 @@ class Desktop:
             args = [str(ROOT / "run.sh"), "--set", f"registry.history_path={directory}/registry.db"]
             cwd = directory
         self.process = subprocess.Popen(args, cwd=cwd, stdin=slave, stdout=slave, stderr=slave,
-                                        start_new_session=True, env={**os.environ, "TERM": "xterm-256color", "BEE_WORKSPACE_DB": str(Path(directory) / "workspace.db"), "BEE_THREADS_DB": str(Path(directory) / "threads.db")})
+                                        start_new_session=True, env=database_environment(directory, TERM="xterm-256color"))
         os.close(slave)
 
     def pump(self, duration=.1):
@@ -515,11 +516,22 @@ def process_manager(packed):
             ui.key(b"\x1b[3~\r")
             ui.wait("Core processes are protected")
             ui.key(b"\t"); ui.wait("SERVICE")
+            # Service inventory may exceed the viewport; workers sorts last.
+            ui.key(b"\x1b[F")
             ui.wait("bee:workers")
             ui.key(b"\t"); ui.wait("bee.applications:broker")
             ui.open_start(); ui.choose("Settings"); ui.wait("BEE SETTINGS")
-            ui.open_start(); ui.choose("Process Manager"); ui.wait("bee.settings:app")
-            assert ui.screen.display[0].count("Process Manager") == 1
+            ui.open_start(); ui.choose("Process Manager"); ui.wait("Heap")
+            # New supervised services can put Settings below the visible rows.
+            # Navigate the actual list instead of assuming the entire inventory fits.
+            ui.key(b"\x1b[H")
+            for _ in range(64):
+                if "bee.settings:app" in ui.text():
+                    break
+                ui.key(b"\x1b[B")
+                ui.pump(.05)
+            ui.wait("bee.settings:app")
+            assert ui.screen.display[0].count("Process Manager") == 1, ui.text()
             row = next(y for y, text in enumerate(ui.screen.display, 1) if "bee.settings:app" in text)
             ui.mouse(0, 5, row); ui.mouse(0, 5, row, True)
             ui.key(b"\x1b[3~"); ui.wait("End selected app?")
@@ -545,7 +557,7 @@ if __name__ == "__main__":
     core_boot(True)
     process_manager(False)
     process_manager(True)
-    with fixture_workspace(presenter_probe=True) as project:
+    with fixture_workspace(presenter_probe=True, unit_tests=False) as project:
         pack = project / "fixtures.wapp"
         pack_fixture(project, pack)
         exercise(False, project, pack)

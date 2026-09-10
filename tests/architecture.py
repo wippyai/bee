@@ -25,6 +25,8 @@ for path in (ROOT / "src").rglob("_index.yaml"):
                 allowed_imports = ("bee.desktop:", "bee.protocol:", "bee.application:")
                 if identity.startswith("bee.terminal:"):
                     allowed_imports += ("bee.terminal:",)
+                if identity.startswith("bee.session:"):
+                    allowed_imports += ("bee.session:",)
                 if identity.startswith("bee.processes:"):
                     allowed_imports += ("bee.processes:",)
                 if identity.startswith("bee.settings:"):
@@ -65,19 +67,69 @@ for identity in applications:
     metadata = entry["meta"]["application"]
     assert metadata["api_version"] == 1 and metadata["revision"]
     assert metadata["instance_policy"] in {"singleton", "multiple"}
+# The desktop adapter consumes two explicit core value interfaces. This is an
+# integration boundary, not permission for reusable Hive code to import core.
+# Walk the complete decoder closure so an indirect process/store/runtime-module
+# dependency cannot enter through either interface later.
+desktop_interfaces = {
+    "bee.hive.desktop:protocol": {"bee.protocol:application"},
+    "bee.hive.desktop:owner": {"bee.launch:retained_protocol"},
+}
+checked_interfaces = set()
+def check_value_interface(identity):
+    if identity in checked_interfaces:
+        return
+    checked_interfaces.add(identity)
+    entry = entries[identity]
+    assert entry["kind"] == "library.lua", ("Desktop interface is not a value library", identity)
+    assert not entry.get("modules") and not entry.get("security"), ("Desktop interface gained runtime authority", identity)
+    for dependency in entry.get("imports", {}).values():
+        check_value_interface(dependency)
+for interfaces in desktop_interfaces.values():
+    for identity in interfaces:
+        check_value_interface(identity)
+
+# The application envelope shares the thread owner's opaque-ID decoder only.
+# Its complete closure must remain free of runtime and storage authority.
+core_value_interfaces = {"bee.protocol:application": {"bee.threads.records:bounds"}}
+for interfaces in core_value_interfaces.values():
+    for identity in interfaces:
+        check_value_interface(identity)
+
 # Registry edges, including broker/workspace, must respect the layer boundary.
+# Carrier and placement share only the host-selected configuration renderer;
+# gateway admission and token materialization remain contract operations.
+gateway_configuration_consumers = {"bee.harness.carrier:machine", "bee.placement.native:service", "bee.placement.native:runner"}
 for identity, entry in entries.items():
     location = locations[identity]
     for target in entry.get("imports", {}).values():
         target_location = locations[target]
         if location.parts[0] == "core":
-            assert target_location.parts[0] in {"core", "ui"}, (identity, target)
+            assert target_location.parts[0] in {"core", "ui"} or target in core_value_interfaces.get(identity, set()), (identity, target)
         if location.parts[0] == "ui":
             assert target_location.parts[0] == "ui", (identity, target)
         if location.parts[0] == "apps":
-            assert target_location.parts[0] == "ui" or target_location.parts[:2] == location.parts[:2] or target in {"bee.threads:client", "bee.threads:protocol"}, (identity, target)
+            assert target_location.parts[0] == "ui" or target_location.parts[:2] == location.parts[:2] or target in {"bee.threads:client", "bee.threads:protocol", "bee.hive:client", "bee.hive:types", "bee.hive:bounds", "bee.threads.records:record", "bee.threads.records:types", "bee.threads.delivery:session"}, (identity, target)
         if location.parts[0] == "threads":
-            assert target_location.parts[0] == "threads", (identity, target)
+            assert target_location.parts[0] == "threads" or target.startswith("bee.persist:"), (identity, target)
+        if location.parts[0] == "placement":
+            assert target_location.parts[0] in {"placement", "persist"} or target in {"bee.driver:types", "bee.driver.kit:quote", "bee.driver.codex:configuration", "bee.threads.records:bounds", "bee.threads.records:canonical"} or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
+        if location.parts[0] == "credentials":
+            assert target_location.parts[0] in {"credentials", "persist"} or target.startswith("bee.threads.records:"), (identity, target)
+        if location.parts[0] == "approvals":
+            assert target_location.parts[0] in {"approvals", "persist"} or target.startswith("bee.threads.records:"), (identity, target)
+        if location.parts[0] == "resources":
+            assert target_location.parts[0] in {"resources", "persist"} or target.startswith("bee.threads.records:"), (identity, target)
+        if location.parts[0] == "persist":
+            assert target_location.parts[0] == "persist", (identity, target)
+        if location.parts[0] == "driver":
+            assert target_location.parts[0] == "driver" or target.startswith("bee.threads.records:"), (identity, target)
+        if location.parts[0] == "harness" and location.parts[1:2] != ("carrier",):
+            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:"), (identity, target)
+        if location.parts[0] == "harness" and location.parts[1:2] == ("carrier",):
+            assert target_location.parts[0] in {"harness", "driver", "placement"} or target.startswith("bee.threads.records:") or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
+        if location.parts[0] == "hive":
+            assert target_location.parts[0] == "hive" or target == "bee.threads.records:canonical" or target in desktop_interfaces.get(identity, set()), (identity, target)
 visiting, visited = set(), set()
 def visit(identity):
     assert identity not in visiting, ("Import cycle", identity)
@@ -103,7 +155,33 @@ assert entries["bee.terminal:render"]["modules"] == ["tty"]
 for pure in ["bee.desktop:layout", "bee.terminal:bindings"]:
     assert not entries[pure].get("modules"), pure
 assert {i for i, e in entries.items() if e["kind"] == "terminal.host"} == {"bee:terminal"}
-assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db"}
+assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db", "bee.approvals:db", "bee.gateway:db"}
+assert "bee.placement.native:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+assert "bee.resources:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+assert "bee.credentials:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+# The approval owner's methods open their store on an application's behalf (the inbox
+# application calls inbox, read, decide and withdraw under its own actor), so the
+# approvals store is not on the application deny list; the owner's methods carry the
+# store policy and the application binding carries no store access of its own.
+assert "bee.approvals:db" not in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+inbox_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.inbox:app")
+assert set(inbox_binding["policies"]) == {"bee:approval_decide_policy", "bee.inbox:client_policy"}
+assert set(entries["bee.inbox:client_policy"]["policy"]["actions"]) == {"funcs.call", "registry.get"}
+assert "bee.approvals:list" not in entries["bee.inbox:client_policy"]["policy"]["resources"]
+manager_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.hive_manager:app")
+assert manager_binding["policies"] == ["bee.hive_manager:client_policy"]
+assert set(entries["bee.hive_manager:client_policy"]["policy"]["actions"]) == {"registry.get", "system.read"}
+assert entries["bee.hive_manager:source"]["data"] == {"kind": "live"}, "Production ships the live directory; a fixture is an explicit host selection"
+timeline_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.timeline:app")
+assert timeline_binding["policies"] == ["bee.timeline:client_policy"]
+timeline_resources = set(entries["bee.timeline:client_policy"]["policy"]["resources"])
+assert not timeline_resources & {"bee.threads.delivery:claim", "bee.threads.delivery:ack", "bee.threads.delivery:dispatch", "bee.threads.service:record", "bee.threads.delivery:unsubscribe"}, "Viewing acknowledges no delivery and writes nothing"
+for identity, entry in entries.items():
+    if identity.startswith("bee.hive_manager:"):
+        for target in entry.get("imports", {}).values():
+            assert target.startswith(("bee.hive_manager:", "bee.application:", "bee.desktop:", "bee.hive:")), (identity, target)
+for method in ("inbox", "read", "decide", "withdraw"):
+    assert "bee:approval_store_policy" in entries[f"bee.approvals:{method}"]["security"]["policies"]
 assert entries["bee:client_storage_policy"]["policy"] == {"actions": ["db.get"], "resources": ["bee:client_db"], "effect": "allow"}
 assert entries["bee:client_db"]["file"] == "${env:bee:workspace_db_path}.client"
 for identity, command in [("bee.client:desktop", "bee"), ("bee.client:application", "bee-app")]:
@@ -124,9 +202,9 @@ import shutil
 import subprocess
 import tempfile
 
-runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol", "bee.host", "bee.interaction", "bee.launch",
-           "bee.session", "bee.settings", "bee.processes", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.test_status", "bee.client"}
+           "bee.session", "bee.settings", "bee.processes", "bee.inbox", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.threads.records", "bee.threads.service", "bee.hive", "bee.hive.telemetry", "bee.hive.supervisor", "bee.hive.desktop", "bee.hive_manager", "bee.timeline", "bee.client", "bee.threads.delivery", "bee.threads.projection", "bee.threads.carrier", "bee.threads.approvals", "bee.driver", "bee.driver.kit", "bee.driver.transport", "bee.driver.claude", "bee.driver.codex", "bee.harness", "bee.harness.catalog", "bee.harness.carrier", "bee.harness.launch", "bee.harness.permission", "bee.persist", "bee.placement", "bee.placement.native", "bee.resources", "bee.credentials", "bee.approvals", "bee.gateway"}
 
 def check_loaded(cwd, packed=False):
     loaded = json.loads(subprocess.check_output([str(runtime), "registry", "list", "--json"], cwd=cwd))

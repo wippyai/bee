@@ -1,0 +1,235 @@
+# SPDX-License-Identifier: MIT
+"""Prepare Bee's explicitly owned packs for the pinned multi-pack builder.
+
+This assembles the host's bundle; it does not publish or infer Hub packages.
+The input build manifest and previous successful bundle are never modified.
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+import yaml
+
+NUMBER = r"(?:0|[1-9][0-9]*)"
+PRERELEASE = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+VERSION = NUMBER + r"\." + NUMBER + r"\." + NUMBER + \
+    r"(?:-" + PRERELEASE + r"(?:\." + PRERELEASE + r")*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def inventory(source):
+    entries = {}
+    for path in sorted(source.rglob("_index.yaml")):
+        doc = yaml.safe_load(path.read_text())
+        for entry in doc["entries"]:
+            identity = f'{doc["namespace"]}:{entry["name"]}'
+            if identity in entries:
+                raise ValueError(f"duplicate entry: {identity}")
+            entries[identity] = entry["kind"]
+    return entries
+
+
+def ownership(plan, entries):
+    if set(plan) != {"schema", "modules"} or plan["schema"] != 1:
+        raise ValueError("expected bundle schema 1 with modules")
+    owners, modules = {}, {}
+    for item in plan["modules"]:
+        if set(item) != {"module", "root", "namespaces"}:
+            raise ValueError("module requires module, root and namespaces")
+        module = item["module"]
+        if not re.fullmatch(r"[a-z][a-z0-9-]*/[a-z][a-z0-9-]*", module):
+            raise ValueError(f"invalid package identity: {module}")
+        if module in modules or item["root"] not in item["namespaces"]:
+            raise ValueError(f"duplicate module or missing root: {module}")
+        modules[module] = item
+        for namespace in item["namespaces"]:
+            if not re.fullmatch(r"[a-z][a-z0-9_.]*", namespace) or namespace in owners:
+                raise ValueError(f"invalid or multiply owned namespace: {namespace}")
+            owners[namespace] = module
+    actual = {identity.split(":", 1)[0] for identity in entries}
+    if actual != set(owners):
+        raise ValueError(f"namespace coverage: unowned={sorted(actual - owners.keys())}, "
+                         f"absent={sorted(owners.keys() - actual)}")
+    for module, item in modules.items():
+        roots = [identity.split(":", 1)[0] for identity, kind in entries.items()
+                 if kind == "ns.definition" and owners[identity.split(":", 1)[0]] == module]
+        if roots != [item["root"]]:
+            raise ValueError(f"{module} needs exactly root {item['root']}; found {roots}")
+    return owners
+
+
+def run(runtime, cwd, *args):
+    subprocess.run([str(runtime), *args], cwd=cwd, check=True)
+
+
+def loaded(runtime, cwd):
+    result = json.loads(subprocess.check_output(
+        [str(runtime), "registry", "list", "--json"], cwd=cwd))
+    entries = {entry["id"]: entry["kind"] for entry in result}
+    if len(entries) != len(result):
+        raise ValueError("loaded registry contains duplicate identities")
+    return entries
+
+
+def freeze_assets(root, source, entries):
+    config = yaml.safe_load((source / "wippy.yaml").read_text()) or {}
+    selected = config.get("embed", [])
+    if not isinstance(selected, list) or any(not isinstance(value, str) for value in selected):
+        raise ValueError("embed must list exact filesystem entry IDs")
+    if len(set(selected)) != len(selected):
+        raise ValueError("duplicate embedded filesystem")
+    definitions = {}
+    for path in (source / "src").rglob("_index.yaml"):
+        doc = yaml.safe_load(path.read_text())
+        definitions.update({f'{doc["namespace"]}:{entry["name"]}': entry for entry in doc["entries"]})
+    assets = {}
+    for identity in selected:
+        if entries.get(identity) != "fs.directory":
+            raise ValueError(f"embed must name a declared fs.directory exactly: {identity}")
+        entry = definitions[identity]
+        directory = entry.get("directory", "")
+        relative = Path(directory)
+        if not directory or "$" in directory or relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            raise ValueError(f"embedded filesystem needs a literal module-relative directory: {identity}")
+        if entry.get("base", "module") != "module":
+            raise ValueError(f"embedded filesystem must have module base: {identity}")
+        original = root / relative
+        if not original.resolve().is_relative_to(root) or not original.is_dir():
+            raise ValueError(f"embedded directory is outside the source tree or missing: {identity}")
+        for path in [original, *original.rglob("*")]:
+            if path.is_symlink() or not (path.is_dir() or path.is_file()):
+                raise ValueError(f"embedded filesystem requires regular files/directories: {identity}: {path}")
+        frozen = source / relative
+        if relative.parts[0] != "src":
+            # Only explicitly selected module assets outside src/ join the snapshot.
+            if frozen.exists():
+                raise ValueError(f"asset directory overlaps another frozen input: {identity}")
+            shutil.copytree(original, frozen)
+        assets[identity] = {str(path.relative_to(frozen)): digest(path)
+                            for path in sorted(frozen.rglob("*")) if path.is_file()}
+    return assets
+
+
+def prepare(root, manifest_path, plan_path, output, runtime, version=None, mode=None):
+    root, manifest_path, plan_path = root.resolve(), manifest_path.resolve(), plan_path.resolve()
+    output, runtime = output.resolve(), runtime.resolve()
+    if output in {manifest_path, plan_path} or output.is_relative_to(root / "src"):
+        raise ValueError("bundle output overlaps a source input")
+    manifest = json.loads(manifest_path.read_text())
+    plan = json.loads(plan_path.read_text())
+    app = manifest["application"]
+    version = (version or next(p["version"] for p in app["packs"]
+                               if p["module"] == app["module"])).removeprefix("v")
+    if not re.fullmatch(VERSION, version):
+        raise ValueError("invalid bundle version")
+    if mode is not None:
+        if mode not in {"base", "bootstrap"}:
+            raise ValueError("bundle mode must be base or bootstrap")
+        app["mode"] = mode
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".bee-bundle-", dir=output.parent) as temporary:
+        stage = Path(temporary)
+        source, artifacts = stage / "source", stage / "artifacts"
+        source.mkdir()
+        artifacts.mkdir()
+        shutil.copytree(root / "src", source / "src")
+        for name in ("wippy.yaml", ".wippy.yaml", "wippy.lock"):
+            shutil.copy2(root / name, source / name)
+        lock = yaml.safe_load((source / "wippy.lock").read_text())
+        if lock.get("modules") or lock["directories"]["src"] != "./src":
+            raise ValueError("bundle input must be Bee's self-contained src/ composition")
+        entries = inventory(source / "src")
+        owners = ownership(plan, entries)
+        assets = freeze_assets(root, source, entries)
+        if app["module"] not in owners.values():
+            raise ValueError("application module is absent from the bundle")
+        run(runtime, source, "lint", "--set", "lua.type_system.enabled=true",
+            "--set", "lua.type_system.strict=true")
+        if loaded(runtime, source) != entries:
+            raise ValueError("loaded source differs from declared bundle entries")
+        packs = []
+        for item in sorted(plan["modules"], key=lambda item: item["module"]):
+            module = item["module"]
+            target = artifacts / "packs" / (module + ".wapp")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            args = ["pack", str(target), "--meta", "namespace=" + module.replace("/", "."),
+                    "--meta", "name=" + module.split("/")[1], "--meta", "version=" + version,
+                    "--silent"]
+            embedded = sorted(identity for identity in assets if owners[identity.split(":", 1)[0]] == module)
+            args.extend(["--embed", ",".join(embedded)])
+            for namespace in sorted(owners):
+                if owners[namespace] != module:
+                    args.extend(["--exclude-ns", namespace])
+            run(runtime, source, *args)
+            # Source-free loading proves exclusions selected exactly the assigned entries.
+            check = stage / "check"
+            check.mkdir(exist_ok=True)
+            (check / "wippy.lock").write_text(yaml.safe_dump({"directories": {
+                "modules": "./vendor", "src": str(target)}, "modules": []}))
+            expected = {identity: "fs.embed" if identity in assets else kind for identity, kind in entries.items()
+                        if owners[identity.split(":", 1)[0]] == module}
+            if loaded(runtime, check) != expected:
+                raise ValueError(f"packed entry coverage differs: {module}")
+            packs.append({"module": module, "version": version,
+                          "path": str(target.relative_to(artifacts)), "sha256": digest(target)})
+            print(f"{module}: {len(expected)} entries", flush=True)
+        app["packs"] = packs
+        for patch in manifest["runtime"].get("patches", []):
+            relative = Path(patch["path"])
+            if relative.is_absolute() or ".." in relative.parts or not re.fullmatch(r"[0-9a-f]{64}", patch["sha256"]):
+                raise ValueError("runtime patch requires a relative path and SHA-256")
+            origin = manifest_path.parent / relative
+            target = artifacts / "patches" / patch["sha256"]
+            target.parent.mkdir(exist_ok=True)
+            shutil.copy2(origin, target)
+            if digest(target) != patch["sha256"]:
+                raise ValueError(f"runtime patch checksum mismatch: {relative}")
+            patch["path"] = str(target.relative_to(artifacts))
+        (artifacts / "ownership.json").write_text(json.dumps({"plan": plan, "assets": assets, "entries": {
+            identity: {"kind": "fs.embed" if identity in assets else kind, "owner": owners[identity.split(":", 1)[0]]}
+            for identity, kind in sorted(entries.items())}}, indent=2) + "\n")
+        hashes = {str(p.relative_to(artifacts)): digest(p)
+                  for p in sorted(artifacts.rglob("*")) if p.is_file()}
+        generation = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+        destination = output.parent / "native-bundles" / generation
+        destination.parent.mkdir(exist_ok=True)
+        if destination.exists():
+            existing = {str(p.relative_to(destination)): digest(p)
+                        for p in destination.rglob("*") if p.is_file()}
+            if existing != hashes:
+                raise ValueError("existing bundle generation was modified")
+        else:
+            artifacts.rename(destination)
+        prefix = destination.relative_to(output.parent)
+        for entry in app["packs"] + manifest["runtime"].get("patches", []):
+            entry["path"] = str(prefix / entry["path"])
+        pending = stage / "manifest.json"
+        pending.write_text(json.dumps(manifest, indent=2) + "\n")
+        os.replace(pending, output)
+    print(f"Prepared {len(packs)} modules, {len(entries)} entries: {output}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--manifest", type=Path, default=Path("wippy.build.json"))
+    parser.add_argument("--plan", type=Path, default=Path("build/modules.json"))
+    parser.add_argument("--output", type=Path, default=Path("dist/bee.bundle.build.json"))
+    parser.add_argument("--toolchain", type=Path, required=True)
+    parser.add_argument("--version")
+    parser.add_argument("--mode", choices=("base", "bootstrap"))
+    args = parser.parse_args()
+    prepare(args.root, args.manifest, args.plan, args.output, args.toolchain, args.version, args.mode)
+
+
+if __name__ == "__main__":
+    main()

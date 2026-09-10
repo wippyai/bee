@@ -14,7 +14,7 @@ local observation_probe = require("observation_probe")
 local logger = require("logger")
 local host_probe = require("host_probe")
 local clients_probe = require("clients_probe")
-local function main(mode: string?)
+local function run_probe(mode: string?)
     if mode == "clients" then
         local ok, err = pcall(clients_probe.main)
         if not ok then logger:error("Client admission probe failed", {error = tostring(err)}); error(err) end
@@ -122,7 +122,7 @@ local function main(mode: string?)
     assert(wait_reply("detach", "bind").error_code == "")
     local stale_frame, observation_error = view:snapshot()
     assert(not stale_frame and observation_error, "Detached mount retained observation")
-    local sent, input_error = view:send({type = "key", key = "x"})
+    local sent, input_error = view:send({type = "key", key = "x", key_type = "runes", action = "press"})
     assert(not sent and input_error, "Detached mount retained input")
     local resized, resize_error = view:resize(40, 12)
     assert(not resized and resize_error, "Detached mount retained resize")
@@ -143,5 +143,9 @@ local function main(mode: string?)
     process.unlisten(replies)
     process.unlisten(catalogs)
     process.unlisten(checkpoints)
+end
+local function main(mode: string?)
+    run_probe(mode)
+    logger:info("BEE_ATTACHMENT_COMPLETE:" .. tostring(mode or "detached"))
 end
 return {main = main}

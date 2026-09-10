@@ -1,5 +1,10 @@
 # Package boundaries
 
+Native assembly is now implemented as described in [native distribution](NATIVE_DISTRIBUTION.md).
+The package extraction, in-app installation and overlay operations below remain proposals.
+[System map](SYSTEM_MAP.md) records their relationship to service-owned editable
+applications, governance, portable sharing and the distributed inbox.
+
 The shell is the current delivery boundary. Directories distinguish ownership;
 separate Hub releases and dependency manifests will follow once the contracts
 are stable. Moving a file must not change an application's registry identity.
@@ -30,8 +35,9 @@ apps and shared libraries. The edit subsystem should inspect the active source
 and dependency graph, stage a workspace overlay against a known revision, lint
 and test it, show the source/capability diff, activate the reviewed revision, and
 record a receipt with rollback information. A baseline bundled in the binary
-must remain recoverable. Being a core package must not make source uneditable;
-being an application actor must not imply core-publication permission.
+must remain recoverable. Core source changes belong to the host-selected maintenance boundary; not every
+component permits runtime editing or activation. Being an application actor must
+not imply core-publication permission.
 
 Edits to a replaceable presenter can reuse the existing live rejoin boundary.
 Apps now have an opt-in checkpoint/restore protocol; coordinated live producer

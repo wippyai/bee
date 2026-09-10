@@ -2,11 +2,28 @@
 local tty = require("tty")
 local model = require("model")
 local appearance = require("appearance")
+local surface = require("surface")
 type TabHit = {id: string, x: integer, width: integer, action: string?}
 type Frame = {text: string, hits: {TabHit}}
 local M = {}
 type Strip = {text: string, hits: {TabHit}}
-local function tabstrip(scene: model.Scene, order: {string}, width: integer, icons: boolean): Strip
+local function badge_glyph(badge: surface.Badge?): string
+    if not badge then return "" end
+    return string.gsub(badge.glyph, "%c", " ")
+end
+local function badge_style(theme: appearance.Theme, badge: surface.Badge?): string?
+    if not badge then return nil end
+    if badge.tone == "muted" then return appearance.style(theme.muted, theme.surface) end
+    -- The current theme contract has no dedicated success/danger fields;
+    -- keep those semantic tones within its existing readable palette.
+    if badge.tone == "warning" or badge.tone == "accent" or badge.tone == "danger" then return appearance.style(theme.accent, theme.surface) end
+    if badge.tone == "success" then return appearance.style(theme.text, theme.surface) end
+    return nil
+end
+local function mode_marker(win: model.Window): string
+    return win.mode == "fullscreen" and "▣ " or (win.mode == "minimized" and "− " or (win.mode == "collapsed" and "▸ " or ""))
+end
+local function tabstrip(scene: model.Scene, order: {string}, width: integer, icons: boolean, badges: {[string]: surface.Badge}?): Strip
     local labels: {string} = {}
     local ids: {string} = {}
     local focused = 1
@@ -18,7 +35,9 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
                     title = tty.text.truncate(win.icon ~= nil and win.icon ~= "" and win.icon or title, 2, "")
                     if tty.text.width(title) == 0 then title = "•" end
                 end
-                local badge = win.mode == "fullscreen" and "▣ " or (win.mode == "minimized" and "− " or (win.mode == "collapsed" and "▸ " or ""))
+                local glyph = tty.text.truncate(badge_glyph(badges and badges[id] or nil), 2, "")
+                if glyph ~= "" then title = glyph .. " " .. title end
+                local badge = mode_marker(win)
                 labels[#labels + 1] = " " .. badge .. title .. " "
                 ids[#ids + 1] = id
                 if win.id == scene.focus then focused = #labels end
@@ -52,7 +71,7 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
 end
 
 function M.draw(scene: model.Scene, order: {string}, status: string, label: string,
-    preferences: appearance.Preferences, opened: boolean): Frame
+    preferences: appearance.Preferences, opened: boolean, badges: {[string]: surface.Badge}?): Frame
     status = string.gsub(status, "%c", " ")
     label = string.gsub(label, "%c", " ")
     local theme = appearance.theme(preferences.theme)
@@ -70,7 +89,7 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     elseif width >= 60 then right = " " .. label .. " " end
     right = tty.text.truncate(right, math.floor(math.max(0, width // 2)))
     local room = math.floor(math.max(0, width - 7 - tty.text.width(right) - tty.text.width(restore)))
-    local strip = tabstrip(scene, order, room, preferences.taskbar == "icons")
+    local strip = tabstrip(scene, order, room, preferences.taskbar == "icons", badges)
     local text = active .. (opened and " BEE ▴ " or " BEE ▾ ") .. normal
     local hits: {TabHit} = {}
     -- Style each application independently without changing its hit geometry.
@@ -86,7 +105,21 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
                 elseif win.mode ~= "minimized" and win.accent and win.accent ~= "" then style = appearance.style(accent, theme.surface) end
             end
         end
-        text = text .. style .. tty.text.cut(strip.text, hit.x - 1, hit.x + hit.width - 1)
+        local raw = tty.text.cut(strip.text, hit.x - 1, hit.x + hit.width - 1)
+        local badge = badges and badges[hit.id] or nil
+        local glyph = tty.text.truncate(badge_glyph(badge), 2, "")
+        local status = badge_style(theme, badge)
+        if glyph ~= "" and status then
+            local status_offset = 1
+            for _, win in ipairs(scene.windows) do
+                if win.id == hit.id then status_offset = status_offset + tty.text.width(mode_marker(win)); break end
+            end
+            local glyph_width = tty.text.width(glyph)
+            local leading = tty.text.cut(raw, 0, status_offset)
+            text = text .. style .. leading .. status .. glyph .. style .. tty.text.cut(raw, status_offset + glyph_width, tty.text.width(raw))
+        else
+            text = text .. style .. raw
+        end
         position = hit.x + hit.width
         hits[#hits + 1] = {id = hit.id, x = hit.x + 7, width = hit.width}
     end

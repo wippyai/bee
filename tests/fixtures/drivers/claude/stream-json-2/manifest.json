@@ -1,0 +1,17 @@
+{
+  "harness": "claude",
+  "protocol": "stream-json",
+  "protocol_revision": "stream-json-2",
+  "executable_version": "2.1.265",
+  "captured_at": "2026-09-08",
+  "capture": "claude -p <prompt> --output-format stream-json --verbose [--include-partial-messages] --permission-mode dontAsk --no-session-persistence, sanitized (cwd, tool list, mcp servers, home paths)",
+  "samples": {
+    "plain": "single text answer with partial message deltas",
+    "tool": "one Bash tool call and result, then the answer",
+    "tool_failure": "a failing Bash command reported as is_error tool_result",
+    "permission_denied": "a denied tool call under dontAsk, system permission_denied and permission_denials in the result",
+    "api_error": "result with subtype success but is_error true and terminal_reason api_error",
+    "permission": "synthetic interactive exchange for the fixture runner: a control_request answered on stdin, then the tool call, result and answer; not a capture of the real harness",
+    "control": "real capture of the interactive permission exchange, executable 2.1.266 on 2026-09-09: claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode default --max-turns 3 --permission-prompt-tool stdio --permission-prompts host, the brief as a user line on stdin, a scripted loopback endpoint answering a Bash tool_use, the control_request answered with an allow control_response, the correlated tool_result, the answer and the result; sanitized (cwd, home, socket path)"
+  }
+}

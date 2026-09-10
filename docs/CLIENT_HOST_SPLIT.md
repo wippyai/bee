@@ -339,9 +339,9 @@ Owner requests can now bind one exact workspace/instance/view independently.
 That operation leaves other view grants and the default recipient for future
 opens intact. The whole-broker bind remains for the old combined actor; the
 independent client replaces its renderer through host-selected per-view grants.
-This is a per-view controller boundary; production observer admission and
-independent desktop clients still require the steps below.
-Owner-only `unbind` additionally revokes controller grants by exact recipient PID
+This boundary also supports observe-only attachments for host-admitted clients.
+Clients without control permission cannot obtain input or resize rights.
+Owner-only `unbind` additionally revokes controller and observer grants by exact recipient PID
 and clears a matching default recipient. Its source/pack Terminal test uses a
 second consumer actor to prove that detaching one recipient leaves the other's
 command input and observations usable. Applications stay running, and revocation
@@ -517,8 +517,10 @@ the current instance ID, so a stale tab cannot close a replacement instance.
    runs in a separate actor and cannot attach the controller's unused grant;
    the intended controller subsequently attaches that same grant successfully.
    Status acknowledgements authenticate the observer's actual PID. This proves
-   native recipient isolation, not independent desktop client owners or production
-   observer admission. Bee's public broker operations still issue controller mounts only.
+   native recipient isolation. The admitted-client and desktop fixtures additionally
+   prove broker observer admission, failed revocation/retry, presenter F12 and
+   differently sized displays without taking controller input or resize authority.
+   Public shared-desktop selection remains unimplemented.
 3. Extract a host entry point with no `tty.start`, physical surface, input listener,
    session or render timer. Start it with explicit host-selected database and
    policy bindings. Do not expose arbitrary database paths as caller authority.
@@ -604,3 +606,44 @@ silently rewriting the new state.
 Infrastructure services, synchronized components and CI harnesses can consume
 these owners later. They are not reasons to move their domain logic into the
 desktop or to delay proving this extraction.
+
+### Native client startup readiness
+
+The experimental `native/client/session` composition shares a 15-second budget
+for supervisor discovery and desktop-catalog readiness. A definite `UNAVAILABLE`
+catalog reply triggers another read after 50 ms, using a fresh request key so a
+cached startup refusal cannot prevent readiness. Authorization, protocol, transport
+and uncertain failures return immediately. Cancellation stops further requests;
+attachment and input are never retried by this readiness loop. A successful empty
+or ambiguous catalog still requires explicit selection/error handling. This
+composition is not yet wired into ordinary global `bee` startup.
+
+The native `launch.Client.Attach` adapter now has acceptance through the actual
+Wippy application lock-busy path. With a separate owner holding the state lock,
+`application.Run` attaches a fresh physical client and reads retained shell state.
+A failing owner-preparation hook and invalid deployment data bindings are never
+reached. Ctrl+] detaches without ending the owner's applications. The compiled
+public launcher still needs to select this adapter and establish first-owner
+background startup; the global executable is unchanged.
+
+The same acceptance now starts its owner with the detached native `StartOwner`
+helper and `OwnerLauncher` explicit-start routing through the real argument
+parser. It retains fixture-selected activation, naming/execute policies and a
+headless command. Public automatic startup and production registration remain
+unverified; no new global command is claimed.
+
+Automatic native startup now also passes with the fixture composition.
+`NewLauncher` handles ordinary foreground launch before parent deployment/store
+setup, starts a detached owner contender, waits for a new execution or successful
+read-only verification by the losing contender, then attaches once. The real
+runtime lock selects the owner. Tests cover both an existing retained Terminal
+and an empty state directory; the latter boots a new owner and detaches.
+Production activation/policies/command entries and standalone assembly remain
+unwired, so this is not yet a global `bee` acceptance claim.
+
+The native foreground now handles signal cancellation in order: stop physical
+presentation, retain its connection/admission for a bounded three-second cleanup,
+then retire the actor. The owner remains independent. Actual-source SIGTERM
+acceptance restores terminal settings and a fresh client reads the retained shell
+variable afterward. This is a local native composition proof; the combined runtime
+needed for standalone clipboard support remains a separate gate.

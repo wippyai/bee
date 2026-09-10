@@ -131,13 +131,14 @@ local function main(initial_application: string?, secondary_application: string?
         end
     end
 
-    local function broker_request(op: string, definition_id: string, id: string, recipient: string, launch_arguments: {string}?)
+    local function broker_request(op: string, definition_id: string, id: string, recipient: string, launch_arguments: {string}?, requested_thread_id: string?)
         local request_id = uuid.v7()
         local restored: recovery.Record? = nil
         if op == "open" and (not launch_arguments or #launch_arguments == 0) then
             for _, saved_id in ipairs(record_order) do
                 local record = records[saved_id]
-                if record and record.definition_id == definition_id then
+                if record and record.definition_id == definition_id
+                    and (requested_thread_id == nil or requested_thread_id == record.thread_id) then
                     local live = false
                     for _, window in ipairs(scene.windows) do if window.id == saved_id then live = true end end
                     if not live then restored = record; break end
@@ -145,7 +146,7 @@ local function main(initial_application: string?, secondary_application: string?
             end
         end
         local request = {version = 1, request_id = request_id, op = op, workspace_id = workspace_id,
-            definition_id = definition_id, id = id, recipient = recipient,
+            definition_id = definition_id, thread_id = requested_thread_id or (restored and restored.thread_id) or nil, id = id, recipient = recipient,
             restore_instance_id = restored and restored.instance_id or "", restore_view_id = restored and restored.id or "",
             resume_schema = restored and restored.resume_schema or "", resume_state = restored and restored.resume_state or "",
             arguments = op == "open" and launch_arguments or nil}
@@ -173,7 +174,7 @@ local function main(initial_application: string?, secondary_application: string?
         if record then
             restore_request = uuid.v7()
             send_control(broker, "bee.app.request", {version = 1, request_id = restore_request, op = "open", workspace_id = workspace_id,
-                definition_id = record.definition_id, restore_instance_id = record.instance_id, restore_view_id = record.id,
+                definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id, restore_view_id = record.id,
                 resume_schema = record.resume_schema, resume_state = record.resume_state})
         else
             restore_request = ""
@@ -306,11 +307,13 @@ local function main(initial_application: string?, secondary_application: string?
                     if data.op == "open" then
                         for _, id in ipairs(record_order) do
                             local record = records[id]
-                            if record and record.definition_id == data.definition_id then
+                            if record and record.definition_id == data.definition_id
+                                and (data.thread_id == nil or data.thread_id == record.thread_id) then
                                 local live = false
                                 for _, window in ipairs(scene.windows) do if window.id == id then live = true end end
                                 if not live then
                                     data.restore_instance_id, data.restore_view_id = record.instance_id, record.id
+                                    data.thread_id = record.thread_id
                                     data.resume_schema, data.resume_state = record.resume_schema, record.resume_state
                                     break
                                 end

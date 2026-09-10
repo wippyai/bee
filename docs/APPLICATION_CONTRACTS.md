@@ -82,6 +82,15 @@ cross-workspace operations. Sender, instance and capability checks remain the
 authority boundary. Restart the whole workspace after updating this launch
 contract; F12 only replaces the presenter.
 
+Open requests may carry an optional bounded `thread_id` association. The value uses
+the thread record identifier bound (nonempty, printable, at most 160 bytes). It is
+an owner-selected descriptive association and grants no thread membership or
+operation permission. It is carried by the host-authorized open request and the
+broker's immutable instance; applications cannot set or infer it from launch
+arguments. Identified replies and host inventory expose the association, and
+checkpoint records retain it for recovery. An open without `thread_id` may restore
+the association saved with its selected checkpoint.
+
 Open requests may carry `arguments`, a dense list of up to 16 strings (1 KiB each,
 8 KiB combined, no control characters). Omission means an empty list. The broker
 copies validated arguments into the launch value, and `client.launch` validates
@@ -124,8 +133,25 @@ executor can run explicit native argument vectors with OS-user authority; empty
 arguments start `/bin/bash -i`. Quoting preserves empty strings, whitespace and
 shell metacharacters without shell evaluation. Other applications gain no native
 execution permissions from declaring a handler.
-Test Status accepts a thread ID and optional run ID; its checkpoint saves only
-the thread, so restoration never requests a new run automatically.
+An application that takes launch arguments validates them before opening
+anything and treats them as selection, never as a command to act: Timeline
+accepts an optional thread ID and its checkpoint saves the thread, its
+subscription identity and the local view state, so restoration reattaches
+to what the owner holds and never creates work automatically.
+
+A read-only viewer of an owner (the Timeline over a thread) never mutates the
+owner's state: it lists and reads, holds its own subscription cursor, and
+waits for change through a read-only operation that claims no obligation
+(`bee.threads.delivery:watch`, distinct from `wait`, which claims). Viewing a
+thread with pending obligations for the viewer leaves those obligations and
+the delivery history unchanged. Page acknowledgment moves the owner's cursor
+for that subscription; it records consumer progress, not proof the viewer saw
+the page. A viewer that folds a page into memory and acknowledges it, then
+loses its process before persisting those rows, resumes past the acknowledged
+cursor and shows the unsaved rows as a bounded gap, never as seen. A viewer
+closes only its own subscriptions and only when it leaves a thread; a
+presenter reload keeps the subscription so it resumes, and a durable
+subscription an app abandons is bounded by the owner, not the viewer.
 
 After initializing its input/output, the app calls `client.ready(launch)`.
 The broker checks the actual sender PID, instance/view identities and launch token.
@@ -155,7 +181,12 @@ is per grant: an error retains the failed grant's owner record and is returned t
 the caller; it does not claim the whole recipient detached. A retry uses a new
 request ID. This is a trusted owner operation, not client admission by itself.
 Replies use `bee.app.reply`, version 1, correlated request ID, operation, view ID
-(`id`), instance ID, title, mount, and explicit `error_code`/`error` strings.
+(`id`), instance ID, title, mount, optional `thread_id`, and explicit `error_code`/
+`error` strings. Host live inventory carries the same optional association. A
+singleton open that explicitly names an association different from the live
+instance returns `thread_conflict`; it never rebinds the instance. Checkpoint
+selection follows an explicit requested association, while an unbound open may
+restore the association saved with its checkpoint.
 Unsolicited `closed` is emitted on EXIT. Duplicate successful opens focus the
 existing live instance; they never replay obsolete mount handles.
 
@@ -191,7 +222,12 @@ presenter can settle a drag. Acknowledgements are processed while rejoining too.
 Route new operations through their owning subsystem, authenticate the sender and
 check explicit grants there. Keep registry/overlay writes behind the future
 publication owner. Do not expand the base app policy to make an individual app
-work. Native execution requires OS-level confinement before admitting untrusted
+work. An application reaches a subsystem's store only inside that subsystem's
+methods, which attach their own store policy; `bee:workspace_storage_boundary`
+denies the stores no method may open on an application's behalf, so a store
+reached through an owner's methods (threads, approvals) is not listed there.
+Every local desktop application acts as the client's actor (`bee.local`);
+admission grants an application calls, not an identity of its own. Native execution requires OS-level confinement before admitting untrusted
 shell commands or external agents. TTY capability isolation is not filesystem isolation.
 
 ## Durable checkpoint and restore
@@ -209,9 +245,11 @@ committed. Only one outstanding request per app is retained; replaced requests
 receive `superseded`, and waiting requests have a five-second deadline. Apps should
 checkpoint during work and avoid depending on a final shutdown exchange.
 
-The workspace preserves acknowledged data, logical instance/view IDs, geometry,
-window mode and preferences. On boot, automatic instances are reopened in saved
-order after admission is checked. Manual instances resume when opened from Start.
+The workspace preserves acknowledged data, logical instance/view IDs, their optional
+thread associations, geometry, window mode and preferences. On boot, automatic
+instances are reopened in saved order after admission is checked. Manual instances
+resume when opened from Start. An explicit thread selection only considers a
+checkpoint with the same association; an unbound open can recover the saved one.
 The new launch carries `resume_schema` and `resume_state`; process and terminal
 capabilities are newly created. Runtime PID strings may be reused across runtime
 boots and must never serve as persistent identities. Failed/incompatible restores
@@ -302,7 +340,9 @@ responses; the presenter owns drawing and input focus. Pure `interactions`,
 `lifecycle` and `shutdown` modules manage values without process or storage access.
 A positive dialog response is not a general capability grant.
 
-Closing a view still stops its app process. Test Status's independent worker
-continues when its view closes, so that app does not opt into a cancellation
-warning. Minimize and F12 never request close. Future independent application
-lifetimes and headless clients must distinguish detach from stop explicitly.
+Closing a view still stops its app process. Work that must outlive a view runs
+in its own supervised process or under an owner service (the approval outbox
+worker, the placement runner, a carrier), and such an app does not opt into a
+cancellation warning because closing it stops nothing durable. Minimize and F12
+never request close. Future independent application lifetimes and headless
+clients must distinguish detach from stop explicitly.

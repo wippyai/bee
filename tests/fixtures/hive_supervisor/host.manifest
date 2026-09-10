@@ -1,0 +1,41 @@
+# MIT. Minimal host composition for the isolated Hive supervisor proof.
+version: '1.0'
+namespace: bee
+entries:
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: workers
+  kind: process.host
+  host: {max_processes: 64, workers: 2}
+  lifecycle: {auto_start: true}
+- name: hive_supervisor_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: hive_catalog_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find]
+    resources: '*'
+    effect: allow
+- name: hive_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list]
+    effect: allow
+- name: hive_dispatch_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list]
+    effect: allow
+- name: hive_telemetry_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node, cluster, memory, goroutines]
+    effect: allow

@@ -19,8 +19,8 @@ type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
-type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, launch_token: string,
+type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
+    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
     negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
@@ -104,6 +104,7 @@ local function main(owner: string, initial_preferences: unknown)
         local reply = contract.reply(request_id, op, code, message)
         reply.workspace_id = workspace_id
         reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, attachment.reference(item.attachment)
+        reply.thread_id = item.thread_id
         reply.icon = item.descriptor.icon
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
@@ -577,7 +578,7 @@ local function main(owner: string, initial_preferences: unknown)
                 reply.id = req.id
                 emit(reply)
             elseif req then
-                local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
+                local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. (req.thread_id or "") .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
                 fingerprint = fingerprint .. "\0" .. req.instance_id
                 local cached = completed[req.request_id]
                 if fingerprints[req.request_id] and fingerprints[req.request_id] ~= fingerprint then
@@ -606,6 +607,14 @@ local function main(owner: string, initial_preferences: unknown)
                         if req.id == "" then recipient = req.recipient end
                         local reply = contract.reply(req.request_id, "bind")
                         local function rebind(item: Instance)
+                            if req.observer then
+                                local result = attachment.observe(item.view, item.observers, req.recipient)
+                                local response = identified(item, "attached", req.request_id, result.error_code, result.error)
+                                response.mount, response.observer = result.mount, true
+                                emit(response)
+                                if result.error_code ~= "" then reply.error_code, reply.error = result.error_code, result.error end
+                                return
+                            end
                             local result = attachment.replace(item.view, item.attachment, item.opened and req.recipient or "")
                             item.attachment = result.attachment
                             if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
@@ -638,6 +647,8 @@ local function main(owner: string, initial_preferences: unknown)
                         local function detach(item: Instance)
                             local result = attachment.remove_recipient(item.view, item.attachment, req.recipient)
                             item.attachment = result.attachment
+                            local removed, observer_error = attachment.remove_observer(item.view, item.observers, req.recipient)
+                            if not removed then reply.error_code, reply.error = "revoke_failed", observer_error or "Observer revocation failed" end
                             if result.error ~= "" then
                                 reply.error_code, reply.error = result.error_code, result.error
                             end
@@ -663,7 +674,9 @@ local function main(owner: string, initial_preferences: unknown)
                             if descriptor and descriptor.singleton and item.descriptor.definition_id == req.definition_id then existing = item end
                         end
                         if existing then
-                            if existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
+                            if req.thread_id ~= nil and req.thread_id ~= existing.thread_id then
+                                emit(contract.reply(req.request_id, "open", "thread_conflict", "Singleton application is associated with another thread"), true)
+                            elseif existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
                             else emit(contract.reply(req.request_id, "open", "busy", "Application is changing state"), true) end
                         elseif not binding or not descriptor then emit(contract.reply(req.request_id, "open", "not_admitted", "Application is not admitted"), true)
                         elseif req.restore_instance_id ~= "" and (req.resume_schema ~= descriptor.resume_schema or descriptor.restart_policy == "never") then
@@ -689,8 +702,8 @@ local function main(owner: string, initial_preferences: unknown)
                                             definition_revision = descriptor.definition_revision, registry_revision = version:string(), launch_token = token, resume_schema = descriptor.resume_schema, resume_state = req.resume_state, arguments = req.arguments})
                                     if not pid then view:close(); emit(contract.reply(req.request_id, "open", "spawn_failed", tostring(spawn_err)), true)
                                     else
-                                        instances[view_id] = {view_id = view_id, instance_id = instance_id, execution_pid = tostring(pid), view = view,
-                                            descriptor = descriptor, binding = binding, launch_token = token,
+                                        instances[view_id] = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = tostring(pid), view = view,
+                                            descriptor = descriptor, binding = binding, launch_token = token, observers = {},
                                             state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
                                     end
                                 end

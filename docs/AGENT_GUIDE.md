@@ -39,10 +39,14 @@ activation requests. Document whether an update supports live rejoin, app
 checkpoint/restore or a full restart. Do not describe planned operations as
 already callable.
 
-The local journal and Test Status app establish the first durable communication
-slice; see [foundation next steps](FOUNDATION_NEXT.md). Agent drivers,
-thread subscriptions, MCP and publication are not implemented yet. Do not route
-new authority through the desktop merely because it is the visible client.
+The thread authority and durable subscriptions now supply the communication
+slice; Timeline is the read-only application, and Test Status has been removed.
+See [the build sequence](BUILD_SEQUENCE.md) for implemented driver and gateway
+components and their remaining public activation gates. Do not route new
+authority through the desktop merely because it is the visible client.
+The shared source currently needs the candidate runtime described in
+[the runtime gate](handoffs/STATUS_RUNTIME_GATE.md); historical standalone
+acceptance does not prove a release of these newer changes.
 
 ## Continuing the host/client work
 
@@ -60,11 +64,13 @@ identity, Hive and portable application content, and
 Do not create a parallel mesh, naming system or registry reconciler.
 
 Current evidence: the broker retains ready producers without a presenter, its
-attachment module retains one recipient-and-grant record per instance, and stale
+attachment module retains one controller and up to 16 observer recipient/grant records per instance, and stale
 mounts lose observation/input/resize authority after detach. The named-host fixture
 uses native LOCAL registration after startup readiness. `bee.host:main` owns its
 broker and persistence without a physical TTY. The local supervisor starts it;
-there is no headless launch profile, workspace switcher or `bee hive` CLI.
+the low-level `bee-host` entry can run that owner on `bee:workers` without a
+desktop. It does not yet expose supervisor admission or discovery. There is no
+managed headless launch profile, workspace switcher or `bee hive` CLI.
 The host admits supervisor-selected client actors with explicit operation
 permissions and connection IDs. Source/pack tests cover two clients, detach,
 re-admission, exit cleanup and retained native terminals. See the internal

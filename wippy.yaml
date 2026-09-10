@@ -1,5 +1,6 @@
 organization: bee
 module: bee
+type: application
 description: A small extensible workspace desktop
 license: MIT
 exclude_meta:

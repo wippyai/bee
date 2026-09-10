@@ -23,3 +23,4 @@ entries:
   source: file://application.lua
   imports:
     arguments: bee.application:arguments
+    thread_bounds: bee.threads.records:bounds

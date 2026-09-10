@@ -1,6 +1,27 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: retained_protocol
+  kind: library.lua
+  source: file://retained_protocol.lua
+  imports:
+    clipboard: bee.client:clipboard
+    contract: bee.protocol:application
+- name: headless
+  kind: process.lua
+  source: file://headless.lua
+  method: main
+  modules: [process, channel, security, time, logger]
+  imports:
+    protocol: bee.launch:protocol
+    decode: bee.protocol:decode
+  meta:
+    command:
+      name: bee-host
+      short: Run a local workspace without a desktop
+      security:
+        actor: {id: bee.local}
+        policies: [bee:host_policy, bee:local_supervisor_spawn_policy]
 - name: bootstrap
   kind: library.lua
   source: file://bootstrap.lua
@@ -20,9 +41,29 @@ entries:
   kind: process.lua
   source: file://supervisor.lua
   method: main
-  modules: [process, channel, security, ctx, time, uuid]
-  imports:
+  modules: [process, channel, security, ctx, time, uuid, logger]
+  imports: &supervisor_imports
+    desktops: bee.client:desktops
+    attachments: bee.client:attachments
+    retained_protocol: bee.launch:retained_protocol
     protocol: bee.launch:protocol
     contract: bee.protocol:application
     decode: bee.protocol:decode
     interaction: bee.application:interaction
+- name: retained
+  kind: process.lua
+  source: file://supervisor.lua
+  method: retained
+  modules: [process, channel, security, ctx, time, uuid, logger]
+  imports: *supervisor_imports
+
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process]
+  meta:
+    comment: Native start keeps this command alive while the Hive service owns the retained desktop; it spawns no host
+    command:
+      name: bee-owner
+      short: Internal retained-owner lifetime entry selected by bee start

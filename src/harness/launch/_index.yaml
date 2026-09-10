@@ -1,0 +1,41 @@
+version: '1.0'
+namespace: bee.harness.launch
+entries:
+- name: definitions
+  kind: library.lua
+  source: file://definition.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules: [hash, funcs, process, security, time]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    definition: bee.harness.launch:definitions
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.threads.records:bounds
+- name: admit
+  kind: function.lua
+  source: file://admit_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+- name: start
+  kind: function.lua
+  source: file://start_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee:launch_spawn_policy]

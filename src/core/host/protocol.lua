@@ -71,7 +71,7 @@ function M.allowed(client: Client, request: contract.Request): boolean
     if request.op == "open" then return client.permissions.open end
     if request.op == "close" then return client.permissions.close and request.id ~= "" and request.instance_id ~= "" end
     if request.op == "bind" then
-        return client.permissions.control and not client.rendering and client.renderer ~= "" and request.id ~= "" and request.instance_id ~= ""
+        return not client.rendering and client.renderer ~= "" and request.id ~= "" and request.instance_id ~= ""
             and (request.recipient == "" or request.recipient == client.recipient)
     end
     return false

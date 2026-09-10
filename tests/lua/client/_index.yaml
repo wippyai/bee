@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.client
 entries:
+- name: clipboard_test
+  kind: function.lua
+  source: file://clipboard_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    clipboard: bee.client:clipboard
 - name: lifecycle_test
   kind: function.lua
   source: file://lifecycle_test.lua

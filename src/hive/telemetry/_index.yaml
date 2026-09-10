@@ -1,0 +1,86 @@
+version: '1.0'
+namespace: bee.hive.telemetry
+entries:
+- name: presence
+  kind: function.lua
+  source: file://presence.lua
+  method: handle
+  modules: [system, time]
+  imports:
+    types: bee.hive:types
+  meta:
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Node presence
+      input: {type: object, properties: {}, additionalProperties: false}
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          protocol_revision: {type: string}
+          node_id: {type: string}
+          role: {type: string}
+          cluster_size: {type: integer}
+          sampled_at: {type: string}
+  security:
+    policies: [bee:hive_telemetry_policy]
+- name: stats
+  kind: function.lua
+  source: file://stats.lua
+  method: handle
+  modules: [system, time]
+  meta:
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Runtime statistics
+      input: {type: object, properties: {}, additionalProperties: false}
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          memory:
+            type: object
+            additionalProperties: false
+            properties:
+              alloc: {type: integer}
+              total_alloc: {type: integer}
+              sys: {type: integer}
+              heap_alloc: {type: integer}
+              heap_objects: {type: integer}
+              num_gc: {type: integer}
+          goroutines: {type: integer}
+          cpu_count: {type: integer}
+          sampled_at: {type: string}
+  security:
+    policies: [bee:hive_telemetry_policy]
+- name: catalog_list
+  kind: function.lua
+  source: file://catalog_list.lua
+  method: handle
+  imports:
+    catalog: bee.hive:catalog
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+  meta:
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Public operation catalog
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          after_operation_ref: {type: string}
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          operations: {type: array}
+          generation: {type: integer}
+          has_more: {type: boolean}
+          next_after_operation_ref: {type: string}
+          unavailable: {type: string}
+  security:
+    policies: [bee:hive_catalog_policy, bee:hive_exposure_policy]

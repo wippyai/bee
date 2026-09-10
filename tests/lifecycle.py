@@ -1,4 +1,5 @@
 """Adversarial app lifecycle scenarios using disposable production compositions."""
+from workspace import database_environment
 from pathlib import Path
 import os
 import shutil
@@ -197,6 +198,30 @@ def detached():
                                     return ok, failure and tostring(failure) or nil
                                 end
                                 local _, err = revoke()''')
+            observer_revoke = "local _, err = view:revoke(previous)"
+            assert code.count(observer_revoke) == 1
+            code = code.replace("local M = {}", "local M = {}\nlocal fail_observer_revoke_once = true")
+            code = code.replace(observer_revoke, """local function revoke_observer(): (boolean?, string?)
+                    if fail_observer_revoke_once then
+                        fail_observer_revoke_once = false
+                        return nil, "Injected observer revocation failure"
+                    end
+                    local ok, failure = view:revoke(previous)
+                    return ok, failure and tostring(failure) or nil
+                end
+                local _, err = revoke_observer()""")
+            observer_remove = "local _, err = view:revoke(mount)"
+            assert code.count(observer_remove) == 1
+            code = code.replace("local M = {}", "local M = {}\nlocal fail_observer_remove_once = true")
+            code = code.replace(observer_remove, """local function revoke_removed_observer(): (boolean?, string?)
+                    if fail_observer_remove_once then
+                        fail_observer_remove_once = false
+                        return nil, "Injected observer detach failure"
+                    end
+                    local ok, failure = view:revoke(mount)
+                    return ok, failure and tostring(failure) or nil
+                end
+                local _, err = revoke_removed_observer()""")
             attachment.write_text(code)
             for name in (".wippy.yaml", "wippy.lock"):
                 shutil.copy2(ROOT / name, project / name)
@@ -215,11 +240,14 @@ def detached():
             pack = folder / "detached.wapp"
             if packed:
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
+            (folder / ".wippy").mkdir(exist_ok=True)
+            (project / ".wippy").mkdir(exist_ok=True)
             for mode in ("detached", "failed-open", "terminal", "observation", "host", "clients"):
                 args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
-                                        env={**os.environ, "BEE_WORKSPACE_DB": str(folder / f"workspace-{mode}.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
+                                        env=database_environment(folder, BEE_WORKSPACE_DB=str(folder / f"workspace-{mode}.db")))
                 assert result.returncode == 0, f"Attachment mode={mode}, packed={packed}, exit={result.returncode}\n" + result.stdout + result.stderr
+                assert f"BEE_ATTACHMENT_COMPLETE:{mode}" in result.stdout + result.stderr, f"Attachment probe did not complete: mode={mode}, packed={packed}\n" + result.stdout + result.stderr
     print("Source/pack: detached Terminal, observer isolation, host restore, client inventory/title/exit updates, detach fencing, renderer replacement/failure, stale generation and queued detach", flush=True)
 
 

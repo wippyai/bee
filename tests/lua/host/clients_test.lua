@@ -50,6 +50,9 @@ local function define_tests()
             request.restore_view_id = ""
             request.op = "bind"; request.id = "view"; request.instance_id = "instance"
             test.eq(clients.allowed(client, request), true)
+            client.permissions.control = false
+            test.is_true(clients.allowed(client, request))
+            client.permissions.control = true
             request.recipient = "foreign"
             test.eq(clients.allowed(client, request), false)
             request.recipient = "client"; request.instance_id = ""

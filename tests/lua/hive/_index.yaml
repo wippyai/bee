@@ -1,0 +1,157 @@
+version: '1.0'
+namespace: bee.hive
+entries:
+- name: probe_exposure_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive:probe_open]
+    effect: allow
+- name: probe_open
+  kind: function.lua
+  source: file://probe_open.lua
+  method: handle
+  meta:
+    type: test_support
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Probe operation
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          name: {type: string}
+          count: {type: integer}
+      output: {type: object, additionalProperties: false, properties: {}}
+- name: probe_bad_meta
+  kind: function.lua
+  source: file://probe_open.lua
+  method: handle
+  meta:
+    type: test_support
+    hive: open
+- name: probe_policy_mode
+  kind: function.lua
+  source: file://probe_open.lua
+  method: handle
+  meta:
+    type: test_support
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Policy probe
+      input: {type: object, additionalProperties: false, properties: {}}
+      output: {type: object, additionalProperties: false, properties: {}}
+- name: probe_tool
+  kind: registry.entry
+  meta:
+    type: hive.interface
+    hive_interface:
+      kind: tool
+      operation_ref: bee.hive:probe_open
+      title: Probe tool
+      fixed: {count: 5}
+      allow: [name]
+- name: probe_widening
+  kind: registry.entry
+  meta:
+    type: hive.interface
+    hive_interface:
+      kind: command
+      operation_ref: bee.hive:probe_open
+      title: Widening probe
+      allow: [name, extra]
+- name: catalog_probe
+  kind: function.lua
+  source: file://catalog_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    catalog: bee.hive:catalog
+- name: fake_supervisor
+  kind: process.lua
+  source: file://fake_supervisor.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel, time]
+  imports:
+    types: bee.hive:types
+- name: fake_impostor
+  kind: process.lua
+  source: file://fake_impostor.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    types: bee.hive:types
+- name: types_test
+  kind: function.lua
+  source: file://types_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    catalog: bee.hive:catalog
+    types: bee.hive:types
+- name: client_test
+  kind: function.lua
+  source: file://client_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, time]
+  imports:
+    test: wippy.test:test
+    client: bee.hive:client
+    types: bee.hive:types
+- name: telemetry_test
+  kind: function.lua
+  source: file://telemetry_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: mapping_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, funcs.call, process.security, security.scope.create, security.policy.get, registry.get]
+    resources: '*'
+    effect: allow
+- name: principals_test
+  kind: function.lua
+  source: file://principals_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    principals: bee.hive.supervisor:principals
+- name: thread_admission_test
+  kind: function.lua
+  source: file://thread_admission_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, registry, time, uuid]
+  security:
+    policies: [bee.hive:mapping_test_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_storage_policy, bee:thread_resource_policy]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    principals: bee.hive.supervisor:principals
+    thread_admission: bee.hive.supervisor:thread_admission
+    harness: bee.threads:harness
+    sends: bee.threads.service:sends

@@ -1,8 +1,11 @@
 # Threads, hooks and subscriptions
 
-**Status: a bounded local journal and Test Status application are implemented.**
-The richer membership, subscription and workflow contract below remains a
-proposal. No Kickside, AI, MCP or Hub dependency is required.
+**Status: the bounded local journal contract is implemented, and the rich
+thread authority, delivery, subscriptions and projection of the build sequence
+are built on it (see [thread authority](THREAD_AUTHORITY.md),
+[delivery](THREAD_DELIVERY.md) and [sessions](THREAD_SESSIONS.md)).** The
+Timeline application reads a thread through those contracts. No Kickside, AI,
+MCP or Hub dependency is required.
 
 ## Implemented local slice
 
@@ -27,34 +30,29 @@ that runtime's SQL pool. Multiple runtimes opening the same file are unsupported
 a stress probe encountered write-lock failures. Future remote callers must use
 the owner's contract; mesh membership does not make SQLite a replicated store.
 
-**Test Status** is an on-demand application under Start → Tools. Run it with:
+**Timeline** is an on-demand application under Start → Tools. Run it with:
 
 ```sh
-bee --command bee-app run bee.test_status:app desktop-checks first-run
+bee --command bee-app run bee.timeline:app <thread_id>
 ```
 
-The first argument selects a thread; the optional second starts an idempotently
-claimed run. Without arguments it shows `desktop-checks`. R starts another run;
-G replays; arrows, Page Up/Down, Home/End and the wheel browse recorded results.
-Six real shared-UI checks execute in a standalone worker, paced 300ms apart for
-visibility. Closing the view does not stop the worker. Reopening or restarting
-Bee replays committed results; it does not resurrect a process. The view keeps
-200 display lines and currently polls one bounded journal page every 300ms.
-There is no production push subscription or durable consumer cursor yet.
+Without an argument it lists the threads the local actor is a member of and
+opens the chosen one. It reads records through a subscription of the thread
+owner: one outstanding page at a time, acknowledged by identity and exact
+extent after it is folded into the frame, so the cursor moves only as the
+owner answers. New records arrive through a bounded wait that claims nothing
+for the viewer; the view holds 512 rows and marks what it no longer shows.
+Reopening restores the thread and subscription identity from the checkpoint
+and resumes under a new lease; an earlier instance's pages are then fenced.
+Viewing acknowledges no delivery and settles nothing. Approval records name
+where they are decided; the Approvals application acts on them. An
+unreachable owner is shown as unreachable, never as an empty thread.
 
-A run claim and process spawn are separate operations. Failure between them can
-leave a claim without execution; retrying that run ID will not spawn again.
-Unexpected shutdown may leave queued/started as the last recorded event. The UI
-labels this as recorded history, not evidence of current liveness. Durable job
-scheduling, automatic retries and arbitrary script execution are not implemented.
-
-`tests/test_status.py`, included in `make check`, exercises source and pack
-argument launch, completion after view close, reopen/F12/cold replay and duplicate
-run suppression. `make threads` exercises the separate subscriber prototype.
+`tests/timeline_app.py`, included in `make check`, boots the application
+under the broker; `tests/lua/timeline` proves the model against the real
+owner, including resume fencing and refusal of a non-member.
 `tests/thread_storage.py` checks the production contract's caller SQL denial,
 actor spoof denial, page boundaries, retry conflicts and migration integrity.
-The live worker fixture also checks that spawning through the run contract does
-not inherit a TTY surface or direct journal SQL authority.
 
 ## Proposed full contract
 
@@ -136,7 +134,7 @@ scheduling work must be coordinated.
 
 The fixture is a local SQLite proof with fixed bootstrap participants and bounded
 replay/wait. It can demonstrate durable order, duplicate append behavior,
-sender-authenticated denial, reconnect replay and a real test-status projection.
+sender-authenticated denial, reconnect replay and a real projection.
 It does not provide remote authentication, dynamic membership, compaction or
 cross-database transactions, and it makes no exactly-once or arbitrary-code
 execution claim. AI drivers, MCP transport, hook adapters and desktop promotion

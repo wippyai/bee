@@ -82,7 +82,7 @@ local function main(owner: string, database_resource: string?)
         if record then
             restoring = uuid.v7()
             send("bee.app.request", {version = 1, request_id = restoring, op = "open", workspace_id = workspace_id,
-                definition_id = record.definition_id, restore_instance_id = record.instance_id,
+                definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id,
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
         else
             restoring = ""

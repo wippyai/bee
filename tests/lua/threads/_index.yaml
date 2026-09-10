@@ -1,0 +1,191 @@
+version: '1.0'
+namespace: bee.threads
+entries:
+- name: records_test
+  kind: function.lua
+  source: file://records_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    record: bee.threads.records:record
+    observation: bee.threads.records:observation
+    message: bee.threads.records:message
+    lifecycle: bee.threads.records:lifecycle
+    delivery: bee.threads.records:delivery
+    bounds: bee.threads.records:bounds
+    types: bee.threads.records:types
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:join,
+      bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after, bee.threads.service:send, bee.threads.service:send_status,
+      bee.threads.service:admit_action, bee.threads.service:prepare_attempt, bee.threads.service:start_attempt, bee.threads.service:request_turn,
+      bee.threads.service:end_turn, bee.threads.service:receipt,
+      bee.threads.delivery:claim, bee.threads.delivery:dispatch, bee.threads.delivery:ack, bee.threads.delivery:release,
+      bee.threads.delivery:expire, bee.threads.delivery:reconcile, bee.threads.delivery:subscribe, bee.threads.delivery:page,
+      bee.threads.delivery:ack_page, bee.threads.delivery:unsubscribe, bee.threads.delivery:resume, bee.threads.delivery:close_subscription, bee.threads.delivery:forget_subscription, bee.threads.delivery:wait, bee.threads.delivery:watch,
+      bee.threads.projection:recap_read, bee.threads.projection:recap_update, bee.threads.projection:recap_rebuild, bee.threads.projection:status_read, bee.threads.projection:status_update, bee.threads.projection:status_rebuild,
+      bee.threads:capabilities, bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint, bee.threads.approvals:append]
+    effect: allow
+- name: upgrade_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-upgrade-test.db
+  lifecycle: {auto_start: true}
+- name: tamper_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-tamper-test.db
+  lifecycle: {auto_start: true}
+- name: rebuild_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-rebuild-test.db
+  lifecycle: {auto_start: true}
+- name: broken_rebuild_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/threads-broken-rebuild-test.db
+  lifecycle: {auto_start: true}
+- name: harness
+  kind: library.lua
+  source: file://harness.lua
+  meta: {type: test_support}
+  modules: [funcs, security, sql, uuid]
+  imports:
+    database: bee.threads.persist:database
+- name: authority_test
+  kind: function.lua
+  source: file://authority_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: lifecycle_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: ledger_test
+  kind: function.lua
+  source: file://ledger_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    database: bee.threads.persist:database
+    legacy: bee.threads.persist:legacy
+    ledger: bee.persist:ledger
+    migrations: bee.threads.persist:migrations
+    owner: bee.threads.persist:owner
+- name: delivery_test
+  kind: function.lua
+  source: file://delivery_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    owner: bee.threads.persist:owner
+- name: subscription_test
+  kind: function.lua
+  source: file://subscription_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    owner: bee.threads.persist:owner
+- name: wait_test
+  kind: function.lua
+  source: file://wait_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [time]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    waits: bee.threads.delivery:waits
+- name: subscription_lifecycle_test
+  kind: function.lua
+  source: file://subscription_lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, sql, uuid]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    subscriptions: bee.threads.delivery:subscriptions
+- name: status_test
+  kind: function.lua
+  source: file://status_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, sql, uuid]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    status: bee.threads.projection:status
+- name: recap_test
+  kind: function.lua
+  source: file://recap_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    recap: bee.threads.projection:recap
+- name: capabilities_test
+  kind: function.lua
+  source: file://capabilities_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, registry, security]
+  imports:
+    test: wippy.test:test
+    capabilities: bee.threads:capabilities_report
+    bounds: bee.threads.records:bounds
+    migrations: bee.threads.persist:migrations
+    waits: bee.threads.delivery:waits
+- name: carrier_test
+  kind: function.lua
+  source: file://carrier_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: approvals_test
+  kind: function.lua
+  source: file://approvals_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: send_test
+  kind: function.lua
+  source: file://send_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    sends: bee.threads.service:sends
+- name: session_test
+  kind: function.lua
+  source: file://session_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    session: bee.threads.delivery:session

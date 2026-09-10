@@ -1,0 +1,52 @@
+version: '1.0'
+namespace: bee.hive_remote
+entries:
+- name: client_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, tty.observe, tty.input, tty.resize]
+    resources: '*'
+    effect: allow
+- name: controller_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.client:main]
+    effect: allow
+- name: inspect
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node, cluster]
+    effect: allow
+- name: host_supervisor
+  kind: process.lua
+  source: file://host.lua
+  method: main
+  modules: [process, channel, security, time, io, system]
+  imports:
+    contract: bee.protocol:application
+  meta:
+    command:
+      name: hive-remote-host
+      security:
+        actor: {id: bee.remote.supervisor}
+        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy, bee.hive_remote:inspect]
+- name: client_actor
+  kind: process.lua
+  source: file://client.lua
+  method: main
+  modules: [process, channel, security, tty, time, io, system]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    client_protocol: bee.host:protocol
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+  meta:
+    command:
+      name: hive-remote-client
+      security:
+        actor: {id: bee.remote.client}
+        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:client_spawn_policy, bee:client_storage_policy, bee.hive_remote:controller_spawn_policy, bee.hive_remote:client_policy, bee.hive_remote:inspect]

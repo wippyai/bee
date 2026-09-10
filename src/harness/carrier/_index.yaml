@@ -1,0 +1,63 @@
+version: '1.0'
+namespace: bee.harness.carrier
+entries:
+- name: provenance
+  kind: library.lua
+  source: file://provenance.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: checkpoint
+  kind: library.lua
+  source: file://checkpoint.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: settle
+  kind: library.lua
+  source: file://settle.lua
+  imports:
+    driver_types: bee.driver:types
+- name: policy
+  kind: library.lua
+  source: file://policy.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    placement_types: bee.placement:types
+- name: machine
+  kind: library.lua
+  source: file://machine.lua
+  modules: [json, hash, registry]
+  imports:
+    permission: bee.harness.permission:adapter
+    acceptance: bee.harness.permission:acceptance
+    codex_configuration: bee.driver.codex:configuration
+    gateway_configuration: bee.gateway:configuration
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    catalog: bee.harness.catalog:catalog
+    classify: bee.harness.catalog:classify
+    policy: bee.harness.carrier:policy
+    provenance: bee.harness.carrier:provenance
+    checkpoint: bee.harness.carrier:checkpoint
+    settle: bee.harness.carrier:settle
+    stream_json: bee.driver.transport:stream_json
+    driver_types: bee.driver:types
+    placement_types: bee.placement:types
+    placement_protocol: bee.placement.native:protocol
+- name: process
+  kind: process.lua
+  source: file://process.lua
+  method: main
+  modules: [process, channel, time, funcs, uuid]
+  imports:
+    machine: bee.harness.carrier:machine
+    placement_protocol: bee.placement.native:protocol
+  security:
+    policies: [bee:carrier_policy]
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    machine: bee.harness.carrier:machine

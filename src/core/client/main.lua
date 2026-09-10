@@ -1,5 +1,8 @@
 -- MIT. Independent desktop owner. The workspace host retains application lifetime.
 local process = require("process")
+local status_bindings = require("status_bindings")
+local status_surface = require("status_surface")
+local clipboard = require("clipboard")
 local channel = require("channel")
 local tty = require("tty")
 local ctx = require("ctx")
@@ -7,6 +10,8 @@ local security = require("security")
 local uuid = require("uuid")
 local hash = require("hash")
 local time = require("time")
+local logger = require("logger")
+local log = logger:named("bee.client")
 local store = require("store")
 local state = require("state")
 local decode = require("decode")
@@ -45,6 +50,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local events = assert(process.events())
         local input = terminal and terminal.input or assert(tty.events())
         local admissions = listen("bee.host.admitted")
+        local copy_results = listen("bee.selection.copied")
         local presentations = listen("bee.host.presentation")
         local catalogs = listen("bee.host.catalog")
         local views = listen("bee.host.views")
@@ -140,9 +146,10 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             end
             return nil
         end
+        local presentation: status_surface.Snapshot = {revision = 0, items = {}}
         local function publish()
             if active then send(presenter, "bee.desktop.scene", {scene = layout.scene, tabs = layout.tabs,
-                preferences = layout.preferences, catalog = catalog}) end
+                preferences = layout.preferences, catalog = catalog, status_surface = presentation}) end
         end
         local function publish_questions()
             if active and inbox_state then
@@ -155,10 +162,44 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 send(host, "bee.host.selection", inbox.selection(inbox_state))
             end
         end
+        local status_revision = 0
+        local status_fingerprint = ""
+        local function publish_bindings()
+            if connection_id == "" or views_revision < 0 then return end
+            local items: {status_bindings.Binding} = {}
+            local identity: {string} = {tostring(layout.scene.revision)}
+            for _, window in ipairs(layout.scene.windows) do
+                local target = targets[window.id]
+                if target and not retired[window.id] and target.workspace_id == workspace_id
+                    and target.instance_id == window.instance_id then
+                    for _, view in ipairs(live) do
+                        if view.view_id == target.view_id and view.instance_id == target.instance_id then
+                            items[#items + 1] = {tab_id = window.id, instance_id = view.instance_id, thread_id = view.thread_id}
+                            identity[#identity + 1] = window.id
+                            identity[#identity + 1] = view.instance_id
+                            identity[#identity + 1] = view.thread_id or ""
+                            break
+                        end
+                    end
+                end
+            end
+            local fingerprint = contract.argument_fingerprint(identity)
+            if fingerprint == status_fingerprint then return end
+            if status_revision >= 9007199254740990 then error("Status binding revision exhausted") end
+            status_revision = status_revision + 1
+            send(session, "bee.desktop.bindings", {version = 1, workspace_id = workspace_id, revision = status_revision, items = items})
+            status_fingerprint = fingerprint
+        end
         local function adopt(value: unknown)
+            local incoming_status = status_surface.decode(value)
+            local status_changed = incoming_status ~= nil and incoming_status.revision > presentation.revision
+            if incoming_status and status_changed then presentation = incoming_status end
             local next_layout, projection_error = state.project(layout, value, targets)
             if projection_error then error(projection_error) end
-            if not next_layout then return end
+            if not next_layout then
+                if status_changed then publish() end
+                return
+            end
             if next_layout.scene.revision == layout.scene.revision
                 and next_layout.scene.focus == layout.scene.focus
                 and #next_layout.scene.windows == #layout.scene.windows
@@ -166,11 +207,13 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 and next_layout.preferences.theme == layout.preferences.theme
                 and next_layout.preferences.background == layout.preferences.background
                 and next_layout.preferences.taskbar == layout.preferences.taskbar then
+                if status_changed then publish() end
                 return
             end
             local committed, err = store.write(database, next_layout)
             if not committed then error(tostring(err)) end
             layout = next_layout
+            publish_bindings()
             select_targets()
             publish()
         end
@@ -254,6 +297,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 local identity = target.view_id .. "\0" .. target.instance_id
                 if (first_inventory or previous[identity]) and not available[identity] then remove(key) end
             end
+            publish_bindings()
         end
         local updates = assert(display.view:updates())
         local function spawn_presenter()
@@ -296,11 +340,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
                     question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive(),
-                    supervisor_controls:case_receive()}
+                    supervisor_controls:case_receive(), copy_results:case_receive()}
                 -- Once saved for local shutdown, retain the physical display but
                 -- stop consuming app removals and scene edits. Host cleanup must
                 -- not overwrite the layout that will be restored on next boot.
-                if saved_for_exit then cases = {events:case_receive(), supervisor_controls:case_receive()} end
+                if saved_for_exit then cases = {events:case_receive(), supervisor_controls:case_receive(), copy_results:case_receive()} end
                 if waiting_presenter and not saved_for_exit then cases[#cases + 1] = presenter_deadline:case_receive() end
                 -- These channels are independent of admission delivery. Leave their
                 -- initial snapshots queued until we can validate the connection.
@@ -311,6 +355,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 local selected = channel.select(cases)
                 if not selected.ok then break end
                 if selected.channel == presenter_deadline then
+                    log:warn("Presenter readiness timed out", {workspace_id = workspace_id, presenter = presenter})
                     pause_presenter()
                 elseif selected.channel == events then
                     local event = selected.value
@@ -322,6 +367,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             error("Desktop dependency exited: " .. exited .. ": " .. (failure or "without completing its lifetime protocol"))
                         end
                         if exited == presenter then
+                            log:warn("Presenter exited", {workspace_id = workspace_id, presenter = presenter,
+                                error = failure or "no error reported", recovery_attempt = presenter_failures})
                             if saved_for_exit then break end
                             if not paused and presenter_failures < 3 then
                                 presenter_failures = presenter_failures + 1
@@ -351,7 +398,17 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     local message = selected.value
                     local sender = tostring(message:from())
                     local data: unknown = message:payload():data()
-                    if selected.channel == admissions and sender == host and connection_id == "" then
+                    if selected.channel == copy_results and sender == presenter then
+                        local result = clipboard.copy_result(data)
+                        if result then
+                            if result.error ~= "" then
+                                send(presenter, "bee.clipboard.result", {version = 1, request_id = result.request_id,
+                                    status = "rejected", error = result.error})
+                            end
+                            send(owner, "bee.client.copied", {version = 1, request_id = result.request_id,
+                                selected = result.selected, text = result.text, error = result.error})
+                        end
+                    elseif selected.channel == admissions and sender == host and connection_id == "" then
                         if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then error("Invalid client admission") end
                         local token, generation = contract.text(data.connection_id, 80), contract.text(data.renderer_generation, 80)
                         if not token or token == "" or not generation or generation == "" then error("Invalid admission identity") end
@@ -434,7 +491,15 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         end
                     elseif selected.channel == controls and sender == presenter then
                         if type(data) == "table" and data.version == 1 then
-                            if data.op == "ready" then
+                            if data.op == "clipboard" then
+                                local request = clipboard.request(data, sender, presenter, active and not paused and not waiting_presenter)
+                                if request then
+                                    local submitted, failure = physical.clipboard(display, request.text)
+                                    -- Submission is not an operating-system clipboard acknowledgement.
+                                    send(presenter, "bee.clipboard.result", {version = 1, request_id = request.request_id,
+                                        status = submitted and "submitted" or "unavailable", error = failure})
+                                end
+                            elseif data.op == "ready" then
                                 if waiting_presenter and not paused then
                                     waiting_presenter = false
                                     send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
@@ -495,6 +560,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 pending_count = pending_count + 1
                                 send(host, "bee.app.request", {version = 1, request_id = request.request_id, op = request.op,
                                     workspace_id = workspace_id, connection_id = connection_id, definition_id = request.definition_id,
+                                    thread_id = request.thread_id,
                                     id = target and target.view_id or "", instance_id = target and target.instance_id or ""})
                             end
                         end
@@ -560,10 +626,12 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     elseif selected.channel == acknowledgements and sender == session then
                         local ack = decode.ack(data)
                         if ack then
+                            -- Scene and acknowledgement topics can arrive independently.
+                            -- Commit the acknowledged projection before forwarding success.
+                            if ack.error_code == "" then adopt(data) end
                             local key = removals[ack.request_id]
                             if key then
                                 if ack.error_code ~= "" then error("Session rejected target removal") end
-                                adopt(data)
                                 if retired[key] == ack.request_id and not state.target(layout, key) then
                                     targets[key], retired[key] = nil, nil
                                 end
@@ -575,12 +643,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                     if not appearance_request then error("Missing pending appearance request") end
                                     appearance_pending[ack.request_id] = nil
                                     local code, message = ack.error_code, ack.error
-                                    if code == "" then
-                                        -- Session and durable projection must agree before
-                                        -- reporting success. A failed commit ends this client
-                                        -- through the same cleanup path as any scene write.
-                                        adopt(data)
-                                    end
                                     appearance_result(appearance_request, code, message)
                                 end
                                 if active then send(presenter, "bee.desktop.ack", ack) end

@@ -1,0 +1,77 @@
+version: '1.0'
+namespace: bee.hive.supervisor
+entries:
+- name: peers_review_test
+  kind: function.lua
+  source: file://peers_review_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    peers: bee.hive.supervisor:peers
+    types: bee.hive:types
+- name: peers_test
+  kind: function.lua
+  source: file://peers_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    peers: bee.hive.supervisor:peers
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: admission_test
+  kind: function.lua
+  source: file://admission_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [time]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    admission: bee.hive.supervisor:admission
+    peers: bee.hive.supervisor:peers
+    catalog: bee.hive:catalog
+- name: dispatch_probe
+  kind: function.lua
+  source: file://dispatch_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    dispatch: bee.hive.supervisor:dispatch
+    types: bee.hive:types
+- name: dispatch_test
+  kind: function.lua
+  source: file://dispatch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    dispatch: bee.hive.supervisor:dispatch
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: execute_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.supervisor:execute]
+    effect: allow
+- name: supervisor_test
+  kind: function.lua
+  source: file://supervisor_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, time, channel, security]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    client: bee.hive:client
+- name: local_name_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.register, process.registry.unregister]
+    resources: [bee.hive.supervisor]
+    effect: allow

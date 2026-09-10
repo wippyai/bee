@@ -11,7 +11,7 @@ entries:
   meta:
     command:
       name: thread-demo
-      short: Run an isolated durable test-status thread
+      short: Run an isolated durable thread with a subscriber
       security:
         actor: {id: bee.thread_demo.local}
         policies: [bee.thread_demo:owner]

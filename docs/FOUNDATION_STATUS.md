@@ -1,7 +1,17 @@
 # Foundation status
 
-Bee is a local terminal desktop with four on-demand default applications:
-Terminal, Settings, Process Manager and Test Status. A fresh workspace opens no applications;
+The global candidate installed September 10 now uses the native owner/client
+launcher. Ordinary `bee` loads embedded code with shared registry history and
+attaches through the same-machine native mesh. Ctrl+Q and Ctrl+] detach the
+physical client while retaining its owner and applications. Standalone startup,
+selection/copy, scrolling, reconnect and old-binary upgrade checks pass. The full
+foundation run is still in progress; see the current
+[runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md) for exact pins and evidence.
+Older gate descriptions below refer to earlier candidates.
+
+
+Bee is a local terminal desktop with on-demand default applications: Terminal,
+Settings, Process Manager, Approvals, Timeline and Hive Manager. A fresh workspace opens no applications;
 later boots restore applications that opted into automatic recovery. The source
 and portable pack load only `src/`; fixtures and the legacy archive are excluded.
 This file and [application contracts](APPLICATION_CONTRACTS.md) describe the
@@ -26,12 +36,36 @@ choice are implemented. Normal workspace quit gathers guarded-app decisions befo
 Terminal opts in and conservatively confirms every PTY close. Emergency exit from
 failed-presenter recovery bypasses negotiation.
 
+The current candidate adds **Select text** to window context menus. Right-click
+the body, title or tab; Shift-right-click in the body goes to the application: freeze one
+body, left-drag, then Ctrl+C to request local physical clipboard output. Source
+and pack acceptance decodes exact foreground text with two overlapping Terminals;
+selection never enters persisted state. This requires native text extraction
+and clipboard PRs #720/#722. The tested candidate is now installed as the global
+Bee at the user's request. Ordinary launch may still select older persisted code;
+`bee --base` selects its fresh embedded baseline through a different registry path.
+This difference is an unresolved deployment bug, not the intended Bee workflow. The
+selected release runtime has not yet adopted these PRs. Remote physical-client
+clipboard routing remains unimplemented.
+See [selection and its acceptance limits](handoffs/TEXT_SELECTION.md).
+
+The native owner/client candidate now has a session-qualified Copy request over
+the existing supervisor protocol. Copy is driven by the requesting physical
+client, and selected text is absent from viewport snapshots. Isolated native
+clipboard output and actual-owner ordinary Ctrl+C checks pass; full selected-window
+copy through the new launcher still needs the combined runtime. This candidate
+has not replaced the installed global executable. See the same selection handoff
+for the remaining observer, reconnect and release gates.
+
+
 ## Ownership
 
 Public local launch uses the host/client split. Full source/pack and standalone
-acceptance pass. Older selected deployments retain their code until explicitly
-changed; `bee --base` selects the executable's embedded baseline and preserves
-application databases.
+acceptance pass. Older selected deployments can still retain their code;
+`bee --base` selects the executable's embedded baseline and preserves application
+databases, but does not establish preservation of the existing registry overlays.
+The required default is embedded code with retained overlays and application state;
+see [the runtime cutover handoff](handoffs/RUNTIME_UPSTREAM_CUTOVER.md).
 
 | Owner | Responsibility | Replacement boundary |
 |---|---|---|
@@ -53,7 +87,18 @@ alone is not an opened application. Readiness has a three-second deadline and
 does not require a presenter attachment. The broker can retain a ready producer
 and accept its checkpoints while detached; a mount failure reports attachment
 failure without killing the app. Source/pack Lua acceptance checks this through
-piped execution. A complete headless workspace profile remains unimplemented.
+piped execution. A low-level `bee-host` command now owns the existing workspace
+host without a desktop. It must execute on `bee:workers`, not the runtime's
+default terminal command host. Source/pack acceptance covers piped readiness, stable
+workspace identity across restart and bounded SIGTERM shutdown. Managed headless
+launch, supervisor discovery and public remote enrollment remain unimplemented.
+`make workspace-hosts-check` proves two host actors in one runtime with exact
+separate database grants, concurrent sender-qualified requests, cross-workspace
+target rejection, Settings checkpoint recovery and independent workspace IDs.
+It passes from source and a source-free pack. Public launch still selects one
+workspace; dynamic workspace activation, scoped catalogs and dormant-workspace
+resource costs remain unproved.
+
 Unguarded close
 sends the producer a cooperative close event, then requests termination after
 250ms. Guarded apps enter this cleanup only after an accepted decision. Records remain owned until EXIT; unsuccessful termination reports
@@ -77,6 +122,13 @@ Presenter snapshots remain reconstructible; this is not remote reconnection.
 Workspace preferences and opt-in app checkpoints survive cold starts in the primary
 workspace database. Settings demonstrates the resume contract. Terminal does not
 claim to resurrect native processes after runtime shutdown.
+
+Host-admitted clients without control permission can observe an existing
+application through separate recipient-bound mounts. Source/pack desktop checks
+cover different display sizes, F12 and observer loss while the original controller
+continues using the same Terminal. Observer frames are clipped locally; input and
+producer resize are denied. Public shared-desktop selection and explicit controller
+transfer remain unimplemented.
 
 ## Security
 
@@ -106,12 +158,17 @@ mutation is denied to applications today.
 
 ## Reproducible runtime and validation
 
-`make setup` builds the commit and checksum-verified patch in `runtime/lock.json`.
-It disables ambient Go workspaces and never consumes a checkout's dirty files.
-The patch preserves the native startup, full-width surface and scheduler shutdown
-fixes needed by this desktop. These runtime files retain their upstream MPL-2.0
-license; Bee's own source is MIT. The runtime patch should move upstream before
-a public stable release; carrying it here makes this development checkpoint reproducible.
+`make setup` uses the Go builder and `wippy.build.json`, the same runtime and native
+components used for standalone releases. The builder disables ambient Go workspaces
+and verifies its pinned checkout. Bee's own source is MIT; the remaining runtime
+patches retain MPL-2.0. Removing those patches requires the upstream changes tracked
+in [runtime upstream work](RUNTIME_UPSTREAM.md).
+The published build has completed that migration. This shared checkout retains
+parallel host/Hive experiments; see [the runtime cutover handoff](handoffs/RUNTIME_UPSTREAM_CUTOVER.md)
+before publishing those changes.
+The local host work also preserves explicit command-host selection for packs,
+needed to execute the headless entry on a worker host; its upstream acceptance
+remains part of that workstream.
 
 The workspace alone opens `bee:workspace_db`, a separate SQLite store from runtime
 registry history. Its append-only migration ledger verifies names and checksums;
@@ -123,8 +180,8 @@ launch values. The app SDK exposes a copied logical view reference. Broker
 replies and desktop windows retain the workspace ID; workspace/presenter replies
 for a different workspace are rejected. Local application requests carry an
 explicit target checked by both the workspace and broker. Missing or foreign
-targets return an error without executing locally. Mixed-workspace composition and remote
-attachment are not implemented.
+targets return an error without executing locally. Mixed-workspace composition and public
+remote launch are not implemented; the internal remote attachment fixture is described below.
 Apps checkpoint through their broker; a successful receipt follows database commit.
 See [storage](STORAGE.md) and [application contracts](APPLICATION_CONTRACTS.md).
 
@@ -136,17 +193,79 @@ modifies a user's workspace history. CI runs the same setup and checks.
 
 ## Next boundaries
 
-The local native thread journal and Test Status app are implemented. Explicit
-launch arguments select a thread and optional idempotent run ID. A standalone
-worker finishes while its view is closed; source and pack acceptance verify
-reopening and cold replay. The isolated Lua subscriber fixture remains separate.
-Production views currently poll; crash-safe job scheduling, dynamic membership
-and durable subscriptions remain future work. See [threads](THREADS.md) for the
+[Hive startup](HIVE_BOOTSTRAP.md) is in progress. The native manifest includes a
+runtime patch for retained automatic listeners, concurrent authenticated startup
+and graceful rejoin at a new port. It also includes an actor-ingress patch that
+rejects source-node claims inconsistent with the authenticated peer; its full
+internode race suite and clean native toolchain build pass. See
+[Hive boundary proof](HIVE_POC.md) for the external-peer forwarding limit.
+CLI acceptance passes for twenty isolated
+runtime processes, including three Raft servers with converged leadership;
+the fixture explicitly aligns relay and gossip node identities. Bee pairing,
+project-host discovery, managed headless
+launch and public remote enrollment remain unimplemented. Runtime transport tests
+are not Bee cluster acceptance.
+
+An experimental two-runtime source fixture now proves supervisor-selected Bee
+host admission, destination Terminal execution, resize, revoked input and fresh
+mount reattachment to the same live shell. It passes both locally and across two
+machines through native mesh transport. `make hive-remote-check` also checks
+coroutine progress while a destination viewport resize is stalled;
+`make hive-lan-check` requires explicit remote test coordinates. Both use the
+current native manifest toolchain; see [the exact scope](HIVE_POC.md).
+Public enrollment, discovery and a remote desktop selector remain unimplemented.
+The internal Hive supervisor implements bounded challenge exchange, peer
+replacement and asynchronous open telemetry dispatch. A two-runtime fixture
+proves discovery by native node-qualified names, calls in both directions,
+sibling rejection and supervisor restart. It uses explicit fixture enrollment
+and boot scopes; no production supervisor service starts automatically.
+Hive Manager refreshes supervisor lookup, membership and owner telemetry. A failed
+lookup is shown as **Hive supervisor unavailable** with its reason; it does not
+infer that Hive is disabled or that enrollment would repair the failure. A found
+supervisor is reported separately from each peer's reachability and desktop
+availability. Detailed startup phases require an authoritative lifecycle source.
+See [the supervisor boundary](HIVE_SUPERVISOR.md) for remaining activation gates.
+`make hive-presenter-check` additionally drives the real presenter while the
+destination runtime is stopped for fault injection. Start opens and F12 retires
+cleanly within one second; input queue overflow is visible, and fresh attachment
+retains the same Bash PID and variable. This is not public desktop discovery or
+automatic recovery after network loss.
+
+`make hive-desktop-check` proves the actual desktop client and session against a
+workspace host in another runtime: destination Terminal execution and resizing,
+F12, and a fresh client reconnecting to the same retained shell through its local
+client store. This uses fixture-selected admission and pre-pinned test keys, not
+the public launch/discovery path. It waits for the new presenter and retained
+content in the same frame before typing; lossless input during reattachment
+remains unproved.
+
+The candidate `hive-desktop-admission-check` also admits a separate compiled
+native client through the supervisor to a retained desktop. Its PTY mode proves
+shell input, F12 with the same shell, resize, bounded Ctrl+] detach and restoration
+of terminal settings. This requires the candidate runtime's isolation of blocking
+stdin reads from terminal control commands. Explicit detach passes; remote actor
+crash cleanup remains a failing native monitor gate. Ordinary second-`bee`
+auto-attachment remains unimplemented. The physical LAN desktop fixture has passed
+against `100.70.10.28`, including an owner-only file assertion and a separate
+physical-process SIGKILL/rejoin to the retained shell with a fresh explicitly
+enrolled client identity and automatic ports; same-name immediate rejoin remains
+a separate failing runtime case; this does not establish the public remote launch route.
+
+The local native thread journal is implemented and the rich thread authority,
+delivery and projection are built on it; the Timeline application reads a
+thread through the owner's subscription contract, with resume under a new
+lease proven against the real owner. The isolated Lua subscriber fixture
+remains separate.
+Production views currently poll. Owner-local durable subscriptions preserve
+acknowledged cursors across close/restart, fence old leases on resume, and reclaim
+capacity only through explicit forget; the restart acceptance now passes on the
+typed-listener candidate. Crash-safe job scheduling and dynamic membership remain
+future work. See [threads](THREADS.md) for the
 implemented API and limits, and [workspace attachments](WORKSPACE_ATTACHMENTS.md)
 for the proposed identity split.
 
 The shell remains the delivery focus. Hub installation, authorized overlay editing,
-MCP, AI drivers, native binary packaging and service/run
+MCP, AI drivers and service/run
 lifetimes are separate subsystems, not unfinished responsibilities of the presenter.
 
 The first resource subsystem should own a workspace's named filesystem roots:
@@ -157,3 +276,26 @@ not authorize a root automatically. Native paths, container roots and virtual
 providers need explicit resolution and containment checks at the provider boundary.
 The terminal currently starts in the runtime's working directory; a resource binding
 will replace that implicit choice once this subsystem exists.
+
+## Native assembly
+
+A pinned builder assembles Bee, Wippy and the typed native `ioevents` module for
+Linux and macOS on amd64 and arm64. Standalone acceptance verifies source-free boot, Settings
+recovery, native shell execution and F12. Base/bootstrap deployment handling and a
+draft-release and Hub publication pipelines are implemented. A completed Hub upload
+and update proof, in-app installation and stable distribution remain pending.
+See [native distribution](NATIVE_DISTRIBUTION.md)
+for the canonical update boundary and outstanding acceptance/license limits.
+
+## Experimental computer owner
+
+The [native computer owner](../native/computer/README.md) now has isolated
+Windows VM acceptance for runtime-frame permission checks, one controller per
+seat, child restart/crash/cancellation, stale grant/frame rejection and sustained
+secure-desktop retirement. Parent and child use the same test executable.
+It is not registered in the normal Bee launcher or exposed through Lua/Hive.
+Actual login/logout recovery, execution-epoch wiring and lossless OS lifecycle
+notifications remain acceptance gates. Linux uses a transport fixture in this
+package; X11/macOS implementations are not integrated. Native race tests, vet
+and Windows build/VM checks pass. The full foundation check was attempted and
+stopped at 23 existing Lua lint errors; no passing full-suite claim is made.

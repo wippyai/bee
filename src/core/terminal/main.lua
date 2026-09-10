@@ -1,10 +1,13 @@
 local tty = require("tty")
+local logger = require("logger")
+local log = logger:named("bee.presenter")
 local title_editor = require("title_editor")
 local dialog = require("dialog")
 local interaction = require("interaction")
 local ctx = require("ctx")
 local contract = require("contract")
 local process = require("process")
+local status_surface = require("status_surface")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
@@ -15,8 +18,9 @@ local render = require("render")
 local bindings = require("bindings")
 local menu = require("menu")
 local appearance = require("appearance")
+local delivery = require("delivery")
+local selection = require("selection")
 
-type Attachment = {view: tty.Viewport, width: integer, height: integer, revision: integer}
 local function main(owner: string, initial_application: string?, secondary_application: string?)
     if ctx.get("bee.workspace_owner") ~= owner or owner == "" then error("Untrusted presenter bootstrap") end
     local workspace_id = contract.workspace_id(ctx.get("bee.workspace_id"))
@@ -31,13 +35,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local dialogs: {[string]: dialog.State} = {}
     local answered: {[string]: boolean} = {}
     local retire = assert(process.listen("bee.workspace.retire", {message = true}))
+    local clipboard_results = assert(process.listen("bee.clipboard.result", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     assert(tty.mouse(true))
     local width, height = tty.screen_size()
     local scene: model.Scene = model.new(width, height)
+    local status_values: status_surface.Snapshot = {revision = 0, items = {}}
     assert(process.monitor(owner))
-    local attachments: {[string]: Attachment} = {}
     local tabs_order: {string} = {}
     local catalog: {menu.Descriptor} = {}
     local routing_scene: model.Scene = scene
@@ -53,7 +58,12 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local start: menu.State? = nil
     local captured_releases: {[string]: boolean} = {}
     local captured_mouse = false
-    local status = "Starting workspace"
+    local active_selection: selection.State? = nil
+    local pending_clipboard: string? = nil
+    local remote_copy_reply: string? = nil
+    local pending_clipboard_at: integer? = nil
+    local CLIPBOARD_TIMEOUT_NS: integer = 10 * 1000 * 1000 * 1000
+    local status: string = "Starting workspace"
     local fatal: string? = nil
     local dirty = true
     local running = true
@@ -109,10 +119,103 @@ local function main(owner: string, initial_application: string?, secondary_appli
             user_title = title, accent = accent, request_id = uuid.v7()})
         if not sent then status = tostring(err) end
     end
+    local function selection_body(state: selection.State): model.Rect?
+        local binding = selection.binding(state)
+        local attachment = delivery.attachment(binding.view_id)
+        if not attachment then return nil end
+        for _, win in ipairs(model.visible(scene)) do
+            if win.id == binding.view_id and win.mode ~= "collapsed" then
+                local body = layout.interior(win, rectangle(win))
+                local current: selection.Binding = {view_id = win.id, attachment = attachment.mount,
+                    mount_generation = attachment.generation, width = body.width, height = body.height}
+                if selection.valid(state, current) then return body end
+            end
+        end
+        return nil
+    end
+    local function cancel_selection()
+        active_selection = selection.cancel(active_selection)
+        remote_copy_reply = nil
+        pending_clipboard = nil
+        pending_clipboard_at = nil
+    end
+    local function begin_selection(target: string)
+        local chosen: model.Window? = nil
+        for _, win in ipairs(model.visible(scene)) do
+            if win.id == target and win.mode ~= "collapsed" then chosen = win; break end
+        end
+        if not chosen then status = "Text selection unavailable: window is not visible"; return end
+        local body = layout.interior(chosen, rectangle(chosen))
+        local attachment = delivery.attachment(target)
+        if not attachment then status = "Text selection unavailable: view is not attached"; return end
+        local content, err = delivery.content(target, body.width, body.height)
+        if not content then status = "Text selection unavailable: " .. tostring(err or "view has no content"); return end
+        local rows: {string} = {}
+        for y = 1, body.height do rows[y] = tty.text.cut(content.rows[y] or "", 0, body.width) end
+        local captured, capture_error = selection.capture({view_id = target, attachment = attachment.mount,
+            mount_generation = attachment.generation, width = body.width, height = body.height}, rows)
+        if not captured then status = "Text selection unavailable: " .. tostring(capture_error); return end
+        active_selection = captured
+        pending_clipboard = nil
+        pending_clipboard_at = nil
+        status = "Select text: drag to select; Ctrl+C requests clipboard; Esc cancels"
+    end
+    local function request_clipboard()
+        if pending_clipboard then
+            status = "Clipboard request pending"
+            return
+        end
+        local state = active_selection
+        if not state or not selection_body(state) then
+            cancel_selection()
+            status = "Clipboard request unavailable: selection expired"
+            return
+        end
+        local text, selection_error = selection.text(state)
+        if not text then
+            status = selection_error and "Clipboard request unavailable: " .. selection_error or "Clipboard request unavailable: select text first"
+            return
+        end
+        if #text > 8192 then
+            status = "Clipboard request unavailable: selected text exceeds 8192 bytes"
+            return
+        end
+        local request_id = uuid.v7()
+        local sent, send_error = process.send(owner, "bee.workspace.control", {version = 1, op = "clipboard",
+            request_id = request_id, text = text})
+        if not sent then
+            status = "Clipboard request unavailable: " .. tostring(send_error or "delivery failed")
+            return
+        end
+        pending_clipboard = request_id
+        pending_clipboard_at = time.now():unix_nano()
+        status = "Clipboard requested"
+    end
+    local function clipboard_result(value: unknown): {request_id: string, status: string, error: string}?
+        if type(value) ~= "table" then return nil end
+        local raw_id: unknown = value.request_id
+        local raw_status: unknown = value.status
+        if value.version ~= 1 then return nil end
+        if type(raw_id) ~= "string" or raw_id == "" or #raw_id > 80 then return nil end
+        if type(raw_status) ~= "string" then return nil end
+        local request_id: string = raw_id
+        local result_status: string = raw_status
+        for key in pairs(value) do
+            if key ~= "version" and key ~= "request_id" and key ~= "status" and key ~= "error" then return nil end
+        end
+        if result_status ~= "submitted" and result_status ~= "unavailable" and result_status ~= "rejected" then return nil end
+        local error_text = ""
+        if value.error ~= nil then
+            if type(value.error) ~= "string" or #value.error > 4096 then return nil end
+            error_text = value.error
+        end
+        return {request_id = request_id, status = result_status, error = error_text}
+    end
     local function invoke(action: string)
         local target = start and start.target or input_focus()
         start = nil
-        if action == "rename" then
+        if action == "select_text" then begin_selection(target)
+        elseif action == "rename" then
             for _, win in ipairs(scene.windows) do
                 if win.id == target then editor = title_editor.open(win.id, model.display_title(win), win.accent or ""); break end
             end
@@ -146,6 +249,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             end
             if #tabs_order > 0 then command("focus", tabs_order[#tabs_order]) end
         elseif action == "rejoin" then
+            cancel_selection()
             rejoining = true
             process.send(owner, "bee.workspace.control", {version = 1, op = "rejoin"})
         end
@@ -158,24 +262,42 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         local contents: {[string]: render.Content} = {}
         for _, win in ipairs(model.visible(scene)) do
-            local attached = attachments[win.id]
-            if attached and win.mode ~= "collapsed" then
+            if delivery.has(win.id) and win.mode ~= "collapsed" then
                 local body = layout.interior(win, rectangle(win))
                 -- Drag previews do not resize producers. Only committed bounds do.
-                if not capture and (attached.width ~= body.width or attached.height ~= body.height) then
-                    local resized, resize_error = attached.view:resize(body.width, body.height)
-                    if resized then attached.width, attached.height = body.width, body.height
-                    else status = tostring(resize_error or "Resize failed") end
+                if not capture and not delivery.observing(win.id) and (delivery.requested_width(win.id) ~= body.width or delivery.requested_height(win.id) ~= body.height) then
+                    local resized, resize_error = delivery.resize(win.id, body.width, body.height)
+                    if not resized and resize_error then
+                        local title = model.display_title(win)
+                        status = "[" .. title .. "] " .. tostring(resize_error)
+                    end
                 end
-                local snapshot, err = attached.view:snapshot()
-                if snapshot then
-                    attached.revision = snapshot.revision
-                    contents[win.id] = {rows = snapshot.rows, cursor = snapshot.cursor}
-                else status = tostring(err or "View unavailable") end
+                local content, err = delivery.content(win.id, body.width, body.height)
+                if content then
+                    local cur: render.Cursor? = nil
+                    if content.cursor and not delivery.is_failed(win.id) and not delivery.observing(win.id) then
+                        cur = {
+                            x = content.cursor.x,
+                            y = content.cursor.y,
+                            visible = content.cursor.visible == true,
+                        }
+                    end
+                    contents[win.id] = {rows = content.rows, cursor = cur}
+                elseif err and not delivery.is_failed(win.id) and err ~= "Attaching" and err ~= "Resizing" then
+                    local title = model.display_title(win)
+                    status = "[" .. title .. "] " .. tostring(err)
+                end
             end
         end
+        local badges: {[string]: status_surface.Badge} = {}
+        for _, item in ipairs(status_values.items) do
+            for _, win in ipairs(scene.windows) do
+                if win.id == item.tab_id and win.instance_id == item.instance_id then badges[win.id] = item.badge; break end
+            end
+        end
+        if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. workspace_id:sub(1, 8),
-            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus])
+            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
@@ -183,7 +305,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
-            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), dialog_states:case_receive(),
+            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(), dialog_states:case_receive(),
             dialog_results:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
@@ -224,28 +346,48 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 end
             end
         elseif selected.channel == retire then
-            if selected.value:from() == owner then rejoining = true; running = false end
+            if selected.value:from() == owner then cancel_selection(); rejoining = true; running = false end
+        elseif selected.channel == clipboard_results then
+            local message = selected.value
+            if message:from() == owner then
+                local reply = clipboard_result(message:payload():data())
+                if reply and reply.request_id == remote_copy_reply and reply.status == "rejected" then
+                    remote_copy_reply = nil
+                    status = "Clipboard request rejected: " .. reply.error
+                    dirty = true
+                elseif reply and active_selection and selection_body(active_selection) and reply.request_id == pending_clipboard then
+                    pending_clipboard = nil
+                    pending_clipboard_at = nil
+                    if reply.status == "submitted" then
+                        cancel_selection()
+                        status = "Clipboard request submitted"
+                    elseif reply.status == "unavailable" then status = "Clipboard request unavailable" .. (reply.error ~= "" and ": " .. reply.error or "")
+                    else status = "Clipboard request rejected" .. (reply.error ~= "" and ": " .. reply.error or "") end
+                    dirty = true
+                end
+            end
         elseif selected.channel == replies then
             local msg = selected.value
             if msg:from() == owner then
                 local reply = decode.reply(msg:payload():data())
                 if reply and decode.belongs(reply, workspace_id) then
-                    if reply.error == "" and (reply.op == "open" or reply.op == "attached" or reply.op == "focus" or reply.op == "close") then status = "" end
+                    if reply.error == "" and (reply.op == "open" or reply.op == "attached" or reply.op == "focus" or reply.op == "close" or reply.op == "closed") then status = "" end
                     if reply.op == "closing" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
                     if reply.error ~= "" then
                         status = reply.error
                         if reply.op == "close" then closing[reply.id] = nil; if not pending_request then adopt_routing() end end
                     end
                     if (reply.op == "open" or reply.op == "attached") and reply.error == "" and reply.mount ~= "" then
-                        local view, err = tty.attach(reply.mount)
-                        if view then
-                            attachments[reply.id] = {view = view, width = 0, height = 0, revision = -1}
-                        else
-                            status = tostring(err)
+                        local attached, err = delivery.attach(reply.id, reply.mount, reply.observer)
+                        if not attached and err then
+                            local title = "Window"
+                            for _, win in ipairs(scene.windows) do if win.id == reply.id then title = model.display_title(win); break end end
+                            status = "[" .. title .. "] " .. tostring(err)
                         end
+                        if active_selection and not selection_body(active_selection) then cancel_selection() end
                     elseif (reply.op == "close" and reply.error == "") or reply.op == "closed" then
-                        local attached = attachments[reply.id]
-                        if attached then attached.view:close(); attachments[reply.id] = nil end
+                        delivery.close(reply.id)
+                        if active_selection and selection.binding(active_selection).view_id == reply.id then cancel_selection() end
                         for i = #tabs_order, 1, -1 do if tabs_order[i] == reply.id then table.remove(tabs_order, i) end end
                         routing_scene = model.remove(routing_scene, reply.id)
                         if capture and capture.id == reply.id then capture, preview = nil, nil; awaiting_place = false; captured_mouse = true end
@@ -265,7 +407,12 @@ local function main(owner: string, initial_application: string?, secondary_appli
         elseif selected.channel == scenes then
             local msg = selected.value
             if msg:from() == owner then
-                local state = decode.desktop(msg:payload():data())
+                local raw: unknown = msg:payload():data()
+                if type(raw) == "table" then
+                    local incoming = status_surface.presentation(raw.status_surface)
+                    if incoming and incoming.revision > status_values.revision then status_values = incoming end
+                end
+                local state = decode.desktop(raw)
                 local next_scene = state and state.scene
                 if next_scene and next_scene.revision >= scene.revision then
                     scene = next_scene
@@ -294,18 +441,57 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 dirty = true
             end
         elseif selected.channel == ticks then
+            if pending_clipboard and pending_clipboard_at and time.now():unix_nano() - pending_clipboard_at >= CLIPBOARD_TIMEOUT_NS then
+                pending_clipboard, pending_clipboard_at = nil, nil
+                status = "Clipboard request unavailable: timed out"
+                dirty = true
+            end
+            local visible_ids: {string} = {}
             for _, win in ipairs(model.visible(scene)) do
-                local attached = attachments[win.id]
-                if attached and win.mode ~= "collapsed" then
-                    local snapshot = attached.view:snapshot()
-                    if snapshot and snapshot.revision ~= attached.revision then dirty = true end
+                if win.mode ~= "collapsed" then table.insert(visible_ids, win.id) end
+            end
+            if delivery.poll(visible_ids) then dirty = true end
+            while true do
+                local f = delivery.poll_failure()
+                if not f then break end
+                local title = "Window"
+                for _, win in ipairs(scene.windows) do
+                    if win.id == f.id then
+                        title = model.display_title(win)
+                        break
+                    end
                 end
+                status = "[" .. title .. "] " .. f.error
+                dirty = true
             end
         elseif selected.channel == input and not rejoining then
             local event = selected.value
             local handled = false
             local kind = tostring(event.key_type or "")
-            if event.type == "key" and event.action == "release" and captured_releases[kind] then
+            -- Reserved compositor key: queued by the owning supervisor after
+            -- prior input admission. Only its pending request can accept a reply.
+            if event.type == "key" and kind == "bee.copy" then
+                local id = contract.text(event.key, 80)
+                if id and id ~= "" and event.action == "press" then
+                    local state = active_selection
+                    local chosen = state ~= nil
+                    local text, failure = "", ""
+                    if state and chosen then
+                        local extracted, err = selection.text(state)
+                        if not selection_body(state) then failure = "Selection expired"
+                        elseif not extracted then failure = tostring(err or "Select text first")
+                        elseif #extracted > 8192 then failure = "Selected text exceeds 8192 bytes"
+                        else text = extracted end
+                        cancel_selection()
+                        remote_copy_reply = id
+                        status = failure ~= "" and failure or "Clipboard requested"
+                    end
+                    local sent = process.send(owner, "bee.selection.copied", {version = 1, request_id = id, selected = chosen, text = text, error = failure})
+                    if not sent then status = "Clipboard response delivery failed" end
+                    dirty = true
+                end
+                handled = true
+            elseif event.type == "key" and event.action == "release" and captured_releases[kind] then
                 captured_releases[kind] = nil; handled = true
             elseif event.type == "mouse" and event.action == "release" and captured_mouse then
                 captured_mouse = false; handled = true
@@ -341,6 +527,44 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
                 if event.type == "mouse" and event.action == "press" then captured_mouse = true end
                 handled = true; dirty = true
+            elseif active_selection and event.type ~= "resize" and event.type ~= "close" then
+                local body = selection_body(active_selection)
+                if not body then
+                    cancel_selection()
+                    status = "Text selection unavailable: view changed"
+                elseif event.type == "key" and event.action ~= "release" and (kind == "esc" or kind == "escape") then
+                    cancel_selection()
+                    status = ""
+                    captured_releases[kind] = true
+                elseif event.type == "key" and event.action ~= "release" and event.ctrl == true
+                    and tostring(event.key or ""):lower() == "c" then
+                    request_clipboard()
+                    captured_releases[kind] = true
+                elseif event.type == "key" and event.action ~= "release" and event.ctrl == true
+                    and tostring(event.key or ""):lower() == "q" then
+                    cancel_selection()
+                    request_quit()
+                    captured_releases[kind] = true
+                elseif event.type == "key" and event.action ~= "release" and kind == "f12" then
+                    cancel_selection()
+                    rejoining = true
+                    process.send(owner, "bee.workspace.control", {version = 1, op = "rejoin"})
+                    captured_releases[kind] = true
+                elseif event.type == "mouse" then
+                    local x, y = math.floor(tonumber(event.x) or 1), math.floor(tonumber(event.y) or 1)
+                    if event.action == "press" and event.button == "left" then
+                        active_selection = selection.press(active_selection, x - body.x + 1, y - body.y + 1)
+                        pending_clipboard, pending_clipboard_at = nil, nil
+                    elseif event.action == "motion" then
+                        active_selection = selection.motion(active_selection, x - body.x + 1, y - body.y + 1)
+                    elseif event.action == "release" and event.button == "left" then
+                        active_selection = selection.release(active_selection, x - body.x + 1, y - body.y + 1)
+                    end
+                end
+                -- Selection owns all app-directed input, including paste, wheel
+                -- and clicks outside its body; the model clamps drag endpoints.
+                handled = true
+                dirty = true
             elseif capture and not awaiting_place and event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release" then
                 capture, preview = nil, nil; awaiting_place = false
                 captured_releases[kind] = true; captured_mouse = true
@@ -368,9 +592,10 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 if changed or response.close or response.action ~= "" then dirty = true end
             end
             if not handled then
-                if event.type == "close" then break
+                if event.type == "close" then cancel_selection(); break
                 elseif event.type == "resize" then
                     width, height = event.width, event.height
+                    cancel_selection()
                     if capture then captured_mouse = true end
                     capture, preview = nil, nil; awaiting_place = false
                     dirty = true
@@ -385,6 +610,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         elseif action == "close" then application("close", "", input_focus())
                         elseif action == "fullscreen" or action == "minimize" then command(action, input_focus())
                         elseif action == "rejoin" then
+                            cancel_selection()
                             rejoining = true
                             process.send(owner, "bee.workspace.control", {version = 1, op = "rejoin"})
                         elseif action == "next" or action == "previous" then
@@ -400,10 +626,18 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         end
                     end
                     if action == "" then
-                        local attached = attachments[input_focus()]
-                        if attached then attached.view:send({type = "key", key = tostring(event.key or ""),
-                            key_type = tostring(event.key_type or ""), action = event.action == "release" and "release" or "press",
-                            ctrl = event.ctrl == true, alt = event.alt == true, shift = event.shift == true}) end
+                        local target = input_focus()
+                        if target ~= "" and delivery.has(target) then
+                            local sent, err = delivery.send(target, {type = "key", key = tostring(event.key or ""),
+                                key_type = tostring(event.key_type or ""), action = event.action == "release" and "release" or "press",
+                                ctrl = event.ctrl == true, alt = event.alt == true, shift = event.shift == true})
+                            if not sent and err then
+                                local title = "Window"
+                                for _, win in ipairs(scene.windows) do if win.id == target then title = model.display_title(win); break end end
+                                status = "[" .. title .. "] " .. tostring(err)
+                                dirty = true
+                            end
+                        end
                     end
                 elseif event.type == "mouse" then
                     local x, y = math.floor(tonumber(event.x) or 1), math.floor(tonumber(event.y) or 1)
@@ -456,7 +690,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                                 local body = layout.interior(win, rect)
                                 if event.action == "press" then command("focus", win.id) end
                                 if event.action == "press" and event.button == "right"
-                                    and (win.mode == "collapsed" or not layout.contains(body, x, y)) then
+                                    and (event.shift ~= true or win.mode == "collapsed" or not layout.contains(body, x, y)) then
                                     start = {selected = 1, offset = 0, kind = "window", target = win.id, x = x, y = y}
                                     captured_mouse = true; dirty = true
                                     break
@@ -473,9 +707,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
                                     if edge ~= "" then awaiting_place = false; capture = {id = win.id, x = x, y = y, bounds = rect, edge = edge} end
                                 end
                                 if not capture and win.mode ~= "collapsed" and layout.contains(body, x, y) then
-                                    local attached = attachments[win.id]
-                                    if attached then attached.view:send({type = "mouse", x = x - body.x + 1, y = y - body.y + 1,
-                                        action = event.action == "release" and "release" or (event.action == "wheel" and "wheel" or (event.action == "motion" and "motion" or "press")), button = tostring(event.button or ""), ctrl = event.ctrl == true, alt = event.alt == true, shift = event.shift == true}) end
+                                    if delivery.has(win.id) then
+                                        local sent, err = delivery.send(win.id, {type = "mouse", x = x - body.x + 1, y = y - body.y + 1,
+                                            action = event.action == "release" and "release" or (event.action == "wheel" and "wheel" or (event.action == "motion" and "motion" or "press")), button = tostring(event.button or ""), ctrl = event.ctrl == true, alt = event.alt == true, shift = event.shift == true})
+                                        if not sent and err then
+                                            status = "[" .. model.display_title(win) .. "] " .. tostring(err)
+                                            dirty = true
+                                        end
+                                    end
                                 end
                                 break
                             end
@@ -489,8 +728,16 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         end
                     end
                 elseif event.type == "paste" then
-                    local attached = attachments[input_focus()]
-                    if attached then attached.view:send({type = "paste", text = tostring(event.text or "")}) end
+                    local target = input_focus()
+                    if target ~= "" and delivery.has(target) then
+                        local sent, err = delivery.send(target, {type = "paste", text = tostring(event.text or "")})
+                        if not sent and err then
+                            local title = "Window"
+                            for _, win in ipairs(scene.windows) do if win.id == target then title = model.display_title(win); break end end
+                            status = "[" .. title .. "] " .. tostring(err)
+                            dirty = true
+                        end
+                    end
                 end
             end
         end
@@ -499,10 +746,18 @@ local function main(owner: string, initial_application: string?, secondary_appli
     ticker:stop()
     process.unlisten(dialog_states)
     process.unlisten(dialog_results)
+    process.unlisten(clipboard_results)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
-    for _, attached in pairs(attachments) do attached.view:close() end
+    delivery.shutdown()
     output:close()
     tty.stop()
     if fatal then error(fatal) end
 end
-return {main = main}
+local function supervised_main(owner: string, initial_application: string?, secondary_application: string?)
+    local ok, failure = pcall(main, owner, initial_application, secondary_application)
+    if not ok then
+        log:error("Presenter failed", {owner = owner, error = tostring(failure)})
+        error(failure)
+    end
+end
+return {main = supervised_main}

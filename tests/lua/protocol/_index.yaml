@@ -11,6 +11,7 @@ entries:
   imports:
     test: wippy.test:test
     contract: bee.protocol:application
+    decode: bee.protocol:decode
     client: bee.application:client
     arguments: bee.application:arguments
 - name: decode_test

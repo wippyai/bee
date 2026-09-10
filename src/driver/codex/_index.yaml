@@ -1,0 +1,116 @@
+version: '1.0'
+namespace: bee.driver.codex
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [json]
+  imports:
+    events: bee.driver.kit:events
+    types: bee.driver:types
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: prepare
+  kind: function.lua
+  source: file://prepare_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.codex:launch
+    types: bee.driver:types
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.codex:launch
+    types: bee.driver:types
+- name: normalize
+  kind: function.lua
+  source: file://normalize_method.lua
+  method: handle
+  imports:
+    protocol: bee.driver.codex:protocol
+    bounds: bee.threads.records:bounds
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.codex:prepare
+      dispatch: bee.driver.codex:dispatch
+      normalize: bee.driver.codex:normalize
+  meta:
+    type: harness.driver
+    driver_id: codex
+    profiles_ref: bee.driver.codex:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.codex:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Codex CLI
+      implementation_version: 0.153.4
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PermissionRequest
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.codex:protocol
+        inbound:
+        - next_turn
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex:protocol
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex:protocol
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []

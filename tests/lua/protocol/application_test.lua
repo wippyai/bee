@@ -1,9 +1,26 @@
 local test = require("test")
 local contract = require("contract")
+local decode = require("decode")
 local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
     test.describe("Application launch arguments", function()
+        test.it("limits observer requests to exact bind targets", function()
+            local value = {version = 1, request_id = "observe", op = "bind", id = "view", instance_id = "instance", observer = true}
+            local request = contract.request(value)
+            if not request then error("Observer bind rejected") end
+            test.is_true(request.observer)
+            value.instance_id = ""
+            test.is_nil(contract.request(value))
+            value.instance_id = "instance"; value.id = ""
+            test.is_nil(contract.request(value))
+            value.id = "view"; value.op = "close"
+            test.is_nil(contract.request(value))
+            value.observer = false
+            test.is_nil(contract.request(value))
+            test.is_nil(contract.request({version = 1, request_id = "r", op = "bind", id = "view", instance_id = "instance", observer = "true"}))
+        end)
+
         test.it("preserves request workspace identity and rejects malformed routing values", function()
             local identity = "0123456789abcdef0123456789abcdef"
             local value = {version = 1, request_id = "route", op = "open", definition_id = "test:app", workspace_id = identity}
@@ -15,6 +32,23 @@ local function define_tests()
                 value.workspace_id = invalid
                 test.is_nil(contract.request(value))
             end
+        end)
+        test.it("accepts only bounded explicit thread associations on open", function()
+            local thread_id = "thread:review"
+            local request = assert(contract.request({version = 1, request_id = "threaded", op = "open",
+                definition_id = "test:app", thread_id = thread_id}))
+            test.eq(request.thread_id, thread_id)
+            test.is_nil(contract.request({version = 1, request_id = "threaded-close", op = "close", id = "view",
+                instance_id = "instance", thread_id = thread_id}))
+            test.is_nil(contract.request({version = 1, request_id = "threaded-empty", op = "open",
+                definition_id = "test:app", thread_id = ""}))
+            test.is_nil(contract.request({version = 1, request_id = "threaded-control", op = "open",
+                definition_id = "test:app", thread_id = "review\n"}))
+            test.is_nil(contract.request({version = 1, request_id = "threaded-large", op = "open",
+                definition_id = "test:app", thread_id = string.rep("x", 161)}))
+            local reply = contract.reply("threaded", "open")
+            reply.thread_id = thread_id
+            test.eq(assert(decode.reply(reply)).thread_id, thread_id)
         end)
         test.it("copies explicit arguments across both boundary decoders", function()
             local source = {"project-a", "run-a", ""}

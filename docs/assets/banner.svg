@@ -1,20 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240" role="img" aria-labelledby="title description">
   <title id="title">Bee</title>
-  <desc id="description">Bee's terminal bee mark beside the words A terminal workspace built on Wippy.</desc>
-  <rect width="1200" height="320" rx="16" fill="#10151b"/>
-  <path d="M376 48v224" stroke="#2b333d"/>
+  <desc id="description">The terminal bee from the application's welcome screen.</desc>
+  <rect width="1200" height="240" rx="12" fill="#10151b"/>
   <g fill="#edbd59" font-family="DejaVu Sans Mono" font-size="24" xml:space="preserve">
-    <text x="61" y="108">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
-    <text x="61" y="132">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
-    <text x="61" y="156">&#160;╭──────┴─────╮&#160;&#160;</text>
-    <text x="61" y="180">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
-    <text x="61" y="204">&#160;╰────────────╯&#160;&#160;</text>
-    <text x="61" y="228">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+    <text x="64" y="68">&#160;&#160;&#160;&#160;╭──╮&#160;╭──╮&#160;&#160;&#160;&#160;</text>
+    <text x="64" y="92">&#160;&#160;&#160;&#160;╰──╲&#160;╱──╯&#160;&#160;&#160;&#160;</text>
+    <text x="64" y="116">&#160;╭──────┴─────╮&#160;&#160;</text>
+    <text x="64" y="140">◂│&#160;██&#160;&#160;██&#160;&#160;•&#160;&#160;│&#160;&#160;</text>
+    <text x="64" y="164">&#160;╰────────────╯&#160;&#160;</text>
+    <text x="64" y="188">&#160;&#160;&#160;&#160;&#160;&#160;&#160;╲&#160;╲&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
   </g>
-  <g font-family="DejaVu Sans">
-    <text x="424" y="85" fill="#a2acb8" font-size="13" letter-spacing="3">WIPPY / APPLICATIONS</text>
-    <text x="420" y="169" fill="#f0f3f6" font-size="76" font-weight="bold">Bee</text>
-    <text x="424" y="214" fill="#b9c3ce" font-size="24">A terminal workspace built on Wippy.</text>
-  </g>
-  <text x="424" y="267" fill="#edbd59" font-family="DejaVu Sans Mono" font-size="17">$ bee codex</text>
+  <text x="376" y="151" fill="#f0f3f6" font-family="DejaVu Sans" font-size="84" font-weight="bold">Bee</text>
 </svg>

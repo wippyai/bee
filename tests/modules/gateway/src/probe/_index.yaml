@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.gateway_probe
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, http_client, json, time, process]
+  meta:
+    command:
+      name: gateway-probe
+      security:
+        actor: {id: bee.test.gateway}
+  security:
+    policies: [bee.gateway_probe:policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_create_policy, bee:thread_observe_policy]
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host]
+    resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
+    effect: allow
+- name: drainer
+  kind: process.lua
+  source: file://drainer.lua
+  method: main
+  modules: [funcs, time]
+  security:
+    policies: [bee.gateway_probe:policy, bee:gateway_manage_policy]

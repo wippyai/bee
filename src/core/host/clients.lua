@@ -171,7 +171,6 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
     elseif control.op == "render" then
         if not client then code, failure = "not_found", "Client is not admitted"
         elseif client.detaching or pending(state, client) then code, failure = "busy", "Client grants are changing"
-        elseif not client.permissions.control then code, failure = "permission_denied", "Client control is not granted"
         elseif reserved(state, control.renderer, client.connection_id) then code, failure = "permission_denied", "Renderer belongs to another owner"
         else render(state, client, control.renderer, control.request_id); return nil end
     elseif control.permissions then
@@ -233,9 +232,9 @@ function M.request(state: State, caller: string, request: contract.Request, data
     if not client then return false end
     local code = ""
     if type(data) ~= "table" or data.connection_id ~= client.connection_id or client.detaching then code = "permission_denied"
-    elseif request.op == "bind" and client.permissions.control and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
-    elseif request.op == "bind" and client.permissions.control and client.rendering then code = "busy"
-    elseif request.op == "bind" and client.permissions.control and client.renderer == "" then code = "unavailable"
+    elseif request.op == "bind" and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
+    elseif request.op == "bind" and client.rendering then code = "busy"
+    elseif request.op == "bind" and client.renderer == "" then code = "unavailable"
     elseif not clients.allowed(client, request) then code = "permission_denied"
     elseif request.workspace_id ~= state.workspace_id then code = "workspace_mismatch"
     elseif not ready then code = "busy" end
@@ -243,11 +242,12 @@ function M.request(state: State, caller: string, request: contract.Request, data
         reject(state, client, request, code, code == "workspace_mismatch" and "Request targets another workspace" or "Client request rejected")
         return true
     end
+    if request.op == "bind" then request.observer = not client.permissions.control or request.observer == true end
     local generation = request.op == "bind" and client.renderer_generation or ""
     local internal, hash_error = hash.sha256(client.connection_id .. "\0" .. generation .. "\0" .. request.request_id)
     if not internal then error(tostring(hash_error)) end
     local fingerprint = contract.argument_fingerprint({request.op, request.id, request.instance_id,
-        request.definition_id, request.recipient}) .. contract.argument_fingerprint(request.arguments)
+        request.definition_id, request.thread_id or "", request.recipient, tostring(request.observer == true)}) .. contract.argument_fingerprint(request.arguments)
     local existing = state.routes[internal]
     if existing and existing.fingerprint ~= fingerprint then
         reject(state, client, request, "request_conflict", "Request ID was reused for another operation")
@@ -265,7 +265,7 @@ function M.request(state: State, caller: string, request: contract.Request, data
             for _, route in pairs(state.routes) do
                 if not route.completed and route.resume then reserved[route.resume.instance_id] = true end
             end
-            resume = recovery.select(saved, state.inventory, request.definition_id, reserved)
+            resume = recovery.select(saved, state.inventory, request.definition_id, reserved, request.thread_id)
         end
         state.routes[internal] = {recipient = client.recipient, connection_id = client.connection_id, request_id = request.request_id,
             op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume}
@@ -277,6 +277,7 @@ function M.request(state: State, caller: string, request: contract.Request, data
     if request.op == "open" and route and route.resume then
         request.restore_view_id, request.restore_instance_id = route.resume.view_id, route.resume.instance_id
         request.resume_schema, request.resume_state = route.resume.schema, route.resume.state
+        request.thread_id = route.resume.thread_id
     end
     request.request_id = internal
     if request.op == "bind" then request.recipient = client.renderer end

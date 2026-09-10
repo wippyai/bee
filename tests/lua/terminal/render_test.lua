@@ -6,7 +6,10 @@ local layout = require("layout")
 local render = require("render")
 local bindings = require("bindings")
 local menu = require("menu")
+local selection = require("selection")
 local appearance = require("appearance")
+local surface = require("surface")
+local function plain_text(value: string): string return string.gsub(value, "\27%[[0-9;]*m", "") end
 local catalog: {menu.Descriptor} = {
     {definition_id = "sample:settings", title = "Settings", group = "Tools", role = "appearance"},
     {definition_id = "sample:processes", title = "Process Manager", group = "Tools", role = "inspection"},
@@ -70,6 +73,36 @@ local function define_tests()
             scene = model.collapse(scene, "one")
             test.is_false(render.draw(scene, {"one"}, contents, nil, nil, "", "workspace").cursor.visible)
         end)
+        test.it("freezes and highlights only the selected window body", function()
+            local scene = model.add(model.new(80, 24), "one", "app", "One")
+            scene = model.add(scene, "two", "app", "Two")
+            scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 8})
+            scene = model.place(scene, "two", {x = 35, y = 4, width = 20, height = 8})
+            local first = scene.windows[1]
+            local body = layout.interior(first, model.bounds(scene, first))
+            local frozen: {string} = {}
+            for row = 1, body.height do frozen[row] = row == 1 and "frozen \27[31m界\27[0m" or "row " .. row end
+            local active, err = selection.capture({view_id = "one", attachment = "mount-one", mount_generation = 1,
+                width = body.width, height = body.height}, frozen)
+            test.is_nil(err)
+            test.not_nil(active)
+            if not active then error("selection capture failed") end
+            active = selection.drag(selection.press(active, 1, 1), 9, 2)
+            local contents: {[string]: render.Content} = {}
+            local changed: {string} = {"changed live content"}
+            local neighbor: {string} = {"neighbor stays live"}
+            contents.one = {rows = changed, cursor = {x = 1, y = 1, visible = true}}
+            contents.two = {rows = neighbor}
+            local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
+                nil, nil, nil, nil, active)
+            local text = plain_text(table.concat(frame.rows, "\n"))
+            test.is_true(text:find("frozen 界", 1, true) ~= nil)
+            test.is_true(text:find("neighbor stays", 1, true) ~= nil)
+            test.is_true(text:find("changed live content", 1, true) == nil)
+            test.is_false(frame.cursor.visible)
+            test.is_true(frame.rows[body.y]:find("48;2;255;201;99", 1, true) ~= nil)
+            test.is_true(frame.rows[body.y]:find("\27[31m", 1, true) == nil)
+        end)
         test.it("shares half-open hit bounds with window interiors", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")
             local win = scene.windows[1]
@@ -123,6 +156,9 @@ local function define_tests()
             test.eq(#menu.items(true, false, true, catalog), 2)
             local state: menu.State = {selected = 1, offset = 0, kind = "window", target = "one", x = 79, y = 23}
             local items = menu.entries(state, scene, false, catalog)
+            local selectable = false
+            for _, item in ipairs(items) do if item.action == "select_text" and item.label == "Select text" then selectable = true end end
+            test.is_true(selectable)
             local panel = menu.panel(80, 24, #items, state)
             test.is_true(panel.x + panel.width - 1 <= 80)
             test.is_true(panel.y + panel.height - 1 <= 24)
@@ -209,6 +245,38 @@ local function define_tests()
             test.eq(appearance.cycle(preferences, "theme").taskbar, "icons")
             test.eq(assert(appearance.decode({theme = "honey", background = "dots"})).taskbar, "labels")
             test.is_nil(appearance.decode({theme = "honey", background = "dots", taskbar = "invalid"}))
+        end)
+        test.it("renders status badges in taskbar labels and window chrome without changing titles", function()
+            local scene = model.add(model.new(80, 24), "one", "one", "Application One", "界")
+            local badges: {[string]: surface.Badge} = {one = {glyph = "◐", text = "Waiting on you", tone = "warning"}}
+            local preferences = appearance.defaults()
+            local plain = render.draw(scene, {"one"}, {}, nil, nil, "", "workspace", preferences)
+            local frame = render.draw(scene, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+            local text = table.concat(frame.rows, "\n")
+            test.is_true(text:find("◐", 1, true) ~= nil)
+            test.is_true(text:find("Waiting on you", 1, true) ~= nil)
+            test.is_true(text:find("Application One", 1, true) ~= nil)
+            test.eq(model.display_title(scene.windows[1]), "Application One")
+            test.eq(frame.tabs[1].x, plain.tabs[1].x)
+            test.eq(frame.tabs[1].width, plain.tabs[1].width + 2)
+
+            local collapsed = model.collapse(scene, "one")
+            local recap = render.draw(collapsed, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+            local recap_text = table.concat(recap.rows, "\n")
+            test.is_true(recap_text:find("◐ Waiting on you", 1, true) ~= nil)
+
+            local modes = {
+                {name = "fullscreen", scene = model.toggle_fullscreen(scene, "one"), marker = "▣ ◐"},
+                {name = "minimized", scene = model.minimize(scene, "one"), marker = "− ◐"},
+                {name = "collapsed", scene = model.collapse(scene, "one"), marker = "▸ ◐"},
+            }
+            for _, item in ipairs(modes) do
+                local plain_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences)
+                local badge_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+                test.is_true(plain_text(table.concat(badge_mode.rows, "\n")):find(item.marker, 1, true) ~= nil)
+                test.eq(badge_mode.tabs[1].x, plain_mode.tabs[1].x)
+                test.eq(badge_mode.tabs[1].width, plain_mode.tabs[1].width + 2)
+            end
         end)
         test.it("keeps the active tab reachable when the taskbar overflows", function()
             local scene = model.new(24, 12)

@@ -1,0 +1,47 @@
+-- MIT. The generated Codex provider configuration: exact provider decoding,
+-- the reviewed fields only, TOML string escaping, the endpoint as a
+-- credential destination, and a stable measurement.
+local test = require("test")
+local configuration = require("configuration")
+local function provider(data: {[string]: unknown}): {[string]: unknown}
+    return {id = "host:provider", kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = data}
+end
+local function define_tests()
+    test.describe("Codex configuration", function()
+        test.it("renders only the reviewed fields for a host provider and measures them", function()
+            local decoded, err = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://gateway.example.net/v1", model = "gpt-5"}))
+            if not decoded then error(tostring(err)) end
+            test.eq(#decoded.digest, 64)
+            local projection = assert(configuration.projection(decoded))
+            test.eq(projection.path, ".codex/config.toml")
+            test.eq(projection.revision, "bee.codex-config@1")
+            test.is_true(projection.content:find('model_provider = "bee"', 1, true) ~= nil)
+            test.is_true(projection.content:find('[model_providers.bee]', 1, true) ~= nil)
+            test.is_true(projection.content:find('env_key = "OPENAI_API_KEY"', 1, true) ~= nil)
+            test.is_true(projection.content:find('wire_api = "responses"', 1, true) ~= nil)
+            test.is_true(projection.content:find('base_url = "https://gateway.example.net/v1"', 1, true) ~= nil)
+            test.eq(#projection.digest, 64)
+            local again = assert(configuration.projection(decoded))
+            test.eq(again.digest, projection.digest)
+        end)
+        test.it("escapes strings and refuses arbitrary fields, bad names and non-loopback http", function()
+            local quoted = configuration.render({ref = "host:provider", name = "bee", base_url = 'https://h.example/v1"x', model = "gpt-5", loopback_fixture = false, digest = string.rep("0", 64)})
+            test.is_true(quoted:find('base_url = "https://h.example/v1\\"x"', 1, true) ~= nil)
+            local _, extra = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://h.example/v1", model = "gpt-5", include = "x"}))
+            test.eq(extra, "host:provider: unknown field include")
+            local _, bad_name = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "Bee Provider", base_url = "https://h.example/v1", model = "gpt-5"}))
+            test.eq(bad_name, "host:provider: name must be a lowercase identifier")
+            local _, plain = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "http://gateway.example.net/v1", model = "gpt-5"}))
+            test.eq(plain, "host:provider: plain http is permitted only for the loopback fixture")
+            local _, remote_loopback = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "http://10.0.0.5:8080/v1", model = "gpt-5", loopback_fixture = true}))
+            test.eq(remote_loopback, "host:provider: the loopback fixture endpoint must be 127.0.0.1 with a port")
+            local loopback = assert(configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "http://127.0.0.1:4321/v1", model = "gpt-5", loopback_fixture = true})))
+            test.is_true(loopback.loopback_fixture)
+            local _, query = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://h.example/v1?x=1", model = "gpt-5"}))
+            test.eq(query, "host:provider: base_url carries no query or fragment")
+            local _, untyped = configuration.decode("host:provider", {id = "host:provider", kind = "registry.entry", meta = {type = "registry.entry"}, data = {}})
+            test.eq(untyped, "host:provider is not a bee.codex_provider")
+        end)
+    end)
+end
+return test.run_cases(define_tests)

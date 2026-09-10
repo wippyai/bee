@@ -18,10 +18,12 @@ function M.request(value: unknown, workspace_id: string): string?
     if not id or id == "" then return nil end
     return id
 end
-function M.ready(value: unknown, workspace_id: string): Ready?
+function M.ready(value: unknown, workspace_id: string, require_import: boolean): Ready?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
     local client_id = contract.workspace_id(value.client_id)
-    local receipt = contract.workspace_id(value.import_receipt)
+    local receipt: string? = nil
+    if value.import_receipt == "" and not require_import then receipt = ""
+    else receipt = contract.workspace_id(value.import_receipt) end
     if not client_id or not receipt then return nil end
     return {client_id = client_id, import_receipt = receipt}
 end

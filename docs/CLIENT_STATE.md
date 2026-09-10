@@ -159,7 +159,7 @@ The caller serializes access and selects an existing workspace host, exact clien
 database resource and child scope. `start` creates a virtual viewport and starts
 `bee.client:main`; it does not create a workspace host or claim readiness. The
 supervisor still authenticates child readiness and arranges host admission and
-renderer selection. A second start against a retained database binding is refused.
+renderer selection. A second start against the same retained database/desktop identity is refused.
 The reservation is local to this supervisor; it is not a distributed writer lock.
 Store generation checks remain the persistence fence.
 
@@ -177,8 +177,8 @@ Changing a recipient's mode requires explicit detach first. Failed revocations
 retain their records for retry. The caller owns the viewport lifetime and must
 admit recipients before calling the helper; the helper is not a public admission
 API. Neither its state nor its grants may be persisted or shared with apps.
-Default local launch does not yet use this helper; the desktop fixture exercises
-it as preparation for retained supervisor composition.
+The retained supervisor uses this helper for public local launch and observation;
+the desktop fixture also checks it independently.
 
 The source/pack desktop fixture now also presents a retained virtual desktop
 through a separate display actor using ordinary native viewport mounts. It

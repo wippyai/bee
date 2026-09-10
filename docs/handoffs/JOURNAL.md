@@ -5570,7 +5570,7 @@ exit-under-one-second acceptance still required. Native session race/vet passed
 `make native-reconnect-check` preserves failed disposable fixtures and probes
 service responsiveness before stack capture.
 
-### Candidate exit gate failed — journal 916
+### Candidate exit gate failed — journal 917
 
 The 750 ms acknowledgment candidate is not installed. Native client5945 and
 standalone71778 passed; stress20084 failed round46 at successful exit1.090s,

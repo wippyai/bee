@@ -385,4 +385,6 @@ Selection or owner changes require a new confirmation; an unconfirmed proposal
 cannot become a retryable pending operation. Source/pack regression checks pass.
 Live desktop browsing/attachment in the app remains unavailable: the existing
 catalog is admitted to native clients only. This fix grants no new access and
-is not yet in the installed global build.
+is now in the installed global build. Alt+F9 minimize and plain-F9 status pass
+source/pack and executable checks. The updated full repository check is running
+against the frozen safety checkpoint; it has no final result yet.

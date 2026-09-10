@@ -5393,3 +5393,17 @@ failed with the wrong fixture-session receipt; fixed source and pack pass, as do
 all 19 Hive Manager Lua tests. These changes add no catalog or attachment grants.
 Live app catalog browsing still needs an authorized read contract; do not expose
 the native-client route indiscriminately. Journal evidence 881.
+
+### Corrected UI installed after native acceptance
+
+Global SHA256 `440890d7fec500ccc16b799e73c9e166c35d023a8c27731ed55226d83a291951`,
+production source 0b44b0f (a90f1b4 adds executable Alt+F9 verification), native
+5172d7dc2396, runtime 674b58a1. Alt+F9 Process Manager acceptance passes source
+and pack; native Hive Manager minimizes/restores and F9/reconnect status passes.
+Exact-target confirmation regression passes source and pack; 19 focused Lua tests
+pass. The previous global and verified process 2137218 were retired with the
+same guarded install; databases remain. New retained process: 2197478.
+Actual-user cold frame 4.027s, detach 0.141s; no timing-cause claim.
+Full corrected frozen check session 46307 remains active, log
+`/tmp/bee-hive-safe-full-check.log`. Do not rerun the terminal failed31926.
+Checkpoint branch `checkpoint/hive-confirmation-20260910` is pushed.

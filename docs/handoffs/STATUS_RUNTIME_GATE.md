@@ -3,7 +3,7 @@
 ## Current global candidate — 2026-09-10
 
 Global `/home/wolfy-j/.local/bin/bee` now uses combined runtime `674b58a1a1`
-and Bee native `70441e040ed2`. The pinned builder produced the executable from
+and Bee native `f02e10111c36`. The pinned builder produced the executable from
 frozen source `/tmp/bee-global-final-crjl7na9`; no runtime or Bee PR was merged.
 Runtime PR #726 (stacked on #703, assigned to skhaz) supplies embedded-default
 selection with shared registry history. Earlier blockers below are historical.
@@ -14,11 +14,11 @@ explicit app/alias launches, and upgrade from the Sep 8 binary with a fresh app
 catalog, retained Ocean theme/workspace identity and unchanged migration ledger.
 The runtime SQLite history replay/changed-baseline tests also pass.
 Evidence: `/tmp/bee-final-binary-acceptance.log` and
-`/tmp/bee-combined-baseline-overlay.log`. The final full foundation run remains
-in progress in `/tmp/bee-final-full-check.log`; no completed full-suite claim.
+`/tmp/bee-combined-baseline-overlay.log`. The final full foundation run failed at the initial blank-frame wait in
+`tests/drag_failure.py`; see `/tmp/bee-final-full-check.log`. No full-suite pass.
 
-Installed SHA256: `19d62d1771dda864b4040d00b6563af9edee155a574a90bf335daa8543a3cdbd`.
-Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T133445Z`.
+Installed SHA256: `8be60049802226257b2f71c89b54a120598d1c259314418cd32b524891636dd9`.
+Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T135712Z`.
 Public remote enrollment, independent observer selection and the runtime main
 release cutover remain separate unfinished work.
 

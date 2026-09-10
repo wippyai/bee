@@ -4945,3 +4945,17 @@ Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T133445Z`.
 The broader frozen `make check` continues in `/tmp/bee-final-full-check.log`;
 no final passing foundation-suite claim yet. Public external enrollment,
 independent observer selection and runtime-main release remain unfinished.
+
+## 2026-09-10 — Native client slow-exit correction
+
+Codex reproduced a 3.9-second physical exit with a stalled test owner. Native
+`f02e10111c36` bounds detach acknowledgment to 200 ms; uncertainty is preserved
+and the native actor retires for eventual owner monitor cleanup. Session race
+tests/vet and actual standalone client acceptance pass, including the new stalled
+owner regression (exit within two seconds, terminal restored, owner alive).
+Global Bee updated atomically; see GLOBAL_BUILD.md for exact digest and rollback.
+Private copies of user state passed --base and ordinary boot, five large-terminal
+reconnects and 45 seconds idle. Unexpected mount retirement is not reproduced;
+immediate reconnect after abrupt death can still encounter a controller busy
+refusal. Full make check failed at drag_failure initial blank-frame wait. No
+user owner was stopped and no user database was modified by these probes.

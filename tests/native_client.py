@@ -88,5 +88,35 @@ def run(binary):
     print('Public native Bee: cold owner, exact copy, Ctrl+Q detach, retained shell, F12 and no clipboard replay passed')
 
 
+def stalled_detach(binary):
+    with tempfile.TemporaryDirectory(prefix='bee-native-stalled-detach-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner = None
+        ui = NativeDesktop(binary, folder, state)
+        try:
+            ui.wait(' BEE ', timeout=15)
+            owner = owner_handle(ui, binary, state)
+            # Fault injection against this fixture's held process identity only.
+            signal.pidfd_send_signal(owner, signal.SIGSTOP)
+            start = time.monotonic()
+            os.write(ui.master, bytes([17]))
+            while ui.process.poll() is None and time.monotonic() - start < 2:
+                ui.pump(.02)
+            assert ui.process.poll() is not None, 'Local detach waited for the stalled owner'
+            assert bytes([27]) + b'[?1049l' in ui.raw, 'Physical terminal was not restored'
+            assert b'detach desktop:' in ui.raw, 'Unacknowledged detach reported as committed'
+            assert b'outcome is unknown' in ui.raw, bytes(ui.raw[-500:])
+            assert not select.select([owner], [], [], 0)[0], 'Detach stopped the owner'
+        finally:
+            if owner is not None:
+                signal.pidfd_send_signal(owner, signal.SIGCONT)
+            ui.close()
+            stop_owner(owner)
+    print('Stalled owner: bounded physical exit, uncertainty preserved, owner retained')
+
+
 if __name__ == '__main__':
-    run(Path(sys.argv[1]).resolve())
+    binary = Path(sys.argv[1]).resolve()
+    run(binary)
+    stalled_detach(binary)

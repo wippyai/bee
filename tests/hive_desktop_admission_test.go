@@ -217,7 +217,7 @@ func TestHiveDesktopAdmission(t *testing.T) {
 	a := start(0, stage(0, ""))
 	seed := marker(a, "ready ")
 	clientDirectory := stage(1, seed)
-	if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_CRASH") == "1" {
+	if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_CRASH") == "1" || os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_OBSERVER") == "1" {
 		rejoinDirectory = stage(2, seed)
 	}
 	b := start(1, clientDirectory)
@@ -234,6 +234,8 @@ func TestHiveDesktopAdmission(t *testing.T) {
 	} else if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_BINARY") != "" {
 		if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_CRASH") == "1" {
 			t.Log("physical native client: SIGKILL without detach, fresh process rejoin, retained shell variable, bounded detach and terminal attribute restoration")
+		} else if os.Getenv("BEE_NATIVE_DESKTOP_PHYSICAL_OBSERVER") == "1" {
+			t.Log("physical native clients: shared shell observation, denied observer input/resize, observer detach preserves controller, F12 and resize")
 		} else {
 			t.Log("physical native client: shell input, F12 same-shell recovery, resize, bounded detach and terminal attribute restoration")
 		}

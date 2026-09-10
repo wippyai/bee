@@ -151,6 +151,69 @@ def probe():
         if not wait_for_prompt(child, b"OWNER_" + token.encode() + b"_OK"):
             raise child_error(child, "physical owner proof failed:")
 
+    def observe_shared_desktop(controller):
+        observer_master, observer_slave = pty.openpty()
+        fcntl.ioctl(observer_slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        attributes = termios.tcgetattr(observer_slave)
+        observed = bytearray()
+        directory = os.environ.get("BEE_NATIVE_DESKTOP_REJOIN_DIR")
+        if not directory:
+            raise AssertionError("observer identity directory is required")
+        observer = subprocess.Popen(
+            [binary], cwd=directory, stdin=observer_slave, stdout=observer_slave,
+            stderr=observer_slave, start_new_session=True,
+            env={**os.environ, "TERM": "xterm-256color",
+                 "BEE_NATIVE_DESKTOP_PHYSICAL": "1", "BEE_NATIVE_DESKTOP_OBSERVER": "1"},
+        )
+        children.append(observer)
+
+        def read_observer():
+            if select.select([observer_master], [], [], .05)[0]:
+                data = os.read(observer_master, 65536)
+                observed.extend(data)
+                if len(observed) > MAX_OUTPUT:
+                    raise AssertionError("observer output exceeded bound")
+
+        def wait_observer(needle):
+            deadline = time.monotonic() + 15
+            while needle not in observed and time.monotonic() < deadline:
+                read_available(controller)
+                read_observer()
+                if observer.poll() is not None:
+                    break
+            if needle not in observed:
+                raise AssertionError(f"observer missing {needle!r}: {bytes(observed[-3000:])!r}")
+
+        try:
+            wait_observer(b"PHYSICAL_alive_OK")
+            # Physical observation must not mutate the shared shell.
+            os.write(observer_master, b"observer_forbidden=bad\r")
+            time.sleep(.2)
+            command("printf 'OBSERVED_%s_%s_OK\\n' \"$native_pty\" \"${observer_forbidden-unset}\"")
+            wait_observer(b"OBSERVED_alive_unset_OK")
+            if not wait_for_prompt(controller, b"OBSERVED_alive_unset_OK"):
+                raise child_error(controller, "controller lost shared shell:")
+            os.write(observer_master, b"\x1d")
+            deadline = time.monotonic() + 8
+            while observer.poll() is None and time.monotonic() < deadline:
+                read_available(controller)
+                read_observer()
+            if observer.poll() != 0:
+                raise AssertionError(f"observer detach failed: {bytes(observed[-3000:])!r}")
+            if termios.tcgetattr(observer_slave) != attributes:
+                raise AssertionError("observer detach did not restore terminal attributes")
+            command("printf 'CONTROLLER_RETAINED_%s_OK\\n' \"$native_pty\"")
+            if not wait_for_prompt(controller, b"CONTROLLER_RETAINED_alive_OK"):
+                raise child_error(controller, "observer detach interrupted controller:")
+            if b"WARNING: DATA RACE" in observed:
+                raise AssertionError("observer race report")
+        finally:
+            if observer.poll() is None:
+                observer.kill()
+            observer.wait(timeout=5)
+            os.close(observer_master)
+            os.close(observer_slave)
+
     def crash_rejoin(child):
         if child.poll() is not None:
             raise child_error(child, "physical crash client exited before SIGKILL:")
@@ -210,6 +273,8 @@ def probe():
             command("native_pty=alive; printf 'PHYSICAL_%s_OK\\n' \"$native_pty\"")
             if not wait_for_prompt(child, b"PHYSICAL_alive_OK"):
                 raise child_error(child, "physical marker missing:")
+            if os.environ.get("BEE_NATIVE_DESKTOP_PHYSICAL_OBSERVER") == "1":
+                observe_shared_desktop(child)
             # F12 is handled by the retained desktop; its Terminal stays alive.
             read_available(child)
             previous = presenter()

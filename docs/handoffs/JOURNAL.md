@@ -5051,3 +5051,13 @@ Standalone checks and the actual Hive Manager smoke pass. User stores survived
 the authorized restart; PID839818, first frame1.398s, warm reconnect0.225s,
 detach0.109s. See GLOBAL_BUILD.md. Shared journal checkpoint805.
 Full foundation check69756 remains running; poll it before claiming a pass.
+
+## 2026-09-10 — Two native physical presentations share one retained shell
+
+The observer variant of hive-desktop-admission-check passes on runtime674b58a1
+with the race-enabled native fixture. One controller and one separately enrolled
+observer have separate PTYs; both see the same shell variable. Native input and
+resize checks deny observer authority, observer typing does not mutate the shell,
+and observer detach preserves the controller. F12 and resize retain the shell.
+Evidence /tmp/bee-mesh-observer-proof.log, session44191 exit0 (57.62s test).
+Only test harnesses/docs changed; public observer/desktop selection remains open.

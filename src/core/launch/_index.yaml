@@ -5,6 +5,7 @@ entries:
   kind: library.lua
   source: file://retained_protocol.lua
   imports:
+    arguments: bee.application:arguments
     clipboard: bee.client:clipboard
     contract: bee.protocol:application
 - name: headless

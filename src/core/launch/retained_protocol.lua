@@ -1,6 +1,7 @@
 -- MIT. Retained supervisor protocol; sender authentication remains caller responsibility before decoding.
 local contract = require("contract")
 local clipboard = require("clipboard")
+local arguments = require("arguments")
 type Request = {op: "attach" | "detach" | "copy", request_id: string, recipient: string, mode: "control" | "observe"}
 type Ready = {workspace_id: string, desktop_id: string}
 type Result = {request_id: string, mount: string, error_code: string, error: string}
@@ -64,6 +65,30 @@ function M.result(value: unknown, workspace_id: string, desktop_id: string): Res
         if mount ~= "" or err == "" then return nil end
     end
     return {request_id = request_id, mount = mount, error_code = error_code, error = err}
+end
+
+-- Internal launch messages are accepted only after the receiver authenticates
+-- its owner and checks the recipient's current controller attachment.
+type Launch = {request_id: string, recipient: string, name: string, arguments: {string}}
+function M.launch(value: unknown, workspace_id: string, desktop_id: string): Launch?
+    if not contract.workspace_id(workspace_id) or not contract.workspace_id(desktop_id) then return nil end
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id
+        or value.desktop_id ~= desktop_id then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id"
+            and key ~= "request_id" and key ~= "recipient" and key ~= "name" and key ~= "arguments" then return nil end
+    end
+    local request_id = contract.text(value.request_id, 80)
+    local recipient = contract.text(value.recipient, 160)
+    local name = contract.text(value.name, 40)
+    if not request_id or request_id == "" or not recipient or recipient == "" or not name
+        or not name:match("^[a-z][a-z0-9_-]*$") then return nil end
+    -- The internal envelope requires an explicit vector; decode supplies the
+    -- same count, item, total-size and control-character bounds as local launch.
+    if value.arguments == nil then return nil end
+    local values = arguments.decode(value.arguments)
+    if not values then return nil end
+    return {request_id = request_id, recipient = recipient, name = name, arguments = values}
 end
 
 type CopyResult = {request_id: string, selected: boolean, text: string, error: string}

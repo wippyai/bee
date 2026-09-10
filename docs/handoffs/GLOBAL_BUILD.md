@@ -154,3 +154,13 @@ and fullscreen metadata. The current desktop wire operations are list, attach,
 detach and copy only. Do not add a second command-name table to native code or
 bypass the broker. Admission, duplicate/retry behavior, controller exclusion and
 uncertain outcomes need acceptance before exposing the route.
+
+Implementation has begun with the internal `bee.launch:retained_protocol.launch`
+decoder. It requires matching workspace/desktop identities, a bounded request
+and recipient, a command token and an explicit argument vector. It copies values
+and uses the existing application argument bounds. Production strict lint and
+all seven retained-protocol cases pass (`/tmp/bee-launch-envelope-check.log`).
+This is not a public operation: controller validation, client/broker request and
+reply wiring, native launch routing and actual retained-owner alias acceptance
+are still required. The installed executable and its frozen source are unchanged;
+this new decoder is work in progress in the shared source/checkpoint.

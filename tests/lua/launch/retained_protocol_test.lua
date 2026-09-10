@@ -8,6 +8,32 @@ local other = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 local function define_tests()
     test.describe("Retained supervisor protocol", function()
+        test.it("keeps literal command arguments and rejects foreign or ambiguous launch envelopes", function()
+            local value = {version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "launch-1", recipient = "node:bee.client:native:actor", name = "terminal",
+                arguments = {"printf", "a b", "$(not-a-shell)", ""}}
+            local decoded = retained_protocol.launch(value, workspace, desktop)
+            if not decoded then error("Valid internal launch refused") end
+            test.eq(decoded.arguments[2], "a b")
+            test.eq(decoded.arguments[3], "$(not-a-shell)")
+            test.eq(decoded.arguments[4], "")
+            value.arguments[2] = "changed"
+            test.eq(decoded.arguments[2], "a b")
+            test.is_nil(retained_protocol.launch(value, other, desktop))
+            test.is_nil(retained_protocol.launch(value, workspace, other))
+            test.is_nil(retained_protocol.launch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "launch-1", recipient = "actor", name = "terminal", arguments = {}, scope = "admin"}, workspace, desktop))
+            test.is_nil(retained_protocol.launch({version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "launch-1", recipient = "actor", name = "terminal", arguments = {[2] = "gap"}}, workspace, desktop))
+            value.arguments = {string.rep("x", 1025)}
+            test.is_nil(retained_protocol.launch(value, workspace, desktop))
+            value.arguments = {"line\nfeed"}
+            test.is_nil(retained_protocol.launch(value, workspace, desktop))
+            value.arguments = {}
+            value.name = "terminal;id"
+            test.is_nil(retained_protocol.launch(value, workspace, desktop))
+        end)
+
         test.it("decodes valid ready announcement and rejects invalid keys and identities", function()
             local valid = {version = 1, workspace_id = workspace, desktop_id = desktop}
             local decoded = retained_protocol.ready(valid)

@@ -1,17 +1,18 @@
 # Global Bee candidate — September 10, 2026
 
 The installed executable is a development candidate built from the frozen source
-at `/tmp/bee-global-final-crjl7na9`. The functional source checkpoint is `18caf09`
+at `/tmp/bee-command-candidate-nqwpkmi3`. The functional source checkpoint is `c0db250`
 on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
-performed for the latest Bee-only link-loss fix.
+performed for the retained command route. The complete foundation gate and
+standalone suites pass; see the installed command-routing acceptance below.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
-- Native Bee: `d4b427d90a2e`, `checkpoint/native-client-binding-20260910`.
+- Native Bee: `a36ac552880d`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- Build output: `/tmp/bee-startup-responsive`.
-- SHA256: `c8847373cfa079a2835e2c567376bb2b7ae25273f80813e817aec6739d8d077a`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T153642Z`.
+- Build output: `/tmp/bee-command-launch-candidate`.
+- SHA256: `f5063813d7a82ffc84a6753953220174d1f4dd53b07b0cdaefe245ee746cb40a`.
+- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T181357Z`.
 
 ## Launch and ownership
 
@@ -36,7 +37,7 @@ Explicit `--base` remains a recovery mode. The embedded-default deployment polic
 is in runtime PR #726, stacked on #703 and assigned to Rodrigo (`skhaz`); the
 candidate does not yet consume a released runtime main revision.
 
-## Verified behavior and limits
+## Earlier acceptance and remaining limits
 
 `/tmp/bee-startup-responsive-acceptance.log` passes the actual executable's cold
 owner/client launch, exact clipboard copy, F12, retained explicit reconnect,
@@ -141,7 +142,10 @@ its existing native service-event capture. The composition passes race/vet:
 `/tmp/bee-cold-service-stages.log`. No production logging or runtime changes were
 introduced by this investigation.
 
-## Retained-owner command alias gap
+## Historical command gap and implementation checkpoints
+
+This section records the earlier failure and intermediate states. The installed
+route and its complete acceptance are documented in the following section.
 
 The installed build's automatic route handles argument-free `bee`, but command
 aliases such as `bee terminal` still enter the in-process launcher. With a retained
@@ -191,9 +195,9 @@ physical display actor, preserving the monitor contract. Hive wire admission,
 receipt/deadline handling and native CLI routing still need integration; global
 `bee terminal` is not fixed or rebuilt by this internal checkpoint.
 
-## Command routing candidate awaiting the full gate
+## Installed command routing acceptance
 
-A newer, uninstalled candidate at `/tmp/bee-command-launch-candidate` uses native
+The installed candidate at `/tmp/bee-command-launch-candidate` uses native
 checkpoint `a36ac552880d` and source checkpoint `689e3b0`, with the same runtime
 and builder pins. Its SHA256 is
 `f5063813d7a82ffc84a6753953220174d1f4dd53b07b0cdaefe245ee746cb40a`.
@@ -227,6 +231,11 @@ Both fixes are test-only. These failures remain recorded in
 `/tmp/bee-command-foundation-check.log` and
 `/tmp/bee-command-native-binary-check.log`.
 
-The full foundation rerun is still pending in
-`/tmp/bee-command-foundation-check-r2.log`; standalone success is not a full-gate
-claim. The installed executable and the user's existing owner remain unchanged.
+The uninterrupted full foundation rerun completed with exit 0 (session 4024):
+484 Lua tests, 517 source/pack entries, storage/subscription restart, all desktop,
+client, launcher, recovery and bundled-app checks. The 16-window load test exited
+in 367 ms. Evidence: `/tmp/bee-command-foundation-check-r2.log`.
+All 365 production files matched the frozen source before atomic installation.
+The installed executable also passed isolated cold/warm command launch, literal
+arguments, retained rejoin and F12: `/tmp/bee-global-command-install-check.log`.
+The user's existing owner and applications were not restarted.

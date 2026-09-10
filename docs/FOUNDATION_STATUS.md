@@ -14,12 +14,17 @@ attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
 The current frozen source now passes one uninterrupted `make check`, including
-482 Lua tests, source/pack architecture at 517 entries, storage and subscription
+484 Lua tests, source/pack architecture at 517 entries, storage and subscription
 restart checks, all desktop/client/launcher/recovery gates and the bundled apps.
-The 16-window load check exited in 394 ms. Both previously intermittent startup
+The 16-window load check exited in 367 ms. Both previously intermittent startup
 failure points passed without increasing time limits; their causes remain
 unexplained, so this run is not a claim that those intermittent failures are fixed.
-Evidence: `/tmp/bee-responsive-foundation-check.log`.
+Evidence: `/tmp/bee-command-foundation-check-r2.log`.
+Named commands such as `bee terminal` now launch through controller admission to
+the retained owner. Cold/warm command launches, literal arguments, replay, denied
+observer launches and fullscreen provider aliases pass; the global binary is
+installed and its isolated cold/warm smoke test passes. Existing owners keep
+their previously loaded code until restarted.
 See the current [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md).
 Older gate descriptions below refer to earlier candidates.
 

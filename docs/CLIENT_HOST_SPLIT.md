@@ -648,7 +648,7 @@ acceptance restores terminal settings and a fresh client reads the retained shel
 variable afterward. This is a local native composition proof; the combined runtime
 needed for standalone clipboard support remains a separate gate.
 
-## Retained command launch candidate
+## Retained command launch
 
 The native foreground client now carries named command arguments through the
 existing `bee.desktop:launch` operation after controller admission. The detached
@@ -668,6 +668,5 @@ commands, identical replay and conflicting reuse. CLI routing and session checks
 also pass. The assembled candidate passes standalone cold/warm command acceptance
 in `tests/native_client.py`, the explicit `--command bee run terminal` form, and
 unknown-command refusal followed by rejoin to the retained Terminal. The full
-native-client gate also passes. The installed global binary still predates this
-route while the full foundation gate runs. Explicit `--base` and qualified
+native-client gate also passes. The full foundation gate passes, and the global binary now includes this route. Explicit `--base` and qualified
 application-ID development launches retain their existing routes.

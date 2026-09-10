@@ -2,7 +2,8 @@
 
 `Join(ctx, Config, stdin, stdout)` composes the existing SameAccount native mesh,
 Hive desktop binding and physical presenter. It is gated by `meshclient` and
-`physicalclient`; public launch does not call it yet. It creates no owner,
+`physicalclient`; the native launcher uses it for ordinary `bee`, named app launches,
+and `bee observe`. It creates no owner,
 workspace database, transport implementation or registry deployment.
 
 The host selects a protected discovery directory, an explicit control/observe
@@ -12,7 +13,8 @@ never selects a workspace. Each call owns a fresh actor and one mount. Attachmen
 and input are never replayed. Supervisor discovery and catalog readiness share
 a 15-second deadline. Only definite UNAVAILABLE catalog refusals trigger another
 read, after 50 ms with a fresh key; all other failures return immediately. Cleanup requests supervisor detach within a bounded
-context and keeps operation and cleanup failures visible.
+context and keeps operation and cleanup failures visible. Detach has a 200 ms deadline;
+it does not wait for the normal operation deadline.
 
 The caller owns physical files and the signal context. Ctrl+] detaches locally;
 applications remain owned by the remote runtime. Starting that owner and deciding
@@ -32,7 +34,9 @@ It does not select control, resize a viewport or claim delivery obligations.
 
 When an elected owner is still preparing under the application lock, Probe waits
 for missing discovery within its existing 15-second budget before authenticating.
-The wait only reads; it creates no owner state. Corruption and permission errors
+The wait only reads; it creates no owner state. Join also allows up to 15 seconds
+for this publication before native transport startup; its subsequent supervisor
+and catalog readiness budget is separate. Probe shares one overall budget. Corruption and permission errors
 return immediately. This prevents a concurrent losing `start` invocation from
 failing solely because the winner has not published yet.
 

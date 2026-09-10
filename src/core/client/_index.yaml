@@ -39,6 +39,7 @@ entries:
   method: main
   modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: &client_imports
+    retained_protocol: bee.launch:retained_protocol
     clipboard: bee.client:clipboard
     launcher: bee.launch:bootstrap
     command: bee.applications:command

@@ -91,6 +91,27 @@ function M.launch(value: unknown, workspace_id: string, desktop_id: string): Lau
     return {request_id = request_id, recipient = recipient, name = name, arguments = values}
 end
 
+type LaunchResult = {request_id: string, id: string, instance_id: string, error_code: string, error: string}
+function M.launch_result(value: unknown, workspace_id: string, desktop_id: string): LaunchResult?
+    if not contract.workspace_id(workspace_id) or not contract.workspace_id(desktop_id) then return nil end
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id
+        or value.desktop_id ~= desktop_id then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id" and key ~= "request_id"
+            and key ~= "id" and key ~= "instance_id" and key ~= "error_code" and key ~= "error" then return nil end
+    end
+    local request_id = contract.text(value.request_id, 80)
+    local id = contract.text(value.id, 80)
+    local instance = contract.text(value.instance_id, 80)
+    local code = contract.text(value.error_code, 80)
+    if not request_id or request_id == "" or not id or not instance or not code
+        or type(value.error) ~= "string" or #value.error > 4096 then return nil end
+    if code == "" then
+        if id == "" or instance == "" or value.error ~= "" then return nil end
+    elseif id ~= "" or instance ~= "" or value.error == "" then return nil end
+    return {request_id = request_id, id = id, instance_id = instance, error_code = code, error = value.error}
+end
+
 type CopyResult = {request_id: string, selected: boolean, text: string, error: string}
 function M.copy_result(value: unknown): CopyResult? return clipboard.copy_result(value) end
 return M

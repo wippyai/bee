@@ -34,6 +34,20 @@ local function define_tests()
             test.is_nil(retained_protocol.launch(value, workspace, desktop))
         end)
 
+        test.it("requires broker identities for successful launch results and qualifies replies", function()
+            local success = {version = 1, workspace_id = workspace, desktop_id = desktop,
+                request_id = "launch-1", id = "view-1", instance_id = "instance-1", error_code = "", error = ""}
+            test.not_nil(retained_protocol.launch_result(success, workspace, desktop))
+            test.is_nil(retained_protocol.launch_result(success, other, desktop))
+            success.instance_id = ""
+            test.is_nil(retained_protocol.launch_result(success, workspace, desktop))
+            success.error_code = "DENIED"
+            success.error = "Controller required"
+            test.is_nil(retained_protocol.launch_result(success, workspace, desktop))
+            success.id = ""
+            test.not_nil(retained_protocol.launch_result(success, workspace, desktop))
+        end)
+
         test.it("decodes valid ready announcement and rejects invalid keys and identities", function()
             local valid = {version = 1, workspace_id = workspace, desktop_id = desktop}
             local decoded = retained_protocol.ready(valid)

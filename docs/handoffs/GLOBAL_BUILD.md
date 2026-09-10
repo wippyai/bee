@@ -164,3 +164,24 @@ This is not a public operation: controller validation, client/broker request and
 reply wiring, native launch routing and actual retained-owner alias acceptance
 are still required. The installed executable and its frozen source are unchanged;
 this new decoder is work in progress in the shared source/checkpoint.
+
+The internal launch path now reaches the existing retained client and broker.
+The core supervisor accepts `bee.retained.launch` only from its retained owner
+and only for the current controller; one launch may be pending. The client
+accepts `bee.client.launch` only from its supervisor, resolves the admitted
+command catalog, and forwards literal arguments to the existing host open
+operation. It applies fullscreen metadata and returns the broker's view/instance
+identities before rewriting IDs for the presenter. Enqueue alone is not success.
+The reply decoder rejects successful results without identities and failures
+that pretend to carry successful identities.
+
+Production lint, eight protocol cases, and the actual retained-supervisor fixture
+pass from source and pack. The fixture proves forged-sender rejection, observer
+and retired-controller denial, unknown-command refusal, literal shell-looking
+arguments and a successful broker identity while preserving the original shell
+through detach/rejoin. Logs: `/tmp/bee-launch-result-check.log` and
+`/tmp/bee-retained-launch-core-verified.log`. An initial observer fixture wrongly
+used the supervisor's already-monitored parent; it was replaced with a distinct
+physical display actor, preserving the monitor contract. Hive wire admission,
+receipt/deadline handling and native CLI routing still need integration; global
+`bee terminal` is not fixed or rebuilt by this internal checkpoint.

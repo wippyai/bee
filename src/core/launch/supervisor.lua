@@ -36,6 +36,9 @@ local function run_supervisor(client: string, database_resource: string?, retain
         if not trapping then error("Cannot handle desktop link loss: " .. tostring(trap_error)) end
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
+        local launch_requests = listen("bee.retained.launch")
+        local launch_results = listen("bee.client.launched")
+        local launch_pending: string? = nil
         local copy_pending: {id: string, recipient: string, mount: string}? = nil
         local hosts, ready = listen("bee.host.ready"), listen("bee.client.ready")
         local renderers, results = listen("bee.client.renderer"), listen("bee.host.client_result")
@@ -75,12 +78,15 @@ local function run_supervisor(client: string, database_resource: string?, retain
         while true do
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
-                saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive()}
+                saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
             if phase == "running" then
                 cases[#cases + 1] = renderers:case_receive()
                 cases[#cases + 1] = quits:case_receive()
             end
-            if retained_owner and phase == "running" then cases[#cases + 1] = attachment_requests:case_receive() end
+            if retained_owner and phase == "running" then
+                cases[#cases + 1] = attachment_requests:case_receive()
+                cases[#cases + 1] = launch_requests:case_receive()
+            end
             if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
@@ -172,6 +178,34 @@ local function run_supervisor(client: string, database_resource: string?, retain
                         end
                         send(retained_owner, "bee.retained.copied", {version = 1, request_id = result.request_id,
                             selected = result.selected, text = result.text, error = result.error})
+                    end
+                elseif selected.channel == launch_results and sender == client and retained_owner then
+                    local result = retained_protocol.launch_result(data, workspace_id, desktop_id)
+                    if result and result.request_id == launch_pending then
+                        launch_pending = nil
+                        send(retained_owner, "bee.retained.launched", {version = 1, workspace_id = workspace_id,
+                            desktop_id = desktop_id, request_id = result.request_id, id = result.id,
+                            instance_id = result.instance_id, error_code = result.error_code, error = result.error})
+                    end
+                elseif selected.channel == launch_requests and sender == retained_owner and desktop and announced then
+                    local request = retained_protocol.launch(data, workspace_id, desktop_id)
+                    if request then
+                        local controller = desktop.grants.controller
+                        local code, message = "", ""
+                        if not controller or controller.recipient ~= request.recipient then
+                            code, message = "DENIED", "Launch requires the active desktop controller"
+                        elseif launch_pending then
+                            code, message = "BUSY", "A desktop launch is already pending"
+                        end
+                        if code ~= "" then
+                            send(retained_owner, "bee.retained.launched", {version = 1, workspace_id = workspace_id,
+                                desktop_id = desktop_id, request_id = request.request_id, id = "", instance_id = "",
+                                error_code = code, error = message})
+                        else
+                            launch_pending = request.request_id
+                            send(client, "bee.client.launch", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
+                                request_id = request.request_id, recipient = request.recipient, name = request.name, arguments = request.arguments})
+                        end
                     end
                 elseif selected.channel == attachment_requests and sender == retained_owner and desktop and announced then
                     local request = retained_protocol.request(data, workspace_id, desktop_id)

@@ -10,6 +10,7 @@ local function main()
     local owner = tostring(process.pid())
     local ready = assert(process.listen("bee.retained.ready", {message = true}))
     local replies = assert(process.listen("bee.retained.result", {message = true}))
+    local launches = assert(process.listen("bee.retained.launched", {message = true}))
     local boots = assert(process.listen("physical.boot", {message = true}))
     local displays = assert(process.listen("physical.ready", {message = true}))
     local events = assert(process.events())
@@ -48,6 +49,24 @@ local function main()
             and data.desktop_id == desktop_id and type(data.mount) == "string" and type(data.error_code) == "string")
         return data.mount, data.error_code
     end
+    local function launch(recipient: string, name: string, args: {string}): string
+        sequence = sequence + 1
+        local id = "launch-" .. tostring(sequence)
+        assert(process.send(supervisor, "bee.retained.launch", {version = 1, workspace_id = workspace_id,
+            desktop_id = desktop_id, request_id = id, recipient = recipient, name = name, arguments = args}))
+        local timeout = time.after("5s")
+        local response = channel.select({launches:case_receive(), timeout:case_receive()})
+        assert(response.ok and response.channel == launches, "Missing broker launch result")
+        local reply = response.value
+        assert(tostring(reply:from()) == supervisor)
+        local data: unknown = reply:payload():data()
+        assert(type(data) == "table" and data.request_id == id and data.workspace_id == workspace_id
+            and data.desktop_id == desktop_id and type(data.error_code) == "string")
+        if data.error_code == "" then
+            assert(type(data.id) == "string" and data.id ~= "" and type(data.instance_id) == "string" and data.instance_id ~= "")
+        else assert(data.id == "" and data.instance_id == "") end
+        return data.error_code
+    end
     local function wait_text(view: tty.Viewport, needle: string)
         for _ = 1, 500 do
             local snapshot = view:snapshot()
@@ -56,17 +75,17 @@ local function main()
         end
         error("Missing retained text: " .. needle)
     end
-    local function attach(): (string, tty.Viewport)
+    local function attach(mode: string?): (string, tty.Viewport)
         local screen, screen_error = tty.viewport({width = 100, height = 32})
         if not screen then error(tostring(screen_error)) end
         local root_policy = assert(security.policy("bee.desktop_client_probe:root_policy"))
         local pid = tostring(assert(process.with_options({terminal = assert(screen:grant())})
             :with_scope(security.new_scope({root_policy})):spawn_monitored("bee.desktop_client_probe:physical", "bee:workers", owner)))
         assert(tostring(assert(boots:receive()):from()) == pid)
-        local mount, code = request(pid, "attach", "control")
+        local mount, code = request(pid, "attach", mode or "control")
         for _ = 1, 300 do
             if code ~= "busy" then break end
-            time.sleep("10ms"); mount, code = request(pid, "attach", "control")
+            time.sleep("10ms"); mount, code = request(pid, "attach", mode or "control")
         end
         assert(code == "", "Supervisor did not release exited controller")
         assert(process.send(pid, "physical.configure", {mount = mount}))
@@ -83,6 +102,9 @@ local function main()
     wait_text(first_screen, "OWNER_alive_OK")
     local _, competing = request(owner, "attach", "control")
     assert(competing == "busy", "Competing controller stole desktop")
+    local observer, observer_screen = attach("observe")
+    assert(launch(observer, "terminal", {}) == "DENIED", "Observer launched an application")
+    assert(launch(first, "missing-command", {}) == "INVALID_ARGUMENT", "Unknown command was accepted")
     assert(process.terminate(first))
     local exit_deadline = time.after("3s")
     while true do
@@ -99,11 +121,14 @@ local function main()
     wait_text(second_screen, "OWNER_REJOIN_alive_OK")
     local _, detached = request(second, "detach", nil)
     assert(detached == "")
+    assert(launch(second, "terminal", {}) == "DENIED", "Retired controller launched an application")
     process.terminate(second)
     second_screen:close()
     local third, third_screen = attach()
     command(third_screen, "printf 'OWNER_DETACH_%s_OK\\n' \"$bee_owner\"")
     wait_text(third_screen, "OWNER_DETACH_alive_OK")
+    assert(launch(third, "terminal", {"bash", "-c", "printf '%s\\n' \"$1\"; exec bash -i", "bee-launch", "LITERAL ; $(exit 4) two words"}) == "")
+    wait_text(third_screen, "LITERAL ; $(exit 4) two words")
     assert(third_screen:send({type = "key", key = "q", key_type = "runes", action = "press", ctrl = true}))
     wait_text(third_screen, "Quit Bee?")
     assert(third_screen:send({type = "key", key = "tab", key_type = "tab", action = "press"}))
@@ -115,6 +140,8 @@ local function main()
         if event.value.kind == process.event.EXIT and tostring(event.value.from) == supervisor then break end
     end
     process.terminate(third)
+    process.terminate(observer)
+    observer_screen:close()
     third_screen:close()
     log:info("RETAINED_SUPERVISOR_PROBE_COMPLETE")
 end
@@ -128,6 +155,8 @@ end
 local function forger(owner: string, supervisor: string, workspace_id: string, desktop_id: string)
     assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id,
         desktop_id = desktop_id, request_id = "forged", recipient = owner, op = "attach", mode = "control"}))
+    assert(process.send(supervisor, "bee.retained.launch", {version = 1, workspace_id = workspace_id,
+        desktop_id = desktop_id, request_id = "forged-launch", recipient = owner, name = "terminal", arguments = {}}))
     assert(process.send(owner, "forged.sent", {}))
 end
 return {main = checked_main, forger = forger}

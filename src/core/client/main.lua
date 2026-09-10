@@ -24,6 +24,7 @@ local inbox = require("inbox")
 local lifecycle = require("lifecycle")
 local interaction = require("interaction")
 local command = require("command")
+local retained_protocol = require("retained_protocol")
 local arguments = require("arguments")
 local launcher = require("launcher")
 local appearance = require("appearance")
@@ -51,6 +52,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local input = terminal and terminal.input or assert(tty.events())
         local admissions = listen("bee.host.admitted")
         local copy_results = listen("bee.selection.copied")
+        local launch_requests = listen("bee.client.launch")
         local presentations = listen("bee.host.presentation")
         local catalogs = listen("bee.host.catalog")
         local views = listen("bee.host.views")
@@ -126,6 +128,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local saved_for_exit = false
         local initial_opened = false
         local initial_request = ""
+        local launch_pending: {request_id: string, desktop_id: string, fullscreen: boolean}? = nil
         local self = tostring(process.pid())
         local function send(recipient: string, topic: string, value: unknown)
             local sent, err = process.send(recipient, topic, value)
@@ -337,7 +340,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             while true do
                 local cases = {events:case_receive(), input:case_receive(), admissions:case_receive(),
                     presentations:case_receive(), replies:case_receive(),
-                    controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(),
+                    controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(), launch_requests:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
                     question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive(),
                     supervisor_controls:case_receive(), copy_results:case_receive()}
@@ -443,6 +446,29 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                         appearance_result(request, "delivery_failed", tostring(err))
                                     end
                                 end
+                            end
+                        end
+                    elseif selected.channel == launch_requests and sender == owner and bootstrap.quit_mode == "supervisor" then
+                        local did = type(data) == "table" and contract.workspace_id(data.desktop_id) or nil
+                        local request = did and retained_protocol.launch(data, workspace_id, did) or nil
+                        if request and did then
+                            local code, message = "", ""
+                            local selected_command: command.Launch? = nil
+                            if launch_pending then code, message = "BUSY", "A desktop launch is already pending"
+                            elseif not active or paused or saved_for_exit then code, message = "UNAVAILABLE", "Desktop is not ready to launch"
+                            else
+                                local resolved, resolve_error = command.resolve(request.name, request.arguments)
+                                if not resolved then code, message = "INVALID_ARGUMENT", resolve_error or "Command resolution failed"
+                                else selected_command = resolved end
+                            end
+                            if selected_command then
+                                launch_pending = {request_id = request.request_id, desktop_id = did, fullscreen = selected_command.fullscreen}
+                                send(host, "bee.app.request", {version = 1, workspace_id = workspace_id, connection_id = connection_id,
+                                    request_id = request.request_id, op = "open", definition_id = selected_command.definition_id,
+                                    arguments = selected_command.arguments})
+                            else
+                                send(owner, "bee.client.launched", {version = 1, workspace_id = workspace_id, desktop_id = did,
+                                    request_id = request.request_id, id = "", instance_id = "", error_code = code, error = message})
                             end
                         end
                     elseif selected.channel == supervisor_controls and sender == owner and bootstrap.quit_mode == "supervisor" then
@@ -600,7 +626,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                     if not target then error("Missing selected target") end
                                     bind(target)
                                     send(session, "bee.desktop.command", {version = 1, op = "focus", id = key})
-                                    if reply.request_id == initial_request and bootstrap.fullscreen then
+                                    if (reply.request_id == initial_request and bootstrap.fullscreen)
+                                        or (launch_pending and reply.request_id == launch_pending.request_id and launch_pending.fullscreen) then
                                         local fullscreen = false
                                         for _, window in ipairs(layout.scene.windows) do
                                             if window.id == key and window.mode == "fullscreen" then fullscreen = true end
@@ -611,6 +638,13 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 else
                                     reply.error_code, reply.error = "unavailable", "Application is no longer running"
                                 end
+                            end
+                            if launch_pending and reply.request_id == launch_pending.request_id and (reply.op == "open" or reply.op == "focus") then
+                                send(owner, "bee.client.launched", {version = 1, workspace_id = workspace_id,
+                                    desktop_id = launch_pending.desktop_id, request_id = launch_pending.request_id,
+                                    id = reply.error_code == "" and reply.id or "", instance_id = reply.error_code == "" and reply.instance_id or "",
+                                    error_code = reply.error_code, error = reply.error})
+                                launch_pending = nil
                             end
                             if key and ((reply.op == "close" and reply.error_code == "") or reply.op == "closed") then
                                 remove(key)

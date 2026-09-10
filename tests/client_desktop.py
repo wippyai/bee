@@ -73,7 +73,7 @@ def run(workspace_appearance=False, command="desktop-client-probe"):
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if command == "retained-supervisor-probe":
-        print("Retained supervisor source/pack: startup/admission, forged sender denial, controller exclusion, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
+        print("Retained supervisor source/pack: startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
         return
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")

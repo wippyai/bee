@@ -21,7 +21,7 @@ end that lifetime on actor/transport shutdown. Native viewport grants enforce
 actual observation/input/resize rights at use time.
 
 `NewDesktop` additionally binds owner execution and physical actor identity.
-`List`, `Attach` and `Detach` validate workspace, desktop, recipient, session, mode
+`List`, `Create`, `Attach` and `Detach` validate workspace, desktop, recipient, session, mode
 and expiry. A node's catalog can contain multiple workspaces. Ordinary typed
 refusals remain distinct from uncertain mutations. No method owns the terminal,
 starts a workspace or retries a mutation.
@@ -75,3 +75,16 @@ controller's shell variable, and cannot change it by typing. Observer detach
 preserves the controller; F12 and resize then retain the same shell. This passes
 on runtime674b58a1 (`/tmp/bee-mesh-observer-proof.log`), with explicit fixture
 enrollment. It does not expose a public observer selector.
+
+
+The source binding adds caller-retained `Create(workspace, desktop)`. The desktop
+identity is also the allocation idempotency key, including after an uncertain
+reply; the binding sends once and never invents a replacement. Success proves
+allocation only. Catalogs may explicitly mark `is_default`; when present every
+record must carry it and exactly one must be true. Legacy catalogs without this
+field remain readable and require explicit selection when ambiguous.
+
+The session selects an explicitly declared default within a single workspace.
+Automatic selection/creation on controller conflict and its public executable
+acceptance remain pending. The global binary has not been updated with these
+source changes.

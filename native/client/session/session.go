@@ -23,7 +23,8 @@ import (
 )
 
 // Selection is explicit when more than one desktop is available. Empty selects
-// the sole desktop only; discovery order must never choose a user's workspace.
+// the sole desktop or one workspace's explicitly declared default; discovery
+// order must never choose a user's workspace.
 type Selection struct{ Workspace, Desktop string }
 
 // Physical detach must not wait for the normal operation deadline. If the
@@ -41,6 +42,23 @@ type Config struct {
 func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection, error) {
 	if (selection.Workspace == "") != (selection.Desktop == "") {
 		return Selection{}, errors.New("workspace and desktop must be selected together")
+	}
+	if selection == (Selection{}) && len(catalog.Workspaces) == 1 {
+		workspace := catalog.Workspaces[0]
+		defaults := 0
+		var selected Selection
+		for _, desktop := range workspace.Desktops {
+			if desktop.IsDefault {
+				defaults++
+				selected = Selection{Workspace: workspace.ID, Desktop: desktop.ID}
+			}
+		}
+		if defaults == 1 {
+			return selected, nil
+		}
+		if defaults > 1 {
+			return Selection{}, errors.New("desktop catalog has multiple defaults")
+		}
 	}
 	var found Selection
 	count := 0
@@ -169,7 +187,7 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	return nil
 }
 
-// waitCatalog tolerates an owner still starting, within the caller's discovery
+// waitCatalog tolerates an owner still starting or a busy catalog reader, within the caller's discovery
 // deadline. Each read gets a fresh key so a cached refusal cannot pin readiness.
 // It never retries authorization, protocol, transport or uncertain failures.
 func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.DesktopCatalog, error)) (hive.DesktopCatalog, error) {
@@ -182,7 +200,7 @@ func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.D
 			return catalog, nil
 		}
 		rejected, ok := err.(*hive.Rejected)
-		if !ok || rejected.Fault.Code != "UNAVAILABLE" {
+		if !ok || (rejected.Fault.Code != "UNAVAILABLE" && rejected.Fault.Code != "BUSY") {
 			// This operation reads the catalog. No attachment has been sent,
 			// so a canceled read is not an uncertain desktop mutation.
 			if errors.Is(err, context.Canceled) {

@@ -117,3 +117,35 @@ func TestDesktopBindingRejectsInvalidSelectionBeforeSend(t *testing.T) {
 		t.Fatal("invalid selection sent")
 	}
 }
+
+func TestDesktopCreateRetainsIdentityAndUncertainty(t *testing.T) {
+	for _, malformed := range []bool{false, true} {
+		d, s := desktopBinding(t)
+		calls := make(chan wireCall, 1)
+		value := selection
+		if malformed {
+			value.Desktop = "wrong"
+		}
+		go func() { calls <- answerDesktop(s, value, nil) }()
+		created, err := d.Create(context.Background(), selection.Workspace, selection.Desktop)
+		call := <-calls
+		var input DesktopSelection
+		if call.Key != selection.Desktop || call.Target.Ref != DesktopCreate || json.Unmarshal(call.Input, &input) != nil || input != selection {
+			t.Fatalf("allocation lost its retained identity: %+v", call)
+		}
+		if malformed {
+			var unknown *UnknownOutcome
+			if !errors.As(err, &unknown) || unknown.Key != selection.Desktop || unknown.Operation != DesktopCreate {
+				t.Fatalf("allocation uncertainty lost: %v", err)
+			}
+		} else if err != nil || created != selection {
+			t.Fatalf("created=%+v err=%v", created, err)
+		}
+		if s.sent.Load() != 1 {
+			t.Fatal("allocation replayed")
+		}
+		if _, err := d.Create(context.Background(), "invalid", selection.Desktop); err == nil || s.sent.Load() != 1 {
+			t.Fatal("invalid creation was sent")
+		}
+	}
+}

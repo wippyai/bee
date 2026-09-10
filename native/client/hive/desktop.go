@@ -13,6 +13,7 @@ import (
 
 const DesktopService = "bee.desktop"
 const DesktopList = "bee.desktop:list"
+const DesktopCreate = "bee.desktop:create"
 const DesktopAttach = "bee.desktop:attach"
 const DesktopDetach = "bee.desktop:detach"
 
@@ -29,7 +30,8 @@ type DesktopSelection struct {
 	Desktop   string `json:"desktop_id"`
 }
 type DesktopDescription struct {
-	ID string `json:"desktop_id"`
+	ID        string `json:"desktop_id"`
+	IsDefault bool   `json:"is_default,omitempty"`
 }
 type WorkspaceDesktops struct {
 	ID       string               `json:"workspace_id"`
@@ -106,8 +108,11 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 		if !desktopList(workspace.Desktops, &rawDesktops) {
 			return DesktopCatalog{}, ErrDesktopReply
 		}
+		marked := 0
 		for _, rawDesktop := range rawDesktops {
-			if !exactDesktopFields(rawDesktop, "desktop_id") {
+			if exactDesktopFields(rawDesktop, "desktop_id", "is_default") {
+				marked++
+			} else if !exactDesktopFields(rawDesktop, "desktop_id") {
 				return DesktopCatalog{}, ErrDesktopReply
 			}
 		}
@@ -115,13 +120,23 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 		if !durableID(workspace.ID) || seen[workspace.ID] || !desktopList(workspace.Desktops, &desktops) || len(desktops) > 64 {
 			return DesktopCatalog{}, ErrDesktopReply
 		}
+		if marked != 0 && marked != len(desktops) {
+			return DesktopCatalog{}, ErrDesktopReply
+		}
 		seen[workspace.ID] = true
+		defaults := 0
 		ids := map[string]bool{}
 		for _, desktop := range desktops {
 			if !durableID(desktop.ID) || ids[desktop.ID] {
 				return DesktopCatalog{}, ErrDesktopReply
 			}
 			ids[desktop.ID] = true
+			if desktop.IsDefault {
+				defaults++
+			}
+		}
+		if marked > 0 && defaults != 1 {
+			return DesktopCatalog{}, ErrDesktopReply
 		}
 		result.Workspaces = append(result.Workspaces, WorkspaceDesktops{ID: workspace.ID, Desktops: desktops})
 	}
@@ -208,4 +223,17 @@ func exactDesktopFields(raw json.RawMessage, names ...string) bool {
 		}
 	}
 	return true
+}
+
+// DecodeDesktopCreated validates the committed identity without claiming that
+// a desktop is active or that this client has acquired any attachment rights.
+func DecodeDesktopCreated(reply Reply, selected DesktopSelection) error {
+	if !selected.valid() || !desktopValue(reply) || !exactDesktopFields(reply.Value, "owner_execution", "workspace_id", "desktop_id") {
+		return ErrDesktopReply
+	}
+	var value DesktopSelection
+	if strict(reply.Value, &value) != nil || value != selected {
+		return ErrDesktopReply
+	}
+	return nil
 }

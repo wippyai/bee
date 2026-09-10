@@ -126,3 +126,28 @@ func TestDesktopDetachRequiresExactSelectionAndPositiveAcknowledgment(t *testing
 		t.Fatal("foreign workspace accepted")
 	}
 }
+
+func TestDesktopCatalogDefaultIsExplicitAndUnique(t *testing.T) {
+	makeValue := func(desktops []any) any {
+		return map[string]any{"owner_execution": selection.Execution, "workspaces": []any{
+			map[string]any{"workspace_id": selection.Workspace, "desktops": desktops},
+		}}
+	}
+	main := map[string]any{"desktop_id": selection.Desktop, "is_default": true}
+	other := map[string]any{"desktop_id": strings.Repeat("d", 32), "is_default": false}
+	catalog, err := DecodeDesktopCatalog(desktopReply(t, makeValue([]any{other, main})), selection.Execution)
+	if err != nil || !catalog.Workspaces[0].Desktops[1].IsDefault || catalog.Workspaces[0].Desktops[0].IsDefault {
+		t.Fatalf("lost explicit default: %+v %v", catalog, err)
+	}
+	for _, desktops := range [][]any{
+		{main, map[string]any{"desktop_id": strings.Repeat("d", 32), "is_default": true}},
+		{other},
+		{main, map[string]any{"desktop_id": strings.Repeat("d", 32)}},
+		{map[string]any{"desktop_id": selection.Desktop, "is_default": "true"}},
+		{map[string]any{"desktop_id": selection.Desktop, "is_default": nil}},
+	} {
+		if _, err := DecodeDesktopCatalog(desktopReply(t, makeValue(desktops)), selection.Execution); err == nil {
+			t.Fatalf("accepted malformed default declaration: %+v", desktops)
+		}
+	}
+}

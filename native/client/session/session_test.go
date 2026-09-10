@@ -51,7 +51,7 @@ func TestMissingPhysicalInputDoesNotCreateDiscoveryState(t *testing.T) {
 	}
 }
 
-func TestCatalogWaitReadsAgainAfterStartupRefusal(t *testing.T) {
+func TestCatalogWaitReadsAgainAfterStartupAndCatalogContention(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	keys := map[string]bool{}
@@ -63,9 +63,12 @@ func TestCatalogWaitReadsAgainAfterStartupRefusal(t *testing.T) {
 		if len(keys) == 1 {
 			return hive.DesktopCatalog{}, &hive.Rejected{Fault: hive.Fault{Code: "UNAVAILABLE"}}
 		}
+		if len(keys) == 2 {
+			return hive.DesktopCatalog{}, &hive.Rejected{Fault: hive.Fault{Code: "BUSY"}}
+		}
 		return hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: "ready"}}}, nil
 	})
-	if err != nil || len(keys) != 2 || len(catalog.Workspaces) != 1 {
+	if err != nil || len(keys) != 3 || len(catalog.Workspaces) != 1 {
 		t.Fatal(catalog, err, keys)
 	}
 }
@@ -165,6 +168,22 @@ func TestCanceledCatalogReadIsNotReportedAsAnUnknownAttachment(t *testing.T) {
 		var unknown *hive.UnknownOutcome
 		if calls != 1 || !errors.Is(err, cause) || errors.As(err, &unknown) {
 			t.Fatal("read cancellation should preserve its cause without attachment uncertainty or replay", calls, err)
+		}
+	}
+}
+
+func TestDesktopSelectionUsesDeclaredDefaultNotOrder(t *testing.T) {
+	main := hive.DesktopDescription{ID: "main", IsDefault: true}
+	other := hive.DesktopDescription{ID: "other"}
+	for _, desktops := range [][]hive.DesktopDescription{{main, other}, {other, main}} {
+		catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: "workspace", Desktops: desktops}}}
+		got, err := selectDesktop(catalog, Selection{})
+		if err != nil || got != (Selection{Workspace: "workspace", Desktop: "main"}) {
+			t.Fatal(got, err)
+		}
+		got, err = selectDesktop(catalog, Selection{Workspace: "workspace", Desktop: "other"})
+		if err != nil || got.Desktop != "other" {
+			t.Fatal(got, err)
 		}
 	}
 }

@@ -122,3 +122,23 @@ func (d *Desktop) Detach(ctx context.Context, key string, mounted DesktopMount) 
 	}
 	return nil
 }
+
+// Create allocates the caller-retained identity. Retry uses that same identity;
+// it does not activate a desktop, open a viewport, or grant control.
+func (d *Desktop) Create(ctx context.Context, workspace, desktop string) (DesktopSelection, error) {
+	if d == nil {
+		return DesktopSelection{}, errors.New("desktop client unavailable")
+	}
+	selected := DesktopSelection{Execution: d.execution, Workspace: workspace, Desktop: desktop}
+	if !selected.valid() {
+		return DesktopSelection{}, errors.New("invalid desktop identity")
+	}
+	reply, err := d.call(ctx, DesktopCreate, desktop, selected)
+	if err != nil {
+		return DesktopSelection{}, err
+	}
+	if err := DecodeDesktopCreated(reply, selected); err != nil {
+		return DesktopSelection{}, &UnknownOutcome{Operation: DesktopCreate, Key: desktop, Cause: err}
+	}
+	return selected, nil
+}

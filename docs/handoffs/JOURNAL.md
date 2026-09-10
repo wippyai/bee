@@ -5581,3 +5581,8 @@ the published experimental native branch remains separate. External syscall
 diagnostic49371 is live against the original candidate, output
 `/tmp/bee-reconnect-syscalls.log` and `.trace`. Trace overhead invalidates direct
 timing comparisons; use it to locate detach versus teardown stages.
+
+Syscall diagnostic49371 subsequently completed exit0: all30 rounds passed.
+The trace is a healthy comparison, not evidence of the failure cause. No
+diagnostic jobs remain live from this stretch; do not repoll completed handles.
+Global cbb6d6a5 and the existing user process remain unchanged.

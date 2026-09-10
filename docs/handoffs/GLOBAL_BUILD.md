@@ -84,3 +84,10 @@ for about twenty seconds, then the retained owner's readiness requests time out
 around the mount lease boundary. A test-owner stack dump shows idle mesh workers,
 not a confirmed mutex deadlock. The user owner was not stopped. Cold-start logs
 still exist; their reporting and lifecycle remain under review.
+
+The native monitor gate was rerun against runtime `674b58a1a1`: registration and a
+later FIFO message succeed, but no EXIT arrives after the target actor finishes
+with its transport still alive. `make -C native mesh-monitor-check` fails at
+`monitor_gate_test.go:77`. This is current evidence, not a historical blocker;
+the runtime lane handoff is Bee Harness seq698. No Bee polling workaround is
+being substituted for native process observation.

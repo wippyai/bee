@@ -4,8 +4,14 @@ The global candidate installed September 10 now uses the native owner/client
 launcher. Ordinary `bee` loads embedded code with shared registry history and
 attaches through the same-machine native mesh. Ctrl+Q and Ctrl+] detach the
 physical client while retaining its owner and applications. Standalone startup,
-selection/copy, scrolling, reconnect and old-binary upgrade checks pass. The full
-foundation run is still in progress; see the current
+selection/copy, scrolling, explicit-detach reconnect and old-binary upgrade checks
+pass. Warm launch now reuses the existing runtime lock and skips an extra owner
+process; one standalone probe reached the retained desktop in 0.204 seconds.
+Abrupt client death is **not** covered by that passing reconnect result: the
+current runtime accepts a remote monitor but fails to deliver the client EXIT,
+leaving its controller claimed. The later owner-readiness timeout remains under
+investigation. The full foundation run failed at an intermittent initial-frame
+wait in `tests/drag_failure.py`; isolated passing runs do not clear it. See the current
 [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md) for exact pins and evidence.
 Older gate descriptions below refer to earlier candidates.
 
@@ -218,7 +224,8 @@ The internal Hive supervisor implements bounded challenge exchange, peer
 replacement and asynchronous open telemetry dispatch. A two-runtime fixture
 proves discovery by native node-qualified names, calls in both directions,
 sibling rejection and supervisor restart. It uses explicit fixture enrollment
-and boot scopes; no production supervisor service starts automatically.
+and boot scopes. The current standalone launcher now starts the same-account
+owner supervisor automatically; public external enrollment is still separate.
 Hive Manager refreshes supervisor lookup, membership and owner telemetry. A failed
 lookup is shown as **Hive supervisor unavailable** with its reason; it does not
 infer that Hive is disabled or that enrollment would repair the failure. A found
@@ -244,8 +251,9 @@ native client through the supervisor to a retained desktop. Its PTY mode proves
 shell input, F12 with the same shell, resize, bounded Ctrl+] detach and restoration
 of terminal settings. This requires the candidate runtime's isolation of blocking
 stdin reads from terminal control commands. Explicit detach passes; remote actor
-crash cleanup remains a failing native monitor gate. Ordinary second-`bee`
-auto-attachment remains unimplemented. The physical LAN desktop fixture has passed
+crash cleanup remains a failing native monitor gate, reconfirmed against the
+current combined runtime on September 10. Ordinary second-`bee` auto-attachment
+is now implemented and verified for explicit detach/reconnect. The physical LAN desktop fixture has passed
 against `100.70.10.28`, including an owner-only file assertion and a separate
 physical-process SIGKILL/rejoin to the retained shell with a fresh explicitly
 enrolled client identity and automatic ports; same-name immediate rejoin remains

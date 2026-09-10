@@ -4972,3 +4972,14 @@ SIGKILL, then readiness timeouts after roughly30s. Test-only owner stack capture
 at /tmp/bee-crashed-client-owner-stack.txt. Luna is investigating the cause;
 production crash recovery is not fixed. No user process was stopped. Cold-start
 file-based error reporting remains to be corrected.
+
+## 2026-09-10 — Current remote-monitor failure verified
+
+Luna reran `make -C native mesh-monitor-check` against the exact combined runtime
+`674b58a1a1`: exit2, missing EXIT after completed native client actor, with a FIFO
+barrier and transport kept alive. Runtime handoff recorded at Bee Harness698.
+This explains the unreleased controller after crash; the later supervisor retry
+and owner-readiness timeout still need service-specific evidence. A diagnostic
+subscriber is being added only to a disposable native test helper. Current
+status docs now distinguish explicit-detach reconnect from unsupported reliable
+crash cleanup, and record the failing full-suite initial-frame wait accurately.

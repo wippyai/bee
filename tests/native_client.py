@@ -1,13 +1,15 @@
 """Linux source-free public launcher: retained owner, local quit and clipboard."""
 from pathlib import Path
 import os
+import fcntl
+import subprocess
 import select
 import signal
 import sys
 import tempfile
 import time
 
-from native_workspace import NativeDesktop
+from native_workspace import NativeDesktop, STATE_ENVIRONMENT
 from terminal_selection import begin, copies
 
 
@@ -120,7 +122,44 @@ def stalled_detach(binary):
     print('Stalled owner: bounded physical exit, uncertainty preserved, owner retained')
 
 
+def preparing_owner(binary):
+    with tempfile.TemporaryDirectory(prefix='bee-native-preparing-owner-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        state.mkdir(mode=0o700)
+        owner = None
+        process = None
+        ui = None
+        try:
+            with (state / '.application.lock').open('a+') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                ui = NativeDesktop(binary, folder, state)
+                ui.pump(1)
+                assert ui.process.poll() is None, bytes(ui.raw[-1000:])
+                assert not list(state.glob('owner-*.log')), 'Waiting client spawned a contender'
+            # Emulate the already-starting owner publishing after preparation.
+            env = {key: value for key, value in os.environ.items()
+                   if key not in STATE_ENVIRONMENT | {'BEE_RUNTIME', 'USER'}}
+            env.update(TERM='xterm-256color', HOME=str(folder), PATH='/usr/bin:/bin')
+            with tempfile.TemporaryFile() as output:
+                process = subprocess.Popen([str(binary), '--state-dir', str(state),
+                    '--command', 'bee', 'run', 'start'], cwd=folder, env=env,
+                    stdin=subprocess.DEVNULL, stdout=output, stderr=output, start_new_session=True)
+                owner = os.pidfd_open(process.pid)
+                ui.wait(' BEE ', timeout=15)
+                ui.quit()
+                assert not select.select([owner], [], [], 0)[0], 'Waiting client killed owner'
+        finally:
+            if ui is not None:
+                ui.close()
+            stop_owner(owner)
+            if process is not None:
+                process.wait(timeout=5)
+    print('Preparing owner: busy-lock client waits for publication, then authenticates and attaches')
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
     run(binary)
     stalled_detach(binary)
+    preparing_owner(binary)

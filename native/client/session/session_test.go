@@ -136,3 +136,21 @@ func TestForegroundCancellationCannotLeaveTransportAliveIndefinitely(t *testing.
 		t.Fatal("stalled cleanup left transport alive")
 	}
 }
+
+func TestJoinWaitsForOwnerPublicationWithoutCreatingState(t *testing.T) {
+	directory := t.TempDir() + "/preparing-owner"
+	input, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err = Join(ctx, Config{Directory: directory, Mode: hive.Control}, input, io.Discard)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("client failed before owner could publish", err)
+	}
+	if _, err := os.Stat(directory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("client created owner state", err)
+	}
+}

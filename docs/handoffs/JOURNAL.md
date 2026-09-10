@@ -4983,3 +4983,13 @@ and owner-readiness timeout still need service-specific evidence. A diagnostic
 subscriber is being added only to a disposable native test helper. Current
 status docs now distinguish explicit-detach reconnect from unsupported reliable
 crash cleanup, and record the failing full-suite initial-frame wait accurately.
+
+## 2026-09-10 — Preparing-owner startup race fixed and installed
+
+Codex installed native1abf5b28a0e5 with unchanged runtime674b58a1a1. Direct warm
+attachment now waits for discovery publication if the owner already holds the
+runtime lock but is still preparing. The actual old-binary test failed on missing
+mesh-owner.json; the new standalone test passes waiting, publication, admission,
+physical quit and retained owner. Warm readiness0.208s, full native-client target
+passes alongside session/launcher race/vet. See GLOBAL_BUILD.md for hash/rollback.
+Remote monitor gate remains red and handed to runtime lane at journal698.

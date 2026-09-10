@@ -41,7 +41,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260910141153-08a5761b809d",
+      "version": "v0.0.0-20260910143402-1abf5b28a0e5",
       "package": "github.com/wippyai/bee/native/desktop",
       "factory": "Component",
       "private": true

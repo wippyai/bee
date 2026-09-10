@@ -5,11 +5,11 @@ frozen source at `/tmp/bee-global-final-crjl7na9`. Runtime and Bee changes remai
 on branches; no PR or main merge was performed.
 
 - Runtime: `674b58a1a1`, `integration/bee-launch-selection-20260910`.
-- Native Bee: `08a5761b809d`, `checkpoint/native-client-binding-20260910`.
+- Native Bee: `1abf5b28a0e5`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- SHA256: `434be069787e26e8395ab158e2338d66acf3685c0f6ba7c73b1b67342fe3031d`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T141438Z`.
+- SHA256: `282c1a2169c04da3cf410fc60bebe2db0247e8c3cf301c496d34866ab51f4731`.
+- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T143654Z`.
 
 Run `bee` normally. Its foreground client automatically starts or authenticates
 an owner for the selected state. Ctrl+Q and Ctrl+] detach locally, retaining
@@ -91,3 +91,17 @@ with its transport still alive. `make -C native mesh-monitor-check` fails at
 `monitor_gate_test.go:77`. This is current evidence, not a historical blocker;
 the runtime lane handoff is Bee Harness seq698. No Bee polling workaround is
 being substituted for native process observation.
+
+## Preparing-owner race correction
+
+The installed native revision is now `1abf5b28a0e5`. When a second launch sees the
+runtime state lock before discovery exists, it waits for publication (up to15s,
+cancellable), then authenticates normally. It writes no owner state and never
+treats the lock or descriptor as admission. The previous binary failed this
+window with a missing `mesh-owner.json` error. Actual standalone acceptance now
+holds the runtime lock, starts a waiting client, releases the lock, starts the
+owner, and proves the original client reaches the desktop and detaches while
+retaining the owner. Normal warm readiness measured0.208s. Session and launcher
+race/vet pass. Evidence: `/tmp/bee-publication-fixed-acceptance.log` and
+`/tmp/bee-preparing-owner-before.log`. The remote EXIT and full-suite gates above
+are still open.

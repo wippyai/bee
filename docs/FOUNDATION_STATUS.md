@@ -13,13 +13,13 @@ shell. Bee's supervisors handle existing LINK_DOWN events and revoke the
 attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
-The current frozen source now passes one uninterrupted `make check`, including
-484 Lua tests, source/pack architecture at 517 entries, storage and subscription
+The current source now passes one uninterrupted `make check`, including
+485 Lua tests, source/pack architecture at 517 entries, storage and subscription
 restart checks, all desktop/client/launcher/recovery gates and the bundled apps.
-The 16-window load check exited in 367 ms. Both previously intermittent startup
+The 16-window load check exited in 336 ms. Both previously intermittent startup
 failure points passed without increasing time limits; their causes remain
 unexplained, so this run is not a claim that those intermittent failures are fixed.
-Evidence: `/tmp/bee-command-foundation-check-r2.log`.
+Evidence: `/tmp/bee-responsive-hive-foundation-check.log`.
 Named commands such as `bee terminal` now launch through controller admission to
 the retained owner. Cold/warm command launches, literal arguments, replay, denied
 observer launches and fullscreen provider aliases pass; the global binary is
@@ -230,11 +230,11 @@ sibling rejection and supervisor restart. It uses explicit fixture enrollment
 and boot scopes. The current standalone launcher now starts the same-account
 owner supervisor automatically; public external enrollment is still separate.
 Hive Manager refreshes supervisor lookup, membership and owner telemetry. The
-source app now draws before querying nodes and performs directory calls in one
-asynchronous worker, keeping input and close responsive during slow queries.
+installed app now draws local Hive state before querying peers and performs
+directory calls in one asynchronous worker, keeping input and close responsive during slow queries.
 Concurrent refresh requests are refused visibly instead of accumulating work;
-results remain keyed to their node. This change is not yet in the global binary. A failed
-lookup is shown as **Hive supervisor unavailable** with its reason; it does not
+results remain keyed to their node. The installed standalone and source/pack
+slow-query checks pass. A failed lookup is shown as **Hive supervisor unavailable** with its reason; it does not
 infer that Hive is disabled or that enrollment would repair the failure. A found
 supervisor is reported separately from each peer's reachability and desktop
 availability. Detailed startup phases require an authoritative lifecycle source.

@@ -1,6 +1,21 @@
 # Runtime gate for status and desktop acceptance
 
-## Current global candidate — 2026-09-10
+## Current status
+
+[GLOBAL_BUILD.md](GLOBAL_BUILD.md) is the authoritative installed-binary and
+acceptance record. The candidate runtime pin is `674b58a1a1`; the current native
+Bee pin is `a36ac552880d`. Earlier binary hashes and failed gates below are
+historical evidence, not the current installation status.
+
+Runtime [PR #716](https://github.com/wippyai/runtime/pull/716) was closed without
+merge at the user's request on September 10. The Bee pin does not contain its
+`system/topology/remote` subsystem, and Bee has no dependency on it. Do not
+revive that branch or add Lua ingress evidence. The cluster lane owns any future
+native lifecycle changes through its reviewed PRs; Bee consumes native mesh
+signals. A link loss can retire a display attachment without claiming that its
+remote actor exited or ending the retained applications.
+
+## Historical global candidate — 2026-09-10
 
 Global `/home/wolfy-j/.local/bin/bee` now uses combined runtime `674b58a1a1`
 and Bee native `1abf5b28a0e5`. The pinned builder produced the executable from

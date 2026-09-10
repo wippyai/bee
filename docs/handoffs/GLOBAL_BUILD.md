@@ -1,18 +1,20 @@
 # Global Bee candidate — September 10, 2026
 
-The installed executable is a development candidate built from the frozen source
-at `/tmp/bee-command-candidate-nqwpkmi3`. The functional source checkpoint is `c0db250`
+The installed executable is a development candidate built from source
+in `/tmp/bee-global-checkpoint-20260910` at production checkpoint `ad23c45`
 on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
-performed for the retained command route. The complete foundation gate and
-standalone suites pass; see the installed command-routing acceptance below.
+performed for this update. The complete foundation gate and standalone suites
+pass; see the installed responsive Hive Manager acceptance below.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
 - Native Bee: `a36ac552880d`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- Build output: `/tmp/bee-command-launch-candidate`.
-- SHA256: `f5063813d7a82ffc84a6753953220174d1f4dd53b07b0cdaefe245ee746cb40a`.
-- Rollback: `/home/wolfy-j/.local/bin/bee.rollback-20260910T181357Z`.
+- Build output: `/tmp/bee-responsive-hive-candidate-final`.
+- SHA256: `53c7ce500d06546cbf44df6656dc6aee308374bb06de2da2a4d39634d76af1d0`.
+- Previous binary archive: `/home/wolfy-j/.local/bin/bee.previous-20260910T190536Z`.
+  This update appends client-store migration 2; the archive is not a supported
+  database downgrade.
 
 ## Launch and ownership
 
@@ -244,7 +246,7 @@ The installed executable also passed isolated cold/warm command launch, literal
 arguments, retained rejoin and F12: `/tmp/bee-global-command-install-check.log`.
 The user's existing owner and applications were not restarted.
 
-## Responsive Hive Manager candidate (not installed)
+## Installed responsive Hive Manager update
 
 Checkpoint `ad23c45` draws local supervisor/membership state before per-node
 queries, then runs directory calls in one asynchronous worker. This preserves the
@@ -259,8 +261,18 @@ Binary `/tmp/bee-responsive-hive-candidate-final` has SHA256
 Native client and binary suites pass (`/tmp/bee-responsive-hive-standalone-check.log`).
 A real Start-menu launch shows Hive Manager in 1.229 seconds, with physical detach
 in 0.108 seconds (`/tmp/bee-responsive-hive-native-smoke.log`). The full foundation
-check remains running in `/tmp/bee-responsive-hive-foundation-check.log`; this is
-not yet an installed update or a completed full-gate claim.
+check passed in `/tmp/bee-responsive-hive-foundation-check.log` (terminal exit 0,
+session 9154): 485 Lua tests, 517 source/pack entries, storage and populated-store
+upgrade, client/desktop source-and-pack checks, recovery and all bundled apps.
+The 16-window load case exited in 0.336 seconds.
+
+The candidate is installed globally and the user’s Bee was restarted under their
+explicit restart authorization. The actual desktop appeared in 1.323 seconds and
+detached in 0.124 seconds, preserving the workspace databases. Evidence:
+`/tmp/bee-responsive-hive-global-install.log`. The installed binary’s isolated
+Start-menu test opened Hive Manager in 1.030 seconds and detached in 0.088 seconds
+(`/tmp/bee-responsive-hive-global-smoke.log`). The actual user-state warm reconnect
+also passed (`/tmp/bee-responsive-hive-user-reconnect.log`).
 
 The user subsequently reported another rejected viewport followed by detach
 uncertainty on the installed binary. A display probe then remained at Connecting

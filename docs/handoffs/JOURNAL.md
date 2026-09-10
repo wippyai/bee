@@ -4993,3 +4993,34 @@ mesh-owner.json; the new standalone test passes waiting, publication, admission,
 physical quit and retained owner. Warm readiness0.208s, full native-client target
 passes alongside session/launcher race/vet. See GLOBAL_BUILD.md for hash/rollback.
 Remote monitor gate remains red and handed to runtime lane at journal698.
+
+
+## 2026-09-10 — PR716 closed; responsive Hive candidate
+
+Runtime PR716 is closed without merge by explicit user direction. Bee runtime
+674b58a1 does not include its remote subsystem, and the cluster lane retains
+responsibility for native lifecycle work. Journal791 records the closure.
+
+Hive Manager now draws known local supervisor/membership state before querying
+peers. Source/pack delayed-query checks prove input and close remain responsive.
+The standalone candidate and idle-reconnect checks pass; see GLOBAL_BUILD.md
+for installation and full-gate status. The user's recurring retained-Bee
+attachment failure was recovered by an authorized restart, but its cause is
+still unproven (journal784). The pinned runtime's generic revoked-mount error
+can mask an earlier viewport RPC error (journal787); no runtime workaround was
+added. Continue using journal handle jc_H7E57Z5SJH71M for this Bee lane.
+
+
+## 2026-09-10 — Responsive Hive Manager installed globally
+
+The complete foundation run passed (485 Lua tests, 517 source/pack entries,
+new desktop-store migration/bootstrap, recovery and UI gates). The standalone
+and repeatable idle-reconnect gates passed. Global bee now has SHA256
+53c7ce500d06546cbf44df6656dc6aee308374bb06de2da2a4d39634d76af1d0,
+from production checkpoint ad23c45 and unchanged native/runtime pins.
+The user's Bee was restarted with saved state preserved: desktop1.323s,
+reconnect0.131s, detach0.113s. Installed Hive Manager first frame1.030s in the
+isolated Start-menu smoke. Current Bee PID552200 is recorded in
+/tmp/bee-current-user-owner-pid. See GLOBAL_BUILD.md for evidence paths.
+The recurring viewport/connection failure remains unproven; this is not a
+claim that the UI scheduling change fixed transport recovery.

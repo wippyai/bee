@@ -5494,3 +5494,17 @@ The commands remain candidate-only; global440890d7 is unchanged. Full61042 and
 hour-idle50459 remain running. Live neutral-display workspace switching remains
 unfinished. Journal902 records the staged boundary; the following evidence fact
 records the executable results.
+
+### Full explicit-selection native gate passed
+
+Session74144 exited0; `/tmp/bee-explicit-desktop-client-check.log` covers cold/warm
+launch, observation denial, three independent displays, named commands, clipboard,
+F12, bounded stalled exit and client-crash retained-shell recovery. Candidate SHA
+`cbb6d6a5bc71b5c37b281f2b3075122e990296c50830d641c8fa21939f389e59`.
+Exact-selection rerun11198 passed after cleanup was made unconditional with
+ExitStack. The old failed fixture2343130 was retired by exact pidfd/digest/state
+checks. Checkpoint3688b8c specifies the still-unimplemented neutral-display
+attachment boundary. Its production Lua is unchanged from the61042 full-gate
+source. Full61042 and idle50459 remain running; global440890d7 is unchanged.
+The guarded installer `/tmp/bee-install-explicit-selection.py` is prepared but
+has not run. Do not reuse the previous install script with outdated digests.

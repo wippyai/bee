@@ -154,3 +154,17 @@ func TestJoinWaitsForOwnerPublicationWithoutCreatingState(t *testing.T) {
 		t.Fatal("client created owner state", err)
 	}
 }
+
+func TestCanceledCatalogReadIsNotReportedAsAnUnknownAttachment(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		calls := 0
+		_, err := waitCatalog(context.Background(), func(context.Context, string) (hive.DesktopCatalog, error) {
+			calls++
+			return hive.DesktopCatalog{}, &hive.UnknownOutcome{Operation: "desktop.list", Key: "read", Cause: cause}
+		})
+		var unknown *hive.UnknownOutcome
+		if calls != 1 || !errors.Is(err, cause) || errors.As(err, &unknown) {
+			t.Fatal("read cancellation should preserve its cause without attachment uncertainty or replay", calls, err)
+		}
+	}
+}

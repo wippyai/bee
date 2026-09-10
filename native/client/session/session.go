@@ -176,6 +176,14 @@ func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.D
 		}
 		rejected, ok := err.(*hive.Rejected)
 		if !ok || rejected.Fault.Code != "UNAVAILABLE" {
+			// This operation reads the catalog. No attachment has been sent,
+			// so a canceled read is not an uncertain desktop mutation.
+			if errors.Is(err, context.Canceled) {
+				return hive.DesktopCatalog{}, fmt.Errorf("Bee launch canceled before desktop attachment: %w", context.Canceled)
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return hive.DesktopCatalog{}, fmt.Errorf("running Bee owner did not answer; no desktop attachment requested: %w", context.DeadlineExceeded)
+			}
 			return hive.DesktopCatalog{}, err
 		}
 		timer := time.NewTimer(50 * time.Millisecond)

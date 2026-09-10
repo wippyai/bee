@@ -36,9 +36,15 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		return err
 	}
 	if busy {
+		if _, err := fmt.Fprintln(c.Stdout, "Connecting to Bee…"); err != nil {
+			return err
+		}
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, request)
+	}
+	if _, err := fmt.Fprintln(c.Stdout, "Starting Bee…"); err != nil {
+		return err
 	}
 	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
 	if err != nil {

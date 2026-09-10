@@ -5480,3 +5480,17 @@ This does not waive runtime owner-isolation/session-loss recovery (journal894).
 Global SHA440890d7... remains installed; no restart or reinstall this turn.
 Newer candidate full 61042 and one-hour diagnostic 50459 remain live.
 Do not poll/restart completed 46307. Journal milestone900.
+
+### Explicit desktop selection candidate accepted locally
+
+Native ced4008999f4 and runtime674b58a1 build successfully into
+`/tmp/bee-explicit-desktop-candidate` (50939 exit0). Executable selection12947,
+connection UI35638 and three independent desktops53275 pass. Exact selected
+observation and retained-shell rejoin work; occupied/foreign selection refuses
+without allocation, and the first controller remains usable. Initial43853 failed
+because the fixture closed a descriptor twice; corrected cleanup passes.
+Native session/launcher race and vet62001 passed before this build.
+The commands remain candidate-only; global440890d7 is unchanged. Full61042 and
+hour-idle50459 remain running. Live neutral-display workspace switching remains
+unfinished. Journal902 records the staged boundary; the following evidence fact
+records the executable results.

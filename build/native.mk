@@ -65,3 +65,14 @@ native-client-check:
 .PHONY: native-client-retention-check
 native-client-retention-check:
 	python3 tests/native_client.py "$(BEE_BINARY)" --idle-reconnects
+
+.PHONY: native-desktop-selection-check
+native-desktop-selection-check:
+	python3 tests/native_desktop_selection.py "$(BEE_BINARY)"
+
+.PHONY: native-connection-ui-check native-independent-desktops-check
+native-connection-ui-check:
+	python3 tests/native_connection_ui.py "$(BEE_BINARY)"
+
+native-independent-desktops-check:
+	python3 tests/native_client.py "$(BEE_BINARY)" --desktops

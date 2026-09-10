@@ -444,3 +444,21 @@ items and evicted nodes retire the corresponding displayed session state; late
 old-owner outcomes cannot restore it. This bookkeeping grants no permissions
 and binds an attachment, not the neutral display's identity. Focused Lua tests
 pass; this follow-up is not yet installed globally.
+
+### Explicit desktop selection candidate
+
+The native ced4008999f4 candidate exposes `bee desktops`,
+`bee attach WORKSPACE DISPLAY` and `bee observe WORKSPACE DISPLAY` against the
+running Bee selected by the local state directory. Listing uses authenticated
+supervisor admission and returns durable identities; it does not acquire control.
+Exact attachment refuses an occupied or foreign target without allocating a
+replacement. Missing Bee refuses without starting one. Plain `bee` keeps its
+independent-desktop behavior.
+
+Executable acceptance proves selected observation, occupied/foreign refusal,
+unchanged catalog on refusal, exact retained-shell reattachment and continued
+input on the other display. These commands are not yet installed globally.
+They do not implement a live workspace picker, remote enrollment or composition
+of applications from several hosts. Neutral physical displays remain independent
+of their selected workspace; the command's DISPLAY identifies its attachment
+target, not a permanent workspace binding for the physical client.

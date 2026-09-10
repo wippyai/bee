@@ -42,7 +42,7 @@ package these same pages with status and version, not maintain a second copy.
 | Step 6: resource authority, associations under the host ceiling, exactly bound grants, resolve for placements | [Resources module](../src/resources/README.md) |
 | Step 6: credential broker, host-admitted sources, environment projections, bytes once to the materializer | [Credentials module](../src/credentials/README.md) |
 | Step 9, admission: launch definitions, measured resolution, requester-authenticated admission, retry-safe start | [Harness module](../src/harness/README.md) |
-| Current critique and recommended next slice | [Foundation next steps](FOUNDATION_NEXT.md) |
+| Historical foundation review and extension proposals | [Foundation review](FOUNDATION_NEXT.md) |
 | Cross-node protocol: six terms, request envelope, exposure levels, interfaces, sessions, guards, launch owner, build steps | [Hive protocol](HIVE_PROTOCOL.md) |
 | Proposed supervisor peer establishment, replacement and bounded dispatch | [Hive supervisor](HIVE_SUPERVISOR.md) |
 | Hive startup work and remaining acceptance | [Hive bootstrap](HIVE_BOOTSTRAP.md) |

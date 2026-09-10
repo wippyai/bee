@@ -60,7 +60,8 @@ Use [client state](CLIENT_STATE.md) and the current command metadata for launch 
 Read [client/host extraction](CLIENT_HOST_SPLIT.md) for current coupling and
 implementation gates, [workspace attachments](WORKSPACE_ATTACHMENTS.md) for
 identity, Hive and portable application content, and
-[foundation next steps](FOUNDATION_NEXT.md) for the later driver/self-edit sequence.
+[historical foundation review](FOUNDATION_NEXT.md) for the proposed driver/self-edit
+sequence, not current implementation status.
 Do not create a parallel mesh, naming system or registry reconciler.
 
 Current evidence: the broker retains ready producers without a presenter, its

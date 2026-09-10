@@ -1,4 +1,13 @@
-# Foundation sweep and next prototype
+# Historical foundation review and extension proposals
+
+This page preserves an earlier review and proposals; its status tables and test
+paths are not the current implementation inventory. Test Status was removed and
+must not be restored from this plan. Timeline is the current read-only thread
+application, and durable thread authority/subscriptions are implemented. Use
+[foundation status](FOUNDATION_STATUS.md), [the build sequence](BUILD_SEQUENCE.md)
+and [the global build handoff](handoffs/GLOBAL_BUILD.md) for current evidence and
+remaining gates. Driver, publication and self-edit proposals below require their
+own implementation and acceptance; they are not callable APIs.
 
 Status: current local foundation reviewed through `ad8857f`. The original review
 was against `ac339ed`; proposed extension contracts below remain unimplemented

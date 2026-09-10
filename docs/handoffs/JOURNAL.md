@@ -5310,3 +5310,22 @@ workers own storage work, with correlated replies, cancellation and explicit ret
 semantics. This is a requirement, not a claim that public remote installation or
 recovery is complete. Mac/Linux catalog acceptance passed in the preceding unit;
 its added owner-OS/file assertion still needs rerunning.
+
+### Verified checkpoint f227945 / native 9750955
+
+Close-dialog source/pack acceptance and all five retained-desktop fault variants
+passed, including replacement while the primary renderer is stalled. Native
+session, Hive, launch, mesh and physical race/vet checks passed. The mesh lifetime
+fixture now outlives the 60-second startup deadline, proving admission disarms
+that timer. The Mac/Linux catalog proof also passed with destination OS and
+owner-only file evidence. Both checkpoint branches were pushed.
+
+Standalone candidate `/tmp/bee-independent-desktops-candidate` built successfully
+(SHA256 `49ea75a692680d8cc20a3a34035ecd23f9fd0ed9bab3fbe830dc3da4ba88bd74`).
+Its three-desktop executable acceptance passed: simultaneous control, default
+observer, F12 and reuse without allocating another identity. The broader native
+suite first caught stale expected `Connecting to Bee` wording in its test; the
+test now expects `Connecting to Hive` and is rerunning. Full frozen source
+acceptance is running at `/tmp/bee-independent-desktops-full-check`, session 90930.
+Global installation is still pending. Actual-user reconnect on the old global
+binary remained stuck at 15 seconds; no root-cause claim is made.

@@ -74,7 +74,7 @@ def run(binary):
             ui = NativeDesktop(binary, folder, state)
             ui.wait('BEE_CLIENT_SELECTED', timeout=15)
             print(f'Warm client ready in {time.monotonic() - rejoin_started:.3f}s', flush=True)
-            assert 'Connecting to Bee…'.encode() in ui.raw, 'Warm launch did not report its route'
+            assert 'Connecting to Hive…'.encode() in ui.raw, 'Warm launch did not report its route'
             assert set(state.glob('owner-*.log')) == owner_logs, 'Warm client spawned another owner contender'
             ui.key(b"printf 'BEE_REJOIN_%s\\n' \"$BEE_RETAINED\"\r")
             ui.wait('BEE_REJOIN_alive')
@@ -138,7 +138,7 @@ def preparing_owner(binary):
                 ui = NativeDesktop(binary, folder, state)
                 ui.pump(1)
                 assert ui.process.poll() is None, bytes(ui.raw[-1000:])
-                assert 'Connecting to Bee…'.encode() in ui.raw, 'Preparing-owner wait was blank'
+                assert 'Connecting to Hive…'.encode() in ui.raw, 'Preparing-owner wait was blank'
                 assert not list(state.glob('owner-*.log')), 'Waiting client spawned a contender'
             # Emulate the already-starting owner publishing after preparation.
             env = {key: value for key, value in os.environ.items()

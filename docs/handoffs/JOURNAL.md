@@ -5456,3 +5456,15 @@ Full previous-source 46307 remains live, now Terminal acceptance after control
 delivery, drag and window retirement. One-hour diagnostic 50459 remains live.
 The next full-source run must use this isolated identity checkpoint, not the
 shared checkout's unrelated new node/sync lane. No runtime implementation changed.
+
+### Concurrent isolated full checks
+
+The staged identity full check is now running as session 61042 in
+`/tmp/bee-hive-session-identity-20260910`, log
+`/tmp/bee-hive-session-identity-full-check.log`. Production is c3b2c9f; later
+commits only record evidence. This supersedes the plan to wait for 46307 before
+starting it: both runs have independent frozen source and disposable state.
+The installed-source run 46307 passed navigation/selection/lifecycle and is
+now in client-desktop acceptance. Its 16-window load fixture used 2% of one CPU
+core and exited in 0.374s. Both full gates and hour-idle 50459 remain active.
+Do not restart any of these jobs while their exact handles are live.

@@ -5,6 +5,7 @@ local arguments = require("arguments")
 local M = {}
 M.SERVICE = "bee.desktop"
 M.LIST = "bee.desktop:list"
+M.CREATE = "bee.desktop:create"
 M.ATTACH = "bee.desktop:attach"
 M.DETACH = "bee.desktop:detach"
 M.COPY = "bee.desktop:copy"
@@ -46,7 +47,10 @@ function M.input(operation: string, value: unknown): DesktopInput?
     local workspace = contract.workspace_id(object.workspace_id)
     local desktop = contract.workspace_id(object.desktop_id)
     if not workspace or not desktop then return nil end
-    if operation == M.ATTACH then
+    if operation == M.CREATE then
+        if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id"}) then return nil end
+        return {execution = execution, workspace_id = workspace, desktop_id = desktop, mode = "control", session_id = nil, name = nil, arguments = nil}
+    elseif operation == M.ATTACH then
         if bounds.fields(object, {"owner_execution", "workspace_id", "desktop_id", "mode"})
             or (object.mode ~= "control" and object.mode ~= "observe") then return nil end
         return {execution = execution, workspace_id = workspace, desktop_id = desktop,

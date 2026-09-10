@@ -114,4 +114,18 @@ end
 
 type CopyResult = {request_id: string, selected: boolean, text: string, error: string}
 function M.copy_result(value: unknown): CopyResult? return clipboard.copy_result(value) end
+type ActivationResult = {request_id: string, error_code: string, error: string}
+function M.activation_result(value: unknown, workspace_id: string, desktop_id: string): ActivationResult?
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id or value.desktop_id ~= desktop_id then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "desktop_id" and key ~= "request_id"
+            and key ~= "error_code" and key ~= "error" then return nil end
+    end
+    local id = contract.text(value.request_id, 80)
+    if not id or id == "" or type(value.error) ~= "string" or #value.error > 400 then return nil end
+    local code = value.error_code
+    if code ~= "" and code ~= "BUSY" and code ~= "UNAVAILABLE" then return nil end
+    if (code == "") ~= (value.error == "") then return nil end
+    return {request_id = id, error_code = code, error = value.error}
+end
 return M

@@ -18,7 +18,13 @@ import (
 	"time"
 )
 
-func TestHiveDesktopAdmission(t *testing.T) {
+func TestHiveDesktopAdmission(t *testing.T) { runHiveDesktopAdmission(t, false) }
+
+// Catalog/explicit-detach acceptance remains independent of the native exact
+// remote actor EXIT gate exercised by TestHiveDesktopAdmission.
+func TestHiveDesktopCatalog(t *testing.T) { runHiveDesktopAdmission(t, true) }
+
+func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
 	if binary == "" {
 		t.Skip("set BEE_HIVE_SUPERVISOR_RUNTIME for native supervisor acceptance")
@@ -223,7 +229,9 @@ func TestHiveDesktopAdmission(t *testing.T) {
 	b := start(1, clientDirectory)
 	marker(b, "ready ")
 	command(b, "probe", "probe_passed")
-	if nativeClient == "" {
+	if catalogOnly {
+		t.Log("catalog/create/replay, independent desktop, session fencing and retained default passed")
+	} else if nativeClient == "" {
 		command(b, "crash", "probe_passed")
 		command(b, "recover", "probe_passed")
 		// More than the bridge's 64-client capacity: exited actors must release records.

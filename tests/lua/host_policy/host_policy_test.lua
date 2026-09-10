@@ -60,6 +60,19 @@ local function define_tests()
             test.is_false(call_can(scope, "db.get", "bee.threads:db"))
             test.is_false(call_can(scope, "security.scope.create", "scope"))
         end)
+        test.it("limits Hive desktop bootstrap to its selected policies", function()
+            local scope = {"bee.hive.desktop:host_policy"}
+            for _, name in ipairs({"bee:host_policy", "bee:desktop_policy",
+                "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy",
+                "bee:desktop_catalog_resource_policy"}) do
+                test.is_true(call_can(scope, "security.policy.get", name))
+            end
+            test.is_false(call_can(scope, "security.policy.get", "bee:workspace_storage_policy"))
+            test.is_false(call_can(scope, "security.policy.get", "foreign:policy"))
+            test.is_false(call_can(scope, "db.get", "bee:client_db"))
+            test.is_false(call_can(scope, "funcs.call", "bee.client:allocate_desktop"))
+        end)
+
         test.it("constrains broker_policy to worker host while retaining nonhost actions", function()
             evaluate_host_policy("bee:broker_policy", "process.spawn", "bee.apps:welcome")
         end)

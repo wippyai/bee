@@ -357,8 +357,8 @@ capacity. Allocating the default identity conflicts. An unavailable allocation
 reply does not prove that the row is absent: keep the same identity on retry.
 These methods neither start a desktop process nor admit a physical client.
 No ordinary application receives these grants. The source retained supervisor now
-receives exact grants for `bee:client_db`; public creation and selection still
-need activation and client integration.
+receives exact grants for `bee:client_db`. The source Hive adapter now exposes
+catalog and identity allocation; automatic launcher selection is still pending.
 
 The source/pack acceptance calls the real function entries with authorized,
 read-only and unauthorized scopes. It proves caller SQL denial before and after
@@ -416,8 +416,9 @@ is ignored, repeated activation reuses the identity, separate desktops run separ
 Terminals, additional F12 replaces its presenter, save/reactivation retains its
 live shell, and the first desktop remains usable. This does not yet expose public
 creation, automatic selection on a controller conflict or Hive Manager control.
-The Hive-facing owner still publishes one desktop; its catalog/session mapping
-and the native launch choice remain the next integration boundary.
+The source Hive-facing owner now publishes allocated identities and qualifies
+its sessions by desktop, as described below. The native launch choice remains
+the next integration boundary.
 
 ### Desktop interruption and concurrent presenter recovery (source)
 
@@ -438,3 +439,38 @@ fails on the earlier supervisor, then passes with the additional presenter
 replaced while the default waits and the default subsequently recovered by F12.
 Normal source/pack launch-exit, copy-exit and withheld-renderer probes pass.
 These source changes are not installed globally yet.
+
+### Hive desktop catalog and selected sessions (source; not installed)
+
+The native-client route now exposes `bee.desktop:list` and `bee.desktop:create`
+through the same supervisor admission as attachment. List carries owner_execution
+and returns workspaces with desktop_id/is_default records. These are durable
+identities, not a claim that an actor or controller is live. The default is
+explicit; native selection never depends on discovery order.
+
+Create carries owner_execution, workspace_id and the caller's retained 32-hex
+desktop_id. Its envelope idempotency_key must equal desktop_id. The underlying
+allocation is durable and idempotent, so a new transport request can retry that
+same identity after a lost reply. Create does not activate the desktop or grant a
+mount. The Hive adapter owns one asynchronous catalog request at a time and
+returns BUSY under contention. Late replies cannot retire a later request.
+An unavailable or malformed allocation completion is UNCERTAIN; a failed list is
+UNAVAILABLE. Neither retries or chooses a replacement identity.
+
+A control attach to an additional identity activates its existing record on the
+same workspace host before requesting a mount. Observe never activates a dormant
+desktop. Each physical actor's session and pending cleanup retain its exact target;
+attach, detach, launch, copy and replies cannot substitute the default desktop.
+Changing desktop while a session exists requires detach first. A controller
+collision is BUSY and retires the refused client's empty record immediately;
+unknown admission/revocation outcomes retain cleanup responsibility.
+
+`make hive-desktop-catalog-check` proves this route over two actual runtimes:
+allocation replay, explicit default identity, dormant observer refusal, simultaneous
+controllers on separate desktops, target-qualified launch/copy rejection, default
+shell continuity during the other desktop's work, and explicit detach/reconnect.
+It uses fixture-selected enrollment and native-client-role Lua actors, not the
+public executable's automatic second-launch choice. Native binding race/vet checks
+cover Create identity/uncertainty and strict default catalog decoding. The separate
+`hive-desktop-admission-check` still exposes the runtime's unresolved remote actor
+EXIT cleanup failure; catalog acceptance does not waive that gate.

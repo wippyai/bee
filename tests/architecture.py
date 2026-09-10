@@ -73,6 +73,7 @@ for identity in applications:
 # dependency cannot enter through any interface later.
 desktop_interfaces = {
     "bee.hive.desktop:protocol": {"bee.protocol:application", "bee.application:arguments"},
+    "bee.hive.desktop:catalog": {"bee.protocol:application"},
     "bee.hive.desktop:owner": {"bee.launch:retained_protocol"},
 }
 checked_interfaces = set()

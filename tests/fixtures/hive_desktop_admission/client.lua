@@ -7,7 +7,7 @@ local uuid = require("uuid")
 local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
-local function main(execution: string, scenario: string?)
+local function main(execution: string, scenario: string?, parent: string?)
     local replies, reply_error = process.listen(types.TOPIC_REPLY, {message = true})
     if not replies then error(tostring(reply_error)) end
     local target: string? = nil
@@ -19,10 +19,10 @@ local function main(execution: string, scenario: string?)
     if not target then error("owner not discovered") end
     local node, host = types.pid_parts(target)
     if node ~= "node-0" or host ~= types.SUPERVISOR_HOST then error("wrong owner identity") end
-    local function call(operation: string, input: unknown): types.Reply
+    local function call(operation: string, input: unknown, key: string?): types.Reply
         local id = uuid.v7()
         local sent, send_error = process.send(target, types.TOPIC_REQUEST, {protocol_revision = types.REVISION,
-            request_id = id, idempotency_key = id, owner_ref = {node_id = "node-0", service_id = protocol.SERVICE},
+            request_id = id, idempotency_key = key or id, owner_ref = {node_id = "node-0", service_id = protocol.SERVICE},
             target = {operation_ref = operation}, input = input,
             deadline = time.now():add("3s"):utc():format("2006-01-02T15:04:05.000Z07:00")})
         if not sent then error(tostring(send_error)) end
@@ -95,6 +95,31 @@ local function main(execution: string, scenario: string?)
         if not entered then error(tostring(enter_error)) end
     end
     local view, session = attach("control")
+    if scenario == "hold" then
+        if not parent then error("holder requires its parent") end
+        local signals, err = process.listen("bee.desktop.fixture.hold", {message = true})
+        if not signals then error(tostring(err)) end
+        process.send(parent, "bee.desktop.fixture.held", "ready")
+        while true do
+            local selected = channel.select({signals:case_receive(), time.after("20s"):case_receive()})
+            if not selected.ok or selected.channel ~= signals then error("holder timed out") end
+            local message = selected.value
+            if tostring(message:from()) ~= parent then error("foreign holder signal") end
+            local op = message:payload():data()
+            if op == "check" then
+                command(view, "printf 'HELD_%s_OK\\n' \"$bee_mesh\"")
+                text(view, "HELD_retained_OK")
+                process.send(parent, "bee.desktop.fixture.held", "checked")
+            elseif op == "stop" then
+                local detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = session})
+                if not detached.ok then error("holder detach failed") end
+                view:close()
+                process.send(parent, "bee.desktop.fixture.held", "stopped")
+                process.unlisten(signals); process.unlisten(replies)
+                return
+            else error("invalid holder signal") end
+        end
+    end
     if scenario == "exit" then return end
     text(view, "$ ")
     if scenario == "crash" then
@@ -135,6 +160,64 @@ local function main(execution: string, scenario: string?)
     local observer_detach = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = observer_session})
     if not observer_detach.ok then error("observer detach failed") end
     observer:close()
+    -- Public catalog/create/attach routes use allocated identities; they cannot
+    -- reuse the default session or expose another desktop's copy/launch grant.
+    local held, held_error = process.listen("bee.desktop.fixture.held", {message = true})
+    if not held then error(tostring(held_error)) end
+    local holder, holder_error = process.spawn_monitored("bee.desktop_admission_probe:client", "bee.client:native", execution, "hold", tostring(process.pid()))
+    if not holder then error(tostring(holder_error)) end
+    local function held_reply(expected: string)
+        local selected = channel.select({held:case_receive(), time.after("10s"):case_receive()})
+        if not selected.ok or selected.channel ~= held then error("missing holder reply " .. expected) end
+        local message = selected.value
+        if tostring(message:from()) ~= tostring(holder) or message:payload():data() ~= expected then error("invalid holder reply") end
+    end
+    held_reply("ready")
+    local busy = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = "control"})
+    if not busy.error or busy.error.code ~= "BUSY" then error("controller conflict is not a definite busy refusal") end
+    local default_id = desktop_id
+    desktop_id = "cccccccccccccccccccccccccccccccc"
+    local create_input = {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id}
+    local bad_key = call(protocol.CREATE, create_input)
+    if not bad_key.error or bad_key.error.code ~= "INVALID_ARGUMENT" then error("allocation accepted an unrelated retry key") end
+    local created = call(protocol.CREATE, create_input, desktop_id)
+    if not created.ok then error("desktop allocation failed") end
+    local replayed = call(protocol.CREATE, create_input, desktop_id)
+    if not replayed.ok then error("desktop allocation replay failed") end
+    local listed = call(protocol.LIST, {owner_execution = execution})
+    local listed_value = listed.value
+    if not listed.ok or type(listed_value) ~= "table" or type(listed_value.workspaces) ~= "table" then error("allocated catalog missing") end
+    local listed_workspace = listed_value.workspaces[1]
+    if type(listed_workspace) ~= "table" or type(listed_workspace.desktops) ~= "table" or #listed_workspace.desktops ~= 2 then error("allocation duplicated or missing") end
+    local first, second = listed_workspace.desktops[1], listed_workspace.desktops[2]
+    if type(first) ~= "table" or first.desktop_id ~= default_id or first.is_default ~= true
+        or type(second) ~= "table" or second.desktop_id ~= desktop_id or second.is_default ~= false then error("catalog identity/default mismatch") end
+    local dormant = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = "observe"})
+    if not dormant.error or dormant.error.code ~= "NOT_FOUND" then error("observation activated a dormant desktop") end
+    local extra, extra_session = attach("control")
+    local cross = call(protocol.COPY, {owner_execution = execution, workspace_id = workspace_id, desktop_id = default_id, session_id = extra_session})
+    if not cross.error or cross.error.code ~= "CONFLICT" then error("session crossed desktop boundary") end
+    local launched = call(protocol.LAUNCH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id,
+        session_id = extra_session, name = "terminal", arguments = {}})
+    if not launched.ok then error("selected desktop Terminal launch refused") end
+    text(extra, "$ ")
+    command(extra, "bee_extra=independent; printf 'EXTRA_%s_OK\\n' \"$bee_extra\"")
+    text(extra, "EXTRA_independent_OK")
+    process.send(tostring(holder), "bee.desktop.fixture.hold", "check")
+    held_reply("checked")
+    local extra_detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = extra_session})
+    if not extra_detached.ok then error("additional desktop detach refused") end
+    extra:close()
+    process.send(tostring(holder), "bee.desktop.fixture.hold", "stop")
+    held_reply("stopped")
+    process.unlisten(held)
+    desktop_id = default_id
+    local original, original_session = attach("control")
+    command(original, "printf 'DEFAULT_%s_OK\\n' \"$bee_mesh\"")
+    text(original, "DEFAULT_retained_OK")
+    local original_detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = original_session})
+    if not original_detached.ok then error("default detach refused after additional desktop") end
+    original:close()
     process.unlisten(replies)
 end
 return {main = main}

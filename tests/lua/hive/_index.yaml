@@ -155,3 +155,14 @@ entries:
     thread_admission: bee.hive.supervisor:thread_admission
     harness: bee.threads:harness
     sends: bee.threads.service:sends
+- name: desktop_catalog_test
+  kind: function.lua
+  source: file://desktop_catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    protocol: bee.hive.desktop:protocol
+    catalog: bee.hive.desktop:catalog

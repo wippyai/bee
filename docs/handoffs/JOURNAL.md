@@ -5215,3 +5215,65 @@ convergence warning for desktop_lifecycle; evidence is preserved in
 Global d65ff900/PID1322000 remains unchanged. Journal836. Public catalog/create/
 selection is the next integration boundary; second bee is not fixed in the
 installed launcher yet.
+
+## 2026-09-10 — Public second-launch diagnosis and bootstrap permission
+
+Journal838: the installed launcher still reads a singleton default desktop catalog
+and requests control of it. An existing controller is refused correctly, but the
+Hive adapter maps that busy result to UNAVAILABLE. Public selection/creation is
+unfinished; additional-desktop source fixtures do not establish that public path.
+The unavailable mesh member in the screenshot has no authoritative display-only
+role evidence; do not classify it by its node name.
+
+Fixed the source Hive desktop host policy to allow fetching the two exact catalog
+policies already selected by owner.start. Added a policy test covering those grants
+and denial of unrelated policy reads, direct client SQL, and direct allocation.
+Validation is running as session30491, /tmp/bee-desktop-bootstrap-policy-test.log;
+no pass or global installation claim yet. No runtime edits.
+
+Storage-only full check9543 completed exit0; its log ends with all app checks
+passing. Activation snapshot87444 was still live at the latest poll. Neither
+snapshot covers subsequent cleanup changes or this policy fix.
+
+## 2026-09-10 — Hive catalog/create and selected-desktop sessions
+
+The source Hive adapter now lists allocated identities with explicit is_default,
+allocates caller-retained identities through bee.desktop:create, activates an
+existing selected identity for control, and qualifies every session, cleanup,
+launch and copy by its desktop. Observe never activates a dormant record.
+Controller collision maps to BUSY and releases the definitely ungranted client
+record immediately; unknown outcomes still retain cleanup responsibility.
+Create requires desktop_id as its idempotency key; its durable allocation is the
+retry authority, not an in-memory receipt. One asynchronous catalog slot is
+bounded, timeout distinguishes reads from uncertain writes, and late replies
+cannot settle a successor. Exact bootstrap catalog-policy reads are now granted.
+
+Native91c4177 is pushed on checkpoint/native-client-binding-20260910. The manifest
+pins v0.0.0-20260910213324-91c4177e461e. It adds strict Create, optional explicit
+catalog defaults (legacy catalogs stay readable), default selection within a
+single workspace, and bounded BUSY retries for catalog reads only. It does not
+implement automatic desktop creation/selection after an attach collision.
+
+Passing evidence: make test1538 (490 tests), source/pack architecture524, pack,
+make hive-desktop-catalog-check20135 (two actual runtimes, simultaneous controllers
+on distinct desktops, allocation replay, dormant-observer refusal, cross-target
+session denial, original shell continuity, explicit detach/reconnect), and native
+binding/session race tests plus vet39884/76745. Logs:
+/tmp/bee-public-desktop-lua-check-after.log,
+/tmp/bee-public-desktop-catalog-after.log,
+/tmp/bee-public-desktop-native-check.log,
+/tmp/bee-public-desktop-session-check.log.
+The linter retains the known desktop_lifecycle InterprocFacts warning.
+
+Preserved failures: full admission88925 passed the new probe then failed recovery
+after remote actor crash (old controller still held); /tmp/bee-public-desktop-admission.log.
+The separate catalog gate does not waive that existing runtime gate. Initial
+simultaneous fixture7019 lacked process.spawn in its test-only scope; corrected
+without changing production grants. Initial new unit test80022 used unsupported
+qualified generic syntax; diagnostic JSON is preserved at
+/tmp/bee-public-desktop-lua-diagnostic.json, and a Channel type alias fixed it.
+
+Earlier full snapshots9543 (storage) and87444 (activation) both completed exit0.
+Neither covers this new Hive route. Global d65ff900/PID1322000 is unchanged.
+Remaining: automatic public second-client selection/reuse, actual executable
+multi-client proof and full combined foundation validation before installation.

@@ -339,3 +339,14 @@ this presenter fix passed their combined full gate (486 tests, 519 entries) and
 are installed globally. The actual-user smoke reached the desktop in 1.568s
 cold, 0.222s on warm reconnect, and 0.219s through `bee observe`; all three
 detached in under 100 ms. See the global build handoff for exact evidence.
+
+The subsequent source Hive desktop route now publishes the durable catalog with
+an explicit default, supports idempotent identity allocation, and activates an
+allocated desktop for control on the existing workspace host. Sessions qualify
+launch, copy and detach by selected desktop; observers cannot activate a dormant
+record. Two-runtime acceptance proves simultaneous controllers on separate
+desktops, retained default-shell continuity, allocation replay and cross-target
+session denial. The native binding and 490 Lua tests pass. This is not installed:
+automatic public second-launch selection and executable acceptance remain pending.
+The runtime's separate exact remote actor EXIT recovery gate still fails. See
+[client state](CLIENT_STATE.md) for the source contract and limits.

@@ -26,6 +26,11 @@ import (
 // the sole desktop only; discovery order must never choose a user's workspace.
 type Selection struct{ Workspace, Desktop string }
 
+// Physical detach must not wait for the normal operation deadline. If the
+// owner cannot acknowledge promptly, report uncertainty and retire this actor;
+// the owner's monitor still owns eventual attachment cleanup.
+const detachTimeout = 200 * time.Millisecond
+
 type Config struct {
 	Directory string
 	Selection Selection
@@ -104,7 +109,7 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 		if ctx.Err() != nil {
 			return
 		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachTimeout)
 		defer cancel()
 		if err := client.Detach(cleanup, "session-detach", mounted); err != nil {
 			result = errors.Join(result, fmt.Errorf("detach desktop: %w", err))

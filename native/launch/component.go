@@ -68,14 +68,28 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 		}
 		selected := *l.client
 		observe := len(request.Arguments) > 0 && request.Arguments[0] == "observe"
-		if observe {
-			if len(request.Arguments) != 1 {
-				return application.LaunchPlan{}, errors.New("bee observe takes no application arguments")
+		attach := len(request.Arguments) > 0 && request.Arguments[0] == "attach"
+		listing := len(request.Arguments) > 0 && request.Arguments[0] == "desktops"
+		if listing && len(request.Arguments) != 1 {
+			return application.LaunchPlan{}, errors.New("bee desktops takes no arguments")
+		}
+		if observe || attach {
+			if len(request.Arguments) == 3 {
+				selection, err := parseSelection(request.Arguments[1], request.Arguments[2])
+				if err != nil {
+					return application.LaunchPlan{}, err
+				}
+				selected.Selection = selection
+			} else if attach || len(request.Arguments) != 1 {
+				return application.LaunchPlan{}, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe takes no application arguments or one WORKSPACE DISPLAY pair")
 			}
-			selected.Mode = hive.Observe
+			selected.Mode = hive.Control
+			if observe {
+				selected.Mode = hive.Observe
+			}
 			selected.Launch = nil
 		}
-		if len(request.Arguments) > 0 && !observe {
+		if len(request.Arguments) > 0 && !observe && !attach && !listing {
 			// Explicit application IDs retain their existing recovery/development
 			// entry. Named handlers resolve only through the retained owner.
 			if strings.Contains(request.Arguments[0], ":") {
@@ -93,6 +107,9 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 		startup.Arguments = nil
 		foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		if listing {
+			return application.LaunchPlan{Handled: true}, selected.list(foreground, startup)
+		}
 		return application.LaunchPlan{Handled: true}, selected.Run(foreground, startup)
 	}
 	if request.Base || len(request.Arguments) != 1 {

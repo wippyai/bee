@@ -223,24 +223,43 @@ func waitCatalog(ctx context.Context, list func(context.Context, string) (hive.D
 // attachment. It is used by an explicit start that loses the runtime lock race.
 // Successful lock contention alone is never reported as an available owner.
 func Probe(ctx context.Context, directory string) error {
+	_, err := readCatalog(ctx, directory, 15*time.Second)
+	return err
+}
+
+// List authenticates the selected Bee and reads its durable desktop identities.
+// It creates no desktop, viewport grant or controller session.
+func List(ctx context.Context, directory string) (hive.DesktopCatalog, error) {
+	return readCatalog(ctx, directory, 60*time.Second)
+}
+
+func readCatalog(ctx context.Context, directory string, timeout time.Duration) (hive.DesktopCatalog, error) {
+	var catalog hive.DesktopCatalog
 	if ctx == nil || directory == "" {
-		return errors.New("invalid owner probe")
+		return catalog, errors.New("invalid owner probe")
 	}
-	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
+	bounded, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	store, err := rendezvous.New(directory)
 	if err != nil {
-		return err
+		return catalog, err
 	}
 	if err := awaitPublication(bounded, store.Read); err != nil {
-		return err
+		return catalog, err
 	}
-	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	err = mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			_, _, err := readyDesktop(frame, frame, actor, owner)
+			_, result, err := readyDesktop(frame, frame, actor, owner)
+			if err == nil {
+				catalog = result
+			}
 			return err
 		})
 	})
+	if err != nil {
+		return hive.DesktopCatalog{}, err
+	}
+	return catalog, nil
 }
 
 func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {

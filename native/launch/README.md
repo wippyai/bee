@@ -83,3 +83,14 @@ lock is only a routing hint; native authentication and supervisor admission stil
 apply. Application arguments are refused. Ctrl+Q or Ctrl+] detaches this display
 without affecting the controller or applications. This is local same-account
 observation; external enrollment and public desktop selection remain separate.
+
+Explicit selection is now implemented in the native source: `bee desktops`
+prints the authenticated workspace/display catalog without creating a desktop
+or controller grant. `bee attach WORKSPACE DISPLAY` requests control of exactly
+that pair; `bee observe WORKSPACE DISPLAY` requests observation of exactly that
+pair. Plain `bee observe` retains default selection. These commands use the
+selected local state directory and refuse an absent Bee; they do not provision
+a node or enroll a remote machine. IDs come from the catalog, not list position.
+Explicit refusal or uncertainty never selects or allocates another display.
+The display picker UI and remote enrollment remain separate unfinished work.
+Executable acceptance is pending; these commands are not in the global build yet.

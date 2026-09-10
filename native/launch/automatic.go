@@ -47,6 +47,9 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 	if c.Mode == hive.Observe {
 		return errors.New("No running Bee to observe; start bee first")
 	}
+	if c.Selection.Workspace != "" {
+		return errors.New("No running Bee for the selected desktop; start bee first")
+	}
 	if _, err := fmt.Fprintln(c.Stdout, "Starting Bee…"); err != nil {
 		return err
 	}

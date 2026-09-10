@@ -106,3 +106,14 @@ workspaces: cold desktop readiness was 2.591, 1.856 and 1.429 seconds; clean exi
 was 81, 89 and 97 ms. Evidence: `/tmp/bee-responsive-cold-timings.log`.
 These samples confirm responsive shutdown, not instantaneous cold boot or a
 universal timing guarantee. The user's existing owner was not touched.
+
+A subsequent four-run cold-start trace observed feedback at 45–47 ms, local
+endpoint publication at 276–362 ms, and desktop readiness at 1.370–1.470 seconds.
+The endpoint is a transport hint, not application readiness. An instrumented
+real-owner composition spends its cold wait discovering the supervisor name;
+ready-owner catalog reads take about 3–4 ms. This does not yet distinguish owner
+application startup from name propagation. A disposable owner-profile 50 ms gossip
+trial still waited 5.5 seconds in that source-based diagnostic versus 6 seconds
+before it; this is insufficient evidence of a fix and was not adopted. Both
+composition runs passed race/vet. Logs: `/tmp/bee-cold-start-stages.log`,
+`/tmp/bee-cold-native-stages.log`, `/tmp/bee-cold-owner-gossip-stages.log`.

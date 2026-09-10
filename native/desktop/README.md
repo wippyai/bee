@@ -23,3 +23,11 @@ versions must be selected together; the release manifest is not yet cut over.
 
 Actual-source cold start, reuse, retained shell and physical detach pass through
 this composition. Standalone build/upgrade/global acceptance remain outstanding.
+
+Ordinary application launches opt into the runtime's `EmbeddedBaseline` policy:
+code comes from this executable's digest-scoped bundle and authored registry
+history remains in the selected state's `registry.db`. Explicit recovery keeps
+its separate history. Runtime and update operations retain their existing policy.
+The foreground physical client handles Ctrl+Q and Ctrl+] locally; exiting it
+retains the owner and applications. The client actor honors native scheduler
+cancellation so its private host shuts down without waiting for the grace timeout.

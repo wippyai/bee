@@ -81,7 +81,13 @@ func (h *Host) PrepareLaunch(ctx context.Context, request application.LaunchRequ
 	if h.initErr != nil {
 		return application.LaunchPlan{}, h.initErr
 	}
-	return h.launcher.PrepareLaunch(ctx, request)
+	plan, err := h.launcher.PrepareLaunch(ctx, request)
+	if err == nil && request.Operation == application.RunApplication && !request.Base && !plan.Handled {
+		// Code follows this executable; authored registry history stays with the
+		// selected state. Recovery and runtime/update commands keep their policy.
+		plan.EmbeddedBaseline = true
+	}
+	return plan, err
 }
 func (h *Host) Load(ctx context.Context) (context.Context, error) {
 	if h.initErr != nil {

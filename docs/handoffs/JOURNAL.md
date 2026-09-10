@@ -5061,3 +5061,18 @@ resize checks deny observer authority, observer typing does not mutate the shell
 and observer detach preserves the controller. F12 and resize retain the shell.
 Evidence /tmp/bee-mesh-observer-proof.log, session44191 exit0 (57.62s test).
 Only test harnesses/docs changed; public observer/desktop selection remains open.
+
+## 2026-09-10 — Public bee observe installed
+
+Global Bee SHA c1f5d871f419b1bffa08e5dc3aa978e90a65e4bb687f83adf0c973571d69a94d
+adds `bee observe`: read-only same-account presentation of the existing desktop.
+No running Bee means prompt refusal; no new owner, database or application is
+created. Controller input continues after observer detach. Native launch race/vet,
+public observer acceptance and complete standalone client/binary suites pass.
+See GLOBAL_BUILD.md and shared journal810 for exact evidence.
+
+Installation was atomic and did not restart retained PID839818. Its `/proc/exe`
+now names the old unlinked image, so the earlier restart helper's exact executable
+path assertion must be revised against verified binary identity before reuse.
+Installed observer0.221s, detach0.081s. Runtime remains674b58a1; native pin142e753.
+Full foundation check69756 still running; do not report it passed until terminal.

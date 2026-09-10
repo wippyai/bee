@@ -232,6 +232,48 @@ def command_launches(binary):
     print('Cold and warm command aliases preserve literal arguments and retained owner')
 
 
+def observers(binary):
+    """Public read-only attachment shares a live desktop without another app."""
+    with tempfile.TemporaryDirectory(prefix='bee-native-observe-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        missing = NativeDesktop(binary, folder, state, arguments=('observe',))
+        try:
+            missing.process.wait(timeout=3)
+            missing.pump(.1)
+            assert missing.process.returncode != 0
+            assert b'No running Bee to observe' in missing.raw, bytes(missing.raw[-1000:])
+            assert not list(state.glob('owner-*.log'))
+        finally:
+            missing.close()
+        owner = None
+        observer = None
+        controller = NativeDesktop(binary, folder, state, arguments=('terminal', 'bash', '--noprofile', '--norc', '-i'))
+        try:
+            controller.wait('bash-', timeout=15)
+            owner = owner_handle(controller, binary, state)
+            controller.key(b"shared_bee=retained; printf 'PUBLIC_%s_OK\\n' \"$shared_bee\"\r")
+            controller.wait('PUBLIC_retained_OK')
+            observer = NativeDesktop(binary, folder, state, arguments=('observe',))
+            observer.wait('PUBLIC_retained_OK', timeout=15)
+            observer.key(b'forbidden_observer=yes\r')
+            controller.key(b"printf 'OBSERVER_%s_%s_OK\\n' \"$shared_bee\" \"${forbidden_observer-unset}\"\r")
+            controller.wait('OBSERVER_retained_unset_OK')
+            observer.wait('OBSERVER_retained_unset_OK')
+            assert observer.quit() < 1, 'Observer detach was not responsive'
+            observer.close(); observer = None
+            assert not select.select([owner], [], [], 0)[0], 'Observer exit stopped Bee'
+            controller.key(b"printf 'AFTER_OBSERVE_%s_OK\\n' \"$shared_bee\"\r")
+            controller.wait('AFTER_OBSERVE_retained_OK')
+            controller.quit()
+        finally:
+            if observer is not None:
+                observer.close()
+            controller.close()
+            stop_owner(owner)
+    print('Public bee observe: absent Bee refused promptly; shared shell, denied typing, bounded detach and retained controller')
+
+
 def idle_reconnects(binary):
     """Repeated graceful departures with idle gaps, against one retained Bee."""
     with tempfile.TemporaryDirectory(prefix='bee-idle-reconnects-') as temporary:
@@ -273,7 +315,11 @@ if __name__ == '__main__':
     if sys.argv[2:] == ['--idle-reconnects']:
         idle_reconnects(binary)
         sys.exit(0)
+    if sys.argv[2:] == ['--observe']:
+        observers(binary)
+        sys.exit(0)
     run(binary)
+    observers(binary)
     command_launches(binary)
     stalled_detach(binary)
     preparing_owner(binary)

@@ -29,6 +29,10 @@ Agent commands open fullscreen and receive the arguments you pass after their
 name. They must already be installed on PATH. These are native terminal sessions;
 Bee-specific agent hooks and MCP integration are not implemented yet.
 
+Run `bee observe` in another terminal to view the running Bee read-only. It shares
+the retained desktop; typing cannot control its apps. Ctrl+Q or Ctrl+] detaches
+that display. If no Bee is running, observation refuses without starting one.
+
 Named commands attach to the selected owner and launch through its admitted
 catalog. Ctrl+Q detaches while retaining applications. An already-running owner
 keeps its loaded code after a binary update; new command routing requires an owner

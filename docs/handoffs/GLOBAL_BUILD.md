@@ -1,18 +1,18 @@
 # Global Bee candidate — September 10, 2026
 
 The installed executable is a development candidate built from source
-in `/tmp/bee-global-checkpoint-20260910` at production checkpoint `7d4a7f1`
+in `/tmp/bee-global-checkpoint-20260910` at source checkpoint `9ca211b` with the observer native pin below
 on `checkpoint/global-bee-candidate-20260910`. No runtime PR or main merge was
 performed for this update. The new standalone suites pass. The full foundation gate for this revision is
 still running; the earlier responsive-Hive build passed its complete gate.
 
 - Runtime: `674b58a1a117fa79398f723c4311201cca8472e1`.
-- Native Bee: `a36ac552880d`, `checkpoint/native-client-binding-20260910`.
+- Native Bee: `142e75380203`, `checkpoint/native-client-binding-20260910`.
 - Builder: `70acb10175fbeb42a3a4d382677715a0c2a969e4`.
 - Installed executable: `/home/wolfy-j/.local/bin/bee`.
-- Build output: `/tmp/bee-membership-global-candidate`.
-- SHA256: `dd674d645a59bd9ec3708ac2626e225f0934e0eed68c0d0912df5de4f2550eeb`.
-- Previous binary archive: `/home/wolfy-j/.local/bin/bee.previous-20260910T192800Z`.
+- Build output: `/tmp/bee-observe-global-candidate`.
+- SHA256: `c1f5d871f419b1bffa08e5dc3aa978e90a65e4bb687f83adf0c973571d69a94d`.
+- Previous binary archive: `/home/wolfy-j/.local/bin/bee.previous-20260910T194019Z`.
   This UI update adds no migration. The preceding build appended client-store
   migration 2; older archives are not supported database downgrades.
 
@@ -310,3 +310,25 @@ The separate-runtime physical SIGKILL proof passes within the existing
 node-departure window (`/tmp/bee-mesh-physical-crash-proof-r3.log`); a five-second
 cleanup bound still fails. Same-name/new-port rejoin and the user's intermittent
 mount/connection failure remain unresolved. No runtime changes were made.
+
+## Public observation installed
+
+`bee observe` adds a read-only physical presentation of the running local Bee.
+It uses the existing supervisor admission and native observation mount. It
+cannot type into or resize the shared desktop; Ctrl+Q/Ctrl+] detaches only this
+view. With no Bee running it refuses promptly, without creating an owner or
+opening databases. Application-launch arguments are refused. This is a shared
+layout, not independent workspaces or public remote enrollment.
+
+Native launch race/vet passes (`/tmp/bee-observe-launch-check.log`). The built
+executable passes the public observer proof plus the complete native client and
+binary suites (`/tmp/bee-observe-public-check.log`,
+`/tmp/bee-observe-standalone-check.log`, session97094 exit0). The new client also
+joined the existing user Bee in0.219s and detached in0.085s. The global binary was
+replaced atomically without restarting PID839818 or its applications. Its `/proc`
+executable therefore still refers to the preceding binary image; this is expected.
+Installed smoke: `/tmp/bee-observe-installed-check.log`.
+
+The same Lua source's full foundation run69756 is still pending. Native changes
+are limited to selecting the existing observer mode and refusing observer startup
+when the state lock is free; runtime674b58a1 is unchanged.

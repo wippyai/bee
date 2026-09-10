@@ -3,7 +3,10 @@
 The global candidate installed September 10 now uses the native owner/client
 launcher. Ordinary `bee` loads embedded code with shared registry history and
 attaches through the same-machine native mesh. Ctrl+Q and Ctrl+] detach the
-physical client while retaining its owner and applications. Standalone startup,
+physical client while retaining its owner and applications. `bee observe` adds a
+read-only physical view of the same running desktop; it cannot send app input or
+resize it, and refuses promptly if no Bee is running. Public executable tests
+prove shared content and controller continuity after observer detach. Standalone startup,
 selection/copy, scrolling, explicit-detach reconnect and old-binary upgrade checks
 pass. Warm launch now reuses the existing runtime lock and skips an extra owner
 process; one standalone probe reached the retained desktop in 0.204 seconds.

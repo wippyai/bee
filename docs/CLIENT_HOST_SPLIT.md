@@ -670,3 +670,20 @@ in `tests/native_client.py`, the explicit `--command bee run terminal` form, and
 unknown-command refusal followed by rejoin to the retained Terminal. The full
 native-client gate also passes. The full foundation gate passes, and the global binary now includes this route. Explicit `--base` and qualified
 application-ID development launches retain their existing routes.
+
+
+### Public local observation
+
+`bee observe` attaches a second physical presentation to the same retained local
+desktop through the existing native mesh and supervisor admission. The observer
+has observation-only rights, cannot type into or resize the desktop, and can
+detach without disturbing the controller. This shares the desktop's layout; it
+does not create a second workspace, application process or independent layout.
+No running Bee means a prompt refusal before owner startup. Extra application
+arguments are rejected. Explicit desktop selection and external Hive enrollment
+remain unimplemented.
+
+The separate-runtime fixture proves controller/observer shared shell content,
+denied input/resize rights and controller continuity after observer detach. The
+public executable proof in `tests/native_client.py` additionally checks missing
+Bee refusal, `bee observe`, ignored observer typing and retained controller input.

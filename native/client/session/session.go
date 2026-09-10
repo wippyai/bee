@@ -66,15 +66,27 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 		((cfg.Selection.Workspace == "") != (cfg.Selection.Desktop == "")) {
 		return errors.New("invalid native client session configuration")
 	}
-	return mesh.SameAccount(ctx, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	transport, closeTransport := cleanupLifetime(ctx)
+	defer closeTransport()
+	return mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			return present(frame, actor, owner, cfg, stdin, stdout)
+			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})
 }
 
-func present(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {
-	client, catalog, err := readyDesktop(ctx, actor, owner)
+func present(ctx context.Context, foreground context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {
+	operations, cancelOperations := context.WithCancel(ctx)
+	stopForeground := context.AfterFunc(foreground, cancelOperations)
+	defer stopForeground()
+	defer cancelOperations()
+	if err := foreground.Err(); err != nil {
+		return err
+	}
+	client, catalog, err := readyDesktop(ctx, operations, actor, owner)
 	if err != nil {
 		return err
 	}
@@ -82,11 +94,16 @@ func present(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor
 	if err != nil {
 		return err
 	}
-	mounted, err := client.Attach(ctx, "session-attach", selected.Workspace, selected.Desktop, cfg.Mode)
+	mounted, err := client.Attach(operations, "session-attach", selected.Workspace, selected.Desktop, cfg.Mode)
 	if err != nil {
 		return err
 	}
 	defer func() {
+		// Once the bounded transport grace expires this actor is retired.
+		// Otherwise detach explicitly before normal native actor shutdown.
+		if ctx.Err() != nil {
+			return
+		}
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 		result = errors.Join(result, client.Detach(cleanup, "session-detach", mounted))
@@ -104,7 +121,7 @@ func present(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor
 	if !ok {
 		return errors.New("native viewport lacks physical presentation interface")
 	}
-	display, cancelDisplay := context.WithDeadline(ctx, mounted.Expires)
+	display, cancelDisplay := context.WithDeadline(operations, mounted.Expires)
 	defer cancelDisplay()
 	rights := tty.MountRights{Observe: true, Input: cfg.Mode == hive.Control, Resize: cfg.Mode == hive.Control}
 	return physical.Run(display, remote, rights, stdin, stdout)
@@ -154,14 +171,14 @@ func Probe(ctx context.Context, directory string) error {
 	}
 	return mesh.SameAccount(bounded, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
-			_, _, err := readyDesktop(frame, actor, owner)
+			_, _, err := readyDesktop(frame, frame, actor, owner)
 			return err
 		})
 	})
 }
 
-func readyDesktop(ctx context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {
-	ready, cancelReady := context.WithTimeout(ctx, 15*time.Second)
+func readyDesktop(ctx context.Context, operations context.Context, actor *mesh.Actor, owner rendezvous.Descriptor) (*hive.Desktop, hive.DesktopCatalog, error) {
+	ready, cancelReady := context.WithTimeout(operations, 15*time.Second)
 	defer cancelReady()
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
@@ -208,6 +225,31 @@ func awaitPublication(ctx context.Context, read func(context.Context) (rendezvou
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-tick.C:
+		}
+	}
+}
+
+// Keep native admission alive briefly after foreground cancellation so the
+// physical surface can restore its terminal and commit detach before actor exit.
+// Startup and stalled cleanup remain bounded; Close joins the cancellation hook.
+func cleanupLifetime(foreground context.Context) (context.Context, func()) {
+	transport, cancel := context.WithCancel(context.WithoutCancel(foreground))
+	finished, callbackDone := make(chan struct{}), make(chan struct{})
+	stop := context.AfterFunc(foreground, func() {
+		defer close(callbackDone)
+		timer := time.NewTimer(3 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-finished:
+		case <-timer.C:
+			cancel()
+		}
+	})
+	return transport, func() {
+		close(finished)
+		cancel()
+		if !stop() {
+			<-callbackDone
 		}
 	}
 }

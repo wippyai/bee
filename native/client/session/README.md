@@ -35,3 +35,10 @@ for missing discovery within its existing 15-second budget before authenticating
 The wait only reads; it creates no owner state. Corruption and permission errors
 return immediately. This prevents a concurrent losing `start` invocation from
 failing solely because the winner has not published yet.
+
+Foreground cancellation stops presentation first. The native connection and
+admitted actor receive at most three seconds to finish explicit detach, restore
+terminal settings and close normally. A stalled cleanup cannot keep transport
+alive indefinitely. Owner credential expiry still fences that connection.
+If the transport grace has already expired, no further mutation is sent under
+retired actor authority. Operation errors are retained.

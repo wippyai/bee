@@ -56,3 +56,9 @@ one second under the real lock. The losing start waits for publication, performs
 read-only owner verification and exits successfully; exactly one child remains
 alive with the state lock. The pre-fix failure and passing race/vet are preserved
 in the shared journal. No second lock or transport was added.
+
+Signal-exit acceptance sends SIGTERM to the isolated foreground test process,
+checks restoration of the physical terminal settings, then reattaches a fresh
+client and reads the same retained shell variable. This required ordering
+presentation cancellation before transport/actor retirement; canceling all of
+them together raced detach and viewport revocation.

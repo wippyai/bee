@@ -8,9 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -19,6 +22,7 @@ import (
 	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/application"
+	"golang.org/x/term"
 )
 
 type sessionOutput struct {
@@ -42,12 +46,22 @@ func init() {
 
 func probePhysicalSession(parent context.Context, directory string) error {
 	if err := probePhysicalSessionMode(parent, directory, false, false); err != nil {
-		return err
+		return fmt.Errorf("direct attachment: %w", err)
 	}
-	return probePhysicalSessionMode(parent, directory, true, false)
+	if err := probePhysicalSessionExit(parent, directory, true, false, true); err != nil {
+		return fmt.Errorf("signal exit: %w", err)
+	}
+	if err := probePhysicalSessionMode(parent, directory, true, false); err != nil {
+		return fmt.Errorf("reattach after signal: %w", err)
+	}
+	return nil
 }
 
 func probePhysicalSessionMode(parent context.Context, directory string, automatic, initialize bool) error {
+	return probePhysicalSessionExit(parent, directory, automatic, initialize, false)
+}
+
+func probePhysicalSessionExit(parent context.Context, directory string, automatic, initialize, signalExit bool) error {
 	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	master, slave, err := pty.Open()
@@ -57,6 +71,10 @@ func probePhysicalSessionMode(parent context.Context, directory string, automati
 	defer master.Close()
 	defer slave.Close()
 	if err := pty.Setsize(slave, &pty.Winsize{Rows: 32, Cols: 100}); err != nil {
+		return err
+	}
+	before, err := term.GetState(int(slave.Fd()))
+	if err != nil {
 		return err
 	}
 	var output sessionOutput
@@ -101,7 +119,11 @@ func probePhysicalSessionMode(parent context.Context, directory string, automati
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-timeout.C:
-				return fmt.Errorf("physical session missing %q", marker)
+				frame := output.text()
+				if len(frame) > 2000 {
+					frame = frame[len(frame)-2000:]
+				}
+				return fmt.Errorf("physical session missing %q; output tail %q", marker, frame)
 			case <-tick.C:
 			}
 		}
@@ -120,15 +142,32 @@ func probePhysicalSessionMode(parent context.Context, directory string, automati
 	if err := await("BEE_PHYSICAL_retained_OK"); err != nil {
 		return err
 	}
-	if _, err := master.Write([]byte{0x1d}); err != nil {
+	if signalExit {
+		// This is the isolated Go test process, whose foreground launch has already
+		// installed NotifyContext. The owner is a different detached OS process.
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			return err
+		}
+	} else if _, err := master.Write([]byte{0x1d}); err != nil {
 		return err
 	}
 	select {
 	case <-done:
+		after, err := term.GetState(int(slave.Fd()))
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(before, after) {
+			return errors.New("physical client did not restore terminal settings")
+		}
+		if signalExit && errors.Is(sessionErr, context.Canceled) {
+			return nil
+		}
 		return sessionErr
 	case <-ctx.Done():
-		return errors.New("physical detach did not finish")
+		return errors.New("physical client exit did not finish")
 	}
+
 }
 
 // This host wrapper supplies the real attachment adapter and fails immediately

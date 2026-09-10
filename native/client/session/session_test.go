@@ -118,3 +118,21 @@ func TestPublicationWaitDoesNotHideCorruptionOrPermissionFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestForegroundCancellationCannotLeaveTransportAliveIndefinitely(t *testing.T) {
+	foreground, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	transport, closeTransport := cleanupLifetime(foreground)
+	defer closeTransport()
+	cancel()
+	select {
+	case <-transport.Done():
+		t.Fatal("transport retired before detach grace")
+	case <-time.After(10 * time.Millisecond):
+	}
+	select {
+	case <-transport.Done():
+	case <-time.After(4 * time.Second):
+		t.Fatal("stalled cleanup left transport alive")
+	}
+}

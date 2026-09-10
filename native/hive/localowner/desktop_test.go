@@ -119,7 +119,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 	if err := os.WriteFile(pack, encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Second)
 	defer cancel()
 	state := filepath.Join(stage, "state")
 	t.Setenv("BEE_OWNER_DESKTOP_PACK", pack)
@@ -292,7 +292,7 @@ func runOwnerDesktop(args []string) error {
 	if err != nil {
 		return err
 	}
-	host, err := desktop.New(desktop.Options{Node: "owner-desktop", Lifetime: time.Minute, Application: "bee.console:app"})
+	host, err := desktop.New(desktop.Options{Node: "owner-desktop", Lifetime: 90 * time.Second, Application: "bee.console:app"})
 	if err != nil {
 		return err
 	}

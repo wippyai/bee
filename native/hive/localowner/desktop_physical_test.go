@@ -8,13 +8,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/creack/pty"
 	"github.com/wippyai/bee/native/client/hive"
-	"github.com/wippyai/bee/native/client/session"
+	beelaunch "github.com/wippyai/bee/native/launch"
+	applicationapi "github.com/wippyai/runtime/api/application"
+	"github.com/wippyai/runtime/api/boot"
+	"github.com/wippyai/runtime/application"
 )
 
 type sessionOutput struct {
@@ -47,7 +51,14 @@ func probePhysicalSession(parent context.Context, directory string) error {
 	done := make(chan struct{})
 	var sessionErr error
 	go func() {
-		sessionErr = session.Join(ctx, session.Config{Directory: directory, Mode: hive.Control}, slave, &output)
+		adapter := beelaunch.Client{Command: "bee", Mode: hive.Control, Stdin: slave, Stdout: &output}
+		// Invalid data binding and empty bundle would fail on the owner path.
+		// A live owner's real application lock must route directly to Attach.
+		sessionErr = application.Run(ctx, application.Options{
+			Name: "bee-owner-desktop", Mode: "base", Command: "bee",
+			DataEnv:    map[string]string{"INVALID=BINDING": "never-opened.db"},
+			Components: []boot.Component{busyClientLauncher{adapter}},
+		}, []string{"--state-dir", filepath.Dir(directory)})
 		close(done)
 	}()
 	defer func() { cancel(); <-done }()
@@ -90,4 +101,19 @@ func probePhysicalSession(parent context.Context, directory string) error {
 	case <-ctx.Done():
 		return errors.New("physical detach did not finish")
 	}
+}
+
+// This host wrapper supplies the real attachment adapter and fails immediately
+// if the runtime accidentally takes the owner path while the other process lives.
+type busyClientLauncher struct{ client beelaunch.Client }
+
+func (busyClientLauncher) Name() string        { return "bee.test.busy_client" }
+func (busyClientLauncher) DependsOn() []string { return nil }
+func (busyClientLauncher) Load(ctx context.Context) (context.Context, error) {
+	return ctx, errors.New("busy client must not boot runtime components")
+}
+func (c busyClientLauncher) PrepareLaunch(context.Context, applicationapi.LaunchRequest) (applicationapi.LaunchPlan, error) {
+	return applicationapi.LaunchPlan{Attach: c.client.Attach, PrepareOwner: func(context.Context, applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
+		return applicationapi.OwnerPlan{}, errors.New("busy client must not prepare another owner")
+	}}, nil
 }

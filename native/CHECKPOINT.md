@@ -23,3 +23,11 @@ application composition. Without the explicit toolchain the test skips.
 
 This checkpoint is not a release, an overlay upgrade proof, a LAN deployment,
 or a public startup acceptance. The installed global binary is unchanged.
+
+The native explicit-start router and detached child primitive are now included.
+The stronger composition proof uses those paths through the actual standalone
+argument parser before exercising runtime lock-busy client attachment. The
+fixture still selects its headless wait entry, activation and naming/execute
+policies. Public first-launch discovery/readiness and assembly remain unfinished.
+Linux proves the child survives launcher exit without a controlling terminal;
+Windows process flags remain unverified.

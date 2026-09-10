@@ -1,10 +1,9 @@
-//go:build meshclient
+//go:build meshclient && physicalclient
 
 // SPDX-License-Identifier: MIT
 package localowner
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -22,6 +21,8 @@ import (
 	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/ioevents"
+	beelaunch "github.com/wippyai/bee/native/launch"
+	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/tty"
 	"github.com/wippyai/runtime/application"
@@ -162,30 +163,40 @@ return {main = main}`), 0600); err != nil {
 	if err := os.WriteFile(pack, encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
-	var cmd *exec.Cmd
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	executable, err := os.Executable()
+	state := filepath.Join(stage, "state")
+	t.Setenv("BEE_OWNER_DESKTOP_PACK", pack)
+	t.Setenv("BEE_OWNER_DESKTOP_ENTRY", "1")
+	log, err := os.OpenFile(filepath.Join(stage, "owner.log"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := filepath.Join(stage, "state")
-	cmd = exec.CommandContext(ctx, executable, "-test.run=^TestOwnerDesktopSubprocess$")
-	cmd.Env = append(os.Environ(), "BEE_OWNER_DESKTOP_PACK="+pack, "BEE_OWNER_DESKTOP_STATE="+state)
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	if err := cmd.Start(); err != nil {
+	defer log.Close()
+	child, err := beelaunch.StartOwner(ctx, applicationapi.LaunchRequest{
+		Operation: applicationapi.RunApplication, Command: "bee", StateDir: state, Directory: stage,
+	}, log)
+	if err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan struct{})
-	var exitErr error
-	go func() { exitErr = cmd.Wait(); close(done); cancel() }()
+	done := child.Done()
+	watcherDone := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+			cancel()
+		case <-ctx.Done():
+		}
+		close(watcherDone)
+	}()
 	defer func() {
-		_ = cmd.Process.Kill()
-		<-done
+		_ = child.Abort()
+		_ = child.Wait(context.Background())
+		cancel()
+		<-watcherDone
 		if t.Failed() {
-			t.Log(output.String())
+			data, _ := os.ReadFile(filepath.Join(stage, "owner.log"))
+			t.Log(string(data))
 		}
 	}()
 	store, err := rendezvous.New(filepath.Join(state, DirectoryName))
@@ -200,7 +211,7 @@ return {main = main}`), 0600); err != nil {
 		}
 		select {
 		case <-done:
-			t.Fatalf("owner exited: %v\n%s", exitErr, output.String())
+			t.Fatalf("owner exited: %v", child.Wait(context.Background()))
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		case <-ticker.C:
@@ -297,31 +308,45 @@ return {main = main}`), 0600); err != nil {
 	}
 }
 
-func TestOwnerDesktopSubprocess(t *testing.T) {
-	pack := os.Getenv("BEE_OWNER_DESKTOP_PACK")
-	if pack == "" {
-		t.Skip("subprocess helper")
+// The helper re-enters the application's real argument parser before Go's test
+// flags are parsed. StartOwner therefore invokes this executable exactly as the
+// assembled Bee launcher will, rather than using a custom process fixture route.
+func init() {
+	if os.Getenv("BEE_OWNER_DESKTOP_ENTRY") != "1" {
+		return
 	}
-	data, err := os.ReadFile(pack)
+	if err := runOwnerDesktop(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func runOwnerDesktop(args []string) error {
+	data, err := os.ReadFile(os.Getenv("BEE_OWNER_DESKTOP_PACK"))
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	owner, err := New(Options{Node: "owner-desktop", Lifetime: time.Minute})
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	service, err := owner.DesktopService([]string{"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy", "bee:hive_dispatch_policy", "bee:owner_fixture_names", "bee:owner_fixture_execute", "bee.hive.desktop:host_policy"}, "bee.console:app")
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	var bundle desktopBundle
 	if err := json.Unmarshal(data, &bundle); err != nil {
-		t.Fatal(err)
+		return err
 	}
-	err = application.Run(context.Background(), application.Options{Name: "bee-owner-desktop", Mode: "base", Command: "owner-desktop-proof", Bundle: bundle.Bundle, Components: []boot.Component{testLauncher{owner}, service, ioevents.Component()}, DataEnv: bundle.DataEnv}, []string{"--state-dir", os.Getenv("BEE_OWNER_DESKTOP_STATE")})
+	launcher, err := beelaunch.NewOwnerLauncher("bee", "owner-desktop-proof", owner.PrepareOwner)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
+	return application.Run(context.Background(), application.Options{
+		Name: "bee-owner-desktop", Mode: "base", Command: "bee", Bundle: bundle.Bundle,
+		Components: []boot.Component{launcher, owner, service, ioevents.Component()}, DataEnv: bundle.DataEnv,
+	}, args)
 }
 
 func awaitDesktopText(ctx context.Context, view tty.Viewport, text string) error {

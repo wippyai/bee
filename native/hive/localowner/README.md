@@ -74,3 +74,10 @@ checkout containing `src/`, `build/modules.json` and `wippy.build.json`. The pro
 snapshots these inputs before boot and logs the selected source root. Its result
 proves that explicit native/application combination, not the checkpoint's older
 application source or a released executable.
+
+The physical-client integration now uses Bee's `launch.StartOwner` and
+`NewOwnerLauncher` against the real standalone argument parser. It no longer
+starts the owner through a custom `exec.CommandContext` test route. The client
+then uses actual `application.Run` lock-busy attachment, with invalid deployment
+bindings/failing owner hooks to detect accidental owner startup. Fixture cleanup
+explicitly aborts only the child it created; client detach never does so.

@@ -25,7 +25,7 @@ import (
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 )
 
-const DirectoryName = "local-mesh"
+const DirectoryName = rendezvous.DirectoryName
 
 // Options comes from the native host. Node is the selected runtime node name,
 // not a workspace identity. Lifetime must be finite and at most 30 days.

@@ -60,3 +60,8 @@ native-upgrade-check:
 .PHONY: native-client-check
 native-client-check:
 	python3 tests/native_client.py "$(BEE_BINARY)"
+
+# Longer diagnostic gate for repeated departures; no user's Bee is touched.
+.PHONY: native-client-retention-check
+native-client-retention-check:
+	python3 tests/native_client.py "$(BEE_BINARY)" --idle-reconnects

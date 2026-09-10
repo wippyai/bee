@@ -272,3 +272,11 @@ the cause of the recurring failure. The fresh-candidate tests above do not prove
 that this retained-node failure is fixed. Refer to the user-visible topology as
 Bees in a Hive; "owner" in implementation contracts denotes state authority, not
 another service the user should manage.
+
+`make native-client-retention-check BEE_BINARY=/path/to/bee` now reproduces the
+idle-reconnect scenario in disposable state: eight graceful detach/rejoins with
+20-second gaps, preserving one live Terminal and enforcing bounded detach. It
+passes against the candidate (`/tmp/bee-native-client-retention-check.log`), with
+reconnects between 0.106 and 0.229 seconds. This roughly three-minute probe does
+not establish long-running or network-loss recovery. The earlier one-off probe
+also passed (`/tmp/bee-retained-reconnect-soak.log`).

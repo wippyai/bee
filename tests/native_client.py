@@ -232,8 +232,47 @@ def command_launches(binary):
     print('Cold and warm command aliases preserve literal arguments and retained owner')
 
 
+def idle_reconnects(binary):
+    """Repeated graceful departures with idle gaps, against one retained Bee."""
+    with tempfile.TemporaryDirectory(prefix='bee-idle-reconnects-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner, ui = None, None
+        try:
+            ui = NativeDesktop(binary, folder, state)
+            ui.wait(' BEE ', timeout=15)
+            owner = owner_handle(ui, binary, state)
+            ui.open_start()
+            ui.choose('Terminal')
+            ui.wait('Terminal')
+            ui.key(b"BEE_RETAINED=alive; clear; printf 'IDLE_%s\\n' READY\r")
+            ui.wait('IDLE_READY')
+            ui.quit()
+            ui.close()
+            ui = None
+            for attempt in range(8):
+                time.sleep(20)
+                started = time.monotonic()
+                ui = NativeDesktop(binary, folder, state)
+                ui.wait('IDLE_READY', timeout=8)
+                print(f'Idle reconnect {attempt + 1}: {time.monotonic() - started:.3f}s', flush=True)
+                ui.key(f"printf 'IDLE_{attempt + 1}_%s\\n' \"$BEE_RETAINED\"\r".encode())
+                ui.wait(f'IDLE_{attempt + 1}_alive', timeout=3)
+                ui.quit()
+                ui.close()
+                ui = None
+            print('Eight idle reconnects retain the same Terminal and detach within one second')
+        finally:
+            if ui is not None:
+                ui.close()
+            stop_owner(owner)
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
+    if sys.argv[2:] == ['--idle-reconnects']:
+        idle_reconnects(binary)
+        sys.exit(0)
     run(binary)
     command_launches(binary)
     stalled_detach(binary)

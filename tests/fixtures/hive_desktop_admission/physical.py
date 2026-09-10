@@ -16,15 +16,7 @@ import pyte
 
 
 MAX_OUTPUT = 8 * 1024 * 1024
-CRASH_ATTEMPTS = 20
-CRASH_RETRY_DELAY = 0.25
-RETRYABLE_ATTACH_REFUSALS = (
-    b"physical attach: BUSY: Desktop request already pending",
-    b"physical attach: UNAVAILABLE: Desktop is starting",
-    b"physical attach: UNAVAILABLE: Desktop already has a controller",
-    b"physical attach: UNAVAILABLE: Previous connection is being revoked",
-    b"physical attach: UNAVAILABLE: Desktop session is closing",
-)
+
 
 
 def probe():
@@ -181,23 +173,11 @@ def probe():
         rejoin_directory = os.environ.get("BEE_NATIVE_DESKTOP_REJOIN_DIR")
         if not rejoin_directory:
             raise AssertionError("fresh identity rejoin directory is required")
-        fresh = None
-        for attempt in range(CRASH_ATTEMPTS):
-            fresh = start_child(rejoin_directory)
-            if wait_for_prompt(fresh):
-                break
-            if fresh.returncode == 0 or not any(
-                refusal in output for refusal in RETRYABLE_ATTACH_REFUSALS
-            ):
-                raise child_error(fresh, "physical crash rejoin failed:")
-            if attempt + 1 == CRASH_ATTEMPTS:
-                raise child_error(
-                    fresh, "physical crash rejoin exhausted attach retries:"
-                )
-            output.clear()
-            time.sleep(CRASH_RETRY_DELAY)
-        else:
-            raise AssertionError("physical crash rejoin did not start a fresh client")
+        # The compiled fixture keeps one mesh incarnation while retrying only
+        # explicit refusals. Restarting it here would also test same-name rejoin.
+        fresh = start_child(rejoin_directory)
+        if not wait_for_prompt(fresh, timeout=45):
+            raise child_error(fresh, "physical crash rejoin failed:")
 
         command("printf 'PHYSICAL_CRASH_REJOIN_%s_OK\\n' \"$native_pty\"")
         if not wait_for_prompt(fresh, b"PHYSICAL_CRASH_REJOIN_crash_retained_OK"):

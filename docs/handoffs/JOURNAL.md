@@ -5024,3 +5024,21 @@ isolated Start-menu smoke. Current Bee PID552200 is recorded in
 /tmp/bee-current-user-owner-pid. See GLOBAL_BUILD.md for evidence paths.
 The recurring viewport/connection failure remains unproven; this is not a
 claim that the UI scheduling change fixed transport recovery.
+
+## 2026-09-10 — Physical crash recovery separated from node reincarnation
+
+Pinned runtime674b58a1 and the compiled native client pass the physical
+SIGKILL/rejoin proof with a single replacement mesh process. The destination
+shell and its variable survive; detach and terminal settings restore correctly.
+Evidence: /tmp/bee-mesh-physical-crash-proof-r3.log (session24761, exit0).
+The test allows the established 40-second node-departure window; it does not
+prove immediate actor exit. A five-second retry bound still refused the new
+controller (r2 log, session71589, exit2).
+
+The earlier Python retry restarted node-2 after each admission refusal, causing
+same-name/new-port membership conflicts (original crash log, session30640,
+exit2; this corrects seq797's provisional session label). Retries now stay in
+one compiled fixture process, apply only to typed explicit negative receipts,
+and never replay uncertain outcomes. Native runtime code is unchanged. The
+same-name rejoin issue and user's intermittent retained-Bee mount failure remain
+unresolved. Global binary is unchanged pending the membership UI build/gates.

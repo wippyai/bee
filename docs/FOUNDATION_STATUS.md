@@ -13,8 +13,11 @@ shell. Bee's supervisors handle existing LINK_DOWN events and revoke the
 attachment without terminating the owner or declaring remote process completion.
 The isolated owner-service trace has no failures and passes race/vet. Immediate
 exact-actor EXIT while transport remains live is still a failing runtime gate.
-The prior full foundation run failed at an intermittent initial-frame wait in
-`tests/drag_failure.py`; a new full run is underway, not yet a passing claim.
+The latest full foundation run passed through taskbar checks, then failed the
+four-second initial Settings wait in `tests/personalization.py` while runtime
+startup logs were still visible. Ten isolated source/pack Settings starts passed
+under 1.4 seconds; the failed recipe and remaining desktop checks are being rerun.
+The earlier intermittent blank frame in `tests/drag_failure.py` remains unexplained.
 See the current [runtime/build handoff](handoffs/STATUS_RUNTIME_GATE.md).
 Older gate descriptions below refer to earlier candidates.
 

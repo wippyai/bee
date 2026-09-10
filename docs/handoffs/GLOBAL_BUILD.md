@@ -120,6 +120,9 @@ trace also rejects failed service states and passes race/vet.
 
 This replaces the earlier crash-induced supervisor restart failure for new owners.
 It does not hot-replace the user's running owner, and does not prove immediate
-exact-actor EXIT with a live transport. Full foundation verification is running
-in `/tmp/bee-linkdown-foundation-check.log`; the earlier intermittent initial-frame
-failure is not yet cleared. Cold startup still creates an owner output log.
+exact-actor EXIT with a live transport. Full foundation verification in `/tmp/bee-linkdown-foundation-check.log` passed
+through taskbar checks, then failed the initial four-second Settings wait in
+personalization while boot logs were still visible. Ten isolated source/pack
+Settings launches passed under 1.4 seconds. Unchanged failed/remaining recipes
+are running in `/tmp/bee-linkdown-remaining-desktop.log`; the earlier intermittent
+initial-frame failure is not yet cleared. Cold startup still creates an owner output log.

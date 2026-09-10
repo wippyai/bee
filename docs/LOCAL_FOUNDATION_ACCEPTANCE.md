@@ -16,8 +16,10 @@ The current source checkpoint is `18caf09`; exact executable pins, hash and
 rollback are in [the global build handoff](handoffs/GLOBAL_BUILD.md).
 
 Immediate exact-actor EXIT while its transport remains live is still a runtime
-gate. A full `make check` is running against the frozen build source; earlier
-passing subsets do not establish its result. Cold owner startup still captures
+gate. The latest full `make check` passed through taskbar checks, then failed
+the initial Settings wait in personalization. The failed and remaining desktop
+recipes are being rerun without changing their time limits; there is no passing
+uninterrupted full-suite claim. Cold owner startup still captures
 output in an owner log file. The user's already-running older owner is not
 hot-replaced by installing a new executable.
 
@@ -150,8 +152,8 @@ startup. See [client state](CLIENT_STATE.md#native-mesh-rendezvous-candidate).
 | Public client gate | Current evidence |
 |---|---|
 | Native transport, destination admission and physical rendering | Compiled client/real owner PTY fixture passes. |
-| Client crash followed by controller rejoin | Remote monitor gate still fails in the consumed runtime; explicit detach is insufficient. |
-| Ordinary first/second `bee` and desktop selection | Not activated or accepted; independent layout allocation is still required. |
+| Client crash followed by controller rejoin | Standalone SIGKILL/rejoin passes after a 40-second native node-departure observation interval; immediate exact-actor EXIT with live transport remains a failing runtime gate. |
+| Ordinary first/second `bee` and desktop selection | Same-state owner startup and retained-desktop attachment pass. Public independent desktop allocation and remote selection remain open. |
 | Remote node selection and Terminal on `100.70.10.28` | Not accepted through the public launch path. |
 
 The remaining public remote milestone must prove discovery, destination admission

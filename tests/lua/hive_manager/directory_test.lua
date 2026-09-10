@@ -20,6 +20,22 @@ local function fixture_data(): Object
 end
 local function define_tests()
     test.describe("Hive Manager directory", function()
+        test.it("reads client role only from native membership metadata", function()
+            local live = directory.live({local_node = "local", lookup = function(): (string?, string?) return nil, nil end,
+                membership = function(): (unknown, unknown) return {
+                    {id = "display", meta = {["bee.role"] = "client"}},
+                    {id = "bee-client-name-only", meta = {}},
+                    {id = "malformed-role", meta = {["bee.role"] = true}},
+                }, nil end,
+                call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
+                    error("Membership decoding must not issue a remote operation")
+                end})
+            local members = live:members()
+            test.is_false(members[1].client_only == true)
+            test.is_true(members[2].client_only == true)
+            test.is_false(members[3].client_only == true)
+            test.is_false(members[4].client_only == true)
+        end)
         test.it("asks the supervisor for presence and stats under the telemetry owner and keeps this node without membership", function()
             local calls: {{owner: types.OwnerRef, target: types.Target, timeout: string?}} = {}
             local live = directory.live({

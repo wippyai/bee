@@ -18,7 +18,7 @@ M.MAX_LABEL_BYTES = 120
 M.DESKTOPS_UNAVAILABLE = "Desktop browsing is not available from this app yet"
 M.ATTACH_UNAVAILABLE = "Connecting from Hive Manager is not available yet"
 type Reply = types.Reply
-type Member = {node_id: string, is_local: boolean, addr: string}
+type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
 type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string, observers: integer}
 -- A catalog carries the owner generation it was read under; an attach names
 -- that generation and its own idempotency identity, so a stale catalog
@@ -58,7 +58,8 @@ local function decode_member(value: unknown): Member?
     if not id then return nil end
     local addr = ""
     if object.addr ~= nil then addr = bounds.line(object.addr, M.MAX_ADDRESS_BYTES) or "" end
-    return {node_id = id, is_local = object.is_local == true, addr = addr}
+    local meta = bounds.object(object.meta)
+    return {node_id = id, is_local = object.is_local == true, addr = addr, client_only = meta ~= nil and meta["bee.role"] == "client"}
 end
 -- Membership as the runtime reports it, bounded, with this node always
 -- present: a runtime without a cluster still has itself.
@@ -85,7 +86,7 @@ local function live_members(self: Directory, live: Live): ({Member}, string?)
     local has_local = false
     for _, member in ipairs(result) do if member.is_local then has_local = true end end
     if not has_local and not seen[live.local_node] then
-        table.insert(result, 1, {node_id = live.local_node, is_local = true, addr = ""})
+        table.insert(result, 1, {node_id = live.local_node, is_local = true, addr = "", client_only = false})
         if #result > M.MAX_NODES then result[#result] = nil end
     end
     return result, problem
@@ -241,7 +242,7 @@ function M.fixture(fixture: Fixture): Directory
     local function supervisor(_: Directory): Supervisor return {running = true, detail = ""} end
     local function members(_: Directory): ({Member}, string?)
         local result: {Member} = {}
-        for _, node in ipairs(fixture.nodes) do result[#result + 1] = {node_id = node.node_id, is_local = node.is_local, addr = node.addr} end
+        for _, node in ipairs(fixture.nodes) do result[#result + 1] = {node_id = node.node_id, is_local = node.is_local, addr = node.addr, client_only = false} end
         return result, nil
     end
     local function find(node_id: string): FixtureNode?

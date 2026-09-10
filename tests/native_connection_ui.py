@@ -15,6 +15,13 @@ def exercise(binary):
         try:
             ui.wait(' BEE ', timeout=15)
             owner = owner_handle(ui, binary, state)
+            ui.open_start()
+            ui.choose('Tools')
+            ui.choose('Hive Manager')
+            ui.wait('HIVE MANAGER')
+            ui.wait('Display ', timeout=10)
+            assert 'destination node is not configured' not in ui.text(), ui.text()
+            assert 'client' in ui.text(), ui.text()
             ui.key(b'\x1b[20~')
             ui.wait('CONNECTION')
             ui.wait('Service running')

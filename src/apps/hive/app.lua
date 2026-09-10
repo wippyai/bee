@@ -112,7 +112,7 @@ local function main(value: unknown)
     local function refresh()
         for _, node in ipairs(state.nodes) do
             if not running then return end
-            if node.member then
+            if node.member and not node.client_only then
                 if supervisor_running then model.apply_presence(state, node.node_id, source:presence(node.node_id))
                 else model.apply_presence(state, node.node_id, types.reply_error("", types.fault("UNAVAILABLE", "no supervisor to ask"))) end
                 changed()
@@ -136,6 +136,7 @@ local function main(value: unknown)
     local function open_selected()
         local selected = model.selected(state)
         if not selected then status = "Select a node first"; dirty = true; return end
+        if selected.client_only then status = "Display client; workspaces run on its Bee node"; dirty = true; return end
         model.apply_catalog(state, selected.node_id, source:desktops(selected.node_id))
         local current = model.selected(state)
         if current and current.node_id == selected.node_id then

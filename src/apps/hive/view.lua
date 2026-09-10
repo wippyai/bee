@@ -17,6 +17,7 @@ function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
     return nil
 end
 local function status_word(node: model.Node): string
+    if node.client_only then return "client" end
     if node.status == "reachable" then return "ready" end
     if node.status == "unavailable" then return "unavailable" end
     return "unknown"
@@ -55,9 +56,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     elseif state.hive == "unavailable" then hive_line = "Hive supervisor unavailable: " .. state.hive_detail end
     line(2, hive_line, theme.muted)
     if state.source ~= "fixture" and width >= 52 then
-        local online = 0
-        for _, node in ipairs(state.nodes) do if node.status == "reachable" then online = online + 1 end end
+        local online, clients = 0, 0
+        for _, node in ipairs(state.nodes) do
+            if node.status == "reachable" then online = online + 1 end
+            if node.client_only then clients = clients + 1 end
+        end
         local summary = tostring(#state.nodes) .. (#state.nodes == 1 and " node · " or " nodes · ") .. tostring(online) .. " ready"
+        if clients > 0 then summary = tostring(online) .. " ready · " .. tostring(clients) .. (clients == 1 and " display" or " displays") end
         local span = tty.text.width(summary)
         put(width - span, 1, summary, span, theme.accent)
     end
@@ -108,18 +113,22 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local lines: {string} = {}
         local keys: {string} = {}
         local head = "Node " .. selected.label
-        if selected.status == "reachable" then
+        if selected.client_only then head = selected.label .. "  ·  Display client"
+        elseif selected.status == "reachable" then
             head = head .. "  ·  Ready"
             if state.technical then head = head .. "  cluster " .. tostring(selected.cluster_size) .. "  sampled " .. selected.sampled_at end
         elseif selected.status == "unavailable" then head = head .. "  Bee service unavailable: " .. selected.detail end
-        if state.technical then
+        if state.technical and not selected.client_only then
             head = head .. "  Raft role " .. (selected.role ~= "" and selected.role or "unknown")
             head = head .. "  heap " .. bytes(selected.heap) .. "  goroutines " .. (selected.goroutines and tostring(selected.goroutines) or "-")
             if catalog and catalog.owner_generation ~= "" then head = head .. "  owner generation " .. catalog.owner_generation end
         end
         lines[#lines + 1] = head
         keys[#keys + 1] = ""
-        if not catalog then
+        if selected.client_only then
+            lines[#lines + 1] = "Presents a desktop; does not host a Bee service"
+            keys[#keys + 1] = ""
+        elseif not catalog then
             lines[#lines + 1] = "Open the node to list its desktops"
             keys[#keys + 1] = ""
         elseif not catalog.available then
@@ -163,7 +172,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local idle = state.pending == nil
     local desktop = model.selected_desktop(state)
     if height >= 4 then
-        button("open", " Open ", selected ~= nil and catalog == nil)
+        button("open", " Open ", selected ~= nil and not selected.client_only and catalog == nil)
         button("control", " Control ", desktop ~= nil and idle and model.can_control(state))
         button("observe", " Observe ", desktop ~= nil and idle)
         button("refresh", " Refresh ", idle)

@@ -17,7 +17,7 @@ type Attach = directory.Attach
 type Outcome = directory.Outcome
 type Mode = directory.Mode
 type Status = "unknown" | "reachable" | "unavailable"
-type Node = {node_id: string, label: string, is_local: boolean, addr: string, member: boolean, departed_at: integer, status: Status, detail: string,
+type Node = {node_id: string, label: string, client_only: boolean, is_local: boolean, addr: string, member: boolean, departed_at: integer, status: Status, detail: string,
     role: string, cluster_size: integer, sampled_at: string, heap: integer?, goroutines: integer?}
 type Session = {session_id: string, mode: string}
 type Pane = "nodes" | "desktops"
@@ -101,7 +101,7 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
         local node = state.index[member.node_id]
         if not node then
             node = {node_id = member.node_id, label = label_of(state, member.node_id), is_local = member.is_local, addr = M.text(member.addr),
-                member = true, departed_at = 0, status = "unknown", detail = "", role = "", cluster_size = 0, sampled_at = "", heap = nil, goroutines = nil}
+                member = true, client_only = member.client_only == true, departed_at = 0, status = "unknown", detail = "", role = "", cluster_size = 0, sampled_at = "", heap = nil, goroutines = nil}
             state.index[member.node_id] = node
             state.nodes[#state.nodes + 1] = node
         else
@@ -109,6 +109,12 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
             node.is_local = member.is_local
             node.addr = M.text(member.addr)
         end
+        node.client_only = member.client_only == true
+        if node.client_only then
+            node.label = state.names[node.node_id] or ("Display " .. node.node_id:sub(-6))
+            node.status, node.detail = "unknown", ""
+            state.catalogs[node.node_id] = nil
+        else node.label = label_of(state, node.node_id) end
     end
     for _, node in ipairs(state.nodes) do
         if not node.member then
@@ -133,7 +139,7 @@ local function fault_text(reply: Reply): string
 end
 function M.apply_presence(state: State, node_id: string, reply: Reply)
     local node = state.index[node_id]
-    if not node then return end
+    if not node or node.client_only then return end
     if not reply.ok or type(reply.value) ~= "table" then
         node.status = "unavailable"
         node.detail = fault_text(reply)
@@ -158,6 +164,8 @@ function M.apply_stats(state: State, node_id: string, reply: Reply)
     node.goroutines = goroutines and math.floor(goroutines) or nil
 end
 function M.apply_catalog(state: State, node_id: string, catalog: Catalog)
+    local node = state.index[node_id]
+    if not node or node.client_only then return end
     state.catalogs[node_id] = catalog
     if state.selected_node == node_id and state.wanted_desktop then
         for _, desktop in ipairs(catalog.desktops) do
@@ -235,6 +243,8 @@ end
 -- Control is offered only where no controller is known; a controlled
 -- desktop offers observation. The owner still decides either request.
 function M.can_control(state: State): boolean
+    local node = M.selected(state)
+    if not node or node.client_only then return false end
     local desktop = M.selected_desktop(state)
     if not desktop then return false end
     if desktop.controller == "" then return true end

@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from contextlib import ExitStack
 
 from native_workspace import NativeDesktop, STATE_ENVIRONMENT
 from native_client import owner_handle, stop_owner
@@ -77,9 +78,10 @@ def exercise(binary):
             first.wait('FIRST_STILL_READY')
             first.quit()
         finally:
-            for ui in reversed(clients):
-                ui.close()
-            stop_owner(owner)
+            with ExitStack() as cleanup:
+                cleanup.callback(stop_owner, owner)
+                for ui in clients:
+                    cleanup.callback(ui.close)
     print('Explicit native desktops: authenticated listing, selected observer, controlled/foreign refusal without allocation, exact retained-shell rejoin passed')
 
 

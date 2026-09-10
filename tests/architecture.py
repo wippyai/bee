@@ -67,12 +67,12 @@ for identity in applications:
     metadata = entry["meta"]["application"]
     assert metadata["api_version"] == 1 and metadata["revision"]
     assert metadata["instance_policy"] in {"singleton", "multiple"}
-# The desktop adapter consumes two explicit core value interfaces. This is an
+# The desktop adapter consumes explicit core/application value interfaces. This is an
 # integration boundary, not permission for reusable Hive code to import core.
 # Walk the complete decoder closure so an indirect process/store/runtime-module
-# dependency cannot enter through either interface later.
+# dependency cannot enter through any interface later.
 desktop_interfaces = {
-    "bee.hive.desktop:protocol": {"bee.protocol:application"},
+    "bee.hive.desktop:protocol": {"bee.protocol:application", "bee.application:arguments"},
     "bee.hive.desktop:owner": {"bee.launch:retained_protocol"},
 }
 checked_interfaces = set()

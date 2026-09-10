@@ -60,11 +60,21 @@ local-tls-check:
 	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient" ./hive/localtls; \
 	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient" ./hive/localtls
 
+LOCAL_OWNER_TEST_RUN ?= .
 .PHONY: local-owner-check
 local-owner-check:
 	@test -n "$(MESH_RUNTIME)" || { echo "MESH_RUNTIME must name the reviewed runtime checkout" >&2; exit 1; }
 	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
 	cp go.mod go.sum "$$testmod/"; \
 	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
-	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient" ./hive/localowner; \
-	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient" ./hive/localowner
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=90s -run "$(LOCAL_OWNER_TEST_RUN)" -tags "$(TAGS) meshclient physicalclient" ./hive/localowner; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient physicalclient" ./hive/localowner
+
+.PHONY: client-session-check
+client-session-check:
+	@test -n "$(MESH_RUNTIME)" || { echo "MESH_RUNTIME must name the reviewed runtime checkout" >&2; exit 1; }
+	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
+	cp go.mod go.sum "$$testmod/"; \
+	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient physicalclient" ./client/session; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient physicalclient" ./client/session

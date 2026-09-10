@@ -36,3 +36,41 @@ Fixture permissions name only its registration and send actions. The same proof
 checks transport expiry while Lua drains, and lock retention followed by release. Supervisor
 admission, ordinary first/second `bee` attachment and LAN Terminal remain separate
 gates.
+
+`ClientPolicy()` returns an unpublished native security policy for one prepared
+owner execution. The host may attach it only to the Hive supervisor's isolated
+scope. Its single action, `bee.desktop.local_client`, takes the actual native
+sender PID as resource and checks the supervisor actor, native client host,
+current protected enrollment and owner lifetime. Unknown clients, foreign actors,
+retired enrollment and replaced executions are denied. Other actions are left
+undefined. A positive answer permits desktop admission to proceed; it is not a
+viewport/input grant. The native Hive service can receive it through Desktop.ClientPolicy and forks
+its sealed lifecycle frame before adding it. Public launch does not select this
+configuration yet. No new Lua module or runtime change is required.
+
+`DesktopService(policies, application)` connects the prepared execution and its
+local-client policy to the existing native Hive service. The host still selects
+all policy IDs and supplies the protected activation entry. Reserved/tooling
+startup leaves activation disabled. It does not install a public CLI route.
+
+The actual-source composition probe uses the same module plan and database
+bindings as Bee. It first passed fresh-node discovery, catalog, observer grant
+and detach without a static client allowlist. The stronger Terminal control and
+retained-content variant also passes: actual native viewport input/output, a shell
+variable retained across detach/rejoin, and stale mount input denied. Run it with:
+
+```
+BEE_OWNER_TEST_WIPPY=/absolute/toolchain make -C native local-owner-check \
+  LOCAL_OWNER_TEST_RUN=TestFreshClientDesktopComposition \
+  MESH_RUNTIME=/absolute/reviewed/runtime
+```
+
+Without the explicit toolchain environment variable, this integration test skips;
+the original owner-lifetime and policy tests still run. A skipped integration test
+is not public startup or desktop acceptance.
+
+For a native-only checkpoint, set `BEE_OWNER_TEST_SOURCE` to an absolute Bee
+checkout containing `src/`, `build/modules.json` and `wippy.build.json`. The probe
+snapshots these inputs before boot and logs the selected source root. Its result
+proves that explicit native/application combination, not the checkpoint's older
+application source or a released executable.

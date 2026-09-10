@@ -240,3 +240,47 @@ func TestDefiniteCopyRefusalKeepsClientAndApplicationRunning(t *testing.T) {
 	}
 	restored(t, slave, before)
 }
+
+type cancelAtCopyCheck struct {
+	*copyViewport
+	armed  atomic.Bool
+	cancel context.CancelFunc
+}
+
+func (v *cancelAtCopyCheck) Check(ctx context.Context, right string) error {
+	if right == tty.RightObserve && v.armed.CompareAndSwap(true, false) {
+		v.cancel()
+	}
+	return v.copyViewport.Check(ctx, right)
+}
+
+func TestCancellationDuringGrantCheckDoesNotWriteClipboard(t *testing.T) {
+	master, slave, before := terminalPair(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	view := &cancelAtCopyCheck{copyViewport: &copyViewport{stalledViewport: newViewport(control), keys: make(chan tty.Event, 8)}, cancel: cancel}
+	out := &copyOutput{wrote: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() {
+		done <- RunWithCopy(ctx, view, control, slave, out, func(context.Context) (string, bool, error) {
+			view.armed.Store(true)
+			return "canceled selection", true, nil
+		})
+	}()
+	waitRaw(t, slave, before)
+	if _, err := master.Write([]byte{3}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled copy did not exit")
+	}
+	if bytes.Contains(out.Buffer.Bytes(), []byte("\x1b]52;")) || len(view.keys) != 0 {
+		t.Fatal("copy produced a side effect after cancellation during grant check")
+	}
+	restored(t, slave, before)
+}

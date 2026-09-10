@@ -171,6 +171,11 @@ func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, s
 					if err == nil && selected && !refused {
 						err = client.Check(ctx, tty.RightObserve)
 					}
+					// The grant check may complete after local cancellation. Do not
+					// begin physical output for a request already retired here.
+					if err == nil && ctx.Err() != nil {
+						err = context.Cause(ctx)
+					}
 					if err == nil && selected && !refused {
 						clipboard, ok := any(surface).(interface{ Clipboard(string) error })
 						if !ok {

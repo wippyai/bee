@@ -226,6 +226,16 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 				if err := awaitDesktopText(frame, view, "$ "); err != nil {
 					return err
 				}
+				if index == 0 {
+					forged := mount
+					forged.Session = "another-session"
+					if _, err := client.Copy(frame, "wrong-session-copy", forged); !copyDenied(err, "DENIED") {
+						return fmt.Errorf("copy with substituted session was not denied: %v", err)
+					}
+					if err := probeObserverCopy(frame, filepath.Join(state, DirectoryName), w.ID, w.Desktops[0].ID); err != nil {
+						return err
+					}
+				}
 				command := "bee_probe=retained; printf 'BEE_OWNER_%s_OK\\n' \"$bee_probe\""
 				expected := "BEE_OWNER_retained_OK"
 				if index == 1 {
@@ -243,6 +253,9 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 				}
 				if err := client.Detach(frame, fmt.Sprintf("detach-%d", index), mount); err != nil {
 					return err
+				}
+				if _, err := client.Copy(frame, fmt.Sprintf("retired-copy-%d", index), mount); !copyDenied(err, "NOT_FOUND") {
+					return fmt.Errorf("retired desktop session copied: %v", err)
 				}
 				if err := view.Send(tty.Event{Type: "paste", Paste: "forbidden"}); err == nil {
 					return errors.New("retired mount accepted input")
@@ -272,6 +285,34 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 		}
 	}
 	probeConcurrentStarts(t, ctx, filepath.Join(stage, "concurrent-state"), stage)
+}
+
+func copyDenied(err error, code string) bool {
+	var rejected *hiveclient.Rejected
+	return errors.As(err, &rejected) && rejected.Fault.Code == code
+}
+
+// A second actual native client may observe the same retained desktop, but
+// cannot read the controller's selection through its own observer session.
+func probeObserverCopy(parent context.Context, directory, workspace, desktopID string) error {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
+	return mesh.SameAccount(ctx, directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
+			client, err := hiveclient.NewDesktop(frame, actor, owner.Node, owner.Execution)
+			if err != nil {
+				return err
+			}
+			mounted, err := client.Attach(frame, "observer-attach", workspace, desktopID, hiveclient.Observe)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Copy(frame, "observer-copy", mounted); !copyDenied(err, "DENIED") {
+				return fmt.Errorf("observer could request controller selection: %v", err)
+			}
+			return client.Detach(frame, "observer-detach", mounted)
+		})
+	})
 }
 
 // The helper re-enters the application's real argument parser before Go's test

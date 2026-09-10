@@ -50,3 +50,10 @@ runtime (58.096s for composition). Lint and pack architecture pass on current Be
 source, with 517 entries. Full Lua boot remains blocked by the old toolchain's
 missing activation listener. Full selected-window native-client acceptance and
 an installed global build remain unproven until the runtime APIs are combined.
+
+The physical cancellation regression now proves a cancellation observed during
+native grant checking cannot start a later clipboard write. Physical race/vet
+passes1.039s. The expanded actual-source composition passes60.585s: a second
+native client observes but cannot copy; substituted and detached sessions are
+refused; the original controller continues using its shell. Independent observer
+selection and combined-runtime release acceptance remain unproved.

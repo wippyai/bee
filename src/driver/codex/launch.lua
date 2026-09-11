@@ -50,7 +50,7 @@ end
 function M.specification(request: Request): types.Launch
     local argv: {string}
     if request.profile_id == "window" then
-        argv = {"codex", "--sandbox", request.sandbox}
+        argv = {"--sandbox", request.sandbox}
         if request.resume_ref then
             argv[#argv + 1] = "resume"
             argv[#argv + 1] = request.resume_ref
@@ -60,15 +60,15 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
     elseif request.resume_ref then
-        argv = {"codex", "--sandbox", request.sandbox, "exec", "resume", request.resume_ref, "--json", "--skip-git-repo-check", "-"}
+        argv = {"--sandbox", request.sandbox, "exec", "resume", request.resume_ref, "--json", "--skip-git-repo-check", "-"}
     else
-        argv = {"codex", "exec", "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
+        argv = {"exec", "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
     end
     if request.gateway_hooks then
         -- The bee profile layer carries the hook trust state the runner
         -- writes under the private home; without it no hook runs.
-        table.insert(argv, 2, "bee")
-        table.insert(argv, 2, "--profile")
+        table.insert(argv, 1, "bee")
+        table.insert(argv, 1, "--profile")
     end
     local environment: {string} = {}
     if request.profile_id == "window" then

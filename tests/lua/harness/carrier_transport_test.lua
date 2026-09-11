@@ -38,6 +38,14 @@ local function define_tests()
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
                     calls[#calls + 1] = target
+                    if target == "bee.threads.service:admit_action" then
+                        if type(value) ~= "table" then error("missing action request") end
+                        local admitted = value.admitted
+                        if type(admitted) ~= "table" then error("missing admitted action") end
+                        local input = admitted.input
+                        if type(input) ~= "table" then error("missing action content") end
+                        test.eq(input.text, "Open Codex window")
+                    end
                     if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
                     return {ok = true, value = {}}, nil
                 end,

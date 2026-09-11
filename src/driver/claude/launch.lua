@@ -87,7 +87,7 @@ end
 -- prompt is pending denies it.
 function M.specification(request: Request): types.Launch
     local window = request.profile_id == "window"
-    local argv: {string} = {"claude"}
+    local argv: {string} = {}
     if not window then
         argv[#argv + 1] = "-p"
         if request.permission_exchange then

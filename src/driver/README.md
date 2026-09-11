@@ -108,3 +108,8 @@ Previously a prompt such as `--version` was parsed as a CLI option. The real
 native resume check now uses that literal prompt and still requires a completed
 turn and retained conversation history. Stdio permission-exchange launches keep
 their existing structured input encoding.
+
+Launch specifications separate the executable from its arguments: `argv` never
+contains the program name. The host may bind `executable` to a measured absolute
+path; placement prepends that selected executable exactly once. A window with
+an empty brief therefore supplies no prompt argument.

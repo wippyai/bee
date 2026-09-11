@@ -53,6 +53,7 @@ type Binding = {
 -- A launch specification: declarative, resolved by placement, never run here.
 type Launch = {
     executable: string,
+    -- Arguments only. Placement prepends the separately selected executable.
     argv: {string},
     stdin: string?,
     stdin_eof: boolean?,

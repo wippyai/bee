@@ -88,10 +88,8 @@ local function define_tests()
             -- close stdin; without that the gate stays open here too.
             local specification = launch.specification({profile_id = "exec", brief = "say hi", sandbox = "read-only", resume_ref = nil})
             test.eq(specification.stdin_eof, true)
-            local argv: {string} = {}
-            for index, item in ipairs(specification.argv) do
-                if index == 1 then argv[index] = codex else argv[index] = item end
-            end
+            local argv: {string} = {codex}
+            for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
             local home = shell("cd " .. root .. "/home && pwd")
             home = home:gsub("%s+$", "")
             local executor = assert(exec.get("bee.placement.native:executor"))

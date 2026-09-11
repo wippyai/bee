@@ -66,10 +66,15 @@ local function define_tests()
                 if binding.binding_id == BINDING then
                     found = true
                     for _, profile in ipairs(binding.profiles) do
-                        if not profile.permission.eligible or profile.permission.adapter_ref ~= ADAPTER then
-                            error("profile " .. profile.id .. " does not pin " .. ADAPTER .. " at digest " .. pinned.digest .. ": " .. table.concat(binding.diagnostics, "; "))
+                        if profile.mode == "window" then
+                            test.eq(profile.permission.mode, "none")
+                            test.is_false(profile.permission.eligible)
+                        else
+                            if not profile.permission.eligible or profile.permission.adapter_ref ~= ADAPTER then
+                                error("profile " .. profile.id .. " does not pin " .. ADAPTER .. " at digest " .. pinned.digest .. ": " .. table.concat(binding.diagnostics, "; "))
+                            end
+                            test.eq(profile.permission.proof_fixture, "control")
                         end
-                        test.eq(profile.permission.proof_fixture, "control")
                     end
                 end
             end

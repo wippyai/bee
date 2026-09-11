@@ -378,8 +378,8 @@ local function without_variable(harness: Harness)
         local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(decode_error or "Claude launch request missing") end
         local specification = claude_launch.specification(decoded)
-        for index, item in ipairs(specification.argv) do argv[index] = item end
         argv[1] = harness.bin
+        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
         environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
@@ -393,8 +393,8 @@ local function without_variable(harness: Harness)
         local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(decode_error or "Codex launch request missing") end
         local specification = codex_launch.specification(decoded)
-        for index, item in ipairs(specification.argv) do argv[index] = item end
         argv[1] = harness.bin
+        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL
@@ -512,8 +512,8 @@ local function hooks_through_gateway(harness: Harness)
         local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(tostring(decode_error)) end
         local specification = claude_launch.specification(decoded)
-        for index, item in ipairs(specification.argv) do argv[index] = item end
         argv[1] = harness.bin
+        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
         environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
@@ -545,8 +545,8 @@ local function hooks_through_gateway(harness: Harness)
         local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(tostring(decode_error)) end
         local specification = codex_launch.specification(decoded)
-        for index, item in ipairs(specification.argv) do argv[index] = item end
         argv[1] = harness.bin
+        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL

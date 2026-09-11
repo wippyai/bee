@@ -509,8 +509,12 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?)
     local grant_refs: {string} = {}
     for _, grant in ipairs(request.resources) do grant_refs[#grant_refs + 1] = grant.grant_ref end
     if not request.previous_attempt_id then
+        -- Opening an interactive UI is an action even with no initial prompt.
+        -- Describe that action in the ledger without sending text to the child.
+        local action_input = request.brief
+        if action_input == "" and plan.profile.mode == "window" then action_input = "Open " .. plan.binding.title .. " window" end
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
-            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = request.brief}}}, "admit")
+            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}}, "admit")
         if admit_error then return nil, admit_error end
     end
     step(io, "admitted")

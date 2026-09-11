@@ -46,9 +46,11 @@ process-manager-check:
 .PHONY: window-retirement-check
 window-retirement-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_retirement.py
-.PHONY: window-native-check managed-window-app-check
+.PHONY: window-native-check managed-window-app-check managed-provider-window-check
 window-native-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_native.py
+managed-provider-window-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_provider_window.py
 managed-window-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_window_app.py
 .PHONY: layout-ack-check

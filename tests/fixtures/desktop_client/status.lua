@@ -146,7 +146,8 @@ local function main()
     -- no thread metadata; the client intersects it with host inventory before
     -- sending the authenticated complete binding snapshot to its session.
     local database = assert(store.open("bee.client.db:status"))
-    local saved = state.empty(100, 32)
+    -- Leave room for the full test-only renderer marker beside friendly labels.
+    local saved = state.empty(120, 32)
     saved.scene = model.add(saved.scene, opened.id, opened.instance_id, opened.title, opened.icon, workspace_id)
     saved.tabs = {opened.id}
     saved.targets = {{tab_id = opened.id, workspace_id = workspace_id, view_id = opened.id, instance_id = opened.instance_id}}
@@ -172,7 +173,7 @@ local function main()
     end
     local function start(): (string, tty.Viewport)
         local selected: desktops.Selection = {host = host, workspace_id = workspace_id, database = "bee.client.db:status",
-            width = 100, height = 32, application = nil,
+            width = 120, height = 32, application = nil,
             options = {version = 1, quit_mode = "detach", arguments = {}}}
         local desktop, start_error = desktops.start(retained, selected, scope({"bee:desktop_policy", "bee:client_spawn_policy",
             "bee.desktop_client_probe:status_policy"}))

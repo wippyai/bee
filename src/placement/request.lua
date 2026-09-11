@@ -53,7 +53,7 @@ local function decode_grant(value: unknown, index: integer): (types.ResourceGran
     if not purpose then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
     return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access :: types.Access, purpose = purpose :: types.Purpose}, nil
 end
-local function decode_launch(value: unknown): (driver_types.Launch?, string?)
+function M.launch(value: unknown): (driver_types.Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch must be an object" end
     local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "readiness"})
@@ -200,7 +200,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not binding_digest then return nil, "binding_digest must be a sha256 hex digest" end
     local profile_digest = digest_hex(object.profile_digest)
     if not profile_digest then return nil, "profile_digest must be a sha256 hex digest" end
-    local launch, launch_error = decode_launch(object.launch)
+    local launch, launch_error = M.launch(object.launch)
     if not launch then return nil, launch_error end
     if type(object.resources) ~= "table" then return nil, "resources must be a list" end
     local raw_resources = object.resources :: {unknown}

@@ -33,6 +33,37 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("refuses malformed driver replies before executable measurement or admission", function()
+            local request = plan("window", "pty").request
+            request.binding_ref = "bee.driver.claude:binding"
+            request.profile_id = "batch"
+            request.policy_ref = "bee.harness.catalog:fixture_policy"
+            request.brief = "test"
+            local replies: {unknown} = {
+                {ok = true, launch = {executable = 42, argv = {}, readiness = "ready"}},
+                {ok = true, launch = {executable = "claude", argv = {false}, readiness = "ready"}},
+                {ok = "yes", launch = {executable = "claude", argv = {}, readiness = "ready"}},
+                {ok = true, launch = {executable = "claude", argv = {}, readiness = "ready"}, extra = true},
+            }
+            for _, response in ipairs(replies) do
+                local calls = 0
+                local io: machine.IO = {
+                    call = function(target: string, value: unknown): (unknown, string?)
+                        calls = calls + 1
+                        test.eq(target, "bee.driver.claude:prepare")
+                        return response, nil
+                    end,
+                    send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                    self_pid = function(): string return "test" end,
+                    now_ms = function(): integer return 0 end,
+                    key = function(): string return "key" end,
+                }
+                local prepared, err = machine.plan(io, request)
+                test.is_nil(prepared)
+                test.eq(calls, 1)
+                test.is_true(err ~= nil and err:find("driver prepare:", 1, true) ~= nil)
+            end
+        end)
         test.it("prepares a window attempt without requesting a turn or starting a transport", function()
             local calls: {string} = {}
             local io: machine.IO = {

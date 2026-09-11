@@ -52,6 +52,7 @@ entries:
     driver_types: bee.driver:types
     placement_types: bee.placement:types
     placement_protocol: bee.placement.native:protocol
+    launch_request: bee.placement:request
 - name: process
   kind: process.lua
   source: file://process.lua

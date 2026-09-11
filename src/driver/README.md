@@ -17,6 +17,11 @@ commits.
 
 ## Rules
 
+The carrier validates every prepare/continuation launch reply before changing
+its executable or resolving placement. It shares placement's bounded launch
+decoder; malformed provider output is refused before executable measurement
+or attempt admission. Driver replies are data, not trusted Lua type assertions.
+
 A normalizer never reports success from a process exit; only the protocol's
 terminal event does. Answers come from the profile's declared answer path.
 Everything a provider declares in `meta.driver` is decoded by

@@ -23,6 +23,7 @@ local stream_json = require("stream_json")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_protocol = require("placement_protocol")
+local launch_request = require("launch_request")
 local M = {}
 M.PLACEMENT_BINDING = "bee.placement.native:binding"
 M.PLACEMENT = "bee.placement.native"
@@ -283,9 +284,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     end
     local prepared, prepare_error = io.call(prepare_target, prepare_request)
     if prepare_error or type(prepared) ~= "table" then return nil, "driver prepare: " .. tostring(prepare_error) end
-    local prepared_reply = prepared :: {ok: boolean, error: string?, launch: driver_types.Launch?}
-    if not prepared_reply.ok or not prepared_reply.launch then return nil, "driver prepare: " .. tostring(prepared_reply.error) end
-    local launch = prepared_reply.launch :: driver_types.Launch
+    local prepared_reply = bounds.object(prepared)
+    if not prepared_reply then return nil, "driver prepare: reply must be an object" end
+    local unexpected = bounds.fields(prepared_reply, {"ok", "error", "launch"})
+    if unexpected then return nil, "driver prepare: " .. unexpected end
+    if prepared_reply.ok ~= true then return nil, "driver prepare: " .. tostring(prepared_reply.error or "driver refused launch") end
+    local decoded_launch, launch_error = launch_request.launch(prepared_reply.launch)
+    if not decoded_launch then return nil, "driver prepare: " .. tostring(launch_error) end
+    local launch: driver_types.Launch = decoded_launch
     if request.session_ref then
         if not bounds.id(request.session_ref) then return nil, "session_ref is not an identifier" end
         local home: string? = nil

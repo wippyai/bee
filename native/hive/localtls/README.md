@@ -46,3 +46,27 @@ The first checks storage, expiry, execution isolation and certificate validation
 The package requires the `meshclient` build tag and an explicit runtime checkout.
 Public owner startup and automatic attachment remain unwired. The native mesh
 checks are component proofs, not evidence of public Hive activation.
+
+## Shared local Hive authority candidate
+
+`PrepareShared` takes the execution's credential directory and a separately
+host-selected, owner-only authority directory. It issues a different leaf
+certificate/key for each execution under that shared CA. The execution directory
+contains only its leaf key and certificate chain; the CA private key stays in
+the authority directory. The existing `Load` verifies the execution identity,
+chain and expiry, so physical display clients can use their selected node's
+credential without a second transport path.
+
+Authority creation and issuance reads use the existing protected atomic-file
+lock. A malformed authority refuses rather than being replaced. Leaf deadlines
+are capped by the authority's expiry; an expired authority may rotate after all
+credentials under it have expired. Nodes and clients must continue enforcing
+those deadlines on live transports. Concurrent issuers share one authority.
+
+This establishes same-OS-account TLS trust only. Native signed-node enrollment,
+gossip keys, discovery and supervisor admission remain separate. It is not yet
+wired into the global Bee launcher. Tests perform an actual mutual TLS handshake
+between distinct executions, reject an unrelated authority and an execution
+mismatch, exercise concurrent issuance and expiry rotation, and preserve invalid
+on-disk state. Existing isolated execution TLS remains available to explicit
+host compositions and fixtures.

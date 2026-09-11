@@ -163,11 +163,26 @@ func decode(data []byte) (*x509.Certificate, error) {
 	if certBlock == nil || certBlock.Type != "CERTIFICATE" || len(certBlock.Headers) != 0 {
 		return nil, ErrCredentials
 	}
+	var authority *x509.Certificate
+	var authorityPEM []byte
+	next, remainder := pem.Decode(rest)
+	if next != nil && next.Type == "CERTIFICATE" {
+		if len(next.Headers) != 0 {
+			return nil, ErrCredentials
+		}
+		var err error
+		authority, err = authorityCertificate(next.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		authorityPEM = pem.EncodeToMemory(next)
+		rest = remainder
+	}
 	keyBlock, tail := pem.Decode(rest)
 	if keyBlock == nil || keyBlock.Type != "PRIVATE KEY" || len(keyBlock.Headers) != 0 || len(bytes.TrimSpace(tail)) != 0 {
 		return nil, ErrCredentials
 	}
-	if !bytes.Equal(data, append(pem.EncodeToMemory(certBlock), pem.EncodeToMemory(keyBlock)...)) {
+	if !bytes.Equal(data, append(append(pem.EncodeToMemory(certBlock), authorityPEM...), pem.EncodeToMemory(keyBlock)...)) {
 		return nil, ErrCredentials
 	}
 	certificate, err := x509.ParseCertificate(certBlock.Bytes)
@@ -177,7 +192,14 @@ func decode(data []byte) (*x509.Certificate, error) {
 	if _, err := tls.X509KeyPair(data, data); err != nil {
 		return nil, ErrCredentials
 	}
-	if err := certificate.CheckSignature(certificate.SignatureAlgorithm, certificate.RawTBSCertificate, certificate.Signature); err != nil {
+	if authority != nil {
+		if certificate.NotAfter.After(authority.NotAfter) || certificate.NotBefore.Before(authority.NotBefore) {
+			return nil, ErrCredentials
+		}
+		if err := certificate.CheckSignatureFrom(authority); err != nil {
+			return nil, ErrCredentials
+		}
+	} else if err := certificate.CheckSignature(certificate.SignatureAlgorithm, certificate.RawTBSCertificate, certificate.Signature); err != nil {
 		return nil, ErrCredentials
 	}
 	if certificate.IsCA || !certificate.BasicConstraintsValid || certificate.KeyUsage != x509.KeyUsageDigitalSignature || len(certificate.ExtKeyUsage) != 2 || certificate.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth || certificate.ExtKeyUsage[1] != x509.ExtKeyUsageServerAuth || len(certificate.DNSNames) != 0 || len(certificate.IPAddresses) != 2 || !certificate.IPAddresses[0].Equal(net.ParseIP("127.0.0.1")) || !certificate.IPAddresses[1].Equal(net.ParseIP("::1")) {

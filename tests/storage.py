@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 PROBE = r'''local storage = require("store")
+local assignments = require("assignments")
 
 local function main()
     local left, left_error = storage.open()
@@ -32,6 +33,53 @@ local function main()
         local seeded, seed_error = left:write('{"version":1,"probe":"seed"}')
         if not seeded then error(tostring(seed_error)) end
         baseline = assert(left:read())
+    end
+
+    -- This is the workspace-owned persistence slice. Host admission and the
+    -- physical revoke/mount operations remain outside this fixture.
+    local transfer = assert(assignments.open(left))
+    local existing, existing_error = transfer:get({view_id = "view-one", instance_id = "instance-one"})
+    assert(not existing_error)
+    if existing then
+        assert(existing.assignment.display_id == "display-b" and existing.assignment.revision == 2)
+    else
+        local initial = assert(transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"}))
+        assert(initial.revision == 1)
+        assert(assert(transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"})).revision == 1)
+        local foreign_claim, foreign_claim_error = transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-b"})
+        assert(not foreign_claim and foreign_claim_error and foreign_claim_error:find("another display"))
+        local prepared = assert(transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+        assert(prepared.phase == "prepared")
+        local fenced = assert(transfer:get({view_id = "view-one", instance_id = "instance-one"}))
+        assert(fenced.assignment.display_id == "display-a" and fenced.intent and fenced.intent.phase == "prepared")
+        local prepared_claim, prepared_claim_error = transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"})
+        assert(not prepared_claim and prepared_claim_error and prepared_claim_error:find("prepared"))
+        local recovery = assert(transfer:reconcile())
+        assert(#recovery == 1 and recovery[1].intent and recovery[1].intent.phase == "prepared")
+        assert(assert(transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local conflict, conflict_error = transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+        assert(not conflict and conflict_error and conflict_error:find("conflicts"))
+        local concurrent, concurrent_error = transfer:prepare({request_id = "move-two", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+        assert(not concurrent and concurrent_error and concurrent_error:find("already prepared"))
+        assert(assert(transfer:fail({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", error = "revoke rejected"})).phase == "failed")
+        assert(assert(transfer:get({view_id = "view-one", instance_id = "instance-one"})).assignment.display_id == "display-a")
+        local stale, stale_error = transfer:prepare({request_id = "move-stale", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 2})
+        assert(not stale and stale_error and stale_error:find("changed"))
+        assert(assert(transfer:prepare({request_id = "move-three", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local committed = assert(transfer:commit({request_id = "move-three", view_id = "view-one", instance_id = "instance-one"}))
+        assert(committed.assignment.display_id == "display-b" and committed.assignment.revision == 2 and committed.intent and committed.intent.phase == "committed")
+        assert(assert(transfer:commit({request_id = "move-three", view_id = "view-one", instance_id = "instance-one"})).assignment.revision == 2)
+        for index = 2, 16 do
+            assert(transfer:claim({view_id = "view-" .. tostring(index), instance_id = "instance-" .. tostring(index), display_id = "display-a"}))
+        end
+        local over_limit, over_limit_error = transfer:claim({view_id = "view-17", instance_id = "instance-17", display_id = "display-a"})
+        assert(not over_limit and over_limit_error and over_limit_error:find("capacity"))
+        assert(assert(transfer:prepare({request_id = "retire-pending", view_id = "view-2", instance_id = "instance-2", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local premature_retire, premature_retire_error = transfer:retire({view_id = "view-2", instance_id = "instance-2"})
+        assert(not premature_retire and premature_retire_error and premature_retire_error:find("prepared"))
+        assert(assert(transfer:fail({request_id = "retire-pending", view_id = "view-2", instance_id = "instance-2", error = "app exited"})).phase == "failed")
+        assert(transfer:retire({view_id = "view-2", instance_id = "instance-2"}))
+        assert(transfer:claim({view_id = "view-17", instance_id = "instance-17", display_id = "display-a"}))
     end
 
     -- Both handles observed the same generation before this commit. The
@@ -76,6 +124,18 @@ end
 return {main = main}
 '''
 
+EXHAUSTION_PROBE = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfer = assert(assignments.open(workspace))
+    local prepared, prepare_error = transfer:prepare({request_id = "revision-overflow", view_id = "view-17", instance_id = "instance-17", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 9007199254740990})
+    assert(not prepared and prepare_error and prepare_error:find("exhausted"))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
 
 def run_probe(project, folder, expect_success=True):
     environment = database_environment(folder)
@@ -115,7 +175,7 @@ def main():
                 "source": "file://main.lua",
                 "method": "main",
                 "modules": ["process"],
-                "imports": {"store": "bee.storage:store"},
+                "imports": {"store": "bee.storage:store", "assignments": "bee.storage:assignments"},
                 "meta": {"command": {"name": "storage-probe", "short": "storage probe"}},
                 "security": {"policies": ["bee:workspace_storage_policy"]},
             }],
@@ -131,7 +191,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert len(migration) == 2 and migration[0][0] == 1 and migration[1][0] == 2
+            assert len(migration) == 3 and [row[0] for row in migration] == [1, 2, 3]
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE singleton = 1"
@@ -159,12 +219,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (3, 'future_schema', 'future', 'now')"
+                "VALUES (4, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "newer than this Bee build" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 3")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 4")
             connection.commit()
         run_probe(project, folder)
 
@@ -175,6 +235,13 @@ def main():
         original_id = identity(database)
         run_probe(project, folder)
         assert identity(database) == original_id, "Reopen changed workspace identity"
+        with sqlite3.connect(database) as db:
+            assert db.execute("SELECT display_id, revision FROM workspace_display_assignments WHERE view_id='view-one' AND instance_id='instance-one'").fetchone() == ("display-b", 2)
+            assert db.execute("SELECT phase FROM workspace_display_transfer_receipts WHERE request_id='move-three'").fetchone() == ("committed",)
+            db.execute("UPDATE workspace_display_assignments SET revision = 9007199254740990 WHERE view_id='view-17' AND instance_id='instance-17'")
+        (probe / "main.lua").write_text(EXHAUSTION_PROBE)
+        run_probe(project, folder)
+        (probe / "main.lua").write_text(PROBE)
         moved = folder / "relocated"
         moved.mkdir()
         with sqlite3.connect(database) as db, sqlite3.connect(moved / "workspace.db") as target:
@@ -216,6 +283,7 @@ def main():
         with sqlite3.connect(legacy / "workspace.db") as db:
             assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
             assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3]
         assert len(identity(legacy / "workspace.db")) == 32
 
         # An applied identity migration cannot silently mint another ID.

@@ -100,6 +100,28 @@ proof preserves the existing live Terminal only across display/client changes.
 Assignment rows for dead, nonrecoverable app identities require explicit bounded
 cleanup without affecting the stored retry outcome or another app incarnation.
 
+## Implemented storage slice
+
+The workspace store now owns a bounded (16 live identities) assignment table
+and a durable transfer-receipt ledger. Its internal
+`bee.storage:assignments` helper accepts only an already-selected workspace
+store; it does not open a database resource and is not a callable application
+transfer API. A row is keyed by `(view_id, instance_id)` and records the stable
+display ID and revision. `prepare` persists an exact request/source/target/
+revision intent before revocation, `commit` atomically changes the assignment
+and receipt after the caller confirms revocation, and `fail` preserves the
+source assignment while recording the result. A prepared receipt remains
+visible through restart and `get`, fencing stale layout projections.
+`reconcile` reads at most the 16 live assignments and their prepared fences for
+host startup; it does not enumerate the durable receipt history. Exact dead
+identities may be retired only once their prepared intent is settled, leaving
+their receipt outcome intact.
+
+Host integration remains required: it must authenticate display admission,
+invoke the existing exact `(id, instance_id)` empty-recipient bind as the
+internal revoke barrier, then commit before the target bind. No mount, PID,
+renderer, or client connection value is stored here.
+
 These are implementation requirements, not implemented APIs or completed proofs.
 
 ## Existing revocation proof verified September 11

@@ -33,7 +33,7 @@ function M.decode(value: unknown): (Request?, string?)
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
     local brief = bounds.text(object.brief)
-    if not brief or #brief == 0 then return nil, "brief must be nonempty bounded text" end
+    if not brief or (#brief == 0 and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
     local sandbox = "read-only"
     if object.sandbox ~= nil then
         local declared = bounds.member(object.sandbox, M.SANDBOXES)
@@ -49,7 +49,17 @@ function M.decode(value: unknown): (Request?, string?)
 end
 function M.specification(request: Request): types.Launch
     local argv: {string}
-    if request.resume_ref then
+    if request.profile_id == "window" then
+        argv = {"codex", "--sandbox", request.sandbox}
+        if request.resume_ref then
+            argv[#argv + 1] = "resume"
+            argv[#argv + 1] = request.resume_ref
+        end
+        if request.brief ~= "" then
+            argv[#argv + 1] = "--"
+            argv[#argv + 1] = request.brief
+        end
+    elseif request.resume_ref then
         argv = {"codex", "--sandbox", request.sandbox, "exec", "resume", request.resume_ref, "--json", "--skip-git-repo-check", "-"}
     else
         argv = {"codex", "exec", "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
@@ -61,6 +71,9 @@ function M.specification(request: Request): types.Launch
         table.insert(argv, 2, "--profile")
     end
     local environment: {string} = {}
+    if request.profile_id == "window" then
+        return {executable = "codex", argv = argv, environment = environment, readiness = "terminal:attached"}
+    end
     -- The brief goes in on stdin and Codex reads it until end of file, so
     -- the launch requires a placement that can close stdin after writing.
     local launch: types.Launch = {executable = "codex", argv = argv, stdin = request.brief, stdin_eof = true, environment = environment, readiness = "protocol:thread.started"}

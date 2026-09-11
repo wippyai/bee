@@ -90,3 +90,15 @@ stdin left open and `session_end = "stdin_close"` declared, so the carrier
 ends the session by closing stdin after the turn is decided, with the
 cooperative stop as the fallback; a close while a prompt is pending denies
 it. The `-p <brief>` launch stays as it is when no exchange is enabled.
+
+The launch builders also accept the reserved `window` profile for native
+interactive command specifications. Empty prompts open the native UI; a supplied
+prompt follows `--` so it cannot become a flag. Codex uses its native `resume`
+subcommand and Claude its resume flag. Window launches have no structured stdin,
+JSON output flags or stdin-EOF lifecycle. Claude rejects explicit structured-turn
+limits and the stdio permission exchange for this profile.
+
+`terminal:attached` means a terminal transport is attached, not that the provider
+has accepted a turn or is ready for automated input. The production catalog does
+not yet declare this profile compatible; the managed PTY owner and its acceptance
+must land first. These are command specifications, not public window activation.

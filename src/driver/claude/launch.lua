@@ -25,13 +25,14 @@ function M.decode(value: unknown): (Request?, string?)
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
     local brief = bounds.text(object.brief)
-    if not brief or #brief == 0 then return nil, "brief must be nonempty bounded text" end
+    if not brief or (#brief == 0 and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
     local mode = "default"
     if object.permission_mode ~= nil then
         local declared = bounds.member(object.permission_mode, M.PERMISSION_MODES)
         if not declared then return nil, "permission_mode is not one Bee admits" end
         mode = declared
     end
+    if profile_id == "window" and object.max_turns ~= nil then return nil, "max_turns is only supported for structured turns" end
     local turns = 1
     if object.max_turns ~= nil then
         local number = bounds.integer(object.max_turns)
@@ -60,6 +61,7 @@ function M.decode(value: unknown): (Request?, string?)
         if type(object.permission_exchange) ~= "boolean" then return nil, "permission_exchange must be a boolean" end
         exchange = object.permission_exchange :: boolean
     end
+    if profile_id == "window" and exchange then return nil, "stdio permission exchange is only supported for structured turns" end
     -- Hook events reach Claude Code through the settings adapter in its
     -- home; the launch line carries nothing for them.
     if object.gateway_hooks ~= nil then
@@ -84,14 +86,22 @@ end
 -- stdio prompt tool. The harness ends when stdin closes; a close while a
 -- prompt is pending denies it.
 function M.specification(request: Request): types.Launch
-    local argv: {string} = {"claude", "-p"}
-    if not request.permission_exchange then argv[#argv + 1] = request.brief end
-    if request.permission_exchange then
-        argv[#argv + 1] = "--input-format"
-        argv[#argv + 1] = "stream-json"
+    local window = request.profile_id == "window"
+    local argv: {string} = {"claude"}
+    if not window then
+        argv[#argv + 1] = "-p"
+        if not request.permission_exchange then argv[#argv + 1] = request.brief end
+        if request.permission_exchange then
+            argv[#argv + 1] = "--input-format"
+            argv[#argv + 1] = "stream-json"
+        end
+        for _, item in ipairs({"--output-format", "stream-json", "--verbose", "--include-partial-messages"}) do argv[#argv + 1] = item end
     end
-    for _, item in ipairs({"--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", request.permission_mode, "--max-turns", tostring(request.max_turns)}) do
-        argv[#argv + 1] = item
+    argv[#argv + 1] = "--permission-mode"
+    argv[#argv + 1] = request.permission_mode
+    if not window then
+        argv[#argv + 1] = "--max-turns"
+        argv[#argv + 1] = tostring(request.max_turns)
     end
     if request.model then
         argv[#argv + 1] = "--model"
@@ -119,6 +129,13 @@ function M.specification(request: Request): types.Launch
         argv[#argv + 1] = table.concat(names, ",")
     end
     local environment: {string} = {}
+    if window then
+        if request.brief ~= "" then
+            argv[#argv + 1] = "--"
+            argv[#argv + 1] = request.brief
+        end
+        return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached"}
+    end
     local launch: types.Launch = {executable = "claude", argv = argv, environment = environment, readiness = "protocol:system.init"}
     if request.permission_exchange then
         -- Canonical encoding keeps the launch specification, and with it

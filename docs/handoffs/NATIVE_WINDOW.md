@@ -217,11 +217,16 @@ uses only a loopback model endpoint. It reports each actual executable version
 alongside its declaration version; the observed Claude 2.1.268 and Codex
 0.154.0 starts do not certify the older 2.1.265 and 0.153.4 declarations.
 
-This is explicitly a direct-process/EOF fixture policy. The current recovery
-runtime refuses the production process-group requirement because the exec handle
-exposes no PID. The probe also asserts that terminal exit leaves cleanup pending.
-Production cleanup, authenticated turns and physical-client/F12 retention
-remain separate gates. Production requirements were not relaxed.
+This is explicitly a direct-process/EOF fixture policy. The refreshed runtime
+includes process-group supervision and `Process.pid()`/`Process.done()`. However,
+`attach_terminal()` consumes an unstarted process: its returned terminal session
+exposes no execution PID or verified process-group cleanup outcome, and the
+consumed process cannot supply that identity. Placement therefore cannot yet
+prove managed-window cleanup. The probe asserts that terminal exit leaves cleanup
+pending. This is a terminal ownership/cleanup contract gap, not a missing generic
+process API. Production cleanup, authenticated turns and physical-client/F12
+retention remain separate gates; production requirements were not relaxed.
+See [the runtime cutover](RUNTIME_MAIN_CUTOVER.md) for current toolchain evidence.
 
 ## Static harness isolation proof
 

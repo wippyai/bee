@@ -159,6 +159,54 @@ local function define_tests()
             local absent = call("bee.threads.service:get", {thread_id = "thread:" .. request_id})
             test.eq(code(absent), "NOT_FOUND")
         end)
+        test.it("keeps definition and policy measurements in the selected registry generation", function()
+            local pinned, pin_error = registry.snapshot()
+            if not pinned then error(tostring(pin_error)) end
+            local before, before_error = admission.read(pinned, DEFINITION, nil)
+            if not before then error(tostring(before_error and before_error.error and before_error.error.message)) end
+            local definition_entry = registry.get(DEFINITION)
+            local policy_entry = registry.get(POLICY)
+            if not definition_entry or not policy_entry then error("launch fixture entries") end
+            local original_definition = definition_entry.data
+            local original_policy = policy_entry.data
+            local changed_definition: {[string]: unknown} = {}
+            local changed_policy: {[string]: unknown} = {}
+            for key, item in pairs(original_definition :: {[string]: unknown}) do changed_definition[key] = item end
+            for key, item in pairs(original_policy :: {[string]: unknown}) do changed_policy[key] = item end
+            changed_definition.title = "Changed launch title"
+            changed_policy.start_ms = 23456
+            local ok, failure = pcall(function()
+                definition_entry.data = changed_definition
+                policy_entry.data = changed_policy
+                local changes = registry.snapshot():changes()
+                changes:update(definition_entry)
+                changes:update(policy_entry)
+                local applied, apply_error = changes:apply()
+                if not applied then error(tostring(apply_error)) end
+                local retained, retained_error = admission.read(pinned, DEFINITION, nil)
+                if not retained then error(tostring(retained_error and retained_error.error and retained_error.error.message)) end
+                test.eq(retained.definition_digest, before.definition_digest)
+                test.eq(retained.policy_digest, before.policy_digest)
+                test.eq(retained.plan_digest, before.plan_digest)
+                test.eq(retained.catalog_generation, before.catalog_generation)
+                local current, current_error = admission.resolve(DEFINITION, nil)
+                if not current then error(tostring(current_error and current_error.error and current_error.error.message)) end
+                test.is_true(current.definition_digest ~= before.definition_digest)
+                test.is_true(current.policy_digest ~= before.policy_digest)
+                test.is_true(current.plan_digest ~= before.plan_digest)
+                test.is_true(current.catalog_generation > before.catalog_generation)
+                test.eq(current.binding_digest, before.binding_digest)
+                test.eq(current.profile_digest, before.profile_digest)
+            end)
+            definition_entry.data = original_definition
+            policy_entry.data = original_policy
+            local restoration = registry.snapshot():changes()
+            restoration:update(definition_entry)
+            restoration:update(policy_entry)
+            local restored, restore_error = restoration:apply()
+            if not restored then error("restore launch fixture: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("resolves a definition to one measured plan without effects", function()
             local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
             test.eq(plan.launch_id, "claude-fixture")

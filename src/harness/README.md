@@ -37,6 +37,13 @@ for batch/session profiles, and `pty` for window profiles. Fixture metadata does
 not change compatibility. Host activation and protected launch admission remain
 required; compatibility alone does not publish a launch route or authorize it.
 
+Launch resolution and admission read the definition, catalog and policy from
+one registry snapshot. The library's `admission.read(snapshot, ref, mode)` lets
+a composing host reuse its pinned snapshot without side effects; ordinary
+`resolve` and `admit_request` pin internally. A retained snapshot describes its
+own generation even after registry changes. Reading that plan grants no
+permission and does not promise that a later execution will use stale code.
+
 ## Host binding
 
 The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref`.

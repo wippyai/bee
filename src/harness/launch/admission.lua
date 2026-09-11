@@ -85,16 +85,20 @@ end
 -- resolve: the measured plan for a definition, with no effects. The plan
 -- digest pins the definition, the binding and profile measurements and
 -- the launch policy at one catalog generation.
-function M.resolve(definition_ref: string, mode: string?): (Plan?, Reply?)
-    local launch, definition_error = definition.load(definition_ref)
-    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
+local function read_definition(pinned: catalog.Pinned, definition_ref: string): (definition.Definition?, string?)
+    local entry = catalog.entry(pinned, definition_ref)
+    if not entry then return nil, "launch definition " .. definition_ref .. " is not in the registry" end
+    return definition.decode(definition_ref, entry)
+end
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?): (Plan?, Reply?)
+    local definition_ref = launch.ref
     local chosen = launch.default_mode
     if mode and mode ~= chosen then
         if not definition.allows(launch, "mode") then return nil, fail("FORBIDDEN", "definition " .. definition_ref .. " does not allow a mode override") end
         if not bounds.member(mode, definition.MODES) then return nil, fail("INVALID", "mode must be window, session or batch") end
         chosen = mode
     end
-    local snapshot, snapshot_error = catalog.snapshot()
+    local snapshot, snapshot_error = catalog.read(pinned, nil)
     if not snapshot then return nil, fail("UNAVAILABLE", snapshot_error or "catalog") end
     local usable, usable_error = catalog.usable(snapshot)
     if not usable then return nil, fail("UNAVAILABLE", usable_error or "catalog") end
@@ -111,13 +115,27 @@ function M.resolve(definition_ref: string, mode: string?): (Plan?, Reply?)
     end
     if binding_digest == "" then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
     if not supported then return nil, fail("UNSUPPORTED_CAPABILITY", "profile " .. launch.profile_id .. " of " .. launch.binding_ref .. " does not run in mode " .. chosen) end
-    local launch_policy, policy_error = policy.load(launch.policy_ref)
+    local policy_entry = catalog.entry(pinned, launch.policy_ref)
+    if not policy_entry then return nil, fail("NOT_FOUND", "launch policy " .. launch.policy_ref .. " is not in the registry") end
+    local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry)
     if not launch_policy then return nil, fail("NOT_FOUND", policy_error or "policy") end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest, mode = chosen})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest}, nil
+end
+-- A caller composing a larger host plan can retain the same snapshot for
+-- its other declarations; this read performs no registry mutation or admission.
+function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): (Plan?, Reply?)
+    local launch, definition_error = read_definition(pinned, definition_ref)
+    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
+    return resolve(pinned, launch, mode)
+end
+function M.resolve(definition_ref: string, mode: string?): (Plan?, Reply?)
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
+    return M.read(pinned, definition_ref, mode)
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
@@ -171,9 +189,11 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if not request then return nil, fail("INVALID", decode_error or "invalid request") end
     local requester = actor()
     if not requester then return nil, fail("UNAUTHENTICATED", "no actor") end
-    local launch, definition_error = definition.load(request.definition_ref)
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
+    local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused = M.resolve(request.definition_ref, request.mode)
+    local plan, plan_refused = resolve(pinned, launch, request.mode)
     if not plan then return nil, plan_refused end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end

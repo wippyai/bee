@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -84,6 +85,16 @@ func (c *Component) Load(ctx context.Context) (context.Context, error) {
 // PrepareLaunch or a registry entry. The runtime then holds the real state lock
 // throughout this method, native boot, shutdown, and returned cleanup.
 func (c *Component) PrepareOwner(ctx context.Context, request launch.LaunchRequest) (launch.OwnerPlan, error) {
+	return c.prepareOwner(ctx, request, false)
+}
+
+// PrepareProjectOwner gives each selected project state a stable mesh identity.
+// The display label alone cannot identify nodes: several projects share a host.
+func (c *Component) PrepareProjectOwner(ctx context.Context, request launch.LaunchRequest) (launch.OwnerPlan, error) {
+	return c.prepareOwner(ctx, request, true)
+}
+
+func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchRequest, project bool) (launch.OwnerPlan, error) {
 	if ctx == nil || request.Operation != launch.RunApplication || request.Base || request.StateDir == "" {
 		return launch.OwnerPlan{}, errors.New("local owner requires ordinary lock-held application startup")
 	}
@@ -94,6 +105,18 @@ func (c *Component) PrepareOwner(ctx context.Context, request launch.LaunchReque
 	defer c.mu.Unlock()
 	if c.used {
 		return launch.OwnerPlan{}, errors.New("local owner component already used")
+	}
+	if project {
+		state, err := filepath.EvalSymlinks(request.StateDir)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		digest := sha256.Sum256([]byte(filepath.Clean(state)))
+		label := c.options.Node
+		if len(label) > 95 {
+			label = label[:95]
+		}
+		c.options.Node = label + "-" + hex.EncodeToString(digest[:16])
 	}
 	c.used = true
 	var execution [16]byte

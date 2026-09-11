@@ -52,7 +52,7 @@ func New(options Options) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	launcher, err := launch.NewLauncher(launch.Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: os.Stdout}, "bee-owner", owner.PrepareOwner)
+	launcher, err := launch.NewLauncher(launch.Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: os.Stdout}, "bee-owner", owner.PrepareProjectOwner)
 	if err != nil {
 		return nil, err
 	}

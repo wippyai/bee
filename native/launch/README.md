@@ -118,3 +118,10 @@ project locks, canonical aliases, explicit-state preservation and absent-node
 client refusal. Full two-project executable acceptance, distinct Bee-node names,
 same-account Hive enrollment/joining and terminal working-directory assertions
 remain required; project state selection alone does not establish those facts.
+
+The project-owner preparation route also derives its native node name from the
+canonical selected state directory, retaining the host label as a prefix.
+This distinguishes two local projects and keeps each name stable across owner
+restarts. The ordinary local-owner component still accepts an explicitly selected
+node name for host compositions and fixtures. Transport keys and owner execution
+IDs remain fresh per invocation; a stable name does not retain old grants.

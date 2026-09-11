@@ -131,6 +131,15 @@ also pass after the guard. A separate gateway fixture proves a restricted
 function scope denies actual placement DB/executor access while the privileged
 control acquires both. Actor/context inheritance remains outside that proof.
 
+## Native startup sample
+
+The provider-guard standalone candidate passed twelve fresh-state cold launches
+and twelve reconnects. First frames arrived in 1.525–1.946 seconds cold and
+0.208–0.213 seconds warm, all within the four-second diagnostic bound. Each case
+used disposable state and exact process-handle cleanup. No blank frame reproduced
+in this local sample; it does not explain the earlier source-fixture failure or
+prove behavior across remote nodes. The global installation remains unchanged.
+
 ## OS-assigned MCP listener address
 
 Source inspection of the selected runtime found another requirement before

@@ -15,8 +15,8 @@ local logger = require("logger")
 local host_probe = require("host_probe")
 local clients_probe = require("clients_probe")
 local function run_probe(mode: string?)
-    if mode == "clients" then
-        local ok, err = pcall(clients_probe.main)
+    if mode == "clients" or mode == "clients-commit" then
+        local ok, err = pcall(clients_probe.main, mode == "clients-commit")
         if not ok then logger:error("Client admission probe failed", {error = tostring(err)}); error(err) end
         return
     end

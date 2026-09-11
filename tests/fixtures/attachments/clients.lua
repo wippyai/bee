@@ -23,7 +23,7 @@ local function wait_for(view: tty.Viewport, pattern: string): string
     end
     error("Missing native output: " .. pattern)
 end
-function M.client(owner: string, host: string, workspace_id: string, label: string)
+function M.client(owner: string, host: string, workspace_id: string, label: string, fail_commit: boolean?)
     local admissions = assert(process.listen("bee.host.admitted", {message = true}))
     local replies = assert(process.listen("bee.host.reply", {message = true}))
     local commands = assert(process.listen("bee.client.command", {message = true}))
@@ -253,11 +253,14 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             local outcome = assert(transfers:receive())
             assert(outcome:from() == host)
             local value: unknown = outcome:payload():data()
-            assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
-                and value.assignment_revision == 2, "Transfer did not commit durable destination")
+            if fail_commit then
+                assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == "persistence_failed"
+                    and value.assignment_revision == 0, "Commit failure did not leave the transfer prepared")
+            else assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
+                and value.assignment_revision == 2, "Transfer did not commit durable destination") end
             local stale, stale_error = view:snapshot()
             assert(not stale and stale_error, "Source retained its revoked controller")
-            status("transferred")
+            status(fail_commit and "transfer-commit-failed" or "transferred")
         elseif type(op) == "table" and op.op == "transfer-replay" and type(op.target_display_id) == "string" then
             -- A settled receipt is replayable even after its destination has
             -- detached.  It must not enqueue a second broker revocation.
@@ -288,6 +291,11 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
                 connection_id = connection_id, renderer_generation = renderer_generation, id = opened.id, instance_id = opened.instance_id}))
             assert(reply("stale-transfer-bind", "bind").error_code == "permission_denied", "Stale source regained transfer control")
             status("stale-bind")
+        elseif type(op) == "table" and op.op == "prepared-bind" and type(op.id) == "string" and type(op.instance_id) == "string" then
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "prepared-transfer-bind", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = op.id, instance_id = op.instance_id}))
+            assert(reply("prepared-transfer-bind", "bind").error_code == "permission_denied", "Prepared transfer granted its target early")
+            status("prepared-bind")
         elseif op == "stale" then
             local frame, err = view:snapshot()
             assert(not frame and err, "Detached client retained its frame")
@@ -356,7 +364,7 @@ function M.renderer(owner: string, client: string)
     end
     process.unlisten(mounts); process.unlisten(commands)
 end
-function M.main()
+function M.main(fail_commit: boolean?)
     local owner = tostring(process.pid())
     local ready = assert(process.listen("bee.host.ready", {message = true}))
     local results = assert(process.listen("bee.host.client_result", {message = true}))
@@ -371,7 +379,8 @@ function M.main()
         policies[#policies + 1] = policy
     end
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
-        :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true}):spawn_monitored("bee.host:main", "bee:workers", owner)))
+        :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true,
+            ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner)))
     local started = assert(ready:receive())
     assert(started:from() == host)
     local boot: unknown = started:payload():data()
@@ -422,12 +431,12 @@ function M.main()
         assert(process.send(host, "bee.host.client", {version = 1, request_id = id, op = "detach", workspace_id = workspace_id, recipient = pid}))
         result(id, pid, "")
     end
-    local first = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "A")))
+    local first = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "A", fail_commit)))
     status(first, "ready")
     admit("first", first, true, "")
     local first_view = status(first, "opened")
     if not first_view then error("Missing first view") end
-    local second = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "B")))
+    local second = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "B", fail_commit)))
     status(second, "ready")
     admit("same-recipient-display-conflict", first, true, "identity_conflict", display_ids[second])
     admit("duplicate-display-conflict", second, true, "identity_conflict", display_ids[first])
@@ -534,8 +543,13 @@ function M.main()
         target_display_id = string.rep("c", 32), expected_revision = 1, error_code = "unavailable"}))
     status(second, "transfer-checked")
     assert(process.send(second, "bee.client.command", {op = "transfer", target_display_id = display_ids[first]}))
-    status(second, "transferred")
+    status(second, fail_commit and "transfer-commit-failed" or "transferred")
     assert(process.send(second, "bee.client.command", "stale-bind")); status(second, "stale-bind")
+    if fail_commit then
+        assert(process.send(first, "bee.client.command", {op = "prepared-bind", id = second_view.id, instance_id = second_view.instance_id})); status(first, "prepared-bind")
+        process.terminate(host)
+        return
+    end
     assert(process.send(first, "bee.client.command", {op = "accept-transfer", id = second_view.id,
         instance_id = second_view.instance_id, native_pid = second_view.native_pid, label = "B"}))
     status(first, "accepted-transfer")

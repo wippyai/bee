@@ -223,6 +223,20 @@ def detached():
                 end
                 local _, err = revoke_removed_observer()""")
             attachment.write_text(code)
+            host_main = project / "src/core/host/main.lua"
+            code = host_main.read_text()
+            anchor = 'if not database then error(tostring(database_error)) end'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, anchor + '''
+    if ctx.get("bee.test.fail_transfer_commit") == true then
+        local original_commit = database.assignments.commit
+        local injected = false
+        database.assignments.commit = function(_, value)
+            if not injected then injected = true; return nil, "Injected transfer commit failure" end
+            return original_commit(database.assignments, value)
+        end
+    end''')
+            host_main.write_text(code)
             for name in (".wippy.yaml", "wippy.lock"):
                 shutil.copy2(ROOT / name, project / name)
             index = project / "src/_index.yaml"
@@ -242,7 +256,7 @@ def detached():
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
             (folder / ".wippy").mkdir(exist_ok=True)
             (project / ".wippy").mkdir(exist_ok=True)
-            for mode in ("detached", "failed-open", "terminal", "observation", "host", "clients"):
+            for mode in ("detached", "failed-open", "terminal", "observation", "host", "clients", "clients-commit"):
                 args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env=database_environment(folder, BEE_WORKSPACE_DB=str(folder / f"workspace-{mode}.db")))

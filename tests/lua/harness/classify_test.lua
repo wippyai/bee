@@ -140,9 +140,22 @@ local function define_tests()
             test.is_true(partial.profiles[2].supported)
             local fixture = declaration("pty")
             meta_of(fixture).test_support = true
-            local accepted = classified(fixture)
+            test.eq(classified(fixture).state, "incompatible")
+        end)
+        test.it("matches transports to execution modes independently of fixture metadata", function()
+            local entry = declaration()
+            local profiles = driver_of(entry).profiles :: {{[string]: unknown}}
+            profiles[2].mode = "window"
+            profiles[2].protocol = "pty"
+            local accepted = classified(entry)
             test.eq(accepted.state, "compatible")
             test.is_true(accepted.profiles[1].supported)
+            test.is_true(accepted.profiles[2].supported)
+            test.is_false(accepted.activated)
+            profiles[2].protocol = "stream-json"
+            test.is_false(classified(entry).profiles[2].supported)
+            driver_of(entry).default_profile = "window"
+            test.eq(classified(entry).state, "incompatible")
         end)
         test.it("requires the driver contract with three bound functions", function()
             local other = binding()

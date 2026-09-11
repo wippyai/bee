@@ -32,10 +32,10 @@ diagnostic; it cannot publish, admit or authorize execution. A read capped below
 bindings is `complete: false`: an unseen binding could share a `driver_id`
 with a visible one, so `usable` resolves nothing from it.
 
-Production compatibility remains `stream-json` only. A profile using `pty` is
-compatible solely when its profile declaration carries `meta.test_support:
-true`; this supports the disposable managed-window fixture and does not make a
-production driver profile or public launch route available.
+Catalog compatibility matches the implemented execution paths: `stream-json`
+for batch/session profiles, and `pty` for window profiles. Fixture metadata does
+not change compatibility. Host activation and protected launch admission remain
+required; compatibility alone does not publish a launch route or authorize it.
 
 ## Host binding
 

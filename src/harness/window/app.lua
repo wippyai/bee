@@ -96,7 +96,7 @@ local function main(value: unknown)
     end
     if plan.profile.mode ~= "window" or plan.profile.protocol ~= "pty" then
         tty.stop(); process.unlisten(closes)
-        error("Managed window requires a fixture-approved PTY window profile")
+        error("Managed window requires a PTY window profile")
     end
     local prepared, preparation_error = machine.prepare_attempt(transport, plan)
     if not prepared then

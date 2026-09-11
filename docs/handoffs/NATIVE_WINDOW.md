@@ -32,8 +32,9 @@ is recorded as `uncertain`, except explicit application close, which records
   materialization, records execution and cleanup, and presently uses pipes.
   Its owned setup and cleanup must be shared with the managed PTY path; spawning
   an ordinary Terminal after that would create a second unmanaged child.
-- `src/harness/catalog/classify.lua` admits stream-json profiles only. Do not
-  declare PTY compatible until its actual carrier and lifecycle are accepted.
+- `src/harness/catalog/classify.lua` matches batch/session profiles to
+  stream-json and window profiles to PTY. This compatibility is separate from
+  host activation, protected admission and provider-specific acceptance.
 
 A local probe against the selected recovery runtime found that a `funcs.call`
 executes with a different process PID. Matching screen dimensions do not prove a
@@ -100,10 +101,10 @@ permissions are still required; this does not itself enable PTY admission.
 The structured carrier now refuses window mode and non-stream-json protocols
 at both open and resume, before any thread, placement or gateway I/O. Planning
 remains shared; execution must use the transport owned by the selected profile.
-The native PTY facade is under separate acceptance. Catalog classification
-recognizes `pty` only for a declaration marked `meta.test_support: true`; no
-production PTY profile is activated in the production catalog or global
-executable.
+The native PTY facade has focused acceptance. Catalog classification recognizes
+PTY only with window mode and stream-json only with batch/session mode;
+`meta.test_support` grants no compatibility exception. No production PTY profile
+is activated in the production catalog or global executable.
 
 Shared attempt preparation now admits the action, prepares and claims its
 thread attempt, admits any gateway binding, and records placement intent. It

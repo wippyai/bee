@@ -8,7 +8,6 @@ local profile = require("profile")
 local driver_types = require("driver_types")
 local permission = require("permission")
 local M = {}
-M.SUPPORTED_PROTOCOLS = {"stream-json"}
 M.CONTRACT = "bee.driver:driver"
 M.METHODS = {"prepare", "dispatch", "normalize"}
 type Entry = {[string]: unknown}
@@ -41,14 +40,11 @@ local function digest(value: unknown): (string?, string?)
     if hash_error or not sum then return nil, "digest failed" end
     return sum, nil
 end
--- Production catalog support is intentionally stream-json only. A disposable
--- fixture can declare the native PTY protocol to exercise the managed-window
--- actor without turning a shipped driver profile into a public launch.
-local function supported(protocol: string, fixture: boolean): boolean
-    for _, candidate in ipairs(M.SUPPORTED_PROTOCOLS) do
-        if candidate == protocol then return true end
-    end
-    return fixture and protocol == "pty"
+-- Compatibility follows the actual execution paths. Activation and authority
+-- remain host-selected; test metadata cannot add a transport capability.
+local function supported(mode: string, protocol: string): boolean
+    if mode == "window" then return protocol == "pty" end
+    return (mode == "batch" or mode == "session") and protocol == "stream-json"
 end
 -- Classifies one binding with everything the catalog resolved for it.
 function M.binding(input: Input): Binding
@@ -93,13 +89,12 @@ function M.binding(input: Input): Binding
     local binding_digest, binding_digest_error = digest({kind = entry.kind, meta = meta, data = data})
     if not binding_digest then fail("binding is not measurable: " .. tostring(binding_digest_error)) end
     local declaration = input.declaration
-    local declaration_meta: {[string]: unknown} = {}
     local decoded: driver_types.Binding? = nil
     local profile_digest = ""
     if not declaration then
         fail("profiles_ref " .. profiles_ref .. " does not exist")
     else
-        declaration_meta = bounds.object(declaration.meta) or {}
+        local declaration_meta = bounds.object(declaration.meta) or {}
         if declaration_meta.type ~= "harness.profile" then fail("profiles entry is not a harness.profile") end
         if declaration_meta.driver_ref ~= binding_id then fail("profiles entry names another binding: " .. tostring(declaration_meta.driver_ref)) end
         local declaration_data = bounds.object(declaration.data) or {}
@@ -116,17 +111,16 @@ function M.binding(input: Input): Binding
         title = decoded.title
         version = decoded.implementation_version
         default_profile = decoded.default_profile
-        local fixture = declaration_meta.test_support == true
         local any_supported = false
         for index, item in ipairs(decoded.profiles) do
-            local ok = supported(item.protocol, fixture)
+            local ok = supported(item.mode, item.protocol)
             if ok then any_supported = true end
             profiles[index] = {id = item.id, mode = item.mode, protocol = item.protocol, protocol_revision = item.protocol_revision, supported = ok,
                 permission = {mode = item.permission_exchange.mode, adapter_ref = item.permission_exchange.adapter_ref, adapter_digest = item.permission_exchange.adapter_digest, proof_fixture = nil, eligible = false}}
         end
         if not any_supported then fail("no profile uses a supported protocol") end
         local default = profile.find(decoded, decoded.default_profile)
-        if default and not supported(default.protocol, fixture) then fail("the default profile uses an unsupported protocol") end
+        if default and not supported(default.mode, default.protocol) then fail("the default profile uses an unsupported protocol") end
         local adapters = input.adapters or {}
         for position, item in ipairs(decoded.profiles) do
             local exchange = item.permission_exchange

@@ -3,8 +3,10 @@
 Current global Bee includes independent retained-display lifetimes, public
 default-display reactivation and friendly workspace/display labels (SHA
 `3e39e45f`, source `e3938a2`). Source/pack focused checks and both executable
-suites pass; the broader lifecycle-source foundation check is still running.
-App transfer and workspace switching remain unfinished. See
+suites pass; the broader lifecycle-source foundation check also passed.
+The app-transfer candidate passes the real window-menu source/pack proof and
+is completing failure/recovery checks before installation. Workspace switching
+remains unfinished. See
 [the authoritative build handoff](handoffs/GLOBAL_BUILD.md); older checkpoints
 below describe earlier installations and narrower evidence.
 

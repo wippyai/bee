@@ -25,13 +25,14 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
-        if _transfer_failure:
+        if _transfer_failure in ("source", "target"):
             client = project / "src/core/client/main.lua"
             code = client.read_text()
             anchor = "            local committed, err = store.write(database, next_layout)\n"
             assert code.count(anchor) == 1
             direction = "#next_layout.targets < #layout.targets" if _transfer_failure == "source" else "#next_layout.targets > #layout.targets"
             label = "source" if _transfer_failure == "source" else "target"
+            resource = "left" if _transfer_failure == "source" else "right"
             injection = f'''            local changed_targets = 0
             for _, previous in ipairs(layout.targets) do
                 local retained = false
@@ -47,7 +48,23 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 end
                 if not retained then changed_targets = changed_targets + 1 end
             end
-            if initial_application ~= nil and assignment_snapshot and assignment_snapshot.revision >= 2
+            local transferred_change = false
+            if assignment_snapshot then
+                for _, assignment in ipairs(assignment_snapshot.items) do
+                    if assignment.revision >= 2 and not assignment.pending then
+                        local before, after = false, false
+                        for _, previous in ipairs(layout.targets) do
+                            if previous.view_id == assignment.view_id and previous.instance_id == assignment.instance_id then before = true end
+                        end
+                        for _, current in ipairs(next_layout.targets) do
+                            if current.view_id == assignment.view_id and current.instance_id == assignment.instance_id then after = true end
+                        end
+                        if before ~= after then transferred_change = true end
+                    end
+                end
+            end
+            if transferred_change and database_resource == "bee.client.db:{resource}" and initial_application ~= nil
+                and assignment_snapshot and assignment_snapshot.revision >= 2
                 and changed_targets == 1 and {direction} then
                 error("Injected {label} transfer layout save failure")
             end
@@ -341,7 +358,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if transfer_probe:
-        print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts and source F12")
+        print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts" + (" and source F12" if _transfer_failure == "success" else " and failed-display restart"))
         return
     if command == "retained-supervisor-probe":
         print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}, primary exit={primary_exit}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, retained display close/reactivation")
@@ -355,6 +372,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 if __name__ == "__main__":
     run()
     run(shared_store=True)
+    run(transfer_probe=True)
     run(command="retained-supervisor-probe")
     run(command="retained-supervisor-probe", storage_delay=True)
     run(command="retained-supervisor-probe", launch_exit=True)

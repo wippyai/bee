@@ -147,7 +147,7 @@ local function main(mode: string?)
         local client, screen = desktop.pid, desktop.view
         local ready = assert(clients:receive())
         assert(tostring(ready:from()) == client)
-        local ready_data = launch_protocol.ready(ready:payload():data(), workspace_id, label == "left")
+        local ready_data = launch_protocol.ready(ready:payload():data(), workspace_id, label == "left" and launch)
         if not ready_data then error("Invalid desktop readiness or missing required import") end
         if shared_store and label == "right" then assert(ready_data.client_id == selected_id) end
         if label == "left" and launch then
@@ -169,7 +169,12 @@ local function main(mode: string?)
             workspace_id = workspace_id, recipient = client, renderer = value.renderer}))
         result(label .. "-render")
         -- A title precedes the attachment. Wait for real PTY output before input.
+        if not launch and mode == "transfer-source-save-failure" and label == "left" then
+            wait_text(screen, "No applications open")
+            return client, screen
+        end
         wait_text(screen, "bash-")
+        if not launch and mode == "transfer-target-save-failure" then return client, screen end
         if launch then
             command(screen, "bee_desktop=" .. label .. "; printf 'DESKTOP_%s_OK\\n' \"$bee_desktop\"")
             wait_text(screen, "DESKTOP_" .. label .. "_OK")

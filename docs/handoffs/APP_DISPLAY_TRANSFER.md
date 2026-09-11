@@ -10,7 +10,9 @@ receipt fences both displays through restart.  The source/pack attachment proof
 covers live Terminal PID and shell-state preservation, target admission denial,
 stale source-bind denial, repeated moves, and receipt replay.
 
-This is not installed globally. Combined UI recovery acceptance remains pending.
+This is not installed globally. Source and target layout-save failure/reconnect
+checks pass on source and pack. Final combined gates and host recovery lifecycle
+corrections remain pending.
 
 
 ## Ownership
@@ -105,8 +107,12 @@ suite passed 528 tests. The combined client/UI unit run passed 529 tests. The re
 passed on source and pack: it preserved the shell PID and variable, kept the
 neighbor working, reconciled both layouts, and passed source F12. The separate
 host fixture also proves old input revocation, target rebind and committed retry
-after destination detach. Remaining failure/recovery checks are required before
-this feature is considered complete or installed globally.
+after destination detach. Injected source/target layout-save failures also preserve the committed transfer:
+reconnecting the source removes its stale tab, and reconnecting the target adds
+the missing tab with the same shell PID and variable. Both paths retain the
+neighbor app. These modes run in `make client-desktop-check`. Host manual-restore
+settlement and dead-assignment retirement after restart still require correction
+and acceptance before global installation.
 
 The combined proof must move a Terminal through the real window menu, preserve
 its exact PID and in-memory variable, retain the neighboring app, reconcile both

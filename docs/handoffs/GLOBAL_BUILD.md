@@ -19,9 +19,23 @@ Actual-user cold frame1.551s, warm0.209s, detach0.114s each (exit zero),
 catalog0.199s (exit zero). F9 reports the real local Hive service and Antares;
 frame captured at `/tmp/bee-global-friendly-labels-frame-20260911.txt`.
 
-Full foundation72192 is still running on lifecycle source81f72d1. It excludes
+Full foundation72192 completed successfully on lifecycle source81f72d1. It excludes
 the later public activation and label deltas, which have focused source/pack and
 executable proofs. App transfer and workspace switching remain unfinished.
+
+## Transfer candidate, not installed
+
+Checkpoint `checkpoint/app-transfer-host-20260911` implements the window-menu
+transfer path using workspace-owned durable assignments and existing broker
+revocation. Source/pack UI acceptance preserves the shell PID and variable,
+neighboring app, both layouts and source F12. The combined client/UI unit run
+passed 529 tests before host integration. Source and target layout-save failure
+reconnect probes now pass on source and pack; stale source tabs cannot reclaim the
+app, and target restart recovers the same live shell. Host commit-failure fencing
+and historical replay pass separately. Manual-restore settlement, dead-assignment
+retirement and final combined build gates remain pending. See
+[the transfer contract](APP_DISPLAY_TRANSFER.md). The global executable above
+has not changed.
 
 ## Previous install: public default-display reactivation
 
@@ -42,7 +56,7 @@ binary preserves shell PID and an in-memory variable across close/reopen and
 refuses the observer before control reactivation. The complete native-client
 suite passes, including that new proof. Logs:
 `/tmp/bee-default-reactivation-{negative,positive,observer,client-check}-20260911.log`.
-Full foundation72192 remains running on lifecycle source81f72d1; it does not
+Full foundation72192 passed on lifecycle source81f72d1; it does not
 include the one-line public activation follow-up. Friendly labels are separate.
 The cause of the earlier spontaneous display crash remains unexplained; these
 changes prove containment and public recovery, not absence of future crashes.
@@ -60,7 +74,7 @@ The initial retained display now uses the same lifecycle as other displays.
 Its exit no longer shuts down the workspace and other apps. Six source/pack
 retained scenarios and both native-client/binary suites pass. Actual-user cold
 frame1.446s, warm0.222s, clean detach0.114s each, catalog0.204s. Full foundation
-check72192 remains running on this source. Friendly labels are not included.
+check72192 passed on this source. Friendly labels are not included.
 The initial spontaneous display failure remains unexplained; the injected crash
 proof establishes containment and direct retained reactivation only. Public Hive
 admission still needs review for default-display reactivation after display exit.

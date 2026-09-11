@@ -220,3 +220,13 @@ runtime refuses the production process-group requirement because the exec handle
 exposes no PID. The probe also asserts that terminal exit leaves cleanup pending.
 Production cleanup, authenticated turns, Codex UI and physical-client/F12
 retention remain separate gates. Production requirements were not relaxed.
+
+## Static harness isolation proof
+
+`make harness-module` stages all harness entries and its exact reviewed static
+import closure in a small host, without desktop, thread service or placement
+service entries. Runtime lint and boot prove the catalog is empty on an empty
+host, a linked process host reaches request validation, and an unlinked host
+refuses before admission. Host policies in this fixture deny execution. This
+is a static composition proof, not successful carrier execution, package
+installation or Hive activation; those still need the full dependency owners.

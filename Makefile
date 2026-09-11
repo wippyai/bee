@@ -60,6 +60,9 @@ threads:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/threads.py
 threads-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_module.py
+.PHONY: harness-module
+harness-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/harness_module.py
 resources-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources_module.py
 gateway-check:
@@ -68,7 +71,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-check: installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module resources-module gateway-check pack headless-check workspace-hosts-check
+check: installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/architecture.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py

@@ -519,5 +519,6 @@ candidate settles the reply, keeps the second display's in-memory shell state,
 reactivates the same default identity and reattaches its original live shell.
 The retained source/pack matrix passes normal operation, slow storage, launch
 exit, delayed initial renderer, additional-display copy exit and initial-display
-crash. The standalone build passes. Full foundation and assembled-binary gates
-are running; this correction is not in the installed global build yet.
+crash. The standalone build passes. Both assembled-binary suites pass and this correction is installed globally.
+The full foundation check remains running; public Hive default-display
+reactivation after display exit still needs its own admission proof.

@@ -1,6 +1,24 @@
 # Global Bee build — September 11, 2026
 
-## Current install: Hive name recovery
+## Current install: independent retained display lifetimes
+
+Global SHA256 `c91809cb6eac44e29d0268130193052f2ac5d1965a2b526b376909f0ea7b4aab`.
+Source81f72d1, native2a2117ad4fe7, runtime674b58a1, builder70acb10175fb.
+Artifact `/tmp/bee-display-lifetimes-candidate-20260911`; backup
+`bee.previous-display-lifetimes-20260911T134612Z`. Atomic installation includes
+all license/provenance sidecars. Exact process identity was checked before
+pidfd restart; databases were preserved.
+
+The initial retained display now uses the same lifecycle as other displays.
+Its exit no longer shuts down the workspace and other apps. Six source/pack
+retained scenarios and both native-client/binary suites pass. Actual-user cold
+frame1.446s, warm0.222s, clean detach0.114s each, catalog0.204s. Full foundation
+check72192 remains running on this source. Friendly labels are not included.
+The initial spontaneous display failure remains unexplained; the injected crash
+proof establishes containment and direct retained reactivation only. Public Hive
+admission still needs review for default-display reactivation after display exit.
+
+## Previous install: Hive name recovery
 
 Global SHA256: `82afdae8791a79fc45703ea61134f48c652794d96da3ba913a776702a9e7dc50`.
 Application fix `6c6c574`, native `2a2117ad4fe7`, runtime `674b58a1`,

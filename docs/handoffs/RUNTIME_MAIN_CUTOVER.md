@@ -101,8 +101,20 @@ toolchain: broker-owned PTYs, keyboard interaction, resize, rebind and explicit
 cancellation. This fixture submits no authenticated provider turn and retains
 its explicit pending-cleanup policy; it is not production cleanup acceptance.
 
-The fresh-runtime Lua run with the process-group absence correction passes
-555 of 556 tests. The remaining failure is the gateway takeover/revocation
-fixture receiving no report in the thread; investigation is separate from the
-native launch gates. The new minimal identity gate and native placement
-identity/descendant cleanup proofs pass.
+The fresh-runtime Lua run passes all 556 tests, including the process-group
+absence correction and native placement identity/descendant cleanup proofs.
+The gateway takeover fixture failure was reproduced by explicitly reconciling
+placement after revocation: correct enforcement stopped the sleeping fixture
+before it could report its HTTP denial. The fixture now cooperatively handles
+TERM, makes the real request and flushes its result within the existing stop
+deadline. Tests require both revocation/stop evidence and the actual HTTP 401;
+production enforcement is unchanged.
+
+The full native-client executable gate passes, including three displays, retained
+applications, cold-launch contention and physical client crash/reconnect. Storage,
+thread restart, resource containment and source/pack connection UI checks also
+pass. The desktop smoke initially failed with a blank first frame. Twelve focused
+boots and a subsequent full source/pack smoke pass do not explain that failure.
+Failure-only diagnostics now retain bounded terminal output and process state;
+the intermittent startup issue remains unresolved. Remaining desktop acceptance
+is still in progress, so this is not a completed full foundation check.

@@ -8,6 +8,11 @@ local function request(): {[string]: unknown}
         renderer_generation = "generation", request_id = "request", view_id = "view",
         instance_id = "instance", target_display_id = target, expected_revision = 1}
 end
+local function snapshot(): {[string]: unknown}
+    return {version = 1, workspace_id = workspace, connection_id = "connection", display_id = workspace, revision = 4,
+        items = {{view_id = "view", instance_id = "instance", display_id = target, revision = 2, pending = true}},
+        displays = {{display_id = workspace, available = true, control = true}, {display_id = target, available = true, control = true}}}
+end
 local function define_tests()
     test.describe("Display transfer boundary", function()
         test.it("copies stable identities without accepting source authority", function()
@@ -44,6 +49,18 @@ local function define_tests()
             invalid = request()
             invalid.version = 2
             test.is_nil(transfer.request(invalid))
+        end)
+        test.it("decodes bounded connection-qualified assignment projections and results", function()
+            local projection = transfer.snapshot(snapshot())
+            if not projection then error("valid assignment projection rejected") end
+            test.eq(projection.items[1].display_id, target)
+            local duplicate = snapshot()
+            duplicate.items[1].instance_id = "another"
+            duplicate.items[2] = duplicate.items[1]
+            test.is_nil(transfer.snapshot(duplicate))
+            local outcome = transfer.result({version = 1, workspace_id = workspace, connection_id = "connection", request_id = "request", view_id = "view", instance_id = "instance", target_display_id = target, assignment_revision = 2, error_code = "", error = ""})
+            if not outcome then error("valid transfer result rejected") end
+            test.is_nil(transfer.result({version = 1, workspace_id = workspace, connection_id = "connection", request_id = "request", view_id = "view", instance_id = "instance", target_display_id = target, assignment_revision = 2, error_code = "", error = "unexpected"}))
         end)
     end)
 end

@@ -282,6 +282,12 @@ local function reject(state: State, client: clients.Client, request: contract.Re
     reply.workspace_id = state.workspace_id
     deliver_reply(state, client, reply)
 end
+local function live_identity(state: State, view_id: string, instance_id: string): boolean
+    for _, view in ipairs(state.inventory.views) do
+        if view.view_id == view_id and view.instance_id == instance_id then return true end
+    end
+    return false
+end
 function M.request(state: State, caller: string, request: contract.Request, data: unknown, ready: boolean, saved: {records.Record}): boolean
     local client = state.admitted[caller]
     if not client then return false end
@@ -296,7 +302,20 @@ function M.request(state: State, caller: string, request: contract.Request, data
     if code == "" and request.op == "bind" and request.observer ~= true and client.permissions.control then
         local assigned, assignment_error = state.assignments:get({view_id = request.id, instance_id = request.instance_id})
         if assignment_error then error("Read display assignment: " .. tostring(assignment_error)) end
-        if not assigned or assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
+        if not assigned then
+            -- Recovered and pre-admission applications can be live before any
+            -- client opened them through this router. The first authenticated
+            -- controller claims only that exact live incarnation; a dormant or
+            -- mismatched identity cannot create an assignment through bind.
+            if not live_identity(state, request.id, request.instance_id) then code = "permission_denied"
+            else
+                local claimed, claim_error = state.assignments:claim({view_id = request.id, instance_id = request.instance_id,
+                    display_id = client.display_id})
+                if not claimed then code = "persistence_failed"
+                elseif claimed.display_id ~= client.display_id then code = "permission_denied"
+                else M.assignments(state) end
+            end
+        elseif assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
     end
     if code ~= "" then
         reject(state, client, request, code, code == "workspace_mismatch" and "Request targets another workspace" or "Client request rejected")

@@ -24,16 +24,8 @@ entries:
   meta:
     comment: Privileged fixture caller may construct a selected child scope and invoke the rendering probe
   policy:
-    actions: [funcs.security, security.scope.create, security.policy.get]
-    resources: [security, custom, bee.gateway_probe:configuration_scope]
-    effect: allow
-- name: configuration_scope
-  kind: security.policy
-  meta:
-    comment: Minimal host-selected scope for pure gateway configuration rendering
-  policy:
-    actions: [funcs.call]
-    resources: [bee.gateway_probe:render_configuration]
+    actions: [funcs.security, security.scope.create]
+    resources: [security, custom]
     effect: allow
 - name: render_configuration
   kind: function.lua

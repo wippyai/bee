@@ -91,8 +91,15 @@ the existing remote-node lifetime policy is unchanged.
 Launch, session, local-owner and mesh-client race tests plus vet pass on #726.
 The physical restart regression kills the old node, retains its descriptor and
 requires a fresh automatic launch within fifteen seconds. The complete native
-toolchain builds at this checkpoint. A standalone validation build is pending;
-no global executable is installed from these results.
+toolchain builds at this checkpoint. The standalone validation build succeeds,
+and its native-binary gate passes embedded startup, all current store files,
+Settings recovery, Terminal, scrolling, selection/copy, command arguments and
+presenter rejoin. No global executable is installed from these results.
+
+Real Claude and Codex window acceptance also passes on the refreshed native
+toolchain: broker-owned PTYs, keyboard interaction, resize, rebind and explicit
+cancellation. This fixture submits no authenticated provider turn and retains
+its explicit pending-cleanup policy; it is not production cleanup acceptance.
 
 The fresh-runtime Lua run with the process-group absence correction passes
 555 of 556 tests. The remaining failure is the gateway takeover/revocation

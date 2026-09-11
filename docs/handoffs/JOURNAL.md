@@ -5586,3 +5586,27 @@ Syscall diagnostic49371 subsequently completed exit0: all30 rounds passed.
 The trace is a healthy comparison, not evidence of the failure cause. No
 diagnostic jobs remain live from this stretch; do not repoll completed handles.
 Global cbb6d6a5 and the existing user process remain unchanged.
+
+### Detach stage diagnosis — journals 920–921
+
+The failing syscall trace places a missing reply before client teardown: the
+retained process read the client's encrypted request bytes promptly, but the
+existing socket carried no reply before the 200 ms deadline. The client exited
+287 ms after terminal restoration. This is not proof of Lua request admission.
+The actual-user read-only catalog remains responsive (0.193s).
+
+A separate diagnostic profile is pushed as
+`checkpoint/detach-stage-trace-20260910` at6eca698. It selects an opt-in
+`beediagnostic` native factory5912947 and logs Hive dispatch/result plus retained
+grant/unmonitor stages through the existing log event stream. It is not a release
+profile and must never be installed globally. The production pin staysced4008.
+The first stage run28307 reproduced successful exit1.152s using the original
+200 ms budget; post-failure catalog1.811s. That slow exit is therefore not caused
+solely by the rejected750ms experiment.
+
+Library logger context was corrected, rebuilt9094, and verified to emit all nine
+stages. Combined trace2773 is live at `/tmp/bee-detach-full-stage.log` and `.trace`,
+fixture `/tmp/bee-native-reconnect-hgvhrztz/state/owner-3771906929.log`. First100
+complete detach dispatch groups took at most2.818ms. Parsers:
+`/tmp/bee-detach-stage-timing.py` and `/tmp/bee-trace-timing.py`. Do not poll
+completed builds1784/9094 or first stage run28307. No user processes restarted.

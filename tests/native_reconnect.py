@@ -73,10 +73,11 @@ def run(binary, rounds, keep_fixture=False):
                     raise failures[0]
                 for ui in clients:
                     ui.pump(.15)
-                for ui in reversed(clients):
+                while clients:
+                    ui = clients[-1]
                     ui.quit()
                     ui.close()
-                clients.clear()
+                    clients.pop()
                 print(f"Round {cycle + 1}: three frames {durations}", flush=True)
         passed = True
         print(f"{rounds} overlapping three-client reconnects passed", flush=True)

@@ -5610,3 +5610,21 @@ fixture `/tmp/bee-native-reconnect-hgvhrztz/state/owner-3771906929.log`. First10
 complete detach dispatch groups took at most2.818ms. Parsers:
 `/tmp/bee-detach-stage-timing.py` and `/tmp/bee-trace-timing.py`. Do not poll
 completed builds1784/9094 or first stage run28307. No user processes restarted.
+
+### Proven cancellation-order fix; independent timeout remains — journal 925
+
+Native checkpointa0fc01e088b2 drains canceled physical input before closing its
+viewport. The new regression failed the original code with ErrMountExpired;
+fixed mesh/physical90369, session56803 and retained-owner49054 race/vet passed.
+Real late delivery errors remain visible, including genuine ErrMountExpired.
+The clean candidate `/tmp/bee-cancel-drain-candidate` built86977 (SHA256
+2c1f11099dd970c12be11ee8cf7e51ad1521e093c94f1a880cfd1602d7908a61),
+without diagnostic code or timeout changes. Native-client63685 and
+standalone83568 acceptance passed. Stress14828 failed round4 at the pre-existing
+detach acknowledgment timeout; catalog still answered in0.386s. Evidence:
+`/tmp/bee-cancel-drain-reconnect-check.log`, fixture
+`/tmp/bee-native-reconnect-359cj4kf`. No global installation or user restart.
+
+The diagnostic's cleanup attempted a second close of earlier completed clients
+after this failure; those clients are now removed from its cleanup list as each
+close completes. The original failure remains preserved.

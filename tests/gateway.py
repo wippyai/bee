@@ -35,14 +35,26 @@ def main():
         addresses = [address for _, address in workspaces]
         assert len(set(addresses)) == len(addresses), addresses
         runs = []
-        for folder, _ in workspaces:
-            runs.append(subprocess.Popen([str(RUNTIME), "run", "gateway-probe", "--set", f"registry.history_path={folder}/registry.db"],
-                                         cwd=folder, env=database_environment(folder), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
-        for run, (_, address) in zip(runs, workspaces):
-            stdout, stderr = run.communicate(timeout=120)
-            output = stdout + stderr
-            assert run.returncode == 0, f"{address}: {output}"
-            assert "Bearer" not in output, "token bytes reached captured output"
+        try:
+            for folder, _ in workspaces:
+                runs.append(subprocess.Popen([str(RUNTIME), "run", "gateway-probe", "--set", f"registry.history_path={folder}/registry.db"],
+                                             cwd=folder, env=database_environment(folder), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
+            for run, (_, address) in zip(runs, workspaces):
+                stdout, stderr = run.communicate(timeout=120)
+                output = stdout + stderr
+                assert run.returncode == 0, f"{address}: {output}"
+                assert "Bearer" not in output, "token bytes reached captured output"
+        finally:
+            for run in runs:
+                if run.poll() is None:
+                    run.terminate()
+            for run in runs:
+                if run.poll() is None:
+                    try:
+                        run.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        run.kill()
+                        run.wait()
     print("Gateway slices 1, 2 and hook endpoints: hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
           "ambiguity per delivery, allowlisted queue fields, Codex metadata classification, payload and queue bounds; authenticated loopback readiness with epoch and restart generation, admission without bytes, materialize once per credential generation, "
           "reissue as compare-and-set, supersession and revoke_attempt fenced by carrier epoch, cross-attempt and expiry and revocation refused, thread_read as the bound subject, "

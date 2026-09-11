@@ -13,11 +13,12 @@ RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).res
 
 
 def managed_gateway_address():
-    """Reserve a distinct loopback address for one disposable composition."""
+    """Select an available ephemeral loopback address for one composition."""
     # http.service accepts an address rather than a pre-bound socket, so the
-    # reservation ends before its process starts. The copied host, policy and
-    # listener all retain this address, preventing concurrent fixtures from
-    # answering one another's readiness probes on the historical shared port.
+    # socket closes before startup and cannot reserve it permanently. The
+    # copied host, policy and listener all retain the selected address,
+    # preventing concurrent fixtures from answering one another's readiness
+    # probes on the historical shared port.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         return f"127.0.0.1:{listener.getsockname()[1]}"

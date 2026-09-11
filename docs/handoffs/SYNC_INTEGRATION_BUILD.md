@@ -25,3 +25,10 @@ Evidence logs:
 This checkpoint does not fix intermittent mesh startup/detach stalls. Display
 appearance inheritance, readable labels, send-to-display and expanded F9 node
 roles are subsequent work, not capabilities demonstrated by these gates.
+
+The subsequent `make native-settings-resize-check` passes on this same executable:
+three grow/shrink cycles, fullscreen/restore, physical-terminal resize, drag
+resize and F12. It checks Settings' footer against the committed body boundary.
+It allows up to three seconds to converge and does not prove intermediate-frame
+smoothness or reproduce the user's reported resize gap. Evidence:
+`/tmp/bee-native-settings-resize-check.log`.

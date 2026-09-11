@@ -83,3 +83,7 @@ native-connection-ui-check:
 
 native-independent-desktops-check:
 	python3 tests/native_client.py "$(BEE_BINARY)" --desktops
+
+.PHONY: native-settings-resize-check
+native-settings-resize-check:
+	python3 tests/native_settings_resize.py "$(BEE_BINARY)"

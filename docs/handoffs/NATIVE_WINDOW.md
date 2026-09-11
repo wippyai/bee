@@ -167,8 +167,9 @@ broker still supplies the base, core and workspace-store boundaries.
 
 `make managed-window-app-check` proves the fixture-only path through a real
 broker: PTY input and resize, detach/rebind without restarting the child,
-explicit close with revoked input, and exactly one cancelled attempt receipt
-without invented logical turns. It runs as part of `make check`. PTY completion
+explicit close with revoked input, and exactly one cancelled attempt receipt.
+A second case allows natural PTY completion and requires one uncertain receipt.
+Neither path creates logical turns. It runs as part of `make check`. PTY completion
 does not prove OS descendant cleanup; that remains pending in placement. It does not yet
 prove a production profile, an Agent-to-Codex menu or command binding,
 installer/Hive activation, or the full F12 and physical-client lifecycle. An
@@ -179,3 +180,9 @@ A future installer must review changes to the complete protected admission
 policy set. With the current schema an omitted ordinary deny is a permission
 change, not a self-declared component role; package metadata cannot authorize
 that omission. Hive installation enforcement remains a separate acceptance gate.
+
+Interactive PTY profiles may explicitly declare `answer_path: {strategy: none}`.
+That declaration has no adapter and is rejected for structured batch/session
+profiles. The managed-window fixture uses this shape, so its cancellation
+receipt no longer depends on an unused provider answer adapter. This declares
+absence of logical answer extraction, not successful completion from PTY exit.

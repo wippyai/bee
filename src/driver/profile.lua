@@ -74,10 +74,18 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     if not answer then return nil, answer_error end
     local unknown_answer = bounds.fields(answer, {"strategy", "adapter_ref"})
     if unknown_answer then return nil, what .. ".answer_path: " .. unknown_answer end
-    local strategy = bounds.member(answer.strategy, {"terminal_field", "accumulate", "transcript", "runner"})
-    local answer_adapter = bounds.id(answer.adapter_ref)
-    if not strategy then return nil, what .. ".answer_path.strategy is not supported" end
-    if not answer_adapter then return nil, what .. ".answer_path.adapter_ref is not an identifier" end
+    local answer_path: types.AnswerPath
+    if answer.strategy == "none" then
+        if mode ~= "window" or protocol ~= "pty" then return nil, what .. ".answer_path none requires a PTY window" end
+        if answer.adapter_ref ~= nil then return nil, what .. ".answer_path names an adapter while disabled" end
+        answer_path = {strategy = "none"}
+    else
+        local strategy = bounds.member(answer.strategy, {"terminal_field", "accumulate", "transcript", "runner"})
+        local answer_adapter = bounds.id(answer.adapter_ref)
+        if not strategy then return nil, what .. ".answer_path.strategy is not supported" end
+        if not answer_adapter then return nil, what .. ".answer_path.adapter_ref is not an identifier" end
+        answer_path = {strategy = strategy :: types.AnswerStrategy, adapter_ref = answer_adapter}
+    end
     local resume: types.Resume = {strategy = "none", portable = false}
     if profile.resume ~= nil then
         local declared, declared_error = object(profile.resume, what .. ".resume")
@@ -204,7 +212,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         exchange = {mode = exchange_mode :: types.PermissionMode, adapter_ref = adapter, adapter_digest = adapter_digest}
     end
     return {id = id, mode = mode :: types.Mode, protocol = protocol :: types.Protocol, protocol_revision = revision, hooks = hooks,
-        answer_path = {strategy = strategy :: types.AnswerStrategy, adapter_ref = answer_adapter}, resume = resume, inbound = inbound :: {types.Inbound},
+        answer_path = answer_path, resume = resume, inbound = inbound :: {types.Inbound},
         isolation_env = isolation, trust_preanswer = trust, exit_codes_trustworthy = exit_codes, input_ready = ready, interrupt = interrupt, mcp = mcp, sandbox = sandbox,
         permission_exchange = exchange}, nil
 end

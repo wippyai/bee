@@ -46,7 +46,7 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: fixture-pty-1
-        answer_path: {strategy: terminal_field, adapter_ref: bee.driver.claude:protocol}
+        answer_path: {strategy: none}
 - name: definition
   kind: registry.entry
   meta: {type: bee.launch_definition, test_support: true}
@@ -80,6 +80,17 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: run
+  modules: [process, channel, time, security, tty, funcs, json]
+  imports:
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+
+- name: natural_completion_test
+  kind: function.lua
+  source: file://main.lua
+  method: natural
   modules: [process, channel, time, security, tty, funcs, json]
   imports:
     appearance: bee.desktop:appearance

@@ -10,7 +10,6 @@ local appearance = require("appearance")
 
 local M = {}
 local WORKSPACE = string.rep("a", 32)
-local THREAD = "managed_window_thread"
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
@@ -28,7 +27,8 @@ local function call(target: string, value: unknown): {[string]: unknown}
     return result
 end
 
-function M.run()
+local function run(natural: boolean)
+    local THREAD = natural and "managed_window_natural" or "managed_window_thread"
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
@@ -41,7 +41,7 @@ function M.run()
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
-    local request = assert(json.encode({request_id = "managed-window-request", definition_ref = "bee.managed_window_fixture:definition", brief = "managed window",
+    local request = assert(json.encode({request_id = natural and "managed-window-natural-request" or "managed-window-request", definition_ref = "bee.managed_window_fixture:definition", brief = "managed window",
         thread_id = THREAD}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = {request}}))
@@ -94,14 +94,28 @@ function M.run()
     end
     local next_view = assert(tty.attach(rebound))
     assert(table.concat(next_view:snapshot().rows):find("MANAGED:hello", 1, true), "detach restarted the managed child")
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
-    local closed = false
-    while not closed do
-        local message = assert(replies:receive())
-        local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then closed = data.error_code == "" end
+    if not natural then
+        assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
+        local closed = false
+        while not closed do
+            local message = assert(replies:receive())
+            local data = message:payload():data()
+            if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then closed = data.error_code == "" end
+        end
+        assert(closed, "managed app close failed")
+    else
+        local settled = false
+        for _ = 1, 160 do
+            local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
+            local page_value = reply(page.value)
+            for _, record in ipairs(page_value.records :: {{[string]: unknown}}) do
+                if record.kind == "receipt" then settled = true end
+            end
+            if settled then break end
+            time.sleep("50ms")
+        end
+        assert(settled, "natural PTY completion never settled an attempt")
     end
-    assert(closed, "managed app close failed")
     local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
     local value = records.value :: {[string]: unknown}
@@ -111,9 +125,9 @@ function M.run()
         if item.kind == "receipt" then
             receipts = receipts + 1
             local body = reply(item.body)
-            assert(body.scope == "attempt" and body.outcome == "cancelled", "explicit close must record attempt cancellation")
+            assert(body.scope == "attempt" and body.outcome == (natural and "uncertain" or "cancelled"), "receipt must distinguish terminal completion from explicit cancellation")
             local fault = reply(body.error)
-            assert(fault.code == "native_window_closed", "close receipt must identify native window cancellation")
+            assert(fault.code == (natural and "native_window_unobserved" or "native_window_closed"), "receipt must identify its evidence")
         end
     end
     assert(receipts == 1, "close must settle exactly one attempt receipt")
@@ -126,4 +140,6 @@ function M.run()
     process.unlisten(catalogs); process.unlisten(replies)
 end
 
+M.run = function() run(false) end
+M.natural = function() run(true) end
 return M

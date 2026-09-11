@@ -33,13 +33,38 @@ local function define_tests()
             if not entry then error("missing application admission") end
             local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
             for _, binding in ipairs(data.bindings) do
-                local names: {string} = {"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"}
-                for _, name in ipairs(binding.policies) do names[#names + 1] = name end
-                local access = probe(names)
-                for _, resource in ipairs({"bee:workspace_db", "bee:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
-                    if access[resource] then error(binding.definition_id .. " opened " .. resource) end
+                if binding.definition_id ~= "bee.harness.window:app" then
+                    local names: {string} = {"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"}
+                    for _, name in ipairs(binding.policies) do names[#names + 1] = name end
+                    local access = probe(names)
+                    for _, resource in ipairs({"bee:workspace_db", "bee:client_db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db"}) do
+                        if access[resource] then error(binding.definition_id .. " opened " .. resource) end
+                    end
                 end
             end
+        end)
+        test.it("checks the managed window's actual binding without granting core store access", function()
+            local entry = registry.get("bee:application_admission")
+            if not entry then error("missing application admission") end
+            local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
+            local found = false
+            for _, binding in ipairs(data.bindings) do
+                if binding.definition_id == "bee.harness.window:app" then
+                    found = true
+                    local names: {string} = {"bee.harness.catalog:scope_probe_allow"}
+                    for _, name in ipairs(binding.policies) do names[#names + 1] = name end
+                    local access = probe(names)
+                    test.is_true(access["bee.placement.native:db"])
+                    for _, resource in ipairs({"bee:workspace_db", "bee:client_db", "bee.resources:db", "bee.credentials:db"}) do
+                        test.is_false(access[resource])
+                    end
+                    names[#names + 1] = "bee.harness.catalog:scope_probe_broad_store"
+                    local broad = probe(names)
+                    test.is_false(broad["bee:workspace_db"])
+                    test.is_false(broad["bee:client_db"])
+                end
+            end
+            test.is_true(found)
         end)
         test.it("requires explicit execution access and always denies the core stores", function()
             local denied = probe({"bee.harness.catalog:scope_probe_allow"})

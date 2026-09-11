@@ -28,6 +28,26 @@ local function define_tests()
             test.not_nil(profile.find(binding, "batch"))
             test.is_nil(profile.find(binding, "window"))
         end)
+        test.it("declares a PTY window without inventing structured answers", function()
+            local entry = declaration()
+            entry.profiles[1].mode = "window"
+            entry.profiles[1].protocol = "pty"
+            entry.profiles[1].answer_path = {strategy = "none"}
+            local binding, err = profile.decode(entry)
+            if not binding then error(tostring(err)) end
+            test.eq(binding.profiles[1].answer_path.strategy, "none")
+            entry.profiles[1].answer_path = {strategy = "none", adapter_ref = "probe:protocol"}
+            local _, adapter_error = profile.decode(entry)
+            test.eq(adapter_error, "profile batch.answer_path names an adapter while disabled")
+            entry.profiles[1].answer_path = {strategy = "none"}
+            entry.profiles[1].mode = "batch"
+            entry.profiles[1].protocol = "stream-json"
+            local _, mode_error = profile.decode(entry)
+            test.eq(mode_error, "profile batch.answer_path none requires a PTY window")
+            entry.profiles[1].answer_path = {strategy = "terminal_field"}
+            local _, missing_error = profile.decode(entry)
+            test.eq(missing_error, "profile batch.answer_path.adapter_ref is not an identifier")
+        end)
         test.it("enables a permission exchange only with a pinned adapter reference and digest", function()
             local enabled = declaration()
             enabled.profiles[1].permission_exchange = {mode = "adapter", adapter_ref = "probe:permission", adapter_digest = string.rep("a", 64)}

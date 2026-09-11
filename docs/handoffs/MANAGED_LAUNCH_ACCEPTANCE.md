@@ -14,7 +14,12 @@ real-executable proof names passed, including loopback authentication, permissio
 exchange and gateway interoperability; the seven gateway-carrier integration
 failures prevent acceptance. Three report a listener readiness generation
 conflict, and later cases fail before the child presents its credential. The
-cause is under investigation; this result does not establish a runtime defect.
+cause was concurrent test compositions sharing loopback port `18790`: a request
+could reach another runtime's listener, which correctly refused the generation.
+A fresh run on unchanged source `4900c6d` passed **199/199** in 213.4 seconds.
+Fixture endpoint isolation and concurrent acceptance are being implemented;
+production generation checks are unchanged. The full integrated gate including
+the workspace handoff correction below remains pending.
 
 Reproduction (real provider credentials removed; fixtures use isolated homes,
 sentinel credentials and loopback endpoints):

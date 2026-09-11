@@ -16,8 +16,8 @@ covers live Terminal PID and shell-state preservation, target admission denial,
 stale source-bind denial, repeated moves, receipt replay, manual restore settlement,
 and dead-assignment retirement.
 
-This is not installed globally. Source and target layout-save failure/reconnect
-checks pass on source and pack. Final combined desktop and executable gates remain pending.
+Installed globally as SHA `2569142f`; see [build evidence](GLOBAL_BUILD.md).
+Source and target layout-save failure/reconnect checks pass on source and pack.
 
 
 ## Ownership
@@ -124,7 +124,7 @@ neighbor app. These modes run in `make client-desktop-check`. Host manual-restor
 acceptance. A combined desktop smoke exposed duplicate bind requests from
 assignment and open projections; sharing the in-flight bind removes the transient
 mount denial and passes the same source/pack smoke, including six presenter
-rejoins and crash recovery. Final desktop and executable gates precede installation.
+rejoins and crash recovery. The final desktop segments and executable gates pass; see the build handoff.
 
 The combined proof must move a Terminal through the real window menu, preserve
 its exact PID and in-memory variable, retain the neighboring app, reconcile both

@@ -1,6 +1,41 @@
 # Global Bee build — September 11, 2026
 
-## Current install: friendly workspace and display labels
+## Current install: app transfer between displays
+
+Global SHA256 `2569142fc3ba3b6fc95ffbf5fc09f9377ab3e4ceca742b5661917ab076a0e847`.
+Production source `4e57054`, build checkpoint `8d16dc5`. Native `2a2117ad4fe7`,
+runtime `674b58a1` and builder `70acb10175fb` are unchanged.
+Artifact `/tmp/bee-app-transfer-final-20260911`; backup
+`bee.previous-app-transfer-20260911T163644Z`. Installed atomically with verified
+provenance/license sidecars. The exact previous Bee process was retired through
+its validated pidfd; application databases were preserved.
+
+Right-click an app tab/title → **Send to display** moves its control assignment
+to another available display in the workspace. Two public native clients prove
+the same shell PID and in-memory state survive; the neighboring app and source
+F12 remain intact. Read-only observers keep their selected views independently
+of control assignment. First controlling bind claims an exact live restored app
+when it has no assignment yet; pending and foreign assignments stay fenced.
+
+Validation: 529 final unit tests, source/pack architecture572, both final executable
+suites, public native app transfer, complete client-desktop suite, full launcher,
+recovery and bundled-app tail pass. The foundation run passed module, headless,
+workspace-host and storage/resource gates. Desktop acceptance was completed in
+segments after fixing duplicate binds, observer projection and initial restored
+assignment; an obsolete two-migration recovery assertion was updated to three.
+There is no claim of one uninterrupted final `make check`. The existing
+`desktop_lifecycle` convergence warning remains.
+
+Actual-user cold frame **1.433s**, warm frame **0.209s**, detach **0.101/0.112s**,
+catalog **0.222s**, all exit zero. F9 confirms Antares and the same friendly
+workspace/display identities. Logs: `/tmp/bee-transfer-global-install-20260911.log`
+and `/tmp/bee-transfer-global-smoke-20260911.log`.
+
+Live Hive Manager desktop browsing/attachment, workspace switching and broader
+remote enrollment/recovery remain unfinished. This release does not establish
+portable native-process recovery after workspace-host death.
+
+## Previous install: friendly workspace and display labels
 
 Global SHA256 `3e39e45f1d17c9a00a45ef4e4aa56f41d5f0f844ac9f24fd12309d004ed1e888`.
 Sourcee3938a2 includes public display recoverye75eaa9 and lifetime81f72d1.
@@ -22,26 +57,6 @@ frame captured at `/tmp/bee-global-friendly-labels-frame-20260911.txt`.
 Full foundation72192 completed successfully on lifecycle source81f72d1. It excludes
 the later public activation and label deltas, which have focused source/pack and
 executable proofs. App transfer and workspace switching remain unfinished.
-
-## Transfer candidate, not installed
-
-Candidate `/tmp/bee-app-transfer-candidate-20260911`, SHA256
-`417eeae8ec436bf3ad6725026a57c89d3013e8085d4a10e7a7e1f5b2b7ffa610`,
-is built from release source `50f23db` (documentation checkpoint `0f44a0f`).
-Runtime, native and builder pins match the current global above.
-
-Window-menu transfer preserves the exact shell PID/state and neighboring app
-across two public native clients. Source/pack tests also cover failed source and
-target layout saves, reconnect, manual host restore, dead-assignment retirement,
-commit failure fencing and historical receipt replay. The combined desktop smoke
-caught duplicate binds from inventory/open projections; sharing the in-flight
-bind passes the source/pack reproduction without transient mount denial.
-
-Final 529-unit, standalone and native-client suites pass. The earlier foundation
-run passed modules, headless, architecture572 and storage/resource gates before
-that corrected smoke failure. The remaining desktop suite is running on the
-combined release. The global executable is unchanged until that gate completes.
-See [the transfer contract](APP_DISPLAY_TRANSFER.md).
 
 ## Previous install: public default-display reactivation
 

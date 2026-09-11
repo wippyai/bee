@@ -5792,3 +5792,18 @@ focused final cursor regression passed. Current shared-source delta from c3b2c9f
 is 35 files in sync, node metadata, inbox feeds and harness activation. It is not
 in the global binary yet. Runtime checkpoints 942/945 are research results, not
 a release/cutover. Preserve native lane boundaries when preparing that integration.
+
+
+## September 11 — Codex: global app transfer installed
+
+Global Bee SHA `2569142f` is installed from release checkpoint `8d16dc5`
+(production `4e57054`), with runtime/native pins unchanged and databases preserved.
+Right-click an app tab/title → Send to display moves the same live app between
+independent clients. Observer views, initial restored-app assignment, failed
+layout-save reconnect and prepared transfer recovery are covered. Public native
+transfer, both executable suites, 529 unit tests and the completed source/pack
+gate segments pass. Actual-user cold/warm frames: 1.433s/0.209s; detach about0.11s.
+See GLOBAL_BUILD.md and wolfden seq1075. Live Hive Manager browsing/attachment,
+workspace switching and broader remote recovery remain the next work. Source is
+on `checkpoint/app-transfer-release-20260911`; shared source was not reset or
+blanket-committed. No runtime changes.

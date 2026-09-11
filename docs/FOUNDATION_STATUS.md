@@ -1,13 +1,12 @@
 # Foundation status
 
-Current global Bee includes independent retained-display lifetimes, public
-default-display reactivation and friendly workspace/display labels (SHA
-`3e39e45f`, source `e3938a2`). Source/pack focused checks and both executable
-suites pass; the broader lifecycle-source foundation check also passed.
-The app-transfer candidate passes the real window-menu source/pack proof and
-is completing failure/recovery checks before installation. Workspace switching
-remains unfinished. See
-[the authoritative build handoff](handoffs/GLOBAL_BUILD.md); older checkpoints
+Current global Bee includes app transfer between independent displays, friendly
+names, retained-display recovery and observer-safe assignment projection (SHA
+`2569142f`, source `4e57054`). Public two-client transfer preserves the same shell
+PID/state; final unit, executable, client/launcher/recovery and source/pack gates
+pass as documented in [the build handoff](handoffs/GLOBAL_BUILD.md). Actual-user
+cold/warm frames were 1.433s/0.209s, with about 0.11s detach. Live Hive Manager
+browsing/attachment and workspace switching remain unfinished. Older checkpoints
 below describe earlier installations and narrower evidence.
 
 The September 11 global build now includes the production Hive eventual-name

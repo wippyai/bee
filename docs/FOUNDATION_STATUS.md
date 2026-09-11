@@ -1,5 +1,13 @@
 # Foundation status
 
+The current global executable includes native `a0fc01e088b2`, the proven physical
+cancellation-order fix, with unchanged Bee source `c3b2c9f` and runtime `674b58a1`.
+Native-client/standalone acceptance and focused race/vet pass; actual-user observe
+reached a frame in 217 ms and detached in 87 ms. Global SHA starts `2c1f1109`.
+Intermittent startup and detach failures remain unresolved; this is not sustained
+reconnect acceptance. See [current build](handoffs/GLOBAL_BUILD.md). Older dated
+checkpoints below describe previous installations and their evidence.
+
 The currently installed September 10 candidate (production c3b2c9f, native
 ced4008999f4, runtime674b58a1) passed full `make check`: 494 Lua tests,
 525 source/pack entries, storage/restart, permissions, desktop/client lifetimes,

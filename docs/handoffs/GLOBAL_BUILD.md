@@ -24,7 +24,7 @@ A private 750 ms detach-budget candidate (`094d0c4416dd`, binary
 passed native race/vet, client acceptance and standalone acceptance. Its longer
 stress check failed at round 46: successful detach took 1.090s, exceeding the
 one-second exit requirement; the subsequent catalog took 1.739s. It is **not
-installed or selected for builds**. The native pin remains `ced4008999f4`.
+installed or selected for builds**. The native pin now selects the separate cancellation fix `a0fc01e088b2`, retaining the original 200 ms detach budget.
 
 A longer acknowledgment budget alone is insufficient. Diagnosis must distinguish
 detach acknowledgment from native client shutdown. No cause or fix is established
@@ -34,15 +34,31 @@ Evidence: `/tmp/bee-detach-budget-reconnect-check.log`, fixture
 
 ## Installed
 
+The global binary now includes the narrow physical cancellation-order fix:
+cancel and join the input worker before closing its mount. A regression fails
+without the change and passes with it; genuine delivery errors remain visible.
+Native-client and standalone suites passed, as did mesh/physical, session and
+retained-owner race/vet checks. The source and runtime are unchanged from the
+previous install. Reconnect stress still reproduces pre-existing detach and
+startup failures, so this is not a sustained-reliability claim.
+
+Installed read-only attachment to the actual user's retained workspace reached
+its first frame in 217 ms and detached in 87 ms. No owner restart or database
+change was performed. Evidence: `/tmp/bee-cancel-drain-global-install.log` and
+`/tmp/bee-cancel-drain-global-observe.log`. Backup:
+`bee.previous-20260911T004912Z`. Artifact: `/tmp/bee-cancel-drain-candidate`.
+The latest runtime-facing detach evidence is journal 935: accepted local send
+in 21 microseconds, retained select resuming 599 ms later.
+
 `/home/wolfy-j/.local/bin/bee` is the explicit-selection and Hive session-identity candidate:
 
 | Component | Revision |
 |---|---|
 | Bee production source | `c3b2c9f` |
-| Native Bee | `ced4008999f4` |
+| Native Bee | `a0fc01e088b2` |
 | Runtime | `674b58a1a117fa79398f723c4311201cca8472e1` |
 | Builder | `70acb10175fbeb42a3a4d382677715a0c2a969e4` |
-| Executable SHA256 | `cbb6d6a5bc71b5c37b281f2b3075122e990296c50830d641c8fa21939f389e59` |
+| Executable SHA256 | `2c1f11099dd970c12be11ee8cf7e51ad1521e093c94f1a880cfd1602d7908a61` |
 
 The full foundation check passed (session61042, exit0): 494 Lua tests, 525
 source/pack entries, storage, permissions, desktop/client lifetimes, recovery and
@@ -70,7 +86,7 @@ restarting it. Logs: `/tmp/bee-explicit-selection-global-install.log` and
 
 ## Explicit selection
 
-The installed build artifact is `/tmp/bee-explicit-desktop-candidate`, from checkpoint
+The previous explicit-selection build artifact is `/tmp/bee-explicit-desktop-candidate`, from checkpoint
 `checkpoint/explicit-desktop-selection-20260910`. Its production source is
 `c3b2c9f`, native pin `ced4008999f4`, and runtime/builder are unchanged.
 SHA256: `cbb6d6a5bc71b5c37b281f2b3075122e990296c50830d641c8fa21939f389e59`.

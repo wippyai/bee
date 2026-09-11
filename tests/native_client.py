@@ -212,15 +212,26 @@ def preparing_owner(binary):
             # owner_pidfd rechecks its command after opening the pidfd, so a PID
             # recycled after the /proc scan cannot target an unrelated process.
             extra_owners = []
-            for pid in live_owners(binary, state):
-                if pid != owner_pid:
+            captured_pids = {owner_pid}
+
+            def capture_extra_owners():
+                for pid in live_owners(binary, state):
+                    if pid in captured_pids:
+                        continue
                     contender = owner_pidfd(pid, binary, state)
                     if contender is not None:
+                        captured_pids.add(pid)
                         extra_owners.append(contender)
+
+            capture_extra_owners()
             if first is not None:
                 first.close()
             if second is not None:
                 second.close()
+            # Killing a foreground client cannot create a new contender. A
+            # second scan catches one it detached between the first scan and
+            # foreground teardown.
+            capture_extra_owners()
             stop_owner(owner)
             for contender in extra_owners:
                 stop_owner(contender)

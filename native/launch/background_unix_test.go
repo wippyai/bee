@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestOwnerCommandPreservesLiteralStateAndProject(t *testing.T) {
@@ -27,7 +27,7 @@ func TestOwnerCommandPreservesLiteralStateAndProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	request := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", StateDir: filepath.Join(root, "state $literal `literal`"), Directory: root}
+	request := app.LaunchRequest{Command: "bee", StateDir: filepath.Join(root, "state $literal `literal`"), Directory: root}
 	command, err := ownerCommand("/absolute/bee", request, log)
 	if err != nil {
 		t.Fatal(err)
@@ -36,9 +36,9 @@ func TestOwnerCommandPreservesLiteralStateAndProject(t *testing.T) {
 	if !reflect.DeepEqual(command.Args, want) || command.Dir != root || command.Stdin != nil || command.Stdout != log || command.Stderr != log {
 		t.Fatalf("wrong command: %#v", command)
 	}
-	request.Base = true
+	request.Arguments = []string{"not-empty"}
 	if _, err := ownerCommand("/absolute/bee", request, log); err == nil {
-		t.Fatal("base accepted")
+		t.Fatal("owner arguments accepted")
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // OwnerProcess is a child executable, not proof of workspace ownership or
@@ -28,7 +28,7 @@ type OwnerProcess struct {
 // supplies a protected log file; no pipe keeps the owner tied to the client.
 // An already canceled context prevents creation. After success, foreground
 // cancellation or exit must not terminate the owner or its applications.
-func StartOwner(ctx context.Context, request application.LaunchRequest, log *os.File) (*OwnerProcess, error) {
+func StartOwner(ctx context.Context, request app.LaunchRequest, log *os.File) (*OwnerProcess, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -40,9 +40,8 @@ func StartOwner(ctx context.Context, request application.LaunchRequest, log *os.
 	return startDetached(ctx, command)
 }
 
-func ownerCommand(executable string, request application.LaunchRequest, log *os.File) (*exec.Cmd, error) {
-	if !filepath.IsAbs(executable) || request.Operation != application.RunApplication || request.Base ||
-		request.Command == "" || len(request.Arguments) != 0 || !filepath.IsAbs(request.StateDir) ||
+func ownerCommand(executable string, request app.LaunchRequest, log *os.File) (*exec.Cmd, error) {
+	if !filepath.IsAbs(executable) || request.Command == "" || len(request.Arguments) != 0 || !filepath.IsAbs(request.StateDir) ||
 		!filepath.IsAbs(request.Directory) || log == nil {
 		return nil, errors.New("invalid background Bee owner launch")
 	}

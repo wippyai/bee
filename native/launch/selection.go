@@ -8,12 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/wippyai/bee/native/client/session"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	"github.com/wippyai/bee/native/internal/privatefile"
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func parseSelection(workspace, desktop string) (session.Selection, error) {
@@ -26,19 +26,18 @@ func parseSelection(workspace, desktop string) (session.Selection, error) {
 	return session.Selection{Workspace: workspace, Desktop: desktop}, nil
 }
 
-func (c Client) list(ctx context.Context, request application.LaunchRequest) error {
+func (c Client) list(ctx context.Context, request app.LaunchRequest) error {
 	if err := c.validate(ctx, request); err != nil {
 		return err
 	}
-	if err := privatefile.EnsurePrivateDir(request.StateDir); err != nil {
-		return err
-	}
-	busy, err := ownerLockBusy(request.StateDir)
+	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
 	if err != nil {
 		return err
 	}
-	if !busy {
+	if _, err := store.Read(ctx); errors.Is(err, os.ErrNotExist) {
 		return errors.New("No running Bee to list; start bee first")
+	} else if err != nil {
+		return err
 	}
 	catalog, err := session.List(ctx, filepath.Join(request.StateDir, rendezvous.DirectoryName))
 	if err != nil {

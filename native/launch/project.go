@@ -9,16 +9,12 @@ import (
 	"errors"
 	"path/filepath"
 
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
-// SelectProject scopes implicit application state to the canonical launch folder.
-// It performs no writes. Explicit state remains authoritative, including the
-// selected state passed to a detached owner child.
-func SelectProject(request application.LaunchRequest) (application.LaunchRequest, error) {
-	if request.Operation != application.RunApplication || request.ExplicitState {
-		return request, nil
-	}
+// CanonicalProject preserves the native node identity across symlink aliases.
+// It deliberately does not alter StateDir: cmd/app resolves that before Launch.
+func CanonicalProject(request app.LaunchRequest) (app.LaunchRequest, error) {
 	if !filepath.IsAbs(request.Directory) || !filepath.IsAbs(request.StateDir) {
 		return request, errors.New("project launch requires absolute project and state directories")
 	}
@@ -27,8 +23,22 @@ func SelectProject(request application.LaunchRequest) (application.LaunchRequest
 		return request, err
 	}
 	directory = filepath.Clean(directory)
-	digest := sha256.Sum256([]byte(directory))
 	request.Directory = directory
-	request.StateDir = filepath.Join(request.StateDir, "projects", hex.EncodeToString(digest[:]))
 	return request, nil
+}
+
+// ProjectStateDir is for the executable entry, before cmd/app.Run resolves its
+// default. It preserves the caller-selected root while assigning one runtime
+// state directory per canonical project. Explicit --state-dir remains outside
+// this helper and is passed to cmd/app unchanged.
+func ProjectStateDir(root, directory string) (string, error) {
+	if !filepath.IsAbs(root) || !filepath.IsAbs(directory) {
+		return "", errors.New("project state requires absolute root and directory")
+	}
+	directory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte(filepath.Clean(directory)))
+	return filepath.Join(root, "projects", hex.EncodeToString(digest[:])), nil
 }

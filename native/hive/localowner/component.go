@@ -21,9 +21,9 @@ import (
 
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 const DirectoryName = rendezvous.DirectoryName
@@ -45,8 +45,8 @@ type prepared struct {
 	cancel    context.CancelFunc
 }
 
-// Component is one owner invocation. The application's single native launcher
-// installs PrepareOwner into its LaunchPlan and includes this boot component.
+// Component is one owner invocation. The application's native launcher prepares
+// it only through cmd/app's owner runner and includes this boot component.
 // Construction and Load perform no filesystem or network operations.
 type Component struct {
 	options Options
@@ -85,35 +85,35 @@ func (c *Component) Load(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-// PrepareOwner must be installed as LaunchPlan.PrepareOwner, never invoked by
-// PrepareLaunch or a registry entry. The runtime then holds the real state lock
-// throughout this method, native boot, shutdown, and returned cleanup.
-func (c *Component) PrepareOwner(ctx context.Context, request launch.LaunchRequest) (launch.OwnerPlan, error) {
+// PrepareOwner is called only by cmd/app's runOwner callback. The runtime holds
+// its application state lock throughout this method, native boot, shutdown, and
+// returned cleanup.
+func (c *Component) PrepareOwner(ctx context.Context, request app.LaunchRequest) (app.OwnerResources, error) {
 	return c.prepareOwner(ctx, request, false)
 }
 
 // PrepareProjectOwner gives each selected project state a stable mesh identity.
 // The display label alone cannot identify nodes: several projects share a host.
-func (c *Component) PrepareProjectOwner(ctx context.Context, request launch.LaunchRequest) (launch.OwnerPlan, error) {
+func (c *Component) PrepareProjectOwner(ctx context.Context, request app.LaunchRequest) (app.OwnerResources, error) {
 	return c.prepareOwner(ctx, request, true)
 }
 
-func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchRequest, project bool) (launch.OwnerPlan, error) {
-	if ctx == nil || request.Operation != launch.RunApplication || request.Base || request.StateDir == "" {
-		return launch.OwnerPlan{}, errors.New("local owner requires ordinary lock-held application startup")
+func (c *Component) prepareOwner(ctx context.Context, request app.LaunchRequest, project bool) (app.OwnerResources, error) {
+	if ctx == nil || request.StateDir == "" {
+		return app.OwnerResources{}, errors.New("local owner requires ordinary lock-held application startup")
 	}
 	if err := ctx.Err(); err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.used {
-		return launch.OwnerPlan{}, errors.New("local owner component already used")
+		return app.OwnerResources{}, errors.New("local owner component already used")
 	}
 	if project {
 		state, err := filepath.EvalSymlinks(request.StateDir)
 		if err != nil {
-			return launch.OwnerPlan{}, err
+			return app.OwnerResources{}, err
 		}
 		digest := sha256.Sum256([]byte(filepath.Clean(state)))
 		label := c.options.Node
@@ -125,7 +125,7 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 	c.used = true
 	var execution [16]byte
 	if _, err := rand.Read(execution[:]); err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	directory := filepath.Join(request.StateDir, DirectoryName)
 	executionID := hex.EncodeToString(execution[:])
@@ -137,11 +137,11 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 		credentials, err = localtls.Prepare(ctx, directory, executionID, time.Now().Add(c.options.Lifetime))
 	}
 	if err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	var shared *rendezvous.Enrollment
 	var sharedEpoch string
@@ -149,23 +149,23 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 	if c.options.HiveDirectory != "" {
 		shared, err = rendezvous.NewEnrollment(c.options.HiveDirectory)
 		if err != nil {
-			return launch.OwnerPlan{}, err
+			return app.OwnerResources{}, err
 		}
 		var snapshot rendezvous.Snapshot
 		sharedEpoch, snapshot, err = shared.EnsureShared(ctx)
 		if err != nil {
-			return launch.OwnerPlan{}, err
+			return app.OwnerResources{}, err
 		}
 		secret = snapshot.GossipKey()
 	} else if _, err := rand.Read(secret); err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	enrollment, err := rendezvous.NewEnrollment(directory)
 	if err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	if err := enrollment.Initialize(ctx, executionID, secret); err != nil {
-		return launch.OwnerPlan{}, err
+		return app.OwnerResources{}, err
 	}
 	lifetime, cancel := context.WithDeadline(ctx, credentials.ExpiresAt)
 	var sharedLease *rendezvous.PeerLease
@@ -173,7 +173,7 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 		sharedLease, _, err = shared.RegisterHeld(lifetime, sharedEpoch, c.options.Node, public)
 		if err != nil {
 			cancel()
-			return launch.OwnerPlan{}, err
+			return app.OwnerResources{}, err
 		}
 	}
 	state := &prepared{execution: executionID, directory: directory, publicKey: base64.RawStdEncoding.EncodeToString(public), expires: credentials.ExpiresAt, ctx: lifetime, cancel: cancel}
@@ -201,7 +201,7 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 			"internode.tls.key_file": credentials.TLS.KeyFile, "internode.tls.ca_file": credentials.TLS.CAFile,
 		}),
 	)
-	return launch.OwnerPlan{Config: config, Deadline: credentials.ExpiresAt, Close: func() error {
+	return app.OwnerResources{Config: config, Deadline: credentials.ExpiresAt, Close: func() error {
 		cancel()
 		if sharedLease != nil {
 			cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)

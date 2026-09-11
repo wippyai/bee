@@ -1,35 +1,35 @@
 # Native Bee launch
 
-`NewLauncher(client, ownerCommand, prepareOwner)` is one compiled launch-preparer
-component. Ordinary launch runs a foreground native client; explicit `start`
-selects the host's headless owner command. The owner and its DesktopService are
-separate host-selected boot components. Update/tooling/base operations retain
-the runtime's existing paths. The installed global candidate uses this composition;
-see [current acceptance](../../docs/FOUNDATION_STATUS.md) for its runtime pin and limits.
+`desktop.Host.Launch` is the callable `cmd/app.Options.Launch` entry. It routes
+ordinary launch through `NewLauncher(client, ownerCommand, prepareOwner)`:
+ordinary launch runs a foreground native client, while explicit `start` selects
+the host's headless owner command. The owner and its DesktopService remain
+separate host-selected boot components. Runtime tooling, update and base bypass
+the callback. See [current acceptance](../../docs/FOUNDATION_STATUS.md) for the
+runtime pin and limits.
 
-The foreground starts the same executable as a detached owner contender with
-literal selected state/command arguments and the original project directory.
-The child arbitrates through the runtime's actual application lock. A winner
-prepares the native owner under that lock and publishes a new execution. A loser
-authenticates the existing owner and reads its catalog without mounting a desktop.
-A successful loser exit or changed descriptor lets the foreground attempt fresh
-supervisor admission once. Hints and lock contention grant no access.
+The foreground reads the existing native descriptor first. A descriptor selects
+one supervisor-admission attempt; it grants no access and an admission refusal
+never starts a replacement owner. If no descriptor exists, the foreground starts
+the same executable as a detached owner contender with literal selected
+state/command arguments and the original project directory. The child calls the
+runtime's `runOwner` once. A winner prepares the native owner under the runtime
+state lock and publishes a new execution. An explicit-start loser receives
+`cmd/app.ErrBusy`, probes the elected owner's supervisor without mounting a
+desktop, and exits successfully only if that probe succeeds. A changed descriptor
+lets the foreground attempt fresh supervisor admission once.
 
 Startup publication has a 30-second deadline. Unchanged stale discovery does not
 prove readiness; child failure never falls back to stale discovery. Invalid
 discovery fails closed. Attachment/input are not replayed. The native session
 separately bounds transport/supervisor readiness and requires explicit selection
-when the catalog is ambiguous. Warm launches probe the runtime's existing `statelock.Acquire` lock and go
-directly to authenticated attachment when it is busy. They create no contender
-or owner log. A free probe releases the lock before spawning; the child still
-arbitrates ownership under that same runtime lock, including races with other
-launchers. Filesystem errors do not count as contention.
+when the catalog is ambiguous. There is no native lock probe or copy of the
+runtime lock: `runOwner` is the only state-owner call, and `ErrBusy` is handled
+by authenticated supervisor admission.
 
-`Client.Attach` also directly supplies a runtime `LaunchPlan.Attach` callback. It
-rejects unrelated operations/commands, unhandled arguments and invalid paths
-before discovery. The callback runs before deployment/application data bindings.
-`NewOwnerLauncher` exposes only explicit-start routing for host compositions that
-do not select the automatic foreground route.
+`Client.Attach` rejects unrelated commands, unhandled arguments and invalid
+paths before discovery. `NewOwnerLauncher` exposes only explicit-start routing
+for host compositions that do not select the automatic foreground route.
 
 `StartOwner` separates OS process lifetime: null stdin, caller-owned regular log,
 and a new session/process group. The automatic route creates an owner-only log
@@ -97,27 +97,25 @@ Executable acceptance is pending; these commands are not in the global build yet
 
 ## Project-scoped launch candidate
 
-The compiled desktop now selects implicit application state from the canonical
-launch directory before looking up a running node. State lives beneath the
-application's existing state root in `projects/<SHA256 of canonical directory>`.
-Two different folders therefore have independent locks and stores; a symlink
-alias selects the same project. The detached owner retains the original project
-working directory and receives the selected state explicitly, so it cannot
-remap that state a second time. Explicit `--state-dir` remains authoritative;
-existing application databases are preserved. Runtime tooling and update state
-selection are unchanged.
+`cmd/app` resolves its state directory before calling `Host.Launch`, so the
+native callback cannot redirect it. `ProjectStateDir` provides the canonical
+`projects/<SHA256 of canonical directory>` selection for Bee's executable entry:
+the entry must apply that default before `cmd/app.Run`, while explicit
+`--state-dir` remains authoritative. Until that executable wiring lands, this
+source does not claim separate project stores or concurrent project nodes.
 
 `bee client` is an explicit attachment-only route, optionally taking a workspace
-and display ID pair. It refuses if the selected project has no running Bee.
-Ordinary `bee` starts that project's node plus the current physical display,
-or adds a display when its project node is already running. `bee start` remains
-headless. Cross-project client selection still needs the Hive selection route.
+and display ID pair. It refuses if the selected state has no running Bee.
+After the executable applies `ProjectStateDir`, ordinary `bee` starts that
+project's node plus the current physical display, or adds a display when its
+project node is already running. `bee start` remains headless. Cross-project
+client selection still needs the Hive selection route.
 
-This is an uninstalled candidate. The launch race/vet checks cover independent
-project locks, canonical aliases, explicit-state preservation and absent-node
-client refusal. Full two-project executable acceptance, distinct Bee-node names,
-same-account Hive enrollment/joining and terminal working-directory assertions
-remain required; project state selection alone does not establish those facts.
+This is an uninstalled candidate. The launch race/vet checks cover canonical
+project state selection, the fixed runtime state passed through the callback,
+and absent-node client refusal. Full two-project executable acceptance, distinct
+Bee-node names, same-account Hive enrollment/joining and terminal
+working-directory assertions remain required.
 
 The project-owner preparation route also derives its native node name from the
 canonical selected state directory, retaining the host label as a prefix.

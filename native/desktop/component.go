@@ -17,11 +17,11 @@ import (
 	"github.com/wippyai/bee/native/hive/localowner"
 	"github.com/wippyai/bee/native/ioevents"
 	"github.com/wippyai/bee/native/launch"
-	application "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/boot/components/core"
 	"github.com/wippyai/runtime/boot/components/dispatchers"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // Options are selected by the compiled host, never registry activation metadata.
@@ -63,7 +63,7 @@ func New(options Options) (*Host, error) {
 
 // Component is the single factory consumed by Wippy Builder. Ordinary fresh
 // desktops start empty; applications remain owned by the retained supervisor.
-func Component() boot.Component {
+func Component() *Host {
 	node, err := os.Hostname()
 	if err != nil {
 		return &Host{initErr: err}
@@ -83,24 +83,19 @@ func (*Host) Name() string { return "bee.native" }
 func (*Host) DependsOn() []string {
 	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName}
 }
-func (h *Host) PrepareLaunch(ctx context.Context, request application.LaunchRequest) (application.LaunchPlan, error) {
+
+// Launch is the cmd/app entry selected by Bee's executable. It is deliberately
+// separate from boot.Component: runtime launch callbacks do not use components
+// as an adapter interface.
+func (h *Host) Launch(ctx context.Context, request app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
 	if h.initErr != nil {
-		return application.LaunchPlan{}, h.initErr
+		return h.initErr
 	}
-	selected, err := launch.SelectProject(request)
+	selected, err := launch.CanonicalProject(request)
 	if err != nil {
-		return application.LaunchPlan{}, err
+		return err
 	}
-	plan, err := h.launcher.PrepareLaunch(ctx, selected)
-	if !plan.Handled && selected.StateDir != request.StateDir {
-		plan.StateDir = selected.StateDir
-	}
-	if err == nil && request.Operation == application.RunApplication && !request.Base && !plan.Handled {
-		// Code follows this executable; authored registry history stays with the
-		// selected state. Recovery and runtime/update commands keep their policy.
-		plan.EmbeddedBaseline = true
-	}
-	return plan, err
+	return h.launcher.Launch(ctx, selected, runOwner)
 }
 func (h *Host) Load(ctx context.Context) (context.Context, error) {
 	if h.initErr != nil {

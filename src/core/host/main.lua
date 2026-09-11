@@ -13,6 +13,7 @@ local appearance = require("appearance")
 local interaction = require("interaction")
 local connections = require("connections")
 local inventory = require("inventory")
+local transfer = require("transfer")
 
 local function main(owner: string, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
@@ -29,6 +30,7 @@ local function main(owner: string, database_resource: string?)
     local client_answers = assert(process.listen("bee.host.answer", {message = true}))
     local appearance_changes = assert(process.listen("bee.client.appearance.changed", {message = true}))
     local client_appearance = assert(process.listen("bee.client.appearance.result", {message = true}))
+    local transfer_requests = assert(process.listen("bee.host.transfer", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
@@ -60,6 +62,7 @@ local function main(owner: string, database_resource: string?)
     local client_connections = connections.new(owner, broker, workspace_id, database.assignments)
     local live_inventory = inventory.new(workspace_id)
     local catalog_received = false
+    local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string}} = {}
     local function deliver(topic: string, value: unknown)
         assert(process.send(owner, topic, value))
     end
@@ -103,7 +106,7 @@ local function main(owner: string, database_resource: string?)
     local function run()
         while true do
             local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
-                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(),
+                checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(),
                 selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()})
             if not selected.ok then break end
             if selected.channel == events then
@@ -134,6 +137,27 @@ local function main(owner: string, database_resource: string?)
                         connections.publish(client_connections, live_inventory, "catalog", joined)
                         connections.publish(client_connections, live_inventory, "views", joined)
                     end
+                elseif selected.channel == transfer_requests then
+                    local caller = tostring(message:from())
+                    local request, source, rejected = connections.transfer(client_connections, caller, data, ready and not stopping)
+                    local code, error_text = rejected or "", ""
+                    if request and source then
+                        local prepared, prepare_error = database.assignments:prepare({request_id = request.request_id,
+                            view_id = request.view_id, instance_id = request.instance_id, source_display_id = source.display_id,
+                            target_display_id = request.target_display_id, expected_revision = request.expected_revision})
+                        if not prepared then code, error_text = "conflict", tostring(prepare_error)
+                        elseif prepared.phase == "committed" then
+                            code = ""
+                        elseif prepared.phase == "failed" then code, error_text = "failed", prepared.error or "Transfer failed"
+                        else
+                            pending_transfers[request.request_id] = {request = request, source = source.display_id, caller = caller}
+                            send("bee.app.request", {version = 1, request_id = request.request_id, op = "bind", workspace_id = workspace_id,
+                                id = request.view_id, instance_id = request.instance_id, recipient = ""})
+                        end
+                    end
+                    if request and code ~= "" then process.send(caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
+                        connection_id = request.connection_id, request_id = request.request_id, view_id = request.view_id, instance_id = request.instance_id,
+                        target_display_id = request.target_display_id, assignment_revision = 0, error_code = code, error = error_text}) end
                 elseif selected.channel == requests then
                     local request = contract.request(data)
                     local caller = tostring(message:from())
@@ -160,6 +184,23 @@ local function main(owner: string, database_resource: string?)
                 elseif selected.channel == replies and message:from() == broker then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
+                        local pending_transfer = pending_transfers[reply.request_id]
+                        if pending_transfer and reply.op == "bind" then
+                            pending_transfers[reply.request_id] = nil
+                            local request = pending_transfer.request
+                            local outcome, outcome_error = reply.error_code == "" and database.assignments:commit({request_id = request.request_id,
+                                view_id = request.view_id, instance_id = request.instance_id}) or database.assignments:fail({request_id = request.request_id,
+                                view_id = request.view_id, instance_id = request.instance_id, error = reply.error})
+                            local code = outcome and reply.error_code or "persistence_failed"
+                            local error_text = outcome and (reply.error_code == "" and "" or reply.error) or tostring(outcome_error)
+                            local assignment_revision = 0
+                            if reply.error_code == "" and outcome and outcome.assignment then assignment_revision = outcome.assignment.revision end
+                            process.send(pending_transfer.caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
+                                connection_id = request.connection_id, request_id = request.request_id, view_id = request.view_id,
+                                instance_id = request.instance_id, target_display_id = request.target_display_id,
+                                assignment_revision = assignment_revision,
+                                error_code = code, error = error_text})
+                        end
                         local next_inventory = inventory.observe(live_inventory, reply)
                         if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
                             local committed, err = replace_record(nil, reply.id)

@@ -16,6 +16,7 @@ entries:
     interaction: bee.application:interaction
     connections: bee.host:clients
     inventory: bee.host:inventory
+    transfer: bee.host:transfer
 - name: inventory
   kind: library.lua
   source: file://inventory.lua

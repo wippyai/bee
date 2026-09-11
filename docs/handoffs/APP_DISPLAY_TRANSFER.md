@@ -114,3 +114,28 @@ unaffected app. `tests/lifecycle.py::detached` runs it on source and pack; this
 stage passed in foundation session72192. No new broker operation or runtime
 change is required for this barrier. This primitive alone does not implement
 transfer authorization, durable assignment or layout reconciliation.
+
+## Layout reconciliation seam
+
+The existing client `observe` path deliberately updates only already-selected
+tabs; catalog discovery never selects a new view. Preserve that rule. A transfer
+must deliver a separate, typed assignment projection from the authenticated
+workspace host, qualified by the current client connection and a monotonic
+assignment revision. It may select a tab because it represents an owner decision,
+not merely discovery metadata.
+
+Reconciliation uses the exact workspace/view/instance identity: include an app
+assigned to this admitted display even when its layout save was lost, and retire
+its local tab when a newer assignment selects another display. Keep layout
+geometry in the client store. The deterministic existing tab key makes repeated
+projection idempotent. Combine assignment with the live inventory before creating
+a view; neither a receipt for a dead app nor a stale projection may launch a new
+application. Pending transfers do not become target grants before owner commit.
+
+Renderer readiness may arrive before this projection. The host's authoritative
+bind check must therefore fence stale source requests regardless of message
+ordering; waiting for a client to acknowledge tab removal is not authorization.
+On reconnect, reset projection state for the newly admitted host/connection and
+reconcile before treating saved targets as current control rights. Failure to
+save either layout is presentation debt under the durable owner assignment,
+not a reason to reverse the ownership decision.

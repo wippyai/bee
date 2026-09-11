@@ -105,22 +105,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         return refuse(home_error or "attempt home")
     end
     evidence(db, attempt_id, "home.created", "attempt home under derived key", {fields = {home_key = home_key}})
-    -- Parents this runner creates in the home for its configuration files.
-    local created_parents: {[string]: boolean} = {}
-    if request.configuration then
-        local configuration = request.configuration
-        local written, write_error = homes.write_protected(home_path, configuration.path, configuration.content, created_parents)
-        if not written then
-            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
-            return refuse(write_error or "configuration")
-        end
-        evidence(db, attempt_id, "configuration.materialized", configuration.revision .. " " .. configuration.path .. " digest " .. configuration.digest .. " in home " .. home_key)
-    end
-    local home_os, home_os_error = homes.os_path(home_path .. "/home")
-    if not home_os then
-        evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
-        return refuse(home_os_error or "home path")
-    end
+    -- A retained session is an explicit writable session resource. Select its
+    -- private /home before any provider, gateway, hook or trust file is
+    -- materialized; the attempt directory remains separate for evidence and
+    -- cleanup. A retained file can only replay exact host-approved content.
+    local selected_home_path = home_path
+    local retained_home = false
     if request.session_ref then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
@@ -129,10 +119,26 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             return refuse("session directory")
         end
         if request.launch.home_ref then
-            local session_os = homes.os_path(session_path)
-            if session_os then home_os = session_os end
+            selected_home_path = session_path
+            retained_home = true
         end
-        evidence(db, attempt_id, "session.attached", "retained session directory")
+        evidence(db, attempt_id, "session.attached", retained_home and "retained session home selected" or "retained session directory")
+    end
+    -- Parents this runner creates in the home for its configuration files.
+    local created_parents: {[string]: boolean} = {}
+    if request.configuration then
+        local configuration = request.configuration
+        local written, write_error, replayed = homes.write_protected(selected_home_path, configuration.path, configuration.content, created_parents, retained_home)
+        if not written then
+            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
+            return refuse(write_error or "configuration")
+        end
+        evidence(db, attempt_id, "configuration.materialized", configuration.revision .. " " .. configuration.path .. " digest " .. configuration.digest .. " in " .. (replayed and "retained" or "new") .. " home " .. home_key)
+    end
+    local home_os, home_os_error = homes.os_path(selected_home_path .. "/home")
+    if not home_os then
+        evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
+        return refuse(home_os_error or "home path")
     end
     local environment, environment_error = resolve_environment(request, home_os)
     if not environment then
@@ -164,7 +170,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         -- A standalone MCP configuration goes into the home; a launch whose
         -- provider configuration already carries the gateway section has none.
         if gateway.configuration then
-            local configured, configure_error = homes.write_protected(home_path, gateway.configuration.path, gateway.configuration.content, created_parents)
+            local configured, configure_error = homes.write_protected(selected_home_path, gateway.configuration.path, gateway.configuration.content, created_parents, retained_home)
             if not configured then
                 evidence(db, attempt_id, "gateway.refused", "configuration: " .. tostring(configure_error), {execution = "exited"})
                 return refuse(configure_error or "gateway configuration")
@@ -178,7 +184,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         -- Claude settings adapter, or the Codex hooks file with its trust
         -- state written under this home's own path into the profile layer.
         if gateway.hook_configuration then
-            local configured_hooks, hooks_error = homes.write_protected(home_path, gateway.hook_configuration.path, gateway.hook_configuration.content, created_parents)
+            local configured_hooks, hooks_error = homes.write_protected(selected_home_path, gateway.hook_configuration.path, gateway.hook_configuration.content, created_parents, retained_home)
             if not configured_hooks then
                 evidence(db, attempt_id, "gateway.refused", "hook configuration: " .. tostring(hooks_error), {execution = "exited"})
                 return refuse(hooks_error or "gateway hook configuration")
@@ -186,13 +192,13 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
         if gateway.codex_hooks then
             local codex = gateway.codex_hooks
-            local hooks_written, hooks_write_error = homes.write_protected(home_path, codex.hooks.path, codex.hooks.content, created_parents)
+            local hooks_written, hooks_write_error = homes.write_protected(selected_home_path, codex.hooks.path, codex.hooks.content, created_parents, retained_home)
             if not hooks_written then
                 evidence(db, attempt_id, "gateway.refused", "codex hooks: " .. tostring(hooks_write_error), {execution = "exited"})
                 return refuse(hooks_write_error or "codex hooks")
             end
             local trust_content = gateway_configuration.codex_trust(home_os .. "/.codex", codex.trust)
-            local trust_written, trust_error = homes.write_protected(home_path, ".codex/" .. codex.profile .. ".config.toml", trust_content, created_parents)
+            local trust_written, trust_error = homes.write_protected(selected_home_path, ".codex/" .. codex.profile .. ".config.toml", trust_content, created_parents, retained_home)
             if not trust_written then
                 evidence(db, attempt_id, "gateway.refused", "codex hook trust: " .. tostring(trust_error), {execution = "exited"})
                 return refuse(trust_error or "codex hook trust")

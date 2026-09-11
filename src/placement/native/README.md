@@ -16,11 +16,15 @@ session directories live under a placement-owned root.
    than that, and records intent. Nothing external exists yet.
 2. `start` spawns the runner under the placement scope and waits for its
    startup acknowledgment within the admitted start budget.
-3. The runner records `starting`, creates the attempt home under a derived
-   key, resolves environment and working directory from the request and the
-   admitted roots, starts the child (in its own process group when the
-   runtime supports it), reads its identity, records `running`, and
-   acknowledges.
+3. The runner records `starting` and creates the attempt home under a derived
+   key. A launch that names both a retained session and its writable session
+   home selects that session's derived `/home` before materializing provider,
+   gateway, hook or trust configuration; the attempt home still owns attempt
+   evidence and cleanup. A later attempt may reuse only byte-identical
+   host-approved configuration already in that retained home. It resolves
+   environment and working directory from the request and the admitted roots,
+   starts the child (in its own process group when the runtime supports it),
+   reads its identity, records `running`, and acknowledges.
 
 ## Capability
 

@@ -95,6 +95,29 @@ local function launch(command: {string}, required: string): {[string]: unknown}
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
 end
+local function provider_configuration(): {[string]: unknown}
+    local provider = registry.get("bee.placement.native:codex_test_provider")
+    if not provider then error("provider entry") end
+    local decoded, decode_error = configuration.decode("bee.placement.native:codex_test_provider", provider)
+    if not decoded then error(tostring(decode_error)) end
+    local rendered, render_error = configuration.projection(decoded)
+    if not rendered then error(tostring(render_error)) end
+    -- The provider projection includes its own diagnostic fields; the native
+    -- launch boundary accepts only the materialized configuration contract.
+    return {revision = rendered.revision, path = rendered.path, content = rendered.content,
+        digest = rendered.digest, provider_ref = rendered.provider_ref}
+end
+local function retained_launch(owner: string, session_ref: string, marker: string): {[string]: unknown}
+    local request = launch({"sh", "-c", "printf '" .. marker .. "\\n' >> \"$HOME/marker\""}, "direct_process")
+    request.owner_id = owner
+    request.session_ref = session_ref
+    local declared = request.launch :: {[string]: unknown}
+    declared.home_ref = "session"
+    local resources = request.resources :: {{[string]: unknown}}
+    resources[#resources + 1] = {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
+    request.configuration = provider_configuration()
+    return request
+end
 local READONLY = "bee.placement.native:readonly_fixture"
 local function admit_root()
     local entry = registry.get("bee.placement.native:admitted_roots")
@@ -445,6 +468,88 @@ local function define_tests()
                     test.is_nil(tostring(item.detail):find("/home", 1, true))
                 end
             end
+        end)
+        test.it("retains a selected session home across attempts without adopting changed configuration", function()
+            local session_ref = fresh("session")
+            local first = retained_launch(OWNER, session_ref, "first")
+            local first_prepared = attempt_of(call(OWNER, "prepare", first))
+            test.eq(attempt_of(call(OWNER, "start", {attempt_id = first_prepared.attempt_id})).execution_state, "running")
+            test.is_true(wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = first_prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000))
+            local second = retained_launch(OWNER, session_ref, "second")
+            local second_prepared = attempt_of(call(OWNER, "prepare", second))
+            test.eq(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).execution_state, "running")
+            test.is_true(wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = second_prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000))
+            local key, key_error = homes.session_key(OWNER, session_ref)
+            if not key then error(tostring(key_error)) end
+            local session_path, session_error = homes.ensure_session(key)
+            if not session_path then error(tostring(session_error)) end
+            local home_path, home_error = homes.os_path(session_path .. "/home")
+            if not home_path then error(tostring(home_error)) end
+            test.eq(shell("cat " .. home_path .. "/marker"), "first\nsecond\n")
+            local expected = provider_configuration()
+            local sum = shell("sha256sum " .. home_path .. "/.codex/config.toml"):match("^([0-9a-f]+)")
+            test.eq(sum, expected.digest)
+            local second_evidence = kinds(second_prepared.attempt_id)
+            test.is_true(has(second_evidence, "configuration.materialized"))
+            local first_home, first_home_error = homes.attempt_key(OWNER, first_prepared.attempt_id)
+            if not first_home then error(tostring(first_home_error)) end
+            local second_home, second_home_error = homes.attempt_key(OWNER, second_prepared.attempt_id)
+            if not second_home then error(tostring(second_home_error)) end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = first_prepared.attempt_id}))
+            attempt_of(call(OWNER, "cleanup", {attempt_id = second_prepared.attempt_id}))
+            test.is_false(homes.attempt_exists(first_home))
+            test.is_false(homes.attempt_exists(second_home))
+            test.eq(shell("cat " .. home_path .. "/marker"), "first\nsecond\n")
+
+            local other_owner = "bee.test.session_other"
+            local other = retained_launch(other_owner, session_ref, "other")
+            local other_prepared = attempt_of(call(other_owner, "prepare", other))
+            test.eq(attempt_of(call(other_owner, "start", {attempt_id = other_prepared.attempt_id})).execution_state, "running")
+            test.is_true(wait_for(function()
+                return (value(call(other_owner, "status", {attempt_id = other_prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000))
+            local other_key, other_key_error = homes.session_key(other_owner, session_ref)
+            if not other_key then error(tostring(other_key_error)) end
+            test.neq(other_key, key)
+            local other_path, other_path_error = homes.ensure_session(other_key)
+            if not other_path then error(tostring(other_path_error)) end
+            local other_home, other_home_error = homes.os_path(other_path .. "/home")
+            if not other_home then error(tostring(other_home_error)) end
+            test.eq(shell("cat " .. other_home .. "/marker"), "other\n")
+
+            local direct_key, direct_key_error = homes.session_key(OWNER, fresh("session"))
+            if not direct_key then error(tostring(direct_key_error)) end
+            local direct_path, direct_path_error = homes.ensure_session(direct_key)
+            if not direct_path then error(tostring(direct_path_error)) end
+            local created: {[string]: boolean} = {}
+            local written, write_error = homes.write_protected(direct_path, ".codex/config.toml", "approved", created, true)
+            if not written then error(tostring(write_error)) end
+            local replayed, replay_error, replay = homes.write_protected(direct_path, ".codex/config.toml", "approved", {}, true)
+            if not replayed then error(tostring(replay_error)) end
+            test.eq(replay, true)
+            local changed, changed_error = homes.write_protected(direct_path, ".codex/config.toml", "changed", {}, true)
+            test.is_nil(changed)
+            test.eq(changed_error, "retained configuration differs from host-approved content")
+            local unowned_key, unowned_key_error = homes.session_key(OWNER, fresh("session"))
+            if not unowned_key then error(tostring(unowned_key_error)) end
+            local unowned_path, unowned_path_error = homes.ensure_session(unowned_key)
+            if not unowned_path then error(tostring(unowned_path_error)) end
+            local made_parent, made_parent_error = homes.write_protected(unowned_path, ".codex/other.toml", "approved", {}, true)
+            if not made_parent then error(tostring(made_parent_error)) end
+            local adopted, adopted_error = homes.write_protected(unowned_path, ".codex/config.toml", "approved", {}, true)
+            test.is_nil(adopted)
+            test.eq(adopted_error, "configuration parent already exists")
+            local missing = launch({"sh", "-c", "true"}, "direct_process")
+            missing.session_ref = fresh("session")
+            local missing_launch = missing.launch :: {[string]: unknown}
+            missing_launch.home_ref = "session"
+            local denied = call(OWNER, "prepare", missing)
+            test.eq(denied.error and denied.error.code, "INVALID")
+            test.eq(denied.error and denied.error.message, "launch.home_ref names no resource")
         end)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
             local request = launch({"sh", "-c", "sleep 2 & echo hi"}, "direct_process")

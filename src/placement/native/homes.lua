@@ -7,6 +7,8 @@ local resources = require("resources")
 local M = {}
 M.ATTEMPTS = "attempts"
 M.SESSIONS = "sessions"
+M.MAX_REPLAY_BYTES = 16384
+M.REPLAY_CHUNK_BYTES = 4096
 local function key(kind: string, id: string): (string?, string?)
     local digest, err = hash.sha256(kind .. "\n" .. id)
     if err or not digest then return nil, "derive directory key" end
@@ -59,6 +61,8 @@ function M.ensure_session(session_key: string): (string?, string?)
     local path = "/" .. M.SESSIONS .. "/" .. session_key
     local session_error = ensure(vol, path)
     if session_error then return nil, session_error end
+    local home_error = ensure(vol, path .. "/home")
+    if home_error then return nil, home_error end
     return path, nil
 end
 local function remove_tree(vol: fs.FS, path: string): string?
@@ -89,18 +93,40 @@ function M.attempt_exists(home_key: string): boolean
     return vol:exists("/" .. M.ATTEMPTS .. "/" .. home_key) == true
 end
 -- The OS path of a placement path, for the child's environment.
--- write_protected: one file under the attempt home, created exclusively
--- so a pre-existing file fails instead of being merged or replaced; the
--- parent is created inside the home only.
+-- write_protected: one file under a selected attempt or session home,
+-- created exclusively so a pre-existing file fails instead of being merged
+-- or replaced. A retained home may replay only byte-identical host-approved
+-- content, read to a fixed bound; it never overwrites an existing file.
 -- created records the parents this runner made in this start, so a second
 -- file in one of them is written into a directory the runner itself
 -- created moments ago and never into one it found.
-function M.write_protected(home_path: string, relative: string, content: string, created: {[string]: boolean}?): (string?, string?)
+local function retained_content(vol: fs.FS, path: string, content: string): string?
+    if #content > M.MAX_REPLAY_BYTES then return "retained configuration exceeds replay bound" end
+    local file, open_error = vol:open(path, "r")
+    if not file then return "read retained configuration: " .. tostring(open_error) end
+    local found = ""
+    while #found <= M.MAX_REPLAY_BYTES do
+        local chunk: unknown = file:read(math.min(M.REPLAY_CHUNK_BYTES, M.MAX_REPLAY_BYTES + 1 - #found))
+        if type(chunk) ~= "string" or chunk == "" then break end
+        found = found .. (chunk :: string)
+    end
+    file:close()
+    if #found > M.MAX_REPLAY_BYTES then return "retained configuration exceeds replay bound" end
+    if found ~= content then return "retained configuration differs from host-approved content" end
+    return nil
+end
+function M.write_protected(home_path: string, relative: string, content: string, created: {[string]: boolean}?, replay_retained: boolean?): (string?, string?, boolean?)
     local vol, vol_error = volume()
     if not vol then return nil, vol_error end
     if relative:find("^/") or relative:find("%.%.") then return nil, "configuration path escapes the home" end
     local root = home_path .. "/home"
     local target = root .. "/" .. relative
+    if vol:exists(target) then
+        if replay_retained ~= true then return nil, "configuration file already exists" end
+        local replay_error = retained_content(vol, target, content)
+        if replay_error then return nil, replay_error end
+        return target, nil, true
+    end
     local parent = target:match("^(.*)/[^/]+$")
     if parent and parent ~= root then
         -- The attempt home was created by this runner moments ago, so the
@@ -117,13 +143,12 @@ function M.write_protected(home_path: string, relative: string, content: string,
             if created then created[parent] = true end
         end
     end
-    if vol:exists(target) then return nil, "configuration file already exists" end
     local file, open_error = vol:open(target, "wx")
     if not file then return nil, "create configuration: " .. tostring(open_error) end
     local written, write_error = file:write(content)
     file:close()
     if not written then return nil, "write configuration: " .. tostring(write_error) end
-    return target, nil
+    return target, nil, false
 end
 function M.os_path(path: string): (string?, string?)
     local root, root_error = resources.root()

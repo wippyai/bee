@@ -16,7 +16,7 @@ entries:
 - name: policy
   kind: security.policy
   policy:
-    actions: [funcs.call, funcs.security, security.scope.create, security.policy.get, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get]
+    actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get]
     resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
     effect: allow
 - name: configuration_caller_policy
@@ -33,7 +33,7 @@ entries:
     comment: Minimal host-selected scope for pure gateway configuration rendering
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway_probe:configuration_scope]
+    resources: [bee.gateway_probe:render_configuration]
     effect: allow
 - name: render_configuration
   kind: function.lua

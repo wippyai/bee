@@ -9,12 +9,28 @@ local sql = require("sql")
 local configuration = require("configuration")
 type Object = {[string]: unknown}
 
+local function error_kind(error: unknown): string?
+    if type(error) ~= "userdata" then return nil end
+    return (error :: LuaError):kind()
+end
+
 local function run(request: Object): Object
     local address = request.address
     local action_id = request.action_id
     assert(type(address) == "string" and type(action_id) == "string", "render request")
     local projection, render_error = configuration.projection(address :: string, action_id :: string)
     assert(projection and not render_error, "configuration projection: " .. tostring(render_error))
+
+    if request.privileged == true then
+        local placement_db, placement_error = sql.get("bee.placement.native:db")
+        local placement_executor, executor_error = exec.get("bee.placement.native:executor")
+        assert(placement_db and not placement_error, "privileged caller could not acquire placement database")
+        assert(placement_executor and not executor_error, "privileged caller could not acquire placement executor")
+        local _, release_db_error = placement_db:release()
+        local _, release_executor_error = placement_executor:release()
+        assert(not release_db_error and not release_executor_error, "privileged placement handles did not release")
+        return {placement_db_acquired = true, placement_executor_acquired = true}
+    end
 
     local placement_db, placement_error = sql.get("bee.placement.native:db")
     local placement_executor, executor_error = exec.get("bee.placement.native:executor")
@@ -27,11 +43,11 @@ local function run(request: Object): Object
 
     return {
         projection = projection,
-        placement_db_denied = placement_db == nil and placement_error ~= nil,
-        placement_executor_denied = placement_executor == nil and executor_error ~= nil,
-        placement_policy_denied = placement_policy == nil and policy_error ~= nil,
-        funcs_security_denied = recovered_scope == nil and recovered_error ~= nil,
-        scope_create_denied = not created and create_error ~= nil,
+        placement_db_denied = placement_db == nil and error_kind(placement_error) == "PermissionDenied",
+        placement_executor_denied = placement_executor == nil and error_kind(executor_error) == "Invalid",
+        placement_policy_denied = placement_policy == nil and error_kind(policy_error) == "Invalid",
+        funcs_security_denied = recovered_scope == nil and error_kind(recovered_error) == "PermissionDenied",
+        scope_create_denied = not created and tostring(create_error):find("not allowed to create custom scopes", 1, true) ~= nil,
     }
 end
 

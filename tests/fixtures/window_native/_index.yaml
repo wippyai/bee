@@ -70,3 +70,14 @@ entries:
   security:
     policies: [bee.window_native:upgrade_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
+- name: cas_test
+  kind: function.lua
+  source: file://cas_test.lua
+  method: run
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native:store
+  security:
+    policies: [bee:placement_store_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}

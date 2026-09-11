@@ -1,5 +1,13 @@
 # Foundation status
 
+Current global Bee includes independent retained-display lifetimes, public
+default-display reactivation and friendly workspace/display labels (SHA
+`3e39e45f`, source `e3938a2`). Source/pack focused checks and both executable
+suites pass; the broader lifecycle-source foundation check is still running.
+App transfer and workspace switching remain unfinished. See
+[the authoritative build handoff](handoffs/GLOBAL_BUILD.md); older checkpoints
+below describe earlier installations and narrower evidence.
+
 The September 11 global build now includes the production Hive eventual-name
 cleanup permission fix (`6c6c574`, global SHA `82afdae8`). A controlled native
 regression proves name release and fresh-PID publication on service re-add;

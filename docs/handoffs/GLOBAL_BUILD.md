@@ -1,6 +1,29 @@
 # Global Bee build — September 11, 2026
 
-## Current install: public default-display reactivation
+## Current install: friendly workspace and display labels
+
+Global SHA256 `3e39e45f1d17c9a00a45ef4e4aa56f41d5f0f844ac9f24fd12309d004ed1e888`.
+Sourcee3938a2 includes public display recoverye75eaa9 and lifetime81f72d1.
+Native2a2117ad4fe7, runtime674b58a1 and builder70acb10175fb are unchanged.
+Artifact `/tmp/bee-display-labels-candidate-20260911`; backup
+`bee.previous-display-labels-20260911T135913Z`. Installed atomically with all
+license/provenance sidecars, then restarted by validated pidfd; DBs preserved.
+
+Stable friendly workspace/display names now appear in the shell, F9 dropdown,
+Hive Manager and workspace-unavailable inbox messages. They are presentation
+only; complete IDs remain in connection details and attach confirmation. Hash
+fragments are not uniqueness guarantees. Source/pack dropdown checks prove full
+ID visibility and F12 stability, including compact rendering. Hive Manager
+interaction checks, architecture568, lint, build and both executable suites pass.
+Actual-user cold frame1.551s, warm0.209s, detach0.114s each (exit zero),
+catalog0.199s (exit zero). F9 reports the real local Hive service and Antares;
+frame captured at `/tmp/bee-global-friendly-labels-frame-20260911.txt`.
+
+Full foundation72192 is still running on lifecycle source81f72d1. It excludes
+the later public activation and label deltas, which have focused source/pack and
+executable proofs. App transfer and workspace switching remain unfinished.
+
+## Previous install: public default-display reactivation
 
 Global SHA256 `b3cebaaf9c39877ed1b153419e020071bb10356bbe3f0f0dea60a7ee7e4d2bdd`.
 Sourcee75eaa9 includes independent retained display lifetimes81f72d1;

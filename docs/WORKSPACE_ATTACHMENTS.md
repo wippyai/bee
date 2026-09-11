@@ -514,5 +514,5 @@ The full-height connection dropdown shows the friendly name and complete ID on
 separate rows. Source/pack acceptance requires both workspace and display IDs to
 fit without truncation and remain unchanged after F12. Compact-height rendering
 keeps the shorter identity presentation. The naming changes are integrated with
-the retained-display recovery candidate; global installation awaits executable
-checks. They do not implement workspace switching or app transfer.
+the retained-display recovery candidate; global installation has passed both executable
+acceptance suites. They do not implement workspace switching or app transfer.

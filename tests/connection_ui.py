@@ -1,6 +1,7 @@
 """Connection dropdown owns input and displays the actual desktop identities."""
 from pathlib import Path
 import tempfile
+import re
 import time
 from tui_smoke import Desktop
 
@@ -15,6 +16,8 @@ def exercise(packed=False):
             for label in ('HIVE', 'NODE', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
+            identities = re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text())
+            assert len(set(identities)) >= 2, 'Full workspace/display IDs were clipped: ' + ui.text()
             ui.key(b'\x1b')
             ui.pump(.2)
             assert 'CONNECTION' not in ui.text(), ui.text()
@@ -29,6 +32,7 @@ def exercise(packed=False):
             assert 'CONNECTION' not in ui.text(), ui.text()
             ui.key(b'\x1b[20~')
             ui.wait('CONNECTION')
+            assert all(identity in ui.text() for identity in identities), 'F12 changed displayed identities'
             Path('/tmp/bee-connection-dropdown-frame.txt').write_text(ui.text())
             ui.resize(42, 12)
             ui.pump(.3)

@@ -509,3 +509,10 @@ and retained shell state. A second local desktop or command-line selection alone
 does not satisfy these checks. Live Hive Manager browsing additionally needs a
 host-authorized catalog route; exposing the native client's control route to
 ordinary applications is not an implementation of that read permission.
+
+The full-height connection dropdown shows the friendly name and complete ID on
+separate rows. Source/pack acceptance requires both workspace and display IDs to
+fit without truncation and remain unchanged after F12. Compact-height rendering
+keeps the shorter identity presentation. The naming changes are integrated with
+the retained-display recovery candidate; global installation awaits executable
+checks. They do not implement workspace switching or app transfer.

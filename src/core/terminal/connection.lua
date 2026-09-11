@@ -51,9 +51,11 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
     put(5, "NODE       Running", muted)
     put(6, info.node, normal)
     put(8, "WORKSPACE  " .. (ready and "Ready" or "Loading"), muted)
-    put(9, names.label(info.workspace) .. "  (" .. info.workspace .. ")", normal)
+    put(9, names.label(info.workspace), normal)
+    put(10, info.workspace, muted)
     put(11, "DISPLAY    " .. tostring(width) .. " × " .. tostring(height), muted)
-    put(12, names.label(info.display) .. "  (" .. info.display .. ")", normal)
+    put(12, names.label(info.display), normal)
+    put(13, info.display, muted)
     put(14, "F9 / Esc close", muted)
 end
 return M

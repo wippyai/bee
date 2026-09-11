@@ -1,6 +1,30 @@
 # Global Bee build — September 11, 2026
 
-## Current install: independent retained display lifetimes
+## Current install: public default-display reactivation
+
+Global SHA256 `b3cebaaf9c39877ed1b153419e020071bb10356bbe3f0f0dea60a7ee7e4d2bdd`.
+Sourcee75eaa9 includes independent retained display lifetimes81f72d1;
+native2a2117ad4fe7, runtime674b58a1 and builder70acb10175fb are unchanged.
+Artifact `/tmp/bee-default-reactivation-candidate-20260911`; backup
+`bee.previous-default-reactivation-20260911T135154Z`. Atomic installation includes
+all sidecars. The exact prior process was verified and restarted via pidfd;
+application databases were preserved. Actual-user cold frame1.424s, warm0.215s,
+detach0.164s/0.114s (exit zero), catalog0.200s (exit zero).
+
+A fresh controlling attachment now activates any selected retained display,
+including the default. Start → Exit closes that display; the next Bee invocation
+reopens it with its running apps. Observers cannot activate a stopped display.
+The executable negative proof returns NOT_FOUND on the prior binary; the new
+binary preserves shell PID and an in-memory variable across close/reopen and
+refuses the observer before control reactivation. The complete native-client
+suite passes, including that new proof. Logs:
+`/tmp/bee-default-reactivation-{negative,positive,observer,client-check}-20260911.log`.
+Full foundation72192 remains running on lifecycle source81f72d1; it does not
+include the one-line public activation follow-up. Friendly labels are separate.
+The cause of the earlier spontaneous display crash remains unexplained; these
+changes prove containment and public recovery, not absence of future crashes.
+
+## Previous install: independent retained display lifetimes
 
 Global SHA256 `c91809cb6eac44e29d0268130193052f2ac5d1965a2b526b376909f0ea7b4aab`.
 Source81f72d1, native2a2117ad4fe7, runtime674b58a1, builder70acb10175fb.

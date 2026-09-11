@@ -530,4 +530,5 @@ operation. Observation never activates a stopped display. This removes the
 assumption that the default can never stop. The executable regression closes the
 default through Start → Exit, then invokes Bee again and requires the same shell
 PID and in-memory variable. The prior executable returns `NOT_FOUND` on rejoin;
-the corrected executable is being built and checked.
+the corrected executable passes and is installed globally. Observation of the
+stopped default refuses before a controlling attachment reactivates it.

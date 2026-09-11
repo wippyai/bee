@@ -418,6 +418,14 @@ def default_display_reactivation(binary):
             ui.close()
             ui = None
             assert not select.select([owner], [], [], 0)[0], 'Default display close killed workspace'
+            observer = NativeDesktop(binary, folder, state, arguments=('observe',))
+            try:
+                observer.process.wait(timeout=5)
+                observer.pump(.1)
+                assert observer.process.returncode != 0, 'Observer activated a stopped default display'
+                assert b'NOT_FOUND' in observer.raw, bytes(observer.raw[-1000:])
+            finally:
+                observer.close()
             ui = NativeDesktop(binary, folder, state)
             ui.wait('DISPLAY_PID_' + shell_pid + '_END', timeout=20)
             ui.key(b"printf 'DISPLAY_REOPEN_%s_%s_END\\n' \"$BEE_DISPLAY_REOPEN\" \"$$\"\r")

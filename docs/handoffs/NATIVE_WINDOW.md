@@ -4,6 +4,11 @@ Status: implementation plan, not a callable production interface. The current
 public Claude/Codex commands still run ordinary native Terminals. Structured
 native continuation is checkpoint d4e84b7; it does not supply an interactive UI.
 
+The ordinary user flow is **Agent → Codex** (or Claude), opening the native
+harness UI. The selected profile supplies local or Docker placement, flags and
+Bee MCP configuration behind that flow. Docker remains an unimplemented option
+until its separate placement acceptance exists.
+
 The requested window renders the native Claude Code or Codex PTY. A managed
 window owner, spawned by the application broker with the sole terminal grant,
 will own exactly one native child and its terminal session. Physical clients
@@ -60,3 +65,25 @@ mount and synchronization contract remains to be discussed.
 Reference only: `../bee-legacy/os-harness/src/window.lua` and the legacy native
 driver implementations demonstrate window versus structured session behavior.
 No legacy code or filesystem path becomes a shipped dependency.
+
+## Shared setup checkpoint
+
+The native runner now delegates HOME/configuration, credential and gateway
+materialization and working-directory resolution to the private placement
+`materialization` library. It runs after the same starting transition; the
+runner still owns gateway retirement and child execution. The helper returns a
+minted binding identity even on a later preparation failure, so the runner can
+revoke it. No credentials enter a durable record or a public reply.
+
+MCP endpoint declarations may be supplied through the MCP component's governed
+registry overlay. Host activation still owns listener binding, actual address
+publication and authorization. This activation path is planned, not implemented
+by this extraction.
+
+Host-selected options are implemented: Claude `model` and `effort` in existing
+prepare options; Codex `reasoning_effort` in its provider declaration. Both retain
+existing defaults when omitted. The Codex CLI probe completed two turns with
+`model_reasoning_effort = "max"`, and both persisted turn contexts recorded
+`max`; this validates CLI configuration consumption, not provider support for
+all model/effort combinations. Evidence:
+`/tmp/bee-codex-effort-cli-20260911.log`.

@@ -173,19 +173,28 @@ entries:
     homes: bee.placement.native:homes
     identity: bee.placement.native:identity
     protocol: bee.placement.native:protocol
+- name: materialization
+  kind: library.lua
+  source: file://materialization.lua
+  modules: [env, funcs, sql]
+  imports:
+    store: bee.placement.native:store
+    resources: bee.placement.native:resources
+    homes: bee.placement.native:homes
+    gateway_configuration: bee.gateway:configuration
+    types: bee.placement:types
 - name: runner
   kind: process.lua
   source: file://runner.lua
   method: main
-  modules: [process, channel, time, exec, env, funcs]
+  modules: [process, channel, time, exec, funcs]
   imports:
+    materialization: bee.placement.native:materialization
     store: bee.placement.native:store
     executable: bee.placement.native:executable
     resources: bee.placement.native:resources
-    homes: bee.placement.native:homes
     identity: bee.placement.native:identity
     protocol: bee.placement.native:protocol
-    gateway_configuration: bee.gateway:configuration
     quote: bee.driver.kit:quote
     types: bee.placement:types
   security:

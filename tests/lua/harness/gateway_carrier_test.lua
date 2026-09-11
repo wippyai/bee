@@ -584,7 +584,9 @@ local function define_tests()
             local fenced: Outcome
             if pause_at == "hooks_committed" then
                 time.sleep("1500ms")
-                assert(process.terminate(old), "terminate the fenced carrier")
+                -- Cleanup may race the fenced carrier's own exit. The monitored
+                -- EXIT below is the proof it stopped, not terminate's return.
+                process.terminate(old)
             end
             fenced = await_carrier(old, "fenced carrier")
             test.is_nil(fenced.value)

@@ -59,3 +59,17 @@ and native-settings-resize 5306. Resize proves final footer alignment through
 physical/window grow/shrink, restore and F12, with the existing three-second
 convergence allowance; it does not prove every intermediate drag frame.
 Full source check 38048 remains live; global installation still pending.
+
+## Full-suite cleanup correction
+
+The final-source r2 check stopped at 510/511 Lua cases. The only failure was
+`Gateway through the carrier > lets a replacement replay rows the original
+committed but never acknowledged, leaving one observation`: cleanup asserted
+that terminating the resumed fenced carrier returned true. The carrier can exit
+on its own before cleanup. The test now requests termination and keeps the
+existing bounded monitored-EXIT wait, nil-outcome assertion and exactly-once
+record assertions. No production source or executable changed.
+
+Full check r3: session 48370, `/tmp/bee-display-inheritance-full-check-r3.log`.
+The committed production checkpoint is e108a4c, pushed to
+`checkpoint/display-inheritance-20260910`; no PR or merge was created.

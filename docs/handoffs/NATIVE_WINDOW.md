@@ -135,3 +135,9 @@ and launch on a second Bee through Hive with destination-local resource and
 permission checks. Removal must retire services and bindings without deleting
 application data. These checks remain pending in the installation lane; the
 native window fixture and bundled build do not substitute for them.
+
+Launch admission exposes one typed internal `admit_request` result containing
+the resolved plan, carrier request and admitted identities. The external
+`admit` method wraps the same result in its existing reply envelope, and
+structured start consumes it directly. The managed app can reuse this path
+without a second decoder or a separate authority implementation.

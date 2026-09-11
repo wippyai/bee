@@ -14,6 +14,8 @@ local canonical = require("canonical")
 local catalog = require("catalog")
 local policy = require("policy")
 local definition = require("definition")
+local carrier = require("carrier")
+local placement_types = require("placement_types")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -37,6 +39,11 @@ type Plan = {
     catalog_generation: integer,
     mode: string,
     plan_digest: string,
+}
+type Admitted = {
+    plan: Plan, request: carrier.Request, requester: string,
+    thread_id: string, action_id: string, attempt_id: string,
+    carrier: string?, mode: string?, started_at: string?,
 }
 type Request = {
     request_id: string,
@@ -159,36 +166,36 @@ end
 -- thread, obtain the attempt-bound resource grant and credential
 -- projections in the requester's own authority, and return the carrier
 -- request. Every acquisition keys on the request id, so a retry replays.
-function M.admit(value: unknown): Reply
+function M.admit_request(value: unknown): (Admitted?, Reply?)
     local request, decode_error = M.decode_request(value)
-    if not request then return fail("INVALID", decode_error or "invalid request") end
+    if not request then return nil, fail("INVALID", decode_error or "invalid request") end
     local requester = actor()
-    if not requester then return fail("UNAUTHENTICATED", "no actor") end
+    if not requester then return nil, fail("UNAUTHENTICATED", "no actor") end
     local launch, definition_error = definition.load(request.definition_ref)
-    if not launch then return fail("NOT_FOUND", definition_error or "definition") end
+    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
     local plan, plan_refused = M.resolve(request.definition_ref, request.mode)
-    if not plan then return plan_refused :: Reply end
-    if request.brief == "" and plan.mode ~= "window" then return fail("INVALID", "a structured launch needs a nonempty brief") end
-    if request.workdir and not definition.allows(launch, "workdir") then return fail("FORBIDDEN", "definition does not allow a workdir override") end
-    if request.thread_id and not definition.allows(launch, "thread") then return fail("FORBIDDEN", "definition does not allow a thread override") end
+    if not plan then return nil, plan_refused end
+    if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
+    if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end
+    if request.thread_id and not definition.allows(launch, "thread") then return nil, fail("FORBIDDEN", "definition does not allow a thread override") end
     local ids = M.identities(request.request_id)
     local thread_id = request.thread_id
     if launch.thread_policy.kind == "named" then thread_id = launch.thread_policy.thread_ref end
     if not thread_id then
-        if launch.thread_policy.kind == "caller" then return fail("INVALID", "definition expects the caller's thread") end
+        if launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
         local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = launch.title})
-        if not created then return create_refused :: Reply end
+        if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
     end
-    local resources: {{[string]: unknown}} = {}
+    local resources: {placement_types.ResourceGrant} = {}
     local working: string? = nil
     local workdir_name = request.workdir
     if launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
-    if launch.workdir_policy.kind == "required" and not workdir_name then return fail("INVALID", "definition requires a working directory resource") end
+    if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
     if workdir_name then
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = workdir_name, access = "write", purpose = "project",
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":workdir"})
-        if not granted then return grant_refused :: Reply end
+        if not granted then return nil, grant_refused end
         resources[1] = {name = workdir_name, grant_ref = tostring(granted.grant_id), root_ref = tostring(granted.root_ref), subpath = tostring(granted.subpath), access = "write", purpose = "project"}
         working = workdir_name
     end
@@ -197,13 +204,20 @@ function M.admit(value: unknown): Reply
         local issued, issue_refused = call(M.CREDENTIALS .. ":issue_projection", {workspace_id = request.workspace_id, name = credential, audience = requester, attempt_id = ids.attempt_id,
             profile_id = plan.profile_id, profile_digest = plan.profile_digest, binding_digest = plan.binding_digest, launch_policy_digest = plan.policy_digest,
             idempotency_key = "launch:" .. request.request_id .. ":credential:" .. tostring(index)})
-        if not issued then return issue_refused :: Reply end
+        if not issued then return nil, issue_refused end
         projections[index] = tostring(issued.projection_id)
     end
-    local carrier_request: {[string]: unknown} = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
+    local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = request.environment,
         working_directory = working, projections = projections, workspace_id = request.workspace_id}
-    return succeed({plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id})
+    return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id}, nil
+end
+-- External callers keep the operation reply; local execution paths consume
+-- the typed admitted request without decoding our own value a second time.
+function M.admit(value: unknown): Reply
+    local admitted, refused = M.admit_request(value)
+    if not admitted then return refused or fail("UNAVAILABLE", "launch admission did not return a result") end
+    return succeed(admitted)
 end
 -- start: admit, then spawn the carrier as the requester. A retry with the
 -- same request id finds the attempt's checkpoint and resumes it instead of
@@ -215,10 +229,9 @@ function M.start(value: unknown): Reply
     if not host then return fail("UNAVAILABLE", "carrier process host is not linked") end
     local target = registry.get(host)
     if not target or target.kind ~= "process.host" then return fail("UNAVAILABLE", "carrier process host is unavailable") end
-    local admitted = M.admit(value)
-    if not admitted.ok then return admitted end
-    local outcome = admitted.value :: {[string]: unknown}
-    local carrier_request = outcome.request :: {[string]: unknown}
+    local outcome, refused = M.admit_request(value)
+    if not outcome then return refused or fail("UNAVAILABLE", "launch admission did not return a result") end
+    local carrier_request = outcome.request
     local stored = call(M.CARRIER_OPS .. ":checkpoint", {thread_id = outcome.thread_id, attempt_id = outcome.attempt_id})
     local mode = "open"
     if stored then

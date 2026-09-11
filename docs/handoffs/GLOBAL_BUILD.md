@@ -1,6 +1,33 @@
 # Global Bee build — September 11, 2026
 
-## Current install: membership retirement
+## Current install: Hive name recovery
+
+Global SHA256: `82afdae8791a79fc45703ea61134f48c652794d96da3ba913a776702a9e7dc50`.
+Application fix `6c6c574`, native `2a2117ad4fe7`, runtime `674b58a1`,
+builder `70acb10175fb`. Artifact `/tmp/bee-hive-name-candidate-20260911`;
+backup `bee.previous-name-recovery-20260911T133017Z`. Installed atomically with
+license and provenance sidecars, then restarted using validated process identity
+and a pidfd. Existing databases were preserved.
+
+Bee's production policy now grants eventual-name unregister as well as register.
+Previously a retained desktop exit could leave the supervisor name behind and
+make every restart fail with `eventualreg: name already registered`. Cleanup
+failures and the original retained-process result error are now reported.
+Native regression `5545061` uses the production policy and real eventual naming:
+removal releases the old name and re-add publishes a fresh PID. Removing the
+unregister permission reproduces the stale-name failure; restoring it passes.
+
+Candidate lint, 11 production policy tests, standalone build and native-client
+acceptance pass. Actual-user installed smoke: cold frame 1.976s, warm frame
+0.218s, detach 0.114s each (exit zero), catalog 0.203s (exit zero).
+A private ten-minute diagnostic run completed 20 successful catalog requests
+without a captured service failure. This does not explain the initial unexpected
+retained desktop exit or establish sustained multi-node recovery. The full
+foundation check on retirement source remains running in session 80193.
+
+The installation records below are historical.
+
+## Previous install: membership retirement
 
 Global SHA256: `723fb40b8c32ee277d8dcda8041e51499bb1c0adf3f0cf54c01115f75303802f`.
 Application source `6b2da06`, native `2a2117ad4fe7`, runtime `674b58a1`.

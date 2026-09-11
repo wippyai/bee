@@ -1,5 +1,12 @@
 # Foundation status
 
+The September 11 global build now includes the production Hive eventual-name
+cleanup permission fix (`6c6c574`, global SHA `82afdae8`). A controlled native
+regression proves name release and fresh-PID publication on service re-add;
+removing the permission reproduces the failure. Actual-user cold/warm frames
+were 1.976s/0.218s, with clean 0.114s detaches. The initial retained desktop exit
+remains unexplained. See [current build](handoffs/GLOBAL_BUILD.md).
+
 Hive Manager source now retires departed node/display-client rows after 60 seconds
 of absence in complete native membership samples. Returning nodes cancel retirement;
 a failed or truncated membership sample resets the grace period while still

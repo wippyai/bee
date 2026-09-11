@@ -181,3 +181,7 @@ connection-ui-check: pack
 .PHONY: client-defaults-check
 client-defaults-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(defaults_probe=True)'
+
+.PHONY: hive-manager-check
+hive-manager-check: pack
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_manager_app.py

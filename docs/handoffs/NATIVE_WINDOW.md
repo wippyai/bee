@@ -156,7 +156,7 @@ existing protected `policies` list. A reviewed execution component may instead
 receive the precise placement policies it requires. No app metadata, profile
 request or broker-specific execution flag selects this scope.
 
-All currently shipped app bindings retain the ordinary deny. Architecture checks
+All ordinary app bindings retain the subsystem-store deny. Architecture checks
 require it, and runtime tests attempt actual database opens with a broad allow
 to prove the deny still wins. A component with placement permission can open
 that store only; core stores remain denied even under a broad allow. The private
@@ -166,7 +166,9 @@ broker still supplies the base, core and workspace-store boundaries.
 
 `make managed-window-app-check` proves the fixture-only path through a real
 broker: PTY input and resize, detach/rebind without restarting the child,
-explicit close, and prepared/started/receipt thread records. It does not yet
+explicit close with revoked input, and exactly one cancelled attempt receipt
+without invented logical turns. It runs as part of `make check`. PTY completion
+does not prove OS descendant cleanup; that remains pending in placement. It does not yet
 prove a production profile, an Agent-to-Codex menu or command binding,
 installer/Hive activation, or the full F12 and physical-client lifecycle. An
 emergency process kill can still leave a prepared or running attempt for normal

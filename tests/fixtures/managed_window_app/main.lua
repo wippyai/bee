@@ -105,7 +105,21 @@ function M.run()
     local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
     local value = records.value :: {[string]: unknown}
-    for _, item in ipairs(value.records :: {{[string]: unknown}}) do kinds[tostring(item.kind)] = true end
+    local receipts = 0
+    for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+        kinds[tostring(item.kind)] = true
+        if item.kind == "receipt" then
+            receipts = receipts + 1
+            local body = reply(item.body)
+            assert(body.scope == "attempt" and body.outcome == "cancelled", "explicit close must record attempt cancellation")
+            local fault = reply(body.error)
+            assert(fault.code == "native_window_closed", "close receipt must identify native window cancellation")
+        end
+    end
+    assert(receipts == 1, "close must settle exactly one attempt receipt")
+    assert(not kinds["turn.request"] and not kinds["turn.end"], "PTY lifecycle must not invent logical turns")
+    local stale_input = next_view:send({type = "paste", text = "must not reach a closed app"})
+    assert(not stale_input, "closed application retained its input grant")
     assert(kinds["attempt.prepared"] and kinds["attempt.started"] and kinds["receipt"], "managed attempt lifecycle was incomplete")
     next_view:close(); view:close()
     process.terminate(broker)

@@ -21,4 +21,4 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
     subprocess.run([str(workspace.RUNTIME), "lint"], cwd=folder, env=environment, check=True, timeout=60)
     subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)
 
-print("Managed window app: broker terminal grant, input/resize, detach/rebind, close cleanup and uncertain/cancelled thread lifecycle passed")
+print("Managed window app: broker terminal grant, input/resize, detach/rebind, revoked input after close and one cancelled attempt receipt passed")

@@ -124,7 +124,7 @@ local function main(mode: string?)
             assert(tostring(message:from()) == host)
             local value: unknown = message:payload():data()
             if type(value) == "table" and value.request_id == request_id then
-                assert(value.error_code == "", "Host rejected client setup")
+                assert(value.error_code == "", "Host rejected client setup " .. request_id .. ": " .. tostring(value.error_code) .. " " .. tostring(value.error))
                 return
             end
         end
@@ -263,6 +263,9 @@ local function main(mode: string?)
             error("Cannot focus transferred app or its neighbor")
         end
         if not target_failure then
+            -- A committed layout can precede presenter attachment. Wait for the
+            -- retained shell in this display before exercising its input route.
+            wait_text(right_screen, "MOVE_BEFORE_left_" .. shell_pid .. "_END")
             focus_right(moved.tab_id)
             command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
             wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")
@@ -296,6 +299,9 @@ local function main(mode: string?)
                 time.sleep("10ms")
             end
             assert(repaired_target, "Restarted target did not reproject transferred app")
+            -- A committed layout can precede presenter attachment. Wait for the
+            -- retained shell in this display before exercising its input route.
+            wait_text(right_screen, "MOVE_BEFORE_left_" .. shell_pid .. "_END")
             focus_right(moved.tab_id)
             command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
             wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")

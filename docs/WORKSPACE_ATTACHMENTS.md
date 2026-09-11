@@ -275,12 +275,12 @@ minimized windows and restored layouts. In a single-workspace desktop, the
 workspace label can be compact; mixed desktops display a short workspace label
 alongside each application's title. A color is supplementary, never the only
 identifier. Bee derives a deterministic friendly alias from each opaque workspace
-or display ID for these presentation surfaces; `Luna` remains part of the shared
-vocabulary. Each alias includes a short deterministic fragment of its source
-ID, so labels remain stable when another workspace appears or disappears and
-remain distinguishable when IDs are shown together. Technical mode includes the
-raw IDs for diagnostics. These aliases never enter requests, keys, journals or
-authorization, and changing a label changes presentation only.
+or display ID for these presentation surfaces. Each alias includes a short
+deterministic hash fragment of its complete source ID, so labels remain stable
+when another workspace appears or disappears and are easier to distinguish when
+IDs are shown together. A hash fragment is not a uniqueness guarantee; technical
+mode includes the raw IDs for diagnostics. These aliases never enter requests,
+keys, journals or authorization, and changing a label changes presentation only.
 
 Start and resource-open actions carry an explicit target workspace. Focus can
 select the initial target, but an asynchronous reply must remain bound to the

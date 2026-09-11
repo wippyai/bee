@@ -26,32 +26,27 @@ local function seed(value: string): (integer, integer)
     return first, second
 end
 
-local function identity_suffix(value: string): string
-    return value:sub(1, 8)
+local function identity_suffix(first: integer, second: integer): string
+    -- This combines the complete input hash into a compact diagnostic
+    -- fragment. It is stable across visible sets; it is not a uniqueness
+    -- guarantee, so technical details retain the complete ID.
+    local value = (first * 1000003 + second) % 4294967296
+    return string.format("%08x", value)
 end
 
 function M.label(value: string): string
     if value == "" or value:find("%c") then return "Unknown" end
     local first, second = seed(value)
     local friendly = ADJECTIVES[(first % #ADJECTIVES) + 1] .. " " .. NOUNS[(second % #NOUNS) + 1]
-    return friendly .. " · " .. identity_suffix(value)
+    return friendly .. " · " .. identity_suffix(first, second)
 end
 
--- labels returns the same stable alias for every ID, regardless of the set of
--- IDs currently visible beside it.
+-- labels returns the same stable alias for every ID, regardless of the set or
+-- order of IDs currently visible beside it.
 function M.labels(values: {string}): {[string]: string}
-    local ids: {string} = {}
-    local present: {[string]: boolean} = {}
-    for _, value in ipairs(values) do
-        if type(value) == "string" and value ~= "" and not present[value] then
-            ids[#ids + 1] = value
-            present[value] = true
-        end
-    end
-    table.sort(ids)
     local result: {[string]: string} = {}
-    for _, value in ipairs(ids) do
-        result[value] = M.label(value)
+    for _, value in ipairs(values) do
+        if type(value) == "string" and value ~= "" then result[value] = M.label(value) end
     end
     return result
 end

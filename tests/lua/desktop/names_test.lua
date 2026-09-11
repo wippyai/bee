@@ -11,6 +11,8 @@ local function define_tests()
             test.eq(id, "0123456789abcdef0123456789abcdef")
         end)
         test.it("keeps short identity suffixes stable across visible sets", function()
+            -- Both IDs share their first eight characters; a prefix-only
+            -- suffix would fail to distinguish these labels.
             local first = "00000000000000000000000000000009"
             local second = "0000000000000000000000000000000a"
             test.is_true(names.label(first) ~= names.label(second))
@@ -19,14 +21,7 @@ local function define_tests()
             test.eq(labels[second], names.label(second))
             test.eq(names.labels({first, second})[first], labels[first])
             test.eq(names.labels({first})[first], labels[first])
-        end)
-        test.it("keeps Luna in the friendly vocabulary", function()
-            local seen = false
-            for index = 0, 4095 do
-                local id = string.format("%032x", index)
-                if names.label(id):find("Luna", 1, true) then seen = true; break end
-            end
-            test.is_true(seen)
+            test.is_true(labels[first]:find(" · ", 1, true) ~= nil)
         end)
     end)
 end

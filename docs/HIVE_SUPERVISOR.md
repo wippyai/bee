@@ -427,3 +427,36 @@ against `100.70.10.28` in `/tmp/bee-hive-physical-desktop-lan-crash-fresh.log`
 (53.28 seconds). No seed-port arithmetic remains in the compiled helper. The
 same-name membership reincarnation failure above remains separate; public dynamic
 enrollment and live-transport actor EXIT are still unfinished.
+
+## Local application catalog reads (candidate)
+
+The candidate `bee.desktop:catalog` process operation reads the retained display
+identity catalog for this local Bee. Its input is an empty object, addressed to
+the `bee.desktop` owner on this node. It uses the existing Hive Call/Reply
+correlation and deadlines and the same bounded retained catalog bridge as native
+listing. There is no additional database reader or catalog service process.
+
+The protected application admission binding grants `catalog_read` only to Hive
+Manager. The broker publishes a complete bounded list of its live admitted app
+PIDs through the workspace host and retained supervisor. Each receiver accepts
+only its exact owner in this chain; the Hive supervisor additionally requires
+local-node PIDs. This state is private to the current execution and is never
+saved or represented as a human identity. Closing the admitted app removes it
+from the list. A pending response rechecks permission before releasing data.
+
+The app calls its local supervisor, which derives the workspace and catalog
+owner from its own state. The reply contains `owner_execution` and workspace/
+display identities only. It carries no mounts, controller identities, credentials,
+or attachment grants. The directory validates all nested fields and array bounds;
+missing occupancy remains unknown. Authorization failure, malformed output and
+unavailability do not appear as an empty catalog.
+
+This operation has no native attachment permission and does not enter the native
+client allowlist. Remote catalog reads and connecting from Hive Manager remain
+unimplemented. Remote visibility will require destination admission through the
+established supervisor relationship. There is no new runtime API, actor
+impersonation, persistent PID permission, or metadata-granted authority.
+
+Candidate acceptance: `make native-hive-catalog-check BEE_BINARY=...` exercises
+the real manager and two physical clients; the installed pre-catalog build
+reproduces the unavailable path. Integrated candidate validation is pending.

@@ -30,3 +30,15 @@ A missing or malformed declaration activates nothing and adds a catalog
 diagnostic; it cannot publish, admit or authorize execution. A read capped below the number of
 bindings is `complete: false`: an unseen binding could share a `driver_id`
 with a visible one, so `usable` resolves nothing from it.
+
+## Host binding
+
+The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref`.
+Launch start resolves that process host before admission and refuses an unlinked
+or missing host. The bundled host defaults to `bee:workers`; another assembly
+can supply its own host. This reference grants no permission: the host-selected
+spawn policy must independently allow the carrier and selected host.
+
+The entry policies still bind `bee:carrier_policy` and
+`bee:launch_spawn_policy`. Independent installation must supply those reviewed
+policies; host binding alone is not Hub or Hive installation acceptance.

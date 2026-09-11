@@ -144,6 +144,21 @@ local function define_tests()
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
         end)
+        test.it("refuses an unlinked carrier host before admitting a thread", function()
+            local entry = registry.get("bee.harness:carrier_host_ref")
+            if not entry then error("carrier host reference") end
+            local original = entry.data
+            entry.data = {}
+            apply(entry)
+            local request_id = fresh("unlinked")
+            local reply = call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
+            entry.data = original
+            apply(entry)
+            test.eq(code(reply), "UNAVAILABLE")
+            test.eq(reply.error and reply.error.message, "carrier process host is not linked")
+            local absent = call("bee.threads.service:get", {thread_id = "thread:" .. request_id})
+            test.eq(code(absent), "NOT_FOUND")
+        end)
         test.it("resolves a definition to one measured plan without effects", function()
             local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
             test.eq(plan.launch_id, "claude-fixture")

@@ -4,6 +4,7 @@
 -- authority, and start the carrier with a durable identity so a retry
 -- after an ambiguous start recovers the same attempt.
 local hash = require("hash")
+local registry = require("registry")
 local funcs = require("funcs")
 local process = require("process")
 local security = require("security")
@@ -15,7 +16,7 @@ local policy = require("policy")
 local definition = require("definition")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
-M.CARRIER_HOST = "bee:workers"
+M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
 M.THREADS = "bee.threads.service"
 M.CARRIER_OPS = "bee.threads.carrier"
 M.RESOURCES = "bee.resources"
@@ -208,6 +209,12 @@ end
 -- same request id finds the attempt's checkpoint and resumes it instead of
 -- opening a second one.
 function M.start(value: unknown): Reply
+    local linked = registry.get(M.CARRIER_HOST_REF)
+    local data = linked and bounds.object(linked.data) or nil
+    local host = data and bounds.id(data.host_ref) or nil
+    if not host then return fail("UNAVAILABLE", "carrier process host is not linked") end
+    local target = registry.get(host)
+    if not target or target.kind ~= "process.host" then return fail("UNAVAILABLE", "carrier process host is unavailable") end
     local admitted = M.admit(value)
     if not admitted.ok then return admitted end
     local outcome = admitted.value :: {[string]: unknown}
@@ -219,7 +226,7 @@ function M.start(value: unknown): Reply
         if stored.checkpoint ~= nil then mode = "resume" end
     end
     -- The carrier outlives this call; whoever routes the launch monitors it.
-    local pid, spawn_error = process.with_context({}):spawn(M.CARRIER, M.CARRIER_HOST, carrier_request, mode, process.pid())
+    local pid, spawn_error = process.with_context({}):spawn(M.CARRIER, host, carrier_request, mode, process.pid())
     if not pid then return fail("UNAVAILABLE", "spawn carrier: " .. tostring(spawn_error)) end
     outcome.carrier = tostring(pid)
     outcome.mode = mode

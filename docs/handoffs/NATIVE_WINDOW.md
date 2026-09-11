@@ -116,9 +116,10 @@ host-selected profile supplies the admitted implementation and options.
 
 `build/modules.json` separates harness, drivers, gateway, resources, credentials,
 threads and native placement. This is assembly ownership, not independent
-installation evidence. The harness currently names `bee:workers` in launch
-admission and the host policies `bee:carrier_policy` and
-`bee:launch_spawn_policy` in its manifests. Independent installation must bind
+installation evidence. The harness links its carrier process host through `process_host` and refuses
+a missing binding before admission. The bundled default is `bee:workers`. Its
+manifests still name the host policies `bee:carrier_policy` and
+`bee:launch_spawn_policy`. Independent installation must bind
 those host dependencies explicitly and prove that missing bindings refuse to
 run. Package metadata cannot choose or widen its own permissions.
 

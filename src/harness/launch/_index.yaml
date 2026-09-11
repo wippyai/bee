@@ -11,7 +11,7 @@ entries:
 - name: admission
   kind: library.lua
   source: file://admission.lua
-  modules: [hash, funcs, process, security, time]
+  modules: [hash, registry, funcs, process, security, time]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

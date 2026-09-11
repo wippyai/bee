@@ -162,3 +162,13 @@ controlling bind checks that assignment and its pending intent, independently of
 client tab state. Broker replies for transfer revocation must be correlated and
 consumed before ordinary client routes; only the authenticated broker can settle
 the persisted intent. A source disconnect after prepare cannot erase the intent.
+
+## Checked request boundary
+
+`bee.host:transfer` now provides an internal pure request decoder. The request
+names a workspace, current connection and renderer generation, request ID, exact
+view and instance, target display and expected assignment revision. It rejects
+extra fields, including source-display claims, permissions and native handles.
+The host must derive the source display from the authenticated admission.
+No actor listens for this operation yet; this decoder does not make transfer
+callable or grant any authority.

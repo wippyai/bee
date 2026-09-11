@@ -48,3 +48,8 @@ entries:
     decode: bee.protocol:decode
     inventory: bee.host:inventory
     appearance: bee.desktop:appearance
+- name: transfer
+  kind: library.lua
+  source: file://transfer.lua
+  imports:
+    contract: bee.protocol:application

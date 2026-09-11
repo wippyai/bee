@@ -38,3 +38,11 @@ entries:
   imports:
     test: wippy.test:test
     connections: bee.host:clients
+- name: transfer_test
+  kind: function.lua
+  source: file://transfer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    transfer: bee.host:transfer

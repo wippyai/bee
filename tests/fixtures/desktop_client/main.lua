@@ -137,7 +137,7 @@ local function main(mode: string?)
                 fullscreen = label == "left",
                 arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
                     or {"bash", "--noprofile", "--norc", "-i"},
-                legacy_desktop = label == "left" and legacy_desktop or nil}}
+                legacy_desktop = label == "left" and launch and legacy_desktop or nil}}
         local client_scope = scope({"bee:desktop_policy", "bee:client_spawn_policy",
             "bee.desktop_client_probe:" .. label .. "_policy"})
         local desktop, start_error = desktops.start(retained_desktops, selection, client_scope)
@@ -150,7 +150,7 @@ local function main(mode: string?)
         local ready_data = launch_protocol.ready(ready:payload():data(), workspace_id, label == "left")
         if not ready_data then error("Invalid desktop readiness or missing required import") end
         if shared_store and label == "right" then assert(ready_data.client_id == selected_id) end
-        if label == "left" then
+        if label == "left" and launch then
             assert(#ready_data.import_receipt == 32, "Import was not committed before readiness")
             if imported_receipt ~= "" then assert(ready_data.import_receipt == imported_receipt, "Import retry changed its receipt") end
             imported_receipt = ready_data.import_receipt
@@ -185,7 +185,7 @@ local function main(mode: string?)
     end
     local left, left_screen = start("left", 100, true)
     local right, right_screen = start("right", 120, true)
-    if mode == "transfer" then
+    if mode == "transfer" or mode == "transfer-source-save-failure" or mode == "transfer-target-save-failure" then
         local left_store, left_store_error = open_store("bee.client.db:left")
         if not left_store then error(tostring(left_store_error)) end
         local right_store, right_store_error = open_store("bee.client.db:right")
@@ -201,6 +201,20 @@ local function main(mode: string?)
         local before = table.concat(assert(left_screen:snapshot()).rows, "\n")
         local shell_pid = before:match("MOVE_BEFORE_left_(%d+)_END")
         if not shell_pid then error("Missing source shell PID") end
+        local function wait_client_exit(pid: string, label: string)
+            local deadline = time.after("5s")
+            while true do
+                local selected = channel.select({events:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then error("Timed out waiting for " .. label .. " client failure") end
+                local event = selected.value
+                if event.kind == process.event.EXIT and tostring(event.from) == pid then
+                    assert(desktops.exited(retained_desktops, event), "Failed " .. label .. " client did not release its desktop")
+                    return
+                end
+            end
+        end
+        local source_failure = mode == "transfer-source-save-failure"
+        local target_failure = mode == "transfer-target-save-failure"
         assert(left_screen:send({type = "mouse", button = "right", action = "press", x = 10, y = 5}))
         assert(left_screen:send({type = "mouse", button = "right", action = "release", x = 10, y = 5}))
         wait_text(left_screen, "Send to display")
@@ -208,6 +222,13 @@ local function main(mode: string?)
         local destination = names.label(right_store.client_id)
         wait_text(left_screen, destination)
         click_text(left_screen, destination)
+        if source_failure then
+            wait_client_exit(left, "source")
+            left_screen:close()
+        elseif target_failure then
+            wait_client_exit(right, "target")
+            right_screen:close()
+        end
         local moved_layout = false
         for _ = 1, 500 do
             local left_state, right_state = store.read(left_store), store.read(right_store)
@@ -218,10 +239,14 @@ local function main(mode: string?)
             for _, target in ipairs(right_state and right_state.targets or {}) do
                 if target.view_id == moved.view_id and target.instance_id == moved.instance_id then target_present = true end
             end
-            if not source_present and target_present then moved_layout = true; break end
+            if (source_failure and source_present and target_present)
+                or (target_failure and not source_present and not target_present)
+                or (not source_failure and not target_failure and not source_present and target_present) then
+                moved_layout = true; break
+            end
             time.sleep("10ms")
         end
-        assert(moved_layout, "Transfer did not reconcile both real client layouts")
+        assert(moved_layout, "Transfer did not reach the expected real client layouts")
         local function focus_right(id: string)
             for _ = 1, 20 do
                 local current = store.read(right_store)
@@ -232,12 +257,60 @@ local function main(mode: string?)
             end
             error("Cannot focus transferred app or its neighbor")
         end
-        focus_right(moved.tab_id)
-        command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
-        wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")
-        focus_right(neighbor.tab_id)
-        command(right_screen, "printf 'MOVE_NEIGHBOR_%s_END\\n' \"$bee_desktop\"")
-        wait_text(right_screen, "MOVE_NEIGHBOR_right_END")
+        if not target_failure then
+            focus_right(moved.tab_id)
+            command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
+            wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")
+            focus_right(neighbor.tab_id)
+            command(right_screen, "printf 'MOVE_NEIGHBOR_%s_END\\n' \"$bee_desktop\"")
+            wait_text(right_screen, "MOVE_NEIGHBOR_right_END")
+        end
+        if source_failure then
+            left, left_screen = start("left", 100, false)
+            local repaired_source = false
+            for _ = 1, 500 do
+                local repaired = store.read(left_store)
+                local present = false
+                for _, target in ipairs(repaired and repaired.targets or {}) do
+                    if target.view_id == moved.view_id and target.instance_id == moved.instance_id then present = true end
+                end
+                if not present then repaired_source = true; break end
+                time.sleep("10ms")
+            end
+            assert(repaired_source, "Restarted stale source reclaimed transferred app")
+        elseif target_failure then
+            right, right_screen = start("right", 120, false)
+            local repaired_target = false
+            for _ = 1, 500 do
+                local repaired = store.read(right_store)
+                local present = false
+                for _, target in ipairs(repaired and repaired.targets or {}) do
+                    if target.view_id == moved.view_id and target.instance_id == moved.instance_id then present = true end
+                end
+                if present then repaired_target = true; break end
+                time.sleep("10ms")
+            end
+            assert(repaired_target, "Restarted target did not reproject transferred app")
+            focus_right(moved.tab_id)
+            command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
+            wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")
+            focus_right(neighbor.tab_id)
+            command(right_screen, "printf 'MOVE_NEIGHBOR_%s_END\\n' \"$bee_desktop\"")
+            wait_text(right_screen, "MOVE_NEIGHBOR_right_END")
+        end
+        if source_failure or target_failure then
+            assert(store.close(left_store)); assert(store.close(right_store))
+            process.terminate(left); process.terminate(right)
+            local failure_deadline = time.after("3s")
+            while next(retained_desktops.desktops) ~= nil do
+                local selected = channel.select({events:case_receive(), failure_deadline:case_receive()})
+                if not selected.ok or selected.channel == failure_deadline then error("Transfer failure cleanup did not complete") end
+                desktops.exited(retained_desktops, selected.value)
+            end
+            process.terminate(host)
+            log:info("DESKTOP_TRANSFER_SAVE_FAILURE_PROBE_COMPLETE", {mode = mode})
+            return
+        end
         key(left_screen, "f12")
         local rejoined = false
         for _ = 1, 500 do

@@ -13,12 +13,46 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, _transfer_failure=None):
+    if transfer_probe and _transfer_failure is None:
+        for failure in ("success", "source", "target"):
+            run(command=command, shared_store=shared_store, storage_delay=storage_delay, launch_exit=launch_exit,
+                primary_render_delay=primary_render_delay, copy_exit=copy_exit, defaults_probe=defaults_probe,
+                primary_exit=primary_exit, transfer_probe=True, _transfer_failure=failure)
+        return
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        if _transfer_failure:
+            client = project / "src/core/client/main.lua"
+            code = client.read_text()
+            anchor = "            local committed, err = store.write(database, next_layout)\n"
+            assert code.count(anchor) == 1
+            direction = "#next_layout.targets < #layout.targets" if _transfer_failure == "source" else "#next_layout.targets > #layout.targets"
+            label = "source" if _transfer_failure == "source" else "target"
+            injection = f'''            local changed_targets = 0
+            for _, previous in ipairs(layout.targets) do
+                local retained = false
+                for _, current in ipairs(next_layout.targets) do
+                    if previous.view_id == current.view_id and previous.instance_id == current.instance_id then retained = true; break end
+                end
+                if not retained then changed_targets = changed_targets + 1 end
+            end
+            for _, current in ipairs(next_layout.targets) do
+                local retained = false
+                for _, previous in ipairs(layout.targets) do
+                    if previous.view_id == current.view_id and previous.instance_id == current.instance_id then retained = true; break end
+                end
+                if not retained then changed_targets = changed_targets + 1 end
+            end
+            if initial_application ~= nil and assignment_snapshot and assignment_snapshot.revision >= 2
+                and changed_targets == 1 and {direction} then
+                error("Injected {label} transfer layout save failure")
+            end
+'''
+            client.write_text(code.replace(anchor, injection + anchor, 1))
         if defaults_probe:
             manifest = project / "src/client_probe/_index.yaml"
             document = yaml.safe_load(manifest.read_text())
@@ -284,7 +318,8 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # Optional subsystem stores use .wippy defaults inside this disposable host.
             ((folder if packed else project) / ".wippy").mkdir(exist_ok=True)
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
-            args += [command] + (["transfer"] if transfer_probe else (["shared-store"] if shared_store else [])) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
+            fixture_mode = "transfer" if _transfer_failure == "success" else f"transfer-{_transfer_failure}-save-failure"
+            args += [command] + ([fixture_mode] if transfer_probe else (["shared-store"] if shared_store else [])) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
             try:
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
                                         env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
@@ -295,7 +330,8 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             logs = result.stdout + result.stderr
             assert result.returncode == 0, logs
             marker = {
-                "desktop-client-probe": "DESKTOP_TRANSFER_PROBE_COMPLETE" if transfer_probe else "DESKTOP_CLIENT_PROBE_COMPLETE",
+                "desktop-client-probe": ("DESKTOP_TRANSFER_PROBE_COMPLETE" if _transfer_failure == "success"
+                                          else "DESKTOP_TRANSFER_SAVE_FAILURE_PROBE_COMPLETE") if transfer_probe else "DESKTOP_CLIENT_PROBE_COMPLETE",
                 "retained-supervisor-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "thread-status-probe": "THREAD_STATUS_PROBE_COMPLETE",
             }[command]
@@ -305,7 +341,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if transfer_probe:
-        print("Display transfer source/pack: real window menu, exact retained shell PID/state, neighbor unaffected, client layouts and source F12")
+        print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts and source F12")
         return
     if command == "retained-supervisor-probe":
         print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}, primary exit={primary_exit}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, retained display close/reactivation")

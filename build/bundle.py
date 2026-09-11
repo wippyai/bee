@@ -38,6 +38,32 @@ def inventory(source):
     return entries
 
 
+def state_bindings(source, application):
+    """Every shipped SQLite store follows executable-selected application state."""
+    entries = {}
+    for path in sorted(source.rglob("_index.yaml")):
+        document = yaml.safe_load(path.read_text())
+        for entry in document["entries"]:
+            entries[f'{document["namespace"]}:{entry["name"]}'] = entry
+    bindings = application.get("data_env", {})
+    resolved = {}
+    for identity, entry in entries.items():
+        if entry["kind"] != "db.sql.sqlite":
+            continue
+        selected = re.fullmatch(r"\$\{env:([^}]+)\}([A-Za-z0-9_.-]*)", str(entry.get("file", "")))
+        if not selected:
+            raise ValueError(f"database {identity} needs a state-bound environment path")
+        environment = entries.get(selected[1], {})
+        variable = environment.get("variable")
+        path = bindings.get(variable)
+        if environment.get("kind") != "env.variable" or not isinstance(path, str) or not path:
+            raise ValueError(f"database {identity} has no data_env binding for {variable}")
+        if Path(path).is_absolute() or ".." in Path(path).parts or "\\" in path or "\0" in path:
+            raise ValueError(f"database {identity} must stay inside the selected state directory")
+        resolved[identity] = path + selected[2]
+    return resolved
+
+
 def ownership(plan, entries):
     if set(plan) != {"schema", "modules"} or plan["schema"] != 1:
         raise ValueError("expected bundle schema 1 with modules")
@@ -148,6 +174,7 @@ def prepare(root, manifest_path, plan_path, output, runtime, version=None, mode=
         if lock.get("modules") or lock["directories"]["src"] != "./src":
             raise ValueError("bundle input must be Bee's self-contained src/ composition")
         entries = inventory(source / "src")
+        state_bindings(source / "src", app)
         owners = ownership(plan, entries)
         assets = freeze_assets(root, source, entries)
         if app["module"] not in owners.values():

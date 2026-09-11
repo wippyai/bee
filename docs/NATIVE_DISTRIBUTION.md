@@ -224,3 +224,21 @@ root notices for all linked Go modules, including the pinned MPL-2.0 registry bi
 See the [dependency notice review](DEPENDENCY_NOTICES.md) for pending upstream reviews.
 Complete those reviews and native target acceptance before publishing a
 stable release. No release tag is created by development checks.
+
+## State-directory coverage
+
+Standalone packaging checks every shipped `db.sql.sqlite` entry against the
+application's `data_env` bindings. A new database without a state-bound path
+refuses packaging; a relative source default is insufficient. The client store
+inherits the workspace path with a `.client` suffix. Registry history is selected
+by the runtime. The host manifest also binds governance storage, so adding that
+component cannot silently put its database in the launch directory.
+
+`make native-project-nodes-check BEE_BINARY=/absolute/bee` reads the executable's
+provenance manifest and verifies every declared database, the client store,
+registry history and placement root. Two project nodes must use distinct files;
+explicit `--state-dir` must contain those stores without creating another set
+in the default state or project folder. It also checks terminal cwd, same-project
+display reuse and client-only refusal. This proves the tested executable's
+composition, not components absent from that executable or Hive convergence.
+Explicit environment path overrides remain host-selected runtime configuration.

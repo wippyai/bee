@@ -28,7 +28,8 @@
       "BEE_CREDENTIALS_DB": "credentials.db",
       "BEE_GATEWAY_DB": "gateway.db",
       "BEE_PLACEMENT_DB": "placement.db",
-      "BEE_PLACEMENT_ROOT": "placement"
+      "BEE_PLACEMENT_ROOT": "placement",
+      "BEE_GOVERNANCE_DB": "governance.db"
     },
     "packs": [
       {

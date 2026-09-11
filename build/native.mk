@@ -99,3 +99,7 @@ native-display-transfer-check:
 .PHONY: native-hive-catalog-check
 native-hive-catalog-check:
 	python3 tests/native_hive_catalog.py "$(BEE_BINARY)"
+
+.PHONY: native-project-nodes-check
+native-project-nodes-check:
+	python3 tests/native_project_nodes.py "$(BEE_BINARY)"

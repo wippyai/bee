@@ -5701,3 +5701,28 @@ Diagnostic binary `/tmp/bee-local-dispatch-trace-candidate`, SHA256
 All build/test jobs are terminal. Runtime lane owns the next investigation below
 local send/select; no runtime or global changes, no user restart. The original
 expired-mount failure remains unresolved. Detailed observations are journal 934–935.
+
+
+### Global cancellation fix installed; reliability work remains — journal 937–938
+
+Global `/home/wolfy-j/.local/bin/bee` now has native `a0fc01e088b2`, with unchanged
+Bee source `c3b2c9f`, runtime `674b58a1` and builder. SHA256:
+2c1f11099dd970c12be11ee8cf7e51ad1521e093c94f1a880cfd1602d7908a61.
+The independently proven cancellation-order correction passed native-client,
+standalone and focused race/vet. Actual-user read-only observation through the
+installed binary reached its frame in 217 ms and detached in 87 ms. No owner
+restart or database change. Backup `bee.previous-20260911T004912Z`; install and
+live proof logs `/tmp/bee-cancel-drain-global-{install,observe}.log`.
+Manifest and current-build docs are checkpoint `0d261ff`. Pre-existing startup,
+mount and detach failures are explicitly not fixed by this installation.
+
+Diagnostic run 87050 ended at round 84 on a client still exiting at two seconds.
+The saved raw ends after names cleanup and before stack shutdown completion;
+its eventual outcome was not retained. Catalog afterwards answered in 2.108 s.
+Fixture `/tmp/bee-native-reconnect-_0kxc580`, client 2958461. Harness `564e1f6`
+now additionally saves client raw/status after catalog pumping, so late cleanup
+results are retained. Original first-frame capture includes the remaining cold
+connection window and an exact pidfd stack. No startup failure recurred in this
+run. All test/build handles are terminal. Runtime checkpoint 936 was read but
+is not an installed/pushed cutover. Continue from the concrete local-send/select
+and native-stack evidence rather than widening production timeouts.

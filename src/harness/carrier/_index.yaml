@@ -24,6 +24,12 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
+- name: continuation
+  kind: library.lua
+  source: file://continuation.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    checkpoint: bee.harness.carrier:checkpoint
 - name: machine
   kind: library.lua
   source: file://machine.lua
@@ -40,6 +46,7 @@ entries:
     policy: bee.harness.carrier:policy
     provenance: bee.harness.carrier:provenance
     checkpoint: bee.harness.carrier:checkpoint
+    continuation: bee.harness.carrier:continuation
     settle: bee.harness.carrier:settle
     stream_json: bee.driver.transport:stream_json
     driver_types: bee.driver:types

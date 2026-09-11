@@ -690,3 +690,12 @@ entries:
     policy: bee.harness.carrier:policy
     launch: bee.driver.codex:launch
     placement: bee.placement.native:service
+- name: continuation_test
+  kind: function.lua
+  source: file://continuation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint

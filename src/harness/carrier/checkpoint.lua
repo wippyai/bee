@@ -56,6 +56,7 @@ type Checkpoint = {
     profile_id: string,
     profile_digest: string,
     plan_digest: string?,
+    retained_session_ref: string?,
     hint_subscription: string?,
     output: string?,
     -- input_closed: the owner closed the child's stdin after settlement;
@@ -68,7 +69,7 @@ type Checkpoint = {
 }
 type Pinned = {binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, plan_digest: string?, gateway_binding: string?}
 function M.new(pinned: Pinned, generation: integer): Checkpoint
-    return {schema_revision = M.REVISION, pending_writes = {}, permissions = {}, consumed = {stdout = 0, stderr = 0}, carry = {stdout = "", stderr = ""}, envelope_index = 0,
+    return {schema_revision = M.REVISION, retained_session_ref = nil, pending_writes = {}, permissions = {}, consumed = {stdout = 0, stderr = 0}, carry = {stdout = "", stderr = ""}, envelope_index = 0,
         event_cursor = nil, normalizer_state = nil, terminal = nil, binding_ref = pinned.binding_ref, binding_digest = pinned.binding_digest, profile_id = pinned.profile_id,
         profile_digest = pinned.profile_digest, plan_digest = pinned.plan_digest, hint_subscription = nil, output = nil, input_closed = nil, gateway_binding = pinned.gateway_binding, attachment_generation = generation}
 end
@@ -94,7 +95,7 @@ end
 function M.decode(value: unknown): (Checkpoint?, string?)
     local object = bounds.object(value)
     if not object then return nil, "checkpoint must be an object" end
-    local unknown_field = bounds.fields(object, {"schema_revision", "pending_writes", "permissions", "consumed", "carry", "envelope_index", "event_cursor", "normalizer_state", "terminal", "binding_ref", "binding_digest", "profile_id", "profile_digest", "plan_digest", "hint_subscription", "output", "input_closed", "gateway_binding", "attachment_generation"})
+    local unknown_field = bounds.fields(object, {"schema_revision", "pending_writes", "permissions", "consumed", "carry", "envelope_index", "event_cursor", "normalizer_state", "terminal", "binding_ref", "binding_digest", "profile_id", "profile_digest", "plan_digest", "retained_session_ref", "hint_subscription", "output", "input_closed", "gateway_binding", "attachment_generation"})
     if unknown_field then return nil, unknown_field end
     if object.schema_revision ~= M.REVISION then return nil, "schema_revision is not " .. M.REVISION end
     local consumed, consumed_error = positions(object.consumed, "consumed")
@@ -180,6 +181,11 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 idempotency_key = idempotency_key, effect_key = effect_key, write_id = write_id, phase = phase, approval_id = approval_id, decision = decision, incarnation = incarnation, response = response}
         end
     end
+    local retained_session: string? = nil
+    if object.retained_session_ref ~= nil then
+        retained_session = bounds.id(object.retained_session_ref)
+        if not retained_session then return nil, "retained_session_ref is not an identifier" end
+    end
     local terminal: {[string]: unknown}? = nil
     if object.terminal ~= nil then
         terminal = bounds.object(object.terminal)
@@ -220,7 +226,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     if not generation or generation < 0 then return nil, "attachment_generation must be a nonnegative integer" end
     local envelope_index: integer = envelope
     local attachment_generation: integer = generation
-    return {schema_revision = M.REVISION, pending_writes = pending, permissions = permissions, consumed = consumed, carry = carried, envelope_index = envelope_index, event_cursor = cursor, normalizer_state = state, terminal = terminal,
+    return {schema_revision = M.REVISION, retained_session_ref = retained_session, pending_writes = pending, permissions = permissions, consumed = consumed, carry = carried, envelope_index = envelope_index, event_cursor = cursor, normalizer_state = state, terminal = terminal,
         binding_ref = binding_ref, binding_digest = binding_digest, profile_id = profile_id, profile_digest = profile_digest, plan_digest = plan_digest,
         hint_subscription = hint_subscription, output = output, input_closed = input_closed, gateway_binding = gateway_binding, attachment_generation = attachment_generation}, nil
 end
@@ -231,6 +237,7 @@ function M.rebind(point: Checkpoint, generation: integer): Checkpoint
 end
 -- A checkpoint continues another only forward and only for the same pins.
 function M.continues(previous: Checkpoint, next: Checkpoint): string?
+    if previous.retained_session_ref ~= next.retained_session_ref then return "retained session changed" end
     if previous.binding_digest ~= next.binding_digest or previous.profile_digest ~= next.profile_digest then return "pinned measurements changed" end
     if next.consumed.stdout < previous.consumed.stdout or next.consumed.stderr < previous.consumed.stderr then return "consumed positions moved backwards" end
     if next.envelope_index < previous.envelope_index then return "envelope index moved backwards" end

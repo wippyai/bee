@@ -17,6 +17,7 @@ local classify = require("classify")
 local policy = require("policy")
 local provenance = require("provenance")
 local checkpoint = require("checkpoint")
+local continuation = require("continuation")
 local settle = require("settle")
 local stream_json = require("stream_json")
 local driver_types = require("driver_types")
@@ -57,6 +58,7 @@ type Request = {
     resources: {placement_types.ResourceGrant},
     environment: {[string]: string},
     session_ref: string?,
+    previous_attempt_id: string?,
     working_directory: string?,
     projections: {string}?,
     workspace_id: string?,
@@ -78,6 +80,7 @@ type Plan = {
     -- can close its exchange on record and settle, and dispatches nothing.
     exchange_refusal: string?,
     prepare_target: string,
+    resume_ref: string?,
     normalize_target: string,
     exchange: Exchange?,
     -- The gateway projection the launch policy admits: tools and the
@@ -252,10 +255,23 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local binding, profile, launch_policy, exchange, configuration, gateway = measured.binding, measured.profile, measured.policy, measured.exchange, measured.configuration, measured.gateway
     local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
     if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
+    local resume_ref: string? = nil
+    if request.previous_attempt_id then
+        if not request.session_ref then return nil, "continuation needs a retained session" end
+        local resumed, resume_error = continuation.resolve(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
+            owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
+            binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry})
+        if not resumed then return nil, resume_error end
+        resume_ref = resumed
+        local dispatch = binding.methods.dispatch
+        if not dispatch then return nil, "driver has no continuation method" end
+        prepare_target = dispatch
+    end
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
     prepare_request.brief = request.brief
+    prepare_request.resume_ref = resume_ref
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
@@ -270,6 +286,18 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local prepared_reply = prepared :: {ok: boolean, error: string?, launch: driver_types.Launch?}
     if not prepared_reply.ok or not prepared_reply.launch then return nil, "driver prepare: " .. tostring(prepared_reply.error) end
     local launch = prepared_reply.launch :: driver_types.Launch
+    if request.session_ref then
+        if not bounds.id(request.session_ref) then return nil, "session_ref is not an identifier" end
+        local home: string? = nil
+        for _, resource in ipairs(request.resources) do
+            if resource.purpose == "session" and resource.access == "write" then
+                if home then return nil, "retained session needs exactly one home resource" end
+                home = resource.name
+            end
+        end
+        if not home then return nil, "retained session needs a writable session resource" end
+        launch.home_ref = home
+    end
     local bound = launch_policy.executables[launch.executable]
     if bound then launch.executable = bound end
     -- The host-selected executable is measured by placement, read-only,
@@ -331,7 +359,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if gateway.hook_configuration then measured_gateway.hooks_digest = gateway.hook_configuration.digest end
         if gateway.codex_hooks then measured_gateway.hooks_digest = gateway.codex_hooks.hooks.digest end
     end
-    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, environment = environment, permission = measured_exchange, configuration = measured_configuration, gateway = measured_gateway})
+    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = measured_configuration, gateway = measured_gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
@@ -341,7 +369,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
     }
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, plan_digest = plan_digest,
-        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
+        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
 end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
@@ -479,11 +507,13 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
     local request = plan.request
     local grant_refs: {string} = {}
     for _, grant in ipairs(request.resources) do grant_refs[#grant_refs + 1] = grant.grant_ref end
-    local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
-        binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = request.brief}}}, "admit")
-    if admit_error then return nil, admit_error end
+    if not request.previous_attempt_id then
+        local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
+            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = request.brief}}}, "admit")
+        if admit_error then return nil, admit_error end
+    end
     step(io, "admitted")
-    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, prepared = {
+    local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
         placement_binding = M.PLACEMENT_BINDING, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
     if prepare_error then return nil, prepare_error end
@@ -502,10 +532,11 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
     step(io, "placement_intent")
     local turn_id = "turn:" .. request.attempt_id .. ":1"
     local _, turn_error = thread_call(io, request, "request_turn", {action_id = request.action_id, attempt_id = request.attempt_id, turn_id = turn_id, carrier_epoch = epoch,
-        turn = {input_message_ids = {}, input = {text = request.brief}, delivery_ids = {}}}, "turn")
+        turn = {input_message_ids = {}, input = {text = request.brief}, resume_ref = plan.resume_ref, delivery_ids = {}}}, "turn")
     if turn_error then return abandon(turn_error) end
     step(io, "turn_requested")
     local point = checkpoint.new({binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry, plan_digest = plan.plan_digest, gateway_binding = gateway_binding}, epoch)
+    point.retained_session_ref = request.session_ref
     local session = new_session(plan, turn_id, epoch, 0, point)
     local committed, commit_error = M.commit(io, session, {})
     if not committed then return abandon(commit_error or "commit") end

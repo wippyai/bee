@@ -256,6 +256,12 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
         value.attempt_id = attempt_id
         value.action_id = attempt.action_id
         value.attempt_state = attempt.state
+        if attempt.state == "ended" then
+            local outcome, outcome_err = reader.attempt_outcome(tx, head.thread_id, attempt_id)
+            if outcome_err then return storage(outcome_err) end
+            if not outcome then return storage("ended attempt has no receipt") end
+            value.attempt_outcome = outcome
+        end
         local open, open_err = reader.open_turn(tx, head.thread_id, attempt_id)
         if open_err then return storage(open_err) end
         value.open_turn_id = open and open.turn_id or nil

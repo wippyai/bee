@@ -20,6 +20,7 @@ record = sys.argv[1]
 hold = float(sys.argv[2]) if len(sys.argv) > 2 else 0.0
 tool_command = os.environ.get("BEE_ENDPOINT_TOOL", "")
 mcp_tool = os.environ.get("BEE_ENDPOINT_MCP_TOOL", "")
+plain_text = os.environ.get("BEE_ENDPOINT_TEXT", "")
 def sse(events):
     return "".join("event: " + name + "\ndata: " + json.dumps(payload) + "\n\n" for name, payload in events).encode()
 def message_start(message_id):
@@ -104,7 +105,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 has_tool_result = True
                 result_excerpt = str(item.get("output"))[:400]
         with open(record, "a") as out:
-            out.write(json.dumps({"path": self.path, "authorization": authorization, "x_api_key": api_key, "content_type": self.headers.get("content-type", ""), "messages": len(messages), "offers_bash": offers_bash,
+            out.write(json.dumps({"path": self.path, "authorization": authorization, "x_api_key": api_key, "content_type": self.headers.get("content-type", ""), "messages": len(messages), "input_items": len(inputs) if isinstance(inputs, list) else 0, "offers_bash": offers_bash,
                 "tool_result": has_tool_result, "mcp_tools": mcp_tools, "result_excerpt": result_excerpt}) + "\n")
         if hold > 0:
             time.sleep(hold)
@@ -113,6 +114,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = responses_text("done") if has_tool_result else responses_mcp_call(mcp_tool, {"cursor": 0})
             else:
                 payload = text_turn("done") if has_tool_result else mcp_tool_turn("mcp__bee__" + mcp_tool, {"cursor": 0})
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream")
+        elif plain_text:
+            payload = responses_text(plain_text) if responses_api else text_turn(plain_text)
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
         elif tool_command:

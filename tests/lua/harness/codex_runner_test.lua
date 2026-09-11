@@ -105,9 +105,9 @@ local endpoint_handle: any = nil
 local endpoint_executor: any = nil
 -- The endpoint holds each answer for the given seconds after recording
 -- the request, so the suite can act while the child is provably waiting.
-local function start_endpoint(record: string, hold_seconds: integer): string
+local function start_endpoint(record: string, hold_seconds: integer, text: string?): string
     local executor = assert(exec.get("bee.placement.native:executor"))
-    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record .. " " .. tostring(hold_seconds))
+    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record .. " " .. tostring(hold_seconds), {env = text and {PATH = "/usr/bin:/bin", BEE_ENDPOINT_TEXT = text} or nil})
     if not proc then error("endpoint: " .. tostring(err)) end
     local started, start_error = proc:start()
     if not started then error("start endpoint: " .. tostring(start_error)) end
@@ -241,6 +241,65 @@ function bounds_content(value: unknown): string
 end
 local function define_tests()
     test.describe("Codex authentication path through placement", function()
+        test.it("resumes the real Codex session across two native attempts in one thread, or reports the gate open", function()
+            local codex = codex_bin()
+            if not codex then test.eq(launch.CODEX_AUTHENTICATION, "unproven"); return end
+            local root = ".wippy/codex-resume-" .. fresh("run")
+            shell("mkdir -p " .. root)
+            local ok, err = pcall(function()
+                local record = root .. "/endpoint.jsonl"
+                local port = start_endpoint(record, 0, "bee native answer")
+                prepare_host(port, codex)
+                local workspace, thread_id = fresh("ws"), thread()
+                local first_id, second_id, session_ref = fresh("attempt"), fresh("attempt"), fresh("session")
+                local first = request(thread_id, first_id, POLICY, {projection_for(workspace, first_id)})
+                first.session_ref = session_ref
+                first.brief = "First native prompt"
+                local resources = first.resources :: {Object}
+                resources[#resources + 1] = {name = "session", grant_ref = "host-session", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
+                local first_result = await_carrier(spawn_carrier("bee.harness.carrier:process", first, "open", nil), "first native turn")
+                if not first_result.value then error("first native turn: " .. tostring(first_result.error)) end
+                local first_settlement = first_result.value.settlement :: Object
+                test.eq(first_settlement.outcome, "succeeded")
+                test.not_nil(first_settlement.resume_ref)
+                local before, initial_messages = 0, 0
+                for line in shell("cat " .. record):gmatch("[^\n]+") do
+                    local item = json.decode(line) :: Object
+                    before = before + 1
+                    initial_messages = math.max(initial_messages, tonumber(item.input_items) or 0)
+                end
+                local second = request(thread_id, second_id, POLICY, {projection_for(workspace, second_id)})
+                second.action_id, second.session_ref = first.action_id, session_ref
+                second.previous_attempt_id = first_id
+                second.resources = resources
+                second.brief = "Second native prompt"
+                local second_result = await_carrier(spawn_carrier("bee.harness.carrier:process", second, "open", nil), "second native turn")
+                if not second_result.value then error("second native turn: " .. tostring(second_result.error)) end
+                local second_settlement = second_result.value.settlement :: Object
+                test.eq(second_settlement.outcome, "succeeded")
+                test.eq(second_settlement.resume_ref, first_settlement.resume_ref)
+                local seen, resumed_messages = 0, 0
+                for line in shell("cat " .. record):gmatch("[^\n]+") do
+                    local item = json.decode(line) :: Object
+                    seen = seen + 1
+                    if seen > before then resumed_messages = math.max(resumed_messages, tonumber(item.input_items) or 0) end
+                end
+                test.is_true(resumed_messages > initial_messages, "native harness did not retain the first turn")
+                local actions, turns, receipts = 0, 0, 0
+                for _, item in ipairs(records_of(thread_id)) do
+                    if item.kind == "action.admitted" then actions = actions + 1 end
+                    if item.kind == "turn.request" then
+                        turns = turns + 1
+                        if item.attempt_id == second_id then test.eq((item.body :: Object).resume_ref, first_settlement.resume_ref) end
+                    end
+                    if item.kind == "receipt" then receipts = receipts + 1 end
+                end
+                test.eq(actions, 1); test.eq(turns, 2); test.eq(receipts, 2)
+            end)
+            stop_endpoint()
+            shell("rm -rf " .. root)
+            if not ok then error(tostring(err)) end
+        end)
         test.it("selects the API-key path through the runner with a generated configuration and a projected sentinel, or reports why not", function()
             local codex = codex_bin()
             if not codex then

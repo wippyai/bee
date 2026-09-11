@@ -50,15 +50,15 @@ end
 function M.specification(request: Request): types.Launch
     local argv: {string}
     if request.resume_ref then
-        argv = {"codex", "exec", "resume", request.resume_ref, "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
+        argv = {"codex", "--sandbox", request.sandbox, "exec", "resume", request.resume_ref, "--json", "--skip-git-repo-check", "-"}
     else
         argv = {"codex", "exec", "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
     end
     if request.gateway_hooks then
         -- The bee profile layer carries the hook trust state the runner
         -- writes under the private home; without it no hook runs.
-        table.insert(argv, #argv, "--profile")
-        table.insert(argv, #argv, "bee")
+        table.insert(argv, 2, "bee")
+        table.insert(argv, 2, "--profile")
     end
     local environment: {string} = {}
     -- The brief goes in on stdin and Codex reads it until end of file, so

@@ -77,6 +77,24 @@ local function define_tests()
             test.eq(page.records[2].source, "bee")
             test.eq(page.records[2].body.data.event_name, "bee.carrier.write")
         end)
+        test.it("reads the committed attempt outcome independently of the provider checkpoint", function()
+            for _, outcome in ipairs({"succeeded", "failed", "cancelled", "uncertain"}) do
+                local thread_id = prepared_attempt()
+                harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
+                local point = checkpoint(1)
+                point.terminal = {outcome = "succeeded", resume_ref = "provider-session"}
+                harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = point, records = {}}))
+                local active = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
+                test.is_nil(active.attempt_outcome)
+                local receipt: {[string]: unknown} = {scope = "attempt", outcome = outcome, evidence_refs = {}}
+                if outcome ~= "succeeded" then receipt.error = {code = outcome, message = outcome, retryable = false} end
+                harness.value(carrier:call("receipt", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", attempt_id = "t1", carrier_epoch = 1, receipt = receipt}))
+                local ended = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
+                test.eq(ended.attempt_state, "ended")
+                test.eq(ended.attempt_outcome, outcome)
+                test.eq(ended.checkpoint.terminal.outcome, "succeeded")
+            end
+        end)
         test.it("refuses malformed records, foreign turns, ended attempts and callers without carrier authority", function()
             local thread_id = prepared_attempt()
             test.eq(harness.code(runner:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"})), "DENIED")

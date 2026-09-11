@@ -191,6 +191,14 @@ function M.latest_settled_attempt(tx: sql.Transaction, thread_id: string, action
     if not id then return nil, "attempt settlement row is corrupt" end
     return id, nil
 end
+function M.attempt_outcome(tx: sql.Transaction, thread_id: string, attempt_id: string): (string?, string?)
+    local row, err = single(tx, "SELECT outcome FROM bee_thread_settlements WHERE thread_id = ? AND scope = 'attempt' AND attempt_id = ?", {thread_id, attempt_id}, "attempt outcome")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    local outcome = text(row.outcome)
+    if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "attempt outcome row is corrupt" end
+    return outcome, nil
+end
 function M.settled(tx: sql.Transaction, thread_id: string, scope: string, action_id: string, attempt_id: string?): (Stored?, string?)
     local select = "SELECT r.record_id, r.sequence, r.kind, r.record_json FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id "
     local row: {[string]: unknown}?, err: string?

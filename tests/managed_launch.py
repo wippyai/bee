@@ -20,6 +20,8 @@ from workspace import fixture_workspace  # noqa: E402
 
 SUITES = ("placement", "harness", "driver", "credentials", "threads", "gateway", "managed")
 PROOFS = (
+    "resumes the real Codex session across two native attempts in one thread",
+    "resumes the real Claude session across two native attempts in one thread",
     "selects the API-key path with the environment projection",
     "selects the API-key path through the runner with a generated configuration",
     "waits on a typed request, executes once on a correlated allow",

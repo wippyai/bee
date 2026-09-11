@@ -9,9 +9,9 @@ definition is installed, and the default composition does not start the gateway
 listener. Public Claude/Codex aliases still launch ordinary native Terminals.
 
 On runtime `674b58a1a117fa79398f723c4311201cca8472e1`, an earlier
-managed-launch gate completed with **192 passed and 7 failed**. All mandatory
-real-executable proof names passed, including loopback authentication, permission
-exchange and gateway interoperability; the first three failures reported a
+managed-launch gate completed with **192 passed and 7 failed**. The listed proof names passed, but the Codex authentication case can return
+without execution when stdin closure is unavailable. Those names alone do not
+prove every native executable ran; the first three failures reported a
 listener readiness generation conflict, and later cases failed before the child
 presented its credential. Independently booted managed compositions shared
 `127.0.0.1:18790`, so readiness correctly refused another runtime's listener.
@@ -46,14 +46,53 @@ while the other three cases pass. Evidence:
 `/tmp/bee-launch-workspace-fixed.log`. This correction is source-only and does
 not activate a provider or change workspace authorization.
 
-A durable follow-up prompt is also unfinished. Both driver `dispatch` methods
-explicitly describe a new process on a provider `resume_ref`; the carrier currently
-calls only `prepare` and settles one attempt. Placement already has retained
-session directories. A conversation can span process attempts: it must preserve
-thread identity, provider continuation and the selected session directory, with
-idempotent admission and recovery. Increasing Claude's `max_turns` does not provide
-that user-facing conversation lifecycle. The launch surface, follow-up composition
-and detach/recovery acceptance remain required.
+The continuation source now resolves a succeeded predecessor from the thread
+owner's committed outcome and carrier checkpoint, verifies the exact exited
+placement and retained session, and dispatches a new native process on the same
+action. It never accepts a provider session ID supplied by the caller. The
+attempt transaction checks the expected predecessor to fence concurrent prompts.
+Placement keeps session HOME separately from disposable attempt evidence and
+reuses generated configuration only when its bounded content matches exactly.
+Public admission and the interactive window integration remain unfinished.
+
+Focused acceptance with real Claude Code passed two successive native attempts,
+one native conversation, one action and two committed turn receipts. The provider
+fixture observed the earlier conversation in the second request. The integrated
+HOME run preserved that result. Codex's new equivalent proof currently fails at
+placement admission: `/tmp/bee-recovery-runtime-20260911` reports no `close_stdin`.
+It has not yet exercised the corrected Codex resume argv. The existing Codex
+authentication test can report that capability gap without executing Codex, so
+its green result alone must not be called actual-executable acceptance.
+Evidence: `/tmp/bee-native-resume-focused-r4-20260911.log` (6/6) and
+`/tmp/bee-native-resume-focused-r5-20260911.log` (7 passed, 1 failed).
+
+The updated unit suite passes 542/542. A direct native Codex probe independently
+completed two processes on the same session, observed request history grow from
+3 to 5 input items, and verified both persisted turn contexts retained the
+selected read-only sandbox. This validates the corrected parent-command sandbox
+flag, not Bee placement integration. Evidence:
+`/tmp/bee-native-continuation-unit-r3-20260911.log` and
+`/tmp/bee-codex-resume-cli-r2-20260911.log`. The Codex fixture counts Responses
+`input` items separately from Messages API messages.
+
+### Interactive native harness target
+
+The requested user experience is Claude Code or Codex's own interactive UI inside
+a retained Bee Terminal. The earlier `bee-legacy/os-harness/src/window.lua` and
+native driver implementations are reference material only, never dependencies.
+They distinguish interactive PTY windows from structured headless sessions.
+The current production catalog supports only stream-json; adding a PTY profile
+must follow its actual carrier, readiness and lifecycle acceptance, not simply
+mark that protocol compatible.
+
+The interactive path must reuse native terminal attachment and Bee's retained
+application/view lifetimes. Driver-selected argv, typed model/reasoning and
+permission options, admitted resources, scoped MCP/traits and generated settings
+belong to managed launch and placement. Threads retain records and lifecycle
+without filesystem knowledge. The MCP listener needs an OS-assigned endpoint,
+authentication and request/security context scoping. Docker remains a separate
+placement component whose filesystem/mount contract is still to be discussed.
+No internal model engine or replacement chat UI is required.
 
 ## Historical September 9 evidence
 

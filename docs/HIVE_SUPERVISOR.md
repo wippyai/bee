@@ -428,9 +428,9 @@ against `100.70.10.28` in `/tmp/bee-hive-physical-desktop-lan-crash-fresh.log`
 same-name membership reincarnation failure above remains separate; public dynamic
 enrollment and live-transport actor EXIT are still unfinished.
 
-## Local application catalog reads (candidate)
+## Local application catalog reads
 
-The candidate `bee.desktop:catalog` process operation reads the retained display
+The `bee.desktop:catalog` process operation reads the retained display
 identity catalog for this local Bee. Its input is an empty object, addressed to
 the `bee.desktop` owner on this node. It uses the existing Hive Call/Reply
 correlation and deadlines and the same bounded retained catalog bridge as native
@@ -466,5 +466,5 @@ client and transfer checks. A subsequent local-only PID correction passes
 `make hive-reader-check`: an actual actor is admitted from its supervisor’s
 native node, a foreign-node snapshot is refused, and revocation fences an
 in-flight response without granting native control. Reverting the correction
-makes that focused test fail on the legitimate local reader. Rebuilding and
-native acceptance of that final correction remain pending; it is not installed.
+makes that focused test fail on the legitimate local reader. The final rebuilt binary passes native catalog and connection acceptance and
+is installed globally; see `handoffs/GLOBAL_BUILD.md` for exact provenance.

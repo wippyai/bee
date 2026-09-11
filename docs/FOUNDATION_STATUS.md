@@ -1,5 +1,12 @@
 # Foundation status
 
+Global Bee now includes local Hive Manager display browsing through exact
+supervisor-selected reader admission. Native catalog/connection checks pass on
+the final binary; source real-actor checks prove revocation and native-control
+denial. Remote browsing and switching remain unfinished. The installed SHA starts
+`5c604fa7`; existing running nodes retain their loaded code until restarted. See
+[the build handoff](handoffs/GLOBAL_BUILD.md).
+
 Current global Bee includes app transfer between independent displays, friendly
 names, retained-display recovery and observer-safe assignment projection (SHA
 `2569142f`, source `4e57054`). Public two-client transfer preserves the same shell

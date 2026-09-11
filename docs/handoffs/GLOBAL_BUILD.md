@@ -1,6 +1,29 @@
 # Global Bee build — September 11, 2026
 
-## Current install: compact connection card
+## Current install: live local Hive display catalog
+
+Global SHA256 `5c604fa7ab5f3c7eaa903c7ed2a79c8eb8b467fa6c0ee738b1c016471c9e026a`.
+Production source `7bee2ab`, artifact `/tmp/bee-live-catalog-locality-20260911`.
+Native `2a2117ad4fe7`, runtime `674b58a1`, builder `70acb10175fb` unchanged.
+Atomic installation verified binary and provenance/license sidecars; backup
+`bee.previous-live-catalog-20260911T172742Z`. No running user process restarted.
+Existing running nodes keep their loaded source until restarted.
+
+Hive Manager can now browse the local workspace's retained displays through
+supervisor-authorized catalog reads. Unknown occupancy is shown honestly;
+listing grants no attachment or native control authority. Remote browsing,
+connecting through the app and workspace switching remain unfinished.
+
+Candidate acceptance passed 535 unit tests, source/pack architecture573 and
+application checks, native client/transfer/catalog/connection checks. The final
+local-only PID fix passes a real-actor admission/revocation test, which fails when
+the old comparison is restored. Final rebuilt binary catalog and connection
+checks pass with two physical clients, exact retained identities, F12 and reconnect.
+This is focused/segmented validation, not a new uninterrupted full make check.
+Evidence: `/tmp/bee-catalog-locality-reader.log`,
+`/tmp/bee-live-catalog-locality-native.log`, `/tmp/bee-install-live-catalog-20260911.log`.
+
+## Previous install: compact connection card
 
 Global SHA256 `af1dc830badf03028deb071874a05152413b9b900bd93aace0369b4c3fdf5b79`.
 Source matches `27f0383` (connection card `2385b82` plus honest unknown display

@@ -68,6 +68,27 @@ local function order(state: State)
         return a.node_id < b.node_id
     end)
 end
+local function remove_node(state: State, index: integer)
+    local removed = table.remove(state.nodes, index)
+    state.index[removed.node_id] = nil
+    state.catalogs[removed.node_id] = nil
+    state.sessions[removed.node_id] = nil
+    if state.selected_node == removed.node_id then
+        state.selected_node = nil
+        state.selected_desktop = nil
+        state.wanted_desktop = nil
+        if state.wanted_node == removed.node_id then state.wanted_node = nil end
+    end
+    if state.pending and state.pending.node_id == removed.node_id then
+        state.pending = nil
+        state.wanted_desktop = nil
+        if state.wanted_node == removed.node_id then state.wanted_node = nil end
+    end
+    if state.wanted_node == removed.node_id then
+        state.wanted_node = nil
+        state.wanted_desktop = nil
+    end
+end
 function M.set_supervisor(state: State, running: boolean, detail: string)
     state.hive = running and "running" or "unavailable"
     state.hive_detail = M.text(detail)
@@ -76,40 +97,55 @@ end
 -- from a complete list is marked unavailable for a 60-second grace. The list stays within the
 -- display bound: when members and retained nodes exceed it, the departed
 -- node that left earliest is dropped first, the selected one last.
-local function evict(state: State)
+local function evict(state: State, reported: {[string]: boolean})
     while #state.nodes > M.MAX_NODES do
         local victim: integer = 0
+        local victim_class = math.huge
         for index, node in ipairs(state.nodes) do
-            if not node.member and node.node_id ~= state.selected_node then
-                if victim == 0 or node.departed_at < state.nodes[victim].departed_at then victim = index end
+            local class = 8
+            if not node.member and node.node_id ~= state.selected_node and not node.is_local then
+                class = 1
+            elseif not node.member and node.node_id ~= state.selected_node then
+                class = 2
+            elseif not node.member then
+                class = 3
+            elseif not reported[node.node_id] and node.node_id ~= state.selected_node and not node.is_local then
+                class = 4
+            elseif not reported[node.node_id] and node.node_id ~= state.selected_node then
+                class = 5
+            elseif reported[node.node_id] and node.node_id ~= state.selected_node and not node.is_local then
+                class = 6
+            elseif reported[node.node_id] and node.node_id ~= state.selected_node then
+                class = 7
             end
-        end
-        if victim == 0 then
-            for index, node in ipairs(state.nodes) do
-                if not node.member then victim = index; break end
+            if class < victim_class or (class == victim_class and (victim == 0 or node.departed_at < state.nodes[victim].departed_at)) then
+                victim, victim_class = index, class
             end
         end
         if victim == 0 then return end
-        local removed = table.remove(state.nodes, victim)
-        state.index[removed.node_id] = nil
-        state.catalogs[removed.node_id] = nil
-        state.sessions[removed.node_id] = nil
-        if state.selected_node == removed.node_id then state.selected_node = nil; state.selected_desktop = nil end
+        remove_node(state, victim)
     end
 end
 function M.apply_members(state: State, members: {directory.Member}, problem: string?, now_ms: integer?)
     local now = now_ms or 0
     state.membership_detail = problem and M.text(problem) or ""
-    -- Failed or truncated membership cannot prove absence. Restart the grace
-    -- period after a complete sample, rather than aging through uncertainty.
-    if problem and #state.nodes > 0 then
-        for _, node in ipairs(state.nodes) do node.absent_since = nil end
-        return
-    end
     state.generation = state.generation + 1
-    for _, node in ipairs(state.nodes) do node.member = false end
+    local reported: {[string]: boolean} = {}
+    local previous_membership: {[string]: boolean} = {}
+    for _, node in ipairs(state.nodes) do previous_membership[node.node_id] = node.member end
+    local complete = problem == nil
+    -- A failed or truncated sample cannot prove absence. Keep each prior
+    -- membership value, but reset departure grace so uncertainty cannot age a
+    -- row out of the presentation.
+    if not complete then
+        for _, node in ipairs(state.nodes) do node.absent_since = nil end
+    else
+        for _, node in ipairs(state.nodes) do node.member = false end
+    end
     for _, member in ipairs(members) do
+        reported[member.node_id] = true
         local node = state.index[member.node_id]
+        local was_member = node ~= nil and previous_membership[node.node_id] == true
         if not node then
             node = {node_id = member.node_id, label = label_of(state, member.node_id), is_local = member.is_local, addr = M.text(member.addr),
                 member = true, client_only = member.client_only == true, departed_at = 0, status = "unknown", detail = "", role = "", cluster_size = 0, sampled_at = "", heap = nil, goroutines = nil}
@@ -120,37 +156,34 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
             node.is_local = member.is_local
             node.addr = M.text(member.addr)
         end
+        if not was_member then node.status, node.detail = "unknown", "" end
         node.client_only = member.client_only == true
         if node.client_only then
             node.label = state.names[node.node_id] or ("Display " .. node.node_id:sub(-6))
-            node.status, node.detail = "unknown", ""
             state.catalogs[node.node_id] = nil
             state.sessions[node.node_id] = nil
         else node.label = label_of(state, node.node_id) end
     end
-    for _, node in ipairs(state.nodes) do
-        if not node.member then
-            if node.status ~= "unavailable" or node.departed_at == 0 then node.departed_at = state.generation end
-            node.status = "unavailable"
-            node.detail = "left membership; retiring after 60s"
-            if node.absent_since == nil then node.absent_since = now end
-        else node.departed_at = 0; node.absent_since = nil end
+    if complete then
+        for _, node in ipairs(state.nodes) do
+            if not node.member then
+                if node.status ~= "unavailable" or node.departed_at == 0 then node.departed_at = state.generation end
+                node.status = "unavailable"
+                node.detail = "left membership; retiring after 60s"
+                if node.absent_since == nil then node.absent_since = now end
+            else node.departed_at = 0; node.absent_since = nil end
+        end
     end
-    state.membership_detail = problem and M.text(problem) or ""
-    for index = #state.nodes, 1, -1 do
-        local node = state.nodes[index]
-        local since = node.absent_since
-        if not node.member and not node.is_local and since ~= nil and now - since >= M.RETIRE_AFTER_MS then
-            table.remove(state.nodes, index)
-            state.index[node.node_id] = nil
-            state.catalogs[node.node_id] = nil
-            state.sessions[node.node_id] = nil
-            if state.selected_node == node.node_id then
-                state.selected_node = nil; state.selected_desktop = nil
+    if complete then
+        for index = #state.nodes, 1, -1 do
+            local node = state.nodes[index]
+            local since = node.absent_since
+            if not node.member and not node.is_local and since ~= nil and now - since >= M.RETIRE_AFTER_MS then
+                remove_node(state, index)
             end
         end
     end
-    evict(state)
+    evict(state, reported)
     order(state)
     if state.wanted_node and state.index[state.wanted_node :: string] then
         state.selected_node = state.wanted_node

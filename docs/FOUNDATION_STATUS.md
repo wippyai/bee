@@ -2,7 +2,11 @@
 
 Hive Manager source now retires departed node/display-client rows after 60 seconds
 of absence in complete native membership samples. Returning nodes cancel retirement;
-a failed or truncated membership sample resets the grace period. Retirement only
+a failed or truncated membership sample resets the grace period while still
+updating the members it reports. Repeated partial samples keep the presentation
+cache bounded at 64 rows, preferring local and selected nodes under pressure.
+Returning nodes clear departure status. Removing a node also clears pending and
+saved-selection hints so another node cannot inherit its desktop selection. Retirement only
 removes the manager's cached row, catalog and session presentation; saved display
 layouts and application processes are untouched. Refresh is every five seconds
 when its directory worker is idle, so cleanup may occur later than 60 seconds.

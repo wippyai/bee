@@ -164,6 +164,12 @@ local function define_tests()
             local applied, apply_error = changes:apply()
             if not applied then error(tostring(apply_error)) end
             local snapshot, read_error = catalog.snapshot()
+            -- Restore shared fixture state before any assertion can fail. The
+            -- captured catalog remains the malformed generation's value.
+            local restore = registry.snapshot():changes()
+            restore:update(original)
+            local restored, restore_error = restore:apply()
+            if not restored then error(tostring(restore_error)) end
             if not snapshot then error(tostring(read_error)) end
             test.eq(snapshot.generation, math.floor(applied:id()))
             test.is_true(has(snapshot.diagnostics, "bee:harness_activation: schema_revision must be bee.harness-activation@1"))
@@ -172,10 +178,6 @@ local function define_tests()
             local usable, usable_error = catalog.usable(snapshot)
             if not usable then error(tostring(usable_error)) end
             test.eq(#usable, 0)
-            local restore = registry.snapshot():changes()
-            restore:update(original)
-            local restored, restore_error = restore:apply()
-            if not restored then error(tostring(restore_error)) end
         end)
     end)
 end

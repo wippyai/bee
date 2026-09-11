@@ -95,3 +95,7 @@ native-display-appearance-check:
 .PHONY: native-display-transfer-check
 native-display-transfer-check:
 	python3 tests/native_display_transfer.py "$(BEE_BINARY)"
+
+.PHONY: native-hive-catalog-check
+native-hive-catalog-check:
+	python3 tests/native_hive_catalog.py "$(BEE_BINARY)"

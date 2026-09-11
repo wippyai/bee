@@ -7,8 +7,9 @@ type Result = {version: integer, reply: contract.Reply, views: inventory.Views}
 type Permissions = {open: boolean, close: boolean, control: boolean, appearance: boolean?}
 type ControlOp = "admit" | "detach" | "render"
 type Client = {recipient: string, connection_id: string, permissions: Permissions, detaching: boolean,
-    renderer: string, renderer_generation: string, rendering: boolean}
-type Control = {request_id: string, workspace_id: string, op: ControlOp, recipient: string, permissions: Permissions?, renderer: string}
+    renderer: string, renderer_generation: string, rendering: boolean, display_id: string}
+type Control = {request_id: string, workspace_id: string, op: ControlOp, recipient: string,
+    permissions: Permissions?, renderer: string, display_id: string}
 type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRequest = {version: integer, request_id: string, op: "appearance", action: AppearanceOp,
     recipient: string, theme: string, background: string, taskbar: string}
@@ -45,6 +46,11 @@ function M.control(value: unknown): Control?
     if not request_id or request_id == "" or not workspace_id or not recipient or recipient == "" then return nil end
     local op = control_op(value.op)
     if not op then return nil end
+    local display_id = ""
+    if op == "admit" then
+        display_id = contract.workspace_id(value.display_id) or ""
+        if display_id == "" then return nil end
+    end
     local renderer = ""
     if op == "render" then
         local selected = contract.text(value.renderer, 160)
@@ -61,7 +67,8 @@ function M.control(value: unknown): Control?
         permissions = {open = data.open, close = data.close, control = data.control,
             appearance = data.appearance == true}
     end
-    return {request_id = request_id, workspace_id = workspace_id, op = op, recipient = recipient, permissions = permissions, renderer = renderer}
+    return {request_id = request_id, workspace_id = workspace_id, op = op, recipient = recipient,
+        permissions = permissions, renderer = renderer, display_id = display_id}
 end
 function M.same_permissions(left: Permissions, right: Permissions): boolean
     return left.open == right.open and left.close == right.close and left.control == right.control

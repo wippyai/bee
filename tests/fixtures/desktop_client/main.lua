@@ -157,7 +157,8 @@ local function main(mode: string?)
             assert(ready_data.import_receipt == "", "Client without legacy offer imported state")
         end
         assert(process.send(host, "bee.host.client", {version = 1, request_id = label .. "-admit", op = "admit",
-            workspace_id = workspace_id, recipient = client, permissions = {open = label ~= "observer", close = label ~= "observer", control = label ~= "observer", appearance = label == "left"}}))
+            workspace_id = workspace_id, recipient = client, display_id = ready_data.client_id,
+            permissions = {open = label ~= "observer", close = label ~= "observer", control = label ~= "observer", appearance = label == "left"}}))
         result(label .. "-admit")
         local selected = assert(renderers:receive())
         assert(tostring(selected:from()) == client)

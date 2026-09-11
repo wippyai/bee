@@ -79,6 +79,7 @@ entries:
     state: bee.client:state
     model: bee.desktop:model
     decode: bee.protocol:decode
+    launch_protocol: bee.launch:protocol
   security:
     policies: [bee.desktop_client_probe:root_policy]
   meta:

@@ -14,6 +14,7 @@ local store = require("store")
 local state = require("state")
 local model = require("model")
 local decode = require("decode")
+local launch_protocol = require("launch_protocol")
 local log = logger:named("bee.thread_status_probe")
 
 local ACTOR = "bee.desktop_client_probe:status_viewer"
@@ -179,8 +180,11 @@ local function main()
         local client = desktop.pid
         local ready_message = assert(clients:receive())
         assert(tostring(ready_message:from()) == client)
+        local ready = launch_protocol.ready(ready_message:payload():data(), workspace_id, false)
+        if not ready then error("Invalid client readiness") end
         assert(process.send(host, "bee.host.client", {version = 1, request_id = "status-admit", op = "admit",
-            workspace_id = workspace_id, recipient = client, permissions = {open = true, close = true, control = true, appearance = false}}))
+            workspace_id = workspace_id, recipient = client, display_id = ready.client_id,
+            permissions = {open = true, close = true, control = true, appearance = false}}))
         result("status-admit")
         local renderer_message = assert(renderers:receive())
         assert(tostring(renderer_message:from()) == client)

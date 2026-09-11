@@ -92,7 +92,8 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local c1_ready_msg = assert(client_readies:receive())
     assert(tostring(c1_ready_msg:from()) == client1_pid, "Client 1 ready sender mismatch")
     local c1_ready_data: unknown = c1_ready_msg:payload():data()
-    if type(c1_ready_data) ~= "table" or c1_ready_data.version ~= 1 or c1_ready_data.workspace_id ~= workspace_id then
+    local c1_display_id = type(c1_ready_data) == "table" and contract.workspace_id(c1_ready_data.client_id) or nil
+    if type(c1_ready_data) ~= "table" or c1_ready_data.version ~= 1 or c1_ready_data.workspace_id ~= workspace_id or not c1_display_id then
         error("Invalid client 1 ready payload")
     end
 
@@ -101,6 +102,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         request_id = "admit-c1",
         op = "admit_client",
         client = client1_pid,
+        display_id = c1_display_id,
     }))
     local ack1 = assert(render_acks:receive())
     assert(tostring(ack1:from()) == supervisor_pid, "Ack 1 sender mismatch")
@@ -235,7 +237,8 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local c2_ready_msg = assert(client_readies:receive())
     assert(tostring(c2_ready_msg:from()) == client2_pid, "Client 2 ready sender mismatch")
     local c2_ready_data: unknown = c2_ready_msg:payload():data()
-    if type(c2_ready_data) ~= "table" or c2_ready_data.version ~= 1 or c2_ready_data.workspace_id ~= workspace_id then
+    local c2_display_id = type(c2_ready_data) == "table" and contract.workspace_id(c2_ready_data.client_id) or nil
+    if type(c2_ready_data) ~= "table" or c2_ready_data.version ~= 1 or c2_ready_data.workspace_id ~= workspace_id or not c2_display_id then
         error("Invalid client 2 ready payload")
     end
 
@@ -244,6 +247,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         request_id = "admit-c2",
         op = "admit_client",
         client = client2_pid,
+        display_id = c2_display_id,
     }))
     local ack2 = assert(render_acks:receive())
     assert(tostring(ack2:from()) == supervisor_pid, "Ack 2 sender mismatch")

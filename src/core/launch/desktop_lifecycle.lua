@@ -159,7 +159,7 @@ function M.receive(state: State, topic: string, sender: string, data: unknown): 
         child.phase, child.pending, child.deadline = "admit", uuid.v7(), time.after("10s")
         if not send(state.host, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
             request_id = child.pending, op = "admit", recipient = child.resource.pid,
-            permissions = {open = true, close = true, control = true, appearance = true}}) then
+            permissions = {open = true, close = true, control = true, appearance = true}, display_id = child.id}) then
             fail(state, child, "Desktop admission request was not accepted")
         end
     elseif topic == "renderer" then

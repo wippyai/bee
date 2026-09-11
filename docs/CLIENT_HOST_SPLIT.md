@@ -48,7 +48,7 @@ writes, but they are not host election or a multi-writer protocol.
 
 Only the bootstrapped supervisor may send `bee.host.client` with version 1,
 request ID, workspace ID, exact recipient PID and `admit`, `detach` or `render`. Admission
-requires explicit `open`, `close` and `control` booleans; optional `appearance`
+requires the supervisor's validated durable `display_id` together with explicit `open`, `close` and `control` booleans; optional `appearance`
 defaults to false and permits client preference changes. Optional
 `workspace_appearance` also defaults to false and requires `appearance = true`;
 it permits host-owned workspace preference writes through Settings. The host monitors that
@@ -56,6 +56,16 @@ execution and supplies a fresh connection ID through `bee.host.admitted`, along
 with `renderer`, `renderer_generation` and `renderer_pending`.
 Requests must match both the actual sender and the connection ID; metadata does
 not grant access. Changing permissions requires completed detach first.
+
+The supervisor binds `display_id` to the exact admitted client execution. A
+second execution cannot become a writer for an admitted display, and an
+execution re-admitted under another display conflicts. The display remains
+reserved while its prior admission is detaching or revoking. Renderer
+replacement preserves the display ID while issuing a new connection and
+renderer generation. Ordinary client request fields and friendly labels do not
+establish display identity or authority. Physical observers reuse retained
+display grants and do not create host admissions. Display transfer remains a
+proposal described in [the transfer handoff](handoffs/APP_DISPLAY_TRANSFER.md).
 
 Client requests use `bee.app.request`. The host isolates request IDs by connection,
 forces targeted bind recipients to the supervisor-selected renderer and denies host recovery,

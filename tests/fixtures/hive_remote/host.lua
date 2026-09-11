@@ -35,7 +35,7 @@ local function main()
 
     while true do
         local line: string = tostring(assert(io.readline()))
-        local cmd, client_pid = string.match(line, "^(%S+)%s*(%S*)$")
+        local cmd, client_pid, requested_display_id = string.match(line, "^(%S+)%s*(%S*)%s*(%S*)$")
         if cmd == "desktop" then
             if not client_pid or client_pid == "" then error("Missing controller PID in desktop") end
             local authorized_controller = client_pid
@@ -50,7 +50,8 @@ local function main()
                 if phase_data.op == "admit_client" then
                     local req_id = phase_data.request_id
                     local target_client = phase_data.client
-                    if type(req_id) ~= "string" or req_id == "" or type(target_client) ~= "string" or target_client == "" then
+                    local display_id = contract.workspace_id(phase_data.display_id)
+                    if type(req_id) ~= "string" or req_id == "" or type(target_client) ~= "string" or target_client == "" or not display_id then
                         error("Invalid admit_client fields")
                     end
                     assert(process.send(host, "bee.host.client", {
@@ -59,6 +60,7 @@ local function main()
                         op = "admit",
                         workspace_id = workspace_id,
                         recipient = target_client,
+                        display_id = display_id,
                         permissions = {open = true, close = true, control = true, appearance = false},
                     }))
                     local res = assert(results:receive())
@@ -112,12 +114,15 @@ local function main()
             end
         elseif cmd == "admit" then
             if not client_pid or client_pid == "" then error("Missing client PID in admit") end
+            local display_id = contract.workspace_id(requested_display_id)
+            if not display_id then error("Missing durable display ID in admit") end
             assert(process.send(host, "bee.host.client", {
                 version = 1,
                 request_id = "admit-" .. client_pid,
                 op = "admit",
                 workspace_id = workspace_id,
                 recipient = client_pid,
+                display_id = display_id,
                 permissions = {open = true, close = false, control = true},
             }))
             local res = assert(results:receive())

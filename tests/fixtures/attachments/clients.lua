@@ -31,15 +31,17 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
     local updates = assert(process.listen("bee.host.views", {message = true}))
     local question_results = assert(process.listen("bee.host.question_result", {message = true}))
+    local display_id = label == "A" and string.rep("a", 32) or string.rep("b", 32)
     local renderer_generation = ""
     local function status(phase: string, view: View?)
-        assert(process.send(owner, "bee.client.status", {phase = phase, view = view}))
+        assert(process.send(owner, "bee.client.status", {phase = phase, client_id = display_id, view = view}))
     end
     local function admission(): string
         local message = assert(admissions:receive())
         assert(message:from() == host)
         local data: unknown = message:payload():data()
-        if type(data) ~= "table" or data.workspace_id ~= workspace_id or type(data.connection_id) ~= "string" or type(data.renderer_generation) ~= "string" then error("Invalid admission") end
+        if type(data) ~= "table" or data.workspace_id ~= workspace_id or data.display_id ~= display_id
+            or type(data.connection_id) ~= "string" or type(data.renderer_generation) ~= "string" then error("Invalid admission") end
         renderer_generation = data.renderer_generation
         return data.connection_id
     end
@@ -303,12 +305,18 @@ function M.main()
     local policy, policy_error = security.policy("bee.attachment_probe:client_policy")
     if not policy then error(tostring(policy_error)) end
     local scope = security.new_scope({policy})
+    local display_ids: {[string]: string} = {}
     local function status(pid: string, phase: string): View?
         local message = assert(statuses:receive())
         assert(message:from() == pid)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or data.phase ~= phase then error("Unexpected client phase") end
         local value = data.view
+        if phase == "ready" then
+            local display_id = contract.workspace_id(data.client_id)
+            if not display_id then error("Invalid client display identity") end
+            display_ids[pid] = display_id
+        end
         if value == nil then return nil end
         if type(value) ~= "table" or type(value.id) ~= "string" or type(value.instance_id) ~= "string" or type(value.native_pid) ~= "string" then error("Invalid view state") end
         return {id = value.id, instance_id = value.instance_id, native_pid = value.native_pid}
@@ -319,9 +327,9 @@ function M.main()
         local data: unknown = message:payload():data()
         assert(type(data) == "table" and data.request_id == id and data.recipient == recipient and data.error_code == expected)
     end
-    local function admit(id: string, pid: string, allowed: boolean, expected: string)
+    local function admit(id: string, pid: string, allowed: boolean, expected: string, selected_display_id: string?)
         assert(process.send(host, "bee.host.client", {version = 1, request_id = id, op = "admit", workspace_id = workspace_id,
-            recipient = pid, permissions = {open = allowed, close = false, control = allowed}}))
+            recipient = pid, display_id = selected_display_id or display_ids[pid], permissions = {open = allowed, close = false, control = allowed}}))
         result(id, pid, expected)
     end
     local function reply(id: string, op: string): decode.Reply
@@ -345,6 +353,8 @@ function M.main()
     if not first_view then error("Missing first view") end
     local second = tostring(assert(process.with_options({}):with_scope(scope):spawn_monitored("bee.attachment_probe:client", "bee:workers", owner, host, workspace_id, "B")))
     status(second, "ready")
+    admit("same-recipient-display-conflict", first, true, "identity_conflict", display_ids[second])
+    admit("duplicate-display-conflict", second, true, "identity_conflict", display_ids[first])
     admit("second", second, true, "")
     local second_view = status(second, "opened")
     if not second_view then error("Missing second view") end

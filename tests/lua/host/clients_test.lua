@@ -23,14 +23,24 @@ local function define_tests()
         test.it("requires explicit bounded authority and copies permissions", function()
             local permissions = {open = true, close = false, control = true}
             local value = {version = 1, request_id = "admit", workspace_id = identity,
-                op = "admit", recipient = "client", permissions = permissions}
+                op = "admit", recipient = "client", display_id = identity, permissions = permissions}
             local admitted = assert(clients.control(value))
+            test.eq(admitted.display_id, identity)
             permissions.open = false
             test.eq(assert(admitted.permissions).open, true)
             value.recipient = string.rep("x", 161)
             test.is_nil(clients.control(value))
             test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
-                op = "admit", recipient = "client", permissions = {open = true, control = true}}))
+                op = "admit", recipient = "client", display_id = identity,
+                permissions = {open = true, control = true}}))
+            test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
+                op = "admit", recipient = "client", permissions = {open = true, close = true, control = true}}))
+            test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
+                op = "admit", recipient = "client", display_id = "not-a-durable-id",
+                permissions = {open = true, close = true, control = true}}))
+            local detached = assert(clients.control({version = 1, request_id = "r", workspace_id = identity,
+                op = "detach", recipient = "client"}))
+            test.eq(detached.display_id, "")
             test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
                 op = "admit", recipient = "client", permissions = {open = "true", close = false, control = true}}))
             test.is_nil(clients.control({version = 1, request_id = "r", workspace_id = identity,
@@ -46,9 +56,9 @@ local function define_tests()
                 action = "set", recipient = "", theme = "honey", background = "dots", taskbar = "labels"}))
         end)
         test.it("denies foreign control, host recovery and lifecycle authority", function()
-            local client: clients.Client = {recipient = "client", connection_id = "connection",
+                local client: clients.Client = {recipient = "client", connection_id = "connection",
                 permissions = {open = true, close = false, control = true}, detaching = false,
-                renderer = "client", renderer_generation = "generation", rendering = false}
+                renderer = "client", renderer_generation = "generation", rendering = false, display_id = identity}
             local request = assert(contract.request({version = 1, request_id = "r", op = "open", definition_id = "test:app"}))
             test.eq(clients.allowed(client, request), true)
             request.resume_state = "{}"
@@ -123,7 +133,8 @@ local function define_tests()
         end)
         test.it("keeps appearance authority explicit and validates scoped receipts", function()
             local value = {version = 1, request_id = "admit", workspace_id = identity,
-                op = "admit", recipient = "client", permissions = {open = true, close = true, control = true}}
+                op = "admit", recipient = "client", display_id = identity,
+                permissions = {open = true, close = true, control = true}}
             local admitted = clients.control(value)
             if not admitted or not admitted.permissions then error("Missing admission") end
             test.is_false(admitted.permissions.appearance == true)

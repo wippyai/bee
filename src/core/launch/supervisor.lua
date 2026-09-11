@@ -253,7 +253,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     pending = uuid.v7(); advance("admitting")
                     send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
                         op = "admit", recipient = client, permissions = {open = true, close = true, control = true,
-                            appearance = true}})
+                            appearance = true}, display_id = identity.client_id})
                 elseif selected.channel == results and sender == host and type(data) == "table" then
                     if protocol.request(data, workspace_id) == pending and (phase == "admitting" or phase == "rendering") then
                         if data.error_code ~= "" then

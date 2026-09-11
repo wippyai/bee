@@ -442,7 +442,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     elseif selected.channel == admissions and sender == host and connection_id == "" then
                         if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then error("Invalid client admission") end
                         local token, generation = contract.text(data.connection_id, 80), contract.text(data.renderer_generation, 80)
-                        if not token or token == "" or not generation or generation == "" then error("Invalid admission identity") end
+                        local display_id = contract.workspace_id(data.display_id)
+                        if not token or token == "" or not generation or generation == "" or display_id ~= database.client_id then error("Invalid admission identity") end
                         connection_id, renderer_generation = token, generation
                         inbox_state = inbox.new(workspace_id, token)
                         select_targets()

@@ -33,7 +33,9 @@ function M.new(owner: string, broker: string, workspace_id: string): State
 end
 local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)
     assert(process.send(state.owner, "bee.host.client_result", {version = 1, request_id = id, op = op,
-        workspace_id = state.workspace_id, recipient = recipient, connection_id = connection_id, error_code = code, error = message}))
+        workspace_id = state.workspace_id, recipient = recipient, connection_id = connection_id,
+        display_id = state.admitted[recipient] and state.admitted[recipient].display_id or "",
+        error_code = code, error = message}))
 end
 
 local function appearance_result(state: State, request_id: string, action: AppearanceOp,
@@ -140,6 +142,15 @@ local function reserved(state: State, recipient: string, except: string): boolea
     end
     return false
 end
+local function display_reserved(state: State, display_id: string): boolean
+    -- Detaching admissions remain in state.admitted until revocation and
+    -- monitor removal complete, so the durable display writer stays fenced
+    -- throughout cleanup and any failed cleanup retry.
+    for _, client in pairs(state.admitted) do
+        if client.display_id == display_id then return true end
+    end
+    return false
+end
 local function forget(state: State, connection_id: string)
     for id, route in pairs(state.routes) do
         if route.connection_id == connection_id then state.routes[id] = nil; state.route_count = state.route_count - 1 end
@@ -174,7 +185,11 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
         elseif reserved(state, control.renderer, client.connection_id) then code, failure = "permission_denied", "Renderer belongs to another owner"
         else render(state, client, control.renderer, control.request_id); return nil end
     elseif control.permissions then
-        if client and (client.detaching or not clients.same_permissions(client.permissions, control.permissions)) then
+        if client and control.display_id ~= client.display_id then
+            code, failure = "identity_conflict", "Client is already admitted under another display"
+        elseif not client and display_reserved(state, control.display_id) then
+            code, failure = "identity_conflict", "Display is already admitted"
+        elseif client and (client.detaching or not clients.same_permissions(client.permissions, control.permissions)) then
             code, failure = "busy", "Detach the current admission before replacing its permissions"
         elseif not client and (state.count >= 8 or reserved(state, control.recipient, "")) then
             code, failure = "busy", "Client recipient or capacity is unavailable"
@@ -185,7 +200,7 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
                 else
                     local joined: clients.Client = {recipient = control.recipient, connection_id = uuid.v7(),
                         permissions = control.permissions, detaching = false, renderer = control.recipient,
-                        renderer_generation = uuid.v7(), rendering = false}
+                        renderer_generation = uuid.v7(), rendering = false, display_id = control.display_id}
                     client = joined
                     state.admitted[control.recipient] = joined
                     state.count = state.count + 1
@@ -194,7 +209,8 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
             if client and code == "" then
                 local sent, send_error = process.send(client.recipient, "bee.host.admitted", {version = 1,
                     workspace_id = state.workspace_id, connection_id = client.connection_id, permissions = client.permissions,
-                    renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering})
+                    renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering,
+                    display_id = client.display_id})
                 if not sent then code, failure = "delivery_failed", tostring(send_error); detach(state, client, "")
                 else joined_recipient = client.recipient end
             end

@@ -30,7 +30,7 @@ type Selection struct{ Workspace, Desktop string }
 // Physical detach must not wait for the normal operation deadline. If the
 // owner cannot acknowledge promptly, report uncertainty and retire this actor;
 // the owner's monitor still owns eventual attachment cleanup.
-const detachTimeout = 200 * time.Millisecond
+const detachTimeout = time.Second
 
 type Config struct {
 	Directory string

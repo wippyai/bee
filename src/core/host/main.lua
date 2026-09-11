@@ -36,6 +36,11 @@ local function main(owner: string, database_resource: string?)
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
     if not database then error(tostring(database_error)) end
+    -- Recovery must observe every durable prepared fence before any admission
+    -- can issue a controlling bind. Unresolved intents stay fenced for the
+    -- supervisor/client reconciliation path; they are never silently failed.
+    local recovered, recovery_error = database.assignments:reconcile()
+    if not recovered then database:close(); error("Reconcile display assignments: " .. tostring(recovery_error)) end
     local fresh_workspace = database.saved == nil
     local workspace_id = database.workspace_id
     local empty_tabs: {string} = {}
@@ -155,6 +160,7 @@ local function main(owner: string, database_resource: string?)
                         else
                             if pending_transfers[receipt] then code, error_text = "", ""
                             else pending_transfers[receipt] = {request = request, source = source.display_id, caller = caller, receipt = receipt}
+                            connections.assignments(client_connections)
                             send("bee.app.request", {version = 1, request_id = "transfer-" .. receipt:sub(1, 64), op = "bind", workspace_id = workspace_id,
                                 id = request.view_id, instance_id = request.instance_id, recipient = ""})
                             end
@@ -258,7 +264,7 @@ local function main(owner: string, database_resource: string?)
     local completed, run_error = pcall(run)
     database:close()
     process.terminate(broker)
-    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, selections, client_answers, appearance_changes, client_appearance}) do
+    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

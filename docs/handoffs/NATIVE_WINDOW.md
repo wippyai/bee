@@ -224,9 +224,12 @@ retention remain separate gates. Production requirements were not relaxed.
 ## Static harness isolation proof
 
 `make harness-module` stages all harness entries and its exact reviewed static
-import closure in a small host, without desktop, thread service or placement
-service entries. Runtime lint and boot prove the catalog is empty on an empty
-host, a linked process host reaches request validation, and an unlinked host
-refuses before admission. Host policies in this fixture deny execution. This
+import closure in a small host. The 28 external library entries include native
+placement materialization and storage helpers used by the managed window; no
+desktop owner, thread service, placement operation or running placement service
+is loaded. Exact registry coverage, lint and boot pass against both staged source
+and a source-free pack. The catalog is empty on an empty host, a linked process
+host reaches request validation, and an unlinked host refuses before admission.
+Host policies in this fixture deny execution. This
 is a static composition proof, not successful carrier execution, package
 installation or Hive activation; those still need the full dependency owners.

@@ -1,32 +1,51 @@
 # Display reliability acceptance
 
-Current worktree: `checkpoint/greenfield-cleanup-20260910`.
-
 The release outcome is prompt local/Hive join, independent physical displays,
 applications retained across detach/crash, and accurate Hive/node/workspace/display
-status. Bee consumes native mesh; this lane adds no runtime ingress or remote
-monitor subsystem. Runtime changes belong to the runtime lane and its PRs.
+status. Bee consumes native mesh. Runtime changes belong to the runtime lane and
+its PRs; there is no Bee ingress or remote-monitor substitute.
 
-## Current evidence
+## Installed checkpoint
 
-- Installed SHA `49aa3547f52c0f7db49aa680594327c4d3a4ce1a20875e85477cd84be219942d`.
-- User reproduced expired mount followed by detach timeout. Still unresolved.
-- Subsequent actual-user smoke joined in 227 ms and detached in 67 ms. One passing
-  attempt does not establish sustained reliability.
-- Retirement source passes lint, all 512 Lua tests and Hive Manager source/pack
-  app checks. Not installed. Only departed presentation rows are retired after
-  60 seconds of complete membership absence; saved layouts/apps are preserved.
+Application source `6b2da06`, native `2a2117ad4fe7`, runtime `674b58a1`.
+Global SHA256 `723fb40b8c32ee277d8dcda8041e51499bb1c0adf3f0cf54c01115f75303802f`.
+See [global build](GLOBAL_BUILD.md) for installation and backup evidence.
 
-## Parallel investigations
+The 516 Lua cases, native-client and native-binary gates passed. Departure rows
+retire after 60 seconds of absence in complete samples. Partial samples update
+reported members without treating omitted members as absent; the presentation
+cache remains bounded at 64 rows. Saved layouts and app processes are preserved.
+The one-second detach acknowledgment allowance returns immediately on success.
+The user accepts slower detach when needed to obtain a reliable acknowledgment.
 
-- Agy, Gemini 3.8 Flash High: read-only attachment/revocation lifetime trace.
-- Grok 4.6: read-only retirement semantics review.
-- Luna High: bounded disposable-state multi-client crash/rejoin reproduction.
-- Primary agent: verify findings, integrate minimal fixes, run release acceptance,
-  then install a tested global candidate and record exact artifact identity.
+## Unresolved attachment failure
 
-No extra UI polish is needed to close the attachment reliability gate. A fix must
-prove simultaneous independent displays, retained application identity, prompt
-normal detach, bounded failed detach and reconnect without stale control grants.
-A 60-second allowance for flaky node discovery is not permission to delay an
-already available local join. Saved layouts and application databases must survive.
+The actual-user workspace stalled at Connecting for 25 seconds after the earlier
+native update. A separate read-only catalog probe reached `Desktop.List` and
+waited in `Client.Call` / `Actor.Receive`. It had progressed beyond discovery and
+request send; this does not establish whether request handling or reply delivery
+failed. The retained process stack showed a supervised service at retry attempt
+511, but did not identify the service or establish causality.
+
+Guarded restart restored access (1.433 seconds cold, 102–217 ms warm). After the
+retirement install a further restart reached a frame in 1.428 seconds and detached
+in 90 ms. Successful short runs do not establish sustained reliability.
+
+Private diagnostic builds collect existing supervisor state events and scalar
+catalog stage events. They do not change runtime semantics and are not global
+releases. Current actual-state capture: `/tmp/bee-service-events-soak-20260911.log`.
+The probe restores the installed global executable's service when it finishes.
+
+## Remaining acceptance
+
+A startup fix must account for the failed catalog exchange and pass simultaneous
+independent displays, retained application identity, cancellation, and reconnect
+without stale control grants. A 60-second node discovery allowance must not delay
+an already available local join. Preserve saved layouts and application databases.
+
+The full foundation check is additionally required; isolated Lua and native gates
+do not stand in for all storage, permission, packaging and architecture proofs.
+Multi-node recovery, display/workspace switching, and moving a running app's view
+to another display remain separate uncompleted requirements. App transfer must
+retain the process and enforce the workspace authority's admission and grant
+revocation; attaching a viewport alone does not transfer application ownership.

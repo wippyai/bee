@@ -387,8 +387,55 @@ def independent_desktops(binary):
     print('Public native Bee: three independent desktops, first-controller continuity, default observer, F12 and reuse without allocation passed')
 
 
+def default_display_reactivation(binary):
+    """Closing the retained default view keeps the app and permits public rejoin."""
+    with tempfile.TemporaryDirectory(prefix='bee-default-reactivation-') as temporary:
+        folder = Path(temporary)
+        state = folder / 'state'
+        owner = None
+        ui = NativeDesktop(binary, folder, state)
+        try:
+            ui.wait(' BEE ', timeout=15)
+            owner = owner_handle(ui, binary, state)
+            ui.open_start()
+            ui.choose('Terminal')
+            ui.wait('$ ')
+            ui.key(b"BEE_DISPLAY_REOPEN=retained; printf 'DISPLAY_PID_%s_END\\n' \"$$\"\r")
+            ui.wait('DISPLAY_PID_')
+            # Take the expanded PID from the rendered output, not the echoed command.
+            import re
+            deadline = time.monotonic() + 5
+            original = None
+            while original is None and time.monotonic() < deadline:
+                ui.pump(.05)
+                original = re.search(r'DISPLAY_PID_([0-9]+)_END', ui.text())
+            assert original is not None, ui.text()
+            shell_pid = original.group(1)
+            ui.open_start()
+            ui.choose('Exit')
+            # Physical shutdown is allowed to observe the revoked display grant.
+            ui.pump(.3)
+            ui.close()
+            ui = None
+            assert not select.select([owner], [], [], 0)[0], 'Default display close killed workspace'
+            ui = NativeDesktop(binary, folder, state)
+            ui.wait('DISPLAY_PID_' + shell_pid + '_END', timeout=20)
+            ui.key(b"printf 'DISPLAY_REOPEN_%s_%s_END\\n' \"$BEE_DISPLAY_REOPEN\" \"$$\"\r")
+            ui.wait('DISPLAY_REOPEN_retained_' + shell_pid + '_END')
+            ui.quit()
+            assert not select.select([owner], [], [], 0)[0], 'Reopened display detach killed workspace'
+        finally:
+            if ui is not None:
+                ui.close()
+            stop_owner(owner)
+    print('Public default display close/reopen: same workspace, shell PID and in-memory variable', flush=True)
+
+
 if __name__ == '__main__':
     binary = Path(sys.argv[1]).resolve()
+    if sys.argv[2:] == ['--default-reactivation']:
+        default_display_reactivation(binary)
+        sys.exit(0)
     if sys.argv[2:] == ['--long-idle-reconnects']:
         idle_reconnects(binary, idle_seconds=600, attempts=2)
         sys.exit(0)
@@ -404,6 +451,7 @@ if __name__ == '__main__':
     run(binary)
     observers(binary)
     independent_desktops(binary)
+    default_display_reactivation(binary)
     command_launches(binary)
     stalled_detach(binary)
     preparing_owner(binary)

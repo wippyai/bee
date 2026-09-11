@@ -222,7 +222,7 @@ function M.request(state: State, message: process.Message, now: integer)
     end
     local pending: Pending = {id = uuid.v7(), op = operation == protocol.ATTACH and "attach" or (operation == protocol.COPY and "copy" or (operation == protocol.LAUNCH and "launch" or "detach")),
         call = call, cache_key = key, digest = digest, due = now + remaining,
-        activating = operation == protocol.ATTACH and input.mode == "control" and input.desktop_id ~= state.desktop_id and not client.session}
+        activating = operation == protocol.ATTACH and input.mode == "control" and not client.session}
     state.receipt_count = state.receipt_count + 1
     client.pending = pending
     if operation == protocol.ATTACH and client.session then

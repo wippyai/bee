@@ -522,3 +522,12 @@ exit, delayed initial renderer, additional-display copy exit and initial-display
 crash. The standalone build passes. Both assembled-binary suites pass and this correction is installed globally.
 The full foundation check remains running; public Hive default-display
 reactivation after display exit still needs its own admission proof.
+
+Public admission follow-up (candidate): every fresh controlling attachment first
+asks the retained supervisor to activate the selected durable display, including
+the default. Existing active displays answer immediately through that same
+operation. Observation never activates a stopped display. This removes the
+assumption that the default can never stop. The executable regression closes the
+default through Start → Exit, then invokes Bee again and requires the same shell
+PID and in-memory variable. The prior executable returns `NOT_FOUND` on rejoin;
+the corrected executable is being built and checked.

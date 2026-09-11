@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
@@ -26,9 +27,10 @@ import (
 // Options are selected by the compiled host, never registry activation metadata.
 // Node names this same-machine mesh; external Hive enrollment remains separate.
 type Options struct {
-	Node        string
-	Lifetime    time.Duration
-	Application string
+	Node          string
+	Lifetime      time.Duration
+	Application   string
+	HiveDirectory string
 }
 
 type Host struct {
@@ -40,7 +42,7 @@ type Host struct {
 }
 
 func New(options Options) (*Host, error) {
-	owner, err := localowner.New(localowner.Options{Node: options.Node, Lifetime: options.Lifetime})
+	owner, err := localowner.New(localowner.Options{Node: options.Node, Lifetime: options.Lifetime, HiveDirectory: options.HiveDirectory})
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +68,11 @@ func Component() boot.Component {
 	if err != nil {
 		return &Host{initErr: err}
 	}
-	host, err := New(Options{Node: node, Lifetime: 30 * 24 * time.Hour})
+	root, err := os.UserConfigDir()
+	if err != nil {
+		return &Host{initErr: err}
+	}
+	host, err := New(Options{Node: node, Lifetime: 30 * 24 * time.Hour, HiveDirectory: filepath.Join(root, "bee", "local-hive")})
 	if err != nil {
 		return &Host{initErr: err}
 	}

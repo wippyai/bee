@@ -82,3 +82,18 @@ starts the owner through a custom `exec.CommandContext` test route. The client
 then uses actual `application.Run` lock-busy attachment, with invalid deployment
 bindings/failing owner hooks to detect accidental owner startup. Fixture cleanup
 explicitly aborts only the child it created; client detach never does so.
+
+Project composition may select an absolute `HiveDirectory` for same-account
+transport trust. Production desktop composition uses the user configuration
+folder's `bee/local-hive`. Project nodes receive distinct execution certificates
+from its protected authority and share its gossip key and held node enrollment.
+Display enrollment and `ClientPolicy` remain local to each project execution:
+shared transport trust does not authorize another project's displays. Closing a
+project releases only its own shared enrollment. An empty `HiveDirectory` keeps
+explicit fixture/host compositions isolated.
+
+The shared-project policy regression proves mutual key resolution, distinct node
+and certificate identities, display admission isolation and selective cleanup.
+This is bootstrap composition evidence, not membership convergence: seed joining
+is not wired. See [the native join requirement](JOIN_REQUIREMENT.md) for the
+runtime integration gate before shared project Hive acceptance or installation.

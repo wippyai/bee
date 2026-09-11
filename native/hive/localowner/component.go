@@ -31,8 +31,9 @@ const DirectoryName = rendezvous.DirectoryName
 // Options comes from the native host. Node is the selected runtime node name,
 // not a workspace identity. Lifetime must be finite and at most 30 days.
 type Options struct {
-	Node     string
-	Lifetime time.Duration
+	Node          string
+	Lifetime      time.Duration
+	HiveDirectory string // Host-selected shared same-account bootstrap; empty is an isolated host composition.
 }
 
 type prepared struct {
@@ -55,6 +56,9 @@ type Component struct {
 }
 
 func New(options Options) (*Component, error) {
+	if options.HiveDirectory != "" && !filepath.IsAbs(options.HiveDirectory) {
+		return nil, errors.New("local Hive directory must be absolute")
+	}
 	if len(options.Node) == 0 || len(options.Node) > 128 || options.Lifetime < time.Second || options.Lifetime > 30*24*time.Hour {
 		return nil, errors.New("invalid local owner options")
 	}
@@ -125,7 +129,13 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 	}
 	directory := filepath.Join(request.StateDir, DirectoryName)
 	executionID := hex.EncodeToString(execution[:])
-	credentials, err := localtls.Prepare(ctx, directory, executionID, time.Now().Add(c.options.Lifetime))
+	var credentials localtls.Credentials
+	var err error
+	if c.options.HiveDirectory != "" {
+		credentials, err = localtls.PrepareShared(ctx, directory, executionID, time.Now().Add(c.options.Lifetime), c.options.HiveDirectory)
+	} else {
+		credentials, err = localtls.Prepare(ctx, directory, executionID, time.Now().Add(c.options.Lifetime))
+	}
 	if err != nil {
 		return launch.OwnerPlan{}, err
 	}
@@ -133,8 +143,21 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 	if err != nil {
 		return launch.OwnerPlan{}, err
 	}
+	var shared *rendezvous.Enrollment
+	var sharedEpoch string
 	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
+	if c.options.HiveDirectory != "" {
+		shared, err = rendezvous.NewEnrollment(c.options.HiveDirectory)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		var snapshot rendezvous.Snapshot
+		sharedEpoch, snapshot, err = shared.EnsureShared(ctx)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		secret = snapshot.GossipKey()
+	} else if _, err := rand.Read(secret); err != nil {
 		return launch.OwnerPlan{}, err
 	}
 	enrollment, err := rendezvous.NewEnrollment(directory)
@@ -145,9 +168,25 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 		return launch.OwnerPlan{}, err
 	}
 	lifetime, cancel := context.WithDeadline(ctx, credentials.ExpiresAt)
+	var sharedLease *rendezvous.PeerLease
+	if shared != nil {
+		sharedLease, _, err = shared.RegisterHeld(lifetime, sharedEpoch, c.options.Node, public)
+		if err != nil {
+			cancel()
+			return launch.OwnerPlan{}, err
+		}
+	}
 	state := &prepared{execution: executionID, directory: directory, publicKey: base64.RawStdEncoding.EncodeToString(public), expires: credentials.ExpiresAt, ctx: lifetime, cancel: cancel}
 	c.state = state
-	peerKeys := clusterapi.PeerKeySource(func(node string) (ed25519.PublicKey, bool) { return enrollment.Resolve(lifetime, executionID, node) })
+	peerKeys := clusterapi.PeerKeySource(func(node string) (ed25519.PublicKey, bool) {
+		if key, ok := enrollment.Resolve(lifetime, executionID, node); ok {
+			return key, true
+		}
+		if shared != nil {
+			return shared.Resolve(lifetime, sharedEpoch, node)
+		}
+		return nil, false
+	})
 	config := boot.NewConfig(
 		boot.WithSection("relay", map[string]any{"node_name": c.options.Node}),
 		boot.WithSection("cluster", map[string]any{
@@ -162,7 +201,15 @@ func (c *Component) prepareOwner(ctx context.Context, request launch.LaunchReque
 			"internode.tls.key_file": credentials.TLS.KeyFile, "internode.tls.ca_file": credentials.TLS.CAFile,
 		}),
 	)
-	return launch.OwnerPlan{Config: config, Deadline: credentials.ExpiresAt, Close: func() error { cancel(); return nil }}, nil
+	return launch.OwnerPlan{Config: config, Deadline: credentials.ExpiresAt, Close: func() error {
+		cancel()
+		if sharedLease != nil {
+			cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer stop()
+			return sharedLease.Close(cleanup)
+		}
+		return nil
+	}}, nil
 }
 
 // Start publishes transport hints only after the normal native cluster starts.

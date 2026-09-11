@@ -113,10 +113,17 @@ local function remember(state: State, client: Client, pending: Pending, reply: t
 end
 local function install_catalog_readers(state: State, snapshot: retained.CatalogReaders)
     if snapshot.workspace_id ~= state.workspace_id then error("Catalog reader workspace changed") end
+    -- `state.node` is the Hive routing identity. A local-only supervisor maps
+    -- its node-less native PID to "local", so it cannot establish transport
+    -- locality. Compare against the exact retained supervisor's native node;
+    -- this also does not conflate a real native node named "local" with the
+    -- local-only marker.
+    local supervisor_node = types.pid_parts(state.supervisor)
+    if supervisor_node == nil then error("Retained catalog reader supervisor has no native PID") end
     local readers: {[string]: boolean} = {}
     for _, reader in ipairs(snapshot.readers) do
         local reader_node = types.pid_parts(reader)
-        if reader_node ~= state.node then error("Catalog reader is not local to this owner") end
+        if reader_node ~= supervisor_node then error("Catalog reader is not local to this owner") end
         readers[reader] = true
     end
     state.catalog_readers = readers

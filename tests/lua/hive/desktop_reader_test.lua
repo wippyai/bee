@@ -40,8 +40,10 @@ local function define_tests()
             local replies = listen(types.TOPIC_REPLY)
             local requests = listen("bee.retained.desktops")
             local self = tostring(process.pid())
-            local node = types.pid_parts(self)
-            if not node then error("test process has no node") end
+            -- The production supervisor uses this routing marker when its
+            -- native PID has no node component. It must not determine PID
+            -- locality for catalog-reader admission.
+            local node = "local"
             local state: owner.State = {
                 supervisor = "", stopped = false, workspace_id = WORKSPACE, desktop_id = "", node = node,
                 allowed = {}, config = {execution = WORKSPACE, expires_at = "", allowed_nodes = {}, local_clients = false},
@@ -64,7 +66,7 @@ local function define_tests()
             test.eq(refused.error and refused.error.code, "DENIED")
 
             local trusted = assert(process.spawn_monitored("bee.hive:reader_sender", "bee:workers", self, WORKSPACE,
-                {"grant_recipient", "forward", "forward"}))
+                {"grant_recipient", "forward", "forward", "forward"}))
             state.supervisor = tostring(trusted)
             local grant = next_message(snapshots)
             owner.catalog_readers(state, grant)
@@ -74,6 +76,14 @@ local function define_tests()
             assert(process.send(self, "bee.test.catalog_reader", {}))
             local reader_message = next_message(snapshots)
             test.is_false(owner.handles(state, reader_message), "catalog reader gained native control admission")
+
+            assert(process.send(tostring(trusted), "bee.test.catalog_reader.command", {version = 1, workspace_id = WORKSPACE,
+                readers = {"{foreign@bee:workers|catalog-reader}"}}))
+            local foreign = next_message(snapshots)
+            local foreign_state: owner.State = state
+            local accepted = pcall(function() owner.catalog_readers(foreign_state, foreign) end)
+            test.is_false(accepted, "foreign native node entered catalog readers")
+            test.is_true(owner.catalog_reader(state, self), "foreign snapshot changed reader state")
 
             catalog.request(state.catalog, self, WORKSPACE, self, call(node), nil, 1000)
             local pending = state.catalog.pending

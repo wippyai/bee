@@ -268,6 +268,9 @@ function M.prepare(value: unknown): Reply
     local policy_meta = bounds.object(policy_entry.meta) or {}
     if policy_meta.type ~= types.LAUNCH_POLICY_TYPE then return fail("DENIED", "policy_ref " .. request.policy_ref .. " is not a host launch policy") end
     local policy_data = bounds.object(policy_entry.data) or {}
+    if policy_data.codex_provider_ref ~= nil and not request.configuration then
+        return fail("DENIED", "launch policy " .. request.policy_ref .. " selects a provider and requires its configuration")
+    end
     if request.configuration then
         local configuration = request.configuration
         if policy_data.codex_provider_ref ~= configuration.provider_ref then

@@ -21,6 +21,7 @@ local OWNER = "bee.test.owner"
 local DIGEST = string.rep("b", 64)
 local ROOT = "bee.placement.native:project_fixture"
 local POLICY = "bee.placement.native:test_launch_policy"
+local NO_PROVIDER_POLICY = "bee.placement.native:test_launch_policy_without_provider"
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -90,7 +91,7 @@ local function launch(command: {string}, required: string): {[string]: unknown}
     local argv: {string} = {}
     for index = 2, #command do argv[index - 1] = command[index] end
     return {idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = fresh("attempt"),
-        binding_ref = "bee.driver.claude:binding", policy_ref = POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
+        binding_ref = "bee.driver.claude:binding", policy_ref = NO_PROVIDER_POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = command[1], argv = argv, environment = {"PROBE_VALUE"}, working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
@@ -111,6 +112,7 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     local request = launch({"sh", "-c", "printf '" .. marker .. "\\n' >> \"$HOME/marker\""}, "direct_process")
     request.owner_id = owner
     request.session_ref = session_ref
+    request.policy_ref = POLICY
     local declared = request.launch :: {[string]: unknown}
     declared.home_ref = "session"
     local resources = request.resources :: {{[string]: unknown}}
@@ -436,6 +438,7 @@ local function define_tests()
             local modified = rendered.content .. 'model_providers.bee.extra = "x"\n'
             local digest = assert(hash.sha256(modified))
             local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = POLICY
             request.configuration = {revision = rendered.revision, path = rendered.path, content = modified, digest = digest, provider_ref = "bee.placement.native:codex_test_provider"}
             local refused = call(OWNER, "prepare", request)
             test.eq(refused.error and refused.error.code, "DENIED")
@@ -445,7 +448,7 @@ local function define_tests()
             -- names, never by the caller: an exact rendering of a provider
             -- the named policy does not select is refused, and so is a
             -- policy reference that is not a host launch policy.
-            request.policy_ref = "bee.placement.native:test_launch_policy_without_provider"
+            request.policy_ref = NO_PROVIDER_POLICY
             local unselected = call(OWNER, "prepare", request)
             test.eq(unselected.error and unselected.error.code, "DENIED")
             test.is_true(tostring(unselected.error and unselected.error.message):find("does not select", 1, true) ~= nil)
@@ -468,6 +471,21 @@ local function define_tests()
                     test.is_nil(tostring(item.detail):find("/home", 1, true))
                 end
             end
+        end)
+        test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = POLICY
+            local refused = call(OWNER, "prepare", request)
+
+            local db, open_error = store.open()
+            if not db then error(open_error or "store") end
+            local attempt, read_error = store.attempt(db, request.attempt_id :: string)
+            db:release()
+            if read_error then error(read_error) end
+            test.is_nil(attempt)
+            test.is_false(refused.ok)
+            test.eq(refused.error and refused.error.code, "DENIED")
+            test.is_true(tostring(refused.error and refused.error.message):find("requires", 1, true) ~= nil)
         end)
         test.it("retains a selected session home across attempts without adopting changed configuration", function()
             local session_ref = fresh("session")

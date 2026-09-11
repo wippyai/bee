@@ -130,3 +130,10 @@ leader is identified alive by pid, start ticks and boot id; otherwise the
 attempt becomes `uncertain`. `reconcile` proves absence the same way and
 keeps uncertainty where identity is missing. `cleanup` removes the home
 only from `exited`.
+
+Provider configuration is mandatory when the selected host launch policy names
+`codex_provider_ref`. Omitting it is denied before recording an attempt intent;
+providing a file is admitted only when its provider identity, path, revision,
+digest and content match the host-rendered configuration. Policies without a
+provider do not require that file. The placement regression proves that an
+omitted required configuration creates no attempt row.

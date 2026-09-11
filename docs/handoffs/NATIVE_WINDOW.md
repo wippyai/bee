@@ -99,3 +99,9 @@ at both open and resume, before any thread, placement or gateway I/O. Planning
 remains shared; execution must use the transport owned by the selected profile.
 The native PTY facade is under separate acceptance and is not activated in the
 production catalog or global executable.
+
+Shared attempt preparation now admits the action, prepares and claims its
+thread attempt, admits any gateway binding, and records placement intent. It
+returns the carrier epoch and binding identity without requesting a turn or
+starting a transport. Structured open reuses that preparation and retains its
+existing turn/checkpoint/start sequence. Window activation remains pending.

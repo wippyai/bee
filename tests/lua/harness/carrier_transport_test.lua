@@ -33,6 +33,25 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("prepares a window attempt without requesting a turn or starting a transport", function()
+            local calls: {string} = {}
+            local io: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    calls[#calls + 1] = target
+                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected transport send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local prepared, err = machine.prepare_attempt(io, plan("window", "pty"))
+            if not prepared then error(tostring(err)) end
+            test.eq(prepared.epoch, 7)
+            test.is_nil(prepared.gateway_binding)
+            test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native:prepare")
+        end)
         test.it("refuses window and nonstructured profiles before opening or claiming an attempt", function()
             local calls = 0
             local io: machine.IO = {

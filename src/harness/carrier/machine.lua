@@ -498,14 +498,12 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
     end
     return drained, nil
 end
--- open: the agreed order. Admit, prepare, claim, gateway admission,
--- placement intent, turn request, checkpoint, attach, gateway readiness,
--- placement start, attempt started. A failure after the gateway admission
--- revokes the binding before the error is returned.
-function M.open(io: IO, plan: Plan): (Session?, string?)
-    if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
-        return nil, "structured carrier requires a stream-json session or batch profile"
-    end
+-- Preparation is shared by structured and native-window execution. It admits
+-- the action, prepares and claims its attempt, admits the gateway, and records
+-- placement intent. It does not request a turn, attach a transport or start a
+-- child; the selected execution path owns those operations.
+type PreparedAttempt = {epoch: integer, gateway_binding: string?}
+function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal end
     local request = plan.request
     local grant_refs: {string} = {}
@@ -526,13 +524,29 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
     local epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
     local gateway_binding, gateway_error = gateway_admit(io, plan, epoch)
     if gateway_error then return nil, gateway_error end
-    local function abandon(err: string): (Session?, string?)
+    local function abandon(err: string): (PreparedAttempt?, string?)
         gateway_revoke(io, gateway_binding)
         return nil, err
     end
     local _, intent_error = must(io, M.PLACEMENT .. ":prepare", plan.placement_request)
     if intent_error then return abandon(intent_error) end
     step(io, "placement_intent")
+    return {epoch = epoch, gateway_binding = gateway_binding}, nil
+end
+-- Structured execution requests a turn and starts the pipe runner only after
+-- shared preparation. Failures before execution retire the admitted gateway.
+function M.open(io: IO, plan: Plan): (Session?, string?)
+    if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
+        return nil, "structured carrier requires a stream-json session or batch profile"
+    end
+    local prepared, preparation_error = M.prepare_attempt(io, plan)
+    if not prepared then return nil, preparation_error end
+    local request = plan.request
+    local epoch, gateway_binding = prepared.epoch, prepared.gateway_binding
+    local function abandon(err: string): (Session?, string?)
+        gateway_revoke(io, gateway_binding)
+        return nil, err
+    end
     local turn_id = "turn:" .. request.attempt_id .. ":1"
     local _, turn_error = thread_call(io, request, "request_turn", {action_id = request.action_id, attempt_id = request.attempt_id, turn_id = turn_id, carrier_epoch = epoch,
         turn = {input_message_ids = {}, input = {text = request.brief}, resume_ref = plan.resume_ref, delivery_ids = {}}}, "turn")

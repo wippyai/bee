@@ -1,0 +1,88 @@
+version: '1.0'
+namespace: bee.managed_window_fixture
+entries:
+- name: policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@1
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+- name: binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: managed_window_fixture
+    test_support: true
+    profiles_ref: bee.managed_window_fixture:profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.managed_window_fixture:prepare
+      dispatch: bee.managed_window_fixture:dispatch
+      normalize: bee.managed_window_fixture:normalize
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.managed_window_fixture:binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Managed window fixture
+      implementation_version: 0.1.0
+      default_profile: window
+      profiles:
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: fixture-pty-1
+        answer_path: {strategy: terminal_field, adapter_ref: bee.driver.claude:protocol}
+- name: definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: managed-window-fixture
+    title: Managed window fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: prepare
+  kind: function.lua
+  source: file://driver.lua
+  method: prepare
+- name: dispatch
+  kind: function.lua
+  source: file://driver.lua
+  method: dispatch
+- name: normalize
+  kind: function.lua
+  source: file://driver.lua
+  method: normalize
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules: [process, channel, time, security, tty, funcs, json]
+  imports:
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}

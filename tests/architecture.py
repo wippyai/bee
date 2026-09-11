@@ -44,7 +44,7 @@ for path in (ROOT / "src").rglob("_index.yaml"):
             if identity == "bee.desktop:model":
                 assert "require(" not in text and "tty." not in text, identity
         if entry.get("meta", {}).get("type") == "bee.application":
-            assert path.is_relative_to(ROOT / "src/apps"), ("App outside default package", identity)
+            assert path.is_relative_to(ROOT / "src/apps") or identity == "bee.harness.window:app", ("App outside default package", identity)
         assert entry.get("meta", {}).get("type") != "test", identity
 
 assert not {"bee.workspace:main", "bee.workspace:launch"} & entries.keys(), "Historical combined desktop must not ship"
@@ -131,7 +131,8 @@ for identity, entry in entries.items():
         if location.parts[0] == "driver":
             assert target_location.parts[0] == "driver" or target.startswith("bee.threads.records:"), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] != ("carrier",):
-            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:") or (identity == "bee.harness.launch:admission" and target == "bee.placement:types"), (identity, target)
+            managed_window_targets = {"bee.application:client", "bee.placement.native:window"}
+            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:") or (identity == "bee.harness.launch:admission" and target == "bee.placement:types") or (identity == "bee.harness.window:app" and target in managed_window_targets), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] == ("carrier",):
             assert target_location.parts[0] in {"harness", "driver", "placement"} or target.startswith("bee.threads.records:") or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
         if location.parts[0] == "hive":
@@ -182,9 +183,16 @@ assert "bee.credentials:db" in entries["bee:ordinary_app_subsystem_boundary"]["p
 # approvals store is not on the application deny list; the owner's methods carry the
 # store policy and the application binding carries no store access of its own.
 assert "bee.approvals:db" not in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
-# Every currently shipped application is ordinary; execution admission is separate.
+# Ordinary applications keep the subsystem-store deny. The private managed
+# window actor is the reviewed execution component that owns its single child.
 for binding in entries["bee:application_admission"]["bindings"]:
-    assert "bee:ordinary_app_subsystem_boundary" in binding["policies"], binding["definition_id"]
+    if binding["definition_id"] != "bee.harness.window:app":
+        assert "bee:ordinary_app_subsystem_boundary" in binding["policies"], binding["definition_id"]
+managed_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.harness.window:app")
+assert set(managed_binding["policies"]) == {
+    "bee:carrier_policy", "bee:placement_store_policy", "bee:placement_exec_policy", "bee:placement_runner_policy",
+    "bee:resource_resolve_policy", "bee:credential_materialize_policy", "bee:gateway_materialize_policy", "bee:gateway_supervision_policy",
+}
 assert set(entries["bee:workspace_storage_boundary"]["policy"]["resources"]) == {"bee:workspace_db", "bee:client_db", "bee.client.db:*", "bee.workspace.db:*"}
 inbox_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.inbox:app")
 assert set(inbox_binding["policies"]) == {"bee:ordinary_app_subsystem_boundary", "bee:approval_decide_policy", "bee.inbox:client_policy"}
@@ -229,7 +237,7 @@ import tempfile
 runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol", "bee.host", "bee.interaction", "bee.launch",
            "bee.node", "bee.sync",
-           "bee.session", "bee.settings", "bee.processes", "bee.inbox", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.threads.records", "bee.threads.service", "bee.hive", "bee.hive.telemetry", "bee.hive.supervisor", "bee.hive.desktop", "bee.hive_manager", "bee.timeline", "bee.client", "bee.threads.delivery", "bee.threads.projection", "bee.threads.carrier", "bee.threads.approvals", "bee.driver", "bee.driver.kit", "bee.driver.transport", "bee.driver.claude", "bee.driver.codex", "bee.harness", "bee.harness.catalog", "bee.harness.carrier", "bee.harness.launch", "bee.harness.permission", "bee.persist", "bee.placement", "bee.placement.native", "bee.resources", "bee.credentials", "bee.approvals", "bee.gateway"}
+           "bee.session", "bee.settings", "bee.processes", "bee.inbox", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.threads.records", "bee.threads.service", "bee.hive", "bee.hive.telemetry", "bee.hive.supervisor", "bee.hive.desktop", "bee.hive_manager", "bee.timeline", "bee.client", "bee.threads.delivery", "bee.threads.projection", "bee.threads.carrier", "bee.threads.approvals", "bee.driver", "bee.driver.kit", "bee.driver.transport", "bee.driver.claude", "bee.driver.codex", "bee.harness", "bee.harness.catalog", "bee.harness.carrier", "bee.harness.launch", "bee.harness.permission", "bee.harness.window", "bee.persist", "bee.placement", "bee.placement.native", "bee.resources", "bee.credentials", "bee.approvals", "bee.gateway"}
 
 def check_loaded(cwd, packed=False):
     loaded = json.loads(subprocess.check_output([str(runtime), "registry", "list", "--json"], cwd=cwd))

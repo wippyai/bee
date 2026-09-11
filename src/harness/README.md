@@ -13,6 +13,7 @@ a placement and the thread contracts into one attempt.
 | `bee.harness.launch` | `definitions`: exact decoding and digest of `bee.launch_definition` entries; `admission`: `resolve` (a measured plan pinning definition, binding, profile, policy and catalog generation, no effects), `admit` (for the authenticated requester: thread by policy, an attempt-bound resource grant and credential projections obtained in the requester's own authority, all keyed on the request id so a retry replays), `start` (spawns the carrier as the requester, resumes when a checkpoint exists, refuses a settled request). Public `launch.resolve`/`launch.start` wiring lives in the core launch lane |
 | `bee.harness.permission` | `adapter`: the pure permission exchange rules (request identity, proposal, qualified keys, response encoding, pending ambiguity, transcript consistency); `acceptance`: the host acceptance record binding driver, profile, adapter and fixture measurements. A profile is eligible with `permission_exchange: {mode: adapter, adapter_ref, adapter_digest}` pinning a `harness.permission_adapter` entry the catalog measures from the same snapshot; enabling needs a matching acceptance record proven by the live fixture runner in `tests/lua/harness/acceptance_test.lua` and, for Claude, by the real executable in `claude_acceptance_test.lua` and `claude_control_test.lua`. Request fields and response fields are dotted paths, a request may name a separate acknowledgment id (Claude echoes `tool_use_id`, not `request_id`), and a terminal denial may be correlated. Both Claude profiles pin `bee.driver.claude:permission_adapter`; the acceptance record (`bee.permission-acceptance@2`) also carries placement's `executable_digest`, compared at plan time; shipped launch policies enable no exchange, so a terminal permission-denied result remains terminal |
 | `bee.harness.catalog` | `classify`: pure classification of a driver binding with its resolved profiles and methods; `catalog`: one immutable registry snapshot (`registry.snapshot()`), every `harness.driver` binding, declaration, method target and the host's `bee:harness_activation` entry read from that same snapshot, classified and marked activated |
+| `bee.harness.window` | Private broker-launched native-window actor. It decodes one bounded launch envelope, admits it as the broker-authenticated application actor, shares planning and attempt preparation with the carrier, then consumes the broker's sole terminal grant to own one native PTY. It records only `uncertain` completion unless the application explicitly closes, which records `cancelled`. It has no command metadata or public catalog binding. |
 
 ## Rules
 
@@ -30,6 +31,11 @@ A missing or malformed declaration activates nothing and adds a catalog
 diagnostic; it cannot publish, admit or authorize execution. A read capped below the number of
 bindings is `complete: false`: an unseen binding could share a `driver_id`
 with a visible one, so `usable` resolves nothing from it.
+
+Production compatibility remains `stream-json` only. A profile using `pty` is
+compatible solely when its profile declaration carries `meta.test_support:
+true`; this supports the disposable managed-window fixture and does not make a
+production driver profile or public launch route available.
 
 ## Host binding
 

@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.harness.window
+entries:
+- name: request
+  kind: library.lua
+  source: file://request.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: input
+  kind: library.lua
+  source: file://input.lua
+  modules: [tty]
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, funcs, uuid]
+  imports:
+    client: bee.application:client
+    window_request: bee.harness.window:request
+    input_event: bee.harness.window:input
+    admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    window: bee.placement.native:window
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Agent
+      icon: A
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: ''
+      role: terminal

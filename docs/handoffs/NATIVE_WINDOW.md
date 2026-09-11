@@ -1,20 +1,23 @@
 # Managed native window implementation boundary
 
-Status: implementation plan, not a callable production interface. The current
-public Claude/Codex commands still run ordinary native Terminals. Structured
-native continuation is checkpoint d4e84b7; it does not supply an interactive UI.
+Status: a private harness-owned actor and fixture acceptance exist; this remains
+outside the callable production interface. The current public Claude/Codex
+commands still run ordinary native Terminals. Structured native continuation is
+checkpoint d4e84b7; it does not supply an interactive UI.
 
 The ordinary user flow is **Agent → Codex** (or Claude), opening the native
 harness UI. The selected profile supplies local or Docker placement, flags and
 Bee MCP configuration behind that flow. Docker remains an unimplemented option
 until its separate placement acceptance exists.
 
-The requested window renders the native Claude Code or Codex PTY. A managed
-window owner, spawned by the application broker with the sole terminal grant,
-will own exactly one native child and its terminal session. Physical clients
-attach to that application's retained viewport through the existing broker.
-F12 and client detach must neither re-execute the command nor settle its attempt.
-An explicit application close stops the child through the placement lifecycle.
+The private `bee.harness.window:app` actor is spawned by the application broker
+with the sole terminal grant. It owns exactly one native child and terminal
+session, reuses typed launch admission and shared attempt preparation, and
+opens the PTY in its own actor so `attach_terminal()` consumes that grant. Its
+broker launch argument is one strict JSON request; the authenticated workspace
+is injected and callers cannot choose an environment or transport. Completion
+is recorded as `uncertain`, except explicit application close, which records
+`cancelled`. The application has no command metadata or public catalog route.
 
 ## Existing boundaries that constrain implementation
 
@@ -97,8 +100,10 @@ permissions are still required; this does not itself enable PTY admission.
 The structured carrier now refuses window mode and non-stream-json protocols
 at both open and resume, before any thread, placement or gateway I/O. Planning
 remains shared; execution must use the transport owned by the selected profile.
-The native PTY facade is under separate acceptance and is not activated in the
-production catalog or global executable.
+The native PTY facade is under separate acceptance. Catalog classification
+recognizes `pty` only for a declaration marked `meta.test_support: true`; no
+production PTY profile is activated in the production catalog or global
+executable.
 
 Shared attempt preparation now admits the action, prepares and claims its
 thread attempt, admits any gateway binding, and records placement intent. It
@@ -154,8 +159,18 @@ request or broker-specific execution flag selects this scope.
 All currently shipped app bindings retain the ordinary deny. Architecture checks
 require it, and runtime tests attempt actual database opens with a broad allow
 to prove the deny still wins. A component with placement permission can open
-that store only; core stores remain denied even under a broad allow. The
-managed app binding and its broker/PTY acceptance are still pending.
+that store only; core stores remain denied even under a broad allow. The private
+managed app is the reviewed execution component: its protected binding grants
+only the carrier and placement policies needed for the one child, while the
+broker still supplies the base, core and workspace-store boundaries.
+
+`make managed-window-app-check` proves the fixture-only path through a real
+broker: PTY input and resize, detach/rebind without restarting the child,
+explicit close, and prepared/started/receipt thread records. It does not yet
+prove a production profile, an Agent-to-Codex menu or command binding,
+installer/Hive activation, or the full F12 and physical-client lifecycle. An
+emergency process kill can still leave a prepared or running attempt for normal
+placement reconciliation.
 
 A future installer must review changes to the complete protected admission
 policy set. With the current schema an omitted ordinary deny is a permission

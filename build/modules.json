@@ -76,7 +76,8 @@
         "bee.harness.carrier",
         "bee.harness.catalog",
         "bee.harness.launch",
-        "bee.harness.permission"
+        "bee.harness.permission",
+        "bee.harness.window"
       ]
     },
     {

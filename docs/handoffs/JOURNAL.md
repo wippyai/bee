@@ -5647,3 +5647,29 @@ Evidence: `/tmp/bee-cleanup-stage-reconnect.log`, fixture
 and intermittent missing detach acknowledgment remain unresolved. Diagnostic
 build `/tmp/bee-cleanup-stage-candidate` is not a release candidate. All current
 build/test sessions are finished; do not repoll them.
+
+
+### Detach timeout traced past Hive admission — journal 931
+
+Diagnostic `da7ccdb` built/linted successfully. Strict stress 80321 failed on
+another successful slow exit (1.255 s, stack shutdown 1.225 s). The explicit
+attachment-focused mode in diagnostic `2862702` records slow successful exits
+and continues; it does not relax standard exit acceptance. Run 80008 then failed
+round 57 on an actual missing detach acknowledgment. The request entered Hive
+at 1789087145.211802006; local dispatch at .211907625 reached retained handling
+at .539417744, 327.510 ms later. Revocation/unmonitor/reply finished at .539510489;
+Hive processed the result at .542191029, after the 200 ms deadline. No success
+reply was sent after expiry. This reproduction narrows the problem to the local
+send/handling interval, without yet identifying what delayed it. The original
+initial expired-mount failure remains unresolved.
+
+Evidence: `/tmp/bee-attachment-focus-reconnect.log`, fixture
+`/tmp/bee-native-reconnect-scwp0cci`, client `2885497`, owner log
+`state/owner-1716549607.log`. Catalog afterwards answered in 2.091 s. Diagnostic
+`1525a72` adds send begin/end and retained-select timings; lint 16238 passed and
+build 37361 is running, output `/tmp/bee-local-dispatch-trace-build.log`, target
+`/tmp/bee-local-dispatch-trace-candidate`. Poll that exact handle before running
+its next focused diagnostic. All earlier test handles are terminal. Global Bee,
+user processes and runtime source remain unchanged. Live global catalog followup
+r3 answered in 146 ms. Runtime lane checkpoint 929 has been read; it is not a
+pushed/merged runtime cutover and is not claimed to fix Bee's symptoms.

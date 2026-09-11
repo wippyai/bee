@@ -57,7 +57,7 @@ local function main(owner: string, database_resource: string?)
     local ready = false
     local stopping = false
     local fatal: string? = nil
-    local client_connections = connections.new(owner, broker, workspace_id)
+    local client_connections = connections.new(owner, broker, workspace_id, database)
     local live_inventory = inventory.new(workspace_id)
     local catalog_received = false
     local function deliver(topic: string, value: unknown)

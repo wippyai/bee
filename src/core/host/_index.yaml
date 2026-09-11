@@ -34,6 +34,7 @@ entries:
     inventory: bee.host:inventory
     questions: bee.interaction:delivery
     interaction: bee.application:interaction
+    persistence: bee.workspace:persistence
 - name: recovery
   kind: library.lua
   source: file://recovery.lua

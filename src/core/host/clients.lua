@@ -10,6 +10,7 @@ local questions = require("questions")
 local interaction = require("interaction")
 local recovery = require("recovery")
 local records = require("records")
+local persistence = require("persistence")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean,
     renderer_generation: string, fingerprint: string, resume: recovery.Resume?}
 type ChangeOp = "render" | "detach"
@@ -18,14 +19,15 @@ type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
     renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
+    assignments: persistence.Persistence,
     inventory: inventory.State,
     questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
     appearance_routes: {[string]: AppearanceRoute}}
 local M = {}
-function M.new(owner: string, broker: string, workspace_id: string): State
-    return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()),
+function M.new(owner: string, broker: string, workspace_id: string, assignments: persistence.Persistence): State
+    return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()), assignments = assignments,
         inventory = inventory.new(workspace_id),
         questions = questions.new(workspace_id),
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
@@ -251,6 +253,10 @@ function M.request(state: State, caller: string, request: contract.Request, data
     elseif request.op == "bind" and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
     elseif request.op == "bind" and client.rendering then code = "busy"
     elseif request.op == "bind" and client.renderer == "" then code = "unavailable"
+    elseif request.op == "bind" and request.observer ~= true and client.permissions.control then
+        local assigned, assignment_error = state.assignments.assignments:get({view_id = request.id, instance_id = request.instance_id})
+        if assignment_error then error("Read display assignment: " .. tostring(assignment_error)) end
+        if not assigned or assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
     elseif not clients.allowed(client, request) then code = "permission_denied"
     elseif request.workspace_id ~= state.workspace_id then code = "workspace_mismatch"
     elseif not ready then code = "busy" end
@@ -475,6 +481,17 @@ function M.reply(state: State, reply: contract.Reply, current: inventory.State):
         state.completed[#state.completed + 1] = reply.request_id
     end
     local client = state.admitted[route.recipient]
+    -- The initiating admitted display owns a newly opened live view before
+    -- its usable reply is delivered. A failed durable claim leaves the app
+    -- unbound from client control rather than creating an unfenced grant.
+    if route.op == "open" and reply.op == "open" and reply.error_code == "" and client
+        and client.permissions.control then
+        local claimed, claim_error = state.assignments.assignments:claim({view_id = reply.id, instance_id = reply.instance_id,
+            display_id = client.display_id})
+        if not claimed then
+            reply.error_code, reply.error = "persistence_failed", tostring(claim_error)
+        end
+    end
     if client and not client.detaching and client.connection_id == route.connection_id
         and (route.op ~= "bind" or (not client.rendering and route.renderer_generation == client.renderer_generation)) then
         reply.request_id, reply.resume_state = route.request_id, ""

@@ -23,7 +23,11 @@ acceptance pass. Actual-user installed smoke: cold frame 1.976s, warm frame
 A private ten-minute diagnostic run completed 20 successful catalog requests
 without a captured service failure. This does not explain the initial unexpected
 retained desktop exit or establish sustained multi-node recovery. The full
-foundation check on retirement source remains running in session 80193.
+foundation check on retirement source completed successfully (session 80193,
+exit zero): 516 Lua tests, storage/module/permission gates, source/pack desktop
+interactions, client lifetimes, recovery and bundled apps. Evidence:
+`/tmp/bee-retirement-foundation-check-20260911.log`. This full run predates the
+name-cleanup source delta, whose focused policy/native proofs are listed above.
 
 The installation records below are historical.
 

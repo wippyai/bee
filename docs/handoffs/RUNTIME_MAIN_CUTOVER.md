@@ -101,7 +101,7 @@ toolchain: broker-owned PTYs, keyboard interaction, resize, rebind and explicit
 cancellation. This fixture submits no authenticated provider turn and retains
 its explicit pending-cleanup policy; it is not production cleanup acceptance.
 
-The fresh-runtime Lua run passes all 556 tests, including the process-group
+The fresh-runtime Lua run passes all 557 tests, including the process-group
 absence correction and native placement identity/descendant cleanup proofs.
 The gateway takeover fixture failure was reproduced by explicitly reconciling
 placement after revocation: correct enforcement stopped the sleeping fixture
@@ -116,8 +116,20 @@ thread restart, resource containment and source/pack connection UI checks also
 pass. The desktop smoke initially failed with a blank first frame. Twelve focused
 boots and a subsequent full source/pack smoke pass do not explain that failure.
 Failure-only diagnostics now retain bounded terminal output and process state;
-the intermittent startup issue remains unresolved. Remaining desktop acceptance
-is still in progress, so this is not a completed full foundation check.
+the intermittent startup issue remains unresolved. The remaining desktop recipe
+now passes, including control delivery, window retirement, native Terminal,
+scrolling/selection, 161 keyboard cases, retained lifetimes, independent clients,
+launcher/recovery and Inbox/Hive Manager/Timeline apps. All foundation recipes
+have passing evidence in segments; this is not an uninterrupted final
+`make check` or a demonstrated fix for the earlier blank frame.
+
+Placement additionally refuses a missing provider configuration before storing
+intent when the host policy selects that provider. The regression with only
+that guard removed creates a stored `intended` attempt; with it restored all
+557 Lua tests pass. Real Claude/Codex PTY startup/input/resize/rebind/cancellation
+also pass after the guard. A separate gateway fixture proves a restricted
+function scope denies actual placement DB/executor access while the privileged
+control acquires both. Actor/context inheritance remains outside that proof.
 
 ## OS-assigned MCP listener address
 

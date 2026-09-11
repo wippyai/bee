@@ -98,26 +98,31 @@ entries:
   kind: registry.entry
   bindings:
   - definition_id: bee.settings:app
-    policies: []
+    policies: [bee:ordinary_app_subsystem_boundary]
     appearance_write: true
   - definition_id: bee.processes:app
     policies:
+    - bee:ordinary_app_subsystem_boundary
     - bee:processes_policy
     application_stop: true
   - definition_id: bee.console:app
     policies:
+    - bee:ordinary_app_subsystem_boundary
     - bee.console:executor_policy
     - bee.console:command_policy
   - definition_id: bee.inbox:app
     policies:
+    - bee:ordinary_app_subsystem_boundary
     - bee:approval_decide_policy
     - bee.inbox:client_policy
   - definition_id: bee.hive_manager:app
     policies:
+    - bee:ordinary_app_subsystem_boundary
     - bee.hive_manager:client_policy
     catalog_read: true
   - definition_id: bee.timeline:app
     policies:
+    - bee:ordinary_app_subsystem_boundary
     - bee.timeline:client_policy
 - name: terminal
   kind: terminal.host
@@ -262,18 +267,18 @@ entries:
 - name: workspace_storage_boundary
   kind: security.policy
   meta:
-    comment: Stores no application may open, even through a method that attaches its own store policy; the approvals store is reached only inside the approval owner's methods, which the inbox application calls under its own actor, so it is not listed
+    comment: Core workspace and client stores remain denied to every application
   policy:
-    actions:
-    - db.get
-    resources:
-    - bee:workspace_db
-    - bee:client_db
-    - bee.client.db:*
-    - bee.workspace.db:*
-    - bee.placement.native:db
-    - bee.resources:db
-    - bee.credentials:db
+    actions: [db.get]
+    resources: [bee:workspace_db, bee:client_db, 'bee.client.db:*', 'bee.workspace.db:*']
+    effect: deny
+- name: ordinary_app_subsystem_boundary
+  kind: security.policy
+  meta:
+    comment: Host-selected boundary for ordinary applications; native execution components receive reviewed policies separately
+  policy:
+    actions: [db.get]
+    resources: [bee.placement.native:db, bee.resources:db, bee.credentials:db]
     effect: deny
 - name: client_storage_policy
   kind: security.policy

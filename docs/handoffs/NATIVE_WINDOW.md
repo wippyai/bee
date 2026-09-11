@@ -141,3 +141,23 @@ the resolved plan, carrier request and admitted identities. The external
 `admit` method wraps the same result in its existing reply envelope, and
 structured start consumes it directly. The managed app can reuse this path
 without a second decoder or a separate authority implementation.
+
+## Host admission of execution components
+
+The broker continues to compose the same mandatory base, application boundary,
+core spawn boundary and workspace/client-store deny. The host now lists the
+ordinary subsystem-store deny explicitly in each ordinary application's
+existing protected `policies` list. A reviewed execution component may instead
+receive the precise placement policies it requires. No app metadata, profile
+request or broker-specific execution flag selects this scope.
+
+All currently shipped app bindings retain the ordinary deny. Architecture checks
+require it, and runtime tests attempt actual database opens with a broad allow
+to prove the deny still wins. A component with placement permission can open
+that store only; core stores remain denied even under a broad allow. The
+managed app binding and its broker/PTY acceptance are still pending.
+
+A future installer must review changes to the complete protected admission
+policy set. With the current schema an omitted ordinary deny is a permission
+change, not a self-declared component role; package metadata cannot authorize
+that omission. Hive installation enforcement remains a separate acceptance gate.

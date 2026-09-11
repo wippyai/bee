@@ -64,7 +64,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-check: installer-check bundle-check bundle-assets-check lint test threads threads-module resources-module gateway-check pack headless-check workspace-hosts-check
+check: installer-check bundle-check bundle-assets-check lint test window-native-check threads threads-module resources-module gateway-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/architecture.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py

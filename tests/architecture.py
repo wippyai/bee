@@ -174,26 +174,30 @@ def assert_pure_sync(identity, checked=None):
 assert_pure_sync("bee.sync:protocol")
 assert {i for i, e in entries.items() if e["kind"] == "terminal.host"} == {"bee:terminal"}
 assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db", "bee.approvals:db", "bee.gateway:db", "bee.node:db"}
-assert "bee.placement.native:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
-assert "bee.resources:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
-assert "bee.credentials:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+assert "bee.placement.native:db" in entries["bee:ordinary_app_subsystem_boundary"]["policy"]["resources"]
+assert "bee.resources:db" in entries["bee:ordinary_app_subsystem_boundary"]["policy"]["resources"]
+assert "bee.credentials:db" in entries["bee:ordinary_app_subsystem_boundary"]["policy"]["resources"]
 # The approval owner's methods open their store on an application's behalf (the inbox
 # application calls inbox, read, decide and withdraw under its own actor), so the
 # approvals store is not on the application deny list; the owner's methods carry the
 # store policy and the application binding carries no store access of its own.
 assert "bee.approvals:db" not in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
+# Every currently shipped application is ordinary; execution admission is separate.
+for binding in entries["bee:application_admission"]["bindings"]:
+    assert "bee:ordinary_app_subsystem_boundary" in binding["policies"], binding["definition_id"]
+assert set(entries["bee:workspace_storage_boundary"]["policy"]["resources"]) == {"bee:workspace_db", "bee:client_db", "bee.client.db:*", "bee.workspace.db:*"}
 inbox_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.inbox:app")
-assert set(inbox_binding["policies"]) == {"bee:approval_decide_policy", "bee.inbox:client_policy"}
+assert set(inbox_binding["policies"]) == {"bee:ordinary_app_subsystem_boundary", "bee:approval_decide_policy", "bee.inbox:client_policy"}
 assert set(entries["bee.inbox:client_policy"]["policy"]["actions"]) == {"funcs.call", "registry.get"}
 assert "bee.approvals:list" not in entries["bee.inbox:client_policy"]["policy"]["resources"]
 manager_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.hive_manager:app")
-assert manager_binding["policies"] == ["bee.hive_manager:client_policy"]
+assert set(manager_binding["policies"]) == {"bee:ordinary_app_subsystem_boundary", "bee.hive_manager:client_policy"}
 assert manager_binding.get("catalog_read") is True
 assert all(not binding.get("catalog_read", False) for binding in entries["bee:application_admission"]["bindings"] if binding is not manager_binding)
 assert set(entries["bee.hive_manager:client_policy"]["policy"]["actions"]) == {"registry.get", "system.read"}
 assert entries["bee.hive_manager:source"]["data"] == {"kind": "live"}, "Production ships the live directory; a fixture is an explicit host selection"
 timeline_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.timeline:app")
-assert timeline_binding["policies"] == ["bee.timeline:client_policy"]
+assert set(timeline_binding["policies"]) == {"bee:ordinary_app_subsystem_boundary", "bee.timeline:client_policy"}
 timeline_resources = set(entries["bee.timeline:client_policy"]["policy"]["resources"])
 assert not timeline_resources & {"bee.threads.delivery:claim", "bee.threads.delivery:ack", "bee.threads.delivery:dispatch", "bee.threads.service:record", "bee.threads.delivery:unsubscribe"}, "Viewing acknowledges no delivery and writes nothing"
 for identity, entry in entries.items():

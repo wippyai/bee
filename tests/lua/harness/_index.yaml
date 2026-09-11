@@ -711,3 +711,31 @@ entries:
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
+- name: scope_probe_allow
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.catalog:execution_scope_probe]
+    effect: allow
+- name: scope_probe_broad_store
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: '*'
+    effect: allow
+- name: execution_scope_probe
+  kind: function.lua
+  source: file://execution_scope_probe.lua
+  method: run
+  meta: {type: test_support}
+  modules: [sql]
+- name: execution_scope_test
+  kind: function.lua
+  source: file://execution_scope_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security, funcs]
+  imports:
+    test: wippy.test:test

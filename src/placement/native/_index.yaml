@@ -199,6 +199,18 @@ entries:
     types: bee.placement:types
   security:
     policies: [bee:placement_store_policy, bee:placement_exec_policy, bee:placement_runner_policy, bee:credential_materialize_policy, bee:gateway_materialize_policy]
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  modules: [process, exec, tty, security, bounds, funcs]
+  imports:
+    store: bee.placement.native:store
+    resources: bee.placement.native:resources
+    materialization: bee.placement.native:materialization
+    executable: bee.placement.native:executable
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
+    service: bee.placement.native:service
 - name: sweeper
   kind: process.lua
   source: file://sweeper.lua

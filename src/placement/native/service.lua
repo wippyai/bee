@@ -195,6 +195,35 @@ local function recheck_grants(row: store.Row, request: types.LaunchRequest): (Re
     end
     return nil, nil
 end
+-- Authorizes one concrete execution path after its recorded grants have been
+-- rechecked.  Both the ordinary runner and the native window use this seam;
+-- callers never supply a gateway materialization key as authority.
+function M.authorize_materialization(attempt: types.Attempt, row: store.Row, request: types.LaunchRequest, gateway_binding: string?): (string?, Reply?)
+    local refused, subject = recheck_grants(row, request)
+    if refused then
+        transition(attempt.attempt_id, {evidence = {kind = tostring(subject) .. ".refused", detail = "at start: " .. tostring(refused.error and refused.error.code) .. ": " .. tostring(refused.error and refused.error.message)}})
+        return nil, refused
+    end
+    -- Materialization is authorized here, for this start, with a one-time
+    -- key the execution owner alone receives. The carrier-recorded binding
+    -- must be the one the attempt holds under its attached carrier epoch.
+    if not request.gateway then return nil, nil end
+    if not gateway_binding then return nil, fail("INVALID", "gateway_binding is required for a launch with a gateway binding") end
+    local carrier_epoch = bounds.integer(row.attachment_generation) or 0
+    local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = math.max(1000, request.timeouts.start_ms)})
+    local reply = type(raw) == "table" and raw :: Reply or nil
+    if call_error or not reply or not reply.ok then
+        local fault = reply and reply.error or {code = "UNAVAILABLE", message = tostring(call_error or "no answer")}
+        transition(attempt.attempt_id, {evidence = {kind = "gateway.refused", detail = "materialization authorization: " .. fault.code .. ": " .. fault.message}})
+        return nil, fail(fault.code, "gateway materialization authorization: " .. fault.message)
+    end
+    local materialization_key = bounds.id((bounds.object(reply.value) or {}).materialization_key)
+    if not materialization_key then
+        transition(attempt.attempt_id, {evidence = {kind = "gateway.refused", detail = "materialization authorization returned no key"}})
+        return nil, fail("UNAVAILABLE", "gateway materialization authorization returned no key")
+    end
+    return materialization_key, nil
+end
 -- prepare: validate the admitted request against this host, refuse what the
 -- runtime cannot clean, record intent. Same key and digest replays.
 function M.prepare(value: unknown): Reply
@@ -408,27 +437,8 @@ function M.start(value: unknown): Reply
     local request = row and store.request(row) or nil
     db:release()
     if not request then return fail("STORAGE", "attempt request unreadable") end
-    local refused, subject = recheck_grants(row :: store.Row, request)
-    if refused then
-        transition(attempt.attempt_id, {evidence = {kind = tostring(subject) .. ".refused", detail = "at start: " .. tostring(refused.error and refused.error.code) .. ": " .. tostring(refused.error and refused.error.message)}})
-        return refused
-    end
-    -- Materialization is authorized here, for this start, with a one-time
-    -- key the runner alone receives; the carrier-recorded binding must be
-    -- the one the attempt holds under its attached carrier epoch.
-    local materialization_key: string? = nil
-    if request.gateway then
-        if not gateway_binding then return fail("INVALID", "gateway_binding is required for a launch with a gateway binding") end
-        local carrier_epoch = type((row :: store.Row).attachment_generation) == "number" and math.floor((row :: store.Row).attachment_generation :: number) or 0
-        local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = math.max(1000, request.timeouts.start_ms)})
-        local reply = type(raw) == "table" and raw :: Reply or nil
-        if call_error or not reply or not reply.ok then
-            local fault = reply and reply.error or {code = "UNAVAILABLE", message = tostring(call_error or "no answer")}
-            transition(attempt.attempt_id, {evidence = {kind = "gateway.refused", detail = "materialization authorization: " .. fault.code .. ": " .. fault.message}})
-            return fail(fault.code, "gateway materialization authorization: " .. fault.message)
-        end
-        materialization_key = tostring((bounds.object(reply.value) or {}).materialization_key)
-    end
+    local materialization_key, authorization_denied = M.authorize_materialization(attempt, row :: store.Row, request, gateway_binding)
+    if authorization_denied then return authorization_denied end
     local reply_topic = "bee.placement.start." .. (uuid.v7() or attempt.attempt_id)
     local replies = assert(process.listen(reply_topic, {message = true}))
     local events = assert(process.events())

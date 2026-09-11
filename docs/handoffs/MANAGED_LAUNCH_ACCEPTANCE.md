@@ -29,6 +29,16 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY make managed-launch-check \
 Evidence: `/tmp/bee-current-managed-launch-check.log`, source checkpoint
 `b3e0f71`. This is a failed integration gate, not production enablement.
 
+Launch admission now retains the selected workspace ID in its carrier request.
+This is the same workspace used to obtain resource grants and credential
+projections; permission exchange needs it when creating approvals. The actual
+launch-admission suite passes 4/4, including grant/projection ownership and
+start recovery. With the old handoff restored, the workspace assertion fails
+while the other three cases pass. Evidence:
+`/tmp/bee-launch-workspace-baseline.log` and
+`/tmp/bee-launch-workspace-fixed.log`. This correction is source-only and does
+not activate a provider or change workspace authorization.
+
 A durable follow-up prompt is also unfinished. Both driver `dispatch` methods
 explicitly describe a new process on a provider `resume_ref`; the carrier currently
 calls only `prepare` and settles one attempt. Placement already has retained

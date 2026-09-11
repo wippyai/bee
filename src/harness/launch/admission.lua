@@ -200,7 +200,7 @@ function M.admit(value: unknown): Reply
     end
     local carrier_request: {[string]: unknown} = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = request.environment,
-        working_directory = working, projections = projections}
+        working_directory = working, projections = projections, workspace_id = request.workspace_id}
     return succeed({plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id})
 end
 -- start: admit, then spawn the carrier as the requester. A retry with the

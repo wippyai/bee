@@ -163,6 +163,7 @@ local function define_tests()
             test.eq(admitted.thread_id, "thread:" .. request_id)
             local carrier_request = admitted.request :: {[string]: unknown}
             test.eq(carrier_request.owner_id, REQUESTER)
+            test.eq(carrier_request.workspace_id, workspace, "approval workspace was lost at launch admission")
             local resources = carrier_request.resources :: {{[string]: unknown}}
             test.eq(#resources, 1)
             test.eq(resources[1].root_ref, ROOT)

@@ -121,7 +121,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     if not definition_ref then return nil, "definition_ref is not an identifier" end
     if not workspace_id then return nil, "workspace_id is not an identifier" end
     local brief = bounds.text(object.brief, M.MAX_BRIEF_BYTES)
-    if not brief or brief == "" then return nil, "brief must be nonempty bounded text" end
+    if not brief then return nil, "brief must be bounded text" end
     local mode: string? = nil
     if object.mode ~= nil then
         mode = bounds.member(object.mode, definition.MODES)
@@ -167,6 +167,7 @@ function M.admit(value: unknown): Reply
     if not launch then return fail("NOT_FOUND", definition_error or "definition") end
     local plan, plan_refused = M.resolve(request.definition_ref, request.mode)
     if not plan then return plan_refused :: Reply end
+    if request.brief == "" and plan.mode ~= "window" then return fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not definition.allows(launch, "workdir") then return fail("FORBIDDEN", "definition does not allow a workdir override") end
     if request.thread_id and not definition.allows(launch, "thread") then return fail("FORBIDDEN", "definition does not allow a thread override") end
     local ids = M.identities(request.request_id)

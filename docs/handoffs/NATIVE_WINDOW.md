@@ -87,3 +87,9 @@ existing defaults when omitted. The Codex CLI probe completed two turns with
 `max`; this validates CLI configuration consumption, not provider support for
 all model/effort combinations. Evidence:
 `/tmp/bee-codex-effort-cli-20260911.log`.
+
+Launch admission decodes bounded prompt text, including an empty string. After
+resolving the definition and selected mode, it refuses an empty structured-launch
+brief before resource grants or credential projections. A window may open with
+no prompt, matching the ordinary native UI. Profile compatibility and host
+permissions are still required; this does not itself enable PTY admission.

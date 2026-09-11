@@ -29,7 +29,9 @@ execution during admission. A new admission cannot change the display identity
 of an existing client or replace a display whose detach is still pending.
 Renderer replacement preserves that identity.
 
-Assignment is the control decision. Layout saves acknowledge presentation
+Assignment is the control decision. An admitted read-only client keeps its
+selected observation tabs independently of controlling-display assignment; it
+cannot use assignment snapshots to obtain control or offer a transfer. Layout saves acknowledge presentation
 convergence and cannot restore an old source's authority. Neither display labels,
 PIDs in payloads, registry metadata nor saved tabs authorize a transfer.
 

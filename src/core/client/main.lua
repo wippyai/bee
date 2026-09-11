@@ -112,6 +112,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local catalog: {contract.Descriptor} = {}
         local live: {inventory.View} = {}
         local catalog_revision, views_revision = -1, -1
+        local controls_apps = false
         local assignment_snapshot: transfer.Snapshot? = nil
         local transfer_pending: {[string]: TransferPending} = {}
         local transfer_pending_count = 0
@@ -162,7 +163,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         end
         local function publish_transfers()
             local snapshot = assignment_snapshot
-            if not active or not snapshot then return end
+            if not active or not snapshot or not controls_apps then return end
             local items = assignment_layout.menu(snapshot, selected_targets())
             local parts: {string} = {}
             for _, item in ipairs(items) do
@@ -340,6 +341,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             return false
         end
         local function assigned_here(view_id: string, instance_id: string, binding: boolean): boolean
+            if not controls_apps then return true end
             local snapshot = assignment_snapshot
             if snapshot then
                 for _, item in ipairs(snapshot.items) do
@@ -379,7 +381,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         end
         local function reconcile_assignments()
             local snapshot = assignment_snapshot
-            if not snapshot or views_revision < 0 then return end
+            if not controls_apps or not snapshot or views_revision < 0 then return end
             local changes = assignment_layout.plan(workspace_id, database.client_id, selected_targets(), live, snapshot.items)
             for _, key in ipairs(changes.remove) do remove(key) end
             for _, view in ipairs(changes.add) do
@@ -554,6 +556,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         local token, generation = contract.text(data.connection_id, 80), contract.text(data.renderer_generation, 80)
                         local display_id = contract.workspace_id(data.display_id)
                         if not token or token == "" or not generation or generation == "" or display_id ~= database.client_id then error("Invalid admission identity") end
+                        if type(data.permissions) ~= "table" or type(data.permissions.control) ~= "boolean" then error("Invalid admission control permission") end
+                        controls_apps = data.permissions.control
                         connection_id, renderer_generation = token, generation
                         inbox_state = inbox.new(workspace_id, token)
                         select_targets()

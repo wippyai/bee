@@ -382,7 +382,9 @@ def exercise(packed, project, pack_file):
             ui.key(b"\x1b[23~")
             ui.wait("Small shell. Independent applications.")
             exit_seconds = ui.quit()
-            assert b"permission denied" not in ui.raw and b"stack traceback" not in ui.raw
+            faults = [bytes(ui.raw[max(0, match.start() - 120):match.end() + 300])
+                      for match in re.finditer(b"permission denied|stack traceback", ui.raw)]
+            assert not faults, faults
             print(f"{'pack' if packed else 'source'}: isolation, input, geometry, colors, six rejoins, crash recovery; exit {exit_seconds:.3f}s")
         finally:
             ui.close()

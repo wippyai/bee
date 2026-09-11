@@ -355,7 +355,10 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local function bind(target: state.Target)
             if not active or not assigned_here(target.view_id, target.instance_id, true) then return end
             local count = 0
-            for _ in pairs(bindings) do count = count + 1 end
+            for _, pending_binding in pairs(bindings) do
+                if pending_binding.tab_id == target.tab_id and pending_binding.generation == renderer_generation then return end
+                count = count + 1
+            end
             if count >= 128 then error("Client attachment request capacity exhausted") end
             local request_id = uuid.v7()
             bindings[request_id] = {generation = renderer_generation, tab_id = target.tab_id}

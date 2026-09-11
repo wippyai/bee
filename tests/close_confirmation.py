@@ -34,7 +34,7 @@ def exercise(packed, responsive=True):
             shutil.copy2(ROOT / name, project / name)
         presenter = project / "src/core/terminal/main.lua"
         presentation = presenter.read_text()
-        label = '"Workspace " .. workspace_id:sub(1, 8)'
+        label = '"Workspace " .. names.label(workspace_id)'
         assert presentation.count(label) == 1
         presenter.write_text(presentation.replace(label, label + ' .. " P:" .. tostring(process.pid()):sub(-8)'))
         source = project / "src/apps/console/app.lua"

@@ -10,6 +10,7 @@ entries:
     client: bee.application:client
     appearance: bee.desktop:appearance
     model: bee.hive_manager:model
+    names: bee.desktop:names
     view: bee.hive_manager:view
     directory: bee.hive_manager:directory
     hive: bee.hive:client
@@ -34,6 +35,7 @@ entries:
   imports:
     text: bee.application:text
     directory: bee.hive_manager:directory
+    names: bee.desktop:names
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -41,6 +43,7 @@ entries:
   imports:
     appearance: bee.desktop:appearance
     model: bee.hive_manager:model
+    names: bee.desktop:names
 - name: directory
   kind: library.lua
   source: file://directory.lua

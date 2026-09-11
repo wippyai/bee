@@ -5,6 +5,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
+local names = require("names")
 type Hit = {kind: string, index: integer, x: integer, y: integer, width: integer, height: integer}
 type Frame = {rows: {string}, hits: {Hit}, capacity: integer, offset: integer}
 local M = {}
@@ -112,7 +113,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if message == "" and state.pending then message = "Waiting for the approval owner…" end
     for _, workspace in ipairs(state.workspaces) do
         local unavailable = state.unavailable[workspace]
-        if message == "" and unavailable then message = "Workspace " .. workspace .. " unavailable: " .. unavailable end
+        if message == "" and unavailable then
+            local label = names.label(workspace)
+            if state.technical then label = label .. " (" .. workspace .. ")" end
+            message = "Workspace " .. label .. " unavailable: " .. unavailable
+        end
     end
     line(footer, message, theme.muted)
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}

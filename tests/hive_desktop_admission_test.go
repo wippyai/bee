@@ -59,7 +59,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		anchor := `"Workspace " .. workspace_id:sub(1, 8)`
+		anchor := `"Workspace " .. names.label(workspace_id)`
 		if strings.Count(string(body), anchor) != 1 {
 			t.Fatal("unexpected presenter label anchor")
 		}

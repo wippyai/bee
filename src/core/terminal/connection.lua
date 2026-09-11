@@ -3,6 +3,7 @@
 -- this presentation neither discovers peers nor grants attachment authority.
 local tty = require("tty")
 local appearance = require("appearance")
+local names = require("names")
 type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?}
 local M = {}
 local function line(value: unknown, limit: integer): string?
@@ -40,8 +41,8 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         put(1, "CONNECTION", accent)
         put(2, "Hive  " .. info.hive, normal)
         put(3, "Node  " .. info.node, normal)
-        put(4, "Workspace  " .. info.workspace:sub(1, 8), normal)
-        put(5, "Display  " .. info.display:sub(1, 8), normal)
+        put(4, "Workspace  " .. names.label(info.workspace), normal)
+        put(5, "Display  " .. names.label(info.display), normal)
         put(6, tostring(width) .. " × " .. tostring(height) .. "  ·  F9 / Esc close", muted)
         return
     end
@@ -50,9 +51,9 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
     put(5, "NODE       Running", muted)
     put(6, info.node, normal)
     put(8, "WORKSPACE  " .. (ready and "Ready" or "Loading"), muted)
-    put(9, info.workspace, normal)
+    put(9, names.label(info.workspace) .. "  (" .. info.workspace .. ")", normal)
     put(11, "DISPLAY    " .. tostring(width) .. " × " .. tostring(height), muted)
-    put(12, info.display, normal)
+    put(12, names.label(info.display) .. "  (" .. info.display .. ")", normal)
     put(14, "F9 / Esc close", muted)
 end
 return M

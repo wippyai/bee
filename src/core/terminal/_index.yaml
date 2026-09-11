@@ -7,6 +7,7 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.desktop:appearance
+    names: bee.desktop:names
 - name: selection
   kind: library.lua
   source: file://selection.lua
@@ -41,6 +42,7 @@ entries:
     menu: bee.terminal:menu
     selection: bee.terminal:selection
     appearance: bee.desktop:appearance
+    names: bee.desktop:names
     status_surface: bee.application:status_surface
 - name: render
   kind: library.lua

@@ -688,7 +688,7 @@ func run() (retErr error) {
 			if err != nil {
 				return err
 			}
-			const label = `"Workspace " .. workspace_id:sub(1, 8)`
+			const label = `"Workspace " .. names.label(workspace_id)`
 			if strings.Count(string(data), label) != 1 {
 				return fmt.Errorf("desktop presenter probe: expected one label anchor")
 			}

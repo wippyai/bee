@@ -68,6 +68,7 @@ entries:
   imports:
     appearance: bee.desktop:appearance
     model: bee.inbox:model
+    names: bee.desktop:names
 - name: workspaces
   kind: registry.entry
   meta:

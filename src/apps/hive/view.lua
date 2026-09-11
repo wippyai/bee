@@ -5,6 +5,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
+local names = require("names")
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
 type Frame = {rows: {string}, hits: {Hit}, capacity: integer, offset: integer}
 local M = {}
@@ -138,14 +139,24 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             lines[#lines + 1] = "The owner lists no desktops"
             keys[#keys + 1] = ""
         else
+            local workspace_ids: {string} = {}
+            local display_ids: {string} = {}
+            for _, desktop in ipairs(catalog.desktops) do
+                workspace_ids[#workspace_ids + 1] = desktop.workspace_id
+                display_ids[#display_ids + 1] = desktop.desktop_id
+            end
+            local workspace_labels = names.labels(workspace_ids)
+            local display_labels = names.labels(display_ids)
             for _, desktop in ipairs(catalog.desktops) do
                 local key = model.desktop_key(desktop.workspace_id, desktop.desktop_id)
                 local session = model.session(state, selected.node_id, desktop.workspace_id, desktop.desktop_id)
-                local item = (desktop.label ~= "" and desktop.label or desktop.desktop_id) .. "  workspace " .. desktop.workspace_id
+                local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)
+                local display_label = desktop.label ~= "" and desktop.label or (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id))
+                local item = display_label .. "  workspace " .. workspace_label
                 if desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller else item = item .. "  no controller" end
                 if desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
                 if session then item = item .. "  your " .. session.mode .. " session " .. session.session_id end
-                if state.technical then item = item .. "  desktop " .. desktop.desktop_id end
+                if state.technical then item = item .. "  workspace " .. desktop.workspace_id .. "  display " .. desktop.desktop_id end
                 lines[#lines + 1] = item
                 keys[#keys + 1] = key
             end

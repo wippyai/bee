@@ -274,8 +274,12 @@ Every tab, window and action target retains its workspace reference, including
 minimized windows and restored layouts. In a single-workspace desktop, the
 workspace label can be compact; mixed desktops display a short workspace label
 alongside each application's title. A color is supplementary, never the only
-identifier. Duplicate display names must be disambiguated with a stable short
-ID. Renaming a workspace changes presentation, not saved references.
+identifier. Bee derives a deterministic friendly alias from each opaque workspace
+or display ID for these presentation surfaces; `Luna` remains part of the shared
+vocabulary. When IDs shown together map to the same alias, sorted durable IDs
+receive stable ordinal suffixes. Technical mode includes the raw IDs for
+diagnostics. These aliases never enter requests, keys, journals or authorization,
+and changing a label changes presentation only.
 
 Start and resource-open actions carry an explicit target workspace. Focus can
 select the initial target, but an asynchronous reply must remain bound to the

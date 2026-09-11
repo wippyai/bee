@@ -6,6 +6,7 @@
 local json = require("json")
 local text = require("text")
 local directory = require("directory")
+local names = require("names")
 local M = {}
 M.TEXT_LIMIT = 160
 M.LABEL_LIMIT = 48
@@ -392,7 +393,7 @@ function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
         local session: Session = {session_id = M.text(outcome.session_id, 80), mode = M.text(outcome.mode or intent.mode, 16)}
         remembered.desktops[key] = session
         state.sessions[intent.node_id] = remembered
-        state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. intent.desktop_id
+        state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. names.label(intent.desktop_id)
     else
         state.outcome = M.text(outcome.code .. ": " .. outcome.message)
     end

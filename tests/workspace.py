@@ -27,7 +27,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # by a fresh process. No diagnostics or test flags enter the core pack.
             presenter = folder / "src/core/terminal/main.lua"
             text = presenter.read_text()
-            label = '"Workspace " .. workspace_id:sub(1, 8)'
+            label = '"Workspace " .. names.label(workspace_id)'
             assert label in text
             text = text.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)')
             anchor = 'local action = bindings.action('

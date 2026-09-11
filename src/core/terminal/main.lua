@@ -21,6 +21,7 @@ local appearance = require("appearance")
 local delivery = require("delivery")
 local selection = require("selection")
 local connection = require("connection")
+local names = require("names")
 
 local function main(owner: string, initial_application: string?, secondary_application: string?)
     if ctx.get("bee.workspace_owner") ~= owner or owner == "" then error("Untrusted presenter bootstrap") end
@@ -311,7 +312,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             end
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
-        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. workspace_id:sub(1, 8),
+        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. names.label(workspace_id),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})

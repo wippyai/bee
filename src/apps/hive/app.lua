@@ -14,6 +14,7 @@ local registry = require("registry")
 local system = require("system")
 local appearance = require("appearance")
 local model = require("model")
+local names = require("names")
 local view = require("view")
 local directory = require("directory")
 local hive = require("hive")
@@ -171,7 +172,8 @@ local function main(value: unknown)
         local intent, refused = model.preview_intent(state, mode, uuid.v4())
         if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
         local title = mode == "control" and "Take control of this desktop?" or "Observe this desktop?"
-        local message = model.text((desktop.label ~= "" and desktop.label or desktop.desktop_id) .. " on " .. node.label .. ", workspace " .. desktop.workspace_id, 512)
+        local display_label = desktop.label ~= "" and desktop.label or names.label(desktop.desktop_id)
+        local message = model.text(display_label .. " on " .. node.label .. ", workspace " .. names.label(desktop.workspace_id), 512)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, intent = intent}

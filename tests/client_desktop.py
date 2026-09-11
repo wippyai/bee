@@ -102,7 +102,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # retained output of the viewport it replaced.
             presenter = project / "src/core/terminal/main.lua"
             source = presenter.read_text()
-            label = '"Workspace " .. workspace_id:sub(1, 8)'
+            label = '"Workspace " .. names.label(workspace_id)'
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"
             presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
         if primary_render_delay:

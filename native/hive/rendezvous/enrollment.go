@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -51,6 +52,7 @@ type Snapshot struct {
 	execution string
 	secret    []byte
 	peers     map[string]ed25519.PublicKey
+	slots     map[string]int
 }
 
 func (s Snapshot) GossipKey() []byte { return bytes.Clone(s.secret) }
@@ -188,12 +190,47 @@ func decodeEnrollment(data []byte) (enrollmentRecord, error) {
 
 func snapshot(record enrollmentRecord) Snapshot {
 	secret, _ := base64.RawStdEncoding.DecodeString(record.Secret)
-	s := Snapshot{execution: record.Execution, secret: secret, peers: make(map[string]ed25519.PublicKey, len(record.Peers))}
+	s := Snapshot{execution: record.Execution, secret: secret, peers: make(map[string]ed25519.PublicKey, len(record.Peers)), slots: make(map[string]int, len(record.Slots))}
 	for node, encoded := range record.Peers {
 		key, _ := base64.RawStdEncoding.DecodeString(encoded)
 		s.peers[node] = key
 	}
+	for node, slot := range record.Slots {
+		s.slots[node] = slot
+	}
 	return s
+}
+
+// EnsureShared creates the same-account Hive enrollment once. Later project
+// owners reuse its epoch and gossip key; restarting one node must not reset
+// the other nodes' registrations. Invalid existing state is never replaced.
+func (e *Enrollment) EnsureShared(ctx context.Context) (string, Snapshot, error) {
+	var result Snapshot
+	err := e.file.ReadModifyWrite(ctx, maxEnrollmentBytes, func(existing []byte) ([]byte, error) {
+		if existing != nil {
+			record, err := decodeEnrollment(existing)
+			if err != nil {
+				return nil, err
+			}
+			result = snapshot(record)
+			return nil, nil
+		}
+		var epoch [16]byte
+		if _, err := rand.Read(epoch[:]); err != nil {
+			return nil, err
+		}
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		record := enrollmentRecord{Version: 2, Execution: hex.EncodeToString(epoch[:]), Secret: base64.RawStdEncoding.EncodeToString(secret), Peers: map[string]string{}, Slots: map[string]int{}}
+		result = snapshot(record)
+		return json.Marshal(record)
+	})
+	if err != nil {
+		return "", Snapshot{}, err
+	}
+	return result.execution, result, nil
 }
 
 // Initialize replaces per-execution bootstrap state. Only the owner holding the

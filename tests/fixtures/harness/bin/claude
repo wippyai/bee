@@ -68,8 +68,15 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # its private home and the bearer token from the environment destination
   # the configuration names, walks initialization, discovery and a call,
   # optionally waits and holds, and reports status codes only on stderr.
+  # A revoked gateway can make placement request cooperative shutdown while
+  # this client is holding. Flush its last real HTTP check before exiting;
+  # the runner's normal forced-stop deadline remains authoritative.
+  gateway_stopping=""
+  trap 'gateway_stopping=1' TERM
   python3 - <<'PY' >&2
-import json, os, time, urllib.request, urllib.error
+import json, os, signal, threading, time, urllib.request, urllib.error
+stopping = threading.Event()
+signal.signal(signal.SIGTERM, lambda *_: stopping.set())
 config = json.load(open(os.path.join(os.environ["HOME"], ".claude.json")))
 server = config["mcpServers"]["bee"]
 url = server["url"]
@@ -118,10 +125,12 @@ if wait_ms:
     report["wait"] = {"status": status, "elapsed_ms": int((time.time() - started) * 1000), "outcome": result}
 hold = float(os.environ.get("BEE_FIXTURE_GATEWAY_HOLD", "0"))
 if hold:
-    time.sleep(hold)
+    stopping.wait(hold)
     report["after_hold"] = rpc("tools/list", ident=5)[0]
 print("gateway:" + json.dumps(report, sort_keys=True))
 PY
+  trap - TERM
+  if [ -n "$gateway_stopping" ]; then exit 143; fi
 fi
 if [ -n "${BEE_FIXTURE_HUGE:-}" ]; then
   printf '{"type":"system","subtype":"status","padding":"'

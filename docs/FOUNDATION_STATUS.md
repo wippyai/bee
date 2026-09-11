@@ -10,10 +10,11 @@ saved-selection hints so another node cannot inherit its desktop selection. Reti
 removes the manager's cached row, catalog and session presentation; saved display
 layouts and application processes are untouched. Refresh is every five seconds
 when its directory worker is idle, so cleanup may occur later than 60 seconds.
-This change is not yet installed globally; the intermittent expired-mount and
-detach-timeout report remains unresolved.
+This change is installed globally as application source `6b2da06`; 516 Lua tests
+and native client/binary checks pass. The intermittent startup/expired-mount
+failure remains unresolved. See [current global build](handoffs/GLOBAL_BUILD.md).
 
-The current global executable includes native `a0fc01e088b2`, the proven physical
+The earlier global executable included native `a0fc01e088b2`, the proven physical
 cancellation-order fix, with unchanged Bee source `c3b2c9f` and runtime `674b58a1`.
 Native-client/standalone acceptance and focused race/vet pass; actual-user observe
 reached a frame in 217 ms and detached in 87 ms. Global SHA starts `2c1f1109`.

@@ -1,5 +1,27 @@
 # Global Bee build — September 11, 2026
 
+## Current install: membership retirement
+
+Global SHA256: `723fb40b8c32ee277d8dcda8041e51499bb1c0adf3f0cf54c01115f75303802f`.
+Application source `6b2da06`, native `2a2117ad4fe7`, runtime `674b58a1`.
+Artifact `/tmp/bee-retirement-candidate-20260911`; backup
+`bee.previous-retirement-20260911T125322Z`.
+
+Hive Manager retires departed presentation rows after 60 seconds of absence in
+complete samples. Partial samples update reported members without proving other
+nodes absent; the cache remains bounded. Returning nodes clear departure status,
+and retirement clears stale selection hints. Saved layouts/apps remain intact.
+
+All 516 Lua tests, standalone build, native-client and native-binary checks pass.
+Logs: `/tmp/bee-retirement-recovered-test-20260911.log`,
+`/tmp/bee-retirement-{build,client-check,binary-check}-20260911.log`.
+A guarded restart loaded this install into the actual user's workspace: first
+frame 1.428s, detach 0.090s, exit zero. Databases were preserved.
+The intermittent catalog/startup stall remains unresolved. A separate private
+trace build is for diagnosis and is not installed globally.
+
+The installation records below are historical.
+
 ## September 11: installed detach acknowledgment update
 
 Global `/home/wolfy-j/.local/bin/bee` SHA256:

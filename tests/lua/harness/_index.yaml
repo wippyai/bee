@@ -94,6 +94,18 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     settle: bee.harness.carrier:settle
     driver_types: bee.driver:types
+- name: carrier_transport_test
+  kind: function.lua
+  source: file://carrier_transport_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    machine: bee.harness.carrier:machine
+    driver_types: bee.driver:types
+    policy: bee.harness.carrier:policy
+    placement_types: bee.placement:types
+    classify: bee.harness.catalog:classify
 - name: fixture_policy
   kind: registry.entry
   meta:

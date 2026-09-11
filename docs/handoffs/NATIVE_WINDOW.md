@@ -93,3 +93,9 @@ resolving the definition and selected mode, it refuses an empty structured-launc
 brief before resource grants or credential projections. A window may open with
 no prompt, matching the ordinary native UI. Profile compatibility and host
 permissions are still required; this does not itself enable PTY admission.
+
+The structured carrier now refuses window mode and non-stream-json protocols
+at both open and resume, before any thread, placement or gateway I/O. Planning
+remains shared; execution must use the transport owned by the selected profile.
+The native PTY facade is under separate acceptance and is not activated in the
+production catalog or global executable.

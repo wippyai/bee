@@ -503,6 +503,9 @@ end
 -- placement start, attempt started. A failure after the gateway admission
 -- revokes the binding before the error is returned.
 function M.open(io: IO, plan: Plan): (Session?, string?)
+    if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
+        return nil, "structured carrier requires a stream-json session or batch profile"
+    end
     if plan.exchange_refusal then return nil, plan.exchange_refusal end
     local request = plan.request
     local grant_refs: {string} = {}
@@ -563,6 +566,9 @@ end
 -- resume: a replacement carrier continues from the stored checkpoint under
 -- a new epoch; the runner resends what the old carrier never acknowledged.
 function M.resume(io: IO, plan: Plan): (Session?, string?)
+    if plan.profile.mode == "window" or plan.profile.protocol ~= "stream-json" then
+        return nil, "structured carrier requires a stream-json session or batch profile"
+    end
     local request = plan.request
     local stored, stored_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
     if stored_error then return nil, stored_error end

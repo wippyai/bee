@@ -19,7 +19,7 @@ M.DESKTOPS_UNAVAILABLE = "Desktop browsing is not available from this app yet"
 M.ATTACH_UNAVAILABLE = "Connecting from Hive Manager is not available yet"
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}
-type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string, observers: integer}
+type Desktop = {workspace_id: string, desktop_id: string, label: string, controller: string?, observers: integer?}
 -- A catalog carries the owner generation it was read under; an attach names
 -- that generation and its own idempotency identity, so a stale catalog
 -- never attaches to a replacement desktop and an ambiguous outcome is
@@ -122,12 +122,12 @@ local function decode_desktop(value: unknown): (Desktop?, string?)
         label = bounds.line(object.label, M.MAX_LABEL_BYTES) or ""
         if label == "" then return nil, "desktop label must be one bounded line" end
     end
-    local controller = ""
+    local controller: string? = nil
     if object.controller ~= nil then
         controller = bounds.id(object.controller) or ""
         if controller == "" then return nil, "desktop controller must be a bounded identity" end
     end
-    local observers = 0
+    local observers: integer? = nil
     if object.observers ~= nil then
         local count = bounds.integer(object.observers)
         if not count or count < 0 or count > 16 then return nil, "desktop observers must be 0 to 16" end
@@ -276,11 +276,11 @@ function M.fixture(fixture: Fixture): Directory
         end
         for _, desktop in ipairs(catalog.desktops) do
             if desktop.workspace_id == request.workspace_id and desktop.desktop_id == request.desktop_id then
-                if request.mode == "control" and desktop.controller ~= "" then
+                if request.mode == "control" and desktop.controller ~= nil and desktop.controller ~= "" then
                     return refused("CONFLICT", "desktop is controlled by " .. desktop.controller .. "; observe instead")
                 end
                 sessions = sessions + 1
-                if request.mode == "control" then desktop.controller = "bee.hive_manager" else desktop.observers = desktop.observers + 1 end
+                if request.mode == "control" then desktop.controller = "bee.hive_manager" else desktop.observers = (desktop.observers or 0) + 1 end
                 return {ok = true, code = "", message = "", session_id = "fixture-session-" .. tostring(sessions), mode = request.mode}
             end
         end

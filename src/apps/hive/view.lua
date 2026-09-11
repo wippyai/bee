@@ -153,8 +153,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)
                 local display_label = desktop.label ~= "" and desktop.label or (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id))
                 local item = display_label .. "  workspace " .. workspace_label
-                if desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller else item = item .. "  no controller" end
-                if desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
+                if desktop.controller == nil then item = item .. "  control status unknown"
+                elseif desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller
+                else item = item .. "  no controller" end
+                if desktop.observers ~= nil and desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
                 if session then item = item .. "  your " .. session.mode .. " session " .. session.session_id end
                 if state.technical then item = item .. "  workspace " .. desktop.workspace_id .. "  display " .. desktop.desktop_id end
                 lines[#lines + 1] = item

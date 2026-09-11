@@ -69,8 +69,11 @@ local function define_tests()
             local grant = next_message(snapshots)
             owner.catalog_readers(state, grant)
             test.is_true(owner.catalog_reader(state, self))
-            -- A catalog reader process is still outside the native client host.
-            test.is_false(owner.handles(state, grant), "catalog reader gained native control admission")
+            -- A catalog reader process is still outside the native client host,
+            -- including when its own actor sends the native request.
+            assert(process.send(self, "bee.test.catalog_reader", {}))
+            local reader_message = next_message(snapshots)
+            test.is_false(owner.handles(state, reader_message), "catalog reader gained native control admission")
 
             catalog.request(state.catalog, self, WORKSPACE, self, call(node), nil, 1000)
             local pending = state.catalog.pending

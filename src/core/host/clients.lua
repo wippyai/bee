@@ -25,14 +25,29 @@ type State = {owner: string, broker: string, workspace_id: string, self: string,
     questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
-    appearance_routes: {[string]: AppearanceRoute}}
+    appearance_routes: {[string]: AppearanceRoute}, assignment_revision: integer}
 local M = {}
 function M.new(owner: string, broker: string, workspace_id: string, assignments: assignment_store.Store): State
     return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()), assignments = assignments,
         inventory = inventory.new(workspace_id),
         questions = questions.new(workspace_id),
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
-        appearance_routes = {}}
+        appearance_routes = {}, assignment_revision = 0}
+end
+function M.assignments(state: State)
+    local entries, read_error = state.assignments:reconcile()
+    if read_error or not entries then error("Reconcile display assignments: " .. tostring(read_error)) end
+    state.assignment_revision = state.assignment_revision + 1
+    for _, client in pairs(state.admitted) do
+        local items: {unknown}, displays: {unknown} = {}, {}
+        for _, entry in ipairs(entries) do items[#items + 1] = {view_id = entry.assignment.view_id, instance_id = entry.assignment.instance_id,
+            display_id = entry.assignment.display_id, revision = entry.assignment.revision, pending = entry.intent ~= nil} end
+        for _, candidate in pairs(state.admitted) do displays[#displays + 1] = {display_id = candidate.display_id,
+            available = not candidate.detaching and candidate.renderer ~= "", control = candidate.permissions.control} end
+        process.send(client.recipient, "bee.host.assignments", {version = 1, workspace_id = state.workspace_id,
+            connection_id = client.connection_id, display_id = client.display_id, revision = state.assignment_revision,
+            items = items, displays = displays})
+    end
 end
 local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)
     assert(process.send(state.owner, "bee.host.client_result", {version = 1, request_id = id, op = op,
@@ -215,7 +230,7 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
                     renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering,
                     display_id = client.display_id})
                 if not sent then code, failure = "delivery_failed", tostring(send_error); detach(state, client, "")
-                else joined_recipient = client.recipient end
+                else joined_recipient = client.recipient; M.assignments(state) end
             end
         end
     end
@@ -504,7 +519,7 @@ function M.reply(state: State, reply: contract.Reply, current: inventory.State):
             display_id = route.display_id})
         if not claimed then
             reply.error_code, reply.error = "persistence_failed", tostring(claim_error)
-        end
+        else M.assignments(state) end
     end
     if client and not client.detaching and client.connection_id == route.connection_id
         and (route.op ~= "bind" or (not client.rendering and route.renderer_generation == client.renderer_generation)) then

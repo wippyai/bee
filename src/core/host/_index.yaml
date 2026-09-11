@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, security, ctx, uuid]
+  modules: [process, channel, security, ctx, uuid, hash]
   imports:
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery

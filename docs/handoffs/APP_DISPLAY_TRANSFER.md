@@ -43,7 +43,10 @@ tables; migrations 1 and 2 are unchanged. Stable app/display identities and
 revisions are persisted; execution PIDs and native mounts are not.
 
 Initial claims are idempotent, reject a different display and refuse a prepared
-transfer. Prepare persists the exact request fingerprint and source revision.
+transfer. A recovered app may already be live before any client opened it. Its
+first authorized controlling bind claims that exact live identity when no
+assignment exists; dormant or mismatched identities cannot be claimed by bind.
+Observer binds never create control assignments. Prepare persists the exact request fingerprint and source revision.
 Commit atomically updates the destination assignment and receipt; fail retains
 the source assignment. Exact retries return historical outcomes. Completed
 receipts remain on disk; bounded indexed reads do not enumerate that history.

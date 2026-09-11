@@ -1,15 +1,13 @@
 """Linux source-free public launcher: retained owner, local quit and clipboard."""
 from pathlib import Path
 import os
-import fcntl
-import subprocess
 import select
 import signal
 import sys
 import tempfile
 import time
 
-from native_workspace import NativeDesktop, STATE_ENVIRONMENT
+from native_workspace import NativeDesktop
 from terminal_selection import begin, copies
 
 
@@ -26,6 +24,23 @@ def owner_handle(ui, binary, state):
             return handle
         os.close(handle)
     raise AssertionError('Automatic launch did not create its retained owner')
+
+
+def live_owners(binary, state):
+    """Return the detached Bee start processes still live for this state."""
+    owners = []
+    executable, state_dir = os.fsencode(binary), os.fsencode(state)
+    for process in Path('/proc').iterdir():
+        if not process.name.isdecimal():
+            continue
+        try:
+            args = (process / 'cmdline').read_bytes().split(b'\0')
+        except OSError:
+            continue
+        if (args and args[0] == executable and state_dir in args and
+                b'--command' in args and b'start' in args):
+            owners.append(int(process.name))
+    return sorted(owners)
 
 
 def stop_owner(owner):
@@ -128,37 +143,62 @@ def preparing_owner(binary):
     with tempfile.TemporaryDirectory(prefix='bee-native-preparing-owner-') as temporary:
         folder = Path(temporary)
         state = folder / 'state'
-        state.mkdir(mode=0o700)
         owner = None
-        process = None
-        ui = None
+        owner_pid = None
+        first = None
+        second = None
         try:
-            with (state / '.application.lock').open('a+') as lock:
-                fcntl.flock(lock, fcntl.LOCK_EX)
-                ui = NativeDesktop(binary, folder, state)
-                ui.pump(1)
-                assert ui.process.poll() is None, bytes(ui.raw[-1000:])
-                assert 'Connecting to Hive…'.encode() in ui.raw, 'Preparing-owner wait was blank'
-                assert not list(state.glob('owner-*.log')), 'Waiting client spawned a contender'
-            # Emulate the already-starting owner publishing after preparation.
-            env = {key: value for key, value in os.environ.items()
-                   if key not in STATE_ENVIRONMENT | {'BEE_RUNTIME', 'USER'}}
-            env.update(TERM='xterm-256color', HOME=str(folder), PATH='/usr/bin:/bin')
-            with tempfile.TemporaryFile() as output:
-                process = subprocess.Popen([str(binary), '--state-dir', str(state),
-                    '--command', 'bee', 'run', 'start'], cwd=folder, env=env,
-                    stdin=subprocess.DEVNULL, stdout=output, stderr=output, start_new_session=True)
-                owner = os.pidfd_open(process.pid)
-                ui.wait(' BEE ', timeout=15)
-                ui.quit()
-                assert not select.select([owner], [], [], 0)[0], 'Waiting client killed owner'
+            # Launch both foreground clients before either has a published owner.
+            # The runtime, rather than this fixture, elects and admits the owner.
+            first = NativeDesktop(binary, folder, state)
+            second = NativeDesktop(binary, folder, state)
+            first.wait(' BEE ', timeout=15)
+            second.wait(' BEE ', timeout=15)
+            assert first.process.poll() is None, bytes(first.raw[-1000:])
+            assert second.process.poll() is None, bytes(second.raw[-1000:])
+
+            deadline = time.monotonic() + 5
+            owners = []
+            while time.monotonic() < deadline:
+                owners = live_owners(binary, state)
+                if len(owners) == 1:
+                    try:
+                        owner = os.pidfd_open(owners[0])
+                    except ProcessLookupError:
+                        pass
+                    else:
+                        owner_pid = owners[0]
+                        break
+                time.sleep(.05)
+            assert owner is not None, f'Expected one live owner, found {owners}'
+
+            first.open_start()
+            first.choose('Terminal')
+            first.wait('$ ')
+            first.key(b"BEE_PREPARING_FIRST=attached; printf 'PREPARING_FIRST_%s\\n' \"$BEE_PREPARING_FIRST\"\r")
+            first.wait('PREPARING_FIRST_attached')
+            second.open_start()
+            second.choose('Terminal')
+            second.wait('$ ')
+            second.key(b"BEE_PREPARING_SECOND=attached; printf 'PREPARING_SECOND_%s\\n' \"$BEE_PREPARING_SECOND\"\r")
+            second.wait('PREPARING_SECOND_attached')
+
+            first.quit()
+            first.close()
+            first = None
+            assert second.process.poll() is None, bytes(second.raw[-1000:])
+            assert not select.select([owner], [], [], 0)[0], 'First client detach killed the owner'
+            assert live_owners(binary, state) == [owner_pid], 'First detach changed the elected owner'
+            second.quit()
+            assert not select.select([owner], [], [], 0)[0], 'Second client detach killed the owner'
+            assert live_owners(binary, state) == [owner_pid], 'Second detach changed the elected owner'
         finally:
-            if ui is not None:
-                ui.close()
+            if first is not None:
+                first.close()
+            if second is not None:
+                second.close()
             stop_owner(owner)
-            if process is not None:
-                process.wait(timeout=5)
-    print('Preparing owner: busy-lock client waits for publication, then authenticates and attaches')
+    print('Preparing owner: concurrent cold clients attach to one runtime-elected owner')
 
 
 def crashed_client(binary):

@@ -46,3 +46,58 @@ unrelated displays working, and exercise both layout-save failure boundaries.
 It must also restart the source client with stale saved state and prove it cannot
 reclaim the target's app. Workspace-host restart needs a separate persistence
 proof if included in the implemented contract.
+
+## Source review: one durable assignment authority
+
+The implementation should not require a transaction spanning two client layout
+stores. A workspace-owned assignment is the decision; layouts project that
+assignment. Their save acknowledgments prove presentation convergence, not the
+right to regain application control. This refines the earlier requirement above:
+keep the assignment fence after layout acknowledgment rather than deleting it.
+Otherwise a sufficiently old layout backup could still reclaim the app.
+
+The inspected admission boundary currently has no durable display identity:
+`bee.host:protocol` carries only recipient, connection, renderer and permissions.
+The retained supervisor already knows the display ID. Its authenticated `admit`
+operation must bind that ID to the exact client execution before assignment can
+be checked. A display ID supplied by an ordinary app request cannot establish
+this relationship. Renderer replacement preserves it; a new admission must be
+checked again. Multiple physical observers of a retained display do not create
+additional workspace assignments.
+
+The concrete integration points are:
+
+- `src/core/host/protocol.lua` and `clients.lua`: supervisor-selected display
+  admission, assignment checks before every controlling bind, and transfer
+  requests authorized against both current assignment and target admission.
+- `src/core/storage/store.lua` and workspace persistence: an appended checked
+  migration and owner-only assignment/retry records. Save stable workspace,
+  view, instance and display identities plus revision; never execution PIDs or
+  native mounts. The existing host checkpoint writer must preserve this state.
+- `src/core/applications/broker.lua` and `attachment.lua`: retain the existing
+  revoke-before-mount behavior. Current `unbind` removes every view for a
+  recipient, so transferring one app needs an exact-view revoke operation; it
+  must not unbind that display's unrelated apps.
+- `src/core/client/main.lua`, state and session: reconcile incoming assignment
+  revisions before using saved targets. Keep geometry as client state. Source
+  removal and target insertion are repeatable projections of the committed
+  assignment, not independent authorization decisions.
+
+Persist a bounded transfer intent with the source assignment revision and exact
+request fingerprint before revocation. While it is pending, fence controlling
+binds for that app and settle previously queued broker work before the revoke
+barrier. A rejected revocation leaves the source grant and assignment intact;
+no target mount may be issued. After successful revocation, commit the target
+assignment and revision before granting its current renderer. A commit failure
+leaves the live app unattached and the durable intent available for reconciliation.
+A target-mount failure leaves the committed target assignment in place and
+reports the view as unavailable; it never silently grants the source again.
+
+On host restart, reconcile durable intents before allowing controlling binds.
+Only applications whose checkpoint contract supports restart can be recreated;
+a Terminal's live process is not recoverable across host death. The transfer
+proof preserves the existing live Terminal only across display/client changes.
+Assignment rows for dead, nonrecoverable app identities require explicit bounded
+cleanup without affecting the stored retry outcome or another app incarnation.
+
+These are implementation requirements, not implemented APIs or completed proofs.

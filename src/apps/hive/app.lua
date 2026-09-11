@@ -173,7 +173,7 @@ local function main(value: unknown)
         if not intent then status = refused or "Desktop unavailable"; dirty = true; return end
         local title = mode == "control" and "Take control of this desktop?" or "Observe this desktop?"
         local display_label = desktop.label ~= "" and desktop.label or names.label(desktop.desktop_id)
-        local message = model.text(display_label .. " on " .. node.label .. ", workspace " .. names.label(desktop.workspace_id), 512)
+        local message = model.text(display_label .. " (" .. desktop.desktop_id .. ") on " .. node.label .. ", workspace " .. names.label(desktop.workspace_id) .. " (" .. desktop.workspace_id .. ")", 512)
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = mode == "control" and "Control" or "Observe"})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, intent = intent}

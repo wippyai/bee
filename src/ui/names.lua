@@ -7,7 +7,6 @@ local ADJECTIVES: {string} = {
     "Hidden", "Jolly", "Kind", "Lively", "Misty", "Nimble", "Quiet", "Radiant",
     "Silver", "Sunny", "Velvet", "Wandering",
 }
--- Keep Luna near the front so it remains a frequent, recognizable label.
 local NOUNS: {string} = {
     "Luna", "Comet", "Meadow", "Otter", "Puddle", "Robin", "Willow", "Aurora",
     "Clover", "Ember", "Fox", "Harbor", "Kite", "Maple", "Nova", "Orbit",
@@ -15,23 +14,31 @@ local NOUNS: {string} = {
 }
 
 local function seed(value: string): (integer, integer)
-    local first, second = 2166136261, 16777619
+    -- Keep each step below the exact range of an IEEE-754 integer so the
+    -- result remains deterministic across Lua runtimes with different number
+    -- representations.
+    local first, second = 17, 31
     for index = 1, #value do
         local byte = string.byte(value, index) or 0
-        first = (first * 16777619 + byte) % 4294967296
-        second = (second * 31 + byte + index) % 4294967296
+        first = (first * 257 + byte) % 1000000007
+        second = (second * 263 + byte + index) % 1000000009
     end
     return first, second
+end
+
+local function identity_suffix(value: string): string
+    return value:sub(1, 8)
 end
 
 function M.label(value: string): string
     if value == "" or value:find("%c") then return "Unknown" end
     local first, second = seed(value)
-    return ADJECTIVES[(first % #ADJECTIVES) + 1] .. " " .. NOUNS[(second % #NOUNS) + 1]
+    local friendly = ADJECTIVES[(first % #ADJECTIVES) + 1] .. " " .. NOUNS[(second % #NOUNS) + 1]
+    return friendly .. " · " .. identity_suffix(value)
 end
 
--- labels returns stable aliases for the IDs shown together. A repeated base
--- name receives a deterministic ordinal after sorting the durable IDs.
+-- labels returns the same stable alias for every ID, regardless of the set of
+-- IDs currently visible beside it.
 function M.labels(values: {string}): {[string]: string}
     local ids: {string} = {}
     local present: {[string]: boolean} = {}
@@ -42,21 +49,9 @@ function M.labels(values: {string}): {[string]: string}
         end
     end
     table.sort(ids)
-    local counts: {[string]: integer} = {}
-    for _, value in ipairs(ids) do
-        local base = M.label(value)
-        counts[base] = (counts[base] or 0) + 1
-    end
-    local seen: {[string]: integer} = {}
     local result: {[string]: string} = {}
     for _, value in ipairs(ids) do
-        local base = M.label(value)
-        if counts[base] == 1 then
-            result[value] = base
-        else
-            seen[base] = (seen[base] or 0) + 1
-            result[value] = base .. " " .. tostring(seen[base])
-        end
+        result[value] = M.label(value)
     end
     return result
 end

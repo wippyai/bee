@@ -182,6 +182,15 @@ function M.open_turn(tx: sql.Transaction, thread_id: string, attempt_id: string)
     if not id or not action_id then return nil, "thread turn row is corrupt" end
     return {turn_id = id, action_id = action_id, attempt_id = attempt_id, ended = false}, nil
 end
+-- The latest completed attempt in owner order, for conditional continuation.
+function M.latest_settled_attempt(tx: sql.Transaction, thread_id: string, action_id: string): (string?, string?)
+    local row, err = single(tx, "SELECT s.attempt_id FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id WHERE s.thread_id = ? AND s.action_id = ? AND s.scope = 'attempt' ORDER BY r.sequence DESC LIMIT 1", {thread_id, action_id}, "latest settled attempt")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    local id = text(row.attempt_id)
+    if not id then return nil, "attempt settlement row is corrupt" end
+    return id, nil
+end
 function M.settled(tx: sql.Transaction, thread_id: string, scope: string, action_id: string, attempt_id: string?): (Stored?, string?)
     local select = "SELECT r.record_id, r.sequence, r.kind, r.record_json FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id "
     local row: {[string]: unknown}?, err: string?

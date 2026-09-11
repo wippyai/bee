@@ -173,7 +173,7 @@ All mutations require `thread_id`, `idempotency_key`. Actor identity is derived 
 | `record` | observation/message submission, optional context references | committed record ID/sequence, replay flag; participant/owner, with producer restrictions |
 | `read_after` | `cursor`, `limit`, `filter:{kinds?:string[],action_id?:string}` | records, `scanned_through`, `has_more`; member |
 | `admit_action` | `action_id`, `Admitted` | committed record; lifecycle authority |
-| `prepare_attempt` | action/attempt IDs, `Prepared` (pinned binding, profile, placement binding and placement attempt, plan digest) | committed record; the attempt exists in state `prepared`; lifecycle authority (added 2026-09-09 per [the carrier contract](CARRIER.md)) |
+| `prepare_attempt` | action/attempt IDs, `Prepared` (pinned binding, profile, placement binding and placement attempt, plan digest), optional `expected_previous_attempt_id` | committed record; the attempt exists in state `prepared`; lifecycle authority (added 2026-09-09 per [the carrier contract](CARRIER.md)) |
 | `start_attempt` | action/attempt IDs, `Started` | committed record; moves a `prepared` attempt to `running`; lifecycle authority |
 | `request_turn` | action/attempt/turn IDs, `TurnRequest` | committed record; lifecycle authority |
 | `end_turn` | IDs, `TurnEnd` | committed record; lifecycle authority |
@@ -186,6 +186,21 @@ Errors: `INVALID_ARGUMENT`, `UNSUPPORTED_SCHEMA`, `DENIED`, `NOT_FOUND`, `CONFLI
 `record` accepts no committed envelope. Bee supplies producer, source, timestamp and sequence. Ordinary message submission derives sender from actor; observations require a scoped producer authorization. In step 2 trusted test producers exercise this path; real hook authentication arrives later.
 
 No delivery, waits, inbox decisions, forced cancellation, owner transfer or remote operation implementation in step 2. Messages record recipients but do not claim delivery.
+
+
+Conditional continuation uses `prepare_attempt.expected_previous_attempt_id`.
+When supplied, it must name this action's latest committed attempt-scope
+receipt. The owner checks that condition and reserves the new attempt in the
+same transaction. An existing prepared/running attempt still refuses admission;
+a missing, foreign or superseded predecessor returns `CONFLICT`. The condition
+is part of the request's idempotency identity. Replaying an already accepted key
+returns its historical reply even after later work settles, without allocating
+another attempt. Ordinary initial attempts omit the condition.
+
+This is an ordering precondition, not authority to resume a provider session.
+The managed launch owner must still select the correct actor, driver and durable
+session state and decide whether the previous outcome permits continuation.
+No migration or new process is involved.
 
 ## 4. Access
 

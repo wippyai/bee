@@ -101,7 +101,7 @@ end
 -- prepare_attempt: the attempt exists with its pinned execution plan before
 -- anything external does. One live attempt per action.
 function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
-    local prepared, invalid = prepare(request, {"action_id", "attempt_id", "prepared"})
+    local prepared, invalid = prepare(request, {"action_id", "attempt_id", "prepared", "expected_previous_attempt_id"})
     if not prepared then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
     local action_id, missing_action = required(prepared.object, "action_id")
     if not action_id then return missing_action or failure("INVALID_ARGUMENT", "action_id is not an identifier") end
@@ -109,6 +109,8 @@ function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
     if not attempt_id then return missing_attempt or failure("INVALID_ARGUMENT", "attempt_id is not an identifier") end
     local plan, decode_error = decoders.prepared(prepared.object.prepared)
     if not plan then return failure("INVALID_ARGUMENT", "prepared: " .. tostring(decode_error)) end
+    local previous, valid_previous = values.optional_id(prepared.object, "expected_previous_attempt_id")
+    if not valid_previous then return failure("INVALID_ARGUMENT", "expected_previous_attempt_id is not an identifier") end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local head, context, stop = open_thread(tx, actor, "prepare_attempt", prepared)
         if not head or not context then return stop or failure("INTERNAL", "thread unavailable") end
@@ -122,6 +124,11 @@ function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
         local live, live_err = reader.running_attempt(tx, head.thread_id, action_id)
         if live_err then return storage(live_err) end
         if live then return failure("INVALID_STATE", "action already has a live attempt") end
+        if previous then
+            local latest, latest_err = reader.latest_settled_attempt(tx, head.thread_id, action_id)
+            if latest_err then return storage(latest_err) end
+            if latest ~= previous then return failure("CONFLICT", "expected_previous_attempt_id does not match the latest settled attempt") end
+        end
         local count, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_attempts WHERE thread_id = ?", {head.thread_id}, "attempts")
         if not count then return storage(count_err or "count attempts") end
         if count >= bounds.MAX_THREAD_ATTEMPTS then return failure("LIMIT_EXCEEDED", "thread attempt limit reached") end

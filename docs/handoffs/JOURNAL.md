@@ -5628,3 +5628,22 @@ detach acknowledgment timeout; catalog still answered in0.386s. Evidence:
 The diagnostic's cleanup attempted a second close of earlier completed clients
 after this failure; those clients are now removed from its cleanup list as each
 close completes. The original failure remains preserved.
+
+
+### Slow exit localized to native stack shutdown — journal 927
+
+Diagnostic native `539b63e` and Bee `21d027e` reproduced a successful but slow
+exit in reconnect session 28295, round 47: 1.128 seconds. The client's existing
+`Stack.Stop()` call consumed 1.110 seconds; actor, TTY and names cleanup each
+consumed under 0.1 ms, enrollment cleanup 10.355 ms. All returned nil. The matching
+supervisor detach dispatch through reply completed in 0.375 ms. Catalog afterwards
+answered in 2.172 seconds. This narrows slow exit to stack shutdown, without yet
+separating internode from membership shutdown. Runtime implementation stays with
+the cluster lane; no runtime changes or global installation were made.
+
+Evidence: `/tmp/bee-cleanup-stage-reconnect.log`, fixture
+`/tmp/bee-native-reconnect-05vc5m98`, failing client `client-2842851.raw`, and
+`state/owner-2485849863.log`. The original expired-mount/60-second stalled catalog
+and intermittent missing detach acknowledgment remain unresolved. Diagnostic
+build `/tmp/bee-cleanup-stage-candidate` is not a release candidate. All current
+build/test sessions are finished; do not repoll them.

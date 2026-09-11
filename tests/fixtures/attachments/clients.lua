@@ -31,6 +31,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
     local updates = assert(process.listen("bee.host.views", {message = true}))
     local question_results = assert(process.listen("bee.host.question_result", {message = true}))
+    local transfers = assert(process.listen("bee.host.transfer_result", {message = true}))
     local display_id = label == "A" and string.rep("a", 32) or string.rep("b", 32)
     local renderer_generation = ""
     local function status(phase: string, view: View?)
@@ -219,12 +220,69 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             command(view, "printf 'BEE_CHECK_%s_%s_%s\\n' \"$bee_client\" \"$$\" " .. tostring(check_sequence))
             wait_for(view, "BEE_CHECK_" .. label .. "_" .. native_pid .. "_" .. tostring(check_sequence))
             status("checked")
+        elseif type(op) == "table" and op.op == "accept-transfer" and type(op.id) == "string"
+            and type(op.instance_id) == "string" and type(op.native_pid) == "string" and type(op.label) == "string" then
+            -- This is the destination's ordinary, assignment-fenced bind.  It
+            -- must attach the existing Terminal rather than launch a second
+            -- application incarnation.
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "accept-transfer", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = op.id, instance_id = op.instance_id}))
+            local attached = reply("accept-transfer", "attached")
+            assert(attached.error_code == "" and reply("accept-transfer", "bind").error_code == "")
+            local transferred, transfer_error = tty.attach(attached.mount)
+            if not transferred then error(tostring(transfer_error)) end
+            command(transferred, "printf 'BEE_TRANSFER_%s_%s\\n' \"$bee_client\" \"$$\"")
+            wait_for(transferred, "BEE_TRANSFER_" .. op.label .. "_" .. op.native_pid)
+            status("accepted-transfer")
+        elseif type(op) == "table" and op.op == "transfer-check" and type(op.target_display_id) == "string"
+            and type(op.expected_revision) == "number" and type(op.request_id) == "string" and type(op.error_code) == "string" then
+            assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, request_id = op.request_id,
+                view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id,
+                expected_revision = op.expected_revision}))
+            local outcome = assert(transfers:receive())
+            assert(outcome:from() == host)
+            local value: unknown = outcome:payload():data()
+            assert(type(value) == "table" and value.request_id == op.request_id and value.error_code == op.error_code,
+                "Transfer rejection did not preserve the source assignment")
+            status("transfer-checked")
+        elseif type(op) == "table" and op.op == "transfer" and type(op.target_display_id) == "string" then
+            assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, request_id = "fixture-transfer",
+                view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id, expected_revision = 1}))
+            local outcome = assert(transfers:receive())
+            assert(outcome:from() == host)
+            local value: unknown = outcome:payload():data()
+            assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
+                and value.assignment_revision == 2, "Transfer did not commit durable destination")
+            local stale, stale_error = view:snapshot()
+            assert(not stale and stale_error, "Source retained its revoked controller")
+            status("transferred")
+        elseif type(op) == "table" and op.op == "transfer-replay" and type(op.target_display_id) == "string" then
+            -- A settled receipt is replayable even after its destination has
+            -- detached.  It must not enqueue a second broker revocation.
+            assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, request_id = "fixture-transfer",
+                view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id, expected_revision = 1}))
+            local outcome = assert(transfers:receive())
+            assert(outcome:from() == host)
+            local value: unknown = outcome:payload():data()
+            assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
+                and value.assignment_revision == 2, "Committed transfer receipt did not replay")
+            status("transfer-replayed")
         elseif op == "stale" then
             local frame, err = view:snapshot()
             assert(not frame and err, "Detached client retained its frame")
             local sent, input_error = view:send({type = "key", key = "x", key_type = "runes", action = "press"})
             assert(not sent and input_error, "Detached client retained input")
             status("stale")
+        elseif op == "recontrol" then
+            local fresh = admission()
+            assert(fresh ~= connection_id)
+            connection_id = fresh
+            last_revision = -1
+            catalog(); wait_views(2)
+            status("recontrolled")
         elseif op == "readmit" then
             local fresh = admission()
             assert(fresh ~= connection_id)
@@ -250,7 +308,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         else error("Invalid client test command") end
     end
     -- Deliberately rely on execution cleanup; the host must retire this admission.
-    for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates, question_results}) do process.unlisten(subscription) end
+    for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates, question_results, transfers}) do process.unlisten(subscription) end
 end
 function M.renderer(owner: string, client: string)
     local mounts = assert(process.listen("bee.renderer.mount", {message = true}))
@@ -440,6 +498,28 @@ function M.main()
     detach("detach-again", first)
     assert(process.send(first, "bee.client.command", "observer-stale")); status(first, "observer-stale")
     assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    admit("recontrol-first", first, true, "")
+    assert(process.send(first, "bee.client.command", "recontrol")); status(first, "recontrolled")
+    assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "self-target",
+        target_display_id = display_ids[second], expected_revision = 1, error_code = "invalid_target"}))
+    status(second, "transfer-checked")
+    assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "stale-revision",
+        target_display_id = display_ids[first], expected_revision = 2, error_code = "stale_assignment"}))
+    status(second, "transfer-checked")
+    assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "missing-target",
+        target_display_id = string.rep("c", 32), expected_revision = 1, error_code = "unavailable"}))
+    status(second, "transfer-checked")
+    assert(process.send(second, "bee.client.command", {op = "transfer", target_display_id = display_ids[first]}))
+    status(second, "transferred")
+    assert(process.send(first, "bee.client.command", {op = "accept-transfer", id = second_view.id,
+        instance_id = second_view.instance_id, native_pid = second_view.native_pid, label = "B"}))
+    status(first, "accepted-transfer")
+    detach("replay-target-detach", first)
+    assert(process.send(second, "bee.client.command", {op = "transfer-replay", target_display_id = display_ids[first]}))
+    status(second, "transfer-replayed")
+    assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "fixture-transfer",
+        target_display_id = string.rep("c", 32), expected_revision = 1, error_code = "conflict"}))
+    status(second, "transfer-checked")
     assert(process.send(second, "bee.client.command", "exit"))
     result("", second, "")
     assert(process.send(first, "bee.client.command", "exit"))

@@ -68,6 +68,8 @@ local function main(owner: string, database_resource: string?)
     local client_connections = connections.new(owner, broker, workspace_id, database.assignments)
     local live_inventory = inventory.new(workspace_id)
     local catalog_received = false
+    -- Keys are internal broker request IDs, never caller receipt IDs.  This
+    -- keeps transfer replies out of the ordinary client-route namespace.
     local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string, receipt: string}} = {}
     local function deliver(topic: string, value: unknown)
         assert(process.send(owner, topic, value))
@@ -75,6 +77,12 @@ local function main(owner: string, database_resource: string?)
     local function send(topic: string, value: unknown)
         local sent, err = process.send(broker, topic, value)
         if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
+    end
+    local function transfer_result(caller: string, request: transfer.Request, assignment_revision: integer, code: string, error_text: string)
+        process.send(caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
+            connection_id = request.connection_id, request_id = request.request_id, view_id = request.view_id,
+            instance_id = request.instance_id, target_display_id = request.target_display_id,
+            assignment_revision = assignment_revision, error_code = code, error = error_text})
     end
     local function restore_next()
         local record = table.remove(restore_queue, 1)
@@ -147,28 +155,43 @@ local function main(owner: string, database_resource: string?)
                     local caller = tostring(message:from())
                     local request, source, rejected = connections.transfer(client_connections, caller, data, ready and not stopping)
                     local code, error_text = rejected or "", ""
-                    if request and source then
+                    if request and source and code == "" then
                         local receipt, receipt_error = hash.sha256(source.display_id .. "\0" .. request.request_id)
                         if not receipt then code, error_text = "internal", tostring(receipt_error) end
-                        local prepared, prepare_error = receipt and database.assignments:prepare({request_id = receipt,
-                            view_id = request.view_id, instance_id = request.instance_id, source_display_id = source.display_id,
-                            target_display_id = request.target_display_id, expected_revision = request.expected_revision})
-                        if not prepared then code, error_text = "conflict", tostring(prepare_error)
-                        elseif prepared.phase == "committed" then
-                            code = ""
-                        elseif prepared.phase == "failed" then code, error_text = "failed", prepared.error or "Transfer failed"
-                        else
-                            if pending_transfers[receipt] then code, error_text = "", ""
-                            else pending_transfers[receipt] = {request = request, source = source.display_id, caller = caller, receipt = receipt}
-                            connections.assignments(client_connections)
-                            send("bee.app.request", {version = 1, request_id = "transfer-" .. receipt:sub(1, 64), op = "bind", workspace_id = workspace_id,
-                                id = request.view_id, instance_id = request.instance_id, recipient = ""})
+                        local existing, existing_error = receipt and database.assignments:receipt(receipt)
+                        if not existing and existing_error then code, error_text = "internal", tostring(existing_error) end
+                        -- Admission and assignment validation is required before
+                        -- creating an intent, but a historical receipt replays
+                        -- without depending on a later display lifetime.
+                        if code == "" and not existing then
+                            local readiness = connections.transfer_ready(client_connections, request, source)
+                            if readiness then code, error_text = readiness, "Transfer source or destination is unavailable" end
+                        end
+                        if code == "" then
+                            local prepared, prepare_error = database.assignments:prepare({request_id = receipt,
+                                view_id = request.view_id, instance_id = request.instance_id, source_display_id = source.display_id,
+                                target_display_id = request.target_display_id, expected_revision = request.expected_revision})
+                            if not prepared then code, error_text = "conflict", tostring(prepare_error)
+                            elseif prepared.phase == "committed" then
+                                local current, current_error = database.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
+                                if current_error or not current or current.intent or current.assignment.display_id ~= request.target_display_id then
+                                    code, error_text = "internal", "Committed display transfer is inconsistent"
+                                else transfer_result(caller, request, current.assignment.revision, "", "") end
+                            elseif prepared.phase == "failed" then
+                                local current = database.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
+                                transfer_result(caller, request, current and current.assignment.revision or 0, "failed", prepared.error or "Transfer failed")
+                            else
+                                local broker_request = "transfer-" .. receipt:sub(1, 64)
+                                if not pending_transfers[broker_request] then
+                                    pending_transfers[broker_request] = {request = request, source = source.display_id, caller = caller, receipt = receipt}
+                                    connections.assignments(client_connections)
+                                    send("bee.app.request", {version = 1, request_id = broker_request, op = "bind", workspace_id = workspace_id,
+                                        id = request.view_id, instance_id = request.instance_id, recipient = ""})
+                                end
                             end
                         end
                     end
-                    if request and code ~= "" then process.send(caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
-                        connection_id = request.connection_id, request_id = request.request_id, view_id = request.view_id, instance_id = request.instance_id,
-                        target_display_id = request.target_display_id, assignment_revision = 0, error_code = code, error = error_text}) end
+                    if request and code ~= "" then transfer_result(caller, request, 0, code, error_text) end
                 elseif selected.channel == requests then
                     local request = contract.request(data)
                     local caller = tostring(message:from())
@@ -195,42 +218,60 @@ local function main(owner: string, database_resource: string?)
                 elseif selected.channel == replies and message:from() == broker then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
-                        local pending_key = ""
-                        for key, item in pairs(pending_transfers) do if reply.request_id == "transfer-" .. item.receipt:sub(1, 64) then pending_key = key; break end end
-                        local pending_transfer = pending_transfers[pending_key]
-                        if pending_transfer and reply.op == "bind" then
-                            pending_transfers[pending_transfer.receipt] = nil
-                            local request = pending_transfer.request
-                            local outcome, outcome_error
-                            if reply.error_code == "" then outcome, outcome_error = database.assignments:commit({request_id = pending_transfer.receipt, view_id = request.view_id, instance_id = request.instance_id})
-                            else outcome, outcome_error = database.assignments:fail({request_id = pending_transfer.receipt, view_id = request.view_id, instance_id = request.instance_id, error = reply.error}) end
-                            local code = outcome and reply.error_code or "persistence_failed"
-                            local error_text = outcome and (reply.error_code == "" and "" or reply.error) or tostring(outcome_error)
-                            local assignment_revision = 0
-                            if reply.error_code == "" and outcome and outcome.assignment then assignment_revision = outcome.assignment.revision end
-                            if outcome then connections.assignments(client_connections) end
-                            process.send(pending_transfer.caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
-                                connection_id = request.connection_id, request_id = request.request_id, view_id = request.view_id,
-                                instance_id = request.instance_id, target_display_id = request.target_display_id,
-                                assignment_revision = assignment_revision,
-                                error_code = code, error = error_text})
+                        local pending_transfer = pending_transfers[reply.request_id]
+                        if pending_transfer then
+                            -- A broker bind can emit an intermediate attachment
+                            -- report before its final bind reply.  Both are
+                            -- private transfer protocol traffic; neither may
+                            -- become an ordinary client route.
+                            if reply.op ~= "bind" then
+                                -- Keep waiting for the final revocation result.
+                            else
+                                pending_transfers[reply.request_id] = nil
+                                local request = pending_transfer.request
+                                local outcome, outcome_error
+                                local code, error_text, assignment_revision = reply.error_code, reply.error, 0
+                                if reply.error_code == "" then
+                                    outcome, outcome_error = database.assignments:commit({request_id = pending_transfer.receipt,
+                                        view_id = request.view_id, instance_id = request.instance_id})
+                                    if outcome and outcome.assignment then assignment_revision = outcome.assignment.revision
+                                    else code, error_text = "persistence_failed", tostring(outcome_error) end
+                                elseif reply.error_code == "revoke_failed" then
+                                    -- attachment.replace documents this code as
+                                    -- retaining the old mount, so it is safe to
+                                    -- settle the intent back to the source.
+                                    outcome, outcome_error = database.assignments:fail({request_id = pending_transfer.receipt,
+                                        view_id = request.view_id, instance_id = request.instance_id, error = reply.error})
+                                    if not outcome then code, error_text = "persistence_failed", tostring(outcome_error) end
+                                else
+                                    -- Do not guess that an arbitrary broker
+                                    -- error left the source mount intact.  The
+                                    -- prepared durable fence remains for later
+                                    -- reconciliation.
+                                    code = "uncertain"
+                                    error_text = reply.error ~= "" and reply.error or "Transfer revoke outcome is uncertain"
+                                end
+                                if outcome then connections.assignments(client_connections) end
+                                transfer_result(pending_transfer.caller, request, assignment_revision, code, error_text)
+                            end
+                        else
+                            local next_inventory = inventory.observe(live_inventory, reply)
+                            if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
+                                local committed, err = replace_record(nil, reply.id)
+                                if not committed then error("Workspace save failed: " .. tostring(err)) end
+                            end
+                            if next_inventory then
+                                live_inventory = next_inventory
+                                if ready then connections.publish(client_connections, live_inventory, "views") end
+                            end
+                            if not connections.reply(client_connections, reply, live_inventory) then
+                                if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
+                                    deliver("bee.host.restore_result", reply)
+                                    restore_next()
+                                else deliver("bee.app.reply", reply) end
+                            end
+                            if stopping and reply.op == "shutdown" then break end
                         end
-                        local next_inventory = inventory.observe(live_inventory, reply)
-                        if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
-                            local committed, err = replace_record(nil, reply.id)
-                            if not committed then error("Workspace save failed: " .. tostring(err)) end
-                        end
-                        if next_inventory then
-                            live_inventory = next_inventory
-                            if ready then connections.publish(client_connections, live_inventory, "views") end
-                        end
-                        if not connections.reply(client_connections, reply, live_inventory) then
-                            if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
-                                deliver("bee.host.restore_result", reply)
-                                restore_next()
-                            else deliver("bee.app.reply", reply) end
-                        end
-                        if stopping and reply.op == "shutdown" then break end
                     end
                 elseif selected.channel == questions and message:from() == broker then
                     connections.questions(client_connections, data)

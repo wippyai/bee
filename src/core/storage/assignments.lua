@@ -15,6 +15,7 @@ type Store = {
     workspace: WorkspaceStore,
     claim: (Store, unknown) -> (Assignment?, string?),
     get: (Store, unknown) -> (Result?, string?),
+    receipt: (Store, unknown) -> (Intent?, string?),
     prepare: (Store, unknown) -> (Intent?, string?),
     commit: (Store, unknown) -> (Result?, string?),
     fail: (Store, unknown) -> (Intent?, string?),
@@ -135,9 +136,17 @@ local function query_prepared(store: Store, view_id: string, instance_id: string
     return decoded, nil
 end
 
+-- Receipt lookup is deliberately exact and bounded.  The host uses it before
+-- applying current admission checks so a completed retry remains replayable
+-- after the source or destination has detached.  It is not enumeration of the
+-- durable receipt history.
+local function receipt_id(value: unknown): string?
+    return text(value, MAX_REQUEST_ID)
+end
+
 function M.open(workspace: WorkspaceStore): (Store?, string?)
     if type(workspace) ~= "table" or workspace.db == nil then return nil, "workspace assignment store requires workspace storage" end
-    return {workspace = workspace, claim = M.claim, get = M.get, prepare = M.prepare, commit = M.commit, fail = M.fail, retire = M.retire, reconcile = M.reconcile}, nil
+    return {workspace = workspace, claim = M.claim, get = M.get, receipt = M.receipt, prepare = M.prepare, commit = M.commit, fail = M.fail, retire = M.retire, reconcile = M.reconcile}, nil
 end
 
 function M.claim(store: Store, value: unknown): (Assignment?, string?)
@@ -178,6 +187,20 @@ function M.get(store: Store, value: unknown): (Result?, string?)
     local pending, pending_err = query_prepared(store, request.view_id, request.instance_id)
     if pending_err then return nil, pending_err end
     return {assignment = current, intent = pending}, nil
+end
+
+function M.receipt(store: Store, value: unknown): (Intent?, string?)
+    local request_id = receipt_id(value)
+    if not request_id then return nil, "invalid display transfer receipt key" end
+    local rows, query_err = store.workspace.db:query(
+        "SELECT request_id, view_id, instance_id, source_display_id, target_display_id, expected_revision, phase, error " ..
+        "FROM workspace_display_transfer_receipts WHERE request_id = ? LIMIT 2", {request_id})
+    if query_err or not rows then return nil, "read display transfer receipt: " .. tostring(query_err) end
+    if #rows == 0 then return nil, nil end
+    if #rows ~= 1 then return nil, "display transfer receipt is corrupt" end
+    local decoded = intent(rows[1])
+    if not decoded then return nil, "display transfer receipt is corrupt" end
+    return decoded, nil
 end
 
 function M.prepare(store: Store, value: unknown): (Intent?, string?)

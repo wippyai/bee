@@ -339,13 +339,32 @@ end
 function M.transfer(state: State, caller: string, data: unknown, ready: boolean): (transfer.Request?, clients.Client?, string?)
     local request = transfer.request(data)
     local client = state.admitted[caller]
-    if not request or not client then return nil, nil, "permission_denied" end
-    if not ready or client.detaching or not client.permissions.control then return nil, nil, "unavailable" end
+    if not request then return nil, nil, "permission_denied" end
+    if not client then return request, nil, "permission_denied" end
+    if not ready or client.detaching or not client.permissions.control then return request, nil, "unavailable" end
     if request.workspace_id ~= state.workspace_id or request.connection_id ~= client.connection_id
         or request.renderer_generation ~= client.renderer_generation or client.rendering or client.renderer == "" then
-        return nil, nil, "stale_renderer"
+        return request, nil, "stale_renderer"
     end
     return request, client, nil
+end
+
+-- A new transfer requires both ends to be present at the durable owner.  This
+-- deliberately runs only for a new receipt: completed receipts must remain
+-- replayable after either display has later detached.
+function M.transfer_ready(state: State, request: transfer.Request, source: clients.Client): string?
+    local current, read_error = state.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
+    if read_error then error("Read display assignment before transfer: " .. tostring(read_error)) end
+    if not current or current.intent or current.assignment.display_id ~= source.display_id
+        or current.assignment.revision ~= request.expected_revision then return "stale_assignment" end
+    if request.target_display_id == source.display_id then return "invalid_target" end
+    for _, target in pairs(state.admitted) do
+        if target.display_id == request.target_display_id then
+            if target.detaching or not target.permissions.control or target.renderer == "" or target.rendering then return "unavailable" end
+            return nil
+        end
+    end
+    return "unavailable"
 end
 local function release_renderer(client: clients.Client): (boolean, string?)
     if client.renderer ~= "" and client.renderer ~= client.recipient then

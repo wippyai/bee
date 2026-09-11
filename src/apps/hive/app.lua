@@ -100,13 +100,14 @@ local function main(value: unknown)
             changed()
         end)
     end
+    local started = time.now()
     local supervisor_running = false
     local function refresh_local()
         local supervisor = source:supervisor()
         supervisor_running = supervisor.running
         model.set_supervisor(state, supervisor.running, supervisor.detail)
         local members, problem = source:members()
-        model.apply_members(state, members, problem)
+        model.apply_members(state, members, problem, math.floor(time.now():sub(started):milliseconds()))
         dirty = true
     end
     local function refresh()

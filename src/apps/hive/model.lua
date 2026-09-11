@@ -2,7 +2,7 @@
 -- report them, desktops as each owner lists them, an explicit control or
 -- observe choice built only from an opened, reachable desktop, outcomes
 -- shown as the owner answered. A node that leaves membership stays listed
--- as unavailable; nothing here deletes a target or infers ownership.
+-- briefly as unavailable; retirement removes only presentation records.
 local json = require("json")
 local text = require("text")
 local directory = require("directory")
@@ -11,13 +11,14 @@ M.TEXT_LIMIT = 160
 M.LABEL_LIMIT = 48
 M.MAX_NAMES = 256
 M.MAX_NODES = directory.MAX_NODES
+M.RETIRE_AFTER_MS = 60000
 type Reply = directory.Reply
 type Catalog = directory.Catalog
 type Attach = directory.Attach
 type Outcome = directory.Outcome
 type Mode = directory.Mode
 type Status = "unknown" | "reachable" | "unavailable"
-type Node = {node_id: string, label: string, client_only: boolean, is_local: boolean, addr: string, member: boolean, departed_at: integer, status: Status, detail: string,
+type Node = {node_id: string, label: string, client_only: boolean, is_local: boolean, addr: string, member: boolean, departed_at: integer, absent_since: integer?, status: Status, detail: string,
     role: string, cluster_size: integer, sampled_at: string, heap: integer?, goroutines: integer?}
 type Session = {session_id: string, mode: string}
 type NodeSessions = {owner_generation: string, desktops: {[string]: Session}}
@@ -72,7 +73,7 @@ function M.set_supervisor(state: State, running: boolean, detail: string)
     state.hive_detail = M.text(detail)
 end
 -- Membership replaces what is a member now; a node seen before and gone
--- from the list is kept and marked unavailable. The list stays within the
+-- from a complete list is marked unavailable for a 60-second grace. The list stays within the
 -- display bound: when members and retained nodes exceed it, the departed
 -- node that left earliest is dropped first, the selected one last.
 local function evict(state: State)
@@ -96,7 +97,15 @@ local function evict(state: State)
         if state.selected_node == removed.node_id then state.selected_node = nil; state.selected_desktop = nil end
     end
 end
-function M.apply_members(state: State, members: {directory.Member}, problem: string?)
+function M.apply_members(state: State, members: {directory.Member}, problem: string?, now_ms: integer?)
+    local now = now_ms or 0
+    state.membership_detail = problem and M.text(problem) or ""
+    -- Failed or truncated membership cannot prove absence. Restart the grace
+    -- period after a complete sample, rather than aging through uncertainty.
+    if problem and #state.nodes > 0 then
+        for _, node in ipairs(state.nodes) do node.absent_since = nil end
+        return
+    end
     state.generation = state.generation + 1
     for _, node in ipairs(state.nodes) do node.member = false end
     for _, member in ipairs(members) do
@@ -123,10 +132,24 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
         if not node.member then
             if node.status ~= "unavailable" or node.departed_at == 0 then node.departed_at = state.generation end
             node.status = "unavailable"
-            node.detail = "left membership; retained until it returns"
-        else node.departed_at = 0 end
+            node.detail = "left membership; retiring after 60s"
+            if node.absent_since == nil then node.absent_since = now end
+        else node.departed_at = 0; node.absent_since = nil end
     end
     state.membership_detail = problem and M.text(problem) or ""
+    for index = #state.nodes, 1, -1 do
+        local node = state.nodes[index]
+        local since = node.absent_since
+        if not node.member and not node.is_local and since ~= nil and now - since >= M.RETIRE_AFTER_MS then
+            table.remove(state.nodes, index)
+            state.index[node.node_id] = nil
+            state.catalogs[node.node_id] = nil
+            state.sessions[node.node_id] = nil
+            if state.selected_node == node.node_id then
+                state.selected_node = nil; state.selected_desktop = nil
+            end
+        end
+    end
     evict(state)
     order(state)
     if state.wanted_node and state.index[state.wanted_node :: string] then

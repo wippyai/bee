@@ -1,5 +1,14 @@
 # Foundation status
 
+Hive Manager source now retires departed node/display-client rows after 60 seconds
+of absence in complete native membership samples. Returning nodes cancel retirement;
+a failed or truncated membership sample resets the grace period. Retirement only
+removes the manager's cached row, catalog and session presentation; saved display
+layouts and application processes are untouched. Refresh is every five seconds
+when its directory worker is idle, so cleanup may occur later than 60 seconds.
+This change is not yet installed globally; the intermittent expired-mount and
+detach-timeout report remains unresolved.
+
 The current global executable includes native `a0fc01e088b2`, the proven physical
 cancellation-order fix, with unchanged Bee source `c3b2c9f` and runtime `674b58a1`.
 Native-client/standalone acceptance and focused race/vet pass; actual-user observe

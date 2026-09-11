@@ -15,7 +15,12 @@ local function capture(executor: exec.Executor, command: string): (string?, stri
     if not started then return nil, tostring(start_error) end
     local chunks: {string} = {}
     while true do
-        local chunk = stdout:read(4096)
+        local chunk, read_error = stdout:read(4096)
+        if read_error then
+            stdout:close()
+            proc:close(true)
+            return nil, "identity output failed: " .. tostring(read_error), nil
+        end
         if not chunk then break end
         chunks[#chunks + 1] = tostring(chunk)
     end

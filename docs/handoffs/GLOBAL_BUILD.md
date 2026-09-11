@@ -1,4 +1,28 @@
-# Global Bee build — September 10, 2026
+# Global Bee build — September 11, 2026
+
+## September 11: installed detach acknowledgment update
+
+Global `/home/wolfy-j/.local/bin/bee` SHA256:
+`1206b961045cb761cb3cd7d4ba49aeb5a90d0c12043d372151cb0ebeafde4225`.
+Application source: `80611ee`; native: `2a2117ad4fe7`; runtime:
+`674b58a1a117fa79398f723c4311201cca8472e1`; builder: `70acb10175fb`.
+The only native production change from `a0fc01e088b2` increases detach
+acknowledgment allowance from 200 ms to one second; successful replies return
+immediately. Backup: `bee.previous-recovery-20260911T123909Z`.
+
+The standalone build, native-client acceptance, native-binary acceptance and
+30 overlapping three-client reconnect rounds passed. Evidence:
+`/tmp/bee-recovery-{build,client-check,binary-check,reconnect}-20260911.log`.
+
+**Actual-user startup remains broken intermittently.** After installation, a
+PTY attachment against `/home/wolfy-j/.config/bee` remained at Connecting for
+25 seconds without its first frame. The probe client was stopped; the retained
+Bee and databases were preserved. Evidence:
+`/tmp/bee-global-real-workspace-20260911.log`. These passing isolated gates do
+not establish a fix for the user's startup or expired-mount failure.
+The 60-second departed-display retirement work is not in this install.
+
+Everything below is historical installation evidence.
 
 ## Current install: display isolation and direct appearance routing
 

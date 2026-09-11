@@ -5750,3 +5750,34 @@ Run **8203 remains live**, 360 total queries in three-client batches, log
 `/tmp/bee-native-catalog-reconnect-65jc9eip`. Poll that exact handle. Binary remains
 `/tmp/bee-local-dispatch-trace-candidate`; it is diagnostic-only. Global remains
 the clean cancellation build installed at journal 937. Runtime source unchanged.
+
+
+### Membership departure measured directly — journal 944–947
+
+Read-only overlapping run 8203 completed all 360 commands: whole-command max
+3.342 s, Stack.Stop max 3.026 s, first-30 median 354.5 ms versus last-30 median
+3.247 s. No startup timeout occurred. The next diagnostic native `4134e93`
+forwards only existing scalar membership stop/leave milestones; normal logging
+remains unchanged. Owner/client race/vet 75495 passed, build 73748 passed,
+manifest checkpoint `a958b48`; artifact `/tmp/bee-membership-stage-candidate`.
+
+Initial query run 99807 failed writing evidence with ENOSPC. Completed temporary
+build directories had already been auto-removed and 5.5 GiB was available at
+followup, so no files were deleted. Retry 97881 completed all 120 commands.
+Its slowest recorded Stack.Stop was 943.108549 ms, of which membership departure
+(leaving-cluster-gracefully to left-cluster-successfully) took 942.840514 ms.
+This directly identifies membership departure as the dominant cost in these
+samples, without claiming a cause within memberlist or explaining other stalls.
+
+Evidence: `/tmp/bee-membership-stage-catalog-r2.log`, fixture
+`/tmp/bee-native-catalog-reconnect-us8vj6wi`, `query-0105-3035888.stderr`.
+All jobs are terminal. Runtime lane owns departure policy and local wakeup
+investigation. Global remains clean native a0fc with its cancellation correction.
+Original startup/mount and accepted-send/select wakeup failures remain open.
+
+Other Bee lane checkpoint 943 is ready for separate integration: full source
+check, 508 Lua tests, 564 source/pack entries, two-node sync/inbox race proof and
+focused final cursor regression passed. Current shared-source delta from c3b2c9f
+is 35 files in sync, node metadata, inbox feeds and harness activation. It is not
+in the global binary yet. Runtime checkpoints 942/945 are research results, not
+a release/cutover. Preserve native lane boundaries when preparing that integration.

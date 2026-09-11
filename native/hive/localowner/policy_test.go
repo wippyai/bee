@@ -12,20 +12,14 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/security"
-	"github.com/wippyai/runtime/application/statelock"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestLocalClientPolicyFencesEnrollmentAndExecution(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stateDir := t.TempDir()
-	unlock, err := statelock.Acquire(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unlock()
 	owner, err := New(Options{Node: "owner", Lifetime: time.Hour})
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +27,7 @@ func TestLocalClientPolicyFencesEnrollmentAndExecution(t *testing.T) {
 	if _, err := owner.ClientPolicy(); err == nil {
 		t.Fatal("unprepared owner issued policy")
 	}
-	plan, err := owner.PrepareOwner(ctx, launch.LaunchRequest{Operation: launch.RunApplication, StateDir: stateDir})
+	plan, err := owner.PrepareOwner(ctx, app.LaunchRequest{StateDir: stateDir})
 	if err != nil {
 		t.Fatal(err)
 	}

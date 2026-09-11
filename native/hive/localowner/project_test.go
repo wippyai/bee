@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	launch "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestProjectNodesHaveStableDistinctNames(t *testing.T) {
@@ -19,7 +19,7 @@ func TestProjectNodesHaveStableDistinctNames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		plan, err := owner.PrepareProjectOwner(context.Background(), launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state})
+		plan, err := owner.PrepareProjectOwner(context.Background(), app.LaunchRequest{StateDir: state, Directory: state})
 		if err != nil {
 			t.Fatal(err)
 		}

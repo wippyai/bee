@@ -16,7 +16,6 @@ import (
 
 	"github.com/wippyai/runtime/api/cluster"
 	metricscfg "github.com/wippyai/runtime/api/service/metrics"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
 	"github.com/wippyai/runtime/service/metrics"
 	"github.com/wippyai/runtime/system/eventbus"
@@ -28,11 +27,6 @@ func TestProtectedEnrollmentAdmitsLiveMeshClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	state := t.TempDir()
-	unlock, err := statelock.Acquire(state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unlock()
 	e, err := NewEnrollment(filepath.Join(state, "discovery"))
 	if err != nil {
 		t.Fatal(err)

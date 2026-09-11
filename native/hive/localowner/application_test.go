@@ -21,19 +21,60 @@ import (
 	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	topapi "github.com/wippyai/runtime/api/topology"
-	"github.com/wippyai/runtime/application"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/wapp"
 )
 
 type testLauncher struct{ *Component }
 
-func (c testLauncher) PrepareLaunch(context.Context, launch.LaunchRequest) (launch.LaunchPlan, error) {
-	return launch.LaunchPlan{PrepareOwner: c.PrepareOwner}, nil
+func (c testLauncher) Launch(ctx context.Context, request app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
+	return runOwner(app.OwnerOptions{Prepare: func(context.Context) (app.OwnerResources, error) {
+		return c.PrepareOwner(ctx, request)
+	}})
+}
+
+func TestRuntimeOwnerRunnerKeepsOneNativePreparationAtATime(t *testing.T) {
+	state := t.TempDir()
+	started := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	options := app.Options{
+		Name: "native-owner-lock", Mode: "base", Command: "owner",
+		Launch: func(_ context.Context, _ app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
+			return runOwner(app.OwnerOptions{Prepare: func(ctx context.Context) (app.OwnerResources, error) {
+				close(started)
+				<-ctx.Done()
+				return app.OwnerResources{}, ctx.Err()
+			}})
+		},
+	}
+	first := make(chan error, 1)
+	go func() { first <- app.Run(ctx, options, []string{"--state-dir", state}) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first owner never entered preparation")
+	}
+	err := app.Run(context.Background(), options, []string{"--state-dir", state})
+	if !errors.Is(err, app.ErrBusy) {
+		t.Fatalf("second owner did not receive runtime contention: %v", err)
+	}
+	cancel()
+	if err := <-first; !errors.Is(err, context.Canceled) {
+		t.Fatalf("first owner cleanup: %v", err)
+	}
+	err = app.Run(context.Background(), app.Options{
+		Name: "native-owner-lock", Mode: "base", Command: "owner",
+		Launch: func(_ context.Context, _ app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
+			return runOwner(app.OwnerOptions{})
+		},
+	}, []string{"--state-dir", state})
+	if errors.Is(err, app.ErrBusy) {
+		t.Fatalf("runtime retained owner exclusion after cleanup: %v", err)
+	}
 }
 
 func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
@@ -84,13 +125,6 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 	}
 	expires := time.NewTimer(time.Until(credentials.ExpiresAt.Add(2 * time.Second)))
 	defer expires.Stop()
-	release, err := statelock.Acquire(state)
-	if release != nil {
-		_ = release()
-	}
-	if !errors.Is(err, statelock.ErrBusy) {
-		t.Fatalf("owner does not hold application lock: %v", err)
-	}
 	err = mesh.SameAccount(ctx, filepath.Join(state, DirectoryName), func(clientContext context.Context, stack *stackpkg.Stack, actual rendezvous.Descriptor) error {
 		if actual != descriptor {
 			return errors.New("owner descriptor changed during native connection")
@@ -201,13 +235,6 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 		if dialError == nil {
 			t.Fatal("owner mesh survived credential expiry")
 		}
-		unlock, lockError := statelock.Acquire(state)
-		if unlock != nil {
-			_ = unlock()
-		}
-		if !errors.Is(lockError, statelock.ErrBusy) {
-			t.Fatalf("owner released state lock before process cleanup: %v", lockError)
-		}
 		cleanup := time.NewTimer(time.Until(credentials.ExpiresAt.Add(15 * time.Second)))
 		defer cleanup.Stop()
 		select {
@@ -222,13 +249,6 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 	}
 	if exitError != nil {
 		t.Fatalf("owner failed: %v\n%s", exitError, output.String())
-	}
-	release, err = statelock.Acquire(state)
-	if err != nil {
-		t.Fatalf("owner shutdown retained application lock: %v", err)
-	}
-	if err := release(); err != nil {
-		t.Fatal(err)
 	}
 	listener, err := net.Listen("tcp", descriptor.Transport)
 	if err != nil {
@@ -329,8 +349,9 @@ return M`,
 		t.Fatal(err)
 	}
 	data := packed.Bytes()
-	bundle := application.Bundle{Root: "bee/proof", Packs: []application.Pack{{Module: "bee/proof", Version: "1.0.0", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data}}}
-	err = application.Run(context.Background(), application.Options{Name: "bee-owner-proof", Mode: "base", Command: "owner-proof", Bundle: bundle, Components: []boot.Component{testLauncher{owner}}}, []string{"--state-dir", state})
+	bundle := app.Bundle{Root: "bee/proof", Packs: []app.Pack{{Module: "bee/proof", Version: "1.0.0", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data}}}
+	launcher := testLauncher{owner}
+	err = app.Run(context.Background(), app.Options{Name: "bee-owner-proof", Mode: "base", Command: "owner-proof", Bundle: bundle, Launch: launcher.Launch, Components: []boot.Component{launcher}}, []string{"--state-dir", state})
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}

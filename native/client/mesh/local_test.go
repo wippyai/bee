@@ -20,7 +20,6 @@ import (
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	metricscfg "github.com/wippyai/runtime/api/service/metrics"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
 	"github.com/wippyai/runtime/cluster/internode"
 	"github.com/wippyai/runtime/service/metrics"
@@ -42,11 +41,6 @@ func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, pro
 	ctx, cancel := context.WithTimeout(context.Background(), startupTimeout+25*time.Second)
 	t.Cleanup(cancel)
 	state := t.TempDir()
-	unlock, err := statelock.Acquire(state)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { unlock() })
 	dir := filepath.Join(state, "discovery")
 	enrollment, err := rendezvous.NewEnrollment(dir)
 	if err != nil {
@@ -147,9 +141,6 @@ func TestLocalSeparateClientProcess(t *testing.T) {
 	}
 	if owner.Membership.LocalNode().ID != "owner" {
 		t.Fatal("owner changed")
-	}
-	if _, err := statelock.Acquire(filepath.Dir(dir)); !errors.Is(err, statelock.ErrBusy) {
-		t.Fatalf("owner lock disturbed: %v", err)
 	}
 	entries, err := os.ReadDir(filepath.Dir(dir))
 	if err != nil {

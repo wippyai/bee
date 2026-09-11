@@ -24,12 +24,10 @@ import (
 	"github.com/wippyai/bee/native/hive/localowner"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	beelaunch "github.com/wippyai/bee/native/launch"
-	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/tty"
-	"github.com/wippyai/runtime/application"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 const DirectoryName = localowner.DirectoryName
@@ -38,7 +36,7 @@ var physicalSessionProbe func(context.Context, string) error
 var physicalStartupProbe func(context.Context, string) error
 
 type desktopBundle struct {
-	Bundle  application.Bundle
+	Bundle  app.Bundle
 	DataEnv map[string]string
 }
 
@@ -76,7 +74,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 	if err := json.Unmarshal(planBytes, &plan); err != nil {
 		t.Fatal(err)
 	}
-	bundle := application.Bundle{Root: "bee/bee"}
+	bundle := app.Bundle{Root: "bee/bee"}
 	for index, module := range plan.Modules {
 		target := filepath.Join(stage, fmt.Sprintf("module-%d.wapp", index))
 		parts := strings.Split(module.Module, "/")
@@ -97,7 +95,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bundle.Packs = append(bundle.Packs, application.Pack{Module: module.Module, Version: "0.1.0-dev", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data})
+		bundle.Packs = append(bundle.Packs, app.Pack{Module: module.Module, Version: "0.1.0-dev", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data})
 	}
 	pack := filepath.Join(stage, "bundle.json")
 	manifestBytes, err := os.ReadFile(filepath.Join(repo, "wippy.build.json"))
@@ -129,9 +127,7 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	child, err := beelaunch.StartOwner(ctx, applicationapi.LaunchRequest{
-		Operation: applicationapi.RunApplication, Command: "bee", StateDir: state, Directory: stage,
-	}, log)
+	child, err := beelaunch.StartOwner(ctx, app.LaunchRequest{Command: "bee", StateDir: state, Directory: stage}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,9 +371,10 @@ func runOwnerDesktop(args []string) error {
 	if err := json.Unmarshal(data, &bundle); err != nil {
 		return err
 	}
-	return application.Run(context.Background(), application.Options{
+	recorded := recordingHost{host}
+	return app.Run(context.Background(), app.Options{
 		Name: "bee-owner-desktop", Mode: "base", Command: "bee", Bundle: bundle.Bundle,
-		Components: []boot.Component{recordingHost{host}}, DataEnv: bundle.DataEnv,
+		Launch: recorded.Launch, Components: []boot.Component{recorded}, DataEnv: bundle.DataEnv,
 	}, args)
 }
 
@@ -424,53 +421,32 @@ func stopRecordedFixtureOwner(t *testing.T, state string) {
 	if err := process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		t.Error(err)
 	}
-	deadline := time.NewTimer(3 * time.Second)
-	defer deadline.Stop()
-	tick := time.NewTicker(10 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		release, err := statelock.Acquire(state)
-		if err == nil {
-			_ = release()
-			return
-		}
-		if !errors.Is(err, statelock.ErrBusy) {
-			t.Error(err)
-			return
-		}
-		select {
-		case <-deadline.C:
-			t.Error("fixture owner did not release lock after cleanup")
-			return
-		case <-tick.C:
-		}
-	}
 }
 
 // Record only the test child actually elected under the application lock, for
 // bounded cleanup of a cold owner started by the automatic foreground route.
 type recordingHost struct{ *desktop.Host }
 
-func (h recordingHost) PrepareLaunch(ctx context.Context, request applicationapi.LaunchRequest) (applicationapi.LaunchPlan, error) {
-	plan, err := h.Host.PrepareLaunch(ctx, request)
-	if err != nil || plan.PrepareOwner == nil {
-		return plan, err
-	}
-	prepare := plan.PrepareOwner
-	plan.PrepareOwner = func(ctx context.Context, selected applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
-		if err := os.WriteFile(filepath.Join(selected.StateDir, "owner-test-pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
-			return applicationapi.OwnerPlan{}, err
-		}
-		if os.Getenv("BEE_OWNER_TEST_PREPARE_DELAY") == "1" {
-			select {
-			case <-ctx.Done():
-				return applicationapi.OwnerPlan{}, ctx.Err()
-			case <-time.After(time.Second):
+func (h recordingHost) Launch(ctx context.Context, request app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
+	return h.Host.Launch(ctx, request, func(options app.OwnerOptions) error {
+		prepare := options.Prepare
+		if prepare != nil {
+			options.Prepare = func(owner context.Context) (app.OwnerResources, error) {
+				if err := os.WriteFile(filepath.Join(request.StateDir, "owner-test-pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+					return app.OwnerResources{}, err
+				}
+				if os.Getenv("BEE_OWNER_TEST_PREPARE_DELAY") == "1" {
+					select {
+					case <-owner.Done():
+						return app.OwnerResources{}, owner.Err()
+					case <-time.After(time.Second):
+					}
+				}
+				return prepare(owner)
 			}
 		}
-		return prepare(ctx, selected)
-	}
-	return plan, nil
+		return runOwner(options)
+	})
 }
 
 func probeConcurrentStarts(t *testing.T, ctx context.Context, state, project string) {
@@ -499,7 +475,7 @@ func probeConcurrentStarts(t *testing.T, ctx context.Context, state, project str
 		}
 		defer log.Close()
 		logs = append(logs, log.Name())
-		child, err := beelaunch.StartOwner(ctx, applicationapi.LaunchRequest{Operation: applicationapi.RunApplication, Command: "bee", StateDir: state, Directory: project}, log)
+		child, err := beelaunch.StartOwner(ctx, app.LaunchRequest{Command: "bee", StateDir: state, Directory: project}, log)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -521,13 +497,5 @@ func probeConcurrentStarts(t *testing.T, ctx context.Context, state, project str
 	case <-winner.Done():
 		t.Fatal("both owner contenders exited", winner.Wait(ctx))
 	default:
-	}
-	release, err := statelock.Acquire(state)
-	if err == nil {
-		_ = release()
-		t.Fatal("successful start has no owner lock")
-	}
-	if !errors.Is(err, statelock.ErrBusy) {
-		t.Fatal(err)
 	}
 }

@@ -21,7 +21,9 @@ lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
 test:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
-.PHONY: clipboard-contract-check
+.PHONY: hive-reader-check clipboard-contract-check
+hive-reader-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_reader.py
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py
 .PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check

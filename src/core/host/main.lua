@@ -67,18 +67,6 @@ local function main(owner: string, database_resource: string?)
         local sent, err = process.send(broker, topic, value)
         if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
     end
-    local appearance_revision = 0
-    local function persist_preferences(preferences: appearance.Preferences, request_id: string): (boolean, string?)
-        if appearance_revision >= 9007199254740990 then return false, "Appearance revision exhausted" end
-        local next: recovery.Snapshot = {version = 1, desktop = {scene = snapshot.desktop.scene,
-            tabs = snapshot.desktop.tabs, preferences = preferences}, applications = snapshot.applications}
-        local committed, err = database:write(next)
-        if committed then snapshot = next; appearance_revision = appearance_revision + 1 end
-        send("bee.appearance.state", {version = 1, scope = "workspace", request_id = request_id, revision = appearance_revision,
-            theme = snapshot.desktop.preferences.theme, background = snapshot.desktop.preferences.background,
-            taskbar = snapshot.desktop.preferences.taskbar, error_code = committed and "" or "persistence_failed", error = err or ""})
-        return committed, err
-    end
     local function restore_next()
         local record = table.remove(restore_queue, 1)
         if record then
@@ -213,19 +201,7 @@ local function main(owner: string, database_resource: string?)
                         end
                     end
                 elseif selected.channel == preferences and message:from() == broker then
-                    local handled, workspace_request = connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping)
-                    if workspace_request then
-                        local next_preferences = appearance.decode(workspace_request)
-                        if not next_preferences then error("Invalid admitted workspace appearance") end
-                        local committed, err = persist_preferences(next_preferences, "")
-                        connections.forward_appearance(client_connections, workspace_request.request_id,
-                            committed and "" or "persistence_failed", err or "")
-                    elseif not handled then
-                        local next_preferences = appearance.decode(data)
-                        if type(data) == "table" and data.version == 1 and contract.text(data.request_id, 80) and next_preferences then
-                            persist_preferences(next_preferences, tostring(data.request_id))
-                        end
-                    end
+                    connections.appearance(client_connections, tostring(message:from()), data, ready and not stopping)
                 end
             end
         end

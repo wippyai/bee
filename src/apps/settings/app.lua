@@ -1,4 +1,4 @@
--- A standalone application: workspace owns preferences; view owns only geometry.
+-- A standalone application: the controlling display owns preferences; view owns geometry.
 local tty = require("tty")
 local client = require("client")
 local channel = require("channel")

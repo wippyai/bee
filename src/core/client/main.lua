@@ -94,20 +94,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         for _, target in ipairs(layout.targets) do
             if target.workspace_id ~= workspace_id then error("This client bootstrap requires one workspace") end
         end
-        if bootstrap.workspace_appearance then
-            local host_desktop = decode.desktop(bootstrap.legacy_desktop)
-            if not host_desktop then error("Workspace appearance requires the host startup snapshot") end
-            local next_preferences = appearance.decode(host_desktop.preferences)
-            if not next_preferences then error("Invalid host appearance snapshot") end
-            if layout.preferences.theme ~= next_preferences.theme or layout.preferences.background ~= next_preferences.background
-                or layout.preferences.taskbar ~= next_preferences.taskbar then
-                local next_layout: state.State = {version = layout.version, appearance_mode = layout.appearance_mode, scene = layout.scene, tabs = layout.tabs,
-                    targets = layout.targets, preferences = next_preferences}
-                local committed, err = store.write(database, next_layout)
-                if not committed then error("Client appearance projection failed: " .. tostring(err)) end
-                layout = next_layout
-            end
-        end
         local targets: {[string]: state.Target} = {}
         local retired: {[string]: string} = {}
         local removals: {[string]: string} = {}
@@ -769,7 +755,7 @@ local function local_entry(database_resource: string, initial_application: strin
     if not boot then return end
     local function run()
         return run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
-            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop, workspace_appearance = false,
+            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop,
                 arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen,
                 secondary_application = bootstrap.secondary_application}, true, boot.terminal)
     end

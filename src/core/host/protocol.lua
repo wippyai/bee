@@ -4,7 +4,7 @@ local decode = require("decode")
 local inventory = require("inventory")
 local appearance = require("appearance")
 type Result = {version: integer, reply: contract.Reply, views: inventory.Views}
-type Permissions = {open: boolean, close: boolean, control: boolean, appearance: boolean?, workspace_appearance: boolean?}
+type Permissions = {open: boolean, close: boolean, control: boolean, appearance: boolean?}
 type ControlOp = "admit" | "detach" | "render"
 type Client = {recipient: string, connection_id: string, permissions: Permissions, detaching: boolean,
     renderer: string, renderer_generation: string, rendering: boolean}
@@ -57,16 +57,15 @@ function M.control(value: unknown): Control?
         if type(data) ~= "table" or type(data.open) ~= "boolean" or type(data.close) ~= "boolean"
             or type(data.control) ~= "boolean" then return nil end
         if data.appearance ~= nil and type(data.appearance) ~= "boolean" then return nil end
-        if data.workspace_appearance ~= nil and type(data.workspace_appearance) ~= "boolean" then return nil end
-        if data.workspace_appearance == true and data.appearance ~= true then return nil end
+        if data.workspace_appearance ~= nil then return nil end
         permissions = {open = data.open, close = data.close, control = data.control,
-            appearance = data.appearance == true, workspace_appearance = data.workspace_appearance == true}
+            appearance = data.appearance == true}
     end
     return {request_id = request_id, workspace_id = workspace_id, op = op, recipient = recipient, permissions = permissions, renderer = renderer}
 end
 function M.same_permissions(left: Permissions, right: Permissions): boolean
     return left.open == right.open and left.close == right.close and left.control == right.control
-        and left.appearance == right.appearance and left.workspace_appearance == right.workspace_appearance
+        and left.appearance == right.appearance
 end
 function M.allowed(client: Client, request: contract.Request): boolean
     if client.detaching then return false end
@@ -93,15 +92,14 @@ local function preferences(value: table): appearance.Preferences?
 end
 
 -- Broker-to-host appearance requests carry the recipient derived from the
--- broker's live attachment record. An empty recipient is the legacy combined
--- launcher path and is intentionally left for the workspace owner.
+-- broker's live attachment record. Every request names its controlling display.
 function M.appearance(value: unknown): AppearanceRequest?
     if type(value) ~= "table" or value.version ~= 1 or value.op ~= "appearance" then return nil end
     local request_id = contract.text(value.request_id, 80)
-    local recipient = contract.text(value.recipient or "", 160)
-    local selected = action(value.action or "set")
+    local recipient = contract.text(value.recipient, 160)
+    local selected = action(value.action)
     local prefs = preferences(value)
-    if not request_id or request_id == "" or not recipient or not selected or not prefs then return nil end
+    if not request_id or request_id == "" or not recipient or recipient == "" or not selected or not prefs then return nil end
     return {version = 1, request_id = request_id, op = "appearance", action = selected, recipient = recipient,
         theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar or "labels"}
 end

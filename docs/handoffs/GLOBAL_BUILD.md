@@ -1,5 +1,25 @@
 # Global Bee build — September 10, 2026
 
+## Current install: display isolation and direct appearance routing
+
+Global `/home/wolfy-j/.local/bin/bee` now has SHA256
+`ac0871a31007c4638c84d9e6836d512750e1ebdbbd1447eb96adfa626424416b`.
+Artifact: `/tmp/bee-greenfield-global`. Runtime remains `674b58a1`; native remains
+`a0fc01e088b2`. Settings allows independent instances, display custom/inherit mode
+is persisted, and workspace-wide appearance writes/unscoped fallback are removed.
+
+Standalone executable and actual two-display appearance acceptance pass. The
+actual user's prior Bee process was stopped with SIGTERM; databases were preserved.
+The installed build reached the existing desktop in 1.941s, F9 opened, and the
+client detached in 0.072s. Backup: `bee.previous-display-20260911T023511Z`.
+Logs: `/tmp/bee-greenfield-global-{build,install,smoke,native,appearance}.log`.
+
+The wider cleanup is unfinished. Full current-cleanup repository acceptance is
+not complete; the predecessor passed 511 Lua cases, and remaining desktop checks
+are still running on that predecessor. No sustained mesh-recovery claim is made.
+The dated installation descriptions below are historical, not the current binary.
+
+
 This page describes the current global executable and its verified capabilities.
 [Earlier build history](GLOBAL_BUILD_HISTORY.md) preserves failed runs and older
 measurements; those entries do not describe the current install.

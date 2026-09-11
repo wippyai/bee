@@ -404,11 +404,9 @@ read authority; `update_appearance` requires the separate
 The metadata-edit permission does not authorize default changes. The defaults
 editor and remote node-default route are not yet exposed in Settings or Hive.
 
-The explicit legacy `workspace_appearance` admission remains supported for
-compatibility fixtures. It commits workspace preferences before asking the client
-to project them; those stores do not share a transaction. It is not selected by
-ordinary launch. Its workspace-wide producer updates must not be confused with
-display-local Settings behavior.
+Workspace appearance grants and unscoped requests are rejected. The host has no
+workspace preference-write route; appearance requests go directly to the admitted
+controlling display. Missing controllers produce an unavailable response.
 
 The source/pack defaults probe proves inheritance, reset, explicit override,
 live default updates and controller palette isolation. Full combined and native

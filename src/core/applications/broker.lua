@@ -67,7 +67,6 @@ local function main(owner: string, initial_preferences: unknown)
     local completed_order: {string} = {}
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
-    local appearance_revision = 0
     local preference_waiters: {[string]: PreferenceWaiter} = {}
     local scope_cache: {[string]: security.Scope} = {}
     local base, base_error = security.policy("bee:base_app_policy")
@@ -113,7 +112,7 @@ local function main(owner: string, initial_preferences: unknown)
     local function appearance_state(item: Instance, request_id: string?, code: string?, message: string?, value: appearance.Preferences?, revision: number?, scope: string?)
         local current = value or preferences
         process.send(item.execution_pid, "bee.appearance.state", {version = 1, request_id = request_id or "",
-            revision = revision or appearance_revision, theme = current.theme, background = current.background, taskbar = current.taskbar,
+            revision = revision or 0, theme = current.theme, background = current.background, taskbar = current.taskbar,
             error_code = code or "", error = message or "", scope = scope})
     end
     local function route_client_appearance(item: Instance, action: AppearanceOp, request_id: string, value: appearance.Preferences): boolean
@@ -494,7 +493,8 @@ local function main(owner: string, initial_preferences: unknown)
         elseif selected.channel == appearance_states then
             local msg = selected.value
             local data: unknown = msg:payload():data()
-            if msg:from() == owner and type(data) == "table" and data.version == 1 then
+            if msg:from() == owner and type(data) == "table" and data.version == 1
+                and (data.scope == "client" or data.scope == "display") then
                 local prefs = appearance.decode(data)
                 local scoped = data.scope == "client" or data.scope == "display"
                 if data.scope == "display" and prefs and type(data.renderer) == "string"
@@ -511,19 +511,6 @@ local function main(owner: string, initial_preferences: unknown)
                                 target.client_appearance_revision = data.revision
                                 appearance_state(target, "", "", "", prefs, data.revision, "client")
                             end
-                        end
-                    end
-                end
-                if not scoped and prefs and type(data.revision) == "number" and data.revision >= appearance_revision then
-                    preferences, appearance_revision = prefs, math.floor(data.revision)
-                    local theme = appearance.theme(preferences.theme)
-                    for _, item in pairs(instances) do
-                        local _, err = item.view:set_page(appearance.page(theme, item.descriptor.role == "terminal"))
-                        if err then
-                            appearance_state(item, nil, "page_failed", tostring(err))
-                        elseif data.scope ~= "workspace" or not item.binding.appearance_write
-                            or not route_client_appearance(item, "state", uuid.v7(), preferences) then
-                            appearance_state(item)
                         end
                     end
                 end
@@ -590,18 +577,7 @@ local function main(owner: string, initial_preferences: unknown)
                                 end
                             end
                             if not route_client_appearance(item, requested, request_id, prefs) then
-                                if requested == "inherit" then
-                                    appearance_state(item, request_id, "unavailable", "A controlling display is required")
-                                else
-                                local routed_id = uuid.v7()
-                                preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = "set", renderer = "", mount = ""}
-                                local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = "set", request_id = routed_id,
-                                    recipient = "", theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar})
-                                if not sent then
-                                    preference_waiters[routed_id] = nil
-                                    appearance_state(item, request_id, "unavailable", tostring(err))
-                                end
-                                end
+                                appearance_state(item, request_id, "unavailable", "A controlling display is required")
                             end
                         end
                     end

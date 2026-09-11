@@ -96,7 +96,8 @@ pause for readiness or renderer timeouts, and supervised normal/emergency exit.
 Ordinary launch grants display-local appearance. The client commits Settings
 writes before success, and the broker updates only its controlled producer pages.
 Fresh displays inherit node defaults; saved v1 choices become custom overrides.
-See the appearance contract for mode persistence and the explicit legacy grant.
+See the appearance contract for mode persistence. Workspace appearance grants
+and requests without a controlling display are rejected.
 Mixed workspaces remain unimplemented. See the verified local client acceptance
 and remaining remote boundary in `CLIENT_HOST_SPLIT.md`.
 `CLIENT_STATE.md` documents the client store and import receipt. Source/pack

@@ -208,42 +208,6 @@ def run():
                     ui.close()
             print(f"Cold boot {'pack' if packed else 'source'}: recovered Settings retains its client tab and live view", flush=True)
 
-        # Exercise the explicitly supported legacy workspace-write admission.
-        # Ordinary display Settings above must never take this route.
-        supervisor_file = project / "src/core/launch/supervisor.lua"
-        supervisor_code = supervisor_file.read_text()
-        assert 'workspace_appearance = false' in supervisor_code
-        supervisor_file.write_text(supervisor_code.replace('workspace_appearance = false', 'workspace_appearance = true'))
-        # A rejected canonical write must not recolor chrome or producer pages.
-        host_file = project / "src/core/host/main.lua"
-        host_code = host_file.read_text()
-        theme_anchor = '    local function persist_preferences(preferences: appearance.Preferences, request_id: string): (boolean, string?)\n'
-        assert host_code.count(theme_anchor) == 1
-        host_file.write_text(host_code.replace(theme_anchor, theme_anchor
-            + '        if preferences.theme == "classic" then return false, "Injected theme save failure" end\n'))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        for packed in (False, True):
-            folder = root / ("theme-failure-pack" if packed else "theme-failure-source")
-            folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
-                         command_name="local-command-probe", apps=("bee.client.db:local", "bee.console:app", "bee.settings:app"))
-            try:
-                ui.wait("Terminal", timeout=12)
-                ui.key(b"\x10")
-                ui.wait("Honey")
-                ui.key(b"\x1b[F")
-                ui.wait("Injected theme save failure")
-                assert stored(folder)["desktop"]["preferences"]["theme"] == "honey"
-                assert ui.screen.buffer[29][99].bg == "0c1119", ui.text()
-                ui.key(b"\x1b\t")
-                assert not any(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()), "Failed theme changed a producer page"
-                ui.quit(confirm=True)
-                print(f"Workspace appearance failure {'pack' if packed else 'source'}: visible rejection retains chrome, producer page and stored theme", flush=True)
-            finally:
-                ui.close()
-        host_file.write_text(host_code)
-        supervisor_file.write_text(supervisor_code)
-
         # Manual recovery belongs to the host, even when the client has discarded
         # its old tab. Opening from Start must receive the saved state and IDs.
         client_file = project / "src/core/client/main.lua"

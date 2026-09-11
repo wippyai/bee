@@ -21,16 +21,15 @@ display IDs select a target; labels and raw PIDs do not grant authority.
 The host must reject source or unrelated rebinds while a transfer is unresolved.
 Moving the mount and then asking the source to remove its tab is insufficient:
 if that save fails, source reconnect loads its old tab and can reclaim control.
-The target layout must be committed and source removal durably acknowledged
-before completing the transfer. A timeout retains the same operation identity
-and reports uncertainty; it must not launch another app.
+The workspace commits the target assignment before completing the transfer.
+Client layout saves acknowledge presentation convergence; they do not decide
+ownership. A timeout retains the same operation identity and reports uncertainty;
+it must not launch another app.
 
-An in-memory host record can fence a physical-client restart while the same
-workspace execution remains alive. It cannot settle an interrupted transfer
-after workspace-host restart. If restart recovery is included, persist the
-logical target/transfer revision in the workspace-owned store and reconcile the
-client layouts against it. Persist neither mount tokens nor execution PIDs.
-This decision must be completed before implementing target-first UI behavior.
+Persist the intent and assignment revision in the workspace-owned store. The host
+must reconcile interrupted intents before issuing control grants after restart.
+Persist neither mount tokens nor execution PIDs. The assignment remains the
+control fence even when a client reconnects with an older saved layout.
 
 ## Failure and acceptance
 
@@ -139,3 +138,27 @@ On reconnect, reset projection state for the newly admitted host/connection and
 reconcile before treating saved targets as current control rights. Failure to
 save either layout is presentation debt under the durable owner assignment,
 not a reason to reverse the ownership decision.
+
+## Storage review and host integration
+
+The assignment store remains an internal foundation under review. Retain durable
+retry receipts; silently deleting an old receipt makes a previously conflicting
+request eligible for execution again. Bound active assignments and each read,
+not the lifetime number of completed transfers. Repeating the same initial claim
+must preserve its revision, and a pending intent must prevent a claim from being
+interpreted as permission to bind. Retiring an exact dead app assignment must
+preserve its retry receipts and refuse unresolved intent removal.
+
+Open assignment storage through the existing workspace persistence handle. Do
+not open a second database connection in the client router. At host startup,
+read the bounded active assignments and reconcile their prepared intents before
+publishing readiness. Automatic checkpoint restoration and manually restorable
+apps retain their exact stable identities; missing live inventory during startup
+alone does not prove an assignment is dead.
+
+Successful open replies must establish the initiating admitted display's initial
+assignment before exposing that reply as usable control. Every subsequent
+controlling bind checks that assignment and its pending intent, independently of
+client tab state. Broker replies for transfer revocation must be correlated and
+consumed before ordinary client routes; only the authenticated broker can settle
+the persisted intent. A source disconnect after prepare cannot erase the intent.

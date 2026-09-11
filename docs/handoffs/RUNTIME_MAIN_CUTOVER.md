@@ -77,3 +77,25 @@ run the native-window acceptance: boot stops because that diagnostic toolchain
 omits the `bee.hive.activation` native handler. This is a composition limitation,
 not evidence that the window tests passed or failed their behavioral assertions.
 The complete native toolchain above resolves that composition gate.
+
+## Stale local node recovery
+
+Native checkpoint `3e895bae936f894503638e0a851db42234453ccc` additionally
+recovers a stale local descriptor after an abrupt node exit. Only a failure
+before authenticated native mesh admission permits a detached contender;
+`cmd/app` remains the sole state-lock arbiter. Refused or uncertain desktop
+operations are not replayed. Cancellation retains its error identity.
+Same-machine authentication has a two-second bound, disarmed after connection;
+the existing remote-node lifetime policy is unchanged.
+
+Launch, session, local-owner and mesh-client race tests plus vet pass on #726.
+The physical restart regression kills the old node, retains its descriptor and
+requires a fresh automatic launch within fifteen seconds. The complete native
+toolchain builds at this checkpoint. A standalone validation build is pending;
+no global executable is installed from these results.
+
+The fresh-runtime Lua run with the process-group absence correction passes
+555 of 556 tests. The remaining failure is the gateway takeover/revocation
+fixture receiving no report in the thread; investigation is separate from the
+native launch gates. The new minimal identity gate and native placement
+identity/descendant cleanup proofs pass.

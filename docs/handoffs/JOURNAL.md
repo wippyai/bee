@@ -5726,3 +5726,27 @@ connection window and an exact pidfd stack. No startup failure recurred in this
 run. All test/build handles are terminal. Runtime checkpoint 936 was read but
 is not an installed/pushed cutover. Continue from the concrete local-send/select
 and native-stack evidence rather than widening production timeouts.
+
+
+### Read-only connections isolate slow mesh shutdown — journal 940–941
+
+Diagnostic checkpoint `aa3261a` adds `native-catalog-reconnect-check`. It starts
+one disposable retained desktop, then issues fresh authenticated `bee desktops`
+commands, retaining stdout/stderr/status and exact-process timeout stacks. No
+viewport attachment or detach occurs in those commands. Sequential run 60105
+passed 120 queries: whole-command median 209 ms, max 316 ms; Stack.Stop max
+76.155 ms. Fixture `/tmp/bee-native-catalog-reconnect-4jdoludz`, log
+`/tmp/bee-catalog-startup-diagnostic.log`. CLI output happens after stack cleanup;
+first-output timing must not be described as catalog-response latency.
+
+Three-client batches reproduce slow Stack.Stop without any viewport or session
+grant churn. At 127 completed queries, one 2.003-second command included 1.739 s
+in Stack.Stop. This narrows the slow-exit reproduction to repeated native client
+join/read/leave, independent of desktop detach semantics. It does not explain the
+original expired mount or the accepted-local-send/select wake delay.
+
+Run **8203 remains live**, 360 total queries in three-client batches, log
+`/tmp/bee-catalog-concurrent-diagnostic.log`, fixture
+`/tmp/bee-native-catalog-reconnect-65jc9eip`. Poll that exact handle. Binary remains
+`/tmp/bee-local-dispatch-trace-candidate`; it is diagnostic-only. Global remains
+the clean cancellation build installed at journal 937. Runtime source unchanged.

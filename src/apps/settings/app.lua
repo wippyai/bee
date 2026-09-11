@@ -129,7 +129,8 @@ local function main(value: unknown)
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local grid = view.grid(width, height)
-                if key == "left" then choose(selected() - 1)
+                if key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
+                elseif key == "left" then choose(selected() - 1)
                 elseif key == "right" then choose(selected() + 1)
                 elseif key == "up" then choose(selected() - grid.columns)
                 elseif key == "down" then choose(selected() + grid.columns)

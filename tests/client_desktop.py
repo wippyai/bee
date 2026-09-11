@@ -45,7 +45,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
 """ + checkpoint, 1)
             anchor = '    if not themed then error("Missing themed client state") end\n'
             assert code.count(anchor) == 1
-            code = code.replace(anchor, anchor + """    click_text(resumed_screen, "Use node default")
+            code = code.replace(anchor, anchor + """    key(resumed_screen, "d")
     local inherited = false
     for _ = 1, 500 do
         local saved = store.read(appearance_store)

@@ -13,7 +13,7 @@ local function define_tests()
             for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), 28) end
         end)
         test.it("keeps cards, tabs and hits inside every terminal size", function()
-            for _, width in ipairs({1, 12, 28, 62, 100}) do
+            for _, width in ipairs({1, 12, 18, 28, 47, 48, 49, 62, 100}) do
                 for _, height in ipairs({1, 8, 18, 30}) do
                     for _, pane in ipairs({"theme", "background", "taskbar"}) do
                         local frame = view.draw(width, height, appearance.defaults(), pane == "theme" and "theme" or (pane == "background" and "background" or "taskbar"), 0)

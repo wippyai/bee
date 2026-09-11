@@ -38,7 +38,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
     put(canvas, 2, 1, "BEE SETTINGS · DISPLAY", width - 2, theme.text, theme.surface)
     if width >= 18 and height >= 3 then
-        local label = width >= 48 and " Use node default " or " Node default "
+        local label = width >= 48 and " Use node default (D) " or " Default (D) "
         local x, y = width >= 48 and width - #label or 2, width >= 48 and 1 or 3
         put(canvas, x, y, label, #label, theme.accent, theme.surface)
         hits[#hits + 1] = {kind = "inherit", index = 0, x = x, y = y, width = #label, height = 1}

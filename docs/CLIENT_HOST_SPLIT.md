@@ -390,7 +390,7 @@ newly bound applications. Observer attachments do not control producer colour or
 size. Unknown or replaced renderers cannot fall back to workspace writes.
 
 Fresh displays inherit node defaults. Existing version-1 layouts preserve their
-saved preferences as explicit custom overrides. Settings “Use node default”
+saved preferences as explicit custom overrides. Settings “Use node default” (or unmodified D while Settings is focused)
 returns to inheritance; explicit theme choices return to custom mode. The client
 reads defaults asynchronously through the host-granted `bee.node:get_appearance`
 function, with one outstanding read and bounded cancellation. Committed changes

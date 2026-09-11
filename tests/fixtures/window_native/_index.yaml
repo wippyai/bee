@@ -17,7 +17,7 @@ entries:
     type: bee.launch_policy
     test_support: true
   data:
-    schema_revision: bee.launch-policy@1
+    schema_revision: bee.launch-policy@2
     required_cleanup: direct_process
     required_exit_observation: eof_gated
     start_ms: 10000

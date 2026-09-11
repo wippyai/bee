@@ -7,7 +7,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local placement_types = require("placement_types")
 local M = {}
-M.SCHEMA = "bee.launch-policy@1"
+M.SCHEMA = "bee.launch-policy@2"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
 -- The host enables a permission exchange by naming the adapter, the
 -- acceptance record and the proven fixture digest here; a production
@@ -17,7 +17,7 @@ type Policy = {
     ref: string,
     digest: string,
     permission_exchange: PermissionExchange?,
-    codex_provider_ref: string?,
+    provider_ref: string?,
     prepare_options: {[string]: unknown},
     required_cleanup: placement_types.Capability,
     required_exit_observation: placement_types.ExitObservation,
@@ -54,7 +54,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "environment", "fixture", "permission_exchange", "codex_provider_ref", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "environment", "fixture", "permission_exchange", "provider_ref", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -113,10 +113,10 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
             prepare_options[name] = item
         end
     end
-    local codex_provider_ref: string? = nil
-    if data.codex_provider_ref ~= nil then
-        codex_provider_ref = bounds.id(data.codex_provider_ref)
-        if not codex_provider_ref then return nil, ref .. ": codex_provider_ref is not an identifier" end
+    local provider_ref: string? = nil
+    if data.provider_ref ~= nil then
+        provider_ref = bounds.id(data.provider_ref)
+        if not provider_ref then return nil, ref .. ": provider_ref is not an identifier" end
     end
     local options: {[string]: unknown} = {}
     for name, item in pairs(prepare_options) do options[name] = item end
@@ -147,7 +147,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, codex_provider_ref = codex_provider_ref, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, fixture = fixture}
     return decoded, nil
 end

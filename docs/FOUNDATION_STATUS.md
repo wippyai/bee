@@ -1,5 +1,18 @@
 # Foundation status
 
+The current driver source adds a shared `configure` contract method and generic
+`provider_ref` launch policies (`bee.launch-policy@2`). Carrier and placement
+resolve activated bindings from pinned snapshots; placement rerenders and checks
+the private-home file before creating intent. A third-driver fixture proves
+materialization without provider-specific imports in either caller. The native
+harness receives scope-management authority only through protected host admission;
+ordinary apps keep their existing denial. All 565 unit tests pass on the runtime
+candidate. The remaining `make check` recipes also pass (the already-passing
+unit prerequisite was omitted), as does standalone executable acceptance. This
+source is not in the global executable. Gateway content combined with provider configuration
+remains Codex-specific, and authenticated turns and production process-tree
+cleanup remain separate acceptance gates.
+
 Global Bee now includes local Hive Manager display browsing through exact
 supervisor-selected reader admission. Native catalog/connection checks pass on
 the final binary; source real-actor checks prove revocation and native-control

@@ -9,7 +9,7 @@ local driver_types = require("driver_types")
 local permission = require("permission")
 local M = {}
 M.CONTRACT = "bee.driver:driver"
-M.METHODS = {"prepare", "dispatch", "normalize"}
+M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
 type Entry = {[string]: unknown}
 type Digest = {entry: string, scope: "entry"}
 -- permission reports proof eligibility apart from compatibility: eligible

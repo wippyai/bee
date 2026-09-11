@@ -33,11 +33,10 @@ entries:
 - name: machine
   kind: library.lua
   source: file://machine.lua
-  modules: [json, hash, registry]
+  modules: [json, hash, registry, funcs, security]
   imports:
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
-    codex_configuration: bee.driver.codex:configuration
     gateway_configuration: bee.gateway:configuration
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -49,6 +48,7 @@ entries:
     continuation: bee.harness.carrier:continuation
     settle: bee.harness.carrier:settle
     stream_json: bee.driver.transport:stream_json
+    configuration: bee.driver:configuration
     driver_types: bee.driver:types
     placement_types: bee.placement:types
     placement_protocol: bee.placement.native:protocol

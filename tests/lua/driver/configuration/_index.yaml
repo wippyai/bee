@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.driver
+entries:
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [hash]
+  imports:
+    test: wippy.test:test
+    configuration: bee.driver:configuration

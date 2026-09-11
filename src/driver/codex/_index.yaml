@@ -28,6 +28,13 @@ entries:
   imports:
     launch: bee.driver.codex:launch
     types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure_method.lua
+  method: handle
+  imports:
+    configuration: bee.driver.codex:configuration
+    configure_protocol: bee.driver:configuration
 - name: dispatch
   kind: function.lua
   source: file://dispatch_method.lua
@@ -50,6 +57,7 @@ entries:
       prepare: bee.driver.codex:prepare
       dispatch: bee.driver.codex:dispatch
       normalize: bee.driver.codex:normalize
+      configure: bee.driver.codex:configure
   meta:
     type: harness.driver
     driver_id: codex

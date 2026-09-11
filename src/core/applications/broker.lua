@@ -83,12 +83,15 @@ local function main(owner: string, initial_preferences: unknown)
     if base_error then error(tostring(base_error)) end
     local boundary, boundary_error = security.policy("bee:app_boundary_policy")
     if boundary_error then error(tostring(boundary_error)) end
+    local scope_boundary, scope_boundary_error = security.policy("bee:scope_managing_app_boundary")
+    if scope_boundary_error then error(tostring(scope_boundary_error)) end
     local private_core, private_error = security.policy("bee:core_spawn_boundary")
     if private_error then error(tostring(private_error)) end
     local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
     if storage_error then error(tostring(storage_error)) end
     for _, binding in ipairs(bindings) do
-        local policies: {security.Policy} = {base, boundary, private_core, storage_boundary}
+        local selected_boundary: security.Policy = binding.scope_management and scope_boundary or boundary
+        local policies: {security.Policy} = {base, selected_boundary, private_core, storage_boundary}
         for _, name in ipairs(binding.policies) do
             local policy, err = security.policy(name)
             if err then error(tostring(err)) end

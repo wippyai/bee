@@ -13,7 +13,7 @@ from workspace import ROOT, RUNTIME
 # this host still exposes no storage resources or operation entries.
 DEPENDENCIES = {
     "bee.application:arguments", "bee.application:client", "bee.application:interaction",
-    "bee.driver.codex:configuration", "bee.driver.kit:framing", "bee.driver.kit:quote",
+    "bee.driver:configuration", "bee.driver:resolver", "bee.driver.kit:framing", "bee.driver.kit:quote",
     "bee.driver.transport:stream_json", "bee.driver:profile", "bee.driver:types",
     "bee.gateway:configuration", "bee.persist:database", "bee.persist:ledger",
     "bee.placement.native:capability", "bee.placement.native:executable",

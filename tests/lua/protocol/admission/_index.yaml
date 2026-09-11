@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.protocol
+entries:
+- name: admission_scope_test
+  kind: function.lua
+  source: file://admission_scope_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    application: bee.protocol:application

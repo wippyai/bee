@@ -10,7 +10,7 @@ commits.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.driver` | Binding schema types, `meta.driver` profile validation, the `driver` contract (prepare, dispatch, normalize) |
+| `bee.driver` | Binding schema types, profile validation, strict activation/configuration decoding, and the `driver` contract (prepare, dispatch, normalize, configure) |
 | `bee.driver.kit` | Pure helpers: JSONL framing with fragment carry-over and a byte bound, POSIX quoting, observation builders |
 | `bee.driver.transport.stream_json` | Frames bytes into JSON envelopes for stream-json protocols |
 | `bee.driver.claude`, `bee.driver.codex` | Provider bindings: profiles, launch specification, protocol normalization |
@@ -21,6 +21,22 @@ The carrier validates every prepare/continuation launch reply before changing
 its executable or resolving placement. It shares placement's bounded launch
 decoder; malformed provider output is refused before executable measurement
 or attempt admission. Driver replies are data, not trusted Lua type assertions.
+
+`configure` receives only copied host-selected provider data, an optional
+gateway section and the fixture flag. Its reply is either explicit no
+configuration for a policy without a provider, or one nonempty, safe relative
+private-home file with a lowercase SHA-256 digest over its content and the
+selected provider identity. The shared decoder rejects unknown fields,
+provider substitution and mismatched bytes. The trusted carrier resolves the
+activated binding and provider from its pinned registry snapshot, then calls
+`configure` under an empty scope. Placement independently renders and compares
+the file while admitting intent. The protected host admission binding grants
+scope management to the native harness application; ordinary applications
+cannot enable it through metadata or launch arguments. Actor context remains
+inherited, but the renderer has no placement, registry, executor or nested-call
+permissions. A gateway extension
+to provider configuration remains Codex-only until a generic driver hook
+contract exists.
 
 A normalizer never reports success from a process exit; only the protocol's
 terminal event does. Answers come from the profile's declared answer path.
@@ -46,7 +62,7 @@ refused. The pinned executable does not take `OPENAI_API_KEY` from the
 environment alone: it selects the API-key path only through a provider
 configuration in the private `CODEX_HOME`. `bee.driver.codex:configuration`
 renders that file from the host's `bee.codex_provider` entry named by the
-launch policy (`codex_provider_ref`): only the provider name, base URL,
+launch policy (`provider_ref`): only the provider name, base URL,
 model and optional `reasoning_effort` (`low`, `medium`, `high`, `xhigh` or
 `max`), with `env_key = "OPENAI_API_KEY"` and the responses wire API, plain
 http for the loopback fixture only; the plan digest pins the adapter
@@ -67,7 +83,7 @@ in the host-selected provider entry; its generated TOML emits only
 `model_reasoning_effort` for the same five accepted values. The caller never
 contributes either value: the carrier copies only the selected policy's
 `prepare_options`, and provider configuration is rendered from the policy's
-`codex_provider_ref`.
+`provider_ref`.
 
 ## Claude authentication path
 

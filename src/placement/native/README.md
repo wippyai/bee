@@ -132,8 +132,13 @@ keeps uncertainty where identity is missing. `cleanup` removes the home
 only from `exited`.
 
 Provider configuration is mandatory when the selected host launch policy names
-`codex_provider_ref`. Omitting it is denied before recording an attempt intent;
-providing a file is admitted only when its provider identity, path, revision,
-digest and content match the host-rendered configuration. Policies without a
-provider do not require that file. The placement regression proves that an
-omitted required configuration creates no attempt row.
+`provider_ref`. Omitting it is denied before recording an attempt intent;
+providing a file is admitted only when its provider identity, safe relative
+home path, revision, digest and content match the activated driver's
+host-rendered configuration. Placement pins the policy, provider, activation
+and binding together, then calls `configure` with copied records under an empty
+callee scope. Policies without a provider require that same binding to return
+no file, so a request's binding reference never selects a renderer. Gateway
+sections in a provider file are currently limited to Codex; placement denies a
+configured generic driver combined with gateway tools. The placement regression
+proves that an omitted required configuration creates no attempt row.

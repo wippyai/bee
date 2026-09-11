@@ -113,6 +113,7 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     request.owner_id = owner
     request.session_ref = session_ref
     request.policy_ref = POLICY
+    request.binding_ref = "bee.driver.codex:binding"
     local declared = request.launch :: {[string]: unknown}
     declared.home_ref = "session"
     local resources = request.resources :: {{[string]: unknown}}
@@ -439,6 +440,7 @@ local function define_tests()
             local digest = assert(hash.sha256(modified))
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
+            request.binding_ref = "bee.driver.codex:binding"
             request.configuration = {revision = rendered.revision, path = rendered.path, content = modified, digest = digest, provider_ref = "bee.placement.native:codex_test_provider"}
             local refused = call(OWNER, "prepare", request)
             test.eq(refused.error and refused.error.code, "DENIED")
@@ -449,14 +451,16 @@ local function define_tests()
             -- the named policy does not select is refused, and so is a
             -- policy reference that is not a host launch policy.
             request.policy_ref = NO_PROVIDER_POLICY
+            request.binding_ref = "bee.driver.claude:binding"
             local unselected = call(OWNER, "prepare", request)
             test.eq(unselected.error and unselected.error.code, "DENIED")
-            test.is_true(tostring(unselected.error and unselected.error.message):find("does not select", 1, true) ~= nil)
+            test.is_true(tostring(unselected.error and unselected.error.message):find("selects no provider", 1, true) ~= nil)
             request.policy_ref = "bee.placement.native:codex_test_provider"
             local foreign = call(OWNER, "prepare", request)
             test.eq(foreign.error and foreign.error.code, "DENIED")
             test.is_true(tostring(foreign.error and foreign.error.message):find("not a host launch policy", 1, true) ~= nil)
             request.policy_ref = POLICY
+            request.binding_ref = "bee.driver.codex:binding"
             local prepared = attempt_of(call(OWNER, "prepare", request))
             test.eq(prepared.execution_state, "intended")
             local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -475,6 +479,7 @@ local function define_tests()
         test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
+            request.binding_ref = "bee.driver.codex:binding"
             local refused = call(OWNER, "prepare", request)
 
             local db, open_error = store.open()

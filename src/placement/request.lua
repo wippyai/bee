@@ -7,6 +7,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
+local configuration_protocol = require("configuration")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -23,8 +24,7 @@ M.DEFAULT_STOP_GRACE_MS = 5000
 M.DEFAULT_RETAIN_MS = 30000
 M.MAX_RETAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 5000
-M.MAX_CONFIGURATION_BYTES = 8192
-M.CONFIGURATION_PATHS = {".codex/config.toml", ".claude.json", ".claude/settings.json", ".codex/hooks.json"}
+M.MAX_CONFIGURATION_BYTES = configuration_protocol.MAX_CONFIGURATION_BYTES
 M.MAX_DRAIN_MS = 600000
 local ENVIRONMENT_NAME = "^[A-Z_][A-Z0-9_]*$"
 local function digest_hex(value: unknown): string?
@@ -158,21 +158,7 @@ local function decode_timeouts(value: unknown): (types.Timeouts?, string?)
 end
 local function decode_configuration(value: unknown): (types.Configuration?, string?)
     if value == nil then return nil, nil end
-    local object = bounds.object(value)
-    if not object then return nil, "configuration must be an object" end
-    local unknown_field = bounds.fields(object, {"revision", "path", "content", "digest", "provider_ref"})
-    if unknown_field then return nil, "configuration: " .. unknown_field end
-    local provider_ref = bounds.id(object.provider_ref)
-    if not provider_ref then return nil, "configuration.provider_ref is not an identifier" end
-    local revision = bounds.id(object.revision)
-    if not revision then return nil, "configuration.revision is not an identifier" end
-    local path = bounds.member(object.path, M.CONFIGURATION_PATHS)
-    if not path then return nil, "configuration.path is not a permitted home file" end
-    local content = bounds.text(object.content, M.MAX_CONFIGURATION_BYTES) or ""
-    if content == "" then return nil, "configuration.content must be bounded nonempty text" end
-    local digest = bounds.id(object.digest) or ""
-    if #digest ~= 64 or not digest:match("^%x+$") then return nil, "configuration.digest must be a sha256 hex digest" end
-    return {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}, nil
+    return configuration_protocol.decode_file(value)
 end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)

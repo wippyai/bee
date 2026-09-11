@@ -102,6 +102,21 @@ for interfaces in core_value_interfaces.values():
 # Launch admission constructs typed grants without importing a placement owner.
 check_value_interface("bee.placement:types")
 
+# Generic configuration and binding selection must stay independent of provider
+# implementations, including indirect imports through another shared helper.
+def check_driver_contract_closure(identity, seen=None):
+    seen = set() if seen is None else seen
+    if identity in seen:
+        return
+    seen.add(identity)
+    namespace = identity.split(":", 1)[0]
+    assert namespace in {"bee.driver", "bee.threads.records"}, ("Provider dependency in generic driver contract", identity)
+    for dependency in entries[identity].get("imports", {}).values():
+        check_driver_contract_closure(dependency, seen)
+
+for identity in ("bee.driver:resolver", "bee.driver:configuration"):
+    check_driver_contract_closure(identity)
+
 # Registry edges, including broker/workspace, must respect the layer boundary.
 # Carrier and placement share only the host-selected configuration renderer;
 # gateway admission and token materialization remain contract operations.
@@ -119,7 +134,7 @@ for identity, entry in entries.items():
         if location.parts[0] == "threads":
             assert target_location.parts[0] == "threads" or target.startswith("bee.persist:"), (identity, target)
         if location.parts[0] == "placement":
-            assert target_location.parts[0] in {"placement", "persist"} or target in {"bee.driver:types", "bee.driver.kit:quote", "bee.driver.codex:configuration", "bee.threads.records:bounds", "bee.threads.records:canonical"} or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
+            assert target_location.parts[0] in {"placement", "persist"} or target in {"bee.driver:types", "bee.driver:resolver", "bee.driver:configuration", "bee.driver.kit:quote", "bee.threads.records:bounds", "bee.threads.records:canonical"} or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
         if location.parts[0] == "credentials":
             assert target_location.parts[0] in {"credentials", "persist"} or target.startswith("bee.threads.records:"), (identity, target)
         if location.parts[0] == "approvals":

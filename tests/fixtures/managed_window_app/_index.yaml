@@ -5,7 +5,7 @@ entries:
   kind: registry.entry
   meta: {type: bee.launch_policy, test_support: true}
   data:
-    schema_revision: bee.launch-policy@1
+    schema_revision: bee.launch-policy@2
     required_cleanup: direct_process
     required_exit_observation: eof_gated
     start_ms: 10000
@@ -28,6 +28,7 @@ entries:
       prepare: bee.managed_window_fixture:prepare
       dispatch: bee.managed_window_fixture:dispatch
       normalize: bee.managed_window_fixture:normalize
+      configure: bee.managed_window_fixture:configure
 - name: profiles
   kind: registry.entry
   meta:
@@ -76,6 +77,10 @@ entries:
   kind: function.lua
   source: file://driver.lua
   method: normalize
+- name: configure
+  kind: function.lua
+  source: file://driver.lua
+  method: configure
 - name: test
   kind: function.lua
   source: file://main.lua

@@ -157,3 +157,24 @@ authorization. The current fixed gateway endpoint is not acceptance of automatic
 multi-project MCP activation. Do not reserve and release a supposedly free port,
 create another HTTP server, or let callers supply credential destinations to
 work around this requirement. No runtime implementation changes are made here.
+
+## Generic driver configuration candidate
+
+The next source checkpoint moves provider configuration behind the shared driver
+`configure` contract, selected through activation and pinned registry data.
+Placement independently renders and compares the file before intent. Native
+harness scope management is an explicit protected admission decision; ordinary
+apps retain their scope denial. See `APPLICATION_CONTRACTS.md` and `CARRIER.md`
+for the trust boundary and remaining Codex-specific gateway extension.
+
+Validation on the unchanged candidate toolchain: all 565 unit tests pass; native
+pack coverage is 14 modules / 586 entries. The standalone candidate SHA-256 is
+`cd8b5f9987884934d56e72db2e86983fdd5f71ddce3ffcc5ee5734408936a753`.
+Its executable gate passes embedded boot, Settings recovery, terminal,
+wheel/burst scrolling, physical selection/copy, fullscreen aliases, literal
+arguments and presenter rejoin. After the full unit run, `make check -o test`
+passes all remaining foundation recipes, including storage, source/pack desktop
+interaction, client recovery and the three thread/Hive applications. The existing
+`desktop_lifecycle` fixpoint warning remains. Global Bee remains unchanged.
+This does not establish per-project default state selection, authenticated
+provider turns, or production process-tree cleanup.

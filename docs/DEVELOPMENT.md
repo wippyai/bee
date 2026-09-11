@@ -62,8 +62,8 @@ import their own helpers/shared UI. Apps may import the public `bee.threads:clie
 The application envelope additionally imports the pure `bee.threads.records:bounds`
 decoder for opaque thread IDs; the architecture audit checks that its complete
 closure has no runtime modules or security policy. This does not admit thread
-storage or service imports into core. Carrier and native placement share only
-`bee.gateway:configuration`; gateway operations still go through contracts.
+storage or service imports into core. Carrier and native placement share the driver resolver and configuration
+boundary, plus `bee.gateway:configuration`; gateway operations still go through contracts.
 Apps must not import private broker or store implementations. Keep pure reducers free of registry, process, SQL and terminal
 side effects. `tests/architecture.py` checks the production import graph.
 

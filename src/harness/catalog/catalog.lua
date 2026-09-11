@@ -6,7 +6,7 @@
 local registry = require("registry")
 local bounds = require("bounds")
 local classify = require("classify")
-local activation = require("activation")
+local resolver = require("resolver")
 local M = {}
 M.ACTIVATION_ENTRY = "bee:harness_activation"
 M.BINDING_TYPE = "harness.driver"
@@ -29,15 +29,12 @@ end
 -- The host's activation declaration. A missing declaration activates nothing;
 -- a malformed one is visible in diagnostics and likewise activates nothing.
 local function active_bindings(pinned: Pinned, diagnostics: {string}): {[string]: boolean}
-    local active: {[string]: boolean} = {}
-    local declared = entry(pinned, M.ACTIVATION_ENTRY)
-    if not declared then return active end
-    local decoded, decode_error = activation.decode(M.ACTIVATION_ENTRY, declared)
-    if not decoded then
+    local active, decode_error = resolver.active(pinned)
+    if not active then
         diagnostics[#diagnostics + 1] = tostring(decode_error)
-        return active
+        return {}
     end
-    return decoded.bindings
+    return active
 end
 -- The permission adapters the declaration's profiles pin, read from the
 -- same pinned snapshot so a profile cannot enable an unmeasured adapter.

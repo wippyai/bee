@@ -159,8 +159,9 @@ entries:
   source: file://service.lua
   modules: [process, channel, time, security, uuid, json, funcs, registry]
   imports:
-    codex_configuration: bee.driver.codex:configuration
     gateway_configuration: bee.gateway:configuration
+    configuration: bee.driver:configuration
+    resolver: bee.driver:resolver
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.placement:types

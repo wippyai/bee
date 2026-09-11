@@ -21,7 +21,30 @@ Deduplication is bounded and in-memory, not durable exactly-once execution.
 optional `icon`, `group` (slash-separated menu path), and `role`. Roles supply
 contextual discoverability, never authority. Only protected
 `bee:application_admission.bindings` selects allowed definitions, policy IDs and
-operation grants (`appearance_write`, `application_stop`).
+operation grants (`appearance_write`, `application_stop`, `catalog_read`).
+
+The protected binding also accepts `scope_management: boolean`, defaulting to
+`false`. Unknown binding fields and nonboolean values are refused. The broker
+uses this decoded host selection when constructing the application scope;
+application metadata and launch arguments cannot opt in. Ordinary bindings use
+`bee:app_boundary_policy`. Opted-in bindings use
+`bee:scope_managing_app_boundary` and still need explicit policies granting the
+scope operations they use. The broker contains no application identity check.
+
+Only the reviewed native harness application currently opts in. It owns native
+execution with OS-user authority and needs to call driver configuration methods
+under an empty scope. Scope management is a trust decision: the application can
+construct and replace call scopes, including reconstructing them from policies
+it already holds. Remaining deny policies are therefore defaults for this
+trusted application, not a confinement guarantee. Driver configuration itself
+runs with an explicitly empty scope, which denies store, executor and nested
+function-call access. Ordinary applications retain their existing scope denial.
+
+Focused acceptance proves default/false/true decoding and malformed-field
+refusal. Real Claude/Codex window startup, input, resize, rebind and cancellation
+pass with the host selection enabled; disabling only that selection restores
+the runtime's scope-creation denial. This does not prove authenticated provider
+turns or production process-tree cleanup.
 
 The admitted icon is copied into the window's presentation state. Settings can
 select compact icon tabs; the taskbar clips icons to two terminal cells and falls

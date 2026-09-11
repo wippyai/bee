@@ -51,6 +51,12 @@ entries:
   imports:
     launch: bee.driver.claude:launch
     types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure_method.lua
+  method: handle
+  imports:
+    configure_protocol: bee.driver:configuration
 - name: dispatch
   kind: function.lua
   source: file://dispatch_method.lua
@@ -73,6 +79,7 @@ entries:
       prepare: bee.driver.claude:prepare
       dispatch: bee.driver.claude:dispatch
       normalize: bee.driver.claude:normalize
+      configure: bee.driver.claude:configure
   meta:
     type: harness.driver
     driver_id: claude

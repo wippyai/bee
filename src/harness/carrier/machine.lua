@@ -6,9 +6,10 @@
 local json = require("json")
 local hash = require("hash")
 local registry = require("registry")
+local funcs = require("funcs")
+local security = require("security")
 local permission = require("permission")
 local acceptance = require("acceptance")
-local codex_configuration = require("codex_configuration")
 local gateway_configuration = require("gateway_configuration")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -24,6 +25,7 @@ local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_protocol = require("placement_protocol")
 local launch_request = require("launch_request")
+local configuration_protocol = require("configuration")
 local M = {}
 M.PLACEMENT_BINDING = "bee.placement.native:binding"
 M.PLACEMENT = "bee.placement.native"
@@ -144,7 +146,10 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, exchange: Exchange?, configuration: placement_types.Configuration?, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, exchange: Exchange?, configuration: placement_types.Configuration?, gateway: placement_types.Gateway?}
+local function configure(target: string, provider_ref: string?, provider: Object?, gateway_section: string?, fixture: boolean): (placement_types.Configuration?, string?)
+    return configuration_protocol.call(target, {provider_ref = provider_ref, provider = provider, gateway_section = gateway_section, fixture = fixture})
+end
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
@@ -228,25 +233,16 @@ local function measure(request: Request): (Measured?, string?)
                 hooks = hook_events, hook_destination = hook_destination, hook_configuration = hook_configuration, codex_hooks = nil}
         end
     end
-    -- A Codex launch needs the host's provider configuration in its private
-    -- home; the endpoint is a credential destination the host selects, and
-    -- plain http reaches only the loopback fixture under a fixture policy.
-    local configuration: placement_types.Configuration? = nil
-    if binding.driver_id == "codex" then
-        local provider_ref = launch_policy.codex_provider_ref
-        if not provider_ref then return nil, "a codex launch needs the launch policy to name codex_provider_ref" end
-        local provider_entry = catalog.entry(pinned, provider_ref)
-        if not provider_entry then return nil, "codex provider " .. provider_ref .. " is not in the registry" end
-        local provider, provider_error = codex_configuration.decode(provider_ref, provider_entry)
-        if not provider then return nil, provider_error end
-        if provider.loopback_fixture and not launch_policy.fixture then return nil, "the loopback fixture provider is permitted only under a fixture policy" end
-        local projection, projection_error = codex_configuration.projection(provider, gateway_section)
-        if not projection then return nil, projection_error end
-        configuration = {revision = projection.revision, path = projection.path, content = projection.content, digest = projection.digest, provider_ref = provider_ref}
-    elseif launch_policy.codex_provider_ref then
-        return nil, "codex_provider_ref applies to codex launches only"
+    local configure_target = binding.methods.configure
+    if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
+    local provider_entry: Object? = nil
+    if launch_policy.provider_ref then
+        provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
+        if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
-    return {binding = binding, profile = profile, policy = launch_policy, exchange = exchange, configuration = configuration, gateway = gateway}, nil
+    local configuration, configuration_error = configure(configure_target, launch_policy.provider_ref, provider_entry, gateway_section, launch_policy.fixture)
+    if configuration_error then return nil, configuration_error end
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, exchange = exchange, configuration = configuration, gateway = gateway}, nil
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.

@@ -8,4 +8,7 @@ end
 function M.normalize(_: unknown): {[string]: unknown}
     return {ok = false, error = "fixture window has no stream normalizer"}
 end
+function M.configure(_: unknown): {[string]: unknown}
+    return {ok = true, configuration = nil}
+end
 return M

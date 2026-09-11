@@ -5811,3 +5811,20 @@ blanket-committed. No runtime changes.
 September11: connection card follow-up installed globally, SHAaf1dc830, source27f0383.
 Source/pack UI and native connection checks pass; running user node not restarted.
 Full IDs now behind Details/D. Live browsing remains next; journal1076 has source evidence.
+
+### 2026-09-11 Codex: generic driver configuration validated
+
+Activated drivers now supply `configure`; carrier and placement use a shared
+typed boundary and independently pinned registry data. Placement refuses missing,
+substituted or changed configuration before intent. A third-driver fixture proves
+private-home file materialization. Native harness scope management is selected
+only by protected host admission and is documented as trusted authority.
+
+All 565 unit tests, remaining `make check` recipes, native pack coverage
+(14 modules / 586 entries) and standalone executable acceptance pass on the
+unchanged candidate runtime. The existing desktop-lifecycle lint warning remains.
+The candidate SHA is recorded in `RUNTIME_MAIN_CUTOVER.md`; global Bee is unchanged.
+Project-state runtime cutover, authenticated provider turns, production terminal
+cleanup, generic gateway extensions, profiles and Docker remain separate work.
+No self-modification API work has started. Wolfden evidence: 1194–1197, followed
+by the final integration checkpoint.

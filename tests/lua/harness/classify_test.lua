@@ -9,11 +9,11 @@ local function method(id: string): Entry
     return {id = id, kind = "function.lua", meta = {}, data = {source = "file://" .. id .. ".lua"}}
 end
 local function methods(): {[string]: Entry?}
-    return {["fake:prepare"] = method("fake:prepare"), ["fake:dispatch"] = method("fake:dispatch"), ["fake:normalize"] = method("fake:normalize")}
+    return {["fake:prepare"] = method("fake:prepare"), ["fake:dispatch"] = method("fake:dispatch"), ["fake:normalize"] = method("fake:normalize"), ["fake:configure"] = method("fake:configure")}
 end
 local function binding(): Entry
     return {id = "fake:binding", kind = "contract.binding", meta = {type = "harness.driver", driver_id = "fake", profiles_ref = "fake:profiles"},
-        data = {contracts = {{contract = "bee.driver:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch", normalize = "fake:normalize"}}}}}
+        data = {contracts = {{contract = "bee.driver:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch", normalize = "fake:normalize", configure = "fake:configure"}}}}}
 end
 local function declaration(protocol: string?): Entry
     return {id = "fake:profiles", kind = "registry.entry", meta = {type = "harness.profile", driver_ref = "fake:binding"},
@@ -157,7 +157,7 @@ local function define_tests()
             driver_of(entry).default_profile = "window"
             test.eq(classified(entry).state, "incompatible")
         end)
-        test.it("requires the driver contract with three bound functions", function()
+        test.it("requires the driver contract with four bound functions", function()
             local other = binding()
             data_of(other).contracts = {{contract = "bee.other:contract", methods = {}}}
             test.is_true(has(classified(nil, other).diagnostics, "binding does not implement bee.driver:driver"))
@@ -194,7 +194,7 @@ local function define_tests()
             test.eq(list[2].state, "incompatible")
             test.is_true(has(list[1].diagnostics, "driver_id fake is declared by 2 compatible bindings"))
             test.eq(list[3].state, "compatible")
-            test.eq(#broken.diagnostics, 3)
+            test.eq(#broken.diagnostics, 4)
         end)
     end)
 end

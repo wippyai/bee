@@ -128,6 +128,7 @@ entries:
   # no command metadata; the broker grants its terminal directly to the actor
   # that admits and owns the one native child.
   - definition_id: bee.harness.window:app
+    scope_management: true
     policies:
     - bee:carrier_policy
     - bee:placement_store_policy
@@ -160,6 +161,14 @@ entries:
     - registry.apply
     - registry.apply_version
     - registry.overlay.apply
+    resources: '*'
+    effect: deny
+- name: scope_managing_app_boundary
+  kind: security.policy
+  meta:
+    comment: Default denial for the host-selected native execution actor, which may manage call scopes under its reviewed admission policy.
+  policy:
+    actions: [process.security, security.policy.get, process.context, registry.apply, registry.apply_version, registry.overlay.apply]
     resources: '*'
     effect: deny
 - name: core_spawn_boundary
@@ -304,8 +313,8 @@ entries:
   meta:
     comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
   policy:
-    actions: [db.get, registry.get, fs.get, exec.get, system.read]
-    resources: [bee.placement.native:db, bee.placement.native:database_ref, bee.placement.native:root_ref, bee.placement.native:runner_host_ref,
+    actions: [db.get, registry.get, fs.get, exec.get, system.read, security.scope.create, funcs.security]
+    resources: [bee.placement.native:db, bee.placement.native:database_ref, bee.placement.native:root_ref, bee.placement.native:runner_host_ref, custom, security,
       bee.placement.native:admitted_roots, bee.placement.native:root, bee.placement.native:host_files, bee.placement.native:executor, cwd]
     effect: allow
 - name: placement_exec_policy
@@ -435,7 +444,7 @@ entries:
     type: bee.launch_policy
     comment: Managed harness launches; inert until the combined runtime and the credential failure gates are pinned, since prepare refuses it on the pinned runtime
   data:
-    schema_revision: bee.launch-policy@1
+    schema_revision: bee.launch-policy@2
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -450,8 +459,8 @@ entries:
   meta:
     comment: A carrier process calls the thread, placement and driver facades and reads the catalog and its launch policy; it holds no executor
   policy:
-    actions: [funcs.call, registry.get, process.send, bee.threads.lifecycle, bee.threads.carrier, bee.threads.observe, bee.gateway.admit]
-    resources: '*'
+    actions: [funcs.call, registry.get, process.send, bee.threads.lifecycle, bee.threads.carrier, bee.threads.observe, bee.gateway.admit, security.scope.create, funcs.security]
+    resources: ['*', custom, security]
     effect: allow
 - name: credential_sources
   kind: registry.entry

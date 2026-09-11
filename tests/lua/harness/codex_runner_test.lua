@@ -396,7 +396,7 @@ local function define_tests()
             -- Missing configuration: a policy without a provider refuses the plan.
             local bare = await_carrier(spawn_carrier("bee.harness.carrier:process", request(thread(), fresh("attempt"), BARE_POLICY, {}), "open", nil), "bare policy")
             test.is_nil(bare.value)
-            if not tostring(bare.error):find("codex_provider_ref", 1, true) then error("bare policy did not refuse: " .. tostring(bare.error)) end
+            if not tostring(bare.error):find("provider_ref", 1, true) then error("bare policy did not refuse: " .. tostring(bare.error)) end
             stop_endpoint()
             shell("rm -rf " .. root)
             test.eq(launch.CODEX_AUTHENTICATION, "unproven")

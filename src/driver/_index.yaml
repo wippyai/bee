@@ -7,7 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee driver contract
-    comment: The driver contract, its binding schema and transport-neutral envelopes; no I/O, no placement
+    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement owns execution
 - name: types
   kind: library.lua
   source: file://types.lua
@@ -17,6 +17,18 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.driver:types
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash, funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:
@@ -26,3 +38,5 @@ entries:
     description: Return the declarative input for a turn or control operation on a running attempt
   - name: normalize
     description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report
+  - name: configure
+    description: Return the optional private-home configuration from the host-selected provider record

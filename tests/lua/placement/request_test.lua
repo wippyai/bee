@@ -6,6 +6,7 @@ local transitions = require("transitions")
 local protocol = require("protocol")
 local types = require("types")
 local DIGEST = string.rep("a", 64)
+local CONFIG_DIGEST = "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
 local function launch(): {[string]: unknown}
     return {idempotency_key = "key-1", owner_id = "bee.owner", owner_incarnation = 3, action_id = "action-1", attempt_id = "attempt-1",
         binding_ref = "bee.driver.claude:binding", policy_ref = "bee.host:launch_policy", profile_id = "session", binding_digest = DIGEST, profile_digest = DIGEST,
@@ -42,7 +43,7 @@ local function define_tests()
             test.neq(request.digest(other :: types.LaunchRequest), first)
         end)
         test.it("decodes a gateway projection exactly and refuses a caller-shaped one", function()
-            local configuration = {revision = "bee.mcp-config@1", path = ".claude.json", content = "{}\n", digest = DIGEST, provider_ref = "bee:gateway_endpoint"}
+            local configuration = {revision = "bee.mcp-config@1", path = ".claude.json", content = "{}\n", digest = CONFIG_DIGEST, provider_ref = "bee:gateway_endpoint"}
             local value = launch()
             value.gateway = {tools = {"thread_wait", "thread_read"}, configuration = configuration, destination = "BEE_GATEWAY_TOKEN"}
             local decoded, err = request.decode(value)
@@ -61,8 +62,14 @@ local function define_tests()
             test.is_nil((without_file.gateway :: types.Gateway).configuration)
             rejects(function(item) item.gateway = {tools = {"thread_read"}, configuration = configuration, destination = "token"} end, "gateway.destination must be an environment name")
             rejects(function(item) item.gateway = {tools = {"thread_read"}, configuration = configuration, destination = "BEE_GATEWAY_TOKEN", token = "x"} end, "gateway: unknown field token")
-            local elsewhere = {revision = "bee.mcp-config@1", path = ".bee/mcp.json", content = "{}\n", digest = DIGEST, provider_ref = "bee:gateway_endpoint"}
-            rejects(function(item) item.gateway = {tools = {"thread_read"}, configuration = elsewhere, destination = "BEE_GATEWAY_TOKEN"} end, "gateway.configuration.path is not a permitted home file")
+            local elsewhere = {revision = "bee.mcp-config@1", path = "../mcp.json", content = "{}\n", digest = CONFIG_DIGEST, provider_ref = "bee:gateway_endpoint"}
+            local generic = {revision = "bee.fixture-config@1", path = ".fixture-agent/provider.json", content = "{}\n", digest = CONFIG_DIGEST, provider_ref = "bee:gateway_endpoint"}
+            local generic_value = launch()
+            generic_value.gateway = {tools = {"thread_read"}, configuration = generic, destination = "BEE_GATEWAY_TOKEN"}
+            local generic_decoded, generic_error = request.decode(generic_value)
+            if not generic_decoded then error(tostring(generic_error)) end
+            test.eq((generic_decoded.gateway :: types.Gateway).configuration.path, ".fixture-agent/provider.json")
+            rejects(function(item) item.gateway = {tools = {"thread_read"}, configuration = elsewhere, destination = "BEE_GATEWAY_TOKEN"} end, "gateway.configuration.path subpath has an invalid segment")
         end)
         test.it("rejects traversal, unknown fields, missing environment and bad references", function()
             rejects(function(value) (value.resources :: {{[string]: unknown}})[1].subpath = "../etc" end, "resources[1]: subpath has an invalid segment")

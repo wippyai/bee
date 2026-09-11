@@ -350,16 +350,35 @@ subscription is closed at settlement.
 
 ## 10. Generated configuration and stdin end of file
 
-A Codex launch needs one file in its private home, `.codex/config.toml`,
-naming the host's provider: the launch policy's `codex_provider_ref` selects
-a `bee.codex_provider` entry (name, base URL, model; plain http only for the
-loopback fixture under a fixture policy), `bee.driver.codex:configuration`
-renders exactly the reviewed fields with `env_key = "OPENAI_API_KEY"` and
-the responses wire API, and the plan digest pins the adapter revision and
-the rendered digest. Placement writes the file with exclusive creation
-inside the home before start (`configuration.materialized`); a pre-existing
-file refuses the start (`configuration.refused`). The key itself reaches
-the child only through the credential broker's environment projection.
+Every driver binding supplies `configure`. During plan measurement, the carrier
+reads the host-selected provider record from its pinned catalog and directly
+calls the activated binding's configured method with copied provider data, an
+optional gateway section and the fixture flag. The request supplies neither a
+target, provider bytes nor a scope. The target comes from the reviewed
+activation and binding in that same snapshot. The reply is either explicit
+no-file output when the policy names no `provider_ref`, or one bounded,
+safe-relative private-home file whose provider identity and SHA-256 digest match
+its copied content.
+
+Placement repeats that direct scoped call from its independently pinned policy,
+provider, activation and binding snapshot while admitting the launch, and
+requires the request's configuration to match byte for byte before recording
+intent. The caller is authorized to call the configured driver method before an
+empty callee scope starts. The callee receives only the declarative copied DTO;
+it has no placement, registry, executor or nested-call permissions. Creating
+that empty scope is a host-selected protected admission capability for the
+native execution application. That application is trusted to construct and
+replace call scopes; its remaining deny policies do not confine it.
+
+Codex renders `.codex/config.toml` from the selected `bee.codex_provider`
+(name, base URL, model; plain http only for the loopback fixture under a
+fixture policy), with `env_key = "OPENAI_API_KEY"` and the responses wire API.
+Placement writes an admitted file with exclusive creation inside the home
+before start (`configuration.materialized`); a pre-existing file refuses the
+start (`configuration.refused`). The key itself reaches the child only through
+the credential broker's environment projection. Gateway content inside a
+provider file is still Codex-specific; another configured driver with gateway
+tools is denied until the driver contract has a generic hook form.
 A launch that declares `stdin_eof` writes its complete initial input first
 and closes stdin once (`stdin.accepted`, `stdin.closed`, or
 `stdin.uncertain`); placement admits it only where the executor can close

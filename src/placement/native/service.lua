@@ -21,8 +21,9 @@ local homes = require("homes")
 local identity = require("identity")
 local protocol = require("protocol")
 local registry = require("registry")
-local codex_configuration = require("codex_configuration")
 local gateway_configuration = require("gateway_configuration")
+local resolver = require("resolver")
+local configuration_protocol = require("configuration")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -40,6 +41,9 @@ local function actor(): string?
     local current = security.actor()
     if not current then return nil end
     return bounds.id(current:id())
+end
+local function rendered_configuration(target: string, provider_ref: string?, provider: {[string]: unknown}?, gateway_section: string?, fixture: boolean): ({[string]: unknown}?, string?)
+    return configuration_protocol.call(target, {provider_ref = provider_ref, provider = provider, gateway_section = gateway_section, fixture = fixture})
 end
 local function owned(attempt: types.Attempt): Reply?
     local caller = actor()
@@ -233,6 +237,42 @@ function M.authorize_materialization(attempt: types.Attempt, row: store.Row, req
     end
     return materialization_key, nil
 end
+-- Resolve and render a selected binding's optional provider file from the
+-- placement admission snapshot. The caller contributes only the binding,
+-- policy and action identities; the target, provider bytes and scope remain
+-- host-selected.
+local function render_from_pinned(pinned: registry.Snapshot, binding_ref: string, policy_ref: string, action_id: string): ({[string]: unknown}?, string?)
+    local policy_entry = resolver.entry(pinned, policy_ref)
+    local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
+    local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
+    if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not policy_data then return nil, "policy_ref " .. policy_ref .. " is not a host launch policy" end
+    local provider_ref = policy_data.provider_ref == nil and nil or bounds.id(policy_data.provider_ref)
+    if policy_data.provider_ref ~= nil and not provider_ref then return nil, "launch policy provider_ref is not an identifier" end
+    local target, target_error, driver_id = resolver.configure(pinned, binding_ref)
+    if not target then return nil, target_error or "binding is not activated" end
+    local provider_entry: {[string]: unknown}? = nil
+    if provider_ref then
+        provider_entry = resolver.entry(pinned, provider_ref)
+        if not provider_entry then return nil, "launch policy provider " .. provider_ref .. " is not in the registry" end
+    end
+    local tools, tools_error = bounds.ids(policy_data.gateway_tools == nil and {} or policy_data.gateway_tools, true)
+    if not tools then return nil, "launch policy gateway_tools: " .. tostring(tools_error) end
+    local gateway_section: string? = nil
+    if provider_ref and #tools > 0 then
+        if driver_id ~= "codex" then return nil, "a provider configuration with gateway tools is currently limited to the Codex driver" end
+        local address, endpoint_error = gateway_configuration.endpoint()
+        if not address then return nil, endpoint_error or "gateway endpoint" end
+        gateway_section = gateway_configuration.codex_section(address, action_id)
+        local hooks, hooks_error = bounds.ids(policy_data.gateway_hooks == nil and {} or policy_data.gateway_hooks, true)
+        if not hooks then return nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
+        if #hooks > 0 then
+            local codex_hooks, hook_error = gateway_configuration.codex_hooks(address, action_id, hooks)
+            if not codex_hooks then return nil, hook_error or "codex hooks" end
+            gateway_section = gateway_section .. codex_hooks.section
+        end
+    end
+    return rendered_configuration(target, provider_ref, provider_entry, gateway_section, policy_data.fixture == true)
+end
 -- prepare: validate the admitted request against this host, refuse what the
 -- runtime cannot clean, record intent. Same key and digest replays.
 function M.prepare(value: unknown): Reply
@@ -259,46 +299,24 @@ function M.prepare(value: unknown): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    -- The host launch policy the request names authorizes its host-selected
-    -- parts: a configuration is authorized by the provider that policy
-    -- selects, never by the caller's choice or content; placement renders
-    -- the provider itself and the request must match it exactly.
-    local policy_entry, policy_error = registry.get(request.policy_ref)
-    if policy_error or not policy_entry then return fail("DENIED", "policy_ref " .. request.policy_ref .. " is not in the registry") end
-    local policy_meta = bounds.object(policy_entry.meta) or {}
-    if policy_meta.type ~= types.LAUNCH_POLICY_TYPE then return fail("DENIED", "policy_ref " .. request.policy_ref .. " is not a host launch policy") end
-    local policy_data = bounds.object(policy_entry.data) or {}
-    if policy_data.codex_provider_ref ~= nil and not request.configuration then
-        return fail("DENIED", "launch policy " .. request.policy_ref .. " selects a provider and requires its configuration")
+    -- Render from this admission snapshot. The request file must be exactly
+    -- the selected driver's result; a no-provider policy requires that same
+    -- driver to return no file.
+    local prepare_pinned, prepare_pin_error = resolver.pin()
+    if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
+    local expected, render_error = render_from_pinned(prepare_pinned, request.binding_ref, request.policy_ref, request.action_id)
+    if render_error then return fail("DENIED", render_error) end
+    if expected ~= nil then
+        local given = request.configuration
+        if not given then return fail("DENIED", "launch policy " .. request.policy_ref .. " selects a provider and requires its configuration") end
+        if given.revision ~= expected.revision or given.path ~= expected.path or given.digest ~= expected.digest or given.content ~= expected.content or given.provider_ref ~= expected.provider_ref then
+            return fail("DENIED", "configuration does not match what the activated driver renders")
+        end
+    elseif request.configuration then
+        return fail("DENIED", "launch policy " .. request.policy_ref .. " selects no provider configuration")
     end
-    if request.configuration then
-        local configuration = request.configuration
-        if policy_data.codex_provider_ref ~= configuration.provider_ref then
-            return fail("DENIED", "configuration names provider " .. configuration.provider_ref .. " which the launch policy " .. request.policy_ref .. " does not select")
-        end
-        local provider_entry, provider_error = registry.get(configuration.provider_ref)
-        if provider_error or not provider_entry then return fail("DENIED", "configuration names provider " .. configuration.provider_ref .. " which is not in the registry") end
-        local provider, decode_error = codex_configuration.decode(configuration.provider_ref, provider_entry)
-        if not provider then return fail("DENIED", "configuration provider: " .. tostring(decode_error)) end
-        -- A launch with a gateway binding carries the gateway section inside
-        -- this file, rendered by the gateway library for this action.
-        local gateway_section: string? = nil
-        if request.gateway then
-            local address, endpoint_error = gateway_configuration.endpoint()
-            if not address then return fail("DENIED", endpoint_error or "gateway endpoint") end
-            gateway_section = gateway_configuration.codex_section(address, request.action_id)
-            if #request.gateway.hooks > 0 then
-                local codex_hooks, hooks_error = gateway_configuration.codex_hooks(address, request.action_id, request.gateway.hooks)
-                if not codex_hooks then return fail("INVALID", hooks_error or "codex hooks") end
-                gateway_section = gateway_section .. codex_hooks.section
-            end
-        end
-        local expected, render_error = codex_configuration.projection(provider, gateway_section)
-        if not expected then return fail("INVALID", render_error or "configuration") end
-        if configuration.revision ~= expected.revision or configuration.path ~= expected.path or configuration.digest ~= expected.digest or configuration.content ~= expected.content then
-            return fail("DENIED", "configuration does not match what the host provider " .. configuration.provider_ref .. " renders")
-        end
-    end
+    local policy_entry = resolver.entry(prepare_pinned, request.policy_ref)
+    local policy_data = policy_entry and bounds.object(policy_entry.data) or {}
     -- A gateway binding is host-selected the same way: the policy names the
     -- tool set and the configuration must be exactly what the host's
     -- endpoint renders for this action.

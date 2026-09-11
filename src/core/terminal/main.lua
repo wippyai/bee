@@ -64,7 +64,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local preferences = appearance.defaults()
     local start: menu.State? = nil
     local connection_open = false
-    local connection_info = connection.new(owner, workspace_id, ctx.get("bee.display_id"), ctx.get("bee.hive_supervisor"))
+    local connection_info: connection.Info = connection.new(owner, workspace_id, ctx.get("bee.display_id"), ctx.get("bee.hive_supervisor"))
     local captured_releases: {[string]: boolean} = {}
     local captured_mouse = false
     local active_selection: selection.State? = nil
@@ -684,9 +684,17 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 handled = true; dirty = true
             elseif connection_open and event.type ~= "resize" and event.type ~= "close"
                 and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q"))) then
-                if (event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release")
-                    or (event.type == "mouse" and event.action == "press") then
+                if event.type == "key" and event.action ~= "release" and event.key == "d"
+                    and event.alt ~= true and event.ctrl ~= true then
+                    connection.toggle_details(connection_info)
+                elseif event.type == "key" and (kind == "esc" or kind == "escape") and event.action ~= "release" then
                     connection_open = false
+                elseif event.type == "mouse" and event.action == "press" then
+                    if event.button == "left" and connection.details_hit(width, height, connection_info, event.x, event.y) then
+                        connection.toggle_details(connection_info)
+                    elseif not connection.contains(width, height, connection_info, event.x, event.y) then
+                        connection_open = false
+                    end
                 end
                 if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
                 if event.type == "mouse" and event.action == "press" then captured_mouse = true end

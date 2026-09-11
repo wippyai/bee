@@ -4,7 +4,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
-type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?}
+type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?, details: boolean?}
 local M = {}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or value == "" or #value > limit or value:find("%c") then return nil end
@@ -16,12 +16,31 @@ function M.new(owner: string, workspace: string, display: unknown, supervisor: u
     return {node = node, workspace = workspace, display = line(display, 64) or "Current session",
         hive = selected and "Service running" or "Not reported", supervisor = selected}
 end
+function M.toggle_details(info: Info)
+    info.details = not info.details
+end
+type Geometry = {left: integer, size: integer, rows: integer}
+local function geometry(width: integer, height: integer, details: boolean?): Geometry
+    local size = math.floor(math.min(44, width - 2))
+    local rows = math.floor(math.min(details and 15 or 13, height - 2))
+    return {left = width - size, size = size, rows = rows}
+end
+function M.contains(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
+    local rect = geometry(width, height, info.details)
+    local left, size, rows = rect.left, rect.size, rect.rows
+    return width >= 12 and height >= 4 and x >= left and x < left + size and y >= 2 and y < 2 + rows
+end
+function M.details_hit(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
+    local rect = geometry(width, height, info.details)
+    local left, rows = rect.left, rect.rows
+    return M.contains(width, height, info, x, y) and y == rows and x >= left + 2 and x < left + 15
+end
 function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, info: Info, ready: boolean)
     if width < 12 or height < 4 then return end
     local theme = appearance.theme(preferences.theme)
-    local size = math.floor(math.min(48, width - 2))
-    local rows = math.floor(math.min(16, height - 2))
-    local left, top = width - size, 2
+    local rect = geometry(width, height, info.details)
+    local left, size, rows = rect.left, rect.size, rect.rows
+    local top = 2
     local normal = appearance.style(theme.text, theme.surface)
     local muted = appearance.style(theme.muted, theme.surface)
     local accent = appearance.style(theme.accent, theme.surface)
@@ -35,27 +54,42 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         canvas:put(left + size - 1, y, border .. "│" .. reset, 1)
     end
     local function put(row: integer, text: string, style: string)
-        if row < rows - 1 then canvas:put(left + 2, top + row, style .. tty.text.truncate(text, size - 4, "…") .. reset, size - 4) end
+        if row > 0 and row < rows - 1 then canvas:put(left + 2, top + row, style .. tty.text.truncate(text, size - 4, "…") .. reset, size - 4) end
     end
-    if rows < 16 then
-        put(1, "CONNECTION", accent)
-        put(2, "Hive  " .. info.hive, normal)
-        put(3, "Node  " .. info.node, normal)
-        put(4, "Workspace  " .. names.label(info.workspace), normal)
-        put(5, "Display  " .. names.label(info.display), normal)
-        put(6, tostring(width) .. " × " .. tostring(height) .. "  ·  F9 / Esc close", muted)
-        return
+    local function pair(row: integer, label: string, value: string)
+        local space = math.floor(math.max(0, size - 5 - tty.text.width(label)))
+        local right = tty.text.truncate(value, space, "…")
+        put(row, label, muted)
+        if row > 0 and row < rows - 1 and space > 0 then
+            canvas:put(left + size - 2 - tty.text.width(right), top + row, normal .. right .. reset, tty.text.width(right))
+        end
+    end
+    local function rule(row: integer)
+        put(row, string.rep("─", size - 4), border)
     end
     put(1, "CONNECTION", accent)
-    put(3, "HIVE       " .. info.hive, normal)
-    put(5, "NODE       Running", muted)
-    put(6, info.node, normal)
-    put(8, "WORKSPACE  " .. (ready and "Ready" or "Loading"), muted)
-    put(9, names.label(info.workspace), normal)
-    put(10, info.workspace, muted)
-    put(11, "DISPLAY    " .. tostring(width) .. " × " .. tostring(height), muted)
-    put(12, names.label(info.display), normal)
-    put(13, info.display, muted)
-    put(14, "F9 / Esc close", muted)
+    if rows < 13 then
+        pair(2, "HIVE", info.hive)
+        pair(3, "NODE", info.node)
+        put(4, "WORKSPACE  " .. names.label(info.workspace), normal)
+        put(5, "DISPLAY    " .. names.label(info.display), normal)
+        put(6, tostring(width) .. " × " .. tostring(height) .. "  ·  " .. (ready and "Ready" or "Loading"), muted)
+    else
+        pair(2, "HIVE", info.hive)
+        pair(3, "NODE", info.node)
+        rule(4)
+        pair(5, "WORKSPACE", ready and "Ready" or "Loading")
+        put(6, names.label(info.workspace), normal)
+        local shift = 0
+        if info.details and rows >= 15 then
+            put(7, info.workspace, muted)
+            shift = 1
+        end
+        rule(7 + shift)
+        pair(8 + shift, "DISPLAY", tostring(width) .. " × " .. tostring(height))
+        put(9 + shift, names.label(info.display), normal)
+        if info.details and rows >= 15 then put(11, info.display, muted) end
+    end
+    put(rows - 2, (info.details and "‹ Less [D]" or "› Details [D]") .. "     F9 / Esc close", muted)
 end
 return M

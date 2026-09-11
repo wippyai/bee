@@ -16,6 +16,16 @@ def exercise(packed=False):
             for label in ('HIVE', 'NODE', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
+            assert not re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text()), ui.text()
+            Path('/tmp/bee-connection-compact-frame.txt').write_text(ui.text())
+            # Clicking inside the card keeps it open; Details is a real hit target.
+            ui.mouse(0, 60, 3)
+            ui.mouse(0, 60, 3, True)
+            ui.pump(.1)
+            assert 'CONNECTION' in ui.text(), ui.text()
+            ui.mouse(0, 60, 13)
+            ui.mouse(0, 60, 13, True)
+            ui.wait('Less [D]')
             identities = re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text())
             assert len(set(identities)) >= 2, 'Full workspace/display IDs were clipped: ' + ui.text()
             ui.key(b'\x1b')
@@ -32,11 +42,13 @@ def exercise(packed=False):
             assert 'CONNECTION' not in ui.text(), ui.text()
             ui.key(b'\x1b[20~')
             ui.wait('CONNECTION')
+            ui.key(b'd')
+            ui.wait('Less [D]')
             assert all(identity in ui.text() for identity in identities), 'F12 changed displayed identities'
             Path('/tmp/bee-connection-dropdown-frame.txt').write_text(ui.text())
             ui.resize(42, 12)
             ui.pump(.3)
-            for label in ('Hive', 'Node', 'Workspace', 'Display'):
+            for label in ('HIVE', 'NODE', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert all(len(row) <= 42 for row in ui.screen.display), ui.text()
             ui.resize(100, 30)

@@ -400,8 +400,12 @@ def public_migration():
         shutil.copytree(ROOT / "src", project / "src")
         for name in (".wippy.yaml", "wippy.lock"):
             shutil.copy2(ROOT / name, project / name)
+        # The removed combined actor is historical test data, never production.
+        legacy = ROOT / "tests/fixtures/legacy_workspace"
+        shutil.copy2(legacy / "main.lua", project / "src/core/workspace/main.lua")
         index = project / "src/core/workspace/_index.yaml"
         document = yaml.safe_load(index.read_text())
+        document["entries"].extend(yaml.safe_load((legacy / "_index.yaml").read_text())["entries"])
         next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {
             "name": "legacy-desktop-probe", "short": "Migration baseline", "security": {
                 "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:core_spawn_policy",

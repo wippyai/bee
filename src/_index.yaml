@@ -154,8 +154,6 @@ entries:
     - process.host
     resources:
     - bee.host:main
-    - bee.workspace:main
-    - bee.workspace:launch
     - bee.client:main
     - bee.client:local
     - bee.client:local_command

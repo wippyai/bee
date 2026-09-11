@@ -47,6 +47,8 @@ for path in (ROOT / "src").rglob("_index.yaml"):
             assert path.is_relative_to(ROOT / "src/apps"), ("App outside default package", identity)
         assert entry.get("meta", {}).get("type") != "test", identity
 
+assert not {"bee.workspace:main", "bee.workspace:launch"} & entries.keys(), "Historical combined desktop must not ship"
+
 for entry in entries.values():
     for target in entry.get("imports", {}).values():
         assert target in entries, target

@@ -92,6 +92,22 @@ func run() error {
 		return fmt.Errorf("copy src: %w", err)
 	}
 
+	// This host-authority fixture exercises singleton thread fencing. Production
+	// Settings allows independent display instances; select singleton explicitly
+	// only in this disposable composition to preserve the generic fencing proof.
+	settingsManifest := filepath.Join(root, "src", "apps", "settings", "_index.yaml")
+	settingsData, err := os.ReadFile(settingsManifest)
+	if err != nil {
+		return fmt.Errorf("read fixture Settings policy: %w", err)
+	}
+	if strings.Count(string(settingsData), "instance_policy: multiple") != 1 {
+		return fmt.Errorf("unexpected production Settings instance policy")
+	}
+	settingsData = []byte(strings.Replace(string(settingsData), "instance_policy: multiple", "instance_policy: singleton", 1))
+	if err := os.WriteFile(settingsManifest, settingsData, 0600); err != nil {
+		return fmt.Errorf("select fixture singleton policy: %w", err)
+	}
+
 	// Copy fixture into src/workspace_hosts
 	if err := os.CopyFS(filepath.Join(root, "src", "workspace_hosts"), os.DirFS("tests/fixtures/workspace_hosts")); err != nil {
 		return fmt.Errorf("copy fixture: %w", err)

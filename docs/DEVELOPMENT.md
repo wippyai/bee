@@ -15,7 +15,7 @@ install the executable using the README before testing global launch behavior.
 | Location | Owns |
 |---|---|
 | `src/_index.yaml` | Host composition, resources and protected admission/policy wiring |
-| `src/core/workspace` | Legacy combined actor and shared workspace persistence/checkpoint decoding during extraction |
+| `src/core/workspace` | Workspace persistence and checkpoint decoding; historical combined actor exists only in upgrade fixtures |
 | `src/core/host` | TTY-free workspace host, client admission, renderer grants and live inventory |
 | `src/core/launch` | Local physical startup helper and separate TTY-free supervisor: admission, presenter selection and coordinated exit |
 | `src/core/client` | Desktop client, public command entry, qualified layout, owned client store and question projection |

@@ -38,6 +38,7 @@ entries:
     selection: bee.terminal:selection
     appearance: bee.desktop:appearance
     surface: bee.application:status_surface
+    names: bee.desktop:names
 - name: title_editor_test
   kind: function.lua
   source: file://title_editor_test.lua

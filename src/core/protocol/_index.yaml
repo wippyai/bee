@@ -24,3 +24,8 @@ entries:
   imports:
     arguments: bee.application:arguments
     thread_bounds: bee.threads.records:bounds
+- name: display_transfer
+  kind: library.lua
+  source: file://display_transfer.lua
+  imports:
+    contract: bee.protocol:application

@@ -9,6 +9,7 @@ local menu = require("menu")
 local selection = require("selection")
 local appearance = require("appearance")
 local surface = require("surface")
+local names = require("names")
 local function plain_text(value: string): string return string.gsub(value, "\27%[[0-9;]*m", "") end
 local catalog: {menu.Descriptor} = {
     {definition_id = "sample:settings", title = "Settings", group = "Tools", role = "appearance"},
@@ -174,6 +175,40 @@ local function define_tests()
             local next_state = menu.respond(hover.state, panel, items, {type = "key", action = "press", key_type = "end"})
             test.eq(next_state.state.kind, "window")
             test.eq(next_state.state.x, 79)
+        end)
+        test.it("shows only current assignment destinations in Send to display", function()
+            local scene = model.add(model.new(80, 24), "one", "instance-one", "One")
+            local current = "0123456789abcdef0123456789abcdef"
+            local target = "fedcba9876543210fedcba9876543210"
+            local other = "00112233445566778899aabbccddeeff"
+            local transfers: menu.TransferSnapshot = {version = 1, revision = 1, items = {{tab_id = "one", instance_id = "instance-one",
+                assignment_revision = 7, targets = {current, target, other}}}}
+            local state: menu.State = {selected = 1, offset = 0, kind = "window", target = "one", x = 1, y = 2}
+            local items = menu.entries(state, scene, false, {}, transfers, current)
+            local send: menu.Item? = nil
+            for _, value in ipairs(items) do if value.action == "group:transfer" then send = value; break end end
+            test.not_nil(send)
+            if send then
+                test.is_true(send.enabled)
+                test.eq(#(send.children or {}), 2)
+                local seen_target, seen_other = false, false
+                for _, child in ipairs(send.children or {}) do
+                    if child.action == "transfer:" .. target and child.label == names.label(target) then seen_target = true end
+                    if child.action == "transfer:" .. other and child.label == names.label(other) then seen_other = true end
+                end
+                test.is_true(seen_target)
+                test.is_true(seen_other)
+                for _, child in ipairs(send.children or {}) do test.is_true(child.enabled) end
+            end
+            local no_targets: menu.TransferSnapshot = {version = 1, revision = 2, items = {{tab_id = "one", instance_id = "instance-one",
+                assignment_revision = 8, targets = {current}}}}
+            local empty = menu.entries(state, scene, false, {}, no_targets, current)
+            for _, value in ipairs(empty) do
+                if value.action == "group:transfer" then
+                    test.is_false(value.enabled)
+                    test.eq(#(value.children or {}), 0)
+                end
+            end
         end)
         test.it("enters and leaves nested groups without launching on hover", function()
             local scene = model.new(80, 24)

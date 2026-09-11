@@ -47,3 +47,11 @@ entries:
   imports:
     interaction: bee.application:interaction
     test: wippy.test:test
+- name: display_transfer_test
+  kind: function.lua
+  source: file://display_transfer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    transfer: bee.protocol:display_transfer
+    test: wippy.test:test

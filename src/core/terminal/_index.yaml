@@ -43,6 +43,7 @@ entries:
     selection: bee.terminal:selection
     appearance: bee.desktop:appearance
     names: bee.desktop:names
+    display_transfer: bee.protocol:display_transfer
     status_surface: bee.application:status_surface
 - name: render
   kind: library.lua
@@ -61,6 +62,7 @@ entries:
     menu: bee.terminal:menu
     selection: bee.terminal:selection
     surface: bee.application:status_surface
+    display_transfer: bee.protocol:display_transfer
 - name: bindings
   kind: library.lua
   source: file://bindings.lua
@@ -77,6 +79,8 @@ entries:
   imports:
     model: bee.desktop:model
     appearance: bee.desktop:appearance
+    names: bee.desktop:names
+    display_transfer: bee.protocol:display_transfer
 - name: bar
   kind: library.lua
   source: file://bar.lua

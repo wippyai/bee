@@ -22,6 +22,7 @@ local delivery = require("delivery")
 local selection = require("selection")
 local connection = require("connection")
 local names = require("names")
+local display_transfer = require("display_transfer")
 
 local function main(owner: string, initial_application: string?, secondary_application: string?)
     if ctx.get("bee.workspace_owner") ~= owner or owner == "" then error("Untrusted presenter bootstrap") end
@@ -38,12 +39,16 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local answered: {[string]: boolean} = {}
     local retire = assert(process.listen("bee.workspace.retire", {message = true}))
     local clipboard_results = assert(process.listen("bee.clipboard.result", {message = true}))
+    local transfer_updates = assert(process.listen("bee.display.transfers", {message = true}))
+    local transfer_results = assert(process.listen("bee.display.transfer_result", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     assert(tty.mouse(true))
     local width, height = tty.screen_size()
     local scene: model.Scene = model.new(width, height)
     local status_values: status_surface.Snapshot = {revision = 0, items = {}}
+    local transfers: display_transfer.Snapshot = {version = 1, revision = 0, items = {}}
+    local display_id = contract.workspace_id(ctx.get("bee.display_id")) or ""
     assert(process.monitor(owner))
     local tabs_order: {string} = {}
     local catalog: {menu.Descriptor} = {}
@@ -66,6 +71,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local pending_clipboard: string? = nil
     local remote_copy_reply: string? = nil
     local pending_clipboard_at: integer? = nil
+    local pending_transfers: {[string]: {id: string, instance_id: string, target_display_id: string}} = {}
     local CLIPBOARD_TIMEOUT_NS: integer = 10 * 1000 * 1000 * 1000
     local status: string = "Starting workspace"
     local window_failure: {id: string, text: string}? = nil
@@ -227,8 +233,55 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         return {request_id = request_id, status = result_status, error = error_text}
     end
-    local function invoke(action: string)
-        local target = start and start.target or input_focus()
+    local function transfer_item(id: string, instance_id: string): display_transfer.Item?
+        for _, item in ipairs(transfers.items) do
+            if item.tab_id == id and item.instance_id == instance_id then return item end
+        end
+        return nil
+    end
+    local function send_transfer(id: string, target_display_id: string)
+        local instance_id: string? = nil
+        for _, win in ipairs(scene.windows) do
+            if win.id == id then instance_id = win.instance_id; break end
+        end
+        if not instance_id then status = "Transfer unavailable: window is no longer open"; return end
+        local item = transfer_item(id, instance_id)
+        if not item then status = "Transfer unavailable: assignment changed"; return end
+        local pending_count = 0
+        for _, pending in pairs(pending_transfers) do
+            pending_count = pending_count + 1
+            if pending.id == id and pending.instance_id == instance_id then
+                status = "Transfer pending for this window"
+                return
+            end
+        end
+        if pending_count >= 16 then
+            status = "Transfer unavailable: too many requests pending"
+            return
+        end
+        local available = false
+        for _, target in ipairs(item.targets) do
+            if target == target_display_id and target ~= display_id then available = true; break end
+        end
+        if not available then status = "Transfer unavailable: destination changed"; return end
+        local request_id = uuid.v7()
+        local action = {version = 1, op = "transfer", request_id = request_id, id = id,
+            instance_id = instance_id, target_display_id = target_display_id,
+            expected_revision = item.assignment_revision}
+        if not display_transfer.action(action) then
+            status = "Transfer unavailable: invalid request"
+            return
+        end
+        local sent, err = process.send(owner, "bee.workspace.control", action)
+        if not sent then
+            status = "Transfer unavailable: " .. tostring(err or "delivery failed")
+            return
+        end
+        pending_transfers[request_id] = {id = id, instance_id = instance_id, target_display_id = target_display_id}
+        status = "Sending to display " .. names.label(target_display_id)
+    end
+    local function invoke(action: string, selected_target: string?)
+        local target = selected_target or (start and start.target) or input_focus()
         start = nil
         if action == "select_text" then begin_selection(target)
         elseif action == "rename" then
@@ -268,6 +321,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
             cancel_selection()
             rejoining = true
             process.send(owner, "bee.workspace.control", {version = 1, op = "rejoin"})
+        elseif action:sub(1, 9) == "transfer:" then
+            send_transfer(target, action:sub(10))
         end
     end
     local function paint()
@@ -313,7 +368,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. names.label(workspace_id),
-            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated)
+            preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
+            transfers, display_id)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
@@ -321,8 +377,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
-            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(), dialog_states:case_receive(),
-            dialog_results:case_receive(), ticks:case_receive()})
+            replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
+            transfer_updates:case_receive(), transfer_results:case_receive(), dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
@@ -379,6 +435,36 @@ local function main(owner: string, initial_application: string?, secondary_appli
                         status = "Clipboard request submitted"
                     elseif reply.status == "unavailable" then status = "Clipboard request unavailable" .. (reply.error ~= "" and ": " .. reply.error or "")
                     else status = "Clipboard request rejected" .. (reply.error ~= "" and ": " .. reply.error or "") end
+                    dirty = true
+                end
+            end
+        elseif selected.channel == transfer_updates then
+            local message = selected.value
+            if message:from() == owner then
+                local incoming = display_transfer.snapshot(message:payload():data())
+                if incoming and incoming.revision > transfers.revision then
+                    transfers = incoming
+                    -- A contextual menu may have been built from the previous
+                    -- assignment revision. Reopen it against the new snapshot.
+                    if start and start.kind == "window" then start = nil end
+                    dirty = true
+                end
+            end
+        elseif selected.channel == transfer_results then
+            local message = selected.value
+            if message:from() == owner then
+                local result = display_transfer.result(message:payload():data())
+                local pending: {id: string, instance_id: string, target_display_id: string}? = nil
+                if result then pending = pending_transfers[result.request_id] end
+                if result and pending and pending.id == result.id and pending.instance_id == result.instance_id
+                    and pending.target_display_id == result.target_display_id then
+                    pending_transfers[result.request_id] = nil
+                    if result.error_code == "" then
+                        status = "Sent to display " .. names.label(result.target_display_id)
+                    else
+                        local message_text = result.error ~= "" and result.error or result.error_code
+                        status = "Transfer failed: " .. message_text
+                    end
                     dirty = true
                 end
             end
@@ -618,16 +704,17 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 if event.type == "key" then captured_releases[kind] = true else captured_mouse = true end
                 handled = true; dirty = true
             elseif start and event.type ~= "resize" and event.type ~= "close" then
-                local items = menu.entries(start, scene, initial_application ~= nil, catalog)
+                local items = menu.entries(start, scene, initial_application ~= nil, catalog, transfers, display_id)
                 local panel = menu.panel(width, height, #items, start)
                 local response = menu.respond(start, panel, items, event)
+                local menu_target = start and start.target
                 local changed = response.state.selected ~= start.selected or response.state.offset ~= start.offset
                     or response.state.path ~= start.path
                 start = response.state
                 if response.close then start = nil end
                 if event.type == "key" and event.action ~= "release" then captured_releases[kind] = true end
                 if event.type == "mouse" and event.action == "press" then captured_mouse = true end
-                if response.action ~= "" then invoke(response.action) end
+                if response.action ~= "" then invoke(response.action, menu_target) end
                 handled = true
                 if changed or response.close or response.action ~= "" then dirty = true end
             end
@@ -789,6 +876,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     process.unlisten(dialog_states)
     process.unlisten(dialog_results)
     process.unlisten(clipboard_results)
+    process.unlisten(transfer_updates)
+    process.unlisten(transfer_results)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
     delivery.shutdown()
     output:close()

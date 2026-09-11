@@ -84,8 +84,8 @@ def check_value_interface(identity):
         return
     checked_interfaces.add(identity)
     entry = entries[identity]
-    assert entry["kind"] == "library.lua", ("Desktop interface is not a value library", identity)
-    assert not entry.get("modules") and not entry.get("security"), ("Desktop interface gained runtime authority", identity)
+    assert entry["kind"] == "library.lua", ("Interface is not a value library", identity)
+    assert not entry.get("modules") and not entry.get("security"), ("Interface gained runtime authority", identity)
     for dependency in entry.get("imports", {}).values():
         check_value_interface(dependency)
 for interfaces in desktop_interfaces.values():
@@ -98,6 +98,9 @@ core_value_interfaces = {"bee.protocol:application": {"bee.threads.records:bound
 for interfaces in core_value_interfaces.values():
     for identity in interfaces:
         check_value_interface(identity)
+
+# Launch admission constructs typed grants without importing a placement owner.
+check_value_interface("bee.placement:types")
 
 # Registry edges, including broker/workspace, must respect the layer boundary.
 # Carrier and placement share only the host-selected configuration renderer;
@@ -128,7 +131,7 @@ for identity, entry in entries.items():
         if location.parts[0] == "driver":
             assert target_location.parts[0] == "driver" or target.startswith("bee.threads.records:"), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] != ("carrier",):
-            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:"), (identity, target)
+            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:") or (identity == "bee.harness.launch:admission" and target == "bee.placement:types"), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] == ("carrier",):
             assert target_location.parts[0] in {"harness", "driver", "placement"} or target.startswith("bee.threads.records:") or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
         if location.parts[0] == "hive":

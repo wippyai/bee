@@ -71,7 +71,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-check: installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check
+check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/architecture.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
@@ -197,3 +197,7 @@ client-defaults-check:
 .PHONY: hive-manager-check
 hive-manager-check: pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_manager_app.py
+
+.PHONY: identity-native-check
+identity-native-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/identity_native.py

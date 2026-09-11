@@ -36,10 +36,19 @@ directories and receipts; this module owns none of them.
   nothing is materialized first.
 - Execution state (`intended`, `starting`, `running`, `stopping`, `exited`,
   `uncertain`) and cleanup state (`pending`, `complete`, `uncertain`) are
-  separate. Cleanup runs only from `exited`.
+  separate. Cleanup runs only from `exited`. A process-group absence proof
+  requires a successful, fully decoded process-table query; command failure,
+  malformed output and an empty result retain uncertainty. A failed signal
+  probe is never evidence that the group is gone.
 - Signal evidence is not exit evidence. A liveness observation is returned
   beside the recorded state, never folded into it.
 - Capabilities: `direct_process` controls the launched pid only,
   `process_group` controls what remains in the created group, and
   `contained_tree` needs a stronger boundary than a process group. A
   descendant that starts its own session escapes a group.
+
+`make identity-native-check` loads the production identity library in a minimal
+native host. It verifies a live group, the same group after its leader is killed
+and reaped, and failed, malformed and empty process-table responses. These
+observations prove the absence check; they do not establish managed-terminal
+identity transfer or process-tree containment.

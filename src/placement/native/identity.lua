@@ -7,7 +7,7 @@ local resources = require("resources")
 local M = {}
 type Identity = {pid: integer, pgid: integer?, start_ticks: integer?, boot_id: string?}
 type Observation = {observed: boolean, alive: boolean?, detail: string}
-local function capture(executor: exec.Executor, command: string): (string?, string?)
+local function capture(executor: exec.Executor, command: string): (string?, string?, integer?)
     local proc, exec_error = executor:exec(command)
     if not proc then return nil, tostring(exec_error) end
     local stdout = proc:stdout_stream()
@@ -19,9 +19,11 @@ local function capture(executor: exec.Executor, command: string): (string?, stri
         if not chunk then break end
         chunks[#chunks + 1] = tostring(chunk)
     end
-    proc:wait()
+    local code, wait_error = proc:wait()
     stdout:close()
-    return table.concat(chunks), nil
+    if wait_error then return nil, "identity command failed: " .. tostring(wait_error), nil end
+    if type(code) ~= "number" or code ~= math.floor(code) then return nil, "identity command returned no exit code", nil end
+    return table.concat(chunks), nil, math.floor(code)
 end
 local function stat_command(pid: integer): string
     local stat = "/proc/" .. tostring(pid) .. "/stat"
@@ -65,14 +67,25 @@ end
 -- as long as one member lives, so "gone" is proof and "alive" may be a
 -- reused id: the safe direction for cleanup.
 function M.group_absent(pgid: integer): (boolean?, string?)
+    if pgid <= 1 then return nil, "invalid process group" end
     local executor, executor_error = exec.get(resources.EXECUTOR)
     if not executor then return nil, "executor unavailable: " .. tostring(executor_error) end
-    local output, err = capture(executor, "sh -c 'kill -0 -- -" .. tostring(pgid) .. " 2>/dev/null && echo alive || echo gone'")
+    -- A failed kill probe can mean unsupported shell syntax or denied access.
+    -- Only a successful, fully decoded process table proves group absence.
+    local output, err, code = capture(executor, "ps -e -o pgid=")
     executor:release()
     if not output then return nil, err end
-    if output:find("gone", 1, true) then return true, nil end
-    if output:find("alive", 1, true) then return false, nil end
-    return nil, "group probe returned nothing"
+    if code ~= 0 then return nil, "group probe failed with exit " .. tostring(code) end
+    local seen, present = false, false
+    for line in output:gmatch("[^\r\n]+") do
+        local digits = line:match("^%s*(%d+)%s*$")
+        local group = digits and tonumber(digits) or nil
+        if not group then return nil, "group probe returned an invalid process table" end
+        seen = true
+        if group == pgid then present = true end
+    end
+    if not seen then return nil, "group probe returned nothing" end
+    return not present, nil
 end
 -- Signals the identified leader's group, or nothing when identity is not
 -- proven alive first.

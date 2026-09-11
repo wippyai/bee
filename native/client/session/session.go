@@ -31,6 +31,7 @@ type Selection struct{ Workspace, Desktop string }
 // owner cannot acknowledge promptly, report uncertainty and retire this actor;
 // the owner's monitor still owns eventual attachment cleanup.
 const detachTimeout = time.Second
+const localOwnerAuthenticationTimeout = 2 * time.Second
 
 // ErrOwnerUnavailable means native mesh authentication did not reach the
 // published owner. It is emitted before supervisor admission or any desktop
@@ -116,14 +117,17 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 	transport, closeTransport := cleanupLifetime(ctx)
 	defer closeTransport()
 	reachedOwner := false
-	err = mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	err = mesh.SameAccountWithStartupTimeout(transport, cfg.Directory, localOwnerAuthenticationTimeout, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
 		reachedOwner = true
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})
 	if err != nil && !reachedOwner {
-		return fmt.Errorf("%w: %v", ErrOwnerUnavailable, err)
+		if err := transport.Err(); err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: %w", ErrOwnerUnavailable, err)
 	}
 	return err
 }

@@ -334,8 +334,12 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 		// The stale descriptor remains. Automatic launch must classify the
 		// failed pre-admission path, start one contender, and let runOwner elect
 		// the replacement before the physical session is admitted.
+		started := time.Now()
 		if err := physicalStartupProbe(ctx, filepath.Join(coldState, DirectoryName)); err != nil {
 			t.Fatal("automatic stale-owner recovery:", err)
+		}
+		if elapsed := time.Since(started); elapsed > 15*time.Second {
+			t.Fatalf("stale local owner recovery took %v", elapsed)
 		}
 	}
 	probeConcurrentStarts(t, ctx, filepath.Join(stage, "concurrent-state"), stage)

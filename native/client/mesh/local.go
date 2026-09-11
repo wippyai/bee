@@ -38,8 +38,9 @@ const cleanupTimeout = 3 * time.Second
 // TLS uses the runtime's existing certificate/key/CA files. There is no fallback
 // from a selected TLS connection to plaintext.
 type LocalConfig struct {
-	Directory string
-	TLS       internode.ManagerTLSConfig
+	Directory      string
+	TLS            internode.ManagerTLSConfig
+	StartupTimeout time.Duration // Optional same-machine authentication bound.
 }
 
 // Local runs one freshly enrolled client against an existing same-account owner.
@@ -58,6 +59,13 @@ func Local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 // admission is still required; this is not remote enrollment.
 func SameAccount(ctx context.Context, directory string, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) error {
 	return local(ctx, LocalConfig{Directory: directory}, run, true)
+}
+
+// SameAccountWithStartupTimeout keeps the live client lifetime tied to ctx, but
+// bounds only initial same-machine owner authentication. It is used when a
+// retained local descriptor may outlive an abruptly terminated owner.
+func SameAccountWithStartupTimeout(ctx context.Context, directory string, timeout time.Duration, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error) error {
+	return local(ctx, LocalConfig{Directory: directory, StartupTimeout: timeout}, run, true)
 }
 
 func local(ctx context.Context, config LocalConfig, run func(context.Context, *stackpkg.Stack, rendezvous.Descriptor) error, sameAccount bool) (result error) {
@@ -154,7 +162,11 @@ func local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 	defer func() { result = errors.Join(result, names.(boot.Stopper).Stop(context.WithoutCancel(root))) }()
 	lifetime, endLifetime := context.WithCancel(root)
 	defer endLifetime()
-	startup, cancel := context.WithTimeout(ctx, startupTimeout)
+	timeout := startupTimeout
+	if config.StartupTimeout > 0 {
+		timeout = config.StartupTimeout
+	}
+	startup, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	abortStartup := context.AfterFunc(startup, endLifetime)
 	defer abortStartup()

@@ -9,6 +9,7 @@ local json = require("json")
 local time = require("time")
 local process = require("process")
 local registry = require("registry")
+local security = require("security")
 local ACTOR = "bee.test.gateway"
 local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
@@ -67,8 +68,29 @@ local function record(text: string)
     ok(call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
         body = {message_id = "m-" .. key(), message_kind = "request", recipient_ids = {}, content = {text = text}}}), "record")
 end
+local function prove_configuration_scope(address: string)
+    local policy, policy_error = security.policy("bee.gateway_probe:configuration_scope")
+    assert(policy and not policy_error, "configuration scope policy")
+    local selected, scope_error = security.new_scope({policy})
+    assert(selected and not scope_error, "configuration scope: " .. tostring(scope_error))
+    local executor, executor_error = funcs.new():with_scope(selected)
+    assert(executor and not executor_error, "configuration caller scope: " .. tostring(executor_error))
+    local result, call_error = executor:call("bee.gateway_probe:render_configuration", {address = address, action_id = "scope-render"})
+    assert(result and not call_error, "configuration scope call: " .. tostring(call_error))
+    local value = result :: Object
+    assert(value.placement_db_denied == true, "callee acquired placement database")
+    assert(value.placement_executor_denied == true, "callee acquired placement executor")
+    assert(value.placement_policy_denied == true, "callee recovered placement policy")
+    assert(value.funcs_security_denied == true, "callee rebuilt a security scope")
+    assert(value.scope_create_denied == true, "callee created a custom scope")
+    local projection = value.projection :: Object
+    assert(projection.path == ".claude.json", "unexpected rendered configuration path")
+    assert(type(projection.content) == "string" and (projection.content :: string):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
+    assert((projection.content :: string):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
+end
 local function main()
     ADDRESS = endpoint()
+    prove_configuration_scope(ADDRESS)
     local opened = ok(call("bee.gateway:open", {address = ADDRESS}), "open")
     assert(opened.epoch == 1, "first epoch")
     ok(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")

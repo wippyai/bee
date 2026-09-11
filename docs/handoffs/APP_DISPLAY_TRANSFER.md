@@ -17,8 +17,7 @@ stale source-bind denial, repeated moves, receipt replay, manual restore settlem
 and dead-assignment retirement.
 
 This is not installed globally. Source and target layout-save failure/reconnect
-checks pass on source and pack. Final combined gates and host recovery lifecycle
-corrections remain pending.
+checks pass on source and pack. Final combined desktop and executable gates remain pending.
 
 
 ## Ownership
@@ -116,9 +115,11 @@ host fixture also proves old input revocation, target rebind and committed retry
 after destination detach. Injected source/target layout-save failures also preserve the committed transfer:
 reconnecting the source removes its stale tab, and reconnecting the target adds
 the missing tab with the same shell PID and variable. Both paths retain the
-neighbor app. These modes run in `make client-desktop-check`. Host manual-restore
-settlement and dead-assignment retirement after restart still require correction
-and acceptance before global installation.
+neighbor app. These modes run in `make client-desktop-check`. Host manual-restore settlement and dead-assignment retirement pass source/pack
+acceptance. A combined desktop smoke exposed duplicate bind requests from
+assignment and open projections; sharing the in-flight bind removes the transient
+mount denial and passes the same source/pack smoke, including six presenter
+rejoins and crash recovery. Final desktop and executable gates precede installation.
 
 The combined proof must move a Terminal through the real window menu, preserve
 its exact PID and in-memory variable, retain the neighboring app, reconcile both

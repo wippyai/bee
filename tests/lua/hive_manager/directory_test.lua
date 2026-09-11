@@ -95,23 +95,66 @@ local function define_tests()
             test.eq(decoded[1].addr, "")
             test.eq(decoded[2].node_id, "me")
         end)
-        test.it("refuses desktop listing and attachment without calling anyone", function()
+        test.it("preserves catalog denial and keeps attachment unavailable", function()
             local live = directory.live({
                 local_node = "local",
                 lookup = function(): (string?, string?) return "{local@bee.hive:supervisor_host|1}", nil end,
                 membership = function(): (unknown, unknown) return {}, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
-                    error("no call may be made for desktops")
+                    test.eq(_owner.service_id, "bee.desktop")
+                    test.eq(_target.operation_ref, "bee.desktop:catalog")
+                    return types.reply_error("read", types.fault("DENIED", "not admitted"))
                 end,
             })
             local catalog = live:desktops("local")
             test.is_false(catalog.available)
-            test.eq(catalog.reason, directory.DESKTOPS_UNAVAILABLE)
+            test.eq(catalog.reason, "DENIED: not admitted")
             test.eq(#catalog.desktops, 0)
             local outcome = live:attach({node_id = "local", workspace_id = "ws", desktop_id = "d", owner_generation = "", mode = "control", idempotency_key = "k"})
             test.is_false(outcome.ok)
             test.eq(outcome.code, "UNSUPPORTED_CAPABILITY")
             test.eq(outcome.message, directory.ATTACH_UNAVAILABLE)
+        end)
+        test.it("reads the selected owner's durable catalog through the supervisor", function()
+            local calls = 0
+            local workspace, display = string.rep("b", 32), string.rep("c", 32)
+            local live = directory.live({local_node = "local",
+                lookup = function(): (string?, string?) return nil, nil end,
+                membership = function(): (unknown, unknown) return {}, nil end,
+                call = function(owner: types.OwnerRef, target: types.Target, input: Object, _options: {timeout: string?}): types.Reply
+                    calls = calls + 1
+                    test.eq(owner.node_id, "selected")
+                    test.eq(owner.service_id, "bee.desktop")
+                    test.eq(target.operation_ref, "bee.desktop:catalog")
+                    test.is_nil(next(input))
+                    return types.reply_ok("read", {owner_execution = string.rep("a", 32), workspaces = {
+                        {workspace_id = workspace, desktops = {{desktop_id = display, is_default = true}}}}})
+                end})
+            local catalog = live:desktops("selected")
+            test.eq(calls, 1)
+            test.is_true(catalog.available)
+            test.eq(catalog.desktops[1].desktop_id, display)
+        end)
+        test.it("decodes retained identities without inventing occupancy and rejects authority-bearing or sparse replies", function()
+            local execution = string.rep("a", 32)
+            local workspace = string.rep("b", 32)
+            local display = string.rep("c", 32)
+            local function response(items: unknown): Object
+                return {owner_execution = execution, workspaces = {{workspace_id = workspace, desktops = items}}}
+            end
+            local catalog = directory.decode_desktops(response({{desktop_id = display, is_default = true}}))
+            test.is_true(catalog.available)
+            test.eq(catalog.owner_generation, execution)
+            test.eq(catalog.desktops[1].workspace_id, workspace)
+            test.eq(catalog.desktops[1].desktop_id, display)
+            test.is_nil(catalog.desktops[1].controller)
+            test.is_nil(catalog.desktops[1].observers)
+            test.is_false(directory.decode_desktops(response({[2] = {desktop_id = display, is_default = true}})).available)
+            test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = true, mount_ref = "secret"}})).available)
+            test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = false}})).available)
+            test.is_false(directory.decode_desktops(response({{desktop_id = display, is_default = true}, {desktop_id = display, is_default = false}})).available)
+            test.is_false(directory.decode_desktops(response({})).available)
+            test.is_false(directory.decode_desktops({owner_execution = execution, workspaces = {}, session_id = "secret"}).available)
         end)
         test.it("decodes a fixture strictly", function()
             local fixture, err = directory.decode_fixture(fixture_data())

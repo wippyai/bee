@@ -30,6 +30,7 @@ entries:
     thread_admission: bee.hive.supervisor:thread_admission
     feed_admission: bee.hive.supervisor:feed_admission
     desktop_owner: bee.hive.desktop:owner
+    desktop_reader: bee.hive.desktop:reader
     desktop_protocol: bee.hive.desktop:protocol
     catalog: bee.hive:catalog
 - name: principals

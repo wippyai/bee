@@ -15,6 +15,7 @@ local thread_admission = require("thread_admission")
 local feed_admission = require("feed_admission")
 local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
+local desktop_reader = require("desktop_reader")
 local desktop_protocol = require("desktop_protocol")
 local MAX_ROUTES = 64
 local MAX_EXECUTIONS = 8
@@ -144,6 +145,10 @@ local function main(configuration: unknown)
         end
     end
     local function admit(message: process.Message)
+        if desktop and desktop_reader.handles(message:payload():data()) then
+            desktop_reader.request(desktop, tostring(message:from()), message:payload():data(), elapsed())
+            return
+        end
         if desktop and desktop_owner.handles(desktop, message) then
             desktop_owner.request(desktop, message, elapsed())
             return

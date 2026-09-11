@@ -91,6 +91,51 @@ local function live_members(self: Directory, live: Live): ({Member}, string?)
     end
     return result, problem
 end
+-- The retained catalog reports identities only. Absence of occupancy data
+-- must remain unknown, and malformed replies must never look like an empty node.
+local function dense(value: unknown, limit: integer): {unknown}?
+    if type(value) ~= "table" then return nil end
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 then return nil end
+        count = count + 1
+        if count > limit then return nil end
+    end
+    for index = 1, count do if value[index] == nil then return nil end end
+    return value :: {unknown}
+end
+local function identity(value: unknown): string?
+    if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
+    return value
+end
+function M.decode_desktops(value: unknown): Catalog
+    local invalid = "Display catalog reply is malformed"
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"owner_execution", "workspaces"}) then return unavailable(invalid) end
+    local execution = identity(object.owner_execution)
+    local workspaces = dense(object.workspaces, M.MAX_DESKTOPS)
+    if not execution or not workspaces then return unavailable(invalid) end
+    local desktops: {Desktop} = {}
+    local seen: {[string]: boolean} = {}
+    for _, value in ipairs(workspaces) do
+        local workspace = bounds.object(value)
+        if not workspace or bounds.fields(workspace, {"workspace_id", "desktops"}) then return unavailable(invalid) end
+        local id = identity(workspace.workspace_id)
+        local items = dense(workspace.desktops, 33)
+        if not id or seen[id] or not items or #items == 0 then return unavailable(invalid) end
+        seen[id] = true
+        local selected: {[string]: boolean} = {}
+        for index, raw in ipairs(items) do
+            local item = bounds.object(raw)
+            if not item or bounds.fields(item, {"desktop_id", "is_default"}) then return unavailable(invalid) end
+            local display = identity(item.desktop_id)
+            if not display or selected[display] or item.is_default ~= (index == 1) or #desktops >= M.MAX_DESKTOPS then return unavailable(invalid) end
+            selected[display] = true
+            desktops[#desktops + 1] = {workspace_id = id, desktop_id = display, label = ""}
+        end
+    end
+    return {available = true, reason = "", owner_generation = execution, desktops = desktops}
+end
 function M.live(live: Live): Directory
     local function supervisor(_: Directory): Supervisor
         local pid, err = live.lookup()
@@ -105,7 +150,14 @@ function M.live(live: Live): Directory
     end
     local function presence(_: Directory, node_id: string): Reply return ask(node_id, M.PRESENCE) end
     local function stats(_: Directory, node_id: string): Reply return ask(node_id, M.STATS) end
-    local function desktops(_: Directory, _node: string): Catalog return unavailable(M.DESKTOPS_UNAVAILABLE) end
+    local function desktops(_: Directory, node: string): Catalog
+        local reply = live.call({node_id = node, service_id = "bee.desktop"}, {operation_ref = "bee.desktop:catalog"}, {}, {timeout = live.timeout})
+        if not reply.ok then
+            local fault = reply.error
+            return unavailable(fault and (fault.code .. ": " .. fault.message) or "Display catalog unavailable")
+        end
+        return M.decode_desktops(reply.value)
+    end
     local function attach(_: Directory, _request: Attach): Outcome return refused("UNSUPPORTED_CAPABILITY", M.ATTACH_UNAVAILABLE) end
     return {source = M.LIVE, supervisor = supervisor, members = members, presence = presence, stats = stats, desktops = desktops, attach = attach}
 end

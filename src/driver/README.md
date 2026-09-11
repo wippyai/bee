@@ -41,8 +41,9 @@ refused. The pinned executable does not take `OPENAI_API_KEY` from the
 environment alone: it selects the API-key path only through a provider
 configuration in the private `CODEX_HOME`. `bee.driver.codex:configuration`
 renders that file from the host's `bee.codex_provider` entry named by the
-launch policy (`codex_provider_ref`): only the provider name, base URL and
-model, with `env_key = "OPENAI_API_KEY"` and the responses wire API, plain
+launch policy (`codex_provider_ref`): only the provider name, base URL,
+model and optional `reasoning_effort` (`low`, `medium`, `high`, `xhigh` or
+`max`), with `env_key = "OPENAI_API_KEY"` and the responses wire API, plain
 http for the loopback fixture only; the plan digest pins the adapter
 revision and the rendered digest, and placement writes it with exclusive
 creation. `tests/lua/harness/codex_runner_test.lua` proves API-key
@@ -50,6 +51,18 @@ authentication-path selection through the runner with a sentinel key and a
 controlled endpoint when `BEE_CODEX_BIN` names the executable;
 `launch.CODEX_AUTHENTICATION` stays `unproven` until the pinned build
 carries the runtime capabilities, and no real credential is enabled.
+
+## Host-selected model options
+
+Claude launch policies may set `model` and `effort` in `prepare_options`.
+The Claude driver accepts only a bounded model identifier and the executable's
+`low`, `medium`, `high`, `xhigh` or `max` effort values, then emits
+`--model` and `--effort`. Codex keeps its model and optional reasoning effort
+in the host-selected provider entry; its generated TOML emits only
+`model_reasoning_effort` for the same five accepted values. The caller never
+contributes either value: the carrier copies only the selected policy's
+`prepare_options`, and provider configuration is rendered from the policy's
+`codex_provider_ref`.
 
 ## Claude authentication path
 

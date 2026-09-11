@@ -11,15 +11,16 @@ local M = {}
 -- the gate stays open until the pinned build runs it.
 M.CLAUDE_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "plan", "dontAsk"}
+M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.MAX_TURNS = 32
 -- permission_exchange is set by the host when it enabled an interactive
 -- exchange: the launch then takes its brief over stream-json input, keeps
 -- stdin open for the responses and routes permission prompts to stdin.
-type Request = {profile_id: string, brief: string, permission_mode: string, max_turns: integer, resume_ref: string?, permission_exchange: boolean, gateway_tools: {string}?}
+type Request = {profile_id: string, brief: string, permission_mode: string, max_turns: integer, model: string?, effort: string?, resume_ref: string?, permission_exchange: boolean, gateway_tools: {string}?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "resume_ref", "permission_exchange", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "resume_ref", "permission_exchange", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, unknown_field end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
@@ -36,6 +37,18 @@ function M.decode(value: unknown): (Request?, string?)
         local number = bounds.integer(object.max_turns)
         if not number or number < 1 or number > M.MAX_TURNS then return nil, "max_turns must be between 1 and " .. tostring(M.MAX_TURNS) end
         turns = number
+    end
+    local model: string? = nil
+    if object.model ~= nil then
+        local declared = bounds.text(object.model, 128)
+        if not declared or declared == "" or not declared:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then return nil, "model is not one bounded model identifier" end
+        model = declared
+    end
+    local effort: string? = nil
+    if object.effort ~= nil then
+        local declared = bounds.member(object.effort, M.EFFORTS)
+        if not declared then return nil, "effort is not one Bee admits" end
+        effort = declared
     end
     local resume: string? = nil
     if object.resume_ref ~= nil then
@@ -63,7 +76,7 @@ function M.decode(value: unknown): (Request?, string?)
         table.sort(declared)
         gateway_tools = declared
     end
-    return {profile_id = profile_id, brief = brief, permission_mode = mode, max_turns = turns, resume_ref = resume, permission_exchange = exchange, gateway_tools = gateway_tools}, nil
+    return {profile_id = profile_id, brief = brief, permission_mode = mode, max_turns = turns, model = model, effort = effort, resume_ref = resume, permission_exchange = exchange, gateway_tools = gateway_tools}, nil
 end
 -- The exchange launch: the executable reads stream-json input, so the
 -- brief is the first user line on stdin rather than an argument, stdin
@@ -79,6 +92,14 @@ function M.specification(request: Request): types.Launch
     end
     for _, item in ipairs({"--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", request.permission_mode, "--max-turns", tostring(request.max_turns)}) do
         argv[#argv + 1] = item
+    end
+    if request.model then
+        argv[#argv + 1] = "--model"
+        argv[#argv + 1] = request.model
+    end
+    if request.effort then
+        argv[#argv + 1] = "--effort"
+        argv[#argv + 1] = request.effort
     end
     if request.permission_exchange then
         for _, item in ipairs({"--permission-prompt-tool", "stdio", "--permission-prompts", "host"}) do argv[#argv + 1] = item end

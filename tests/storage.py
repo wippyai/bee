@@ -136,6 +136,95 @@ end
 return {main = main}
 '''
 
+ASSIGNMENT_PREPARE = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    assert(transfers:claim({view_id = "restart-view", instance_id = "restart-instance", display_id = "display-a"}))
+    assert(transfers:prepare({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_PREPARED = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local value = assert(assert(assignments.open(workspace)):get({view_id = "restart-view", instance_id = "restart-instance"}))
+    assert(value.assignment.display_id == "display-a" and value.assignment.revision == 1)
+    assert(value.intent and value.intent.request_id == "restart-transfer" and value.intent.phase == "prepared")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_COMMIT_FAILS = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local committed, commit_error = assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"})
+    assert(not committed and commit_error and commit_error:find("forced receipt failure"))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_COMMIT = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local committed = assert(assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"}))
+    assert(committed.assignment.display_id == "display-b" and committed.assignment.revision == 2 and committed.intent and committed.intent.phase == "committed")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_HISTORY = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    assert(transfers:claim({view_id = "history-view", instance_id = "history-instance", display_id = "display-a"}))
+    local source, target, expected = "display-a", "display-b", 1
+    for index = 1, 65 do
+        local request_id = "history-" .. tostring(index)
+        local prepared, prepare_error = transfers:prepare({request_id = request_id, view_id = "history-view", instance_id = "history-instance", source_display_id = source, target_display_id = target, expected_revision = expected})
+        assert(prepared, "history " .. tostring(index) .. ": " .. tostring(prepare_error))
+        local committed = assert(transfers:commit({request_id = request_id, view_id = "history-view", instance_id = "history-instance"}))
+        assert(committed.assignment.revision == expected + 1)
+        source = committed.assignment.display_id
+        target = source == "display-a" and "display-b" or "display-a"
+        expected = committed.assignment.revision
+    end
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_HISTORY_REPLAY = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    local before = assert(transfers:get({view_id = "history-view", instance_id = "history-instance"}))
+    local replay = assert(transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+    assert(replay.phase == "committed")
+    local conflict, conflict_error = transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+    assert(not conflict and conflict_error and conflict_error:find("conflicts"))
+    local after = assert(transfers:get({view_id = "history-view", instance_id = "history-instance"}))
+    assert(after.assignment.display_id == before.assignment.display_id and after.assignment.revision == before.assignment.revision)
+    assert(transfers:retire({view_id = "history-view", instance_id = "history-instance"}))
+    local retired, retired_error = transfers:get({view_id = "history-view", instance_id = "history-instance"})
+    assert(not retired and not retired_error)
+    assert(assert(transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "committed")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
 
 def run_probe(project, folder, expect_success=True):
     environment = database_environment(folder)
@@ -153,6 +242,32 @@ def run_probe(project, folder, expect_success=True):
     else:
         assert result.returncode != 0, output
     return output
+
+
+def assignment_acceptance(project, probe, folder):
+    """Exercise durable fences and receipt history through the real runtime."""
+    def phase(source):
+        (probe / "main.lua").write_text(source)
+        run_probe(project, folder)
+
+    folder.mkdir()
+    phase(ASSIGNMENT_PREPARE)
+    phase(ASSIGNMENT_PREPARED)  # Reopen must retain source and prepared fence.
+    database = folder / "workspace.db"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TRIGGER fail_assignment_receipt BEFORE UPDATE OF phase ON workspace_display_transfer_receipts WHEN NEW.phase = 'committed' BEGIN SELECT RAISE(ABORT, 'forced receipt failure'); END")
+    phase(ASSIGNMENT_COMMIT_FAILS)
+    phase(ASSIGNMENT_PREPARED)  # The assignment UPDATE rolled back with receipt failure.
+    with sqlite3.connect(database) as db:
+        db.execute("DROP TRIGGER fail_assignment_receipt")
+    phase(ASSIGNMENT_COMMIT)
+    phase(ASSIGNMENT_HISTORY)
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT count(*) FROM workspace_display_transfer_receipts WHERE view_id='history-view' AND instance_id='history-instance'").fetchone()[0] == 65
+    phase(ASSIGNMENT_HISTORY_REPLAY)
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT phase FROM workspace_display_transfer_receipts WHERE request_id='history-1'").fetchone() == ("committed",)
+        assert db.execute("SELECT count(*) FROM workspace_display_assignments WHERE view_id='history-view' AND instance_id='history-instance'").fetchone() == (0,)
 
 
 def main():
@@ -252,6 +367,8 @@ def main():
         fresh.mkdir()
         run_probe(project, fresh)
         assert identity(fresh / "workspace.db") != original_id, "Fresh workspaces share identity"
+
+        assignment_acceptance(project, probe, folder / "assignment-acceptance")
 
         # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
         legacy = folder / "legacy"

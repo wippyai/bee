@@ -105,3 +105,32 @@ thread attempt, admits any gateway binding, and records placement intent. It
 returns the carrier epoch and binding identity without requesting a turn or
 starting a transport. Structured open reuses that preparation and retains its
 existing turn/checkpoint/start sequence. Window activation remains pending.
+
+## Installable application boundary
+
+The managed native window belongs to the harness package, consuming the public
+application lifecycle and the terminal grant supplied by the broker. It must
+not add driver selection, credentials, MCP configuration or placement storage to
+core client/session/presenter code. Ordinary users choose Agent → Codex; the
+host-selected profile supplies the admitted implementation and options.
+
+`build/modules.json` separates harness, drivers, gateway, resources, credentials,
+threads and native placement. This is assembly ownership, not independent
+installation evidence. The harness currently names `bee:workers` in launch
+admission and the host policies `bee:carrier_policy` and
+`bee:launch_spawn_policy` in its manifests. Independent installation must bind
+those host dependencies explicitly and prove that missing bindings refuse to
+run. Package metadata cannot choose or widen its own permissions.
+
+The installation owner must resolve and measure the dependency closure, review
+capabilities, activate on the selected destination, and report its committed
+result. Hive transports that authorized request and content; the destination
+owns activation, resource mappings and credentials. No source-machine paths,
+credential values or terminal grants become portable installation data.
+
+The install acceptance must boot a minimal host with the package's declared
+requirements, refuse a missing requirement, install/update through governance,
+and launch on a second Bee through Hive with destination-local resource and
+permission checks. Removal must retire services and bindings without deleting
+application data. These checks remain pending in the installation lane; the
+native window fixture and bundled build do not substitute for them.

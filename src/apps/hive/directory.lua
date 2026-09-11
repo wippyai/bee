@@ -15,7 +15,6 @@ M.MAX_NODES = 64
 M.MAX_DESKTOPS = 64
 M.MAX_ADDRESS_BYTES = 200
 M.MAX_LABEL_BYTES = 120
-M.DESKTOPS_UNAVAILABLE = "Desktop browsing is not available from this app yet"
 M.ATTACH_UNAVAILABLE = "Connecting from Hive Manager is not available yet"
 type Reply = types.Reply
 type Member = {node_id: string, is_local: boolean, addr: string, client_only: boolean?}

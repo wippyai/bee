@@ -147,7 +147,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             end
             local workspace_labels = names.labels(workspace_ids)
             local display_labels = names.labels(display_ids)
-            for _, desktop in ipairs(catalog.desktops) do
+            local visible = maximum(1, desktop_rows - 2)
+            local selected_index = 1
+            for index, desktop in ipairs(catalog.desktops) do
+                if model.desktop_key(desktop.workspace_id, desktop.desktop_id) == state.selected_desktop then selected_index = index end
+            end
+            local first = maximum(1, selected_index - visible + 1)
+            local last = math.floor(math.min(#catalog.desktops, first + visible - 1))
+            for index = first, last do
+                local desktop = catalog.desktops[index]
                 local key = model.desktop_key(desktop.workspace_id, desktop.desktop_id)
                 local session = model.session(state, selected.node_id, desktop.workspace_id, desktop.desktop_id)
                 local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)

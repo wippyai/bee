@@ -78,6 +78,30 @@ local function define_tests()
             test.is_nil(text:find("no controller", 1, true))
             test.is_nil(text:find("observers ", 1, true))
         end)
+        test.it("keeps the selected display visible when the catalog exceeds the pane", function()
+            local state = populated("live")
+            local desktops: {directory.Desktop} = {}
+            for index = 1, 20 do
+                desktops[index] = {workspace_id = "ws1", desktop_id = "display-" .. tostring(index), label = "Display " .. tostring(index)}
+            end
+            model.apply_catalog(state, "forge", {available = true, reason = "", owner_generation = "forge-execution-1", desktops = desktops})
+            model.set_pane(state, "desktops")
+            model.move(state, 20)
+            for _, height in ipairs({14, 30}) do
+                local frame = view.draw(100, height, appearance.defaults(), state, 0, "")
+                local found = false
+                for _, hit in ipairs(frame.hits) do
+                    if hit.kind == "desktop" and hit.key == model.desktop_key("ws1", "display-20") then found = true end
+                end
+                test.is_true(found)
+            end
+            model.move(state, -19)
+            local first = false
+            for _, hit in ipairs(view.draw(100, 30, appearance.defaults(), state, 0, "").hits) do
+                if hit.kind == "desktop" and hit.key == model.desktop_key("ws1", "display-1") then first = true end
+            end
+            test.is_true(first)
+        end)
         test.it("separates membership from service readiness and keeps Raft roles in details", function()
             local state = model.new("live", "", {})
             model.set_supervisor(state, true, "")
@@ -114,13 +138,13 @@ local function define_tests()
             model.set_supervisor(state, false, "supervisor is not running")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}}, "membership unavailable")
             model.apply_presence(state, "local", types.reply_error("r", types.fault("UNAVAILABLE", "no supervisor to ask")))
-            model.apply_catalog(state, "local", {available = false, reason = directory.DESKTOPS_UNAVAILABLE, owner_generation = "", desktops = {}})
+            model.apply_catalog(state, "local", {available = false, reason = "No supervisor is available", owner_generation = "", desktops = {}})
             local frame = view.draw(120, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("Hive supervisor unavailable: supervisor is not running", 1, true) ~= nil)
             test.is_true(text:find("Membership: membership unavailable", 1, true) ~= nil)
             test.is_true(text:find("local", 1, true) ~= nil)
-            test.is_true(text:find("Desktops unavailable: Desktop browsing is not available", 1, true) ~= nil)
+            test.is_true(text:find("Desktops unavailable: No supervisor is available", 1, true) ~= nil)
             local rows = 0
             for _, hit in ipairs(frame.hits) do if hit.kind == "node" then rows = rows + 1 end end
             test.eq(rows, 1)

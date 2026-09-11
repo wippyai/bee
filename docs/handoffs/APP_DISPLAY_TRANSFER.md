@@ -194,3 +194,10 @@ extra fields, including source-display claims, permissions and native handles.
 The host must derive the source display from the authenticated admission.
 No actor listens for this operation yet; this decoder does not make transfer
 callable or grant any authority.
+
+`bee.client:assignments.plan` is the pure layout reconciliation helper. It adds
+only exact live app identities assigned to this display, excludes pending
+transfers, and removes only a selected app whose assignment names another
+display. Neighboring and foreign-workspace tabs remain unchanged. Discovery
+alone and receipts for old app incarnations select nothing. Actor wiring and
+the transfer UI are still in progress.

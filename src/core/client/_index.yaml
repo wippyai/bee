@@ -149,3 +149,9 @@ entries:
   modules: [funcs, channel]
   imports:
     appearance: bee.desktop:appearance
+- name: assignments
+  kind: library.lua
+  source: file://assignments.lua
+  imports:
+    state: bee.client:state
+    inventory: bee.host:inventory

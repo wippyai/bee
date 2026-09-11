@@ -728,7 +728,7 @@ entries:
   meta:
     comment: Selected only by the native Hive supervisor host for native name publication and discovery
   policy:
-    actions: [process.registry.register, process.registry.register.local, process.registry.register.eventual, process.registry.lookup, process.registry.unregister]
+    actions: [process.registry.register, process.registry.register.local, process.registry.register.eventual, process.registry.lookup, process.registry.unregister, process.registry.unregister.eventual]
     resources: '*'
     effect: allow
 - name: hive_execute_policy

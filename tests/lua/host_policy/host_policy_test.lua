@@ -48,6 +48,12 @@ end
 
 local function define_tests()
     test.describe("Host policy isolation and boundary enforcement", function()
+        test.it("allows the native Hive supervisor to release the eventual name it publishes", function()
+            local scope = {"bee:hive_names_policy"}
+            test.is_true(call_can(scope, "process.registry.register.eventual", "bee.hive.supervisor/Antares"))
+            test.is_true(call_can(scope, "process.registry.unregister.eventual", "bee.hive.supervisor/Antares"))
+            test.is_false(call_can({"bee:base_app_policy"}, "process.registry.unregister.eventual", "bee.hive.supervisor/Antares"))
+        end)
         test.it("limits waiter startup to its own name and reply delivery", function()
             local scope = {"bee:thread_waiter_policy"}
             test.is_true(call_can(scope, "process.registry.register", "bee.threads.waiter"))

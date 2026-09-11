@@ -420,7 +420,9 @@ function M.event(state: State, event: process.Event, now: integer)
     local sender = tostring(event.from)
     if sender == state.supervisor and event.kind == process.event.EXIT then
         state.stopped = true
-        error("Retained desktop owner exited")
+        local result: unknown = event.result
+        local cause = type(result) == "table" and result.error ~= nil and tostring(result.error) or "without an error result"
+        error("Retained desktop owner exited: " .. cause)
     end
     -- Revoking this attachment is our authority, even when the remote actor's
     -- outcome is unknown. This does not declare that actor or its apps exited.

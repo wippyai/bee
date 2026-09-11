@@ -378,7 +378,10 @@ local function main(configuration: unknown)
         if route.future then route.future:cancel() end
         if not route.abandoned then expire_route(route, "UNAVAILABLE", "supervisor is stopping; outcome may be unknown") end
     end
-    if advertised then process.registry.unregister(distributed_name, process.registry.EVENTUAL) end
+    if advertised then
+        local _, release_error = process.registry.unregister(distributed_name, process.registry.EVENTUAL)
+        if release_error then log:error("Hive name release failed", {name = distributed_name, error = tostring(release_error)}) end
+    end
     if registered then process.registry.unregister(types.SUPERVISOR_NAME) end
     process.unlisten(requests); process.unlisten(replies); process.unlisten(hellos)
     if not ok then error(tostring(err)) end

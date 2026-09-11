@@ -156,3 +156,15 @@ entries:
           adapter_digest: 91a46beb9b3e0f0db3af61246310f494bb0ddbfbdff178709fca783c9a4840c6
         input_ready: *id004
         interrupt: *id005
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME, CLAUDE_CONFIG_DIR]
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}

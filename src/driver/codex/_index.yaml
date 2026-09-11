@@ -114,3 +114,15 @@ entries:
           providers:
           - codex-sandbox
           required_placement_features: []
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME, CODEX_HOME]
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}

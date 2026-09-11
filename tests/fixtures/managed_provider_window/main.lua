@@ -9,10 +9,11 @@ local json = require("json")
 local appearance = require("appearance")
 
 local M = {}
+local WORKSPACE = string.rep("a", 32)
+
 local function plain(value: string): string
     return (value:gsub("\27%[[0-9;]*m", ""))
 end
-local WORKSPACE = string.rep("a", 32)
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
@@ -30,11 +31,19 @@ local function call(target: string, value: unknown): {[string]: unknown}
     return result
 end
 
-local function run()
-    local expected = assert(registry.get("bee.managed_provider_fixture:expectation"))
-    local marker = tostring(expected.data.marker)
-    local THREAD = "managed_provider_thread"
-    call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
+local function receive_reply(replies: any, request_id: string, operation: string): {[string]: unknown}
+    while true do
+        local message = assert(replies:receive())
+        local data = message:payload():data()
+        if type(data) == "table" and data.request_id == request_id and data.op == operation then
+            return data :: {[string]: unknown}
+        end
+    end
+    return {}
+end
+
+local function run(provider: string, definition: string, marker: string, title: string, thread: string)
+    call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = title})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
@@ -46,31 +55,19 @@ local function run()
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
-    local request = assert(json.encode({request_id = "managed-provider-request", definition_ref = "bee.managed_provider_fixture:definition", brief = "",
-        thread_id = THREAD}))
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
+    local request = assert(json.encode({request_id = provider .. "-request", definition_ref = definition, brief = "",
+        thread_id = thread}))
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = {request}}))
-    local opened: {[string]: unknown}? = nil
-    while not opened do
-        local message = assert(replies:receive())
-        if tostring(message:from()) == broker then
-            local data = message:payload():data()
-            if type(data) == "table" and data.request_id == "open" and data.op == "open" then opened = data :: {[string]: unknown} end
-        end
-    end
-    assert(opened.error_code == "", "managed app did not become ready: " .. tostring(opened.error))
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-one", op = "bind", workspace_id = WORKSPACE,
+    local opened = receive_reply(replies, provider .. "-open", "open")
+    assert(opened.error_code == "", "managed " .. provider .. " app did not become ready: " .. tostring(opened.error))
+    local id = tostring(opened.id)
+    local instance_id = tostring(opened.instance_id)
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-bind-one", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
-    local mounted = ""
-    while mounted == "" do
-        local message = assert(replies:receive())
-        local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-one" and data.op == "attached" then
-            assert(data.error_code == "")
-            mounted = tostring(data.mount)
-        end
-    end
-    local view = assert(tty.attach(mounted))
+    local attached = receive_reply(replies, provider .. "-bind-one", "attached")
+    assert(attached.error_code == "")
+    local view = assert(tty.attach(tostring(attached.mount)))
     assert(view:send({type = "resize", width = 100, height = 30}))
     local saw = false
     for _ = 1, 400 do
@@ -78,45 +75,48 @@ local function run()
         if plain(table.concat(frame.rows)):find(marker, 1, true) then saw = true; break end
         time.sleep("25ms")
     end
-    assert(saw, "provider startup marker absent from broker PTY: " .. table.concat(view:snapshot().rows, "\n"))
+    assert(saw, provider .. " startup marker absent from broker PTY: " .. table.concat(view:snapshot().rows, "\n"))
     local before = plain(table.concat(view:snapshot().rows))
-    local selected = tonumber(before:match("❯%s+(%d+)%."))
-    assert(selected, "theme selector is not visible")
-    assert(view:send({type = "key", key = "", key_type = "down", action = "press"}))
-    local changed = false
-    for _ = 1, 100 do
-        if tonumber(plain(table.concat(view:snapshot().rows)):match("❯%s+(%d+)%.")) == selected + 1 then changed = true; break end
-        time.sleep("25ms")
+    local selected: number? = nil
+    if provider == "claude" then
+        local candidate = tonumber(before:match("❯%s+(%d+)%."))
+        if not candidate then error("Claude startup UI is not visible") end
+        selected = candidate
+        assert(view:send({type = "key", key = "", key_type = "down", action = "press"}))
+        local changed = false
+        for _ = 1, 100 do
+            if tonumber(plain(table.concat(view:snapshot().rows)):match("❯%s+(%d+)%.")) == selected + 1 then changed = true; break end
+            time.sleep("25ms")
+        end
+        assert(changed, "Claude startup UI did not react to keyboard input")
+    else
+        assert(view:send({type = "paste", text = "managed-input"}))
+        local changed = false
+        for _ = 1, 100 do
+            if plain(table.concat(view:snapshot().rows)):find("managed-input", 1, true) then changed = true; break end
+            time.sleep("25ms")
+        end
+        assert(changed, "Codex startup UI did not react to keyboard input")
     end
-    assert(changed, "provider startup UI did not react to keyboard input")
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "detach", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
-    local detached = false
-    while not detached do
-        local message = assert(replies:receive())
-        local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "detach" and data.op == "bind" then detached = data.error_code == "" end
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-detach", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
+    local detached = receive_reply(replies, provider .. "-detach", "bind")
+    assert(detached.error_code == "")
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-bind-two", op = "bind", workspace_id = WORKSPACE,
+        id = id, instance_id = instance_id, recipient = owner}))
+    local rebound = receive_reply(replies, provider .. "-bind-two", "attached")
+    assert(rebound.error_code == "")
+    local next_view = assert(tty.attach(tostring(rebound.mount)))
+    local rebound_frame = plain(table.concat(next_view:snapshot().rows))
+    assert(rebound_frame:find(marker, 1, true), provider .. " detach lost the provider UI")
+    if provider == "claude" then
+        assert(tonumber(rebound_frame:match("❯%s+(%d+)%s*%.")) == (selected :: number) + 1, "Claude detach reset the provider selection")
+    else
+        assert(rebound_frame:find("managed-input", 1, true), "Codex detach lost typed input")
     end
-    assert(detached)
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-two", op = "bind", workspace_id = WORKSPACE,
-        id = opened.id, instance_id = opened.instance_id, recipient = owner}))
-    local rebound = ""
-    while rebound == "" do
-        local message = assert(replies:receive())
-        local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then rebound = tostring(data.mount) end
-    end
-    local next_view = assert(tty.attach(rebound))
-    assert(plain(table.concat(next_view:snapshot().rows)):find(marker, 1, true), "detach lost the provider UI")
-    assert(tonumber(plain(table.concat(next_view:snapshot().rows)):match("❯%s+(%d+)%.")) == selected + 1, "detach reset the provider selection")
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
-    local closed = false
-    while not closed do
-        local message = assert(replies:receive())
-        local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then closed = data.error_code == "" end
-    end
-    assert(closed, "managed provider close failed")
-    local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-close", op = "close", workspace_id = WORKSPACE, id = id}))
+    local closed = receive_reply(replies, provider .. "-close", "close")
+    assert(closed.error_code == "", "managed " .. provider .. " close failed")
+    local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
     local value = records.value :: {[string]: unknown}
     local receipts = 0
@@ -124,7 +124,8 @@ local function run()
         kinds[tostring(item.kind)] = true
         if item.kind == "action.admitted" then
             local admitted = reply(item.body)
-            assert(reply(admitted.input).text == "Open Claude Code window", "empty prompt must describe opening the UI")
+            local input = reply(admitted.input)
+            assert(input.text == title, "empty prompt must describe opening the " .. provider .. " UI: " .. tostring(input.text))
         end
         if item.kind == "receipt" then
             receipts = receipts + 1
@@ -134,15 +135,22 @@ local function run()
             assert(fault.code == "native_window_closed", "receipt must identify its evidence")
         end
     end
-    assert(receipts == 1, "close must settle exactly one attempt receipt")
-    assert(not kinds["turn.request"] and not kinds["turn.end"], "PTY lifecycle must not invent logical turns")
+    assert(receipts == 1, provider .. " close must settle exactly one attempt receipt")
+    assert(not kinds["turn.request"] and not kinds["turn.end"], provider .. " PTY lifecycle must not invent logical turns")
     local stale_input = next_view:send({type = "paste", text = "must not reach a closed app"})
-    assert(not stale_input, "closed application retained its input grant")
-    assert(kinds["attempt.prepared"] and kinds["attempt.started"] and kinds["receipt"], "managed attempt lifecycle was incomplete")
+    assert(not stale_input, provider .. " closed application retained its input grant")
+    assert(kinds["attempt.prepared"] and kinds["attempt.started"] and kinds["receipt"], provider .. " managed attempt lifecycle was incomplete")
     next_view:close(); view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies)
 end
 
-M.run = run
+local function run_all()
+    local expected = assert(registry.get("bee.managed_provider_fixture:expectation"))
+    local data = expected.data :: {[string]: unknown}
+    run("claude", "bee.managed_provider_fixture:definition_claude", tostring(data.claude_marker), "Open Claude Code window", "managed_claude_thread")
+    run("codex", "bee.managed_provider_fixture:definition_codex", tostring(data.codex_marker), "Open Codex CLI window", "managed_codex_thread")
+end
+
+M.run = run_all
 return M

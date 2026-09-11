@@ -207,19 +207,21 @@ in the thread ledger. The driver still receives the empty brief and sends no
 prompt argument. This preserves nonempty thread content without inventing user
 instructions for the provider.
 
-`BEE_CLAUDE_BIN=/absolute/claude make managed-provider-window-check` runs the
-actual Claude onboarding UI through broker admission and its sole PTY. It checks
-keyboard selection, resize, preserved selection on rebind, one cancelled receipt,
-arguments without an injected prompt, and a newly initialized private home.
-The probe supplies no credentials and uses an unused loopback model endpoint.
-It reports both the actual executable version and the declaration version;
-the observed 2.1.268 startup does not certify the older 2.1.265 declaration.
+`BEE_CLAUDE_BIN=/absolute/claude BEE_CODEX_BIN=/absolute/codex make
+managed-provider-window-check` runs both actual provider UIs through broker
+admission and their sole PTYs. It checks keyboard input, resize, preserved UI
+state on rebind, one cancelled receipt per provider, arguments without an
+injected prompt, distinct newly initialized private homes and host-generated
+Codex configuration. The probe supplies no credentials, submits no turn and
+uses only a loopback model endpoint. It reports each actual executable version
+alongside its declaration version; the observed Claude 2.1.268 and Codex
+0.154.0 starts do not certify the older 2.1.265 and 0.153.4 declarations.
 
 This is explicitly a direct-process/EOF fixture policy. The current recovery
 runtime refuses the production process-group requirement because the exec handle
 exposes no PID. The probe also asserts that terminal exit leaves cleanup pending.
-Production cleanup, authenticated turns, Codex UI and physical-client/F12
-retention remain separate gates. Production requirements were not relaxed.
+Production cleanup, authenticated turns and physical-client/F12 retention
+remain separate gates. Production requirements were not relaxed.
 
 ## Static harness isolation proof
 

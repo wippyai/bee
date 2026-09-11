@@ -58,3 +58,19 @@ wiring should select this value explicitly from the native host. This requiremen
 does not call for a second lock, recursive app.Run or a helper process just to
 rewrite arguments. Native callback migration can proceed independently, but the
 per-project executable acceptance must remain pending until this is wired.
+
+## Validation of the callback migration
+
+Bee native commit `447f015b08bf924452192713cf71d1cb5965f263` replaces the old
+launch plan with `cmd/app` callbacks and exposes the concrete host's `Launch`
+method. Its focused launch race tests and vet pass against unchanged #726.
+The complete builder composition still fails: Go module resolution loads native
+local-owner test imports of the removed application packages. Those fixtures
+must migrate to the real callback contract before the toolchain can build.
+The candidate manifest pins this checkpoint for validation only.
+
+A separate core-only runtime main build succeeds and lints Bee source. It cannot
+run the native-window acceptance: boot stops because that diagnostic toolchain
+omits the `bee.hive.activation` native handler. This is a composition limitation,
+not evidence that the window tests passed or failed their behavioral assertions.
+The complete native toolchain remains the next executable gate.

@@ -102,7 +102,7 @@ for interfaces in core_value_interfaces.values():
 # Registry edges, including broker/workspace, must respect the layer boundary.
 # Carrier and placement share only the host-selected configuration renderer;
 # gateway admission and token materialization remain contract operations.
-gateway_configuration_consumers = {"bee.harness.carrier:machine", "bee.placement.native:service", "bee.placement.native:runner"}
+gateway_configuration_consumers = {"bee.harness.carrier:machine", "bee.placement.native:service", "bee.placement.native:materialization"}
 for identity, entry in entries.items():
     location = locations[identity]
     for target in entry.get("imports", {}).values():

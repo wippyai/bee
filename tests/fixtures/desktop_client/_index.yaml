@@ -61,6 +61,7 @@ entries:
   source: file://retained.lua
   method: main
   modules: [process, security, tty, time, channel, logger]
+  imports: {store: bee.client:store}
   security:
     policies: [bee.desktop_client_probe:root_policy]
   meta:
@@ -89,6 +90,6 @@ entries:
         policies: [bee.desktop_client_probe:root_policy]
 - name: forger
   kind: process.lua
-  source: file://retained.lua
+  source: file://forger.lua
   method: forger
   modules: [process, security, tty, time, channel, logger]

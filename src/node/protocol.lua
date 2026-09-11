@@ -1,5 +1,6 @@
 -- MIT. User-editable descriptions are separate from node identity and grants.
 local bounds = require("bounds")
+local appearance = require("appearance")
 local M = {}
 M.SCHEMA = "bee.node-description@1"
 type Metadata = {display_name: string, description: string, labels: {[string]: string}}
@@ -47,6 +48,34 @@ function M.update(value: unknown): (Update?, string?)
     local metadata, err = M.metadata(object.metadata)
     if not metadata then return nil, err end
     return {expected_revision = revision, idempotency_key = key, metadata = metadata}, nil
+end
+
+-- Defaults belong to this node, independently of descriptive metadata.
+type AppearanceUpdate = {expected_revision: integer, idempotency_key: string, preferences: appearance.Preferences}
+function M.preferences(value: unknown): (appearance.Preferences?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "preferences must be an object" end
+    local extra = bounds.fields(object, {"theme", "background", "taskbar"})
+    if extra then return nil, extra end
+    if object.theme == nil or object.background == nil or object.taskbar == nil then
+        return nil, "theme, background and taskbar are required"
+    end
+    local decoded = appearance.decode(object)
+    if not decoded then return nil, "invalid appearance preferences" end
+    return decoded, nil
+end
+function M.appearance_update(value: unknown): (AppearanceUpdate?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "request must be an object" end
+    local extra = bounds.fields(object, {"expected_revision", "idempotency_key", "preferences"})
+    if extra then return nil, extra end
+    local revision = bounds.count(object.expected_revision)
+    if not revision then return nil, "expected_revision must be a nonnegative safe integer" end
+    local key = bounds.id(object.idempotency_key)
+    if not key then return nil, "idempotency_key must be an identifier" end
+    local preferences, err = M.preferences(object.preferences)
+    if not preferences then return nil, err end
+    return {expected_revision = revision, idempotency_key = key, preferences = preferences}, nil
 end
 
 function M.empty(value: unknown): string?

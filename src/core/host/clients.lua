@@ -14,7 +14,7 @@ type Route = {recipient: string, connection_id: string, request_id: string, op: 
     renderer_generation: string, fingerprint: string, resume: recovery.Resume?}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
-type AppearanceOp = "state" | "set"
+type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
     renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
@@ -330,7 +330,7 @@ function M.appearance(state: State, caller: string, data: unknown, ready: boolea
     local code, message = "", ""
     if not ready then code, message = "busy", "Host is not accepting clients"
     elseif client.detaching then code, message = "unavailable", "Client is detaching"
-    elseif request.action == "set" and not client.permissions.appearance then code, message = "permission_denied", "Client appearance is not granted"
+    elseif request.action ~= "state" and not client.permissions.appearance then code, message = "permission_denied", "Client appearance is not granted"
     elseif client.renderer == "" then code, message = "unavailable", "Client renderer is unavailable"
     elseif state.appearance_routes[request.request_id] then code, message = "request_conflict", "Appearance request ID was reused"
     else
@@ -374,6 +374,19 @@ end
 -- Only the stable admitted client execution may answer a route. The renderer
 -- and connection generation must still be the exact values selected by the
 -- host when the request was delivered.
+-- An admitted display owns its committed presentation, not the workspace defaults.
+function M.appearance_changed(state: State, caller: string, data: unknown): boolean
+    local update = clients.appearance_changed(data)
+    local client = state.admitted[caller]
+    if not update or not client or client.detaching or client.rendering or not client.permissions.control
+        or update.workspace_id ~= state.workspace_id or update.connection_id ~= client.connection_id
+        or update.renderer ~= client.renderer or update.renderer_generation ~= client.renderer_generation then return false end
+    assert(process.send(state.broker, "bee.appearance.state", {version = 1, scope = "display",
+        renderer = update.renderer, revision = update.revision, theme = update.theme,
+        background = update.background, taskbar = update.taskbar}))
+    return true
+end
+
 function M.appearance_result(state: State, caller: string, data: unknown): boolean
     local response = clients.appearance_result(data)
     if not response then return false end

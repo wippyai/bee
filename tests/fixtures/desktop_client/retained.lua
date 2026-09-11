@@ -1,5 +1,6 @@
 -- MIT. Actual retained supervisor, separate display executions, same live shell.
 local process = require("process")
+local store = require("store")
 local security = require("security")
 local tty = require("tty")
 local time = require("time")
@@ -31,6 +32,11 @@ local function main()
     local value: unknown = message:payload():data()
     assert(type(value) == "table" and type(value.workspace_id) == "string" and type(value.desktop_id) == "string")
     local workspace_id, desktop_id = value.workspace_id, value.desktop_id
+    local initial_store, open_error = store.open("bee:client_db")
+    if not initial_store then error(tostring(open_error)) end
+    local initial_layout = store.read(initial_store)
+    assert(initial_layout and initial_layout.appearance_mode == "inherit", "Fresh primary display did not inherit node defaults")
+    assert(store.close(initial_store))
     local forger_policy = assert(security.policy("bee.desktop_client_probe:root_policy"))
     local forger = tostring(assert(process.with_options({}):with_scope(security.new_scope({forger_policy}))
         :spawn("bee.desktop_client_probe:forger", "bee:workers", owner, supervisor, workspace_id, desktop_id)))
@@ -246,15 +252,4 @@ local function checked_main()
         error(failure)
     end
 end
-local function forger(owner: string, supervisor: string, workspace_id: string, desktop_id: string)
-    assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id,
-        desktop_id = desktop_id, request_id = "forged", recipient = owner, op = "attach", mode = "control"}))
-    assert(process.send(supervisor, "bee.retained.launch", {version = 1, workspace_id = workspace_id,
-        desktop_id = desktop_id, request_id = "forged-launch", recipient = owner, name = "terminal", arguments = {}}))
-    assert(process.send(supervisor, "bee.retained.desktops", {version = 1, workspace_id = workspace_id,
-        request_id = "forged-storage", op = "allocate", desktop_id = string.rep("b", 32)}))
-    assert(process.send(supervisor, "bee.retained.activate", {version = 1, workspace_id = workspace_id,
-        request_id = "forged-activation", desktop_id = string.rep("b", 32)}))
-    assert(process.send(owner, "forged.sent", {}))
-end
-return {main = checked_main, forger = forger}
+return {main = checked_main}

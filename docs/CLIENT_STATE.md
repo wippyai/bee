@@ -24,13 +24,14 @@ the existing scene model plus one qualified target per window:
 
 `{tab_id, workspace_id, instance_id, view_id}`
 
-The local launch selects workspace appearance: its supervisor grants
-host-owned preference writes, and bootstrap projects the fresh host preferences
-over any stale client copy. Layout and targets remain client-owned. The two stores
-do not share a transaction; the host value is authoritative for this local mode.
-Ordinary attached clients retain independent chrome preferences. See the
-[appearance contract](CLIENT_HOST_SPLIT.md#identity-and-appearance) for commit,
-projection, failure and permission behavior.
+Ordinary local launch and retained displays use display-scoped appearance.
+Fresh displays inherit the node defaults; an explicit Settings choice persists a
+custom override. “Use node default” restores inheritance. Existing version-1
+layouts upgrade to custom, preserving saved choices even when they equal the
+old defaults. The mode is stored separately from the effective preferences.
+Applications follow their controlling display; observers cannot recolour them.
+See the [appearance contract](CLIENT_HOST_SPLIT.md#identity-and-appearance).
+This source change is under acceptance and is not yet installed globally.
 
 Scene IDs are client tab keys. Every target must match its window's workspace
 and instance identity. Equal view and instance IDs from different workspaces do
@@ -78,7 +79,9 @@ The private API is `open(resource?)`, `read(handle)`, `write(handle, state)`,
 their native database fields must remain inside the owning client process.
 Each store has a stable random client identity. Reads validate the whole state;
 writes compare the generation observed by that handle. A stale writer must read
-again and reconcile. Values are bounded to 2 MiB and schema version 1.
+again and reconcile. Values are bounded to 2 MiB. State schema version 2 requires
+`appearance_mode` (`inherit` or `custom`); version-1 reads upgrade to custom.
+No applied SQL migration changes. Older readers reject version 2.
 
 The append-only migration ledger verifies its name and SQL checksum. Unknown,
 changed or corrupt schemas fail closed. A missing identity after migration is

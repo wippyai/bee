@@ -5,6 +5,21 @@ local contract = require("contract")
 local identity = "0123456789abcdef0123456789abcdef"
 local function define_tests()
     test.describe("Workspace client admission", function()
+        test.it("bounds committed display notifications and rejects authority fields", function()
+            local update = {version = 1, workspace_id = identity, connection_id = "connection",
+                renderer = "renderer", renderer_generation = "generation", revision = 7,
+                theme = "classic", background = "solid", taskbar = "labels"}
+            local decoded = clients.appearance_changed(update)
+            if not decoded then error("display update did not decode") end
+            test.eq(decoded.revision, 7)
+            test.eq(decoded.theme, "classic")
+            test.is_nil(clients.appearance_changed({version = 1, workspace_id = identity,
+                connection_id = "connection", renderer = "renderer", renderer_generation = "generation",
+                revision = -1, theme = "classic", background = "solid", taskbar = "labels"}))
+            test.is_nil(clients.appearance_changed({version = 1, workspace_id = identity,
+                connection_id = "connection", renderer = "renderer", renderer_generation = "generation",
+                revision = 7, theme = "classic", background = "solid", taskbar = "labels", permissions = {control = true}}))
+        end)
         test.it("requires explicit bounded authority and copies permissions", function()
             local permissions = {open = true, close = false, control = true}
             local value = {version = 1, request_id = "admit", workspace_id = identity,

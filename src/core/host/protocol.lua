@@ -9,7 +9,7 @@ type ControlOp = "admit" | "detach" | "render"
 type Client = {recipient: string, connection_id: string, permissions: Permissions, detaching: boolean,
     renderer: string, renderer_generation: string, rendering: boolean}
 type Control = {request_id: string, workspace_id: string, op: ControlOp, recipient: string, permissions: Permissions?, renderer: string}
-type AppearanceOp = "state" | "set"
+type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRequest = {version: integer, request_id: string, op: "appearance", action: AppearanceOp,
     recipient: string, theme: string, background: string, taskbar: string}
 type ClientAppearanceRequest = {version: integer, request_id: string, action: AppearanceOp,
@@ -18,6 +18,10 @@ type ClientAppearanceRequest = {version: integer, request_id: string, action: Ap
 type AppearanceResult = {version: integer, request_id: string, action: AppearanceOp,
     workspace_id: string, connection_id: string, renderer: string, renderer_generation: string,
     revision: integer, theme: string, background: string, taskbar: string, error_code: string, error: string}
+type AppearanceChanged = {version: integer, workspace_id: string, connection_id: string,
+    renderer: string, renderer_generation: string, revision: integer,
+    theme: string, background: string, taskbar: string}
+
 local M = {}
 -- A bounded full snapshot makes an operation result self-contained even when
 -- its independent inventory channel is consumed before or after the result.
@@ -80,6 +84,7 @@ end
 local function action(value: unknown): AppearanceOp?
     if value == "state" then return "state" end
     if value == "set" then return "set" end
+    if value == "inherit" then return "inherit" end
     return nil
 end
 
@@ -151,4 +156,25 @@ function M.appearance_result(value: unknown): AppearanceResult?
         revision = checked_revision, theme = checked.theme, background = checked.background,
         taskbar = checked.taskbar or "labels", error_code = error_code, error = error_text}
 end
+function M.appearance_changed(value: unknown): AppearanceChanged?
+    if type(value) ~= "table" or value.version ~= 1 then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "workspace_id" and key ~= "connection_id" and key ~= "renderer"
+            and key ~= "renderer_generation" and key ~= "revision" and key ~= "theme"
+            and key ~= "background" and key ~= "taskbar" then return nil end
+    end
+    local workspace = contract.workspace_id(value.workspace_id)
+    local connection = contract.text(value.connection_id, 80)
+    local renderer = contract.text(value.renderer, 160)
+    local generation = contract.text(value.renderer_generation, 80)
+    local revision = value.revision
+    local prefs = preferences(value)
+    if not workspace or not connection or connection == "" or not renderer or renderer == ""
+        or not generation or generation == "" or not prefs then return nil end
+    if type(revision) ~= "number" or revision < 0 or revision > 9007199254740990 or revision ~= math.floor(revision) then return nil end
+    return {version = 1, workspace_id = workspace, connection_id = connection, renderer = renderer,
+        renderer_generation = generation, revision = math.floor(revision), theme = prefs.theme,
+        background = prefs.background, taskbar = prefs.taskbar or "labels"}
+end
+
 return M

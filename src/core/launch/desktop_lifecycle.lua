@@ -66,7 +66,7 @@ local function queue_renderer(state: State, child: Child, renderer: Renderer)
 end
 function M.new(owner: string, host: string, workspace_id: string, default_id: string, resources: desktops.State): State
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy"}) do
+    for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return {owner = owner, host = host, workspace_id = workspace_id, default_id = default_id,
@@ -94,7 +94,7 @@ function M.activate(state: State, value: unknown)
     if count >= 32 then answer(state, id, request, "BUSY", "Active desktop capacity reached"); return end
     local resource, err = desktops.start(state.resources, {host = state.host, workspace_id = state.workspace_id,
         database = "bee:client_db", width = 100, height = 32,
-        options = {version = 1, desktop_id = id, quit_mode = "supervisor", workspace_appearance = false, hive_supervisor = state.owner}}, state.scope)
+        options = {version = 1, desktop_id = id, quit_mode = "supervisor", workspace_appearance = false, node_defaults = true, hive_supervisor = state.owner}}, state.scope)
     if not resource then answer(state, id, request, "UNAVAILABLE", tostring(err)); return end
     state.children[id] = {id = id, resource = resource, phase = "boot", connection = "", pending = "",
         ready = false, activation = request, deadline = time.after("10s")}

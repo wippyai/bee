@@ -87,3 +87,7 @@ native-independent-desktops-check:
 .PHONY: native-settings-resize-check
 native-settings-resize-check:
 	python3 tests/native_settings_resize.py "$(BEE_BINARY)"
+
+.PHONY: native-display-appearance-check
+native-display-appearance-check:
+	python3 tests/native_display_appearance.py "$(BEE_BINARY)"

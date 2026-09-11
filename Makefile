@@ -177,3 +177,7 @@ hive-desktop-catalog-check:
 .PHONY: connection-ui-check
 connection-ui-check: pack
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/connection_ui.py
+
+.PHONY: client-defaults-check
+client-defaults-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(defaults_probe=True)'

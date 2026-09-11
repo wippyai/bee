@@ -15,7 +15,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.sync_probe:direct_db]
+    resources: [bee.node:get_appearance, bee.node:update_appearance, bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.sync_probe:direct_db]
     effect: allow
 - name: read_policy
   kind: security.policy
@@ -23,6 +23,9 @@ entries:
 - name: write_policy
   kind: security.policy
   policy: {actions: [bee.node.update], resources: '*', effect: allow}
+- name: appearance_policy
+  kind: security.policy
+  policy: {actions: [bee.node.appearance.update], resources: '*', effect: allow}
 - name: direct_db
   kind: function.lua
   source: file://direct_db.lua

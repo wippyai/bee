@@ -13,12 +13,73 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(workspace_appearance=False, command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False):
+def run(workspace_appearance=False, command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        if defaults_probe:
+            manifest = project / "src/client_probe/_index.yaml"
+            document = yaml.safe_load(manifest.read_text())
+            next(e for e in document["entries"] if e["name"] == "main")["modules"].append("funcs")
+            manifest.write_text(yaml.safe_dump(document, sort_keys=False))
+            fixture = project / "src/client_probe/main.lua"
+            code = fixture.read_text().replace('local process = require("process")', 'local process = require("process")\nlocal funcs = require("funcs")', 1)
+            assert code.count('local function main(mode: string?)') == 1
+            code = code.replace('local function main(mode: string?)', """local function main(mode: string?)
+    local seeded, seed_error = funcs.call("bee.node:update_appearance", {expected_revision = 0,
+        idempotency_key = "fixture-defaults", preferences = {theme = "dos", background = "solid", taskbar = "labels"}})
+    assert(not seed_error and type(seeded) == "table" and seeded.ok == true, "Cannot seed node defaults")""", 1)
+            code = code.replace('options = {version = 1, desktop_id', 'options = {version = 1, node_defaults = true, desktop_id', 1)
+            code = code.replace('local client_scope = scope({"bee:desktop_policy",', 'local client_scope = scope({"bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy", "bee:desktop_policy",', 1)
+            checkpoint = '    local other_before = assert(store.read(other_store))'
+            assert code.count(checkpoint) == 1
+            code = code.replace(checkpoint, """    local defaults_ready = false
+    for _ = 1, 500 do
+        local saved = store.read(other_store)
+        if saved and saved.appearance_mode == "inherit" and saved.preferences.theme == "dos" then defaults_ready = true; break end
+        time.sleep("10ms")
+    end
+    assert(defaults_ready, "Fresh display did not inherit seeded node defaults")
+""" + checkpoint, 1)
+            anchor = '    if not themed then error("Missing themed client state") end\n'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, anchor + """    click_text(resumed_screen, "Use node default")
+    local inherited = false
+    for _ = 1, 500 do
+        local saved = store.read(appearance_store)
+        if saved and saved.appearance_mode == "inherit" and saved.preferences.theme == "dos" then inherited = true; break end
+        time.sleep("10ms")
+    end
+    assert(inherited, "Reset state=" .. tostring(assert(store.read(appearance_store)).appearance_mode) .. ":" .. tostring(assert(store.read(appearance_store)).preferences.theme) .. " -- Reset did not commit node defaults and inherit mode: " .. table.concat(assert(resumed_screen:snapshot()).rows, "\\n"))
+    key(resumed_screen, "end")
+    local customized = false
+    for _ = 1, 500 do
+        local saved = store.read(appearance_store)
+        if saved and saved.appearance_mode == "custom" and saved.preferences.theme == "classic" then customized = true; break end
+        time.sleep("10ms")
+    end
+    assert(customized, "Explicit selection did not restore custom mode")
+    local function update_defaults(revision: integer, key: string, theme: string)
+        local changed, change_error = funcs.call("bee.node:update_appearance", {expected_revision = revision,
+            idempotency_key = key, preferences = {theme = theme, background = "solid", taskbar = "labels"}})
+        assert(not change_error and type(changed) == "table" and changed.ok == true, "Cannot update node defaults")
+        local applied = false
+        for _ = 1, 800 do
+            local right_state = store.read(other_store)
+            if right_state and right_state.appearance_mode == "inherit" and right_state.preferences.theme == theme then applied = true; break end
+            time.sleep("10ms")
+        end
+        assert(applied, "Inheriting display did not follow a node-default update")
+        local left_state = assert(store.read(appearance_store))
+        assert(left_state.appearance_mode == "custom" and left_state.preferences.theme == "classic", "Node update changed a custom display")
+    end
+    update_defaults(1, "live-defaults", "classic")
+    wait_text(right_screen, "48;2;12;12;12")
+    update_defaults(2, "restore-defaults", "dos")
+""")
+            fixture.write_text(code)
         if shared_store:
             fixture_manifest = project / "src/client_probe/_index.yaml"
             data = yaml.safe_load(fixture_manifest.read_text())

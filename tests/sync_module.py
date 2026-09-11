@@ -12,6 +12,11 @@ def main():
         for name in ("node", "sync", "persist"):
             shutil.copytree(ROOT / "src" / name, folder / "src" / name)
         shutil.copytree(ROOT / "src/threads/records", folder / "src/records")
+        # Only the pure appearance value library; no desktop actor or terminal.
+        appearance = folder / "src/appearance"
+        appearance.mkdir()
+        shutil.copy2(ROOT / "src/ui/appearance.lua", appearance / "appearance.lua")
+        (appearance / "_index.yaml").write_text("version: '1.0'\nnamespace: bee.desktop\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n")
         shutil.copytree(ROOT / "tests/fixtures/sync_module", folder / "src/probe")
         (folder / "wippy.lock").write_text("directories:\n  modules: .wippy\n  src: ./src\n")
         (folder / ".wippy.yaml").write_text("version: '1.0'\nshutdown:\n  timeout: 2s\n")

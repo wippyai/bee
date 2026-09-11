@@ -27,11 +27,13 @@ local function main(owner: string, database_resource: string?)
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
     local selections = assert(process.listen("bee.host.selection", {message = true}))
     local client_answers = assert(process.listen("bee.host.answer", {message = true}))
+    local appearance_changes = assert(process.listen("bee.client.appearance.changed", {message = true}))
     local client_appearance = assert(process.listen("bee.client.appearance.result", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
     if not database then error(tostring(database_error)) end
+    local fresh_workspace = database.saved == nil
     local workspace_id = database.workspace_id
     local empty_tabs: {string} = {}
     local empty_records: {recovery.Record} = {}
@@ -87,7 +89,7 @@ local function main(owner: string, database_resource: string?)
         else
             restoring = ""
             ready = true
-            deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, saved = snapshot})
+            deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
         end
     end
     local function replace_record(record: recovery.Record?, removed: string?): (boolean, string?)
@@ -114,7 +116,7 @@ local function main(owner: string, database_resource: string?)
         while true do
             local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
                 checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(),
-                selections:case_receive(), client_answers:case_receive(), client_appearance:case_receive(), events:case_receive()})
+                selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()})
             if not selected.ok then break end
             if selected.channel == events then
                 local event = selected.value
@@ -194,6 +196,8 @@ local function main(owner: string, database_resource: string?)
                     connections.selection(client_connections, tostring(message:from()), data)
                 elseif selected.channel == client_answers then
                     connections.answer(client_connections, tostring(message:from()), data)
+                elseif selected.channel == appearance_changes then
+                    connections.appearance_changed(client_connections, tostring(message:from()), data)
                 elseif selected.channel == client_appearance then
                     connections.appearance_result(client_connections, tostring(message:from()), data)
                 elseif selected.channel == answers and message:from() == owner then
@@ -229,7 +233,7 @@ local function main(owner: string, database_resource: string?)
     local completed, run_error = pcall(run)
     database:close()
     process.terminate(broker)
-    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, selections, client_answers, client_appearance}) do
+    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, selections, client_answers, appearance_changes, client_appearance}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

@@ -30,3 +30,11 @@ entries:
     test: wippy.test:test
     clients: bee.host:protocol
     contract: bee.protocol:application
+- name: appearance_authority_test
+  kind: function.lua
+  source: file://appearance_authority_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    connections: bee.host:clients

@@ -28,6 +28,7 @@ local retained_protocol = require("retained_protocol")
 local arguments = require("arguments")
 local launcher = require("launcher")
 local appearance = require("appearance")
+local node_appearance = require("node_appearance")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
@@ -35,6 +36,9 @@ type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: launcher.Terminal?)
     local bootstrap = lifecycle.bootstrap(options)
     if not bootstrap then error("Invalid client bootstrap options") end
+    local defaults_reader = node_appearance.new()
+    local defaults_timer = assert(time.ticker("1s"))
+    local defaults_ticks = defaults_timer:channel()
     local owned_database: store.Store? = nil
     local owned_display: physical.Display? = terminal and terminal.display or nil
     local presenter, session = "", ""
@@ -78,7 +82,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         owned_database = database
         local import_receipt = ""
         if bootstrap.legacy_desktop ~= nil and bootstrap.desktop_id == nil then
-            local receipt, import_error = store.import_legacy(database, workspace_id, bootstrap.legacy_desktop)
+            local receipt, import_error = store.import_legacy(database, workspace_id, bootstrap.legacy_desktop, bootstrap.inherit_appearance and "inherit" or "custom")
             if not receipt then error(tostring(import_error)) end
             import_receipt = receipt
         end
@@ -97,7 +101,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             if not next_preferences then error("Invalid host appearance snapshot") end
             if layout.preferences.theme ~= next_preferences.theme or layout.preferences.background ~= next_preferences.background
                 or layout.preferences.taskbar ~= next_preferences.taskbar then
-                local next_layout: state.State = {version = layout.version, scene = layout.scene, tabs = layout.tabs,
+                local next_layout: state.State = {version = layout.version, appearance_mode = layout.appearance_mode, scene = layout.scene, tabs = layout.tabs,
                     targets = layout.targets, preferences = next_preferences}
                 local committed, err = store.write(database, next_layout)
                 if not committed then error("Client appearance projection failed: " .. tostring(err)) end
@@ -110,6 +114,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local pending: {[string]: {op: string, tab_id: string}} = {}
         local pending_count = 0
         local appearance_pending: {[string]: AppearancePending} = {}
+        local defaults_request = ""
+        local node_defaults: node_appearance.Snapshot? = nil
         for _, target in ipairs(layout.targets) do targets[target.tab_id] = target end
         local catalog: {contract.Descriptor} = {}
         local live: {inventory.View} = {}
@@ -193,17 +199,20 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             send(session, "bee.desktop.bindings", {version = 1, workspace_id = workspace_id, revision = status_revision, items = items})
             status_fingerprint = fingerprint
         end
-        local function adopt(value: unknown)
+        local function adopt(value: unknown, mode: state.AppearanceMode?)
             local incoming_status = status_surface.decode(value)
             local status_changed = incoming_status ~= nil and incoming_status.revision > presentation.revision
             if incoming_status and status_changed then presentation = incoming_status end
-            local next_layout, projection_error = state.project(layout, value, targets)
+            local projected, projection_error = state.project(layout, value, targets)
             if projection_error then error(projection_error) end
-            if not next_layout then
+            if not projected then
                 if status_changed then publish() end
                 return
             end
-            if next_layout.scene.revision == layout.scene.revision
+            local next_layout: state.State = projected
+            if mode then next_layout.appearance_mode = mode end
+            if next_layout.appearance_mode == layout.appearance_mode
+                and next_layout.scene.revision == layout.scene.revision
                 and next_layout.scene.focus == layout.scene.focus
                 and #next_layout.scene.windows == #layout.scene.windows
                 and #next_layout.tabs == #layout.tabs
@@ -213,9 +222,18 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if status_changed then publish() end
                 return
             end
+            local appearance_changed = next_layout.preferences.theme ~= layout.preferences.theme
+                or next_layout.preferences.background ~= layout.preferences.background
+                or next_layout.preferences.taskbar ~= layout.preferences.taskbar
             local committed, err = store.write(database, next_layout)
             if not committed then error(tostring(err)) end
             layout = next_layout
+            if appearance_changed and active then
+                send(host, "bee.client.appearance.changed", {version = 1, workspace_id = workspace_id,
+                    connection_id = connection_id, renderer = presenter, renderer_generation = renderer_generation,
+                    revision = layout.scene.revision, theme = layout.preferences.theme,
+                    background = layout.preferences.background, taskbar = layout.preferences.taskbar or "labels"})
+            end
             publish_bindings()
             select_targets()
             publish()
@@ -339,7 +357,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             send(owner, "bee.client.ready", {version = 1, workspace_id = workspace_id,
                 client_id = database.client_id, import_receipt = import_receipt})
             while true do
-                local cases = {events:case_receive(), input:case_receive(), admissions:case_receive(),
+                local defaults_pending: node_appearance.Pending? = nil
+                if bootstrap.node_defaults then
+                    defaults_pending = node_appearance.advance(defaults_reader, math.floor(time.now():unix_nano() / 1000000))
+                end
+                local cases = {defaults_ticks:case_receive(), events:case_receive(), input:case_receive(), admissions:case_receive(),
                     presentations:case_receive(), replies:case_receive(),
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(), launch_requests:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
@@ -356,11 +378,30 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     cases[#cases + 1] = catalogs:case_receive()
                     cases[#cases + 1] = views:case_receive()
                 end
+                if defaults_pending then cases[#cases + 1] = defaults_pending.response:case_receive() end
                 local selected = channel.select(cases)
                 if not selected.ok then break end
                 if selected.channel == presenter_deadline then
                     log:warn("Presenter readiness timed out", {workspace_id = workspace_id, presenter = presenter})
                     pause_presenter()
+                elseif selected.channel == defaults_ticks then
+                    local defaults = node_defaults
+                    if defaults and layout.appearance_mode == "inherit" and defaults_request == "" and next(appearance_pending) == nil
+                        and (layout.preferences.theme ~= defaults.preferences.theme
+                            or layout.preferences.background ~= defaults.preferences.background
+                            or layout.preferences.taskbar ~= defaults.preferences.taskbar) then
+                        defaults_request = uuid.v7()
+                        local sent = process.send(session, "bee.desktop.command", {version = 1, op = "appearance",
+                            request_id = defaults_request, expected_revision = layout.scene.revision,
+                            theme = defaults.preferences.theme, background = defaults.preferences.background,
+                            taskbar = defaults.preferences.taskbar})
+                        if not sent then defaults_request = "" end
+                    end
+                elseif defaults_pending and selected.channel == defaults_pending.response then
+                    local defaults = node_appearance.complete(defaults_reader, defaults_pending)
+                    if defaults and (not node_defaults or (defaults.node_id == node_defaults.node_id and defaults.revision >= node_defaults.revision)) then
+                        node_defaults = defaults
+                    end
                 elseif selected.channel == events then
                     local event = selected.value
                     if event.kind == process.event.CANCEL then break end
@@ -430,17 +471,24 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 appearance_result(request, "stale_renderer", "Client renderer is no longer current")
                             elseif request.action == "state" then
                                 appearance_result(request, "", "")
+                            elseif request.action == "inherit" and not node_defaults then
+                                appearance_result(request, "unavailable", "Node defaults are not available yet")
                             else
                                 local count = 0
                                 for _ in pairs(appearance_pending) do count = count + 1 end
                                 if count >= 16 then
                                     appearance_result(request, "busy", "Client appearance request capacity reached")
                                 else
+                                    local selected_preferences = {theme = request.theme, background = request.background, taskbar = request.taskbar}
+                                    if request.action == "inherit" and node_defaults then
+                                        selected_preferences = {theme = node_defaults.preferences.theme, background = node_defaults.preferences.background,
+                                            taskbar = node_defaults.preferences.taskbar or "labels"}
+                                    end
                                     local session_request_id = uuid.v7()
                                     appearance_pending[session_request_id] = {request = request}
                                     local sent, err = process.send(session, "bee.desktop.command", {version = 1,
-                                        op = "appearance", request_id = session_request_id, theme = request.theme,
-                                        background = request.background, taskbar = request.taskbar,
+                                        op = "appearance", request_id = session_request_id, theme = selected_preferences.theme,
+                                        background = selected_preferences.background, taskbar = selected_preferences.taskbar,
                                         expected_revision = layout.scene.revision})
                                     if not sent then
                                         appearance_pending[session_request_id] = nil
@@ -661,9 +709,15 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     elseif selected.channel == acknowledgements and sender == session then
                         local ack = decode.ack(data)
                         if ack then
+                            if ack.request_id == defaults_request then defaults_request = "" end
                             -- Scene and acknowledgement topics can arrive independently.
                             -- Commit the acknowledged projection before forwarding success.
-                            if ack.error_code == "" then adopt(data) end
+                            if ack.error_code == "" then
+                                local appearance_change = appearance_pending[ack.request_id]
+                                if appearance_change then
+                                    adopt(data, appearance_change.request.action == "inherit" and "inherit" or "custom")
+                                else adopt(data) end
+                            end
                             local key = removals[ack.request_id]
                             if key then
                                 if ack.error_code ~= "" then error("Session rejected target removal") end
@@ -690,6 +744,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         run()
     end
     local completed, err = pcall(boot)
+    defaults_timer:stop()
+    node_appearance.close(defaults_reader)
     if owned_database then store.close(owned_database) end
     if presenter ~= "" then process.terminate(presenter) end
     if retired_presenter ~= "" then process.terminate(retired_presenter) end
@@ -713,7 +769,7 @@ local function local_entry(database_resource: string, initial_application: strin
     if not boot then return end
     local function run()
         return run_client(boot.supervisor, boot.host, boot.workspace_id, database_resource, initial_application,
-            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop, workspace_appearance = true,
+            {version = 1, quit_mode = "supervisor", legacy_desktop = boot.desktop, workspace_appearance = false,
                 arguments = bootstrap.arguments, fullscreen = bootstrap.fullscreen,
                 secondary_application = bootstrap.secondary_application}, true, boot.terminal)
     end

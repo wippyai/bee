@@ -36,6 +36,7 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.threads.records:bounds
+    appearance: bee.desktop:appearance
 - name: resources
   kind: library.lua
   source: file://resources.lua
@@ -53,6 +54,7 @@ entries:
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    appearance: bee.desktop:appearance
 - name: store_policy
   kind: security.policy
   policy:
@@ -62,6 +64,10 @@ entries:
 - name: contract
   kind: contract.definition
   methods:
+  - name: get_appearance
+    description: Read node appearance defaults and their revision
+  - name: update_appearance
+    description: Commit authorized node appearance defaults at an expected revision
   - name: describe
     description: Read this node's native identity and editable description
   - name: update_metadata
@@ -75,6 +81,8 @@ entries:
   contracts:
   - contract: bee.node:contract
     methods:
+      get_appearance: bee.node:get_appearance
+      update_appearance: bee.node:update_appearance
       describe: bee.node:describe
       update_metadata: bee.node:update_metadata
       snapshot: bee.node:snapshot
@@ -184,3 +192,17 @@ entries:
     request. On conflict, reread and resolve the change before using a new key.
     Metadata describes the node and never grants permissions or proves liveness.
   tools: [bee.node:describe, bee.node:update_metadata]
+
+- name: get_appearance
+  kind: function.lua
+  source: file://get_appearance_method.lua
+  method: handle
+  imports: {service: bee.node:service}
+  security: {policies: [bee.node:store_policy]}
+
+- name: update_appearance
+  kind: function.lua
+  source: file://update_appearance_method.lua
+  method: handle
+  imports: {service: bee.node:service}
+  security: {policies: [bee.node:store_policy]}

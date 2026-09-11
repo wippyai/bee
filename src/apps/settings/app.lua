@@ -65,6 +65,14 @@ local function main(value: unknown)
         end
         reveal(); dirty = true
     end
+    local function inherit()
+        if not broker then return end
+        pending = uuid.v7(); pending_ticks = 0; status = ""
+        local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending,
+            op = "inherit", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
+        if not sent then pending = ""; status = tostring(err) end
+        dirty = true
+    end
     local function browse(amount: integer)
         local grid = view.grid(width, height)
         offset = view.offset(selected(), offset + amount, grid, count(), false)
@@ -140,7 +148,8 @@ local function main(value: unknown)
                 elseif data.action == "press" and data.button == "left" then
                     local hit = view.hit(hits, x, y)
                     if hit then
-                        if hit.kind == "theme" then switch("theme")
+                        if hit.kind == "inherit" then inherit()
+                        elseif hit.kind == "theme" then switch("theme")
                         elseif hit.kind == "background" then switch("background")
                         elseif hit.kind == "taskbar" then switch("taskbar")
                         elseif hit.kind == "select" then choose(hit.index)

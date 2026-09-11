@@ -60,6 +60,29 @@ local function main()
         assert(value(updated).revision == 2, "post-restart update failed")
         logger:info("NODE_SYNC_SECOND_BOOT_PASS")
     end
+    local defaults = value(call(reader, "get_appearance", {}))
+    local appearance_writer = funcs.new():with_actor(security.new_actor("appearance-user")):
+        with_scope(security.new_scope({assert(security.policy("bee.sync_probe:call_policy")),
+            assert(security.policy("bee.sync_probe:read_policy")), assert(security.policy("bee.sync_probe:appearance_policy"))}))
+    local appearance_request = {expected_revision = 0, idempotency_key = "initial-description",
+        preferences = {theme = "classic", background = "solid", taskbar = "labels"}}
+    local denied_appearance = call(writer, "update_appearance", appearance_request)
+    assert(denied_appearance.ok == false and denied_appearance.code == "DENIED", "metadata permission changed node appearance")
+    if defaults.revision == 0 then
+        assert(value(call(appearance_writer, "update_appearance", appearance_request)).revision == 1)
+        local conflict = call(appearance_writer, "update_appearance", {expected_revision = 0, idempotency_key = "stale-appearance",
+            preferences = {theme = "dos", background = "solid", taskbar = "labels"}})
+        assert(conflict.ok == false and conflict.code == "CONFLICT", "stale appearance write accepted")
+    else
+        assert(defaults.revision == 1, "restart changed appearance revision")
+        local preferences = defaults.preferences :: Object
+        assert(preferences.theme == "classic" and preferences.background == "solid", "restart lost node defaults")
+    end
+    local replay_appearance = call(appearance_writer, "update_appearance", appearance_request)
+    assert(replay_appearance.ok == true and replay_appearance.replayed == true, "appearance retry did not replay")
+    local malformed = call(appearance_writer, "update_appearance", {expected_revision = 1, idempotency_key = "invalid-appearance",
+        preferences = {theme = "unknown", background = "solid", taskbar = "labels"}})
+    assert(malformed.ok == false and malformed.code == "INVALID", "unknown theme accepted")
     -- The public caller has no direct store access even though methods can open it.
     local restricted = funcs.new():with_actor(security.new_actor("node-metadata-user")):
         with_scope(security.new_scope({assert(security.policy("bee.sync_probe:call_policy"))}))

@@ -234,13 +234,13 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     advance("client_boot")
                     if retained_owner then
                         local client_policies: {security.Policy} = {}
-                        for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy"}) do
+                        for _, name in ipairs({"bee:desktop_policy", "bee:client_spawn_policy", "bee:client_storage_policy", "bee:client_node_defaults_call_policy", "bee:client_node_defaults_read_policy"}) do
                             client_policies[#client_policies + 1] = assert(security.policy(name))
                         end
                         local started, start_error = desktops.start(retained,
                             {host = host, workspace_id = workspace_id, database = "bee:client_db", width = 100, height = 32,
                                 application = initial_application, options = {version = 1, quit_mode = "supervisor",
-                                    legacy_desktop = value.desktop, workspace_appearance = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
+                                    legacy_desktop = value.desktop, inherit_appearance = value.fresh, workspace_appearance = false, node_defaults = true, hive_supervisor = retained_owner}}, security.new_scope(client_policies))
                         if not started then error(tostring(start_error)) end
                         desktop, client = started, started.pid
                     else
@@ -253,7 +253,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     pending = uuid.v7(); advance("admitting")
                     send(host, "bee.host.client", {version = 1, workspace_id = workspace_id, request_id = pending,
                         op = "admit", recipient = client, permissions = {open = true, close = true, control = true,
-                            appearance = true, workspace_appearance = true}})
+                            appearance = true, workspace_appearance = false}})
                 elseif selected.channel == results and sender == host and type(data) == "table" then
                     if protocol.request(data, workspace_id) == pending and (phase == "admitting" or phase == "rendering") then
                         if data.error_code ~= "" then

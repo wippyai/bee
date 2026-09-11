@@ -741,3 +741,16 @@ entries:
     actions: [funcs.call]
     resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_feed]
     effect: allow
+
+- name: client_node_defaults_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.node:get_appearance]
+    effect: allow
+- name: client_node_defaults_read_policy
+  kind: security.policy
+  policy:
+    actions: [bee.node.read]
+    resources: '*'
+    effect: allow

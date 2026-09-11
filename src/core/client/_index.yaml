@@ -39,6 +39,7 @@ entries:
   method: main
   modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
   imports: &client_imports
+    node_appearance: bee.client:node_appearance
     retained_protocol: bee.launch:retained_protocol
     clipboard: bee.client:clipboard
     launcher: bee.launch:bootstrap
@@ -141,3 +142,10 @@ entries:
   imports: *desktop_storage_imports
   security:
     policies: [bee:client_storage_policy]
+
+- name: node_appearance
+  kind: library.lua
+  source: file://node_appearance.lua
+  modules: [funcs, channel]
+  imports:
+    appearance: bee.desktop:appearance

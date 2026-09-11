@@ -24,7 +24,7 @@ entries:
       icon: S
       lifetime: view
       revision: '1'
-      instance_policy: singleton
+      instance_policy: multiple
       group: Tools
       role: appearance
       resume_schema: settings.v1

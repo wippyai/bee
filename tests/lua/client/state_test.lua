@@ -12,6 +12,25 @@ local function legacy()
 end
 local function define_tests()
     test.describe("Client durable layout", function()
+        test.it("preserves legacy appearance as custom and requires an explicit version-two mode", function()
+            local fresh = state.empty(100, 30)
+            test.eq(fresh.version, 2)
+            test.eq(fresh.appearance_mode, "inherit")
+            local legacy_value = {version = 1, scene = fresh.scene, tabs = fresh.tabs,
+                preferences = fresh.preferences, targets = fresh.targets}
+            local upgraded = state.decode(legacy_value)
+            if not upgraded then error("legacy layout did not upgrade") end
+            test.eq(upgraded.version, 2)
+            test.eq(upgraded.appearance_mode, "custom")
+            test.eq(upgraded.preferences.theme, fresh.preferences.theme)
+            test.is_nil(state.decode({version = 2, scene = fresh.scene, tabs = fresh.tabs,
+                preferences = fresh.preferences, targets = fresh.targets}))
+            test.is_nil(state.decode({version = 2, appearance_mode = "guess", scene = fresh.scene,
+                tabs = fresh.tabs, preferences = fresh.preferences, targets = fresh.targets}))
+            local projected = state.project(fresh, fresh, {})
+            if not projected then error("projection did not decode") end
+            test.eq(projected.appearance_mode, "inherit")
+        end)
         test.it("composes equal remote IDs without losing their workspaces", function()
             local source = legacy()
             local first = assert(state.import_desktop(first_workspace, source))

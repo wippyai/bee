@@ -16,12 +16,12 @@ local interaction = require("interaction")
 local interactions = require("interactions")
 local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
-type AppearanceOp = "state" | "set"
-type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp}
+type AppearanceOp = "state" | "set" | "inherit"
+type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
 type Checkpoint = {request_id: string, pid: string, deadline: number}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
-    negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
+    client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
@@ -122,13 +122,14 @@ local function main(owner: string, initial_preferences: unknown)
         -- Keep one write in flight for an app, while allowing a bind-triggered
         -- state refresh to coexist with a user click already being delivered.
         for id, waiter in pairs(preference_waiters) do
-            if waiter.recipient == item.execution_pid and (action == "set" or waiter.action == "state") then
+            if waiter.recipient == item.execution_pid and (action ~= "state" or waiter.action == "state") then
                 appearance_state(item, waiter.request_id, "superseded", "A newer appearance request replaced this one")
                 preference_waiters[id] = nil
             end
         end
         local routed_id = uuid.v7()
-        preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = action}
+        preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = action,
+            renderer = mounted.recipient, mount = mounted.mount}
         local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = action,
             request_id = routed_id, recipient = mounted.recipient, theme = value.theme, background = value.background, taskbar = value.taskbar})
         if not sent then
@@ -495,7 +496,24 @@ local function main(owner: string, initial_preferences: unknown)
             local data: unknown = msg:payload():data()
             if msg:from() == owner and type(data) == "table" and data.version == 1 then
                 local prefs = appearance.decode(data)
-                local scoped = data.scope == "client"
+                local scoped = data.scope == "client" or data.scope == "display"
+                if data.scope == "display" and prefs and type(data.renderer) == "string"
+                    and type(data.revision) == "number" and data.revision >= 0
+                    and data.revision <= 9007199254740990 and data.revision == math.floor(data.revision) then
+                    for _, candidate in pairs(instances) do
+                        local target: Instance = candidate
+                        local control = target.attachment
+                        if control and control.recipient == data.renderer
+                            and (not target.client_appearance_revision or data.revision >= target.client_appearance_revision) then
+                            local _, page_error = target.view:set_page(appearance.page(appearance.theme(prefs.theme), target.descriptor.role == "terminal"))
+                            if page_error then appearance_state(target, "", "page_failed", tostring(page_error))
+                            else
+                                target.client_appearance_revision = data.revision
+                                appearance_state(target, "", "", "", prefs, data.revision, "client")
+                            end
+                        end
+                    end
+                end
                 if not scoped and prefs and type(data.revision) == "number" and data.revision >= appearance_revision then
                     preferences, appearance_revision = prefs, math.floor(data.revision)
                     local theme = appearance.theme(preferences.theme)
@@ -515,8 +533,35 @@ local function main(owner: string, initial_preferences: unknown)
                     if item and waiter then
                         local revision: number? = nil
                         if type(data.revision) == "number" and data.revision >= 0 and data.revision == math.floor(data.revision) then revision = data.revision end
-                        appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "",
-                            type(data.error) == "string" and data.error or "", scoped and prefs or nil, revision, scoped and "client" or nil)
+                        local mounted = item.attachment
+                        if scoped and (not mounted or mounted.recipient ~= waiter.renderer or mounted.mount ~= waiter.mount) then
+                            -- The host fences renderer admission; the broker also fences
+                            -- this application's mount, which can change independently.
+                            appearance_state(item, waiter.request_id, "stale_attachment", "Application display changed")
+                        elseif scoped and data.error_code == "" and revision and item.client_appearance_revision and revision < item.client_appearance_revision then
+                            appearance_state(item, waiter.request_id, "superseded", "A newer display appearance is already applied")
+                        else
+                            if scoped and prefs and revision and data.error_code == "" then
+                                for _, candidate in pairs(instances) do
+                                    local target: Instance = candidate
+                                    local control = target.attachment
+                                    if control and control.recipient == waiter.renderer
+                                        and (waiter.action ~= "state" or target == item)
+                                        and (not target.client_appearance_revision or revision >= target.client_appearance_revision) then
+                                        local _, page_error = target.view:set_page(appearance.page(appearance.theme(prefs.theme), target.descriptor.role == "terminal"))
+                                        if page_error then
+                                            appearance_state(target, target == item and waiter.request_id or "", "page_failed", tostring(page_error))
+                                        else
+                                            target.client_appearance_revision = revision
+                                            appearance_state(target, target == item and waiter.request_id or "", "", "", prefs, revision, "client")
+                                        end
+                                    end
+                                end
+                            else
+                                appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "",
+                                    type(data.error) == "string" and data.error or "", scoped and prefs or nil, revision, scoped and "client" or nil)
+                            end
+                        end
                     end
                     preference_waiters[data.request_id] = nil
                 end
@@ -531,7 +576,8 @@ local function main(owner: string, initial_preferences: unknown)
                     if data.op == "state" then
                         local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
                         if not route_client_appearance(item, "state", request_id, current) then appearance_state(item, request_id) end
-                    elseif data.op == "set" then
+                    elseif data.op == "set" or data.op == "inherit" then
+                        local requested: AppearanceOp = data.op == "inherit" and "inherit" or "set"
                         local prefs = appearance.decode(data)
                         if not item.binding.appearance_write then appearance_state(item, request_id, "permission_denied", "Appearance changes are not granted")
                         elseif not prefs then appearance_state(item, request_id, "invalid_argument", "Invalid appearance")
@@ -543,14 +589,18 @@ local function main(owner: string, initial_preferences: unknown)
                                     preference_waiters[id] = nil
                                 end
                             end
-                            if not route_client_appearance(item, "set", request_id, prefs) then
+                            if not route_client_appearance(item, requested, request_id, prefs) then
+                                if requested == "inherit" then
+                                    appearance_state(item, request_id, "unavailable", "A controlling display is required")
+                                else
                                 local routed_id = uuid.v7()
-                                preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = "set"}
+                                preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = "set", renderer = "", mount = ""}
                                 local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = "set", request_id = routed_id,
                                     recipient = "", theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar})
                                 if not sent then
                                     preference_waiters[routed_id] = nil
                                     appearance_state(item, request_id, "unavailable", tostring(err))
+                                end
                                 end
                             end
                         end
@@ -617,13 +667,14 @@ local function main(owner: string, initial_preferences: unknown)
                             end
                             local result = attachment.replace(item.view, item.attachment, item.opened and req.recipient or "")
                             item.attachment = result.attachment
+                            if result.error_code == "" then item.client_appearance_revision = nil end
                             if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
                             if result.error_code == "revoke_failed" or (req.recipient ~= "" and item.opened) then
                                 local response = identified(item, "attached", req.request_id, result.error_code, result.error)
                                 if result.error ~= "" then response.mount = "" end
                                 emit(response)
                             end
-                            if result.error_code == "" and req.recipient ~= "" and item.opened and item.binding.appearance_write then
+                            if result.error_code == "" and req.recipient ~= "" and item.opened then
                                 local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
                                 route_client_appearance(item, "state", "", current)
                             end
@@ -645,8 +696,10 @@ local function main(owner: string, initial_preferences: unknown)
                         if recipient == req.recipient then recipient = "" end
                         local reply = contract.reply(req.request_id, "unbind")
                         local function detach(item: Instance)
-                            local result = attachment.remove_recipient(item.view, item.attachment, req.recipient)
+                            local previous = item.attachment
+                            local result = attachment.remove_recipient(item.view, previous, req.recipient)
                             item.attachment = result.attachment
+                            if previous ~= result.attachment then item.client_appearance_revision = nil end
                             local removed, observer_error = attachment.remove_observer(item.view, item.observers, req.recipient)
                             if not removed then reply.error_code, reply.error = "revoke_failed", observer_error or "Observer revocation failed" end
                             if result.error ~= "" then

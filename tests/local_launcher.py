@@ -87,10 +87,14 @@ def run():
                 ui.wait("Honey")
                 ui.key(b"\x1b[F")
                 ui.wait("Windows Classic")
-                assert stored(pair_folder)["desktop"]["preferences"]["theme"] == "classic"
+                assert stored(pair_folder)["desktop"]["preferences"]["theme"] == "honey", "Display Settings changed workspace defaults"
+                with sqlite3.connect(pair_folder / "workspace.db.client") as db:
+                    display_state = json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
+                assert display_state["preferences"]["theme"] == "classic"
+                assert display_state["appearance_mode"] == "custom"
                 ui.key(b"\x1b\t")
                 ui.pump(.3)
-                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "Existing terminal did not receive the workspace page"
+                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "Existing terminal did not receive its controlling display page"
                 ui.key(b"\x10")
                 ui.wait("Windows Classic")
                 ui.key(b"\x1b[24~")
@@ -98,26 +102,22 @@ def run():
                 ui.key(b"\x0e")
                 ui.pump(.3)
                 assert ui.screen.display[0].count("Terminal") == 2, ui.text()
-                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "New terminal did not inherit the workspace page"
+                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "New terminal did not inherit its controlling display page"
                 ui.key(b"\x10")
                 ui.wait("Windows Classic")
                 ui.quit(confirm=True)
                 print(f"Explicit pair {'pack' if packed else 'source'}: initial open, Ctrl+N/Ctrl+P targets survive F12", flush=True)
             finally:
                 ui.close()
-            # Simulate a stale client projection after the host committed its
-            # theme. Reopening must recover from the canonical workspace value.
-            with sqlite3.connect(pair_folder / "workspace.db.client") as db:
-                stale = json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
-                stale["preferences"]["theme"] = "honey"
-                db.execute("UPDATE client_state SET value=?, generation=generation+1 WHERE singleton=1", (json.dumps(stale),))
+            # The custom display choice survives cold boot even though the
+            # workspace still holds its original Honey preferences.
             ui = Desktop(pair_folder, packed, project=project, pack_file=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Windows Classic", timeout=12)
                 assert ui.screen.buffer[29][99].bg == "008080", ui.text()
                 ui.quit()
-                print(f"Workspace appearance {'pack' if packed else 'source'}: live/new terminal pages, F12 and stale-client cold reconciliation", flush=True)
+                print(f"Display appearance {'pack' if packed else 'source'}: live/new terminal pages, F12 and custom choice survives cold boot", flush=True)
             finally:
                 ui.close()
             argument_folder = root / ("arguments-pack" if packed else "arguments-source")
@@ -208,6 +208,12 @@ def run():
                     ui.close()
             print(f"Cold boot {'pack' if packed else 'source'}: recovered Settings retains its client tab and live view", flush=True)
 
+        # Exercise the explicitly supported legacy workspace-write admission.
+        # Ordinary display Settings above must never take this route.
+        supervisor_file = project / "src/core/launch/supervisor.lua"
+        supervisor_code = supervisor_file.read_text()
+        assert 'workspace_appearance = false' in supervisor_code
+        supervisor_file.write_text(supervisor_code.replace('workspace_appearance = false', 'workspace_appearance = true'))
         # A rejected canonical write must not recolor chrome or producer pages.
         host_file = project / "src/core/host/main.lua"
         host_code = host_file.read_text()
@@ -236,6 +242,7 @@ def run():
             finally:
                 ui.close()
         host_file.write_text(host_code)
+        supervisor_file.write_text(supervisor_code)
 
         # Manual recovery belongs to the host, even when the client has discarded
         # its old tab. Opening from Start must receive the saved state and IDs.

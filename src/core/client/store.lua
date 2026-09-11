@@ -139,7 +139,7 @@ function M.write(store: Store, value: state.State): (boolean, string?)
     store.generation = store.generation + 1
     return true, nil
 end
-function M.import_legacy(store: Store, workspace_id: string, desktop: unknown): (string?, string?)
+function M.import_legacy(store: Store, workspace_id: string, desktop: unknown, appearance_mode: state.AppearanceMode?): (string?, string?)
     if store.desktop_id then return nil, "Only the default desktop imports legacy layout" end
     if store.closed then return nil, "Client store is closed" end
     if not contract.workspace_id(workspace_id) then return nil, "Invalid import workspace" end
@@ -151,8 +151,10 @@ function M.import_legacy(store: Store, workspace_id: string, desktop: unknown): 
         return current.receipt, nil
     end
     if current.value then return nil, "Existing client layout cannot be replaced by legacy import" end
-    local imported, import_error = state.import_desktop(workspace_id, desktop)
-    if not imported then return nil, import_error end
+    local decoded, import_error = state.import_desktop(workspace_id, desktop)
+    if not decoded then return nil, import_error end
+    local imported: state.State = decoded
+    if appearance_mode then imported.appearance_mode = appearance_mode end
     local encoded, encode_error = encode(imported)
     if not encoded then return nil, encode_error end
     -- The layout and receipt become durable in the same SQLite statement.

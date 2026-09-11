@@ -235,8 +235,8 @@ The persistent client database is `${env:bee:workspace_db_path}.client`, alongsi
 the selected workspace database. Public-command migration checks cover a real
 combined-owner baseline, absent legacy window workspace IDs, unchanged migrations
 and repeated cold starts without resetting client edits. The local supervisor
-grants workspace appearance explicitly, preserving the local
-Settings effect on producer colors without client workspace-storage authority.
+grants display-local appearance. Settings changes its controlling display and
+producer colours without workspace-storage authority.
 
 The host finishes automatic recovery before admission. The first authoritative
 inventory reconciles saved client targets, removing tabs for applications that
@@ -380,39 +380,39 @@ its attachment; joining a second client alone must not displace an existing
 controller. Both public local launch and the independent-client fixture use this
 selection isolation.
 
-Client preferences own wallpaper, desktop chrome and tab presentation. The
-workspace/application owns producer page defaults and application appearance.
-Two clients with different themes observe the same application pixels; neither
-may recolor the shared producer merely by attaching. In the ordinary independent-client path,
-the broker routes Settings through its current native attachment recipient to
-the admitted client, which commits its preferences through its own session/store.
-The response is client-scoped and does not change workspace producer defaults.
-Unknown or replaced renderers cannot fall back to workspace preference writes.
-The Classic terminal palette belongs to producer appearance, not client chrome.
+Client preferences own wallpaper, desktop chrome and tab presentation. Ordinary
+local launch and retained displays do not grant workspace appearance writes.
+Settings allows independent application instances so another display does not
+reuse a workspace-wide Settings singleton. Settings writes through the admitted controlling display, which commits its
+session projection and appearance mode before reporting success. The broker
+applies the effective theme to applications controlled by that display, including
+newly bound applications. Observer attachments do not control producer colour or
+size. Unknown or replaced renderers cannot fall back to workspace writes.
 
-The local supervisor selects `workspace_appearance = true`. For such an
-admission, the host commits Settings writes to the workspace database first and
-publishes revisioned producer defaults to the broker. It then asks the client to
-project the same preferences through its session and client store. The client
-acknowledgement completes the Settings request. The host remains the sole workspace
-writer; neither app metadata nor a client bootstrap flag confers this grant.
-Workspace broadcasts refresh mounted appearance controllers through their own
-admitted-client route, so they do not acquire another client's chrome preferences.
+Fresh displays inherit node defaults. Existing version-1 layouts preserve their
+saved preferences as explicit custom overrides. Settings “Use node default”
+returns to inheritance; explicit theme choices return to custom mode. The client
+reads defaults asynchronously through the host-granted `bee.node:get_appearance`
+function, with one outstanding read and bounded cancellation. Committed changes
+are reported to the host with connection, renderer and generation identity;
+the host validates the native sender and current control permission. The broker
+fences pending replies by controller mount and successful preference revision.
 
-These two owned stores do not share a transaction. A rejected host commit leaves
-producer colors and client chrome unchanged and reports the failure. If the host
-commits but client projection fails, the workspace value remains authoritative:
-the local bootstrap's `workspace_appearance` option projects the fresh host
-snapshot into the client store on restart, preserving layout and tab identity.
-This bootstrap option selects how that client displays saved preferences; host
-admission separately controls write authority. Ordinary clients keep their own
-preferences and receive no workspace-write grant.
+Node defaults use the existing node sync ledger. `get_appearance` requires node
+read authority; `update_appearance` requires the separate
+`bee.node.appearance.update` permission, expected revision and idempotency key.
+The metadata-edit permission does not authorize default changes. The defaults
+editor and remote node-default route are not yet exposed in Settings or Hive.
 
-Source/pack acceptance changes Windows Classic on live and newly opened Terminals,
-checks full background fill and F12, simulates a stale client projection on cold
-boot, and rejects an injected host save failure without changing colors. Two-client
-acceptance covers both ordinary grants and the explicit workspace grant: producer
-pages change across the workspace while the other client's chrome stays unchanged.
+The explicit legacy `workspace_appearance` admission remains supported for
+compatibility fixtures. It commits workspace preferences before asking the client
+to project them; those stores do not share a transaction. It is not selected by
+ordinary launch. Its workspace-wide producer updates must not be confused with
+display-local Settings behavior.
+
+The source/pack defaults probe proves inheritance, reset, explicit override,
+live default updates and controller palette isolation. Full combined and native
+executable acceptance are still pending; these changes are not installed globally.
 
 ### Presenter recipient ownership
 

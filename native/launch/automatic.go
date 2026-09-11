@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/bee/native/client/session"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	app "github.com/wippyai/runtime/cmd/app"
@@ -32,17 +33,26 @@ func (c Client) Run(ctx context.Context, request app.LaunchRequest) error {
 	if err != nil {
 		return err
 	}
-	previous, err := store.Read(ctx)
-	if err == nil {
+	previous, readErr := store.Read(ctx)
+	if readErr == nil {
 		if _, err := fmt.Fprintln(c.Stdout, "Connecting to Hive…"); err != nil {
 			return err
 		}
 		// Discovery only selects this admission attempt. Its result never
 		// authorizes access or starts a replacement owner.
-		return c.Attach(ctx, request)
+		if err := c.Attach(ctx, request); err == nil {
+			return nil
+		} else if !errors.Is(err, session.ErrOwnerUnavailable) {
+			return err
+		}
+		// The descriptor survives an abrupt owner death. This error is limited
+		// to pre-admission mesh authentication, so no uncertain attachment or
+		// refusal is retried. The detached child still uses runOwner to decide
+		// whether it owns the state.
+		readErr = os.ErrNotExist
 	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return err
+	if !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
 	}
 	if c.AttachOnly {
 		return errors.New("No running Bee for this project; run bee to start its node")

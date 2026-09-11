@@ -32,6 +32,12 @@ type Selection struct{ Workspace, Desktop string }
 // the owner's monitor still owns eventual attachment cleanup.
 const detachTimeout = time.Second
 
+// ErrOwnerUnavailable means native mesh authentication did not reach the
+// published owner. It is emitted before supervisor admission or any desktop
+// request, so a launcher may let a detached contender ask cmd/app to arbitrate
+// state ownership. It never describes an admission refusal or mutation result.
+var ErrOwnerUnavailable = errors.New("published Bee owner is unavailable")
+
 type Config struct {
 	Directory string
 	Selection Selection
@@ -109,11 +115,17 @@ func Join(ctx context.Context, cfg Config, stdin *os.File, stdout io.Writer) err
 	}
 	transport, closeTransport := cleanupLifetime(ctx)
 	defer closeTransport()
-	return mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+	reachedOwner := false
+	err = mesh.SameAccount(transport, cfg.Directory, func(lifetime context.Context, stack *stackpkg.Stack, owner rendezvous.Descriptor) error {
+		reachedOwner = true
 		return mesh.WithActor(lifetime, stack, owner.Node, func(frame context.Context, actor *mesh.Actor) error {
 			return present(frame, ctx, actor, owner, cfg, stdin, stdout)
 		})
 	})
+	if err != nil && !reachedOwner {
+		return fmt.Errorf("%w: %v", ErrOwnerUnavailable, err)
+	}
+	return err
 }
 
 func present(ctx context.Context, foreground context.Context, actor *mesh.Actor, owner rendezvous.Descriptor, cfg Config, stdin *os.File, stdout io.Writer) (result error) {

@@ -300,8 +300,42 @@ func TestFreshClientDesktopComposition(t *testing.T) {
 		t.Setenv("BEE_OWNER_TEST_EMPTY_DESKTOP", "1")
 		coldState := filepath.Join(stage, "cold-state")
 		defer stopRecordedFixtureOwner(t, coldState)
+		staleLog, err := os.CreateTemp(stage, "stale-owner-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer staleLog.Close()
+		stale, err := beelaunch.StartOwner(ctx, app.LaunchRequest{Command: "bee", StateDir: coldState, Directory: stage}, staleLog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		staleStore, err := rendezvous.New(filepath.Join(coldState, DirectoryName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for {
+			if _, err := staleStore.Read(ctx); err == nil {
+				break
+			} else if !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			select {
+			case <-stale.Done():
+				t.Fatalf("stale-owner fixture exited: %v", stale.Wait(context.Background()))
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case <-ticker.C:
+			}
+		}
+		if err := stale.Abort(); err != nil {
+			t.Fatal(err)
+		}
+		_ = stale.Wait(ctx)
+		// The stale descriptor remains. Automatic launch must classify the
+		// failed pre-admission path, start one contender, and let runOwner elect
+		// the replacement before the physical session is admitted.
 		if err := physicalStartupProbe(ctx, filepath.Join(coldState, DirectoryName)); err != nil {
-			t.Fatal("automatic first launch:", err)
+			t.Fatal("automatic stale-owner recovery:", err)
 		}
 	}
 	probeConcurrentStarts(t, ctx, filepath.Join(stage, "concurrent-state"), stage)

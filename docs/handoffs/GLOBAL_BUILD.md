@@ -22,6 +22,14 @@ Evidence: `/tmp/bee-connection-refine-check.log`,
 `/tmp/bee-connection-refined-native-check.log`, `/tmp/bee-install-connection-20260911.log`.
 Live Hive Manager browsing/switching remains unfinished.
 
+The broader compact-card validation has now completed in segments on frozen
+checkpoint `6c9d850`: source/pack storage and subscription restart, resources,
+desktop interactions, independent clients, app transfer, retained-supervisor
+recovery, local launcher, recovery and bundled apps all passed (tail process
+14472, exit 0). The earlier composite stopped because its temporary fixture
+captured an unfinished catalog edit; that edit was never installed. This is
+segmented acceptance, not an uninterrupted full `make check`.
+
 ## Previous install: app transfer between displays
 
 Global SHA256 `2569142fc3ba3b6fc95ffbf5fc09f9377ab3e4ceca742b5661917ab076a0e847`.

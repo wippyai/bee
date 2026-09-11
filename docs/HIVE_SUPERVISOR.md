@@ -440,7 +440,8 @@ The protected application admission binding grants `catalog_read` only to Hive
 Manager. The broker publishes a complete bounded list of its live admitted app
 PIDs through the workspace host and retained supervisor. Each receiver accepts
 only its exact owner in this chain; the Hive supervisor additionally requires
-local-node PIDs. This state is private to the current execution and is never
+PIDs on the retained supervisor’s actual native node. The local-only routing
+label `local` is not used for this comparison. This state is private to the current execution and is never
 saved or represented as a human identity. Closing the admitted app removes it
 from the list. A pending response rechecks permission before releasing data.
 
@@ -459,4 +460,11 @@ impersonation, persistent PID permission, or metadata-granted authority.
 
 Candidate acceptance: `make native-hive-catalog-check BEE_BINARY=...` exercises
 the real manager and two physical clients; the installed pre-catalog build
-reproduces the unavailable path. Integrated candidate validation is pending.
+reproduces the unavailable path. The candidate passed 535 unit tests,
+source/pack architecture and app checks, and native catalog, connection,
+client and transfer checks. A subsequent local-only PID correction passes
+`make hive-reader-check`: an actual actor is admitted from its supervisor’s
+native node, a foreign-node snapshot is refused, and revocation fences an
+in-flight response without granting native control. Reverting the correction
+makes that focused test fail on the legitimate local reader. Rebuilding and
+native acceptance of that final correction remain pending; it is not installed.

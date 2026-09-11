@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
@@ -284,7 +284,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # Optional subsystem stores use .wippy defaults inside this disposable host.
             ((folder if packed else project) / ".wippy").mkdir(exist_ok=True)
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
-            args += [command] + (["shared-store"] if shared_store else []) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
+            args += [command] + (["transfer"] if transfer_probe else (["shared-store"] if shared_store else [])) + [ "--host", "bee:workers", "--set", f"registry.history_path={folder / 'registry.db'}"]
             try:
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=40,
                                         env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
@@ -295,7 +295,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             logs = result.stdout + result.stderr
             assert result.returncode == 0, logs
             marker = {
-                "desktop-client-probe": "DESKTOP_CLIENT_PROBE_COMPLETE",
+                "desktop-client-probe": "DESKTOP_TRANSFER_PROBE_COMPLETE" if transfer_probe else "DESKTOP_CLIENT_PROBE_COMPLETE",
                 "retained-supervisor-probe": "RETAINED_SUPERVISOR_PROBE_COMPLETE",
                 "thread-status-probe": "THREAD_STATUS_PROBE_COMPLETE",
             }[command]
@@ -304,6 +304,9 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 assert ((folder if packed else project) / "fault-launch-evidence").read_text() == "committed"
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
+    if transfer_probe:
+        print("Display transfer source/pack: real window menu, exact retained shell PID/state, neighbor unaffected, client layouts and source F12")
+        return
     if command == "retained-supervisor-probe":
         print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}, primary exit={primary_exit}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, retained display close/reactivation")
         return

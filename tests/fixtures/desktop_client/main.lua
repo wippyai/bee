@@ -13,6 +13,7 @@ local desktop_attachments = require("desktop_attachments")
 local decode = require("decode")
 local launch_protocol = require("launch_protocol")
 local interaction = require("interaction")
+local names = require("names")
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for _, name in ipairs(names) do
@@ -39,15 +40,15 @@ local function key(view: tty.Viewport, value: string, ctrl: boolean?)
     assert(view:send({type = "key", key = value, key_type = #value == 1 and "runes" or value,
         ctrl = ctrl or false, action = "press"}))
 end
-local function click_text(view: tty.Viewport, text: string)
+local function click_text(view: tty.Viewport, text: string, button: string?)
     local frame = assert(view:snapshot())
     for y, row in ipairs(frame.rows) do
         local plain = row:gsub("\27%[[0-?]*[ -/]*[@-~]", "")
         local index = plain:find(text, 1, true)
         if index then
             local x = tty.text.width(plain:sub(1, index - 1)) + 1
-            assert(view:send({type = "mouse", button = "left", action = "press", x = x, y = y}))
-            assert(view:send({type = "mouse", button = "left", action = "release", x = x, y = y}))
+            assert(view:send({type = "mouse", button = button or "left", action = "press", x = x, y = y}))
+            assert(view:send({type = "mouse", button = button or "left", action = "release", x = x, y = y}))
             return
         end
     end
@@ -184,6 +185,92 @@ local function main(mode: string?)
     end
     local left, left_screen = start("left", 100, true)
     local right, right_screen = start("right", 120, true)
+    if mode == "transfer" then
+        local left_store, left_store_error = open_store("bee.client.db:left")
+        if not left_store then error(tostring(left_store_error)) end
+        local right_store, right_store_error = open_store("bee.client.db:right")
+        if not right_store then error(tostring(right_store_error)) end
+        local source_layout, source_error = store.read(left_store)
+        if not source_layout then error(tostring(source_error)) end
+        local neighbor_layout, neighbor_error = store.read(right_store)
+        if not neighbor_layout then error(tostring(neighbor_error)) end
+        local moved, neighbor = source_layout.targets[1], neighbor_layout.targets[1]
+        if not moved or not neighbor then error("Missing initial transfer identities") end
+        command(left_screen, "printf 'MOVE_BEFORE_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
+        wait_text(left_screen, "MOVE_BEFORE_left_")
+        local before = table.concat(assert(left_screen:snapshot()).rows, "\n")
+        local shell_pid = before:match("MOVE_BEFORE_left_(%d+)_END")
+        if not shell_pid then error("Missing source shell PID") end
+        assert(left_screen:send({type = "mouse", button = "right", action = "press", x = 10, y = 5}))
+        assert(left_screen:send({type = "mouse", button = "right", action = "release", x = 10, y = 5}))
+        wait_text(left_screen, "Send to display")
+        click_text(left_screen, "Send to display")
+        local destination = names.label(right_store.client_id)
+        wait_text(left_screen, destination)
+        click_text(left_screen, destination)
+        local moved_layout = false
+        for _ = 1, 500 do
+            local left_state, right_state = store.read(left_store), store.read(right_store)
+            local source_present, target_present = false, false
+            for _, target in ipairs(left_state and left_state.targets or {}) do
+                if target.view_id == moved.view_id and target.instance_id == moved.instance_id then source_present = true end
+            end
+            for _, target in ipairs(right_state and right_state.targets or {}) do
+                if target.view_id == moved.view_id and target.instance_id == moved.instance_id then target_present = true end
+            end
+            if not source_present and target_present then moved_layout = true; break end
+            time.sleep("10ms")
+        end
+        assert(moved_layout, "Transfer did not reconcile both real client layouts")
+        local function focus_right(id: string)
+            for _ = 1, 20 do
+                local current = store.read(right_store)
+                if current and current.scene.focus == id then return end
+                assert(right_screen:send({type = "key", key = "tab", key_type = "tab", alt = true, action = "press"}))
+                assert(right_screen:send({type = "key", key = "tab", key_type = "tab", alt = true, action = "release"}))
+                time.sleep("30ms")
+            end
+            error("Cannot focus transferred app or its neighbor")
+        end
+        focus_right(moved.tab_id)
+        command(right_screen, "printf 'MOVE_AFTER_%s_%s_END\\n' \"$bee_desktop\" \"$$\"")
+        wait_text(right_screen, "MOVE_AFTER_left_" .. shell_pid .. "_END")
+        focus_right(neighbor.tab_id)
+        command(right_screen, "printf 'MOVE_NEIGHBOR_%s_END\\n' \"$bee_desktop\"")
+        wait_text(right_screen, "MOVE_NEIGHBOR_right_END")
+        key(left_screen, "f12")
+        local rejoined = false
+        for _ = 1, 500 do
+            local selected = channel.select({renderers:case_receive(), time.after("10ms"):case_receive()})
+            if selected.ok and selected.channel == renderers then
+                local value: unknown = selected.value:payload():data()
+                if type(value) == "table" and type(value.renderer) == "string" and tostring(selected.value:from()) == left then
+                    assert(process.send(host, "bee.host.client", {version = 1, request_id = "transfer-rejoin", op = "render",
+                        workspace_id = workspace_id, recipient = left, renderer = value.renderer}))
+                    result("transfer-rejoin")
+                    rejoined = true
+                    break
+                end
+            end
+        end
+        assert(rejoined, "Source presenter did not rejoin")
+        local rejoined_layout, rejoined_error = store.read(left_store)
+        if not rejoined_layout then error(tostring(rejoined_error)) end
+        assert(#rejoined_layout.targets == 0, "Source rejoin reclaimed transferred app")
+        assert(process.send(host, "bee.app.request", {version = 1, workspace_id = workspace_id, request_id = "transfer-shutdown", op = "shutdown"}))
+        assert(host_reply("transfer-shutdown", "shutdown").error_code == "")
+        assert(store.close(left_store)); assert(store.close(right_store))
+        process.terminate(left); process.terminate(right)
+        local deadline = time.after("3s")
+        while next(retained_desktops.desktops) ~= nil do
+            local selected = channel.select({events:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel == deadline then error("Transfer display cleanup did not complete") end
+            desktops.exited(retained_desktops, selected.value)
+        end
+        process.terminate(host)
+        log:info("DESKTOP_TRANSFER_PROBE_COMPLETE")
+        return
+    end
     -- Physical presentations attach to the retained virtual desktop. Replacing
     -- one must not recreate the desktop actor, its store, presenter or shell.
     local physical_boot = assert(process.listen("physical.boot", {message = true}))

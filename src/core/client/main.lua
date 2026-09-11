@@ -19,6 +19,9 @@ local input_decode = require("input_decode")
 local contract = require("contract")
 local inventory = require("inventory")
 local host_protocol = require("host_protocol")
+local transfer = require("transfer")
+local transfer_ui = require("transfer_ui")
+local assignment_layout = require("assignment_layout")
 local physical = require("physical")
 local inbox = require("inbox")
 local lifecycle = require("lifecycle")
@@ -31,6 +34,7 @@ local appearance = require("appearance")
 local node_appearance = require("node_appearance")
 type Channel = channel.Channel
 type Binding = {generation: string, tab_id: string}
+type TransferPending = {action: transfer_ui.Action, view_id: string, renderer_generation: string, presenter: string}
 type AppearancePending = {request: host_protocol.ClientAppearanceRequest}
 
 local function run_client(owner: string, host: string, workspace_id: string, database_resource: string, initial_application: string?, options: unknown, owner_monitored: boolean, terminal: launcher.Terminal?)
@@ -60,6 +64,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local presentations = listen("bee.host.presentation")
         local catalogs = listen("bee.host.catalog")
         local views = listen("bee.host.views")
+        local assignment_updates = listen("bee.host.assignments")
+        local transfer_results = listen("bee.host.transfer_result")
         local replies = listen("bee.host.reply")
         local controls = listen("bee.workspace.control")
         local requests = listen("bee.app.request")
@@ -106,6 +112,9 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local catalog: {contract.Descriptor} = {}
         local live: {inventory.View} = {}
         local catalog_revision, views_revision = -1, -1
+        local assignment_snapshot: transfer.Snapshot? = nil
+        local transfer_pending: {[string]: TransferPending} = {}
+        local transfer_pending_count = 0
         local connection_id, renderer_generation = "", ""
         local bindings: {[string]: Binding} = {}
         local active = false
@@ -142,7 +151,78 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             return nil
         end
         local presentation: status_surface.Snapshot = {revision = 0, items = {}}
+        local transfer_revision = 0
+        local transfer_signature, transfer_presenter = "", ""
+        local function selected_targets(): {state.Target}
+            local selected: {state.Target} = {}
+            for key, target in pairs(targets) do
+                if not retired[key] then selected[#selected + 1] = target end
+            end
+            return selected
+        end
+        local function publish_transfers()
+            local snapshot = assignment_snapshot
+            if not active or not snapshot then return end
+            local items = assignment_layout.menu(snapshot, selected_targets())
+            local parts: {string} = {}
+            for _, item in ipairs(items) do
+                parts[#parts + 1] = item.tab_id .. "\0" .. item.instance_id .. "\0" .. tostring(item.assignment_revision)
+                    .. "\0" .. table.concat(item.targets, "\0")
+            end
+            local signature = table.concat(parts, "\1")
+            if signature == transfer_signature and presenter == transfer_presenter then return end
+            if transfer_revision >= 9007199254740990 then error("Display transfer presentation revision exhausted") end
+            transfer_revision = transfer_revision + 1
+            transfer_signature, transfer_presenter = signature, presenter
+            send(presenter, "bee.display.transfers", {version = 1, revision = transfer_revision, items = items})
+        end
+        local function transfer_result(action: transfer_ui.Action, code: string, message: string)
+            send(presenter, "bee.display.transfer_result", {version = 1, request_id = action.request_id,
+                id = action.id, instance_id = action.instance_id, target_display_id = action.target_display_id,
+                error_code = code, error = message})
+        end
+        local function request_transfer(data: unknown)
+            local action = transfer_ui.action(data)
+            if not action then return end
+            local existing = transfer_pending[action.request_id]
+            if existing then
+                local previous = existing.action
+                if previous.id ~= action.id or previous.instance_id ~= action.instance_id
+                    or previous.target_display_id ~= action.target_display_id or previous.expected_revision ~= action.expected_revision then
+                    transfer_result(action, "request_conflict", "Transfer request identity was reused")
+                end
+                return
+            end
+            local target = targets[action.id]
+            local snapshot = assignment_snapshot
+            local allowed = false
+            if snapshot and target and not retired[action.id] and target.instance_id == action.instance_id then
+                for _, item in ipairs(assignment_layout.menu(snapshot, {target})) do
+                    if item.assignment_revision == action.expected_revision then
+                        for _, candidate in ipairs(item.targets) do
+                            if candidate == action.target_display_id then allowed = true end
+                        end
+                    end
+                end
+            end
+            if not allowed or not target then
+                transfer_result(action, "unavailable", "The application or destination changed; select the display again")
+                return
+            end
+            if transfer_pending_count >= 16 then
+                transfer_result(action, "busy", "Display transfers are still pending")
+                return
+            end
+            transfer_pending[action.request_id] = {action = action, view_id = target.view_id,
+                renderer_generation = renderer_generation, presenter = presenter}
+            transfer_pending_count = transfer_pending_count + 1
+            send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id, connection_id = connection_id,
+                renderer_generation = renderer_generation, request_id = action.request_id,
+                view_id = target.view_id, instance_id = target.instance_id, target_display_id = action.target_display_id,
+                expected_revision = action.expected_revision})
+        end
         local function publish()
+            publish_transfers()
             if active then send(presenter, "bee.desktop.scene", {scene = layout.scene, tabs = layout.tabs,
                 preferences = layout.preferences, catalog = catalog, status_surface = presentation}) end
         end
@@ -259,8 +339,21 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             end
             return false
         end
+        local function assigned_here(view_id: string, instance_id: string, binding: boolean): boolean
+            local snapshot = assignment_snapshot
+            if snapshot then
+                for _, item in ipairs(snapshot.items) do
+                    if item.view_id == view_id and item.instance_id == instance_id then
+                        return item.display_id == database.client_id and (not binding or not item.pending)
+                    end
+                end
+            end
+            -- The projection can arrive after renderer readiness. The host
+            -- remains the authority and checks any request sent in that interval.
+            return true
+        end
         local function bind(target: state.Target)
-            if not active then return end
+            if not active or not assigned_here(target.view_id, target.instance_id, true) then return end
             local count = 0
             for _ in pairs(bindings) do count = count + 1 end
             if count >= 128 then error("Client attachment request capacity exhausted") end
@@ -270,16 +363,27 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 connection_id = connection_id, renderer_generation = renderer_generation,
                 id = target.view_id, instance_id = target.instance_id})
         end
-        local function include(reply: contract.Reply): string
-            local existing = tab(reply.id, reply.instance_id)
+        local function include_view(view_id: string, instance_id: string, title: string, icon: string?): string
+            local existing = tab(view_id, instance_id)
             if existing and not retired[existing] then return existing end
-            local key, err = hash.sha256(workspace_id .. "\0" .. reply.instance_id .. "\0" .. reply.id)
+            local key, err = hash.sha256(workspace_id .. "\0" .. instance_id .. "\0" .. view_id)
             if not key then error(tostring(err)) end
-            targets[key] = {tab_id = key, workspace_id = workspace_id, view_id = reply.id, instance_id = reply.instance_id}
+            targets[key] = {tab_id = key, workspace_id = workspace_id, view_id = view_id, instance_id = instance_id}
             retired[key] = nil
             send(session, "bee.desktop.command", {version = 1, op = "add", id = key, workspace_id = workspace_id,
-                instance_id = reply.instance_id, title = reply.title, icon = reply.icon})
+                instance_id = instance_id, title = title, icon = icon})
             return key
+        end
+        local function reconcile_assignments()
+            local snapshot = assignment_snapshot
+            if not snapshot or views_revision < 0 then return end
+            local changes = assignment_layout.plan(workspace_id, database.client_id, selected_targets(), live, snapshot.items)
+            for _, key in ipairs(changes.remove) do remove(key) end
+            for _, view in ipairs(changes.add) do
+                local key = include_view(view.view_id, view.instance_id, view.title, view.icon)
+                local target = targets[key]
+                if target then bind(target) end
+            end
         end
         local function observe(value: inventory.Views)
             if value.workspace_id ~= workspace_id or value.connection_id ~= connection_id or value.revision <= views_revision then return end
@@ -304,6 +408,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 local identity = target.view_id .. "\0" .. target.instance_id
                 if (first_inventory or previous[identity]) and not available[identity] then remove(key) end
             end
+            reconcile_assignments()
             publish_bindings()
         end
         local updates = assert(display.view:updates())
@@ -363,6 +468,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if connection_id ~= "" and not saved_for_exit then
                     cases[#cases + 1] = catalogs:case_receive()
                     cases[#cases + 1] = views:case_receive()
+                    cases[#cases + 1] = assignment_updates:case_receive()
+                    cases[#cases + 1] = transfer_results:case_receive()
                 end
                 if defaults_pending then cases[#cases + 1] = defaults_pending.response:case_receive() end
                 local selected = channel.select(cases)
@@ -553,7 +660,9 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         end
                     elseif selected.channel == controls and sender == presenter then
                         if type(data) == "table" and data.version == 1 then
-                            if data.op == "clipboard" then
+                            if data.op == "transfer" then
+                                if active and not paused and not waiting_presenter then request_transfer(data) end
+                            elseif data.op == "clipboard" then
                                 local request = clipboard.request(data, sender, presenter, active and not paused and not waiting_presenter)
                                 if request then
                                     local submitted, failure = physical.clipboard(display, request.text)
@@ -608,6 +717,29 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                         if value and value.workspace_id == workspace_id and value.connection_id == connection_id and value.revision > catalog_revision then
                             catalog_revision, catalog = value.revision, value.items; publish()
                         end
+                    elseif selected.channel == transfer_results and sender == host then
+                        local result = transfer.result(data)
+                        local pending_transfer: TransferPending? = nil
+                        if result then pending_transfer = transfer_pending[result.request_id] end
+                        if result and pending_transfer and result.workspace_id == workspace_id and result.connection_id == connection_id
+                            and result.view_id == pending_transfer.view_id and result.instance_id == pending_transfer.action.instance_id
+                            and result.target_display_id == pending_transfer.action.target_display_id then
+                            transfer_pending[result.request_id] = nil
+                            transfer_pending_count = transfer_pending_count - 1
+                            if active and pending_transfer.presenter == presenter
+                                and pending_transfer.renderer_generation == renderer_generation then
+                                transfer_result(pending_transfer.action, result.error_code, result.error)
+                            end
+                        end
+                    elseif selected.channel == assignment_updates and sender == host then
+                        local snapshot = transfer.snapshot(data)
+                        if snapshot and snapshot.workspace_id == workspace_id and snapshot.connection_id == connection_id
+                            and snapshot.display_id == database.client_id
+                            and (not assignment_snapshot or snapshot.revision > assignment_snapshot.revision) then
+                            assignment_snapshot = snapshot
+                            reconcile_assignments()
+                            publish_transfers()
+                        end
                     elseif selected.channel == views and sender == host then
                         local value = inventory.views(data)
                         if value then observe(value) end
@@ -655,9 +787,9 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 for _, view in ipairs(live) do
                                     if view.view_id == reply.id and view.instance_id == reply.instance_id then current = view end
                                 end
-                                if current then
+                                if current and assigned_here(reply.id, reply.instance_id, false) then
                                     reply.title, reply.icon = current.title, current.icon
-                                    key = include(reply)
+                                    key = include_view(reply.id, reply.instance_id, reply.title, reply.icon)
                                     local target = targets[key]
                                     if not target then error("Missing selected target") end
                                     bind(target)
@@ -672,7 +804,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                         initial_request = ""
                                     end
                                 else
-                                    reply.error_code, reply.error = "unavailable", "Application is no longer running"
+                                    reply.error_code, reply.error = "unavailable", "Application is no longer available on this display"
                                 end
                             end
                             if launch_pending and reply.request_id == launch_pending.request_id and (reply.op == "open" or reply.op == "focus") then

@@ -43,3 +43,4 @@ entries:
   imports:
     test: wippy.test:test
     assignments: bee.client:assignments
+    transfer: bee.host:transfer

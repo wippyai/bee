@@ -54,6 +54,9 @@ entries:
     status_bindings: bee.session:bindings
     status_surface: bee.application:status_surface
     host_protocol: bee.host:protocol
+    transfer: bee.host:transfer
+    transfer_ui: bee.protocol:display_transfer
+    assignment_layout: bee.client:assignments
     inbox: bee.client:inbox
     lifecycle: bee.client:lifecycle
     interaction: bee.application:interaction
@@ -153,5 +156,6 @@ entries:
   kind: library.lua
   source: file://assignments.lua
   imports:
+    transfer: bee.host:transfer
     state: bee.client:state
     inventory: bee.host:inventory

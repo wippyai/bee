@@ -270,6 +270,24 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
                 and value.assignment_revision == 2, "Committed transfer receipt did not replay")
             status("transfer-replayed")
+        elseif type(op) == "table" and op.op == "transfer-exact" and type(op.id) == "string"
+            and type(op.instance_id) == "string" and type(op.target_display_id) == "string"
+            and type(op.request_id) == "string" and type(op.expected_revision) == "number" then
+            assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, request_id = op.request_id,
+                view_id = op.id, instance_id = op.instance_id, target_display_id = op.target_display_id,
+                expected_revision = op.expected_revision}))
+            local outcome = assert(transfers:receive())
+            assert(outcome:from() == host)
+            local value: unknown = outcome:payload():data()
+            assert(type(value) == "table" and value.request_id == op.request_id and value.error_code == ""
+                and value.assignment_revision == op.expected_revision + 1, "Second transfer did not commit")
+            status("transfer-exact")
+        elseif op == "stale-bind" then
+            assert(process.send(host, "bee.app.request", {version = 1, request_id = "stale-transfer-bind", op = "bind", workspace_id = workspace_id,
+                connection_id = connection_id, renderer_generation = renderer_generation, id = opened.id, instance_id = opened.instance_id}))
+            assert(reply("stale-transfer-bind", "bind").error_code == "permission_denied", "Stale source regained transfer control")
+            status("stale-bind")
         elseif op == "stale" then
             local frame, err = view:snapshot()
             assert(not frame and err, "Detached client retained its frame")
@@ -498,6 +516,12 @@ function M.main()
     detach("detach-again", first)
     assert(process.send(first, "bee.client.command", "observer-stale")); status(first, "observer-stale")
     assert(process.send(second, "bee.client.command", "check")); status(second, "checked")
+    admit("observer-first", first, false, "")
+    assert(process.send(first, "bee.client.command", "readmit")); status(first, "denied")
+    assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "observer-target",
+        target_display_id = display_ids[first], expected_revision = 1, error_code = "unavailable"}))
+    status(second, "transfer-checked")
+    detach("detach-observer-first", first)
     admit("recontrol-first", first, true, "")
     assert(process.send(first, "bee.client.command", "recontrol")); status(first, "recontrolled")
     assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "self-target",
@@ -511,10 +535,16 @@ function M.main()
     status(second, "transfer-checked")
     assert(process.send(second, "bee.client.command", {op = "transfer", target_display_id = display_ids[first]}))
     status(second, "transferred")
+    assert(process.send(second, "bee.client.command", "stale-bind")); status(second, "stale-bind")
     assert(process.send(first, "bee.client.command", {op = "accept-transfer", id = second_view.id,
         instance_id = second_view.instance_id, native_pid = second_view.native_pid, label = "B"}))
     status(first, "accepted-transfer")
-    detach("replay-target-detach", first)
+    assert(process.send(first, "bee.client.command", {op = "transfer-exact", request_id = "fixture-transfer-again",
+        id = second_view.id, instance_id = second_view.instance_id, target_display_id = display_ids[second], expected_revision = 2}))
+    status(first, "transfer-exact")
+    assert(process.send(second, "bee.client.command", {op = "accept-transfer", id = second_view.id,
+        instance_id = second_view.instance_id, native_pid = second_view.native_pid, label = "B"}))
+    status(second, "accepted-transfer")
     assert(process.send(second, "bee.client.command", {op = "transfer-replay", target_display_id = display_ids[first]}))
     status(second, "transfer-replayed")
     assert(process.send(second, "bee.client.command", {op = "transfer-check", request_id = "fixture-transfer",

@@ -48,6 +48,7 @@ local function main(owner: string, database_resource: string?)
     local snapshot: recovery.Snapshot = {version = 1,
         desktop = {scene = model.new(80, 24), tabs = empty_tabs, preferences = appearance.defaults()}, applications = empty_records}
     if database.saved then snapshot = database.saved end
+    local live_inventory = inventory.new(workspace_id)
     local broker_policy, broker_error = security.policy("bee:broker_policy")
     if not broker_policy then database:close(); error(tostring(broker_error)) end
     local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
@@ -65,8 +66,11 @@ local function main(owner: string, database_resource: string?)
     local ready = false
     local stopping = false
     local fatal: string? = nil
-    local client_connections = connections.new(owner, broker, workspace_id, database.assignments)
-    local live_inventory = inventory.new(workspace_id)
+    local client_connections = connections.new(owner, broker, workspace_id, connections.assignment_reader(
+        function(value: unknown) return database.assignments:get(value) end,
+        function() return database.assignments:reconcile() end,
+        function(value: unknown) return database.assignments:claim(value) end
+    ))
     local catalog_received = false
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
@@ -84,6 +88,41 @@ local function main(owner: string, database_resource: string?)
             instance_id = request.instance_id, target_display_id = request.target_display_id,
             assignment_revision = assignment_revision, error_code = code, error = error_text})
     end
+    local function resolve_prepared_intents()
+        -- A restarted broker has no surviving mount grants.  An automatically
+        -- restored exact identity can therefore settle to its persisted target
+        -- before client admission.  A checkpointed manual identity remains
+        -- fenced until it is restored; its absence from the current inventory
+        -- does not prove it dead.  Identities absent from the checkpoint are
+        -- proven lost with this host and can be retired after their receipt is
+        -- settled, while the receipt itself remains durable.
+        for _, recovered_entry in ipairs(recovered) do
+            local intent = recovered_entry.intent
+            if intent then
+                local live = false
+                for _, item in ipairs(live_inventory.views) do
+                    if item.view_id == intent.view_id and item.instance_id == intent.instance_id then live = true; break end
+                end
+                if live then
+                    local committed, commit_error = database.assignments:commit({request_id = intent.request_id,
+                        view_id = intent.view_id, instance_id = intent.instance_id})
+                    if not committed then error("Resolve restored display transfer: " .. tostring(commit_error)) end
+                else
+                    local checkpointed = false
+                    for _, record in ipairs(snapshot.applications) do
+                        if record.id == intent.view_id and record.instance_id == intent.instance_id then checkpointed = true; break end
+                    end
+                    if not checkpointed then
+                        local failed, fail_error = database.assignments:fail({request_id = intent.request_id,
+                            view_id = intent.view_id, instance_id = intent.instance_id, error = "Application was lost during host restart"})
+                        if not failed then error("Resolve lost display transfer: " .. tostring(fail_error)) end
+                        local retired, retire_error = database.assignments:retire({view_id = intent.view_id, instance_id = intent.instance_id})
+                        if not retired then error("Retire lost display assignment: " .. tostring(retire_error)) end
+                    end
+                end
+            end
+        end
+    end
     local function restore_next()
         local record = table.remove(restore_queue, 1)
         if record then
@@ -93,6 +132,7 @@ local function main(owner: string, database_resource: string?)
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
         else
             restoring = ""
+            resolve_prepared_intents()
             ready = true
             deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
         end
@@ -158,7 +198,8 @@ local function main(owner: string, database_resource: string?)
                     if request and source and code == "" then
                         local receipt, receipt_error = hash.sha256(source.display_id .. "\0" .. request.request_id)
                         if not receipt then code, error_text = "internal", tostring(receipt_error) end
-                        local existing, existing_error = receipt and database.assignments:receipt(receipt)
+                        local existing, existing_error = nil, nil
+                        if receipt then existing, existing_error = database.assignments:receipt(receipt) end
                         if not existing and existing_error then code, error_text = "internal", tostring(existing_error) end
                         -- Admission and assignment validation is required before
                         -- creating an intent, but a historical receipt replays
@@ -173,13 +214,12 @@ local function main(owner: string, database_resource: string?)
                                 target_display_id = request.target_display_id, expected_revision = request.expected_revision})
                             if not prepared then code, error_text = "conflict", tostring(prepare_error)
                             elseif prepared.phase == "committed" then
-                                local current, current_error = database.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
-                                if current_error or not current or current.intent or current.assignment.display_id ~= request.target_display_id then
-                                    code, error_text = "internal", "Committed display transfer is inconsistent"
-                                else transfer_result(caller, request, current.assignment.revision, "", "") end
+                                -- A receipt reports its own settled outcome,
+                                -- even if later transfers moved or retired the
+                                -- live assignment.
+                                transfer_result(caller, request, prepared.expected_revision + 1, "", "")
                             elseif prepared.phase == "failed" then
-                                local current = database.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
-                                transfer_result(caller, request, current and current.assignment.revision or 0, "failed", prepared.error or "Transfer failed")
+                                transfer_result(caller, request, prepared.expected_revision, "failed", prepared.error or "Transfer failed")
                             else
                                 local broker_request = "transfer-" .. receipt:sub(1, 64)
                                 if not pending_transfers[broker_request] then
@@ -259,6 +299,19 @@ local function main(owner: string, database_resource: string?)
                             if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
                                 local committed, err = replace_record(nil, reply.id)
                                 if not committed then error("Workspace save failed: " .. tostring(err)) end
+                            end
+                            -- A broker closed reply is the only live-process
+                            -- proof used to retire an exact assignment.  Keep
+                            -- unresolved prepared fences for recovery, and
+                            -- retain every receipt regardless of retirement.
+                            if reply.op == "closed" then
+                                local assigned, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})
+                                if assignment_error then error("Read closed display assignment: " .. tostring(assignment_error)) end
+                                if assigned and not assigned.intent then
+                                    local retired, retire_error = database.assignments:retire({view_id = reply.id, instance_id = reply.instance_id})
+                                    if not retired then error("Retire closed display assignment: " .. tostring(retire_error)) end
+                                    connections.assignments(client_connections)
+                                end
                             end
                             if next_inventory then
                                 live_inventory = next_inventory

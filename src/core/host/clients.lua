@@ -10,7 +10,6 @@ local questions = require("questions")
 local interaction = require("interaction")
 local recovery = require("recovery")
 local records = require("records")
-local assignment_store = require("assignment_store")
 local transfer = require("transfer")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean,
     renderer_generation: string, fingerprint: string, resume: recovery.Resume?, display_id: string}
@@ -19,20 +18,41 @@ type Change = {op: ChangeOp, recipient: string, connection_id: string, request_i
 type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
     renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
+type Assignment = {view_id: string, instance_id: string, display_id: string, revision: integer}
+type AssignmentResult = {assignment: Assignment, intent: unknown?}
+type AssignmentEntries = {AssignmentResult}
+-- The client router only reads an assignment fence.  Persistence ownership and
+-- mutation remain in the host actor, so tests can provide a fail-on-use reader.
+type Assignments = {
+    get: (Assignments, unknown) -> (AssignmentResult?, string?),
+    reconcile: (Assignments) -> (AssignmentEntries?, string?),
+    claim: (Assignments, unknown) -> (Assignment?, string?),
+}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
-    assignments: assignment_store.Store,
+    assignments: Assignments,
     inventory: inventory.State,
     questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
     appearance_routes: {[string]: AppearanceRoute}, assignment_revision: integer}
 local M = {}
-function M.new(owner: string, broker: string, workspace_id: string, assignments: assignment_store.Store): State
+function M.new(owner: string, broker: string, workspace_id: string, assignments: Assignments): State
     return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()), assignments = assignments,
         inventory = inventory.new(workspace_id),
         questions = questions.new(workspace_id),
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
         appearance_routes = {}, assignment_revision = 0}
+end
+function M.assignment_reader(
+    get: (unknown) -> (AssignmentResult?, string?),
+    reconcile: () -> (AssignmentEntries?, string?),
+    claim: (unknown) -> (Assignment?, string?)
+): Assignments
+    return {
+        get = function(_: Assignments, value: unknown): (AssignmentResult?, string?) return get(value) end,
+        reconcile = function(_: Assignments): (AssignmentEntries?, string?) return reconcile() end,
+        claim = function(_: Assignments, value: unknown): (Assignment?, string?) return claim(value) end,
+    }
 end
 function M.assignments(state: State)
     local entries, read_error = state.assignments:reconcile()
@@ -353,6 +373,11 @@ end
 -- deliberately runs only for a new receipt: completed receipts must remain
 -- replayable after either display has later detached.
 function M.transfer_ready(state: State, request: transfer.Request, source: clients.Client): string?
+    local live = false
+    for _, item in ipairs(state.inventory.views) do
+        if item.view_id == request.view_id and item.instance_id == request.instance_id then live = true; break end
+    end
+    if not live then return "not_found" end
     local current, read_error = state.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
     if read_error then error("Read display assignment before transfer: " .. tostring(read_error)) end
     if not current or current.intent or current.assignment.display_id ~= source.display_id

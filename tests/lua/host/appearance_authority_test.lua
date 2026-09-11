@@ -5,7 +5,14 @@ local identity = "0123456789abcdef0123456789abcdef"
 local function define_tests()
     test.describe("Display appearance authority", function()
         test.it("rejects unadmitted, observing and stale display notifications before forwarding", function()
-            local host = connections.new("owner", "invalid-broker", identity)
+            -- This denial-only test must not rely on an omitted assignment
+            -- store.  Any accidental assignment read is a test failure.
+            local assignments = connections.assignment_reader(
+                function(_: unknown): (nil, string) error("appearance denial read assignments") end,
+                function(): (nil, string) error("appearance denial reconciled assignments") end,
+                function(_: unknown): (nil, string) error("appearance denial claimed assignments") end
+            )
+            local host = connections.new("owner", "invalid-broker", identity, assignments)
             local update = {version = 1, workspace_id = identity, connection_id = "connection",
                 renderer = "renderer", renderer_generation = "generation", revision = 7,
                 theme = "classic", background = "solid", taskbar = "labels"}

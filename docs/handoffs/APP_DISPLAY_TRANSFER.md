@@ -1,9 +1,17 @@
-# Send app to display — implementation in progress
+# Send app to display — implementation status
 
-This is not a completed public API or a shipped global feature. The checked
-request boundary, durable assignment storage, display admission, client layout
-reconciliation and presenter menu exist. The normal two-display path passes combined source/pack acceptance. Interrupted
-transfer recovery and further failure checks remain in progress.
+The local workspace host now owns the transfer decision.  It accepts a
+connection-qualified request from an admitted controller, persists the exact
+source/target/revision intent, revokes the source through the broker's exact
+view bind, commits the target assignment, and leaves the target's ordinary
+assignment-fenced bind to mount the existing app.  Completed receipts replay
+their original outcome after later moves, detach, or retirement; a prepared
+receipt fences both displays through restart.  The source/pack attachment proof
+covers live Terminal PID and shell-state preservation, target admission denial,
+stale source-bind denial, repeated moves, and receipt replay.
+
+This is not installed globally. Combined UI recovery acceptance remains pending.
+
 
 ## Ownership
 

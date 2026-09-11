@@ -233,3 +233,21 @@ host reaches request validation, and an unlinked host refuses before admission.
 Host policies in this fixture deny execution. This
 is a static composition proof, not successful carrier execution, package
 installation or Hive activation; those still need the full dependency owners.
+
+## September 11 desktop acceptance follow-up
+
+The full client-desktop source/pack suite passes on the managed-window source:
+independent displays and appearance, shared-store isolation, retained Terminal
+reconnect, F12, all three display-transfer cases, supervisor failure handling,
+and thread status retention. Launcher, recovery, Approvals inbox, Hive Manager
+and Timeline checks also pass. The transfer fixture now waits for the exact
+retained shell PID marker in the destination frame before typing; committing
+layout alone does not establish presenter readiness.
+
+The preceding full foundation run stopped on missing post-transfer output.
+During focused validation, client setup also refused intermittently before
+transfer. Its diagnostic now includes the request and error code. The passing
+follow-up does not explain or establish a fix for that separate rejection, and
+is not a single uninterrupted full foundation run or a global installation.
+Production process-group cleanup, authenticated provider turns and automatic
+project-node Hive joining remain separate acceptance gates.

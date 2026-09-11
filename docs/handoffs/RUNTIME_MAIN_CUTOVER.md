@@ -34,3 +34,27 @@ the existing executable tests on that wiring before installation.
 Main's membership Start still calls joinWithRetry synchronously when seeds are
 configured. Refreshing the runtime does not yet establish local-first automatic
 Hive convergence. That remains a separate native membership requirement.
+
+Builder #7 already supplies explicit composition (`native[].launch: true`) and
+`application.baseline: embedded`. Head checked:
+`d2d451ba83455ee022857be83f422fec66dd9d76`, assigned to Rodrigo. It constructs
+the host once and assigns that concrete host's Launch method to runtime options.
+Bee's factory must therefore return its concrete host type. No additional
+builder callback mechanism is needed.
+
+The validation candidate uses unchanged #726 and builder #7 heads while Bee's
+native migration is developed. This is not a main-only release pin; the final
+main cutover remains contingent on the corresponding merges and executable
+acceptance. The failed main-only build remains recorded above.
+
+## Project default state directory
+
+The revised runtime resolves StateDir before Launch and forbids runOwner from
+redirecting it. Bee's per-project default therefore must be selected at the
+executable entry, before app.Run opens state. A plain executable-selected default
+state-directory option, with explicit --state-dir retaining precedence, is enough
+for Bee to compute its existing protected per-CWD path. The corresponding builder
+wiring should select this value explicitly from the native host. This requirement
+does not call for a second lock, recursive app.Run or a helper process just to
+rewrite arguments. Native callback migration can proceed independently, but the
+per-project executable acceptance must remain pending until this is wired.

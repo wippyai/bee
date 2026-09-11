@@ -150,8 +150,13 @@ local function check_gateway(row: store.Row, request: types.LaunchRequest): Repl
     if carrier_epoch < 1 then return fail("DENIED", "gateway binding: the attempt is not attached to a carrier") end
     local raw, call_error = funcs.call(resources.GATEWAY_CHECK, {attempt_id = request.attempt_id, carrier_epoch = carrier_epoch})
     if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "the gateway did not answer for attempt " .. request.attempt_id) end
-    local reply = raw :: Reply
-    if not reply.ok then return fail(reply.error and reply.error.code or "DENIED", "gateway binding: " .. tostring(reply.error and reply.error.message)) end
+    local reply = raw :: {[string]: unknown}
+    if reply.ok ~= true then
+        local reply_error = bounds.object(reply.error)
+        local reply_code = reply_error and type(reply_error.code) == "string" and reply_error.code or "DENIED"
+        local reply_message = reply_error and type(reply_error.message) == "string" and reply_error.message or "gateway refused"
+        return fail(reply_code, "gateway binding: " .. reply_message)
+    end
     local checked = bounds.object(reply.value) or {}
     if checked.valid ~= true then return fail("DENIED", "gateway binding: " .. tostring(checked.reason)) end
     return nil
@@ -167,10 +172,12 @@ local function retire_gateway(attempt: types.Attempt, why: string)
     db:release()
     if not request or not request.gateway or attempt.attachment_generation < 1 then return end
     local raw, call_error = funcs.call(resources.GATEWAY_REVOKE_ATTEMPT, {attempt_id = attempt.attempt_id, carrier_epoch = attempt.attachment_generation})
-    local reply = type(raw) == "table" and raw :: Reply or nil
+    local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
     local detail = why .. "; bindings through carrier epoch " .. tostring(attempt.attachment_generation)
-    if call_error or not reply or not reply.ok then
-        detail = detail .. " not revoked: " .. tostring(call_error or (reply and reply.error and reply.error.code) or "no answer")
+    if call_error or not reply or reply.ok ~= true then
+        local reply_error = reply and bounds.object(reply.error)
+        local reply_code = reply_error and type(reply_error.code) == "string" and reply_error.code or nil
+        detail = detail .. " not revoked: " .. tostring(call_error or reply_code or "no answer")
         transition(attempt.attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = detail}})
         return
     end
@@ -211,11 +218,13 @@ function M.authorize_materialization(attempt: types.Attempt, row: store.Row, req
     if not gateway_binding then return nil, fail("INVALID", "gateway_binding is required for a launch with a gateway binding") end
     local carrier_epoch = bounds.integer(row.attachment_generation) or 0
     local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = math.max(1000, request.timeouts.start_ms)})
-    local reply = type(raw) == "table" and raw :: Reply or nil
-    if call_error or not reply or not reply.ok then
-        local fault = reply and reply.error or {code = "UNAVAILABLE", message = tostring(call_error or "no answer")}
-        transition(attempt.attempt_id, {evidence = {kind = "gateway.refused", detail = "materialization authorization: " .. fault.code .. ": " .. fault.message}})
-        return nil, fail(fault.code, "gateway materialization authorization: " .. fault.message)
+    local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+    if call_error or not reply or reply.ok ~= true then
+        local reply_error = reply and bounds.object(reply.error)
+        local fault_code = reply_error and type(reply_error.code) == "string" and reply_error.code or "UNAVAILABLE"
+        local fault_message = reply_error and type(reply_error.message) == "string" and reply_error.message or tostring(call_error or "no answer")
+        transition(attempt.attempt_id, {evidence = {kind = "gateway.refused", detail = "materialization authorization: " .. fault_code .. ": " .. fault_message}})
+        return nil, fail(fault_code, "gateway materialization authorization: " .. fault_message)
     end
     local materialization_key = bounds.id((bounds.object(reply.value) or {}).materialization_key)
     if not materialization_key then

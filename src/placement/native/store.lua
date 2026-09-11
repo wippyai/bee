@@ -16,6 +16,7 @@ M.MAX_EVIDENCE_PAGE = 64
 M.MAX_DETAIL_BYTES = 2048
 type Row = {[string]: unknown}
 type Update = {
+    expected_execution: types.ExecutionState?,
     execution: types.ExecutionState?,
     cleanup: types.CleanupState?,
     fields: {[string]: unknown}?,
@@ -146,6 +147,10 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
     local execution = state_of(row.execution_state, "uncertain") :: types.ExecutionState
     local cleanup = state_of(row.cleanup_state, "uncertain") :: types.CleanupState
     local count = integer(row.evidence_count) or 0
+    if update.expected_execution and execution ~= update.expected_execution then
+        rollback(tx)
+        return {ok = false, code = "CONFLICT", message = "execution " .. execution .. " is not the expected " .. update.expected_execution}
+    end
     if update.execution and update.execution ~= execution then
         if not transitions.execution(execution, update.execution) then
             rollback(tx)

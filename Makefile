@@ -46,6 +46,9 @@ process-manager-check:
 .PHONY: window-retirement-check
 window-retirement-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_retirement.py
+.PHONY: window-native-check
+window-native-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_native.py
 .PHONY: layout-ack-check
 layout-ack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import personalization; personalization.acknowledged_layout()'

@@ -52,8 +52,8 @@ local function fail(db, reason: string, gateway_binding: string?, attempt_id: st
         -- failed. Revoke it here; bytes never enter this facade's return
         -- value or a durable record.
         local raw, revoke_error = funcs.call(resources.GATEWAY_REVOKE, {binding_id = gateway_binding})
-        local reply = type(raw) == "table" and raw :: {ok: boolean} or nil
-        if revoke_error or not reply or not reply.ok then
+        local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        if revoke_error or not reply or reply.ok ~= true then
             if attempt_id then
                 store.transition(db, attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = "window open failed: " .. tostring(revoke_error or "gateway refused revoke")}})
             end
@@ -111,7 +111,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     if request.owner_id ~= owner or request.attempt_id ~= attempt_id then return fail(db, "attempt owner does not match its request", nil) end
     if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
 
-    local starting = store.transition(db, attempt_id, {execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
+    local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
     if not starting.ok then return fail(db, starting.message or "attempt is no longer intended", nil) end
 
     local attempt = store.attempt(db, attempt_id)
@@ -180,8 +180,8 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local binding = gateway_binding
         gateway_binding = nil
         local raw, revoke_error = funcs.call(resources.GATEWAY_REVOKE, {binding_id = binding})
-        local reply = type(raw) == "table" and raw :: {ok: boolean} or nil
-        if revoke_error or not reply or not reply.ok then
+        local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        if revoke_error or not reply or reply.ok ~= true then
             store.transition(db, attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = why .. ": " .. tostring(revoke_error or "gateway refused revoke")}})
         else
             store.transition(db, attempt_id, {evidence = {kind = "gateway.revoked", detail = why .. ": binding " .. binding}})

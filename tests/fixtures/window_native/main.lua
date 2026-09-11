@@ -1,0 +1,143 @@
+-- Real PTY acceptance for the process-local native window seam.
+local test = require("test")
+local process = require("process")
+local channel = require("channel")
+local tty = require("tty")
+local time = require("time")
+local security = require("security")
+local funcs = require("funcs")
+local window = require("window")
+local OWNER = "bee.window.native.owner"
+local FOREIGN = "bee.window.native.foreign"
+local POLICY = "bee.window_native:launch_policy"
+local function request(attempt_id: string): {[string]: unknown}
+    return {idempotency_key = "window-key-" .. attempt_id, owner_id = OWNER, owner_incarnation = 1,
+        action_id = "window-action-" .. attempt_id, attempt_id = attempt_id, binding_ref = "bee.driver.claude:binding",
+        policy_ref = POLICY, profile_id = "window", binding_digest = string.rep("a", 64), profile_digest = string.rep("b", 64),
+        launch = {executable = "sh", argv = {"-c", "IFS= read -r line; printf 'WINDOW:%s\\n' \"$line\"; stty size; sleep 1"}, environment = {}, working_directory_ref = nil, readiness = "none"},
+        resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
+        required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
+end
+local function caller()
+    local policy = assert(security.policy("bee.window_native:caller_policy"))
+    local store_policy = assert(security.policy("bee:placement_store_policy"))
+    local exec_policy = assert(security.policy("bee:placement_exec_policy"))
+    local resource_policy = assert(security.policy("bee:resource_resolve_policy"))
+    return funcs.new():with_actor(security.new_actor(OWNER)):with_scope(security.new_scope({policy, store_policy, exec_policy, resource_policy}))
+end
+local function prepare(attempt_id: string): string
+    local reply, err = caller():call("bee.placement.native:prepare", request(attempt_id))
+    if err then error(tostring(err)) end
+    local value = reply :: {[string]: unknown}
+    if value.ok ~= true then error(tostring((value.error :: {[string]: unknown}).message)) end
+    return tostring((value.value :: {[string]: unknown}).attempt_id)
+end
+local function child_scope(): security.Scope
+    local names = {"bee:placement_store_policy", "bee:placement_exec_policy", "bee:placement_runner_policy", "bee:resource_resolve_policy", "bee.window_native:child_policy"}
+    local policies: {security.Policy} = {}
+    for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
+    return security.new_scope(policies)
+end
+local function wait_for(view: tty.Viewport, text: string, timeout_ms: integer): boolean
+    local function contains(snapshot: tty.ViewportSnapshot?): boolean
+        if not snapshot then return false end
+        return table.concat(snapshot.rows, "\n"):find(text, 1, true) ~= nil
+    end
+    local deadline = time.now():unix_nano() + timeout_ms * 1000000
+    while time.now():unix_nano() < deadline do
+        local snapshot = view:snapshot()
+        if contains(snapshot) then return true end
+        time.sleep("50ms")
+    end
+    local snapshot = view:snapshot()
+    return contains(snapshot)
+end
+local function run()
+    assert(window.open)
+    local view = assert(tty.viewport({width = 40, height = 12}))
+    local parent = process.pid()
+    local attempt_id = "window-attempt-" .. tostring(time.now():unix_nano())
+    local prepared = prepare(attempt_id)
+    local grant = assert(view:grant())
+    local results = assert(process.listen("bee.window.native.result", {message = true}))
+    local owner_child = assert(process.with_options({terminal = grant}):with_actor(security.new_actor(OWNER)):with_scope(child_scope())
+        :spawn_monitored("bee.window_native:child", "bee:workers", parent, prepared, "owner"))
+    local foreign_child = ""
+    local saw_open, saw_io, saw_finish, saw_foreign = false, false, false, false
+    local deadline = time.after("20s")
+    while not (saw_finish and saw_foreign) do
+        local selected = channel.select({results:case_receive(), deadline:case_receive()})
+        if not selected.ok then break end
+        if selected.channel == deadline then break end
+        local message = selected.value
+        local data = message:payload():data()
+        if type(data) == "table" and tostring(message:from()) == owner_child then
+            if data.phase == "open" then
+                saw_open = data.ok == true and data.duplicate_ok == false
+                if foreign_child == "" then
+                    foreign_child = assert(process.with_options({}):with_actor(security.new_actor(FOREIGN)):with_scope(child_scope())
+                        :spawn_monitored("bee.window_native:child", "bee:workers", parent, prepared, "foreign"))
+                end
+            elseif data.phase == "io" then
+                saw_io = data.sent == true and data.resized == true
+                if saw_io and wait_for(view, "WINDOW:hello from window", 3000) and wait_for(view, "10 30", 3000) then
+                    process.send(tostring(owner_child), "bee.window.native.close." .. parent, {})
+                end
+            elseif data.phase == "close" then
+                saw_io = saw_io and data.closed == true and data.timed_out ~= true
+            elseif data.phase == "finish" then
+                saw_finish = data.finished == true
+            end
+        elseif type(data) == "table" and tostring(message:from()) == foreign_child and data.phase == "foreign" then
+            saw_foreign = data.ok == false and tostring(data.error):find("another actor", 1, true) ~= nil
+        end
+    end
+    test.ok(saw_open, "same owner opens once and duplicate open is refused")
+    test.ok(saw_io, "window accepts input, resize and close")
+    test.ok(saw_finish, "terminal completion is finalized by finish")
+    test.ok(saw_foreign, "foreign actor cannot open the attempt")
+    local status_reply, status_call_error = caller():call("bee.placement.native:status", {attempt_id = prepared})
+    local status_object = type(status_reply) == "table" and status_reply :: {[string]: unknown} or nil
+    local status_result = status_object and type(status_object.value) == "table" and status_object.value :: {[string]: unknown} or nil
+    local status_value = status_result and type(status_result.attempt) == "table" and status_result.attempt :: {[string]: unknown} or nil
+    test.is_nil(status_call_error)
+    test.eq(status_object and status_object.ok, true)
+    test.eq(status_value and status_value.execution_state, "exited")
+    test.eq(status_value and status_value.cleanup_state, "pending")
+    test.not_nil(status_value and status_value.home_ref)
+    local cleanup_reply, cleanup_call_error = caller():call("bee.placement.native:cleanup", {attempt_id = prepared})
+    local cleanup_object = type(cleanup_reply) == "table" and cleanup_reply :: {[string]: unknown} or nil
+    local cleanup_error = cleanup_object and type(cleanup_object.error) == "table" and cleanup_object.error :: {[string]: unknown} or nil
+    test.is_nil(cleanup_call_error)
+    test.eq(cleanup_object and cleanup_object.ok, false)
+    test.is_true(tostring(cleanup_error and cleanup_error.message):find("not proven gone", 1, true) ~= nil)
+    local race_attempt = prepare("window-race-" .. tostring(time.now():unix_nano()))
+    local race_view_a = assert(tty.viewport({width = 24, height = 8}))
+    local race_view_b = assert(tty.viewport({width = 24, height = 8}))
+    local race_a = assert(process.with_options({terminal = assert(race_view_a:grant())}):with_actor(security.new_actor(OWNER)):with_scope(child_scope())
+        :spawn_monitored("bee.window_native:child", "bee:workers", parent, race_attempt, "race"))
+    local race_b = assert(process.with_options({terminal = assert(race_view_b:grant())}):with_actor(security.new_actor(OWNER)):with_scope(child_scope())
+        :spawn_monitored("bee.window_native:child", "bee:workers", parent, race_attempt, "race"))
+    local race_results, race_successes = 0, 0
+    local race_deadline = time.after("10s")
+    while race_results < 2 do
+        local selected = channel.select({results:case_receive(), race_deadline:case_receive()})
+        if not selected.ok or selected.channel == race_deadline then break end
+        local message = selected.value
+        local data = message:payload():data()
+        local sender = tostring(message:from())
+        if type(data) == "table" and data.phase == "race" and (sender == tostring(race_a) or sender == tostring(race_b)) then
+            race_results = race_results + 1
+            if data.ok == true then race_successes = race_successes + 1 end
+        end
+    end
+    process.unlisten(results)
+    test.eq(race_results, 2)
+    test.eq(race_successes, 1)
+    race_view_a:close()
+    race_view_b:close()
+    test.ok(wait_for(view, "WINDOW:hello from window", 3000), "PTY receives input and renders output")
+    test.ok(wait_for(view, "10 30", 3000), "PTY observes the requested resize")
+    view:close()
+end
+return {run = run}

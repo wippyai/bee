@@ -205,8 +205,10 @@ func RunWithCopy(ctx context.Context, client Viewport, rights tty.MountRights, s
 	// Cancel network operations before joining the input reader or worker.
 	defer func() {
 		cancel(nil)
-		client.Close()
+		// Native operations honor cancellation. Drain them before retiring the
+		// mount, or our own Close can turn their cancellation into ErrMountExpired.
 		workers.Wait()
+		client.Close()
 		// Mount retirement can arrive before the delivery worker reports its
 		// failure. Preserve that operation error after the worker exits.
 		if workerErr != nil && !errors.Is(workerErr, context.Canceled) {

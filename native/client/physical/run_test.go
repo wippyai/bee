@@ -248,27 +248,30 @@ func TestLocalCancellationAndExternalRevocationStayDistinct(t *testing.T) {
 }
 
 func TestCancellationKeepsLateDeliveryFailure(t *testing.T) {
-	_, slave, before := terminalPair(t)
-	view := newViewport(control)
-	lost := errors.New("input outcome unavailable after cancellation")
-	view.operationError = lost
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- Run(ctx, view, control, slave, io.Discard) }()
-	select {
-	case <-view.submitted:
-	case <-time.After(3 * time.Second):
-		t.Fatal("input worker did not start")
+	for _, lost := range []error{errors.New("input outcome unavailable after cancellation"), tty.ErrMountExpired} {
+		t.Run(lost.Error(), func(t *testing.T) {
+			_, slave, before := terminalPair(t)
+			view := newViewport(control)
+			view.operationError = lost
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- Run(ctx, view, control, slave, io.Discard) }()
+			select {
+			case <-view.submitted:
+			case <-time.After(3 * time.Second):
+				t.Fatal("input worker did not start")
+			}
+			cancel()
+			select {
+			case err := <-done:
+				if !errors.Is(err, lost) {
+					t.Fatal("delivery failure erased", err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("cancel did not exit")
+			}
+			restored(t, slave, before)
+		})
 	}
-	cancel()
-	select {
-	case err := <-done:
-		if !errors.Is(err, lost) {
-			t.Fatal("delivery failure erased", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("cancel did not exit")
-	}
-	restored(t, slave, before)
 }

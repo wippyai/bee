@@ -102,3 +102,9 @@ limits and the stdio permission exchange for this profile.
 has accepted a turn or is ready for automated input. The production catalog does
 not yet declare this profile compatible; the managed PTY owner and its acceptance
 must land first. These are command specifications, not public window activation.
+
+Claude's structured print command also places positional prompt text after `--`.
+Previously a prompt such as `--version` was parsed as a CLI option. The real
+native resume check now uses that literal prompt and still requires a completed
+turn and retained conversation history. Stdio permission-exchange launches keep
+their existing structured input encoding.

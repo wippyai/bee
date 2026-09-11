@@ -114,7 +114,7 @@ local function define_tests()
             if not request then error(tostring(err)) end
             local launch = claude_launch.specification(request)
             test.eq(launch.executable, "claude")
-            test.eq(quote.line(launch.argv), "claude -p 'say hi' --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --max-turns 2 --model sonnet --effort xhigh")
+            test.eq(quote.line(launch.argv), "claude -p --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --max-turns 2 --model sonnet --effort xhigh -- 'say hi'")
             local _, mode_error = claude_launch.decode({profile_id = "session", brief = "x", permission_mode = "bypassPermissions"})
             test.eq(mode_error, "permission_mode is not one Bee admits")
             local _, model_error = claude_launch.decode({profile_id = "session", brief = "x", model = "not a model"})
@@ -122,7 +122,14 @@ local function define_tests()
             local _, effort_error = claude_launch.decode({profile_id = "session", brief = "x", effort = "turbo"})
             test.eq(effort_error, "effort is not one Bee admits")
             local resumed = claude_launch.specification({profile_id = "session", brief = "next", permission_mode = "default", max_turns = 1, resume_ref = "sess-1", permission_exchange = false})
-            test.eq(resumed.argv[#resumed.argv], "sess-1")
+            test.eq(resumed.argv[#resumed.argv - 2], "sess-1")
+            test.eq(resumed.argv[#resumed.argv - 1], "--")
+            test.eq(resumed.argv[#resumed.argv], "next")
+            local literal_request, literal_error = claude_launch.decode({profile_id = "batch", brief = "--version"})
+            if not literal_request then error(tostring(literal_error)) end
+            local literal = claude_launch.specification(literal_request)
+            test.eq(literal.argv[#literal.argv - 1], "--")
+            test.eq(literal.argv[#literal.argv], "--version")
             -- The exchange launch: the brief is the first stream-json line
             -- on stdin, canonically encoded, stdin stays open, and prompts
             -- route to the stdio prompt tool.

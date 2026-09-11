@@ -90,7 +90,6 @@ function M.specification(request: Request): types.Launch
     local argv: {string} = {"claude"}
     if not window then
         argv[#argv + 1] = "-p"
-        if not request.permission_exchange then argv[#argv + 1] = request.brief end
         if request.permission_exchange then
             argv[#argv + 1] = "--input-format"
             argv[#argv + 1] = "stream-json"
@@ -135,6 +134,10 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
         return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached"}
+    end
+    if not request.permission_exchange then
+        argv[#argv + 1] = "--"
+        argv[#argv + 1] = request.brief
     end
     local launch: types.Launch = {executable = "claude", argv = argv, environment = environment, readiness = "protocol:system.init"}
     if request.permission_exchange then

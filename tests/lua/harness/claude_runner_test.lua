@@ -221,7 +221,7 @@ local function define_tests()
                 local first_id, second_id, session_ref = fresh("attempt"), fresh("attempt"), fresh("session")
                 local first = request(thread_id, first_id, {projection_for(workspace, first_id)})
                 first.session_ref = session_ref
-                first.brief = "First native prompt"
+                first.brief = "--version"
                 local resources = first.resources :: {Object}
                 resources[#resources + 1] = {name = "session", grant_ref = "host-session", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
                 local first_result = await_carrier(spawn_carrier(first), "first native turn")

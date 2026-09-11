@@ -166,3 +166,30 @@ entries:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     catalog: bee.hive.desktop:catalog
+- name: desktop_reader_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send]
+    resources: '*'
+    effect: allow
+- name: reader_sender
+  kind: process.lua
+  source: file://reader_sender.lua
+  method: main
+  modules: [process, channel]
+  meta: {type: test_support}
+- name: desktop_reader_test
+  kind: function.lua
+  source: file://desktop_reader_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  security:
+    policies: [bee.hive:desktop_reader_test_policy]
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    owner: bee.hive.desktop:owner
+    reader: bee.hive.desktop:reader
+    catalog: bee.hive.desktop:catalog

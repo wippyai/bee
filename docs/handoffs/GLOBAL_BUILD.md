@@ -29,6 +29,19 @@ interactions, client lifetimes, recovery and bundled apps. Evidence:
 `/tmp/bee-retirement-foundation-check-20260911.log`. This full run predates the
 name-cleanup source delta, whose focused policy/native proofs are listed above.
 
+The installed name-recovery build also passed a ten-minute, 20-cycle actual-user
+reconnect run (session39137, exit zero). Catalog calls took0.139–0.229s,
+frames0.102–0.224s and every detach0.114s. Evidence:
+`/tmp/bee-global-reconnect-soak-20260911.log`.
+
+A separate source candidate `81f72d1` gives the initial retained display the same
+independent lifetime as all other displays. The baseline fails the injected
+initial-display crash; the candidate passes source/pack with the other display's
+shell and the original default shell preserved. All six retained lifecycle
+variants and the standalone build pass. Full check72192, native-client70191 and
+native-binary39180 are running. Artifact:
+`/tmp/bee-display-lifetimes-candidate-20260911`. Not installed globally yet.
+
 The installation records below are historical.
 
 ## Previous install: membership retirement

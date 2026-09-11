@@ -517,5 +517,7 @@ The source/pack crash regression injects failure into the initial display during
 a copy operation. The previous source loses the reply and workspace; the
 candidate settles the reply, keeps the second display's in-memory shell state,
 reactivates the same default identity and reattaches its original live shell.
-The wider retained lifecycle suite and assembled-binary gates are still pending;
-this correction is not in the installed global build yet.
+The retained source/pack matrix passes normal operation, slow storage, launch
+exit, delayed initial renderer, additional-display copy exit and initial-display
+crash. The standalone build passes. Full foundation and assembled-binary gates
+are running; this correction is not in the installed global build yet.

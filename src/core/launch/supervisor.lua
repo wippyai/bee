@@ -22,7 +22,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
     local retained = desktops.new()
     local desktop: desktops.Desktop? = nil
     local desktop_id = ""
-    local additional: desktop_lifecycle.State? = nil
+    local retained_displays: desktop_lifecycle.State? = nil
     local storage_pending: desktop_storage.Pending? = nil
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
@@ -99,8 +99,8 @@ local function run_supervisor(client: string, database_resource: string?, retain
             end
         end
         local function find_desktop(id: string): desktops.Desktop?
-            if id == desktop_id then return desktop end
-            return additional and desktop_lifecycle.find(additional, id) or nil
+            if id == desktop_id and desktop then return desktop end
+            return retained_displays and desktop_lifecycle.find(retained_displays, id) or nil
         end
         local function has_attachment(recipient: string): boolean
             for _, resource in pairs(retained.desktops) do
@@ -133,7 +133,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
                 saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
-            if phase == "running" or additional then
+            if phase == "running" or retained_displays then
                 cases[#cases + 1] = renderers:case_receive()
                 cases[#cases + 1] = quits:case_receive()
             end
@@ -143,8 +143,8 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 cases[#cases + 1] = storage_requests:case_receive()
                 cases[#cases + 1] = activations:case_receive()
             end
-            if additional then
-                for _, timer in ipairs(desktop_lifecycle.deadlines(additional)) do cases[#cases + 1] = timer:case_receive() end
+            if retained_displays then
+                for _, timer in ipairs(desktop_lifecycle.deadlines(retained_displays)) do cases[#cases + 1] = timer:case_receive() end
             end
             if current_storage then
                 cases[#cases + 1] = current_storage.response:case_receive()
@@ -153,7 +153,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
             if phase ~= "running" then cases[#cases + 1] = deadline:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then error("Local supervisor channel closed") end
-            if additional and desktop_lifecycle.timeout(additional, selected.channel) then
+            if retained_displays and desktop_lifecycle.timeout(retained_displays, selected.channel) then
                 -- This deadline belongs only to the selected desktop.
             elseif current_storage and (selected.channel == current_storage.response or selected.channel == current_storage.deadline) then
                 storage_pending = nil
@@ -168,7 +168,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 send(client, "bee.client.control", {version = 1, workspace_id = workspace_id, request_id = uuid.v7(), op = "pause"})
             elseif selected.channel == events then
                 local event = selected.value
-                if additional then desktop_lifecycle.event(additional, event) end
+                if retained_displays then desktop_lifecycle.event(retained_displays, event) end
                 if event.kind == process.event.CANCEL then return end
                 if event.kind == process.event.LINK_DOWN then
                     if desktop then
@@ -210,10 +210,10 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 local topic = selected.channel == ready and "ready" or selected.channel == results and "result"
                     or selected.channel == renderers and "renderer" or selected.channel == quits and "quit"
                     or selected.channel == saved and "saved" or selected.channel == finished and "finished" or ""
-                if additional and topic ~= "" and desktop_lifecycle.receive(additional, topic, sender, data) then
-                    -- The additional desktop owns this lifecycle message.
-                elseif selected.channel == activations and sender == retained_owner and additional and announced then
-                    desktop_lifecycle.activate(additional, data)
+                if retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
+                    -- This retained display owns its lifecycle message.
+                elseif selected.channel == activations and sender == retained_owner and retained_displays and announced then
+                    desktop_lifecycle.activate(retained_displays, data)
                 elseif selected.channel == storage_requests and sender == retained_owner and announced then
                     local request = desktop_storage.request(data, workspace_id)
                     if request then
@@ -269,7 +269,13 @@ local function run_supervisor(client: string, database_resource: string?, retain
                             connection_id = token; pending = ""; advance("running")
                             if retained_owner and rendered and not announced then
                                 announced = true
-                                additional = desktop_lifecycle.new(retained_owner, host, workspace_id, desktop_id, retained)
+                                retained_displays = desktop_lifecycle.new(retained_owner, host, workspace_id, desktop_id, retained)
+                                local initial = desktop
+                                if not initial then error("Initial retained display resource is missing") end
+                                desktop_lifecycle.adopt(retained_displays, desktop_id, initial, connection_id)
+                                -- From here the workspace has peers, not a privileged display
+                                -- whose exit would terminate the host and every application.
+                                desktop, client = nil, ""
                                 send(retained_owner, "bee.retained.ready", {version = 1, workspace_id = workspace_id,
                                     desktop_id = desktop_id})
                             end
@@ -320,7 +326,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                                 request_id = request.request_id, recipient = request.recipient, name = request.name, arguments = request.arguments})
                         end
                     end
-                elseif selected.channel == attachment_requests and sender == retained_owner and desktop and announced then
+                elseif selected.channel == attachment_requests and sender == retained_owner and announced then
                     local requested_id = type(data) == "table" and contract.workspace_id(data.desktop_id) or nil
                     local selected_desktop = requested_id and find_desktop(requested_id) or nil
                     local request = requested_id and retained_protocol.request(data, workspace_id, requested_id) or nil
@@ -428,7 +434,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
     end
     local ok, err = pcall(run)
     if storage_pending then desktop_storage.cancel(storage_pending) end
-    if additional then desktop_lifecycle.close(additional) end
+    if retained_displays then desktop_lifecycle.close(retained_displays) end
     if retained_owner and client ~= "" then process.terminate(client) end
     if host ~= "" then process.terminate(host) end
     for _, subscription in ipairs(subscriptions) do process.unlisten(subscription) end

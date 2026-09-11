@@ -1,4 +1,4 @@
--- MIT. Additional desktop lifetimes inside the existing workspace supervisor.
+-- MIT. Retained display lifetimes inside the existing workspace supervisor.
 -- The actor owns all children and grants. This library creates no workspace host.
 local process = require("process")
 local security = require("security")
@@ -72,6 +72,15 @@ function M.new(owner: string, host: string, workspace_id: string, default_id: st
     return {owner = owner, host = host, workspace_id = workspace_id, default_id = default_id,
         resources = resources, children = {}, scope = security.new_scope(policies)}
 end
+-- The initial display discovers the default store identity during bootstrap.
+-- After readiness it follows the same lifetime as every other retained display.
+function M.adopt(state: State, id: string, resource: desktops.Desktop, connection: string)
+    if id ~= state.default_id or state.children[id] or connection == "" then
+        error("Invalid initial retained display adoption")
+    end
+    state.children[id] = {id = id, resource = resource, phase = "running", connection = connection,
+        pending = "", ready = true}
+end
 -- The caller authenticates state.owner before this decoder. The record must
 -- already exist: the child opens that exact identity and never allocates a new one.
 function M.activate(state: State, value: unknown)
@@ -82,7 +91,6 @@ function M.activate(state: State, value: unknown)
     local id = contract.workspace_id(value.desktop_id)
     local request = contract.text(value.request_id, 80)
     if not id or not request or request == "" then return end
-    if id == state.default_id then answer(state, id, request, "", ""); return end
     local old = state.children[id]
     if old then
         if old.ready and old.phase ~= "stopping" and old.phase ~= "save" and old.phase ~= "exit" then answer(state, id, request, "", "")
@@ -91,10 +99,12 @@ function M.activate(state: State, value: unknown)
     end
     local count = 0
     for _ in pairs(state.children) do count = count + 1 end
-    if count >= 32 then answer(state, id, request, "BUSY", "Active desktop capacity reached"); return end
+    if count >= 33 then answer(state, id, request, "BUSY", "Active desktop capacity reached"); return end
+    local selected_id: string? = nil
+    if id ~= state.default_id then selected_id = id end
     local resource, err = desktops.start(state.resources, {host = state.host, workspace_id = state.workspace_id,
         database = "bee:client_db", width = 100, height = 32,
-        options = {version = 1, desktop_id = id, quit_mode = "supervisor", node_defaults = true, hive_supervisor = state.owner}}, state.scope)
+        options = {version = 1, desktop_id = selected_id, quit_mode = "supervisor", node_defaults = true, hive_supervisor = state.owner}}, state.scope)
     if not resource then answer(state, id, request, "UNAVAILABLE", tostring(err)); return end
     state.children[id] = {id = id, resource = resource, phase = "boot", connection = "", pending = "",
         ready = false, activation = request, deadline = time.after("10s")}

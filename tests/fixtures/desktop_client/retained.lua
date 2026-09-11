@@ -230,15 +230,19 @@ local function main()
     assert(launch(third, "terminal", {"bash", "-c", "printf '%s\\n' \"$1\"; exec bash -i", "bee-launch", "LITERAL ; $(exit 4) two words"}) == "")
     wait_text(third_screen, "LITERAL ; $(exit 4) two words")
     assert(third_screen:send({type = "key", key = "q", key_type = "runes", action = "press", ctrl = true}))
-    wait_text(third_screen, "Quit Bee?")
-    assert(third_screen:send({type = "key", key = "tab", key_type = "tab", action = "press"}))
-    assert(third_screen:send({type = "key", key = "enter", key_type = "enter", action = "press"}))
-    local stopped = time.after("5s")
-    while true do
-        local event = channel.select({events:case_receive(), stopped:case_receive()})
-        assert(event.ok and event.channel == events, "Supervisor did not finish negotiated shutdown")
-        if event.value.kind == process.event.EXIT and tostring(event.value.from) == supervisor then break end
+    time.sleep("100ms")
+    local reopened = activate(desktop_id, nil)
+    for _ = 1, 300 do
+        if reopened ~= "BUSY" then break end
+        time.sleep("10ms"); reopened = activate(desktop_id, nil)
     end
+    assert(reopened == "", "Default display did not reactivate after close")
+    local fourth, fourth_screen = attach()
+    wait_text(fourth_screen, "LITERAL ; $(exit 4) two words")
+    assert(select(2, request(fourth, "detach", nil)) == "")
+    process.terminate(fourth)
+    fourth_screen:close()
+    process.terminate(supervisor)
     process.terminate(third)
     process.terminate(observer)
     observer_screen:close()

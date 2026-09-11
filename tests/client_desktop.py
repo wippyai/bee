@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False):
     with tempfile.TemporaryDirectory(prefix="bee-client-desktop-") as temporary:
         root = Path(temporary)
         project = root / "project"
@@ -106,15 +106,12 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"
             presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
         if primary_render_delay:
-            supervisor = project / "src/core/launch/supervisor.lua"
-            code = supervisor.read_text().replace('    local announced = false', '    local announced = false\n    local probe_held_renderer = false', 1)
-            pattern = r'(?m)^([ \t]*)send\(host, "bee.host.client", \{version = 1, workspace_id = workspace_id, request_id = pending,\n\s*op = "render", recipient = client, renderer = renderer\}\)'
-            def hold(match):
-                indent = match.group(1)
-                return indent + 'if announced and not probe_held_renderer then probe_held_renderer = true\n' + indent + 'else\n' + match.group(0) + '\n' + indent + 'end'
-            code, count = re.subn(pattern, hold, code)
-            assert count == 1
-            supervisor.write_text(code)
+            lifecycle = project / "src/core/launch/desktop_lifecycle.lua"
+            code = lifecycle.read_text().replace('local M = {}', 'local M = {}\nlocal probe_held_renderer = false', 1)
+            anchor = '    child.pending, child.phase, child.deadline = uuid.v7(), "render", time.after("10s")\n'
+            assert code.count(anchor) == 1
+            code = code.replace(anchor, anchor + '    if child.id == state.default_id and not probe_held_renderer then probe_held_renderer = true; return end\n', 1)
+            lifecycle.write_text(code)
             fixture = project / "src/client_probe/retained.lua"
             code = fixture.read_text()
             anchor = '    local before_rejoin = assert(extra_screen:snapshot()).rows[1]'
@@ -142,6 +139,44 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
     assert(primary_rejoined, "Primary desktop did not recover after the withheld renderer reply")
 ''', 1)
             fixture.write_text(code)
+        if primary_exit:
+            client = project / "src/core/client/main.lua"
+            code = client.read_text()
+            anchor = '                    if selected.channel == copy_results and sender == presenter then\n'
+            assert code.count(anchor) == 1
+            client.write_text(code.replace(anchor, anchor + '                        if bootstrap.desktop_id == nil then error("Injected initial display crash") end\n'))
+            fixture = project / "src/client_probe/retained.lua"
+            code = fixture.read_text().replace('    local catalogs = assert(process.listen("bee.retained.desktops_result", {message = true}))',
+                '    local catalogs = assert(process.listen("bee.retained.desktops_result", {message = true}))\n    local copied = assert(process.listen("bee.retained.copied", {message = true}))')
+            anchor = '    local before_rejoin = assert(extra_screen:snapshot()).rows[1]'
+            injection = r'''    assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id,
+        desktop_id = desktop_id, request_id = "initial-display-crash", recipient = first, op = "copy"}))
+    local crashed = channel.select({copied:case_receive(), time.after("3s"):case_receive()})
+    assert(crashed.ok and crashed.channel == copied, "Initial display crash killed workspace or stranded copy")
+    local crash_message = crashed.value
+    assert(tostring(crash_message:from()) == supervisor)
+    local crash_value: unknown = crash_message:payload():data()
+    assert(type(crash_value) == "table" and crash_value.request_id == "initial-display-crash"
+        and type(crash_value.error) == "string" and crash_value.error ~= "", "Crash did not settle copy uncertainty")
+    command(extra_screen, "printf 'SURVIVING_%s_OK\\n' \"$bee_extra\"")
+    wait_text(extra_screen, "SURVIVING_separate_OK")
+    storage("list", nil, "OK", 2)
+    process.terminate(first)
+    local physical_deadline = time.after("3s")
+    while true do
+        local stopped = channel.select({events:case_receive(), physical_deadline:case_receive()})
+        assert(stopped.ok and stopped.channel == events, "Crashed display physical client did not exit")
+        assert(tostring(stopped.value.from) ~= supervisor, "Initial display crash stopped supervisor")
+        if stopped.value.kind == process.event.EXIT and tostring(stopped.value.from) == first then break end
+    end
+    first_screen:close()
+    activate(desktop_id, "")
+    first, first_screen = attach()
+    command(first_screen, "printf 'REACTIVATED_%s_OK\\n' \"$bee_owner\"")
+    wait_text(first_screen, "REACTIVATED_alive_OK")
+'''
+            assert anchor in code
+            fixture.write_text(code.replace(anchor, injection + anchor, 1))
         if copy_exit:
             client = project / "src/core/client/main.lua"
             code = client.read_text()
@@ -270,7 +305,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             if command == "retained-supervisor-probe":
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
     if command == "retained-supervisor-probe":
-        print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, negotiated shutdown")
+        print(f"Retained supervisor source/pack (slow storage={storage_delay}, launch exit={launch_exit}, primary delay={primary_render_delay}, copy exit={copy_exit}, primary exit={primary_exit}): authorized catalog/allocation and retry, additional activation/replay, independent Terminals, additional F12/save/reactivation with live shell, startup/admission, forged sender denial, controller exclusion, observer/retired launch denial, literal command launch and broker identity, display EXIT revocation, explicit detach/rejoin, same shell, retained display close/reactivation")
         return
     if command == "thread-status-probe":
         print("Bound thread status source/pack: host-authorized association, visible owner-derived badge, F12 and fresh-client retention")
@@ -286,4 +321,5 @@ if __name__ == "__main__":
     run(command="retained-supervisor-probe", launch_exit=True)
     run(command="retained-supervisor-probe", primary_render_delay=True)
     run(command="retained-supervisor-probe", copy_exit=True)
+    run(command="retained-supervisor-probe", primary_exit=True)
     run(command="thread-status-probe")

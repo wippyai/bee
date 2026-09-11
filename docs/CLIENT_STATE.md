@@ -498,3 +498,24 @@ are client-side ceilings. Destination operation limits still apply: the desktop
 owner caps a dispatched request at 30 seconds and catalog/storage stages have
 their own shorter bounds. These changes do not alter native membership failure
 detection or prove automatic reconnect after established transport loss.
+
+## Retained display lifetime correction (candidate, September 11)
+
+After initial readiness, the default display joins the same lifecycle table as
+all other retained displays. Closing or crashing that client retires its viewport
+and writer reservation while the workspace host, broker and other displays stay
+alive. Reopening the default selects its existing default-store identity; it does
+not allocate a new display or replay the initial launch arguments. A pending copy
+or launch receives an unavailable/uncertain outcome if its display exits.
+
+The default display's in-desktop quit now saves and closes that display, matching
+additional displays. It does not negotiate shutdown of every workspace app.
+Physical-client detach remains separate and retains the display itself. The
+nonretained development launcher still coordinates its own workspace shutdown.
+
+The source/pack crash regression injects failure into the initial display during
+a copy operation. The previous source loses the reply and workspace; the
+candidate settles the reply, keeps the second display's in-memory shell state,
+reactivates the same default identity and reattaches its original live shell.
+The wider retained lifecycle suite and assembled-binary gates are still pending;
+this correction is not in the installed global build yet.

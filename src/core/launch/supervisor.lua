@@ -43,6 +43,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local attachment_requests = listen("bee.retained.request")
         local copy_results = listen("bee.client.copied")
         local launch_requests = listen("bee.retained.launch")
+        local catalog_readers = listen("bee.launch.catalog_readers")
         local launch_results = listen("bee.client.launched")
         local launch_pending: {id: string, desktop_id: string, client: string}? = nil
         local copy_pending: {id: string, recipient: string, mount: string, desktop_id: string, client: string}? = nil
@@ -71,6 +72,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local deferred_renderer: string? = nil
         local deferred_quit: protocol.Quit? = nil
         local question: interaction.Spec? = nil
+        local reader_snapshot: retained_protocol.CatalogReaders? = nil
         local deadline = time.after("10s")
         local function advance(next_phase: Phase)
             phase = next_phase
@@ -79,6 +81,13 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local function send(recipient: string, topic: string, value: unknown)
             local sent, err = process.send(recipient, topic, value)
             if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
+        end
+        local function forward_catalog_readers()
+            local snapshot = reader_snapshot
+            if retained_owner and workspace_id ~= "" and snapshot then
+                if snapshot.workspace_id ~= workspace_id then error("Catalog reader workspace changed") end
+                send(retained_owner, "bee.retained.catalog_readers", {version = 1, workspace_id = snapshot.workspace_id, readers = snapshot.readers})
+            end
         end
         local function control(op: string)
             pending = uuid.v7()
@@ -132,7 +141,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
             local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
-                saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), launch_results:case_receive()}
+                saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), catalog_readers:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
                 cases[#cases + 1] = renderers:case_receive()
                 cases[#cases + 1] = quits:case_receive()
@@ -231,6 +240,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     local value = protocol.host(data)
                     if not value then error("Invalid local host readiness") end
                     workspace_id = value.workspace_id
+                    forward_catalog_readers()
                     advance("client_boot")
                     if retained_owner then
                         local client_policies: {security.Policy} = {}
@@ -246,6 +256,11 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     else
                         send(client, "bee.launch.host", {version = 1, workspace_id = workspace_id, host = host, desktop = value.desktop})
                     end
+                elseif selected.channel == catalog_readers and sender == host then
+                    local snapshot = retained_protocol.catalog_readers(data, workspace_id ~= "" and workspace_id or nil)
+                    if not snapshot then error("Invalid host catalog reader snapshot") end
+                    reader_snapshot = snapshot
+                    forward_catalog_readers()
                 elseif selected.channel == ready and sender == client and phase == "client_boot" then
                     local identity = protocol.ready(data, workspace_id, true)
                     if not identity then error("Client did not acknowledge durable legacy import") end

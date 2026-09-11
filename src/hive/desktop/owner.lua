@@ -18,8 +18,8 @@ type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires
 type State = {
     config: protocol.Configuration, node: string, supervisor: string,
     ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
-    catalogs: Channel<process.Message>, activations: Channel<process.Message>, catalog: catalog.State,
-    workspace_id: string, desktop_id: string, allowed: {[string]: boolean},
+    catalogs: Channel<process.Message>, activations: Channel<process.Message>, reader_updates: Channel<process.Message>, catalog: catalog.State,
+    workspace_id: string, desktop_id: string, allowed: {[string]: boolean}, catalog_readers: {[string]: boolean}, pending_catalog_readers: retained.CatalogReaders?,
     clients: {[string]: Client}, receipts: {[string]: Receipt}, client_count: integer, receipt_count: integer,
     expires_at: time.Time, stopped: boolean,
 }
@@ -53,20 +53,22 @@ function M.start(config: protocol.Configuration, node: string): State
     local launches = listen("bee.retained.launched")
     local catalogs = listen("bee.retained.desktops_result")
     local activations = listen("bee.retained.activated")
+    local reader_updates = listen("bee.retained.catalog_readers")
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:host_policy", "bee:desktop_policy", "bee:retained_supervisor_spawn_policy", "bee:desktop_catalog_policy", "bee:desktop_catalog_resource_policy"}) do
         local policy, err = security.policy(name)
-        if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); error(tostring(err)) end
+        if not policy then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); process.unlisten(reader_updates); error(tostring(err)) end
         policies[#policies + 1] = policy
     end
     local self = tostring(process.pid())
     local owner, err = process.with_options({}):with_context({["bee.retained_owner"] = self})
         :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", self, config.application)
-    if not owner then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); error(tostring(err)) end
+    if not owner then process.unlisten(ready); process.unlisten(results); process.unlisten(copies); process.unlisten(launches); process.unlisten(catalogs); process.unlisten(activations); process.unlisten(reader_updates); error(tostring(err)) end
     local clients: {[string]: Client} = {}
     local receipts: {[string]: Receipt} = {}
     return {config = config, node = node, supervisor = tostring(owner), ready = ready, results = results, copies = copies, launches = launches,
-        workspace_id = "", desktop_id = "", allowed = allowed, catalogs = catalogs, activations = activations, catalog = catalog.new(), clients = clients, receipts = receipts,
+        workspace_id = "", desktop_id = "", allowed = allowed, catalogs = catalogs, activations = activations, reader_updates = reader_updates, catalog = catalog.new(),
+        catalog_readers = {}, pending_catalog_readers = nil, clients = clients, receipts = receipts,
         client_count = 0, receipt_count = 0, expires_at = expiry, stopped = false}
 end
 local function forget(state: State, recipient: string)
@@ -109,6 +111,17 @@ local function remember(state: State, client: Client, pending: Pending, reply: t
         send(client.recipient, types.TOPIC_REPLY, reply)
     end
 end
+local function install_catalog_readers(state: State, snapshot: retained.CatalogReaders)
+    if snapshot.workspace_id ~= state.workspace_id then error("Catalog reader workspace changed") end
+    local readers: {[string]: boolean} = {}
+    for _, reader in ipairs(snapshot.readers) do
+        local reader_node = types.pid_parts(reader)
+        if reader_node ~= state.node then error("Catalog reader is not local to this owner") end
+        readers[reader] = true
+    end
+    state.catalog_readers = readers
+    state.pending_catalog_readers = nil
+end
 function M.ready(state: State, message: process.Message)
     if tostring(message:from()) ~= state.supervisor or state.stopped then return end
     local value = retained.ready(message:payload():data())
@@ -117,6 +130,19 @@ function M.ready(state: State, message: process.Message)
         error("Retained desktop identity changed within an execution")
     end
     state.workspace_id, state.desktop_id = value.workspace_id, value.desktop_id
+    if state.pending_catalog_readers then install_catalog_readers(state, state.pending_catalog_readers) end
+end
+-- This query is for the separate catalog-read bridge only. It deliberately does
+-- not widen the native desktop-client admission route below.
+function M.catalog_reader(state: State, sender: string): boolean
+    return not state.stopped and state.catalog_readers[sender] == true
+end
+function M.catalog_readers(state: State, message: process.Message)
+    if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local snapshot = retained.catalog_readers(message:payload():data(), state.workspace_id ~= "" and state.workspace_id or nil)
+    if not snapshot then error("Invalid retained catalog reader snapshot") end
+    if state.workspace_id == "" then state.pending_catalog_readers = snapshot
+    else install_catalog_readers(state, snapshot) end
 end
 -- Only a native sender from an explicitly admitted client node enters
 -- this route. Unknown clients continue to the ordinary supervisor refusal path.
@@ -351,6 +377,13 @@ function M.result(state: State, message: process.Message, now: integer)
 end
 function M.catalog_result(state: State, message: process.Message, now: integer)
     if tostring(message:from()) ~= state.supervisor or state.stopped then return end
+    local pending = state.catalog.pending
+    -- The catalog bridge was started for an authorized local app. Recheck the
+    -- exact current PID before its result can leave this owner.
+    if pending and pending.call.target.operation_ref == "bee.desktop:catalog" and not M.catalog_reader(state, pending.recipient) then
+        catalog.revoke(state.catalog, "Catalog reader authorization was revoked")
+        return
+    end
     catalog.result(state.catalog, message:payload():data(), state.workspace_id, state.config.execution, now)
 end
 function M.activated(state: State, message: process.Message, now: integer)
@@ -420,6 +453,7 @@ function M.event(state: State, event: process.Event, now: integer)
     local sender = tostring(event.from)
     if sender == state.supervisor and event.kind == process.event.EXIT then
         state.stopped = true
+        state.catalog_readers = {}; state.pending_catalog_readers = nil
         local result: unknown = event.result
         local cause = type(result) == "table" and result.error ~= nil and tostring(result.error) or "without an error result"
         error("Retained desktop owner exited: " .. cause)
@@ -432,7 +466,8 @@ end
 function M.close(state: State)
     state.stopped = true
     process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
-    process.unlisten(state.catalogs); process.unlisten(state.activations)
+    process.unlisten(state.catalogs); process.unlisten(state.activations); process.unlisten(state.reader_updates)
+    state.catalog_readers = {}; state.pending_catalog_readers = nil
     for recipient in pairs(state.clients) do process.unmonitor(recipient) end
     process.terminate(state.supervisor)
 end

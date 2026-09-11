@@ -17,6 +17,7 @@ entries:
     connections: bee.host:clients
     inventory: bee.host:inventory
     transfer: bee.host:transfer
+    retained: bee.launch:retained_protocol
 - name: inventory
   kind: library.lua
   source: file://inventory.lua

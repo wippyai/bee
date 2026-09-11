@@ -267,10 +267,12 @@ local function main(configuration: unknown)
         local desktop_copies = desktop and desktop.copies
         local desktop_launches = desktop and desktop.launches
         local desktop_catalogs = desktop and desktop.catalogs
+        local desktop_readers = desktop and desktop.reader_updates
         local desktop_activations = desktop and desktop.activations
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
             if desktop_catalogs then cases[#cases + 1] = desktop_catalogs:case_receive() end
+            if desktop_readers then cases[#cases + 1] = desktop_readers:case_receive() end
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
             if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
@@ -308,6 +310,8 @@ local function main(configuration: unknown)
                 if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
             elseif desktop_catalogs and selected.channel == desktop_catalogs and desktop then
                 desktop_owner.catalog_result(desktop, selected.value, now_ms)
+            elseif desktop_readers and selected.channel == desktop_readers and desktop then
+                desktop_owner.catalog_readers(desktop, selected.value)
             elseif desktop_activations and selected.channel == desktop_activations and desktop then
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then

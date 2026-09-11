@@ -115,6 +115,7 @@ entries:
   - definition_id: bee.hive_manager:app
     policies:
     - bee.hive_manager:client_policy
+    catalog_read: true
   - definition_id: bee.timeline:app
     policies:
     - bee.timeline:client_policy

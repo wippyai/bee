@@ -5,6 +5,16 @@ local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
     test.describe("Application launch arguments", function()
+        test.it("defaults catalog-reader admission off and accepts only a boolean host binding", function()
+            local base = {definition_id = "test:app", policies = {"test:policy"}}
+            local ordinary = assert(contract.binding(base))
+            test.is_false(ordinary.catalog_read)
+            base.catalog_read = true
+            test.is_true(assert(contract.binding(base)).catalog_read)
+            base.catalog_read = "true"
+            test.is_nil(contract.binding(base))
+        end)
+
         test.it("limits observer requests to exact bind targets", function()
             local value = {version = 1, request_id = "observe", op = "bind", id = "view", instance_id = "instance", observer = true}
             local request = contract.request(value)

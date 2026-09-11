@@ -9,7 +9,7 @@ type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"
 type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, thread_id: string?, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}, observer: boolean?}
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string}
-type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean}
+type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, catalog_read: boolean}
 local function request_op(value: unknown): RequestOp?
     if value == "open" then return "open" end
     if value == "close" then return "close" end
@@ -105,7 +105,8 @@ function M.binding(value: unknown): Binding?
     end
     if value.appearance_write ~= nil and type(value.appearance_write) ~= "boolean" then return nil end
     if value.application_stop ~= nil and type(value.application_stop) ~= "boolean" then return nil end
+    if value.catalog_read ~= nil and type(value.catalog_read) ~= "boolean" then return nil end
     return {definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
-        application_stop = value.application_stop == true}
+        application_stop = value.application_stop == true, catalog_read = value.catalog_read == true}
 end
 return M

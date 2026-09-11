@@ -21,6 +21,7 @@ local function main(owner: string, database_resource: string?)
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalog_readers = assert(process.listen("bee.host.catalog_readers", {message = true}))
     local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
     local questions = assert(process.listen("bee.interaction.state", {message = true}))
     local answers = assert(process.listen("bee.interaction.response", {message = true}))
@@ -84,6 +85,7 @@ local function main(owner: string, database_resource: string?)
         function(value: unknown) return database.assignments:claim(value) end
     ))
     local catalog_received = false
+    local reader_snapshot: retained.CatalogReaders? = nil
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
     local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string, receipt: string}} = {}
@@ -93,6 +95,12 @@ local function main(owner: string, database_resource: string?)
     local function send(topic: string, value: unknown)
         local sent, err = process.send(broker, topic, value)
         if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
+    end
+    local function forward_catalog_readers()
+        local snapshot = reader_snapshot
+        if ready and snapshot then
+            deliver("bee.launch.catalog_readers", {version = 1, workspace_id = snapshot.workspace_id, readers = snapshot.readers})
+        end
     end
     local function transfer_result(caller: string, request: transfer.Request, assignment_revision: integer, code: string, error_text: string)
         process.send(caller, "bee.host.transfer_result", {version = 1, workspace_id = workspace_id,
@@ -176,6 +184,7 @@ local function main(owner: string, database_resource: string?)
             resolve_prepared_intents()
             ready = true
             deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
+            forward_catalog_readers()
         end
     end
     local function replace_record(record: recovery.Record?, removed: string?): (boolean, string?)
@@ -200,7 +209,7 @@ local function main(owner: string, database_resource: string?)
     end
     local function run()
         while true do
-            local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(),
+            local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(), catalog_readers:case_receive(),
                 checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(),
                 selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()})
             if not selected.ok then break end
@@ -226,6 +235,11 @@ local function main(owner: string, database_resource: string?)
                         if ready then connections.publish(client_connections, live_inventory, "catalog") end
                         if not catalog_received then catalog_received = true; restore_next() end
                     end
+                elseif selected.channel == catalog_readers and message:from() == broker then
+                    local snapshot = retained.catalog_readers(data, workspace_id)
+                    if not snapshot then error("Invalid broker catalog reader snapshot") end
+                    reader_snapshot = snapshot
+                    forward_catalog_readers()
                 elseif selected.channel == client_requests then
                     local joined = connections.control(client_connections, tostring(message:from()), data, ready and not stopping)
                     if joined then
@@ -400,7 +414,7 @@ local function main(owner: string, database_resource: string?)
     local completed, run_error = pcall(run)
     database:close()
     process.terminate(broker)
-    for _, subscription in ipairs({requests, replies, catalogs, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
+    for _, subscription in ipairs({requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

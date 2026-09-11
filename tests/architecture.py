@@ -185,6 +185,8 @@ assert set(entries["bee.inbox:client_policy"]["policy"]["actions"]) == {"funcs.c
 assert "bee.approvals:list" not in entries["bee.inbox:client_policy"]["policy"]["resources"]
 manager_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.hive_manager:app")
 assert manager_binding["policies"] == ["bee.hive_manager:client_policy"]
+assert manager_binding.get("catalog_read") is True
+assert all(not binding.get("catalog_read", False) for binding in entries["bee:application_admission"]["bindings"] if binding is not manager_binding)
 assert set(entries["bee.hive_manager:client_policy"]["policy"]["actions"]) == {"registry.get", "system.read"}
 assert entries["bee.hive_manager:source"]["data"] == {"kind": "live"}, "Production ships the live directory; a fixture is an explicit host selection"
 timeline_binding = next(b for b in entries["bee:application_admission"]["bindings"] if b["definition_id"] == "bee.timeline:app")

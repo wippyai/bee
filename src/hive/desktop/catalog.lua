@@ -71,6 +71,14 @@ local function decode(value: unknown, workspace: string, pending: Pending): Resu
     if code == "OK" and object.message ~= "" then return nil end
     return {code = code, message = message, desktops = identities}
 end
+-- The owner may revoke an execution-local reader while its storage query is
+-- pending. Clear before replying so a late storage result cannot expose data.
+function M.revoke(state: State, message: string)
+    local pending = state.pending
+    if not pending then return end
+    state.pending = nil
+    answer(pending.recipient, types.reply_error(pending.call.request_id, types.fault("DENIED", message)))
+end
 function M.result(state: State, value: unknown, workspace: string, execution: string, now: integer)
     local pending = state.pending
     -- A late reply cannot retire the next catalog request.

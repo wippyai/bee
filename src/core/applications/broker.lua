@@ -49,6 +49,16 @@ local function main(owner: string, initial_preferences: unknown)
     local ticks = ticker:channel()
     local bindings = catalog.bindings()
     local instances: {[string]: Instance} = {}
+    -- The host receives a complete snapshot after every change. A PID is only
+    -- an execution-local reader reference; it is not a durable principal.
+    local function publish_catalog_readers()
+        local readers: {string} = {}
+        for _, item in pairs(instances) do
+            if item.binding.catalog_read then readers[#readers + 1] = item.execution_pid end
+        end
+        table.sort(readers)
+        assert(process.send(owner, "bee.host.catalog_readers", {version = 1, workspace_id = workspace_id, readers = readers}))
+    end
     local dialogs = interactions.new()
     local shutdown_plan: shutdown.State? = nil
     local shutdown_dialog: interaction.Spec? = nil
@@ -180,6 +190,7 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
         item.view:close()
         instances[item.view_id] = nil
+        if item.binding.catalog_read then publish_catalog_readers() end
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
         end
@@ -290,6 +301,7 @@ local function main(owner: string, initial_preferences: unknown)
         else transition(item, force and "force_stop" or "stop") end
     end
     assert(process.send(owner, "bee.application.catalog", {version = 1, items = catalog.items(bindings)}))
+    publish_catalog_readers()
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local function abort_shutdown()
         local plan = shutdown_plan
@@ -734,6 +746,7 @@ local function main(owner: string, initial_preferences: unknown)
                                         instances[view_id] = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = tostring(pid), view = view,
                                             descriptor = descriptor, binding = binding, launch_token = token, observers = {},
                                             state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
+                                        if binding.catalog_read then publish_catalog_readers() end
                                     end
                                 end
                             end

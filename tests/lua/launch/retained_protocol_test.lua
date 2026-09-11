@@ -221,6 +221,22 @@ local function define_tests()
             test.eq(#assert(max_res).mount, 4096)
         end)
 
+        test.it("decodes only bounded complete catalog-reader snapshots", function()
+            local value = {version = 1, workspace_id = workspace, readers = {"node-a:bee:workers:manager"}}
+            local decoded = retained_protocol.catalog_readers(value, workspace)
+            test.not_nil(decoded)
+            test.eq(assert(decoded).readers[1], "node-a:bee:workers:manager")
+            value.readers[1] = "changed"
+            test.eq(assert(decoded).readers[1], "node-a:bee:workers:manager")
+            test.is_nil(retained_protocol.catalog_readers(value, other))
+            test.is_nil(retained_protocol.catalog_readers({version = 1, workspace_id = workspace, readers = {}, pid = "payload-id"}, workspace))
+            test.is_nil(retained_protocol.catalog_readers({version = 1, workspace_id = workspace, readers = {[2] = "gap"}}, workspace))
+            test.is_nil(retained_protocol.catalog_readers({version = 1, workspace_id = workspace, readers = {"duplicate", "duplicate"}}, workspace))
+            local many: {string} = {}
+            for i = 1, 17 do many[i] = "reader-" .. tostring(i) end
+            test.is_nil(retained_protocol.catalog_readers({version = 1, workspace_id = workspace, readers = many}, workspace))
+        end)
+
         test.it("preserves existing request decoder behavior", function()
             local attach_req = {version = 1, workspace_id = workspace, desktop_id = desktop,
                 op = "attach", request_id = "req-1", recipient = "proc-1", mode = "control"}

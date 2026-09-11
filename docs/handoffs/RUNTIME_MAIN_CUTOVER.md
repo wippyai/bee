@@ -64,13 +64,16 @@ per-project executable acceptance must remain pending until this is wired.
 Bee native commit `447f015b08bf924452192713cf71d1cb5965f263` replaces the old
 launch plan with `cmd/app` callbacks and exposes the concrete host's `Launch`
 method. Its focused launch race tests and vet pass against unchanged #726.
-The complete builder composition still fails: Go module resolution loads native
-local-owner test imports of the removed application packages. Those fixtures
-must migrate to the real callback contract before the toolchain can build.
-The candidate manifest pins this checkpoint for validation only.
+The follow-up native checkpoint `2a652f89754ce9e010a71110d0332b258d179d25`
+migrates the obsolete test imports and proves state contention through the actual
+runtime runner. Its local-owner race tests and vet pass. The complete native
+toolchain now builds with that checkpoint, unchanged #726 and builder #7;
+managed-window acceptance passes all three tests. This proves window input,
+resize, close, duplicate admission and foreign-owner refusal. Its cleanup remains
+explicitly pending; it does not prove production process-group reclamation.
 
 A separate core-only runtime main build succeeds and lints Bee source. It cannot
 run the native-window acceptance: boot stops because that diagnostic toolchain
 omits the `bee.hive.activation` native handler. This is a composition limitation,
 not evidence that the window tests passed or failed their behavioral assertions.
-The complete native toolchain remains the next executable gate.
+The complete native toolchain above resolves that composition gate.

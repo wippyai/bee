@@ -5673,3 +5673,31 @@ its next focused diagnostic. All earlier test handles are terminal. Global Bee,
 user processes and runtime source remain unchanged. Live global catalog followup
 r3 answered in 146 ms. Runtime lane checkpoint 929 has been read; it is not a
 pushed/merged runtime cutover and is not claimed to fix Bee's symptoms.
+
+
+### Accepted local send waited 599 ms for retained select — journal 935
+
+Run 96915 failed round 67 on a 20-second startup stall; two peers attached,
+but client 2928543 emitted only the connection banner. The owner had only two
+catalog callers for that round. The diagnostic previously killed such a client
+without a stack. Harness `20eae6c` now preserves that original failure, observes
+the remaining connection window, and takes an exact-subprocess pidfd stack when
+still live. This does not relax the normal first-frame gate.
+
+Repeat 27804 then reproduced the detach timeout in round 4. Local process.send
+returned successfully in 21.219 microseconds. Retained channel.select, entered
+before the send, returned 599.164 ms after its acceptance; no retained handler
+ran between the select begin/end markers. Revocation/unmonitor/reply then took
+under 0.2 ms. This locates the delay in local delivery/wakeup/scheduling rather
+than Bee revocation; the precise runtime mechanism remains unproved. Client
+stack shutdown in this failure was only 32.296 ms, separating it from the other
+slow-exit issue. Catalog afterwards answered in 447 ms.
+
+Evidence: `/tmp/bee-local-dispatch-trace-r2-reconnect.log`, fixture
+`/tmp/bee-native-reconnect-yhovcyf4`, `state/owner-2879045078.log`,
+`client-2940102.raw`. Request: `01a08ded-c40e-790b-bf2b-1ff04c05a696`.
+Diagnostic binary `/tmp/bee-local-dispatch-trace-candidate`, SHA256
+41d3742d9ccc822c77521247b02719cb20d65e13360c67fce05044b2bb26bd15.
+All build/test jobs are terminal. Runtime lane owns the next investigation below
+local send/select; no runtime or global changes, no user restart. The original
+expired-mount failure remains unresolved. Detailed observations are journal 934–935.

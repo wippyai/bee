@@ -5807,3 +5807,7 @@ See GLOBAL_BUILD.md and wolfden seq1075. Live Hive Manager browsing/attachment,
 workspace switching and broader remote recovery remain the next work. Source is
 on `checkpoint/app-transfer-release-20260911`; shared source was not reset or
 blanket-committed. No runtime changes.
+
+September11: connection card follow-up installed globally, SHAaf1dc830, source27f0383.
+Source/pack UI and native connection checks pass; running user node not restarted.
+Full IDs now behind Details/D. Live browsing remains next; journal1076 has source evidence.

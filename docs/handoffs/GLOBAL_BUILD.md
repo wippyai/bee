@@ -1,6 +1,28 @@
 # Global Bee build — September 11, 2026
 
-## Current install: app transfer between displays
+## Current install: compact connection card
+
+Global SHA256 `af1dc830badf03028deb071874a05152413b9b900bd93aace0369b4c3fdf5b79`.
+Source matches `27f0383` (connection card `2385b82` plus honest unknown display
+occupancy). Native/runtime/builder pins are unchanged from the transfer build.
+Artifact `/tmp/bee-connection-refined-20260911`; verified atomic installation
+with license/provenance sidecars, backup `bee.previous-connection-card-20260911T164814Z`.
+No running user process was restarted; existing displays retain their loaded UI.
+
+F9 now shows a compact44×13 card with aligned Hive/node status and grouped
+workspace/display names. Click Details or press D for full identities. Inside
+clicks no longer dismiss the card. Source and pack acceptance cover Details,
+F9/Escape, F12, stable identities and42×12 terminals. Standalone connection UI
+acceptance passes, including controller reconnect. Build and lint pass with the
+existing desktop_lifecycle convergence warning. Occupancy projection changes
+passed530 Lua tests before the card edits. This small follow-up has focused UI
+acceptance, not a new full foundation run.
+
+Evidence: `/tmp/bee-connection-refine-check.log`,
+`/tmp/bee-connection-refined-native-check.log`, `/tmp/bee-install-connection-20260911.log`.
+Live Hive Manager browsing/switching remains unfinished.
+
+## Previous install: app transfer between displays
 
 Global SHA256 `2569142fc3ba3b6fc95ffbf5fc09f9377ab3e4ceca742b5661917ab076a0e847`.
 Production source `4e57054`, build checkpoint `8d16dc5`. Native `2a2117ad4fe7`,

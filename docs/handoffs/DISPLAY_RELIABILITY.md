@@ -36,6 +36,23 @@ catalog stage events. They do not change runtime semantics and are not global
 releases. Current actual-state capture: `/tmp/bee-service-events-soak-20260911.log`.
 The probe restores the installed global executable's service when it finishes.
 
+## Reproduced restart failure
+
+The direct event capture reproduced the stall after about 256 seconds. Service
+`bee.hive:activation` first reported that its retained desktop process exited.
+Subsequent starts failed repeatedly because its eventual name remained registered.
+The ninth catalog probe then timed out. Evidence:
+`/home/wolfy-j/.config/bee/owner-1402978003.log` and
+`/tmp/bee-service-events-soak-20260911.log`.
+
+The production `bee:hive_names_policy` omitted
+`process.registry.unregister.eventual`, which the pinned runtime explicitly
+requires. The native test fixture granted it. Source fix `6c6c574` adds the
+missing permission, reports failed name release, and preserves the retained
+process exit error instead of discarding it. Lint passed; policy regression and
+recovery validation remain pending. This fix is not yet installed globally and
+does not explain the initial retained-process exit.
+
 ## Remaining acceptance
 
 A startup fix must account for the failed catalog exchange and pass simultaneous

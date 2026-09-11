@@ -2,8 +2,8 @@
 
 This is not a completed public API or a shipped global feature. The checked
 request boundary, durable assignment storage, display admission, client layout
-reconciliation and presenter menu exist. Host transfer integration and combined
-end-to-end acceptance are still in progress.
+reconciliation and presenter menu exist. The normal two-display path passes combined source/pack acceptance. Interrupted
+transfer recovery and further failure checks remain in progress.
 
 ## Ownership
 
@@ -93,8 +93,12 @@ replay refusal and receipt preservation after retirement.
 
 Admission has passing unit and source/pack attachment/client checks. Pure client
 reconciliation and menu eligibility tests pass. The presenter lane's full unit
-suite passed 528 tests. Combined actor, menu and host transfer checks remain
-required before this feature is considered complete or installed globally.
+suite passed 528 tests. The combined client/UI unit run passed 529 tests. The real window-menu transfer
+passed on source and pack: it preserved the shell PID and variable, kept the
+neighbor working, reconciled both layouts, and passed source F12. The separate
+host fixture also proves old input revocation, target rebind and committed retry
+after destination detach. Remaining failure/recovery checks are required before
+this feature is considered complete or installed globally.
 
 The combined proof must move a Terminal through the real window menu, preserve
 its exact PID and in-memory variable, retain the neighboring app, reconcile both

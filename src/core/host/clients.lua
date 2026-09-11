@@ -10,23 +10,24 @@ local questions = require("questions")
 local interaction = require("interaction")
 local recovery = require("recovery")
 local records = require("records")
-local persistence = require("persistence")
+local assignment_store = require("assignment_store")
+local transfer = require("transfer")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean,
-    renderer_generation: string, fingerprint: string, resume: recovery.Resume?}
+    renderer_generation: string, fingerprint: string, resume: recovery.Resume?, display_id: string}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
 type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
     renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
-    assignments: persistence.Persistence,
+    assignments: assignment_store.Store,
     inventory: inventory.State,
     questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
     appearance_routes: {[string]: AppearanceRoute}}
 local M = {}
-function M.new(owner: string, broker: string, workspace_id: string, assignments: persistence.Persistence): State
+function M.new(owner: string, broker: string, workspace_id: string, assignments: assignment_store.Store): State
     return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()), assignments = assignments,
         inventory = inventory.new(workspace_id),
         questions = questions.new(workspace_id),
@@ -253,13 +254,14 @@ function M.request(state: State, caller: string, request: contract.Request, data
     elseif request.op == "bind" and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
     elseif request.op == "bind" and client.rendering then code = "busy"
     elseif request.op == "bind" and client.renderer == "" then code = "unavailable"
-    elseif request.op == "bind" and request.observer ~= true and client.permissions.control then
-        local assigned, assignment_error = state.assignments.assignments:get({view_id = request.id, instance_id = request.instance_id})
-        if assignment_error then error("Read display assignment: " .. tostring(assignment_error)) end
-        if not assigned or assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
     elseif not clients.allowed(client, request) then code = "permission_denied"
     elseif request.workspace_id ~= state.workspace_id then code = "workspace_mismatch"
     elseif not ready then code = "busy" end
+    if code == "" and request.op == "bind" and request.observer ~= true and client.permissions.control then
+        local assigned, assignment_error = state.assignments:get({view_id = request.id, instance_id = request.instance_id})
+        if assignment_error then error("Read display assignment: " .. tostring(assignment_error)) end
+        if not assigned or assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
+    end
     if code ~= "" then
         reject(state, client, request, code, code == "workspace_mismatch" and "Request targets another workspace" or "Client request rejected")
         return true
@@ -290,7 +292,7 @@ function M.request(state: State, caller: string, request: contract.Request, data
             resume = recovery.select(saved, state.inventory, request.definition_id, reserved, request.thread_id)
         end
         state.routes[internal] = {recipient = client.recipient, connection_id = client.connection_id, request_id = request.request_id,
-            op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume}
+            op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume, display_id = client.display_id}
         state.route_count = state.route_count + 1
     end
     -- Keep this selection on the correlation record, including after completion:
@@ -316,6 +318,19 @@ function M.request(state: State, caller: string, request: contract.Request, data
         reject(state, client, request, "delivery_failed", tostring(send_error))
     end
     return true
+end
+-- The host derives source display authority from the admitted caller. The
+-- transfer payload never selects a source client or renderer handle.
+function M.transfer(state: State, caller: string, data: unknown, ready: boolean): (transfer.Request?, clients.Client?, string?)
+    local request = transfer.request(data)
+    local client = state.admitted[caller]
+    if not request or not client then return nil, nil, "permission_denied" end
+    if not ready or client.detaching or not client.permissions.control then return nil, nil, "unavailable" end
+    if request.workspace_id ~= state.workspace_id or request.connection_id ~= client.connection_id
+        or request.renderer_generation ~= client.renderer_generation or client.rendering or client.renderer == "" then
+        return nil, nil, "stale_renderer"
+    end
+    return request, client, nil
 end
 local function release_renderer(client: clients.Client): (boolean, string?)
     if client.renderer ~= "" and client.renderer ~= client.recipient then
@@ -484,10 +499,9 @@ function M.reply(state: State, reply: contract.Reply, current: inventory.State):
     -- The initiating admitted display owns a newly opened live view before
     -- its usable reply is delivered. A failed durable claim leaves the app
     -- unbound from client control rather than creating an unfenced grant.
-    if route.op == "open" and reply.op == "open" and reply.error_code == "" and client
-        and client.permissions.control then
-        local claimed, claim_error = state.assignments.assignments:claim({view_id = reply.id, instance_id = reply.instance_id,
-            display_id = client.display_id})
+    if route.op == "open" and reply.op == "open" and reply.error_code == "" then
+        local claimed, claim_error = state.assignments:claim({view_id = reply.id, instance_id = reply.instance_id,
+            display_id = route.display_id})
         if not claimed then
             reply.error_code, reply.error = "persistence_failed", tostring(claim_error)
         end

@@ -140,7 +140,6 @@ local function define_tests()
             local decoded, decode_error = admission.decode_request(request)
             if not decoded then error(tostring(decode_error)) end
             test.eq(decoded.brief, "")
-            prepare_host(request.workspace_id)
             local reply = call("bee.harness.launch:admit", request)
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")

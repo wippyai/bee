@@ -25,17 +25,23 @@ executable proofs. App transfer and workspace switching remain unfinished.
 
 ## Transfer candidate, not installed
 
-Checkpoint `checkpoint/app-transfer-host-20260911` implements the window-menu
-transfer path using workspace-owned durable assignments and existing broker
-revocation. Source/pack UI acceptance preserves the shell PID and variable,
-neighboring app, both layouts and source F12. The combined client/UI unit run
-passed 529 tests before host integration. Source and target layout-save failure
-reconnect probes now pass on source and pack; stale source tabs cannot reclaim the
-app, and target restart recovers the same live shell. Host commit-failure fencing
-and historical replay pass separately. Manual-restore settlement, dead-assignment
-retirement and final combined build gates remain pending. See
-[the transfer contract](APP_DISPLAY_TRANSFER.md). The global executable above
-has not changed.
+Candidate `/tmp/bee-app-transfer-candidate-20260911`, SHA256
+`417eeae8ec436bf3ad6725026a57c89d3013e8085d4a10e7a7e1f5b2b7ffa610`,
+is built from release source `50f23db` (documentation checkpoint `0f44a0f`).
+Runtime, native and builder pins match the current global above.
+
+Window-menu transfer preserves the exact shell PID/state and neighboring app
+across two public native clients. Source/pack tests also cover failed source and
+target layout saves, reconnect, manual host restore, dead-assignment retirement,
+commit failure fencing and historical receipt replay. The combined desktop smoke
+caught duplicate binds from inventory/open projections; sharing the in-flight
+bind passes the source/pack reproduction without transient mount denial.
+
+Final 529-unit, standalone and native-client suites pass. The earlier foundation
+run passed modules, headless, architecture572 and storage/resource gates before
+that corrected smoke failure. The remaining desktop suite is running on the
+combined release. The global executable is unchanged until that gate completes.
+See [the transfer contract](APP_DISPLAY_TRANSFER.md).
 
 ## Previous install: public default-display reactivation
 

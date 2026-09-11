@@ -129,3 +129,9 @@ keys do not duplicate revocation; old source layouts cannot reclaim control;
 failed saves/mounts do not reverse assignment; and interrupted prepared transfers
 settle correctly after restart. A test that merely loads the protocol is not
 end-to-end transfer evidence.
+
+`make native-display-transfer-check BEE_BINARY=...` also proves the public
+standalone route: two independently launched physical clients, the actual menu
+and friendly destination, unchanged shell PID/state, unaffected neighbor and
+source F12. This gate uses disposable stores and retains the exact owner pidfd
+for cleanup.

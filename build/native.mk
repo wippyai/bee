@@ -91,3 +91,7 @@ native-settings-resize-check:
 .PHONY: native-display-appearance-check
 native-display-appearance-check:
 	python3 tests/native_display_appearance.py "$(BEE_BINARY)"
+
+.PHONY: native-display-transfer-check
+native-display-transfer-check:
+	python3 tests/native_display_transfer.py "$(BEE_BINARY)"

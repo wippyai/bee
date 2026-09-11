@@ -43,6 +43,23 @@ def live_owners(binary, state):
     return sorted(owners)
 
 
+def owner_pidfd(pid, binary, state):
+    """Hold a matching owner identity, guarding the scan-to-open race."""
+    handle = None
+    try:
+        handle = os.pidfd_open(pid)
+        args = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+    except OSError:
+        if handle is not None:
+            os.close(handle)
+        return None
+    if (args and args[0] == os.fsencode(binary) and os.fsencode(state) in args and
+            b'--command' in args and b'start' in args):
+        return handle
+    os.close(handle)
+    return None
+
+
 def stop_owner(owner):
     if owner is None:
         return
@@ -148,8 +165,8 @@ def preparing_owner(binary):
         first = None
         second = None
         try:
-            # Launch both foreground clients before either has a published owner.
-            # The runtime, rather than this fixture, elects and admits the owner.
+            # Start both foreground clients without a fixture-supplied owner. The
+            # runtime, rather than this fixture, elects and admits the owner.
             first = NativeDesktop(binary, folder, state)
             second = NativeDesktop(binary, folder, state)
             first.wait(' BEE ', timeout=15)
@@ -162,11 +179,8 @@ def preparing_owner(binary):
             while time.monotonic() < deadline:
                 owners = live_owners(binary, state)
                 if len(owners) == 1:
-                    try:
-                        owner = os.pidfd_open(owners[0])
-                    except ProcessLookupError:
-                        pass
-                    else:
+                    owner = owner_pidfd(owners[0], binary, state)
+                    if owner is not None:
                         owner_pid = owners[0]
                         break
                 time.sleep(.05)
@@ -193,11 +207,23 @@ def preparing_owner(binary):
             assert not select.select([owner], [], [], 0)[0], 'Second client detach killed the owner'
             assert live_owners(binary, state) == [owner_pid], 'Second detach changed the elected owner'
         finally:
+            # A first-frame failure can still leave a runtime-elected owner. Hold
+            # every fixture-scoped contender before closing its foreground parent.
+            # owner_pidfd rechecks its command after opening the pidfd, so a PID
+            # recycled after the /proc scan cannot target an unrelated process.
+            extra_owners = []
+            for pid in live_owners(binary, state):
+                if pid != owner_pid:
+                    contender = owner_pidfd(pid, binary, state)
+                    if contender is not None:
+                        extra_owners.append(contender)
             if first is not None:
                 first.close()
             if second is not None:
                 second.close()
             stop_owner(owner)
+            for contender in extra_owners:
+                stop_owner(contender)
     print('Preparing owner: concurrent cold clients attach to one runtime-elected owner')
 
 

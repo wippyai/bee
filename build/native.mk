@@ -68,9 +68,10 @@ native-client-retention-check:
 
 # Opt-in overlapping-display diagnostic. Failure preserves disposable evidence.
 RECONNECT_ROUNDS ?= 30
+RECONNECT_KEEP ?= 0
 .PHONY: native-reconnect-check
 native-reconnect-check:
-	python3 tests/native_reconnect.py "$(BEE_BINARY)" --rounds "$(RECONNECT_ROUNDS)"
+	python3 tests/native_reconnect.py "$(BEE_BINARY)" --rounds "$(RECONNECT_ROUNDS)" $(if $(filter 1,$(RECONNECT_KEEP)),--keep-fixture,)
 
 .PHONY: native-desktop-selection-check
 native-desktop-selection-check:

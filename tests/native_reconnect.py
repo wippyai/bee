@@ -1,7 +1,7 @@
 """MIT. Linux overlapping-display diagnostic against an assembled Bee binary.
 
 Uses disposable stores. Failed fixtures retain frames, a read-only catalog probe
-and an exact-process stack; successful fixtures are removed. This is an opt-in
+and an exact-process stack; successful fixtures are removed by default. This is an opt-in
 stress check, not evidence of complete remote recovery.
 """
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +18,7 @@ from native_client import owner_handle, stop_owner
 from native_workspace import NativeDesktop
 
 
-def run(binary, rounds):
+def run(binary, rounds, keep_fixture=False):
     folder = Path(tempfile.mkdtemp(prefix="bee-native-reconnect-"))
     state = folder / "state"
     owner = None
@@ -115,15 +115,18 @@ def run(binary, rounds):
                 ui.close()
         finally:
             stop_owner(owner)
-        if passed:
+        if passed and not keep_fixture:
             shutil.rmtree(folder)
+        elif passed:
+            print(f"Successful fixture preserved in {folder}", flush=True)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("--rounds", type=int, default=30)
+    parser.add_argument("--keep-fixture", action="store_true", help="retain successful diagnostic output")
     args = parser.parse_args()
     if not 1 <= args.rounds <= 1000:
         parser.error("rounds must be between 1 and 1000")
-    run(args.binary.resolve(strict=True), args.rounds)
+    run(args.binary.resolve(strict=True), args.rounds, args.keep_fixture)

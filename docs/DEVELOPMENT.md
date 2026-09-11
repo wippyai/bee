@@ -163,7 +163,8 @@ For intermittent physical-client reconnect failures, run
 `make native-reconnect-check BEE_BINARY=/absolute/path/to/bee`. This opt-in Linux
 diagnostic retains Hive Manager and repeatedly joins three physical clients
 concurrently, requiring each detach to succeed within one second. Set
-`RECONNECT_ROUNDS` (default 30) to change its duration. It uses disposable stores;
+`RECONNECT_ROUNDS` (default 30) to change its duration. Set `RECONNECT_KEEP=1`
+to retain successful fixtures for diagnostic log analysis. It uses disposable stores;
 on failure it preserves terminal frames, probes the catalog while draining live
 clients, and captures only its own retained process through a held pidfd. The
 printed fixture directory may contain private test credentials and is not a

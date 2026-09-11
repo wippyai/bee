@@ -118,3 +118,21 @@ boots and a subsequent full source/pack smoke pass do not explain that failure.
 Failure-only diagnostics now retain bounded terminal output and process state;
 the intermittent startup issue remains unresolved. Remaining desktop acceptance
 is still in progress, so this is not a completed full foundation check.
+
+## OS-assigned MCP listener address
+
+Source inspection of the selected runtime found another requirement before
+public per-node MCP activation: `service/http/server.go` binds the configured
+address but `ensureRunning` probes `s.config.Addr`, not the bound listener's
+address. With `127.0.0.1:0`, that still probes port zero. The service's current
+public methods also expose no bound endpoint. This is source evidence; a
+runtime-owned executable regression is still required.
+
+The existing HTTP service should retain and expose its actual bound endpoint
+through the native service surface, with readiness using that endpoint and
+restart/stop retiring the old value. Bee can then bind loopback port zero and
+use the current endpoint with its existing listener generation and scoped MCP
+authorization. The current fixed gateway endpoint is not acceptance of automatic
+multi-project MCP activation. Do not reserve and release a supposedly free port,
+create another HTTP server, or let callers supply credential destinations to
+work around this requirement. No runtime implementation changes are made here.

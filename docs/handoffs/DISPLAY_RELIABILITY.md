@@ -49,9 +49,11 @@ The production `bee:hive_names_policy` omitted
 `process.registry.unregister.eventual`, which the pinned runtime explicitly
 requires. The native test fixture granted it. Source fix `6c6c574` adds the
 missing permission, reports failed name release, and preserves the retained
-process exit error instead of discarding it. Lint passed; policy regression and
-recovery validation remain pending. This fix is not yet installed globally and
-does not explain the initial retained-process exit.
+process exit error instead of discarding it. Lint and the 11-case production host-policy suite passed. The corrected
+private build then passed 20 actual-state catalog checks over ten minutes with
+zero captured service failures; native-client acceptance also passed. A controlled
+restart test using the production policy remains pending. This fix is not yet
+installed globally and does not explain the initial retained-process exit.
 
 ## Remaining acceptance
 

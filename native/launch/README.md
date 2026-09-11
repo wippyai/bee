@@ -94,3 +94,27 @@ a node or enroll a remote machine. IDs come from the catalog, not list position.
 Explicit refusal or uncertainty never selects or allocates another display.
 The display picker UI and remote enrollment remain separate unfinished work.
 Executable acceptance is pending; these commands are not in the global build yet.
+
+## Project-scoped launch candidate
+
+The compiled desktop now selects implicit application state from the canonical
+launch directory before looking up a running node. State lives beneath the
+application's existing state root in `projects/<SHA256 of canonical directory>`.
+Two different folders therefore have independent locks and stores; a symlink
+alias selects the same project. The detached owner retains the original project
+working directory and receives the selected state explicitly, so it cannot
+remap that state a second time. Explicit `--state-dir` remains authoritative;
+existing application databases are preserved. Runtime tooling and update state
+selection are unchanged.
+
+`bee client` is an explicit attachment-only route, optionally taking a workspace
+and display ID pair. It refuses if the selected project has no running Bee.
+Ordinary `bee` starts that project's node plus the current physical display,
+or adds a display when its project node is already running. `bee start` remains
+headless. Cross-project client selection still needs the Hive selection route.
+
+This is an uninstalled candidate. The launch race/vet checks cover independent
+project locks, canonical aliases, explicit-state preservation and absent-node
+client refusal. Full two-project executable acceptance, distinct Bee-node names,
+same-account Hive enrollment/joining and terminal working-directory assertions
+remain required; project state selection alone does not establish those facts.

@@ -67,13 +67,15 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 			return application.LaunchPlan{}, nil
 		}
 		selected := *l.client
+		clientOnly := len(request.Arguments) > 0 && request.Arguments[0] == "client"
+		selected.AttachOnly = clientOnly
 		observe := len(request.Arguments) > 0 && request.Arguments[0] == "observe"
 		attach := len(request.Arguments) > 0 && request.Arguments[0] == "attach"
 		listing := len(request.Arguments) > 0 && request.Arguments[0] == "desktops"
 		if listing && len(request.Arguments) != 1 {
 			return application.LaunchPlan{}, errors.New("bee desktops takes no arguments")
 		}
-		if observe || attach {
+		if observe || attach || clientOnly {
 			if len(request.Arguments) == 3 {
 				selection, err := parseSelection(request.Arguments[1], request.Arguments[2])
 				if err != nil {
@@ -81,7 +83,7 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 				}
 				selected.Selection = selection
 			} else if attach || len(request.Arguments) != 1 {
-				return application.LaunchPlan{}, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe takes no application arguments or one WORKSPACE DISPLAY pair")
+				return application.LaunchPlan{}, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe/client takes no application arguments or one WORKSPACE DISPLAY pair")
 			}
 			selected.Mode = hive.Control
 			if observe {
@@ -89,7 +91,7 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 			}
 			selected.Launch = nil
 		}
-		if len(request.Arguments) > 0 && !observe && !attach && !listing {
+		if len(request.Arguments) > 0 && !observe && !attach && !listing && !clientOnly {
 			// Explicit application IDs retain their existing recovery/development
 			// entry. Named handlers resolve only through the retained owner.
 			if strings.Contains(request.Arguments[0], ":") {

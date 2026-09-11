@@ -81,7 +81,14 @@ func (h *Host) PrepareLaunch(ctx context.Context, request application.LaunchRequ
 	if h.initErr != nil {
 		return application.LaunchPlan{}, h.initErr
 	}
-	plan, err := h.launcher.PrepareLaunch(ctx, request)
+	selected, err := launch.SelectProject(request)
+	if err != nil {
+		return application.LaunchPlan{}, err
+	}
+	plan, err := h.launcher.PrepareLaunch(ctx, selected)
+	if !plan.Handled && selected.StateDir != request.StateDir {
+		plan.StateDir = selected.StateDir
+	}
 	if err == nil && request.Operation == application.RunApplication && !request.Base && !plan.Handled {
 		// Code follows this executable; authored registry history stays with the
 		// selected state. Recovery and runtime/update commands keep their policy.

@@ -44,6 +44,9 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, request)
 	}
+	if c.AttachOnly {
+		return errors.New("No running Bee for this project; run bee to start its node")
+	}
 	if c.Mode == hive.Observe {
 		return errors.New("No running Bee to observe; start bee first")
 	}

@@ -85,8 +85,8 @@ client-launch-check:
 	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
 	cp go.mod go.sum "$$testmod/"; \
 	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
-	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient physicalclient" ./launch; \
-	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient physicalclient" ./launch
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) meshclient physicalclient" ./launch ./desktop; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient physicalclient" ./launch ./desktop
 
 # Requires one reviewed runtime with both native launch and clipboard APIs.
 .PHONY: local-owner-selection-check

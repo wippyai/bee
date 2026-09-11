@@ -1,5 +1,49 @@
 # Managed launch acceptance
 
+## Current checkpoint — September 11, 2026
+
+The managed session is not enabled in production. Current source has carrier,
+placement, driver, credentials, approvals and gateway components, but the shipped
+managed policy has no executable or environment bindings, no production launch
+definition is installed, and the default composition does not start the gateway
+listener. Public Claude/Codex aliases still launch ordinary native Terminals.
+
+On runtime `674b58a1a117fa79398f723c4311201cca8472e1`, the current
+managed-launch gate completed with **192 passed and 7 failed**. All mandatory
+real-executable proof names passed, including loopback authentication, permission
+exchange and gateway interoperability; the seven gateway-carrier integration
+failures prevent acceptance. Three report a listener readiness generation
+conflict, and later cases fail before the child presents its credential. The
+cause is under investigation; this result does not establish a runtime defect.
+
+Reproduction (real provider credentials removed; fixtures use isolated homes,
+sentinel credentials and loopback endpoints):
+
+```sh
+env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY make managed-launch-check \
+  BEE_RUNTIME=/path/to/pinned/wippy \
+  BEE_CLAUDE_BIN=/absolute/path/to/claude \
+  BEE_CODEX_BIN=/absolute/path/to/codex
+```
+
+Evidence: `/tmp/bee-current-managed-launch-check.log`, source checkpoint
+`b3e0f71`. This is a failed integration gate, not production enablement.
+
+A durable follow-up prompt is also unfinished. Both driver `dispatch` methods
+explicitly describe a new process on a provider `resume_ref`; the carrier currently
+calls only `prepare` and settles one attempt. Placement already has retained
+session directories. A conversation can span process attempts: it must preserve
+thread identity, provider continuation and the selected session directory, with
+idempotent admission and recovery. Increasing Claude's `max_turns` does not provide
+that user-facing conversation lifecycle. The launch surface, follow-up composition
+and detach/recovery acceptance remain required.
+
+## Historical September 9 evidence
+
+The runtime limitations and PR table below describe the old September 9 pin.
+They are historical evidence, not unresolved requirements of the current pin.
+
+
 The state of managed harness launches (Claude Code and Codex through the
 carrier, the native placement runner, the credential broker and the
 approvals owner) as of 2026-09-09, what the pinned runtime can run, what a

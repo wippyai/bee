@@ -6,9 +6,15 @@ source/target/revision intent, revokes the source through the broker's exact
 view bind, commits the target assignment, and leaves the target's ordinary
 assignment-fenced bind to mount the existing app.  Completed receipts replay
 their original outcome after later moves, detach, or retirement; a prepared
-receipt fences both displays through restart.  The source/pack attachment proof
+receipt fences both displays through restart. A startup-recovered manual checkpoint
+keeps its prepared fence until an ordinary open restores that exact view and instance;
+then the host commits its recovered receipt before the target's routed bind. A current
+runtime prepared transfer cannot use that path and still waits for its broker revoke
+reply. Checkpoint-absent assignments retire at startup after any prepared receipt is
+settled, while checkpointed exact identities remain. The source/pack attachment proof
 covers live Terminal PID and shell-state preservation, target admission denial,
-stale source-bind denial, repeated moves, and receipt replay.
+stale source-bind denial, repeated moves, receipt replay, manual restore settlement,
+and dead-assignment retirement.
 
 This is not installed globally. Source and target layout-save failure/reconnect
 checks pass on source and pack. Final combined gates and host recovery lifecycle

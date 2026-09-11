@@ -256,7 +256,7 @@ def detached():
                 subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
             (folder / ".wippy").mkdir(exist_ok=True)
             (project / ".wippy").mkdir(exist_ok=True)
-            for mode in ("detached", "failed-open", "terminal", "observation", "host", "clients", "clients-commit"):
+            for mode in ("detached", "failed-open", "terminal", "observation", "host", "host-manual", "clients", "clients-commit"):
                 args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else []) + ["attachment-probe", mode, "--host", "bee:workers", "--set", f"registry.history_path={folder}/registry.db"]
                 result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=20,
                                         env=database_environment(folder, BEE_WORKSPACE_DB=str(folder / f"workspace-{mode}.db")))

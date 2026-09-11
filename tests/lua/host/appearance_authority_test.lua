@@ -7,7 +7,7 @@ local function define_tests()
         test.it("rejects unadmitted, observing and stale display notifications before forwarding", function()
             -- This denial-only test must not rely on an omitted assignment
             -- store.  Any accidental assignment read is a test failure.
-            local assignments = connections.assignment_reader(
+            local assignments = connections.assignment_access(
                 function(_: unknown): (nil, string) error("appearance denial read assignments") end,
                 function(): (nil, string) error("appearance denial reconciled assignments") end,
                 function(_: unknown): (nil, string) error("appearance denial claimed assignments") end

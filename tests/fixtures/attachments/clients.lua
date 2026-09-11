@@ -23,7 +23,7 @@ local function wait_for(view: tty.Viewport, pattern: string): string
     end
     error("Missing native output: " .. pattern)
 end
-function M.client(owner: string, host: string, workspace_id: string, label: string, fail_commit: boolean?)
+function M.client(owner: string, host: string, workspace_id: string, label: string, fail_commit: boolean?, definition_id: string?, preflight: boolean?)
     local admissions = assert(process.listen("bee.host.admitted", {message = true}))
     local replies = assert(process.listen("bee.host.reply", {message = true}))
     local commands = assert(process.listen("bee.client.command", {message = true}))
@@ -107,7 +107,22 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         end
     end
     catalog()
-    wait_views(label == "A" and 0 or 1)
+    wait_views(definition_id ~= nil and 0 or (label == "A" and 0 or 1))
+    if preflight then
+        status("preflight")
+        local message = assert(commands:receive())
+        assert(message:from() == owner)
+        local target: unknown = message:payload():data()
+        if type(target) ~= "table" or type(target.id) ~= "string" or type(target.instance_id) ~= "string" then error("Invalid prepared bind target") end
+        assert(process.send(host, "bee.app.request", {version = 1, request_id = "prepared-startup-bind", op = "bind", workspace_id = workspace_id,
+            connection_id = connection_id, renderer_generation = renderer_generation, id = target.id, instance_id = target.instance_id}))
+        assert(reply("prepared-startup-bind", "bind").error_code == "permission_denied", "Recovered manual transfer granted its source early")
+        status("prepared-bind")
+        local exit = assert(commands:receive())
+        assert(exit:from() == owner and exit:payload():data() == "exit")
+        for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates, question_results, transfers}) do process.unlisten(subscription) end
+        return
+    end
     local function presentation(renderer: string, code: string)
         local message = assert(presentations:receive())
         assert(message:from() == host)
@@ -118,7 +133,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         renderer_generation = data.generation
     end
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = workspace_id,
-        connection_id = connection_id, definition_id = "bee.console:app"}))
+        connection_id = connection_id, definition_id = definition_id or "bee.console:app"}))
     local opened = reply("open", "open")
     assert(opened.error_code == "" and opened.mount == "" and opened.resume_state == "")
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = workspace_id,
@@ -127,9 +142,12 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     assert(bound.error_code == "" and reply("bind", "bind").error_code == "")
     local view, view_error = tty.attach(bound.mount)
     if not view then error(tostring(view_error)) end
-    command(view, "bee_client=" .. label .. "; printf 'BEE_CLIENT_%s_%s\\n' \"$bee_client\" \"$$\"")
-    local native_pid = wait_for(view, "BEE_CLIENT_" .. label .. "_(%d+)")
-    wait_views(label == "A" and 1 or 2)
+    local native_pid = "manual"
+    if definition_id == nil then
+        command(view, "bee_client=" .. label .. "; printf 'BEE_CLIENT_%s_%s\\n' \"$bee_client\" \"$$\"")
+        native_pid = wait_for(view, "BEE_CLIENT_" .. label .. "_(%d+)")
+    end
+    wait_views(definition_id ~= nil and 1 or (label == "A" and 1 or 2))
     status("opened", {id = opened.id, instance_id = opened.instance_id, native_pid = native_pid})
     local observed: tty.Viewport? = nil
     local check_sequence = 0

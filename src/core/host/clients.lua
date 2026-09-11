@@ -21,8 +21,9 @@ type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: str
 type Assignment = {view_id: string, instance_id: string, display_id: string, revision: integer}
 type AssignmentResult = {assignment: Assignment, intent: unknown?}
 type AssignmentEntries = {AssignmentResult}
--- The client router only reads an assignment fence.  Persistence ownership and
--- mutation remain in the host actor, so tests can provide a fail-on-use reader.
+-- The client router runs inside the host actor. It may read assignment fences
+-- and claim the initial display for a newly opened identity; all persistence
+-- remains host-owned, so tests can provide a narrow fail-on-use adapter.
 type Assignments = {
     get: (Assignments, unknown) -> (AssignmentResult?, string?),
     reconcile: (Assignments) -> (AssignmentEntries?, string?),
@@ -43,7 +44,7 @@ function M.new(owner: string, broker: string, workspace_id: string, assignments:
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
         appearance_routes = {}, assignment_revision = 0}
 end
-function M.assignment_reader(
+function M.assignment_access(
     get: (unknown) -> (AssignmentResult?, string?),
     reconcile: () -> (AssignmentEntries?, string?),
     claim: (unknown) -> (Assignment?, string?)

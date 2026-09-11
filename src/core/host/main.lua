@@ -41,6 +41,18 @@ local function main(owner: string, database_resource: string?)
     -- supervisor/client reconciliation path; they are never silently failed.
     local recovered, recovery_error = database.assignments:reconcile()
     if not recovered then database:close(); error("Reconcile display assignments: " .. tostring(recovery_error)) end
+    -- Only transfers that were already prepared when this host started can be
+    -- reconciled from a later manual restore. A runtime prepare still needs its
+    -- broker revoke reply before it is eligible to commit.
+    local recovered_prepared: {[string]: string} = {}
+    local function assignment_key(view_id: string, instance_id: string): string
+        return view_id .. "\0" .. instance_id
+    end
+    for _, recovered_entry in ipairs(recovered) do
+        if recovered_entry.intent then
+            recovered_prepared[assignment_key(recovered_entry.intent.view_id, recovered_entry.intent.instance_id)] = recovered_entry.intent.request_id
+        end
+    end
     local fresh_workspace = database.saved == nil
     local workspace_id = database.workspace_id
     local empty_tabs: {string} = {}
@@ -66,7 +78,7 @@ local function main(owner: string, database_resource: string?)
     local ready = false
     local stopping = false
     local fatal: string? = nil
-    local client_connections = connections.new(owner, broker, workspace_id, connections.assignment_reader(
+    local client_connections = connections.new(owner, broker, workspace_id, connections.assignment_access(
         function(value: unknown) return database.assignments:get(value) end,
         function() return database.assignments:reconcile() end,
         function(value: unknown) return database.assignments:claim(value) end
@@ -98,30 +110,59 @@ local function main(owner: string, database_resource: string?)
         -- settled, while the receipt itself remains durable.
         for _, recovered_entry in ipairs(recovered) do
             local intent = recovered_entry.intent
-            if intent then
-                local live = false
-                for _, item in ipairs(live_inventory.views) do
-                    if item.view_id == intent.view_id and item.instance_id == intent.instance_id then live = true; break end
+            local assignment = recovered_entry.assignment
+            local live = false
+            for _, item in ipairs(live_inventory.views) do
+                if item.view_id == assignment.view_id and item.instance_id == assignment.instance_id then live = true; break end
+            end
+            if intent and live then
+                local committed, commit_error = database.assignments:commit({request_id = intent.request_id,
+                    view_id = intent.view_id, instance_id = intent.instance_id})
+                if not committed then error("Resolve restored display transfer: " .. tostring(commit_error)) end
+                recovered_prepared[assignment_key(intent.view_id, intent.instance_id)] = nil
+            elseif not live then
+                local checkpointed = false
+                for _, record in ipairs(snapshot.applications) do
+                    if record.id == assignment.view_id and record.instance_id == assignment.instance_id then checkpointed = true; break end
                 end
-                if live then
-                    local committed, commit_error = database.assignments:commit({request_id = intent.request_id,
-                        view_id = intent.view_id, instance_id = intent.instance_id})
-                    if not committed then error("Resolve restored display transfer: " .. tostring(commit_error)) end
-                else
-                    local checkpointed = false
-                    for _, record in ipairs(snapshot.applications) do
-                        if record.id == intent.view_id and record.instance_id == intent.instance_id then checkpointed = true; break end
-                    end
-                    if not checkpointed then
+                if not checkpointed then
+                    if intent then
                         local failed, fail_error = database.assignments:fail({request_id = intent.request_id,
                             view_id = intent.view_id, instance_id = intent.instance_id, error = "Application was lost during host restart"})
                         if not failed then error("Resolve lost display transfer: " .. tostring(fail_error)) end
-                        local retired, retire_error = database.assignments:retire({view_id = intent.view_id, instance_id = intent.instance_id})
-                        if not retired then error("Retire lost display assignment: " .. tostring(retire_error)) end
+                        recovered_prepared[assignment_key(intent.view_id, intent.instance_id)] = nil
                     end
+                    local retired, retire_error = database.assignments:retire({view_id = assignment.view_id, instance_id = assignment.instance_id})
+                    if not retired then error("Retire lost display assignment: " .. tostring(retire_error)) end
                 end
             end
         end
+    end
+    local function settle_opened_intent(reply: decode.Reply): boolean
+        -- A manual checkpoint is intentionally absent during startup recovery.
+        -- Once its exact restored identity becomes live, its prepared transfer
+        -- can settle to the persisted target before any routed bind is allowed.
+        if reply.op ~= "open" or reply.error_code ~= "" then return false end
+        local key = assignment_key(reply.id, reply.instance_id)
+        local recovered_receipt = recovered_prepared[key]
+        if not recovered_receipt then return false end
+        local present = false
+        for _, item in ipairs(live_inventory.views) do
+            if item.view_id == reply.id and item.instance_id == reply.instance_id then present = true; break end
+        end
+        if not present then return false end
+        local assigned, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})
+        if assignment_error then error("Read opened display assignment: " .. tostring(assignment_error)) end
+        if not assigned or not assigned.intent then return false end
+        local intent = assigned.intent
+        if intent.request_id ~= recovered_receipt or intent.view_id ~= reply.id or intent.instance_id ~= reply.instance_id then
+            error("Opened display transfer identity is corrupt")
+        end
+        local committed, commit_error = database.assignments:commit({request_id = intent.request_id,
+            view_id = reply.id, instance_id = reply.instance_id})
+        if not committed then error("Resolve opened display transfer: " .. tostring(commit_error)) end
+        recovered_prepared[key] = nil
+        return true
     end
     local function restore_next()
         local record = table.remove(restore_queue, 1)
@@ -315,6 +356,7 @@ local function main(owner: string, database_resource: string?)
                             end
                             if next_inventory then
                                 live_inventory = next_inventory
+                                if settle_opened_intent(reply) and ready then connections.assignments(client_connections) end
                                 if ready then connections.publish(client_connections, live_inventory, "views") end
                             end
                             if not connections.reply(client_connections, reply, live_inventory) then

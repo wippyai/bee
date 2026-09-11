@@ -20,8 +20,8 @@ local function run_probe(mode: string?)
         if not ok then logger:error("Client admission probe failed", {error = tostring(err)}); error(err) end
         return
     end
-    if mode == "host" then
-        local ok, err = pcall(host_probe.main)
+    if mode == "host" or mode == "host-manual" then
+        local ok, err = pcall(mode == "host-manual" and host_probe.manual or host_probe.main)
         if not ok then logger:error("Host probe failed", {error = tostring(err)}); error(err) end
         return
     end

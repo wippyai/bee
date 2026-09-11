@@ -88,7 +88,16 @@ class Desktop:
                 return
             if self.process.poll() is not None:
                 break
-        raise AssertionError(f"Missing {text!r}; exit={self.process.poll()}\n{self.text()}")
+        try:
+            state = next(line for line in Path(f'/proc/{self.process.pid}/status').read_text().splitlines()
+                         if line.startswith('State:'))
+        except (OSError, StopIteration):
+            state = 'unavailable'
+        raw_tail = bytes(self.raw[-2048:])
+        raise AssertionError(
+            f"Missing {text!r}; exit={self.process.poll()}; process_state={state}; "
+            f"raw_bytes={len(self.raw)}; raw_tail={raw_tail!r}; "
+            f"pending_synchronized_bytes={len(self.pending_output.encode())}\n{self.text()}")
 
     def text(self):
         return "\n".join(self.screen.display)

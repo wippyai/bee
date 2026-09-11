@@ -1,8 +1,9 @@
 # Foundation status
 
 The profile work first corrects launch admission to read its definition, driver
-catalog and policy from one registry snapshot. All 566 unit tests pass, including
-a real registry-update regression; restoring a live policy read makes that
+catalog and policy from one registry snapshot. Managed admission also refuses caller environment before creating a thread;
+the selected policy and credential broker supply it. All 567 unit tests pass,
+including a real registry-update regression; restoring a live policy read makes that
 regression fail. Managed-window and source/pack harness isolation checks pass.
 The preceding driver checkpoint's complete foundation gate is recorded below;
 this admission follow-up has not repeated that broader gate or changed global Bee.

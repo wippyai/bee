@@ -19,7 +19,6 @@ type Request = {
     mode: "window",
     workdir: string?,
     thread_id: string?,
-    environment: {[string]: string},
 }
 
 function M.decode(arguments: {string}, workspace_id: string): (Request?, string?)
@@ -49,7 +48,7 @@ function M.decode(arguments: {string}, workspace_id: string): (Request?, string?
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id,
-        brief = brief, mode = "window", workdir = workdir, thread_id = thread_id, environment = {}}, nil
+        brief = brief, mode = "window", workdir = workdir, thread_id = thread_id}, nil
 end
 
 return M

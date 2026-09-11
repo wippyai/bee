@@ -53,7 +53,6 @@ type Request = {
     mode: string?,
     workdir: string?,
     thread_id: string?,
-    environment: {[string]: string},
 }
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -140,7 +139,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "environment"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -163,17 +162,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
-    local environment: {[string]: string} = {}
-    if object.environment ~= nil then
-        local declared = bounds.object(object.environment)
-        if not declared then return nil, "environment must be an object" end
-        for name, item in pairs(declared) do
-            local text = bounds.text(item, 4096)
-            if not name:match("^[A-Z_][A-Z0-9_]*$") or not text then return nil, "environment." .. name .. " is not a variable" end
-            environment[name] = text
-        end
-    end
-    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id, environment = environment}, nil
+    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -228,7 +217,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         projections[index] = tostring(issued.projection_id)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
-        binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = request.environment,
+        binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id}
     return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id}, nil
 end

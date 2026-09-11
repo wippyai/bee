@@ -2,6 +2,35 @@
 
 Written 2026-09-10 for Astra's review after the user's direction the same day: "we should also be able to add agent profiles like additional kits or anything like that, maybe different environment variables as well; make sure that we can easily run that in Docker and so on, Docker with proper full UI", and "is there a way to set the system prompt or something like that for all the agents when you run them". Astra (round 64): carry it forward at full scope, separate the acceptance cases, keep nonsecret profile environment apart from broker-projected secrets, and never let container logs stand for the full UI.
 
+## September 11 implementation direction
+
+The extra `bee.agent_profile` composition proposed below is superseded. A named
+`bee.launch_definition` already selects the binding, driver profile, launch
+policy and presentation. It is the user-facing agent profile; a second entry
+repeating those references would duplicate ownership. The selected host policy
+continues to own environment, executable bindings, driver options and gateway
+configuration. Credentials remain separate broker projections. Profile selection
+will list eligible launch definitions through the existing Agent application.
+This selection UI and its public CLI wiring are still unimplemented.
+
+The first prerequisites are implemented on the isolated profile branch:
+definition, catalog and policy resolve from one registry snapshot, and managed
+launch admission rejects caller environment before any thread/resource/credential
+effect. The lower carrier and placement remain general execution primitives.
+All 567 unit tests and managed-window acceptance pass for these boundaries.
+
+Still required: two named definitions for one kit must prove distinct effective
+configuration and credential isolation; changes before start must be refused;
+host-owned environment destinations must not silently replace placement or
+credential values. Shared instructions need driver-specific measured rendering
+and real-executable checks. Docker placement and its full interactive UI retain
+the acceptance below. No `profile_ref` replacement schema or extra presentation
+decoder is needed for the existing launch definition.
+
+The original proposal below is retained as design history. Its instructions,
+Docker and acceptance requirements remain planned; its additional profile schema
+and duplicated references must not be implemented.
+
 ## What exists that this builds on
 
 | Piece | Where | What it already gives |

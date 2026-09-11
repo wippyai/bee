@@ -144,6 +144,17 @@ local function define_tests()
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
         end)
+        test.it("refuses caller environment before admitting a thread", function()
+            for _, environment in ipairs({{}, {BEE_PROFILE_VALUE = "caller-value"}}) do
+                local request_id = fresh("environment")
+                local reply = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", environment = environment})
+                test.eq(code(reply), "INVALID")
+                test.is_true(reply.error ~= nil and tostring(reply.error.message):find("environment", 1, true) ~= nil)
+                local absent = call("bee.threads.service:get", {thread_id = "thread:" .. request_id})
+                test.eq(code(absent), "NOT_FOUND")
+            end
+        end)
         test.it("refuses an unlinked carrier host before admitting a thread", function()
             local entry = registry.get("bee.harness:carrier_host_ref")
             if not entry then error("carrier host reference") end

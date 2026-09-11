@@ -43,6 +43,10 @@ a composing host reuse its pinned snapshot without side effects; ordinary
 `resolve` and `admit_request` pin internally. A retained snapshot describes its
 own generation even after registry changes. Reading that plan grants no
 permission and does not promise that a later execution will use stale code.
+Managed launch requests accept no environment map, including an empty one.
+Nonsecret environment and driver options come from the selected host policy;
+credentials are projected separately by the broker. The lower carrier and
+placement contracts remain separate execution primitives.
 
 ## Host binding
 

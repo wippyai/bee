@@ -74,10 +74,11 @@ The concrete integration points are:
   migration and owner-only assignment/retry records. Save stable workspace,
   view, instance and display identities plus revision; never execution PIDs or
   native mounts. The existing host checkpoint writer must preserve this state.
-- `src/core/applications/broker.lua` and `attachment.lua`: retain the existing
-  revoke-before-mount behavior. Current `unbind` removes every view for a
-  recipient, so transferring one app needs an exact-view revoke operation; it
-  must not unbind that display's unrelated apps.
+- `src/core/applications/broker.lua` and `attachment.lua`: reuse the existing
+  exact-view `bind` with both view and instance IDs and an empty recipient as
+  the revocation barrier. It removes only that controller and returns a final
+  `bind` reply. A later exact-view bind grants the destination renderer. Do not
+  use recipient-wide `unbind`, which also removes unrelated views.
 - `src/core/client/main.lua`, state and session: reconcile incoming assignment
   revisions before using saved targets. Keep geometry as client state. Source
   removal and target insertion are repeatable projections of the committed
@@ -101,3 +102,15 @@ Assignment rows for dead, nonrecoverable app identities require explicit bounded
 cleanup without affecting the stored retry outcome or another app incarnation.
 
 These are implementation requirements, not implemented APIs or completed proofs.
+
+## Existing revocation proof verified September 11
+
+`tests/fixtures/attachments/terminal.lua` already covers the required primitive:
+a wrong instance does not revoke the live controller; exact empty-recipient
+bind denies the old input grant while a neighboring Terminal continues to
+respond; rebind retains the original shell PID and in-memory variable. The
+fixture also separately verifies recipient-wide detach and another recipient's
+unaffected app. `tests/lifecycle.py::detached` runs it on source and pack; this
+stage passed in foundation session72192. No new broker operation or runtime
+change is required for this barrier. This primitive alone does not implement
+transfer authorization, durable assignment or layout reconciliation.

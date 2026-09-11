@@ -110,7 +110,7 @@ for identity, entry in entries.items():
         if location.parts[0] == "ui":
             assert target_location.parts[0] == "ui", (identity, target)
         if location.parts[0] == "apps":
-            assert target_location.parts[0] == "ui" or target_location.parts[:2] == location.parts[:2] or target in {"bee.threads:client", "bee.threads:protocol", "bee.hive:client", "bee.hive:types", "bee.hive:bounds", "bee.threads.records:record", "bee.threads.records:types", "bee.threads.delivery:session"}, (identity, target)
+            assert target_location.parts[0] == "ui" or target_location.parts[:2] == location.parts[:2] or target in {"bee.threads:client", "bee.threads:protocol", "bee.hive:client", "bee.hive:types", "bee.hive:bounds", "bee.threads.records:record", "bee.threads.records:types", "bee.threads.delivery:session", "bee.threads.records:bounds", "bee.sync:protocol"}, (identity, target)
         if location.parts[0] == "threads":
             assert target_location.parts[0] == "threads" or target.startswith("bee.persist:"), (identity, target)
         if location.parts[0] == "placement":
@@ -155,8 +155,20 @@ assert "command" not in entries["bee.terminal:main"].get("meta", {})
 assert entries["bee.terminal:render"]["modules"] == ["tty"]
 for pure in ["bee.desktop:layout", "bee.terminal:bindings"]:
     assert not entries[pure].get("modules"), pure
+# Apps may reduce sync envelopes, never inherit the ledger's storage authority.
+def assert_pure_sync(identity, checked=None):
+    checked = set() if checked is None else checked
+    if identity in checked:
+        return
+    checked.add(identity)
+    entry = entries[identity]
+    assert entry["kind"] == "library.lua", identity
+    assert not entry.get("modules") and not entry.get("security"), identity
+    for dependency in entry.get("imports", {}).values():
+        assert_pure_sync(dependency, checked)
+assert_pure_sync("bee.sync:protocol")
 assert {i for i, e in entries.items() if e["kind"] == "terminal.host"} == {"bee:terminal"}
-assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db", "bee.approvals:db", "bee.gateway:db"}
+assert {i for i,e in entries.items() if e["kind"] == "db.sql.sqlite"} == {"bee:workspace_db", "bee:client_db", "bee.threads:db", "bee.placement.native:db", "bee.resources:db", "bee.credentials:db", "bee.approvals:db", "bee.gateway:db", "bee.node:db"}
 assert "bee.placement.native:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
 assert "bee.resources:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
 assert "bee.credentials:db" in entries["bee:workspace_storage_boundary"]["policy"]["resources"]
@@ -205,6 +217,7 @@ import tempfile
 
 runtime = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 allowed = {"bee", "bee.applications", "bee.desktop", "bee.protocol", "bee.host", "bee.interaction", "bee.launch",
+           "bee.node", "bee.sync",
            "bee.session", "bee.settings", "bee.processes", "bee.inbox", "bee.terminal", "bee.workspace", "bee.console", "bee.application", "bee.storage", "bee.threads", "bee.threads.persist", "bee.threads.records", "bee.threads.service", "bee.hive", "bee.hive.telemetry", "bee.hive.supervisor", "bee.hive.desktop", "bee.hive_manager", "bee.timeline", "bee.client", "bee.threads.delivery", "bee.threads.projection", "bee.threads.carrier", "bee.threads.approvals", "bee.driver", "bee.driver.kit", "bee.driver.transport", "bee.driver.claude", "bee.driver.codex", "bee.harness", "bee.harness.catalog", "bee.harness.carrier", "bee.harness.launch", "bee.harness.permission", "bee.persist", "bee.placement", "bee.placement.native", "bee.resources", "bee.credentials", "bee.approvals", "bee.gateway"}
 
 def check_loaded(cwd, packed=False):

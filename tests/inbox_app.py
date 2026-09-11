@@ -24,7 +24,7 @@ def exercise():
             ui.wait("APPROVALS", timeout=5)
             ui.key(b"a")
             ui.pump(.4)
-            assert "Open the request before deciding" in ui.text(), ui.text()
+            assert "Open a pending request before deciding" in ui.text(), ui.text()
             ui.key(b"\x1b")
             ui.pump(.5)
             ui.quit()

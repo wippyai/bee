@@ -14,6 +14,7 @@ package these same pages with status and version, not maintain a second copy.
 | App admission, launch, messages and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
 | Local journal, Timeline and subscriptions | [Threads](THREADS.md) |
+| Node metadata, ledger-backed synchronization and approval inbox | [Sync and inbox](SYNC_AND_INBOX.md) |
 | Native binary, update modes and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
 | Running the current pack while the global bee is stale | [Fresh pack launch](handoffs/FRESH_PACK_LAUNCH.md) |
 | Runtime PRs and removal of local patches | [Runtime upstream work](RUNTIME_UPSTREAM.md) |
@@ -25,6 +26,7 @@ package these same pages with status and version, not maintain a second copy.
 | Thread record families, delivery rules and driver bindings | [Thread records](THREAD_RECORDS.md) |
 | Namespaces, contracts and build order for threads, approvals and drivers | [Component layout](COMPONENT_LAYOUT.md) |
 | How overlays and Hub modules add drivers, transports, channels, agents and tools | [Registry extension](REGISTRY_EXTENSION.md) |
+| Independent governance implementation plan and runtime admission gate | [Governance implementation](GOVERNANCE_IMPLEMENTATION.md) |
 | Launch definitions, remote topology, lifecycle states, pause and status | [Launch routing](LAUNCH_ROUTING.md) |
 | Docker placement, workspace resources, dependency chain, thread subscriptions | [Placement and subscriptions](PLACEMENT_AND_SUBSCRIPTIONS.md) |
 | The ordered build with a proof per step | [Build sequence](BUILD_SEQUENCE.md) |

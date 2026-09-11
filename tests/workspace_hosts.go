@@ -63,7 +63,7 @@ func runSupervisor(runtime string, dir string, env []string, desc string, args .
 
 // Each source/pack boot owns all subsystem stores inside its disposable root.
 func databaseEnvironment(root string) []string {
-	names := []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway"}
+	names := []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node"}
 	environment := make([]string, 0, len(names))
 	for _, name := range names {
 		environment = append(environment, "BEE_"+strings.ToUpper(name)+"_DB="+filepath.Join(root, name+".db"))

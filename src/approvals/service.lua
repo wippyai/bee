@@ -573,6 +573,130 @@ local function op_inbox(tx: sql.Transaction, actor: string, object: Object, now:
     return success({changes = changes, next_seq = next_seq, more = #rows == limit}, false)
 end
 -- list: the requester's own requests, newest first, bounded.
+-- A visibility-scoped snapshot/feed adapter over the approval owner's existing
+-- transactional ledger. It never copies approval authority into the sync store.
+local function feed_scope(actor: string, workspace: string): (string?, string?, Result?)
+    local native, native_error = system.node.id()
+    if native_error or not bounds.id(native) then return nil, nil, failure("UNAVAILABLE", "native node identity unavailable") end
+    if not security.can(M.DECIDE, workspace) then return nil, nil, failure("DENIED", "caller may not read this workspace inbox") end
+    local policies, policy_error = resources.policies()
+    if not policies then return nil, nil, storage(policy_error or "read approver policies") end
+    local encoded, encode_error = canonical.encode({actor = actor, workspace = workspace, policies = policies})
+    if not encoded then return nil, nil, storage(encode_error or "encode approval visibility") end
+    local scope, scope_error = hash.sha256(encoded)
+    local feed, feed_error = hash.sha256(workspace)
+    if not scope or scope_error or not feed or feed_error then return nil, nil, storage("measure approval visibility") end
+    return "approvals." .. feed, scope, nil
+end
+local function inbox_head(tx: sql.Transaction): (integer?, Result?)
+    local rows, err = tx:query("SELECT seq FROM sqlite_sequence WHERE name = 'bee_approval_inbox'")
+    if err or not rows then return nil, storage("read inbox watermark") end
+    return #rows == 0 and 0 or integer(rows[1].seq), nil
+end
+local function op_feed_snapshot(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local extra = bounds.fields(object, {"workspace_id", "limit", "after_key", "expected_cursor", "expected_scope_revision"})
+    if extra then return failure("INVALID", extra) end
+    local workspace = bounds.id(object.workspace_id)
+    local parsed_limit = bounds.integer(object.limit == nil and 64 or object.limit)
+    local after = object.after_key == nil and "" or bounds.id(object.after_key)
+    if not workspace then return failure("INVALID", "invalid snapshot workspace") end
+    if not parsed_limit then return failure("INVALID", "invalid snapshot limit") end
+    local fetch_limit: integer = parsed_limit + 1
+    if parsed_limit < 1 or parsed_limit > 64 then return failure("INVALID", "snapshot limit must be between 1 and 64") end
+    if not after then return failure("INVALID", "invalid snapshot after_key") end
+    local limit: integer = parsed_limit
+    local feed, scope, refused = feed_scope(actor, workspace)
+    if not feed or not scope then return refused or storage("read feed scope") end
+    local cursor, cursor_error = inbox_head(tx)
+    if not cursor then return cursor_error or storage("read inbox watermark") end
+    if object.expected_cursor ~= nil and bounds.count(object.expected_cursor) == nil then return failure("INVALID", "invalid expected_cursor") end
+    if object.expected_scope_revision ~= nil and (type(object.expected_scope_revision) ~= "string" or
+        #object.expected_scope_revision ~= 64 or not object.expected_scope_revision:match("^[0-9a-f]+$")) then
+        return failure("INVALID", "invalid expected_scope_revision")
+    end
+    if after ~= "" and (object.expected_cursor == nil or object.expected_scope_revision == nil) then return failure("INVALID", "snapshot continuation requires cursor and scope revision") end
+    if (object.expected_cursor ~= nil and object.expected_cursor ~= cursor) or
+        (object.expected_scope_revision ~= nil and object.expected_scope_revision ~= scope) then
+        return failure("RESET_REQUIRED", "snapshot changed; restart from its first page")
+    end
+    local rows, err = tx:query([[SELECT r.*, (SELECT MAX(i.seq) FROM bee_approval_inbox i WHERE i.approval_id = r.approval_id) AS last_sequence
+        FROM bee_approval_requests r WHERE r.workspace_id = ? AND r.approval_id > ? ORDER BY r.approval_id LIMIT ?]], {workspace, after, fetch_limit})
+    if err or not rows then return storage("read approval snapshot") end
+    local items: {Object} = {}
+    local next_key: string? = nil
+    local page_bytes, truncated = 0, false
+    for index, row in ipairs(rows) do
+        if index > limit then break end
+        local visible, policy_error = eligible(actor, row)
+        if policy_error then return storage(policy_error) end
+        if visible then
+            local sequence = bounds.count(row.last_sequence)
+            if not sequence then return storage("approval projection has no ledger position") end
+            local item: Object = {schema = "bee.sync-projection@1", owner_id = node(), feed = feed,
+                key = row.approval_id, revision = row.revision, value = M.view(row), tombstone = false,
+                sequence = sequence, updated_at = row.updated_at}
+            local encoded = canonical.encode(item)
+            if not encoded then return storage("encode approval projection") end
+            if #encoded > 196608 then return failure("CAPACITY_EXHAUSTED", "approval projection exceeds feed capacity") end
+            if page_bytes + #encoded > 196608 then truncated = true; break end
+            page_bytes = page_bytes + #encoded
+            items[#items + 1] = item
+        end
+        next_key = text(row.approval_id)
+    end
+    local _, checked_scope, checked_error = feed_scope(actor, workspace)
+    if checked_error then return checked_error end
+    if checked_scope ~= scope then return failure("RESET_REQUIRED", "approval visibility changed") end
+    return success({schema = "bee.sync-snapshot@1", owner_id = node(), feed = feed, cursor = cursor,
+        earliest_cursor = 0, scope_revision = scope, items = items, complete = not truncated and #rows <= limit,
+        next_key = (truncated or #rows > limit) and next_key or nil}, false)
+end
+local function op_feed_read_after(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local extra = bounds.fields(object, {"workspace_id", "cursor", "limit", "expected_scope_revision"})
+    if extra then return failure("INVALID", extra) end
+    local workspace, cursor = bounds.id(object.workspace_id), bounds.count(object.cursor)
+    if not workspace or not cursor then return failure("INVALID", "invalid feed request") end
+    if type(object.expected_scope_revision) ~= "string" or #object.expected_scope_revision ~= 64 or
+        not object.expected_scope_revision:match("^[0-9a-f]+$") then return failure("INVALID", "invalid expected_scope_revision") end
+    local feed, scope, refused = feed_scope(actor, workspace)
+    if not feed or not scope then return refused or storage("read feed scope") end
+    if object.expected_scope_revision ~= scope then return failure("RESET_REQUIRED", "take a snapshot of the current approval visibility") end
+    local page = op_inbox(tx, actor, {workspace_id = workspace, after_seq = cursor, limit = object.limit}, now, nil)
+    if not page.ok then return page end
+    local value = bounds.object(page.value)
+    if not value then return storage("read approval page") end
+    local changes = value.changes :: {Object}
+    local events: {Object} = {}
+    local page_bytes, truncated = 0, false
+    local next_cursor = value.next_seq
+    for _, change in ipairs(changes) do
+        local request = bounds.object(change.request)
+        if not request then return storage("read approval change") end
+        local item: Object = {schema = "bee.sync-event@1", owner_id = node(), feed = feed, sequence = change.seq,
+            event_id = tostring(change.approval_id) .. "/" .. tostring(change.seq), event_type = "approval.changed",
+            projection_key = change.approval_id, revision = request.revision, tombstone = false,
+            payload = {schema_revision = "bee.approval-projection@1", request = request}, committed_at = change.at}
+        local encoded = canonical.encode(item)
+        if not encoded then return storage("encode approval event") end
+        if #encoded > 196608 then return failure("CAPACITY_EXHAUSTED", "approval event exceeds feed capacity") end
+        if page_bytes + #encoded > 196608 then
+            truncated = true
+            next_cursor = events[#events].sequence
+            break
+        end
+        page_bytes = page_bytes + #encoded
+        events[#events + 1] = item
+    end
+    local head, head_error = inbox_head(tx)
+    if not head then return head_error or storage("read inbox watermark") end
+    if cursor > head then return failure("INVALID", "cursor is ahead of the inbox") end
+    local _, checked_scope, checked_error = feed_scope(actor, workspace)
+    if checked_error then return checked_error end
+    if checked_scope ~= scope then return failure("RESET_REQUIRED", "approval visibility changed") end
+    return success({schema = "bee.sync-page@1", owner_id = node(), feed = feed, scope_revision = scope,
+        events = events, next_cursor = next_cursor, more = truncated or value.more, head_cursor = head,
+        earliest_cursor = 0, reset_required = false}, false)
+end
 local function op_list(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
     local unknown_field = bounds.fields(object, {"workspace_id", "limit"})
     if unknown_field then return failure("INVALID", unknown_field) end
@@ -644,6 +768,7 @@ function M.node(): string
 end
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
+operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
 function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end
@@ -652,6 +777,8 @@ function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.inbox(value: unknown): Reply return run(value, "inbox") end
+function M.feed_snapshot(value: unknown): Reply return run(value, "feed_snapshot") end
+function M.feed_read_after(value: unknown): Reply return run(value, "feed_read_after") end
 function M.list(value: unknown): Reply return run(value, "list") end
 function M.reconcile(value: unknown): Reply return run(value, "reconcile") end
 function M.capabilities(): Reply

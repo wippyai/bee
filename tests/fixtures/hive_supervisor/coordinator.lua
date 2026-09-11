@@ -7,6 +7,7 @@ local io = require("io")
 local system = require("system")
 local types = require("types")
 local client = require("client")
+local funcs = require("funcs")
 local function main(remote: string)
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
@@ -44,7 +45,13 @@ local function main(remote: string)
     assert(io.print("BEE_HIVE_SUPERVISOR ready " .. tostring(assert(system.node.addr()))))
     while true do
         local command = tostring(assert(io.readline()))
-        if command == "probe" then
+        if command == "identity" then
+            assert(io.print("BEE_HIVE_SUPERVISOR identity " .. tostring(process.pid())))
+        elseif command:match("^feed%-") or command:match("^enroll%-") or command:match("^approval%-") or command == "revoke" then
+            local answer, err = funcs.new():call("bee.feed_probe:handle", {command = command, remote = remote})
+            if err or type(answer) ~= "string" then error("feed fixture: " .. tostring(err)) end
+            assert(io.print("BEE_HIVE_SUPERVISOR " .. answer))
+        elseif command == "probe" then
             local handle, open_error = client.open()
             if not handle then error(tostring(open_error)) end
             local deadline = time.now():add("30s")

@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.harness.catalog
 entries:
+- name: activation_test
+  kind: function.lua
+  source: file://activation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    activation: bee.harness.catalog:activation
 - name: fake_binding
   kind: contract.binding
   meta:

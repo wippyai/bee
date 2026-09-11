@@ -4,7 +4,7 @@ entries:
 - name: controller_policy
   kind: security.policy
   policy:
-    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get]
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call]
     resources: '*'
     effect: allow
 - name: names_policy
@@ -17,7 +17,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_feed]
     effect: allow
 - name: inspect_policy
   kind: security.policy
@@ -35,7 +35,7 @@ entries:
   kind: process.lua
   source: file://coordinator.lua
   method: main
-  modules: [process, security, time, channel, io, system]
+  modules: [process, security, time, channel, io, system, funcs]
   imports:
     types: bee.hive:types
     client: bee.hive:client

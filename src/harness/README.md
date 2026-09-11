@@ -24,6 +24,9 @@ compatible bindings with one `driver_id` are both marked ambiguous. Digests
 measure the entry and the declaration only and say so; executable closures
 are measured at admission. Compatible is not activated, and activated is not
 admitted: the host lists activated bindings in `bee:harness_activation`, and
-launch admission decides per request. A read capped below the number of
+launch admission decides per request. That entry is a strict
+`bee.harness-activation@1` declaration containing only distinct `bindings`.
+A missing or malformed declaration activates nothing and adds a catalog
+diagnostic; it cannot publish, admit or authorize execution. A read capped below the number of
 bindings is `complete: false`: an unseen binding could share a `driver_id`
 with a visible one, so `usable` resolves nothing from it.

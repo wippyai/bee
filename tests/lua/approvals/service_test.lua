@@ -142,6 +142,36 @@ end
 local function define_tests()
     test.describe("Approval owner", function()
         install_policy()
+        test.it("exports pinned snapshots and scoped catch-up from the existing approval ledger", function()
+            local workspace = "ws-feed-" .. key()
+            local created = value(call(requester, "request", request_of(workspace)))
+            value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(outsider, "feed_snapshot", {workspace_id = workspace})), "DENIED")
+            local first = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1}))
+            test.eq(first.schema, "bee.sync-snapshot@1")
+            test.eq(first.complete, false)
+            local tail = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
+                after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision}))
+            test.eq(tail.complete, true)
+            local empty = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = first.scope_revision}))
+            test.eq(#(empty.events :: {unknown}), 0)
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                proposal_digest = created.proposal_digest, decision = "approved"}))
+            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
+                after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision})), "RESET_REQUIRED")
+            local changed = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = first.scope_revision}))
+            local events = changed.events :: {{[string]: unknown}}
+            test.eq(#events, 1)
+            test.eq(events[1].event_type, "approval.changed")
+            test.eq(events[1].projection_key, created.approval_id)
+            test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = string.rep("0", 64)})), "RESET_REQUIRED")
+            test.eq(code(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
+                expected_scope_revision = {}})), "INVALID")
+            test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, expected_scope_revision = 7})), "INVALID")
+        end)
         test.it("serves no request before the authority establishes its incarnation and advances it per start", function()
             local store = open_test_store()
             local before = service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester)

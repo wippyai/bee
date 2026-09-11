@@ -53,6 +53,26 @@ installation cannot manufacture a new Go module in an already running process.
 These subsystems are not implemented by the shell refinement. Their agent-facing
 operations, receipts and recovery instructions must ship with their implementation.
 
+## Isolated registry-planner component
+
+`modules/bee-registry-planner` is a private, separately published library and
+acceptance fixture for one narrow part of the future package path. Versions
+`wolfy-j/bee-registry-planner@0.1.0` and `@0.1.1` demonstrate immutable-snapshot
+harness-binding planning, durable candidate staging, an agent trait, and
+append-only install/update migrations on SQLite and PostgreSQL. The planner
+cannot publish or apply registry entries, grant permissions, activate drivers,
+or launch processes. It is outside production `src/`, is not a Bee dependency,
+and does not make Hub installation, overlays, self-edit, or activation callable
+from Bee.
+
+Migration 1 creates the staged-candidate store. Migration 2 adds a bounded
+summary with an empty default and leaves migration 1 unchanged. The standalone
+upgrade acceptance installs the published 0.1.0 artifact, writes a candidate,
+updates to the published 0.1.1 artifact, applies migration 2, and verifies the
+old candidate and migration ledger survive. A governed activation owner must
+still re-plan or recheck the exact generation and digests before consuming any
+candidate.
+
 ## Native distribution feasibility
 
 The current Wippy CLI already supports `.wapp` and Hub references, including cache

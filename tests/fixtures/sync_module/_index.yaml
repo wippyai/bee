@@ -1,0 +1,41 @@
+version: '1.0'
+namespace: bee.sync_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: owner_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get]
+    resources: '*'
+    effect: allow
+- name: call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.sync_probe:direct_db]
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  policy: {actions: [bee.node.read], resources: '*', effect: allow}
+- name: write_policy
+  kind: security.policy
+  policy: {actions: [bee.node.update], resources: '*', effect: allow}
+- name: direct_db
+  kind: function.lua
+  source: file://direct_db.lua
+  method: handle
+  modules: [sql]
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, security, logger, sql]
+  security: {policies: [bee.sync_probe:owner_policy]}
+  meta:
+    command:
+      name: sync-probe
+      security:
+        actor: {id: bee.sync_probe}

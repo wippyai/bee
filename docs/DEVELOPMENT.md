@@ -28,6 +28,8 @@ install the executable using the README before testing global launch behavior.
 | `src/core/storage` | Workspace database and migration ledger |
 | `src/ui` | Optional app-facing lifecycle helper, appearance and rendering values |
 | `src/threads` | Native local journal contract, typed consumer, owned SQLite store and the first declared module root with its `target_db` hole |
+| `src/sync` | Owner-local projection/event/receipt ledger and pure typed synchronization protocol |
+| `src/node` | Authorized editable native-node descriptions and their public metadata trait |
 | `src/apps/<name>` | A default app process and its own view/domain helpers |
 
 Registry IDs are public identities independent of file location. Existing
@@ -158,14 +160,3 @@ separate build manifest; `make standalone` passes it to the pinned builder.
 `make pack` continues producing the single source/pack acceptance snapshot.
 These are different artifacts with different ownership requirements. See
 `NATIVE_DISTRIBUTION.md`; bundled modules are not independently published packages.
-
-For intermittent physical-client reconnect failures, run
-`make native-reconnect-check BEE_BINARY=/absolute/path/to/bee`. This opt-in Linux
-diagnostic retains Hive Manager and repeatedly joins three physical clients
-concurrently, requiring each detach to succeed within one second. Set
-`RECONNECT_ROUNDS` (default 30) to change its duration. Set `RECONNECT_KEEP=1`
-to retain successful fixtures for diagnostic log analysis. It uses disposable stores;
-on failure it preserves terminal frames, probes the catalog while draining live
-clients, and captures only its own retained process through a held pidfd. The
-printed fixture directory may contain private test credentials and is not a
-release artifact. Passing this test does not prove public remote recovery.

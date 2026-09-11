@@ -384,6 +384,7 @@ entries:
     type: bee.harness_activation
     comment: Driver bindings this host activates; discovery alone activates nothing
   data:
+    schema_revision: bee.harness-activation@1
     bindings: [bee.driver.claude:binding, bee.driver.codex:binding]
 - name: thread_create_policy
   kind: security.policy
@@ -667,6 +668,19 @@ entries:
     actions: [hive.expose.open]
     resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list, bee.threads:capabilities]
     effect: allow
+- name: hive_feed_exposure_policy
+  kind: security.policy
+  meta: {comment: Exact reviewed feed and node operations; destination principal and owner authorization still required}
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw]
+    effect: allow
+- name: feed_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw]
+    effect: allow
 - name: hive_thread_invoke_policy
   kind: security.policy
   meta:
@@ -725,5 +739,5 @@ entries:
     comment: The native supervisor host may call its own admitted-operation executor
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_feed]
     effect: allow

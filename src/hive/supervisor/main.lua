@@ -12,6 +12,7 @@ local bounds = require("bounds")
 local peers = require("peers")
 local admission = require("admission")
 local thread_admission = require("thread_admission")
+local feed_admission = require("feed_admission")
 local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
 local desktop_protocol = require("desktop_protocol")
@@ -193,7 +194,9 @@ local function main(configuration: unknown)
                 resolved, resolution_error = catalog.apply_interface(snapshot, call.target.interface_ref, call.input)
             end
             if not resolved then failed(sender, id, "DENIED", resolution_error or "operation unavailable"); return end
-            if resolved.operation.mode ~= "open" then failed(sender, id, "UNSUPPORTED_CAPABILITY", "only open telemetry is enabled"); return end
+            if resolved.operation.mode ~= "open" and not (resolved.operation.mode == "policy" and feed_admission.OPERATIONS[resolved.operation.operation_ref]) then
+                failed(sender, id, "UNSUPPORTED_CAPABILITY", "operation has no admitted forwarding route"); return
+            end
             local fault: types.Fault? = nil
             request, fault = admission.forward(node, incarnation, sender, exchange_id, call, resolved, wall_now)
             if not request then
@@ -226,6 +229,7 @@ local function main(configuration: unknown)
             -- dispatch. A local caller never reaches the thread path here.
             local worker = "bee.hive.supervisor:execute"
             if sender_node ~= native_node and thread_admission.OPERATIONS[request.operation_ref] then worker = "bee.hive.supervisor:admit_thread" end
+            if feed_admission.OPERATIONS[request.operation_ref] then worker = "bee.hive.supervisor:admit_feed" end
             local future, err = funcs.async(worker, request)
             if not future or err then failed(sender, id, "UNAVAILABLE", "operation dispatch unavailable"); return end
             route.future = future

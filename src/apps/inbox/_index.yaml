@@ -13,6 +13,10 @@ entries:
     view: bee.inbox:view
     inbox: bee.inbox:client
     caller: bee.application:caller
+    feeds: bee.inbox:feeds
+    source_config: bee.inbox:source_config
+    hive: bee.hive:client
+    hive_types: bee.hive:types
   meta:
     type: bee.application
     application:
@@ -37,6 +41,26 @@ entries:
   source: file://client.lua
   imports:
     caller: bee.application:caller
+- name: feeds
+  kind: library.lua
+  source: file://feeds.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    sync: bee.sync:protocol
+    caller: bee.application:caller
+    source_config: bee.inbox:source_config
+- name: source_config
+  kind: library.lua
+  source: file://sources.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: sources
+  kind: registry.entry
+  meta:
+    type: bee.inbox_sources
+    comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
+  data: {sources: []}
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -57,5 +81,5 @@ entries:
     comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals:inbox, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw, bee.inbox:workspaces]
+    resources: [bee.approvals:inbox, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw, bee.inbox:workspaces, bee.inbox:sources]
     effect: allow

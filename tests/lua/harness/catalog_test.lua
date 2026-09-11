@@ -144,12 +144,38 @@ local function define_tests()
             test.is_true(complete.complete)
             test.eq(#complete.bindings, 4)
         end)
-        test.it("ignores activation lists that are not identifiers", function()
+        test.it("ships a versioned host activation declaration", function()
             local entry = registry.get("bee:harness_activation")
             if not entry then error("activation entry") end
-            local list = (entry.data :: {[string]: unknown}).bindings :: {string}
+            local data = entry.data :: {[string]: unknown}
+            test.eq(data.schema_revision, "bee.harness-activation@1")
+            local list = data.bindings :: {string}
             test.eq(#list, 2)
             test.is_true(has(list, "bee.driver.claude:binding"))
+        end)
+        test.it("rejects a malformed activation declaration without activating discovered bindings", function()
+            local original = registry.get("bee:harness_activation")
+            if not original then error("activation entry") end
+            local malformed = registry.get("bee:harness_activation")
+            if not malformed then error("activation entry") end
+            (malformed.data :: {[string]: unknown}).schema_revision = "bee.harness-activation@0"
+            local changes = registry.snapshot():changes()
+            changes:update(malformed)
+            local applied, apply_error = changes:apply()
+            if not applied then error(tostring(apply_error)) end
+            local snapshot, read_error = catalog.snapshot()
+            if not snapshot then error(tostring(read_error)) end
+            test.eq(snapshot.generation, math.floor(applied:id()))
+            test.is_true(has(snapshot.diagnostics, "bee:harness_activation: schema_revision must be bee.harness-activation@1"))
+            test.is_false(find(snapshot, "bee.driver.claude:binding").activated)
+            test.is_false(find(snapshot, "bee.driver.codex:binding").activated)
+            local usable, usable_error = catalog.usable(snapshot)
+            if not usable then error(tostring(usable_error)) end
+            test.eq(#usable, 0)
+            local restore = registry.snapshot():changes()
+            restore:update(original)
+            local restored, restore_error = restore:apply()
+            if not restored then error(tostring(restore_error)) end
         end)
     end)
 end

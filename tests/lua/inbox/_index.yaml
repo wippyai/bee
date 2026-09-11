@@ -25,6 +25,15 @@ entries:
     test: wippy.test:test
     model: bee.inbox:model
     inbox: bee.inbox:client
+- name: feeds_test
+  kind: function.lua
+  source: file://feeds_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    feeds: bee.inbox:feeds
+    source_config: bee.inbox:source_config
 - name: view_test
   kind: function.lua
   source: file://view_test.lua

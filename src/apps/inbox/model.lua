@@ -40,6 +40,7 @@ type Row = {
 -- recovers an ambiguous answer, settles it.
 type Pending = {kind: string, request_id: string, approval_id: string, revision: integer, decision: string?}
 type Intent = {target: string, request: Object}
+type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, owner_node: string, owner_incarnation: integer}
 type State = {
     workspaces: {string},
     cursors: {[string]: integer},
@@ -117,6 +118,14 @@ end
 function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
     if not reply.ok then
         local fault = reply.error or {code = "INTERNAL", message = "inbox failed"}
+        if fault.code == "DENIED" or fault.code == "RESET_REQUIRED" then
+            for key, row in pairs(state.rows) do
+                if row.workspace_id == workspace then
+                    state.rows[key] = nil
+                    if state.selected == key then state.selected, state.detail = nil, nil end
+                end
+            end
+        end
         if fault.code == "RESET_REQUIRED" then
             local details = object(reply.value)
             state.cursors[workspace] = math.max(0, integer(details.oldest_seq) - 1)
@@ -127,6 +136,19 @@ function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
     end
     state.unavailable[workspace] = nil
     local page = object(reply.value)
+    if page.replace_source == true then
+        local incoming: {[string]: boolean} = {}
+        for _, item in ipairs(object(page.changes) :: {unknown}) do
+            local request = object(object(item).request)
+            if type(request.approval_id) == "string" then incoming[request.approval_id] = true end
+        end
+        for key, row in pairs(state.rows) do
+            if row.workspace_id == workspace and not incoming[key] then
+                state.rows[key] = nil
+                if state.selected == key then state.selected, state.detail = nil, nil end
+            end
+        end
+    end
     for _, item in ipairs(object(page.changes) :: {unknown}) do
         local change = object(item)
         keep(state, object(change.request), integer(change.seq))
@@ -169,6 +191,20 @@ end
 function M.read_intent(state: State): Intent?
     if not state.selected then return nil end
     return {target = "bee.approvals:read", request = {approval_id = state.selected}}
+end
+-- Bind the shell's question to exactly the owner revision the user opened.
+function M.confirmation(state: State): Confirmation?
+    local detail = state.detail
+    if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" then return nil end
+    if type(detail.approval_id) ~= "string" or type(detail.proposal_digest) ~= "string" or type(detail.owner_node) ~= "string" then return nil end
+    return {approval_id = detail.approval_id, revision = integer(detail.revision), proposal_digest = detail.proposal_digest,
+        owner_node = detail.owner_node, owner_incarnation = integer(detail.owner_incarnation)}
+end
+function M.confirmation_matches(state: State, asked: Confirmation): boolean
+    local current = M.confirmation(state)
+    return current ~= nil and current.approval_id == asked.approval_id and current.revision == asked.revision
+        and current.proposal_digest == asked.proposal_digest and current.owner_node == asked.owner_node
+        and current.owner_incarnation == asked.owner_incarnation
 end
 function M.apply_read(state: State, approval_id: string, reply: Reply)
     if reply.ok then
@@ -263,17 +299,21 @@ end
 function M.apply_recovery(state: State, reply: Reply)
     local pending = state.pending
     if not pending then return end
-    state.pending = nil
     if reply.ok then
         local view = object(reply.value)
         local row = state.rows[pending.approval_id]
         keep(state, view, row and row.seq or 0)
         if state.selected == pending.approval_id then state.detail = view end
-        if view.state == "pending" then state.notice = "Not recorded: the request is still pending"
-        else state.notice = "Recovered: " .. outcome_text(view) end
+        if view.state == "pending" then
+            state.notice = "Still pending at the owner; the earlier decision may remain in flight"
+        else
+            state.pending = nil
+            state.notice = "Recovered: " .. outcome_text(view)
+        end
         return
     end
     M.apply_read(state, pending.approval_id, reply)
+    state.notice = "Decision outcome remains unknown; refresh to reconcile. " .. state.notice
 end
 -- payload_lines: a proposal payload as bounded key and value lines, in
 -- key order; never interpreted.

@@ -1,0 +1,34 @@
+version: '1.0'
+namespace: bee.sync
+entries:
+- name: sync_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/sync-ledger-test.db
+  lifecycle: {auto_start: true}
+- name: sync_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.sync:sync_test_db]
+    effect: allow
+- name: store_test
+  kind: function.lua
+  source: file://store_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [uuid]
+  security:
+    policies: [bee.sync:sync_test_policy]
+  imports:
+    test: wippy.test:test
+    store: bee.sync:store
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.sync:protocol

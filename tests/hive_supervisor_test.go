@@ -129,6 +129,123 @@ func supervisorTLS(t *testing.T, root string, addresses ...string) map[string]an
 }
 
 func TestHiveSupervisors(t *testing.T) {
+	runHiveSupervisors(t, false)
+}
+
+func TestHiveSupervisorFeeds(t *testing.T) {
+	runHiveSupervisors(t, true)
+}
+
+func stageHiveFeeds(t *testing.T, source, fixture string) {
+	t.Helper()
+	_, file, _, _ := runtime.Caller(0)
+	repository := filepath.Dir(filepath.Dir(file))
+	coordinatorPath := filepath.Join(fixture, "coordinator.lua")
+	coordinator, err := os.ReadFile(coordinatorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coordinator = []byte(strings.Replace(string(coordinator), `funcs.new():call("bee.feed_probe:handle", {command = command, remote = remote})`, `require("feed_logic").handle({command = command, remote = remote})`, 1))
+	if err := os.WriteFile(coordinatorPath, coordinator, 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixtureManifest := filepath.Join(fixture, "_index.yaml")
+	fixtureBytes, err := os.ReadFile(fixtureManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureText := strings.Replace(string(fixtureBytes), "    types: bee.hive:types", "    feed_logic: bee.feed_probe:logic\n    types: bee.hive:types", 1)
+	fixtureText = strings.Replace(fixtureText, "bee.hive_probe:name_injection_policy]", "bee.hive_probe:name_injection_policy, bee.feed_probe:policy, bee.feed_probe:enrollment_policy]", 1)
+	if err := os.WriteFile(fixtureManifest, []byte(fixtureText), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"node", "sync", "persist", "approvals"} {
+		if err := os.CopyFS(filepath.Join(source, name), os.DirFS(filepath.Join(repository, "src", name))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approvalManifest := filepath.Join(source, "approvals/_index.yaml")
+	approvals, err := os.ReadFile(approvalManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalText := string(approvals)
+	workerStart, workerEnd := strings.Index(approvalText, "- name: worker_service\n"), strings.Index(approvalText, "- name: contract\n")
+	if workerStart < 0 || workerEnd < workerStart {
+		t.Fatal("locate optional approval projection worker")
+	}
+	approvalText = approvalText[:workerStart] + approvalText[workerEnd:]
+	if err := os.WriteFile(approvalManifest, []byte(approvalText), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// The existing isolated helper already stages canonical under this namespace.
+	bounds, err := os.ReadFile(filepath.Join(repository, "src/threads/records/bounds.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "canonical/bounds.lua"), bounds, 0600); err != nil {
+		t.Fatal(err)
+	}
+	applicationManifest := filepath.Join(source, "application_protocol/_index.yaml")
+	application, err := os.ReadFile(applicationManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	application = append(application, []byte("    thread_bounds: bee.threads.records:bounds\n")...)
+	if err := os.WriteFile(applicationManifest, application, 0600); err != nil {
+		t.Fatal(err)
+	}
+	retainedManifest := filepath.Join(source, "retained_protocol/_index.yaml")
+	retained, err := os.ReadFile(retainedManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained = append(retained, []byte("    arguments: bee.application:arguments\n    clipboard: bee.client:clipboard\n")...)
+	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
+		t.Fatal(err)
+	}
+	clipboard, err := os.ReadFile(filepath.Join(repository, "src/core/client/clipboard.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(source, "clipboard")
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "clipboard.lua"), clipboard, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(source, "canonical/_index.yaml")
+	manifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest = append(manifest, []byte("- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n")...)
+	for _, name := range []string{"values", "types"} {
+		body, err := os.ReadFile(filepath.Join(repository, "src/threads/records", name+".lua"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(source, "canonical", name+".lua"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		manifest = append(manifest, []byte("- name: "+name+"\n  kind: library.lua\n  source: file://"+name+".lua\n")...)
+		if name == "values" {
+			manifest = append(manifest, []byte("  imports:\n    types: bee.threads.records:types\n    bounds: bee.threads.records:bounds\n")...)
+		}
+	}
+	if err := os.WriteFile(manifestPath, manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.CopyFS(filepath.Join(source, "feed_fixture"), os.DirFS(filepath.Join(repository, "tests/fixtures/hive_feeds"))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func runHiveSupervisors(t *testing.T, feeds bool) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
 	if binary == "" {
 		t.Skip("set BEE_HIVE_SUPERVISOR_RUNTIME for native supervisor acceptance")
@@ -139,6 +256,9 @@ func TestHiveSupervisors(t *testing.T) {
 	}
 	root := t.TempDir()
 	sourceSnapshot, fixtureSnapshot := freezeHiveSupervisorSource(t, root)
+	if feeds {
+		stageHiveFeeds(t, sourceSnapshot, fixtureSnapshot)
+	}
 	transportTLS := supervisorTLS(t, root)
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
@@ -199,7 +319,11 @@ func TestHiveSupervisors(t *testing.T) {
 		return folder
 	}
 	start := func(i int, folder string) *procRunner {
-		cmd := exec.CommandContext(ctx, binary, "run", "--silent", "hive-supervisor-probe", "--", fmt.Sprintf("node-%d", 1-i))
+		verbosity := "--silent"
+		if feeds {
+			verbosity = "--verbose"
+		}
+		cmd := exec.CommandContext(ctx, binary, "run", verbosity, "hive-supervisor-probe", "--", fmt.Sprintf("node-%d", 1-i))
 		cmd.Dir = folder
 		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"))
 		runner, err := newProcRunner(cmd, fmt.Sprintf("supervisor node %d", i))
@@ -246,6 +370,26 @@ func TestHiveSupervisors(t *testing.T) {
 	marker(b, "ready ")
 	command(a, "probe", "probe_passed")
 	command(b, "probe", "probe_passed")
+	if feeds {
+		command(b, "feed-denied", "feed_denied")
+		if _, err := io.WriteString(b.stdin, "identity\n"); err != nil {
+			t.Fatal(err)
+		}
+		subject := marker(b, "identity ")
+		command(a, "enroll-read "+subject, "enrolled")
+		command(b, "feed-read", "feed_read")
+		command(b, "feed-write-denied", "feed_write_denied")
+		command(a, "enroll-write "+subject, "enrolled")
+		command(b, "feed-write", "feed_write")
+		command(b, "feed-replay", "feed_replay")
+		command(b, "feed-snapshot", "feed_snapshot")
+		command(a, "approval-create "+subject, "approval_created")
+		command(b, "feed-approval", "feed_approval")
+		command(a, "approval-revoke", "approval_revoked")
+		command(b, "feed-approval-empty", "feed_approval_empty")
+		command(a, "revoke", "revoked")
+		command(b, "feed-denied", "feed_denied")
+	}
 	command(b, "sibling", "sibling_denied")
 	command(b, "check-name", "foreign_name_denied")
 	command(b, "restart", "restarted")

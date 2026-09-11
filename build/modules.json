@@ -2,6 +2,16 @@
   "schema": 1,
   "modules": [
     {
+      "module": "bee/node",
+      "root": "bee.node",
+      "namespaces": ["bee.node"]
+    },
+    {
+      "module": "bee/sync",
+      "root": "bee.sync",
+      "namespaces": ["bee.sync"]
+    },
+    {
       "module": "bee/approvals",
       "root": "bee.approvals",
       "namespaces": [

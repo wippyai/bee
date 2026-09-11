@@ -5551,6 +5551,17 @@ interval, log `/tmp/bee-hive-manager-idle-r2.log`, fixture
 `/tmp/bee-hive-manager-idle-nhjncua8`. Do not treat the first fixture's dump as
 user-failure evidence. Hour50459 remains live. Checkpointdcd0905 is pushed.
 
+### Reconnect diagnostic follow-up — journal 913
+
+Read-only `bee desktops` against the restored actual-user process returned both
+displays in 0.208s (exit 0), without a restart or binary change. Evidence:
+`/tmp/bee-user-catalog-followup-20260910.log`. Hour-idle session 50459 completed
+exit 0, reconnecting to the retained Terminal in 0.236s; that probe used the
+previous candidate. Current-build Hive Manager diagnostic 87211 remains live;
+its first five reconnects passed in 0.221–0.232s. The actual-user mount failure
+and subsequent catalog timeout remain unexplained. Runtime journal 910 describes
+in-progress monitor recovery work, not an established cause or fix here.
+
 ### Overlapping-display failure — journal 915
 
 The current global binary reproduced detach uncertainty under concurrent display

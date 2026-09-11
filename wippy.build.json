@@ -21,6 +21,7 @@
     "mode": "base",
     "data_env": {
       "BEE_THREADS_DB": "threads.db",
+      "BEE_NODE_DB": "node.db",
       "BEE_WORKSPACE_DB": "workspace.db",
       "BEE_APPROVALS_DB": "approvals.db",
       "BEE_RESOURCES_DB": "resources.db",

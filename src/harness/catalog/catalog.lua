@@ -6,6 +6,7 @@
 local registry = require("registry")
 local bounds = require("bounds")
 local classify = require("classify")
+local activation = require("activation")
 local M = {}
 M.ACTIVATION_ENTRY = "bee:harness_activation"
 M.BINDING_TYPE = "harness.driver"
@@ -25,19 +26,18 @@ local function entry(pinned: Pinned, id: string): Entry?
     if err or not found then return nil end
     return bounds.object(found)
 end
--- The host's activation list: identifiers under data.bindings, or nothing.
-local function activation(pinned: Pinned, diagnostics: {string}): {[string]: boolean}
+-- The host's activation declaration. A missing declaration activates nothing;
+-- a malformed one is visible in diagnostics and likewise activates nothing.
+local function active_bindings(pinned: Pinned, diagnostics: {string}): {[string]: boolean}
     local active: {[string]: boolean} = {}
     local declared = entry(pinned, M.ACTIVATION_ENTRY)
     if not declared then return active end
-    local data = bounds.object(declared.data) or {}
-    local list, list_error = bounds.ids(data.bindings or {}, true)
-    if not list then
-        diagnostics[#diagnostics + 1] = M.ACTIVATION_ENTRY .. ": bindings: " .. tostring(list_error)
+    local decoded, decode_error = activation.decode(M.ACTIVATION_ENTRY, declared)
+    if not decoded then
+        diagnostics[#diagnostics + 1] = tostring(decode_error)
         return active
     end
-    for _, id in ipairs(list) do active[id] = true end
-    return active
+    return decoded.bindings
 end
 -- The permission adapters the declaration's profiles pin, read from the
 -- same pinned snapshot so a profile cannot enable an unmeasured adapter.
@@ -81,7 +81,7 @@ function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
     if not current then return nil, generation_error end
     local cap = limit or M.MAX_BINDINGS
     local snapshot: Snapshot = {generation = current, complete = true, bindings = {}, diagnostics = {}}
-    local active = activation(pinned, snapshot.diagnostics)
+    local active = active_bindings(pinned, snapshot.diagnostics)
     local found, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.BINDING_TYPE})
     if find_error or not found then return nil, "read driver bindings" end
     local count = 0

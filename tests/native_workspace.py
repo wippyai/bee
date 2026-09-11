@@ -9,7 +9,7 @@ import termios
 import pyte
 from tui_smoke import Desktop
 
-STORE_NAMES = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway")
+STORE_NAMES = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node")
 STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_PLACEMENT_ROOT"}
 
 

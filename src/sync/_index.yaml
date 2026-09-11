@@ -1,0 +1,59 @@
+version: '1.0'
+namespace: bee.sync
+entries:
+- name: definition
+  kind: ns.definition
+  module: sync
+  readme: file://README.md
+  meta:
+    title: Bee synchronized projections
+    comment: Owner-local bounded ledger and projection reads; feed adapters select authority and transport
+- name: target_db
+  kind: ns.requirement
+  meta:
+    comment: SQLite resource selected by the host for this owner-local sync store
+  targets:
+  - entry: bee.sync:database_ref
+    path: .resource_ref
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked SQL resource; empty until a host selects target_db
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  imports:
+    bounds: bee.sync:bounds
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.sync:bounds
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+  imports:
+    persist: bee.persist:database
+    migrations: bee.sync:migrations
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, time]
+  imports:
+    bounds: bee.sync:bounds
+    canonical: bee.sync:canonical
+    database: bee.sync:database
+    transaction: bee.persist:transaction
+    resources: bee.sync:resources

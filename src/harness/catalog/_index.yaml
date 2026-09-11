@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.harness.catalog
 entries:
+- name: activation
+  kind: library.lua
+  source: file://activation.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: classify
   kind: library.lua
   source: file://classify.lua
@@ -18,3 +23,4 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     classify: bee.harness.catalog:classify
+    activation: bee.harness.catalog:activation

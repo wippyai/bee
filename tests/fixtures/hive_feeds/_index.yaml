@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.feed_probe
+entries:
+- name: logic
+  kind: library.lua
+  source: file://handle.lua
+  modules: [registry, funcs]
+  imports:
+    client: bee.hive:client
+    types: bee.hive:types
+    principals: bee.hive.supervisor:principals
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, funcs.call]
+    resources: [bee.hive.supervisor:principal_mappings, bee.feed_probe:handle, bee.approvals:approver_policies, bee.approvals:request]
+    effect: allow
+- name: enrollment_policy
+  kind: security.policy
+  policy:
+    actions: [registry.apply, bee.approvals.request]
+    resources: '*'
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  policy:
+    actions: [hive.invoke, funcs.call, bee.node.read, bee.approvals.decide]
+    resources: [bee.node:describe, bee.node:snapshot, bee.node:read_after, bee.node:update_metadata, bee.hive.supervisor:invoke_check, node-0, node-1, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, feed-workspace]
+    effect: allow
+- name: write_policy
+  kind: security.policy
+  policy:
+    actions: [bee.node.update]
+    resources: [node-0, node-1]
+    effect: allow
+- name: handle
+  kind: function.lua
+  source: file://handle.lua
+  method: handle
+  modules: [registry, funcs]
+  security:
+    policies: [bee.feed_probe:policy, bee.feed_probe:enrollment_policy]
+  imports:
+    client: bee.hive:client
+    types: bee.hive:types
+    principals: bee.hive.supervisor:principals

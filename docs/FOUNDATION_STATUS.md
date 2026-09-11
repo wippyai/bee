@@ -8,6 +8,19 @@ Intermittent startup and detach failures remain unresolved; this is not sustaine
 reconnect acceptance. See [current build](handoffs/GLOBAL_BUILD.md). Older dated
 checkpoints below describe previous installations and their evidence.
 
+The source now includes an owner-local sync ledger, editable node descriptions
+with a metadata trait, and multi-source approval inbox feeds over the existing
+Hive policy route. Node updates use revision CAS and caller-scoped retry receipts;
+all schema changes use the checked migration lifecycle. Two-runtime acceptance
+passes metadata read/update/replay, mapped read-only denial/revocation, and
+approval snapshot/decision/catch-up with revoked visibility. The local inbox
+application smoke and 508 Lua tests pass. The full repository check passes,
+including source-free packaging after adding the node database to the fixture's
+isolated environment. The two-runtime feed gate also passes with the race-enabled
+harness. This is source evidence, not a global binary installation or Hub publication.
+See [sync and inbox](SYNC_AND_INBOX.md) for authority, retention and enrollment
+limits; governance, Hub installation and overlay activation remain separate.
+
 The currently installed September 10 candidate (production c3b2c9f, native
 ced4008999f4, runtime674b58a1) passed full `make check`: 494 Lua tests,
 525 source/pack entries, storage/restart, permissions, desktop/client lifetimes,

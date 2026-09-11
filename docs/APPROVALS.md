@@ -1,7 +1,9 @@
 # Durable approval requests
 
-The owner is built as `bee.approvals` (see `src/approvals/README.md`); the
-distributed inbox projection and the harness permission exchange are not. Existing application dialogs are live broker-owned
+The owner is built as `bee.approvals` (see `src/approvals/README.md`). The
+typed owner-feed and inbox integration are described in
+[sync and inbox](SYNC_AND_INBOX.md), including their explicit enrollment limits.
+Existing application dialogs are live broker-owned
 questions, not durable authorization records. Do not treat their confirmation
 messages as grants for remote operations. The first proposed use is approval of
 a remote Terminal request through the destination supervisor.

@@ -17,8 +17,13 @@ local model = require("model")
 local view = require("view")
 local inbox = require("inbox")
 local caller = require("caller")
+local feeds = require("feeds")
+local source_config = require("source_config")
+local hive = require("hive")
+local hive_types = require("hive_types")
 local WORKSPACES = "bee.inbox:workspaces"
 local POLL = "2s"
+type FeedSource = {id: string, node_id: string, workspace_id: string, local_owner: boolean, feed: string}
 local function unknown_answer(): model.Reply
     return caller.unknown()
 end
@@ -39,10 +44,38 @@ local function main(value: unknown)
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local owner = inbox.new(function(target: string, request: unknown): (unknown, string?)
-        return funcs.new():call(target, request)
+    local local_node = hive_types.pid_parts(tostring(process.pid()))
+    if not local_node then error("inbox native node identity is unavailable") end
+    local mesh, mesh_error = hive.open()
+    if not mesh then error(mesh_error or "inbox Hive listener unavailable") end
+    local source_entry = registry.get("bee.inbox:sources")
+    local declared: unknown = nil
+    if source_entry and type(source_entry.data) == "table" then declared = source_entry.data.sources end
+    local local_workspaces = inbox.workspaces(launch.workspace_id, admitted_workspaces())
+    local configured, configure_error = source_config.configure(local_node, local_workspaces, declared)
+    if not configured then error(configure_error or "inbox source configuration is invalid") end
+    local routed = feeds.new(configured,
+        function(source: FeedSource, target: string, request: unknown): (unknown, string?)
+            if source.local_owner then return funcs.new():call(target, request) end
+            if type(request) ~= "table" then return nil, "invalid owner request" end
+            local answer = mesh:call({node_id = source.node_id, service_id = "bee.approvals"},
+                {operation_ref = target}, request :: {[string]: unknown}, {timeout = "5s"})
+            if not answer.ok then
+                -- Transport failure cannot say whether an owner mutation committed.
+                if target == "bee.approvals:decide" or target == "bee.approvals:withdraw" then
+                    return nil, "owner outcome unknown"
+                end
+                return {ok = false, error = answer.error, value = nil, replayed = false}, nil
+            end
+            return answer.value, nil
+        end)
+    -- feeds owns source-address routing.  Wrap its reply-shaped result in the
+    -- standard caller boundary so the application itself never trusts a
+    -- transport value without the shared decoder.
+    local owner = caller.new(function(target: string, request: unknown): (unknown, string?)
+        return routed:invoke(target, request), nil
     end)
-    local state: model.State = model.new(inbox.workspaces(launch.workspace_id, admitted_workspaces()))
+    local state: model.State = model.new(configured.workspaces)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
     local offset = 0
@@ -51,12 +84,28 @@ local function main(value: unknown)
     local announced = false
     local last_checkpoint = ""
     local running, dirty = true, true
+    local updates = channel.new(1)
+    local busy = false
+    local function perform(operation: () -> ())
+        if busy then status = "Sync in progress"; dirty = true; return end
+        busy = true
+        coroutine.spawn(function()
+            local ok, failure = pcall(operation)
+            busy = false
+            if not running then return end
+            if not ok then status = "Owner query failed: " .. tostring(failure)
+            elseif status == "Sync in progress" then status = "" end
+            dirty = true
+            updates:send(true)
+        end)
+    end
     -- One dialog at a time: what it asks and what accepting it does.
-    local dialog: {request_id: string, kind: string, approval_id: string}? = nil
+    local dialog: {request_id: string, kind: string, confirmation: model.Confirmation}? = nil
     local ticker = assert(time.ticker(POLL))
     local ticks = ticker:channel()
     local function refresh()
         for _, workspace in ipairs(state.workspaces) do
+            if not running then return end
             local pages = 0
             local more = true
             local name: string = workspace
@@ -105,20 +154,23 @@ local function main(value: unknown)
     -- Every decision passes through the shell's confirmation; nothing acts
     -- on a row selection or a key alone.
     local function ask(kind: string)
-        if dialog or state.pending then return end
+        if dialog or state.pending or busy then return end
         local selected = model.selected_row(state)
-        if not selected or not state.detail then status = "Open the request before deciding"; dirty = true; return end
+        local confirmation = model.confirmation(state)
+        if not selected or not confirmation then status = "Open a pending request before deciding"; dirty = true; return end
         local title = kind == "approve" and "Approve this request?" or (kind == "deny" and "Deny this request?" or "Withdraw this request?")
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
         local accept = kind == "approve" and "Approve" or (kind == "deny" and "Deny" or "Withdraw")
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept})
         if not request_id then status = tostring(err); dirty = true; return end
-        dialog = {request_id = request_id, kind = kind, approval_id = selected.approval_id}
+        dialog = {request_id = request_id, kind = kind, confirmation = confirmation}
         dirty = true
     end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
-    refresh()
-    if state.selected and state.rows[state.selected :: string] then open_selected() elseif state.selected then model.select(state, nil) end
+    perform(function()
+        refresh()
+        if state.selected and state.rows[state.selected :: string] then open_selected() elseif state.selected then model.select(state, nil) end
+    end)
     while running do
         if dirty then
             local frame = view.draw(width, height, preferences, state, rows, offset, status)
@@ -133,12 +185,16 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), ticks:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), ticks:case_receive(), updates:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
+        elseif event.channel == updates then
+            dirty = true
         elseif event.channel == ticks then
-            if not state.pending then refresh() end
+            if not busy then
+                if state.pending then perform(recover) else perform(refresh) end
+            end
         elseif event.channel == states then
             local message = event.value
             if broker and message:from() == broker then
@@ -152,8 +208,13 @@ local function main(value: unknown)
             if result and dialog and result.request_id == dialog.request_id then
                 local asked = dialog
                 dialog = nil
-                if result.action == "accept" and state.selected == asked.approval_id then act(asked.kind)
-                else status = "Cancelled"; dirty = true end
+                if result.action ~= "accept" then status = "Cancelled"; dirty = true
+                elseif not model.confirmation_matches(state, asked.confirmation) then
+                    status = "Request changed; open it and confirm again"; dirty = true
+                else perform(function()
+                    if model.confirmation_matches(state, asked.confirmation) then act(asked.kind)
+                    else status = "Request changed; open it and confirm again"; dirty = true end
+                end) end
             end
         else
             local data = event.value
@@ -167,11 +228,11 @@ local function main(value: unknown)
                 elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
                 elseif key == "pgdown" then model.move(state, 8); dirty = true
-                elseif key == "enter" or text == "o" then open_selected()
+                elseif key == "enter" or text == "o" then perform(open_selected)
                 elseif text == "a" then ask("approve")
                 elseif text == "d" then ask("deny")
                 elseif text == "w" then ask("withdraw")
-                elseif text == "r" then refresh()
+                elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
                 elseif text == "t" then model.toggle_technical(state); dirty = true
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
@@ -181,9 +242,9 @@ local function main(value: unknown)
                     if hit.kind == "row" then
                         local row = rows[hit.index]
                         if row then model.select(state, row.approval_id); dirty = true end
-                    elseif hit.kind == "open" then open_selected()
+                    elseif hit.kind == "open" then perform(open_selected)
                     elseif hit.kind == "approve" or hit.kind == "deny" or hit.kind == "withdraw" then ask(hit.kind)
-                    elseif hit.kind == "refresh" then refresh()
+                    elseif hit.kind == "refresh" then perform(function() if state.pending then recover() else refresh() end end)
                     elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
                 end
             elseif data.type == "mouse" and data.action == "wheel" then
@@ -192,6 +253,7 @@ local function main(value: unknown)
         end
     end
     ticker:stop()
+    mesh:close()
     process.unlisten(states)
     process.unlisten(answers)
     output:close()

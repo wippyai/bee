@@ -3,12 +3,52 @@ from contextlib import contextmanager
 from pathlib import Path
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
+
+
+def managed_gateway_address():
+    """Reserve a distinct loopback address for one disposable composition."""
+    # http.service accepts an address rather than a pre-bound socket, so the
+    # reservation ends before its process starts. The copied host, policy and
+    # listener all retain this address, preventing concurrent fixtures from
+    # answering one another's readiness probes on the historical shared port.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return f"127.0.0.1:{listener.getsockname()[1]}"
+
+
+def configure_managed_gateway(folder, address=None):
+    """Point this copied managed composition at one isolated loopback address."""
+    selected = address or managed_gateway_address()
+    host = folder / "src/_index.yaml"
+    document = yaml.safe_load(host.read_text())
+    endpoint = next((entry for entry in document["entries"] if entry["name"] == "gateway_endpoint"), None)
+    readiness = next((entry for entry in document["entries"] if entry["name"] == "gateway_readiness_policy"), None)
+    assert endpoint is not None and readiness is not None
+    endpoint["data"]["address"] = selected
+    resources = readiness["policy"]["resources"]
+    original = "http://127.0.0.1:18790/ready"
+    assert original in resources
+    resources[resources.index(original)] = f"http://{selected}/ready"
+    host.write_text(yaml.safe_dump(document, sort_keys=False))
+    listeners = []
+    for index in (folder / "src").rglob("_index.yaml"):
+        entry_document = yaml.safe_load(index.read_text())
+        if entry_document.get("namespace") != "bee.managed":
+            continue
+        listener = next((entry for entry in entry_document["entries"] if entry["name"] == "listener"), None)
+        if listener is not None:
+            listener["addr"] = selected
+            index.write_text(yaml.safe_dump(entry_document, sort_keys=False))
+            listeners.append(index)
+    assert len(listeners) == 1
+    return selected
 
 def database_environment(directory, **overrides):
     """Keep every booted subsystem store inside the fixture's disposable root."""
@@ -44,6 +84,8 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         # must retain the default composition's no-listener boundary.
         if not managed_gateway:
             shutil.rmtree(folder / "src/tests/managed", ignore_errors=True)
+        else:
+            configure_managed_gateway(folder)
         shutil.copytree(ROOT / "examples/fixtures", folder / "src/fixtures")
         shutil.copytree(ROOT / "tests/fixtures/drivers", folder / "fixtures/drivers")
         shutil.copytree(ROOT / "tests/fixtures/harness", folder / "fixtures/harness")

@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [funcs, http_client, json, time, process]
+  modules: [funcs, http_client, json, time, process, registry]
   meta:
     command:
       name: gateway-probe
@@ -16,8 +16,8 @@ entries:
 - name: policy
   kind: security.policy
   policy:
-    actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host]
-    resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
+    actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get]
+    resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
     effect: allow
 - name: drainer
   kind: process.lua

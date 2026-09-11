@@ -8,10 +8,18 @@ local http_client = require("http_client")
 local json = require("json")
 local time = require("time")
 local process = require("process")
+local registry = require("registry")
 local ACTOR = "bee.test.gateway"
-local ADDRESS = "127.0.0.1:18790"
 local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
+local ADDRESS = ""
+local function endpoint(): string
+    local entry, err = registry.get("bee:gateway_endpoint")
+    assert(not err and entry and type(entry.data) == "table", "gateway endpoint")
+    local address = (entry.data :: Object).address
+    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
+    return address :: string
+end
 local function key(): string return "k-" .. tostring(time.now():unix_nano()) end
 local function call(target: string, request: Object): Object
     local reply, err = funcs.call(target, request)
@@ -60,6 +68,7 @@ local function record(text: string)
         body = {message_id = "m-" .. key(), message_kind = "request", recipient_ids = {}, content = {text = text}}}), "record")
 end
 local function main()
+    ADDRESS = endpoint()
     local opened = ok(call("bee.gateway:open", {address = ADDRESS}), "open")
     assert(opened.epoch == 1, "first epoch")
     ok(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")

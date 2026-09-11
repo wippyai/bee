@@ -8,18 +8,20 @@ managed policy has no executable or environment bindings, no production launch
 definition is installed, and the default composition does not start the gateway
 listener. Public Claude/Codex aliases still launch ordinary native Terminals.
 
-On runtime `674b58a1a117fa79398f723c4311201cca8472e1`, the current
+On runtime `674b58a1a117fa79398f723c4311201cca8472e1`, an earlier
 managed-launch gate completed with **192 passed and 7 failed**. All mandatory
 real-executable proof names passed, including loopback authentication, permission
-exchange and gateway interoperability; the seven gateway-carrier integration
-failures prevent acceptance. Three report a listener readiness generation
-conflict, and later cases fail before the child presents its credential. The
-cause was concurrent test compositions sharing loopback port `18790`: a request
-could reach another runtime's listener, which correctly refused the generation.
+exchange and gateway interoperability; the first three failures reported a
+listener readiness generation conflict, and later cases failed before the child
+presented its credential. Independently booted managed compositions shared
+`127.0.0.1:18790`, so readiness correctly refused another runtime's listener.
 A fresh run on unchanged source `4900c6d` passed **199/199** in 213.4 seconds.
-Fixture endpoint isolation and concurrent acceptance are being implemented;
-production generation checks are unchanged. The full integrated gate including
-the workspace handoff correction below remains pending.
+Disposable managed fixtures now select separate loopback addresses and update
+the copied endpoint, readiness policy and listener consistently.
+`tests/gateway.py` starts two probes concurrently to check isolation.
+Production generation verification is unchanged. Final concurrent and managed
+acceptance results remain pending.
+
 
 Reproduction (real provider credentials removed; fixtures use isolated homes,
 sentinel credentials and loopback endpoints):

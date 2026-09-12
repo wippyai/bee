@@ -112,6 +112,7 @@ local function prepare_host(workspace: string)
     local sources_data = sources_entry.data :: {[string]: unknown}
     local sources = sources_data.sources :: {{[string]: unknown}}
     sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
+    sources[#sources + 1] = {ref = "bee.credentials:claude_login_fixture", workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"file"}}
     sources[#sources + 1] = {ref = ALTERNATE_SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
     apply(sources_entry)
     value(call("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
@@ -199,6 +200,39 @@ local function define_tests()
             test.eq(#resources, 2)
             test.eq(resources[1].root_ref, ROOT)
             test.eq(resources[2].root_ref, ROOT)
+        end)
+        test.it("preserves optional login policy on setup retry and refuses a required definition", function()
+            local entry = registry.get("bee:harness_setup")
+            if not entry then error("host setup") end
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            local source = {kind = "fs_directory", ref = "bee.credentials:claude_login_fixture"}
+            changed.credentials = {anthropic = {provider = "claude", source = source, optional = true}}
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local target = fresh("setup-optional-login")
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                local listed = value(call("bee.credentials:list", {workspace_id = target}))
+                local definitions = listed.definitions :: {{[string]: unknown}}
+                test.eq(#definitions, 1)
+                test.eq(definitions[1].optional, true)
+                test.eq(definitions[1].revision, 1)
+                local conflict = fresh("setup-required-login")
+                value(call("bee.credentials:define", {workspace_id = conflict, name = "anthropic", provider = "claude", source = source}))
+                local reply = setup(conflict, RETAINED_DEFINITION)
+                test.is_false(reply.ok == true)
+                test.eq(reply.error, "existing credential anthropic differs from host setup")
+                local retained = value(call("bee.credentials:list", {workspace_id = conflict}))
+                local unchanged = retained.definitions :: {{[string]: unknown}}
+                test.eq(unchanged[1].optional, false)
+                test.eq(unchanged[1].revision, 1)
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("never replaces a different existing credential during first-use setup", function()
             local target = fresh("setup-existing-credential")

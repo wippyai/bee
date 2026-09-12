@@ -435,6 +435,35 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	if !strings.Contains(string(output), "HUB_MIGRATION_SERVICE_PASS "+mode) {
 		return fmt.Errorf("%s omitted acceptance marker\n%s", mode, output)
 	}
+	if mode == "history" {
+		manifest := filepath.Join(folder, "src/migration_probe/_index.yaml")
+		data, err := os.ReadFile(manifest)
+		if err != nil {
+			return err
+		}
+		updated := string(data)
+		for old, replacement := range map[string]string{
+			"method: history":                      "method: other_actor",
+			"actor: {id: probe.migration_service}": "actor: {id: probe.other_actor}",
+		} {
+			if strings.Count(updated, old) != 1 {
+				return fmt.Errorf("history actor fixture anchor %q is not unique", old)
+			}
+			updated = strings.Replace(updated, old, replacement, 1)
+		}
+		if err := os.WriteFile(manifest, []byte(updated), 0600); err != nil {
+			return err
+		}
+		foreignCtx, foreignCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer foreignCancel()
+		foreign, err := runRuntime(foreignCtx, runtime, folder, environment, "run", "--verbose", "--host", "bee:workers", "--", "migration-service-probe")
+		if writeErr := os.WriteFile(filepath.Join(folder, "other-actor.log"), foreign, 0600); writeErr != nil {
+			return writeErr
+		}
+		if err != nil || !strings.Contains(string(foreign), "HUB_OPERATION_HISTORY_ACTOR_PASS") {
+			return fmt.Errorf("history actor isolation failed: %v\n%s", err, foreign)
+		}
+	}
 	return checkServiceDatabase(folder, mode)
 }
 
@@ -502,7 +531,7 @@ func run() error {
 		_ = server.Wait()
 		_ = serverLog.Close()
 	}()
-	for _, mode := range []string{"absent", "applied", "denied", "crash", "partial", "tamper", "linked"} {
+	for _, mode := range []string{"absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history"} {
 		workspace := filepath.Join(folder, mode)
 		if err := os.Mkdir(workspace, 0700); err != nil {
 			return err
@@ -521,7 +550,7 @@ func run() error {
 		}
 	}
 	succeeded = true
-	fmt.Println("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, orphan removal block, absent ledger and denied database grant pass")
+	fmt.Println("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, absent ledger and denied database grant pass")
 	return nil
 }
 

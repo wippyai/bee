@@ -158,7 +158,7 @@ local function records_of(thread_id: string): {Object}
     end
     return all
 end
-local function report(thread_id: string): Object
+local function report(thread_id: string, attempt_id: string?): Object
     for _, item in ipairs(records_of(thread_id)) do
         if item.kind == "observation" and item.source == "stream" then
             local data = (item.body :: Object).data :: Object
@@ -173,7 +173,12 @@ local function report(thread_id: string): Object
             end
         end
     end
-    error("no gateway report in thread " .. thread_id)
+    local kinds: {string} = {}
+    if attempt_id then
+        local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
+        for _, item in ipairs(page.evidence :: {Object}) do kinds[#kinds + 1] = tostring(item.kind) end
+    end
+    error("no gateway report in thread " .. thread_id .. "; placement evidence: " .. table.concat(kinds, ","))
 end
 local function evidence_kinds(attempt_id: string): ({string}, {string})
     local page = call("bee.placement.native:evidence", {attempt_id = attempt_id, limit = 128})
@@ -442,7 +447,7 @@ local function define_tests()
             call("bee.placement.native:reconcile", {attempt_id = attempt_id})
             local resumed = run_carrier(launch, "resume", nil)
             if not resumed.value then error("resumed carrier failed: " .. tostring(resumed.error)) end
-            local seen = report(thread_id)
+            local seen = report(thread_id, attempt_id)
             test.eq(seen.read, 200)
             local names, details = evidence_kinds(attempt_id)
             expect_evidence(names, details, "carrier.lost", true)

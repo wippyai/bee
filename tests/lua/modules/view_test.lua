@@ -55,6 +55,44 @@ local function define_tests()
                 end
             end
         end)
+        test.it("renders paged operation history, selected migration rows, and recovery review hit", function()
+            local state = model.new()
+            model.apply_history(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                page = 1, total = 26, page_size = 25, operations = {{digest = string.rep("f", 64), component = "bee/recover", action = "update",
+                    state = "recovery_required", message = "migration paused", baseline_revision = 8,
+                    request = {action = "update", component = "bee/recover", version = "2.0.0", parameters = {}, migration_policy = "up"},
+                    migration_work = {rows = {{id = "bee.recover:01", target_db = "app:db", module = "bee/recover", status = "applied"}}}}},
+            }})
+            local selected, problem = model.select_operation(state, string.rep("f", 64))
+            test.not_nil(selected)
+            test.is_nil(problem)
+            local frame = view.draw(100, 24, appearance.defaults(), state, 0, "")
+            local rendered = table.concat(frame.rows, "\n")
+            test.is_true(rendered:find("Actor%-owned operation history") ~= nil)
+            test.is_true(rendered:find("bee.recover:01", 1, true) ~= nil)
+            local has_recover = false
+            for _, hit in ipairs(frame.hits) do if hit.kind == "recover" then has_recover = true end end
+            test.is_true(has_recover)
+            test.is_nil(model.recover(state))
+            local review = view.draw(100, 24, appearance.defaults(), state, 0, "")
+            local review_text = table.concat(review.rows, "\n")
+            test.is_true(review_text:find("Review recovery", 1, true) ~= nil)
+            test.is_true(review_text:find("exact stored request", 1, true) ~= nil)
+        end)
+        test.it("scrolls through every receipt on a full history page", function()
+            local state = model.new()
+            local operations: {{[string]: unknown}} = {}
+            for index = 1, 25 do
+                operations[index] = {digest = string.format("%064x", index), component = "bee/package" .. tostring(index),
+                    action = "install", state = "complete", message = "done", baseline_revision = index}
+            end
+            model.apply_history(state, {ok = true, code = nil, message = nil, replayed = false, value = {page = 1, total = 25, page_size = 25, operations = operations}})
+            local first = view.draw(100, 12, appearance.defaults(), state, 0, "")
+            local last = view.draw(100, 12, appearance.defaults(), state, 24, "")
+            test.is_true(table.concat(first.rows, "\n"):find("bee/package1 ", 1, true) == nil)
+            test.is_true(table.concat(last.rows, "\n"):find("bee/package25", 1, true) == nil)
+            test.is_true(table.concat(last.rows, "\n"):find("bee/package1", 1, true) ~= nil)
+        end)
     end)
 end
 return test.run_cases(define_tests)

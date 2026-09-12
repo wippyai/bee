@@ -37,8 +37,21 @@ local function handle(raw: unknown): Result
         local request, problem = plan.decode(value.request)
         if not request then return transaction.failure("INVALID", problem or "invalid package request") end
         resource = request.component
+    elseif operation == "status" then
+        if value.expected_digest ~= nil then
+            if value.request ~= nil then return transaction.failure("INVALID", "receipt lookup takes no request body") end
+        else
+            local request = bounds.object(value.request == nil and {} or value.request)
+            if not request or bounds.fields(request, {"page"}) then return transaction.failure("INVALID", "invalid operation history request") end
+            if request.page ~= nil then
+                local decoded_page = bounds.count(request.page)
+                if not decoded_page or decoded_page < 1 or decoded_page > 10000 then
+                    return transaction.failure("INVALID", "invalid operation history page")
+                end
+            end
+        end
     elseif value.request ~= nil then return transaction.failure("INVALID", "operation takes no request body") end
-    if operation == "apply" or operation == "status" then
+    if operation == "apply" or (operation == "status" and value.expected_digest ~= nil) then
         local digest = value.expected_digest
         if type(digest) ~= "string" or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
             return transaction.failure("INVALID", "operation requires a plan digest")

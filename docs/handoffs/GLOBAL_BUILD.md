@@ -1,6 +1,22 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub migrations plus default machine login
+## Current install: Hub history
+
+Global `/home/wolfy-j/.local/bin/bee` has SHA
+`2f3f8e5ab1f970c4acbe070da10530ba6ceec828b13972421052457f028001d3`,
+source `efa29db`. The Hub lane installed this successor with paged operation
+history and recovery review, preserving the Agent and machine-login work below.
+Its receipt is `hub-history-global-install.json`, with focused Hub, source/pack
+history, real service and native evidence. Running nodes were not restarted.
+
+The Agent source adds profile instructions after this install. Its four-harness
+configuration checks and all 766 unit tests passed before merging Hub history;
+the frozen full gate and combined-source checks are tracked separately. Those
+instruction additions are not yet in global. The integration retains the newer
+Hub history acceptance in Go, including a second actor denied access to the
+first actor's receipts (`hub-history-go-check.log`).
+
+## Previous install: Hub migrations plus default machine login
 
 Global `/home/wolfy-j/.local/bin/bee` now has SHA
 `f276bc2b0edaa85d1385e91783f4820156f41cb1730cefd410e3089e0546d100`,
@@ -19,7 +35,8 @@ pass, as does native Modules install/update/uninstall. A native Agent fixture
 initially lost unchanged rows in partial terminal redraws; its bounded screen
 reader now passes the regression and actual selector acceptance. These are
 focused combined-source and native results; the original Hub source's full
-repository run remains separately tracked in `hub-migration-full-check.log`.
+repository run has now passed, separately recorded in `hub-migration-full-check.log`.
+That run covers source `0b63194`, not the later combined history UI source.
 
 Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. The executable and
 five sidecars were verified against their provenance, backed up, and replaced

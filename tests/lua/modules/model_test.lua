@@ -91,6 +91,64 @@ local function define_tests()
             model.apply_result(state, ok({state = "complete", message = "done"}))
             if state.result then test.is_true(state.result.ok) end
         end)
+        test.it("binds paged operation history to actor-owned receipt fields and sorts newest first", function()
+            local state = model.new()
+            local intent = model.operation_history_intent(state)
+            test.eq(intent.operation, "status")
+            test.eq(intent.request and intent.request.page, 1)
+            test.is_nil(intent.expected_digest)
+            model.apply_history(state, ok({page = 1, total = 26, page_size = 25, operations = {
+                {digest = string.rep("a", 64), component = "bee/old", action = "install", state = "complete", message = "old", baseline_revision = 2},
+                {digest = string.rep("b", 64), component = "bee/new", action = "update", state = "published", message = "new", baseline_revision = 9,
+                    request = {action = "update", component = "bee/new", version = "1.0.0", parameters = {}, migration_policy = "none"},
+                    migration_work = {entries = {}, rows = {{id = "bee.new:01", target_db = "app:db", module = "bee/new", status = "applied"}}}},
+            }}))
+            test.eq(state.operation_total, 26)
+            test.eq(state.operation_page_size, 25)
+            test.eq(state.operations[1].component, "bee/new")
+            test.eq(#state.operations[1].migration_work, 1)
+            local selected, selected_problem = model.select_operation(state, state.operations[1].digest)
+            test.not_nil(selected)
+            test.is_nil(selected_problem)
+            local selected_status = model.status_intent(state)
+            test.eq(selected_status and selected_status.expected_digest, state.operations[1].digest)
+        end)
+        test.it("keeps old receipts view-only and refuses blind recovery", function()
+            local state = model.new()
+            model.apply_history(state, ok({page = 1, total = 2, page_size = 25, operations = {
+                {digest = string.rep("c", 64), component = "bee/old", action = "install", state = "published", message = "old"},
+                {digest = string.rep("d", 64), component = "bee/done", action = "update", state = "complete", message = "done", baseline_revision = 3,
+                    request = {action = "update", component = "bee/done", version = "1.0.0", parameters = {}, migration_policy = "none"}},
+            }}))
+            local _, problem = model.select_operation(state, string.rep("c", 64))
+            test.is_nil(problem)
+            test.eq(model.recover(state), "this operation has no stored request for recovery")
+            local _, done_problem = model.select_operation(state, string.rep("d", 64))
+            test.is_nil(done_problem)
+            test.eq(model.recover(state), "only published or recovery-required operations can be recovered")
+        end)
+        test.it("reviews recovery with the exact stored request and digest", function()
+            local state = model.new()
+            local digest = string.rep("e", 64)
+            local request = {action = "install", component = "bee/recover", version = "1.2.3", parameters = {{name = "bee.recover:flag", value = true}}, migration_policy = "up"}
+            local reply = ok({page = 1, total = 1, page_size = 25, operations = {{digest = digest, component = "bee/recover", action = "install", state = "recovery_required", message = "review", baseline_revision = 11, request = request}}})
+            model.apply_history(state, reply)
+            request.version = "9.9.9"
+            local selected, select_problem = model.select_operation(state, digest)
+            test.not_nil(selected)
+            test.is_nil(select_problem)
+            test.is_nil(model.recover(state))
+            local intent, problem = model.confirm_intent(state)
+            test.is_nil(problem)
+            test.not_nil(intent)
+            if intent and intent.request then
+                test.eq(intent.expected_digest, digest)
+                test.eq(intent.request.version, "1.2.3")
+                test.eq(intent.request.parameters[1].value, true)
+            end
+            model.select_version(state, "9.9.9")
+            test.is_nil(model.confirm_intent(state))
+        end)
     end)
 end
 return test.run_cases(define_tests)

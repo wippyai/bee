@@ -19,7 +19,7 @@ type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
     baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?,
-    migration_work: migration_work.Work?}
+    migration_work: migration_work.Work?, request: {[string]: unknown}?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -70,6 +70,13 @@ local function expected_modules(raw: unknown): {ExpectedModule}?
     return result
 end
 
+local function request_value(request: plan.Request): {[string]: unknown}
+    local result: {[string]: unknown} = {action = request.action, component = request.component,
+        migration_policy = request.migration_policy}
+    if request.action ~= "uninstall" then result.version, result.parameters = request.version, request.parameters end
+    return result
+end
+
 local function decode_receipt(raw: unknown): Receipt?
     local value = bounds.object(raw)
     if not value then return nil end
@@ -84,21 +91,62 @@ local function decode_receipt(raw: unknown): Receipt?
     if value.expected_modules ~= nil and not expected then return nil end
     local work = value.migration_work ~= nil and migration_work.decode(value.migration_work) or nil
     if value.migration_work ~= nil and not work then return nil end
+    local request: {[string]: unknown}? = nil
+    if value.request ~= nil then
+        local decoded = plan.decode(value.request)
+        if not decoded or decoded.action ~= action or decoded.component ~= component then return nil end
+        local encoded = canonical.encode(decoded)
+        if not encoded or hash.sha256(encoded) ~= request_digest then return nil end
+        request = request_value(decoded)
+    end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work}
+        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work, request = request}
 end
 
-function M.status(raw: unknown): Result
+function M.status(raw: unknown, options: unknown?): Result
     local measured = digest(raw)
-    if not measured then return transaction.failure("INVALID", "invalid plan digest") end
+    if raw ~= nil and not measured then return transaction.failure("INVALID", "invalid plan digest") end
     local actor = security.actor()
     if not actor then return transaction.failure("DENIED", "authenticated installer required") end
     local snapshot, problem = registry.snapshot()
     if not snapshot then return transaction.failure("UNAVAILABLE", tostring(problem)) end
+    if not measured then
+        local request = bounds.object(options == nil and {} or options)
+        if not request or bounds.fields(request, {"page"}) then return transaction.failure("INVALID", "invalid operation history request") end
+        local page: integer = 1
+        if request.page ~= nil then
+            local decoded_page = bounds.count(request.page)
+            if not decoded_page or decoded_page < 1 or decoded_page > 10000 then
+                return transaction.failure("INVALID", "invalid operation history page")
+            end
+            page = decoded_page
+        end
+        local state, state_error = snapshot:state()
+        if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+        local owned: {Receipt} = {}
+        for _, item in ipairs(state.entries) do
+            if item.id:sub(1, 19) == "bee.hub.operations:" then
+                local data = bounds.object(item.data)
+                if data and data.actor_id == actor:id() then
+                    local receipt = decode_receipt(data)
+                    if not receipt or item.id ~= receipt_id(receipt.digest) then return transaction.failure("INTERNAL", "invalid owned Hub operation receipt") end
+                    owned[#owned + 1] = receipt
+                end
+            end
+        end
+        table.sort(owned, function(a: Receipt, b: Receipt): boolean
+            if a.baseline_revision ~= b.baseline_revision then return a.baseline_revision > b.baseline_revision end
+            return a.digest < b.digest
+        end)
+        local selected: {Receipt} = {}
+        local first = (page - 1) * 25 + 1
+        for index = first, math.min(#owned, first + 24) do selected[#selected + 1] = owned[index] end
+        return transaction.success({operations = selected, page = page, total = #owned, page_size = 25}, false)
+    end
     local entry = snapshot:get(receipt_id(measured))
     if not entry then return transaction.failure("NOT_FOUND", "no published operation for this plan") end
     local receipt = decode_receipt(entry.data)
-    if not receipt then return transaction.failure("INTERNAL", "invalid Hub operation receipt") end
+    if not receipt or receipt.digest ~= measured then return transaction.failure("INTERNAL", "invalid Hub operation receipt") end
     if receipt.actor_id ~= actor:id() then return transaction.failure("DENIED", "operation belongs to another actor") end
     return transaction.success(receipt, false)
 end
@@ -318,7 +366,7 @@ function M.apply(raw: unknown, expected: unknown): Result
         expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
     end
     local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
-        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected, migration_work = work}
+        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected, migration_work = work, request = request_value(request)}
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()

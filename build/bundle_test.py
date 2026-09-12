@@ -50,6 +50,21 @@ class BundleTest(unittest.TestCase):
         self.assertEqual(owners["bee.hive_manager"], "bee/bee")
         self.assertEqual(owners["bee.hive.telemetry"], "bee/hive")
 
+    def test_build_metadata_uses_manifest_pins_and_staged_source_revision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            manifest = {"runtime": {"repository": "https://runtime.example", "commit": "r" * 40},
+                        "native": [{"module": "github.com/example/native", "version": "v1.2.3"}]}
+            with patch.object(bundle, "source_revision", return_value="b" * 40 + "-dirty"):
+                bundle.write_build_metadata(source, manifest, "0.1.0", Path(temporary))
+            generated = (source / "src/apps/settings/build_info.lua").read_text()
+            self.assertIn('version = "0.1.0"', generated)
+            self.assertIn('build = "bbbbbbbbbbbb-dirty"', generated)
+            self.assertIn('source_revision = "' + "b" * 40 + '-dirty"', generated)
+            self.assertIn('runtime = "https://runtime.example"', generated)
+            self.assertIn('runtime_commit = "' + "r" * 40 + '"', generated)
+            self.assertIn('native_version = "v1.2.3"', generated)
+
     def test_new_namespace_requires_explicit_owner(self):
         self.entries["bee.new:app"] = "process.lua"
         with self.assertRaisesRegex(ValueError, "unowned=.*bee.new"):

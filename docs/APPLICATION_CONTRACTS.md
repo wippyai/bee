@@ -283,7 +283,9 @@ boots and must never serve as persistent identities. Failed/incompatible restore
 retain their checkpoint rather than deleting it. Closing a live view-owned instance
 removes its resume record after EXIT; exiting the workspace retains it.
 
-Settings checkpoints its selected pane and browsing position. A chat driver can
+Settings checkpoints its selected pane and browsing position. Its About pane
+reports the version and source/runtime/native pins embedded in the loaded Bee
+bundle; editable source displays an explicit development-unknown fallback. A chat driver can
 checkpoint a conversation UID. A terminal needs a surviving session service to
 rejoin a live PTY; the current native Terminal deliberately declares no cold-resume
 contract. Database migration version, registry version, application revision and

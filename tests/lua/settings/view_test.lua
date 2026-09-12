@@ -39,6 +39,27 @@ local function define_tests()
             local end_offset = view.offset(14, 0, grid, 14, true)
             test.is_true(14 > end_offset and 14 <= end_offset + grid.capacity)
         end)
+        test.it("shows loaded bundle identity and the project website in About", function()
+            for _, width in ipairs({1, 18, 28, 62, 100}) do
+                for _, height in ipairs({1, 4, 8, 18}) do
+                    local frame = view.draw(width, height, appearance.defaults(), "about", 0)
+                    test.eq(#frame.rows, height)
+                    for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), width) end
+                    for _, hit in ipairs(frame.hits) do
+                        test.is_true(hit.x >= 1 and hit.y >= 1)
+                        test.is_true(hit.x + hit.width - 1 <= width)
+                        test.is_true(hit.y + hit.height - 1 <= height)
+                    end
+                end
+            end
+            local text = table.concat(view.draw(100, 18, appearance.defaults(), "about", 0).rows, "\n")
+            test.is_true(text:find("BEE SETTINGS · ABOUT", 1, true) ~= nil)
+            test.is_true(text:find("development source (unknown)", 1, true) ~= nil)
+            test.is_true(text:find("https://bee.wippy.ai", 1, true) ~= nil)
+            local compact = table.concat(view.draw(40, 8, appearance.defaults(), "about", 100).rows, "\n")
+            test.is_true(compact:find("Native", 1, true) ~= nil)
+            test.is_true(compact:find("Website", 1, true) ~= nil)
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

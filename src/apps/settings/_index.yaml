@@ -36,3 +36,6 @@ entries:
   - tty
   imports:
     appearance: bee.desktop:appearance
+- name: build_info
+  kind: library.lua
+  source: file://build_info.lua

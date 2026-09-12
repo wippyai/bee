@@ -285,7 +285,7 @@ local function define_tests()
             -- Oversized answer in state
             local bad_answer, err5 = funcs.call("bee.driver.agy:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)},
+                state = {started = true, resumed = false, answer_truncated = false, answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)},
                 envelope = {event = "step_update", step_update = {}},
             })
             if err5 then error(tostring(err5)) end
@@ -295,7 +295,7 @@ local function define_tests()
             -- Valid bounded state succeeds
             local valid_reply, err6 = funcs.call("bee.driver.agy:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, session_id = "conv-valid", answer = "prior"},
+                state = {started = true, resumed = false, answer_truncated = false, session_id = "conv-valid", answer = "prior"},
                 envelope = {
                     event = "step_update",
                     step_update = {
@@ -318,6 +318,7 @@ local function define_tests()
                 state = {
                     started = true,
                     resumed = false,
+                    answer_truncated = false,
                     session_id = "conv-valid",
                     terminal = {
                         outcome = "failed",
@@ -342,7 +343,7 @@ local function define_tests()
 
             local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.driver.agy:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, terminal = {outcome = "succeeded", answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)}},
+                state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", answer = string.rep("x", bounds.MAX_RECORD_BYTES + 1)}},
                 envelope = {event = "step_update", step_update = {}},
             })
             if bad_terminal_answer_call_error then error(tostring(bad_terminal_answer_call_error)) end
@@ -350,7 +351,7 @@ local function define_tests()
 
             local bad_terminal_usage, bad_terminal_usage_call_error = funcs.call("bee.driver.agy:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, terminal = {outcome = "succeeded", usage = {input_tokens = -1}}},
+                state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", usage = {input_tokens = -1}}},
                 envelope = {event = "step_update", step_update = {}},
             })
             if bad_terminal_usage_call_error then error(tostring(bad_terminal_usage_call_error)) end
@@ -358,7 +359,7 @@ local function define_tests()
 
             local bad_terminal_error, bad_terminal_error_call_error = funcs.call("bee.driver.agy:normalize", {
                 index = 1,
-                state = {started = true, resumed = false, terminal = {outcome = "failed", error = {code = "failed", message = "x", retryable = "no"}}},
+                state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "failed", error = {code = "failed", message = "x", retryable = "no"}}},
                 envelope = {event = "step_update", step_update = {}},
             })
             if bad_terminal_error_call_error then error(tostring(bad_terminal_error_call_error)) end
@@ -503,10 +504,13 @@ local function define_tests()
             -- verify tools map is nil / not accumulating
             test.is_nil((state :: {[string]: unknown}).tools)
 
-            -- Stream delta chunks totaling > bounds.MAX_RECORD_BYTES
+            -- Stream delta chunks totaling > the retained answer bound. Every
+            -- bounded frame must remain present in observations even though
+            -- the checkpointed summary is omitted after overflow.
             local chunk = string.rep("A", 5000)
+            local observed = {}
             for i = 1, 5 do
-                protocol.normalize(state, i + 1, {
+                local step = protocol.normalize(state, i + 1, {
                     event = "step_update",
                     step_update = {
                         conversation_id = "c1",
@@ -516,13 +520,20 @@ local function define_tests()
                         text_delta = chunk,
                     },
                 })
+                for _, obs in ipairs(step.observations) do
+                    if obs.type == "text" then
+                        observed[#observed + 1] = obs.data.text
+                    end
+                end
             end
 
-            -- 5 chunks of 5000 bytes = 25000 bytes, but state.answer must be strictly capped
-            test.not_nil(state.answer)
-            test.eq(#state.answer, bounds.MAX_RECORD_BYTES)
+            test.eq(table.concat(observed), string.rep("A", 25000))
+            test.is_nil(state.answer)
+            test.is_true(state.answer_truncated)
 
-            -- Result with oversized response is also capped
+            -- An oversized terminal response is omitted rather than silently
+            -- sliced; the bound is signaled as an observation.
+            local notices = 0
             local result_step = protocol.normalize(state, 10, {
                 event = "result",
                 result = {
@@ -533,7 +544,22 @@ local function define_tests()
             })
             test.not_nil(result_step.terminal)
             test.eq(result_step.terminal.outcome, "succeeded")
-            test.eq(#result_step.terminal.answer, bounds.MAX_RECORD_BYTES)
+            test.is_nil(result_step.terminal.answer)
+            for _, obs in ipairs(result_step.observations) do
+                if obs.type == "notice" and obs.data.code == "answer_truncated" then notices = notices + 1 end
+            end
+            test.is_true(notices >= 1)
+
+            -- A provider output field does not imply a completed tool call
+            -- while the step remains active.
+            local live_state = protocol.new(false)
+            protocol.normalize(live_state, 1, {event = "init", conversation_id = "tool-state", init = {}})
+            local live_step = protocol.normalize(live_state, 2, {
+                event = "step_update",
+                step_update = {conversation_id = "tool-state", state = "ACTIVE", step_type = "tool_call", tool_name = "run_command", output = "still running"},
+            })
+            test.eq(#live_step.observations, 1)
+            test.eq(live_step.observations[1].type, "tool.call")
         end)
 
         test.it("normalizes actual observed wire schema without speculative aliases", function()

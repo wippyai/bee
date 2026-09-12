@@ -8,6 +8,11 @@ local bounds = require("bounds")
 
 local M = {}
 M.PROTOCOL_REVISION = "agy-stream-json-1"
+-- Agy's stream transport rejects frames larger than this bound. Keeping the
+-- same ceiling here lets direct callers receive every bounded text frame while
+-- refusing an envelope that bypassed transport framing.
+M.MAX_FRAME_BYTES = 1048576
+M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
 
 type Observation = {[string]: unknown}
 type State = {
@@ -16,6 +21,7 @@ type State = {
     resumed: boolean,
     terminal: types.Terminal?,
     answer: string?,
+    answer_truncated: boolean,
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 
@@ -127,13 +133,14 @@ function M.new(resumed: boolean): State
     return {
         started = false,
         resumed = resumed,
+        answer_truncated = false,
     }
 end
 
 function M.validate_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown_field = bounds.fields(object, {"session_id", "started", "resumed", "terminal", "answer"})
+    local unknown_field = bounds.fields(object, {"session_id", "started", "resumed", "terminal", "answer", "answer_truncated"})
     if unknown_field then return nil, "state: " .. unknown_field end
 
     local session_id: string? = nil
@@ -150,6 +157,10 @@ function M.validate_state(value: unknown): (State?, string?)
         return nil, "state.resumed must be a boolean"
     end
 
+    if type(object.answer_truncated) ~= "boolean" then
+        return nil, "state.answer_truncated must be a boolean"
+    end
+
     local terminal: types.Terminal? = nil
     if object.terminal ~= nil then
         local decoded, terminal_error = decode_terminal(object.terminal)
@@ -159,8 +170,11 @@ function M.validate_state(value: unknown): (State?, string?)
 
     local answer: string? = nil
     if object.answer ~= nil then
-        answer = bounds.text(object.answer, bounds.MAX_RECORD_BYTES)
+        answer = bounds.text(object.answer, M.MAX_ANSWER_BYTES)
         if not answer then return nil, "state.answer exceeds maximum record bytes" end
+    end
+    if object.answer_truncated == true and answer ~= nil then
+        return nil, "state.answer must be absent after truncation"
     end
 
     return {
@@ -169,6 +183,7 @@ function M.validate_state(value: unknown): (State?, string?)
         resumed = object.resumed :: boolean,
         terminal = terminal,
         answer = answer,
+        answer_truncated = object.answer_truncated :: boolean,
     }, nil
 end
 
@@ -280,25 +295,37 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
 
         if step_type == "agent_response" then
             if type(body.text_delta) == "string" and #body.text_delta > 0 then
-                -- A single provider frame must not create an unbounded number
-                -- of observations or grow the retained answer without limit.
-                local delta = body.text_delta:sub(1, bounds.MAX_RECORD_BYTES)
-                local segment = "assistant:" .. seg_suffix
-                for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", delta, "answer")) do
-                    out[#out + 1] = piece
-                end
-                local current = state.answer or ""
-                if #current < bounds.MAX_RECORD_BYTES then
-                    local remaining = bounds.MAX_RECORD_BYTES - #current
-                    state.answer = current .. delta:sub(1, remaining)
+                local delta = body.text_delta
+                if #delta > M.MAX_FRAME_BYTES then
+                    out[#out + 1] = events.notice(key(index, "answer-bound"), "warning", "oversized_text_delta", "Agy text_delta exceeds the stream frame bound and was refused")
+                else
+                    local segment = "assistant:" .. seg_suffix
+                    for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", delta, "answer")) do
+                        out[#out + 1] = piece
+                    end
+                    if not state.answer_truncated then
+                        local current = state.answer or ""
+                        local answer = current .. delta
+                        if #answer <= M.MAX_ANSWER_BYTES then
+                            state.answer = answer
+                        else
+                            state.answer = nil
+                            state.answer_truncated = true
+                            out[#out + 1] = events.notice(key(index, "answer-bound"), "warning", "answer_truncated", "Agy answer exceeded the retained answer bound; text observations remain complete")
+                        end
+                    end
                 end
             end
             if body.thinking ~= nil then
-                local summary = text_of(body.thinking):sub(1, bounds.MAX_RECORD_BYTES)
+                local summary = text_of(body.thinking)
                 if #summary > 0 then
-                    local segment = "thinking:" .. seg_suffix
-                    for _, piece in ipairs(events.text(key(index, "thinking"), segment, "complete", summary, "reasoning_summary")) do
-                        out[#out + 1] = piece
+                    if #summary > M.MAX_FRAME_BYTES then
+                        out[#out + 1] = events.notice(key(index, "summary-bound"), "warning", "oversized_thinking", "Agy thinking summary exceeds the stream frame bound and was refused")
+                    else
+                        local segment = "thinking:" .. seg_suffix
+                        for _, piece in ipairs(events.text(key(index, "thinking"), segment, "complete", summary, "reasoning_summary")) do
+                            out[#out + 1] = piece
+                        end
                     end
                 end
             end
@@ -323,7 +350,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
                     params = body.command
                 end
                 out[#out + 1] = events.tool_call(key(index, "tool_call"), call_id, tool_name, params)
-            elseif item_state == "DONE" or body.output ~= nil or body.error ~= nil then
+            elseif item_state == "DONE" then
                 local outcome = "succeeded"
                 local fault: {code: string, message: string, retryable: boolean}? = nil
                 local err_obj = body.error
@@ -404,8 +431,14 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local answer: string? = nil
         if outcome == "succeeded" then
             if type(body.response) == "string" then
-                answer = body.response:sub(1, bounds.MAX_RECORD_BYTES)
-            elseif state.answer and #state.answer > 0 then
+                if #body.response <= M.MAX_ANSWER_BYTES then
+                    answer = body.response
+                else
+                    state.answer = nil
+                    state.answer_truncated = true
+                    out[#out + 1] = events.notice(key(index, "answer-bound"), "warning", "answer_truncated", "Agy result response exceeded the retained answer bound; text observations remain complete")
+                end
+            elseif not state.answer_truncated and state.answer and #state.answer > 0 then
                 answer = state.answer
             end
         end

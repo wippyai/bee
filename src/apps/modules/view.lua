@@ -206,7 +206,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     line(y + 2, table.concat(row.targets, " · "), theme.muted)
                     hits[#hits + 1] = {kind = "requirement", key = row.id, x = 1, y = y, width = width, height = 3}
                 end
-                button(2, height - 2, "plan", " Prepare ", state.requirements_digest ~= nil)
+                local action_x = button(2, height - 2, "plan", " Prepare ", state.requirements_digest ~= nil)
+                local requirement = state.requirements[state.selected_requirement]
+                button(action_x, height - 2, "reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
                 line(height - 1, "Defaults are used unless you choose a value.", theme.muted)
                 line(height, status ~= "" and status or "↑↓ select · Enter edit JSON · V versions · P prepare", theme.muted)
                 return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = 0, operation_detail_offset = 0}

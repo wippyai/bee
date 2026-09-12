@@ -337,6 +337,14 @@ local function main(value: unknown)
             changed()
         elseif kind == "installed" then invalidate(); installed()
         elseif kind == "requirements" then requirements()
+        elseif kind == "reset_requirement" then
+            local row = state.requirements[state.selected_requirement]
+            if row and row.origin == "Selected" then
+                model.remove_parameter(state, row.id)
+                invalidate()
+                requirements()
+                status = "Override cleared"
+            end
         elseif kind == "requirement" then
             for index, row in ipairs(state.requirements) do if row.id == key then model.select_requirement(state, index); break end end
             edit_requirement()
@@ -451,6 +459,7 @@ local function main(value: unknown)
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
                         elseif letter == "o" or letter == "O" then operation_history()
+                        elseif key == "delete" and state.phase == "details" and state.requirements_open then handle_hit("reset_requirement", "")
                         elseif letter == "e" and state.phase == "details" then requirements()
                         elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
                         elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")

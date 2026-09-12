@@ -265,3 +265,8 @@ The next Modules layout separates package titles/versions from descriptions,
 exposes clickable search/filter controls, opens details on README, and uses a
 configuration dialog instead of the footer editor when space permits. Validation
 errors keep the editor open. This presentation update is installed in global source `7649cd7` (SHA `9c70d927`).
+
+Requirements also support clearing the selected override with the visible
+Clear override action or Delete. Hub then supplies the declared default again,
+or marks the requirement missing if it has no default. This source change is
+pending the next release.

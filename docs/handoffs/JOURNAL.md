@@ -6131,3 +6131,23 @@ Other-overlay fencing, exact expansion and activation lifecycle remain unproven.
 Required-executable test guards are being tightened separately: an explicitly
 selected native binary must not turn missing runtime capability into a green
 non-execution. No Python changes or global installation accompany this work.
+
+### 2026-09-12 Codex: required native-executable evidence corrected
+
+Terra's `7c75a28` is integrated as `dcdbeb3`. Configured Codex now fails the
+direct authentication, placement authentication and gateway proof cases when
+stdin closure is missing. The existing Python runner is unchanged; no replacement
+test framework was needed. Its positive gate passes 268 cases with both actual
+executables against isolated provider endpoints, exit 0 after 191.9 seconds.
+The disposable negative fixture forces missing capability in the placement case:
+267 pass, one fails specifically with `the configured Codex executable requires
+placement stdin_close`; the required runner rejects the missing proof. Evidence:
+`managed-executable-evidence-{gate,counterfactual}.log`. Strict runtime lint and
+Go vet pass; the known interprocedural convergence warning remains.
+
+User hook integration clarification: configured managed agents wire admitted
+hooks through their scoped gateway and fenced carrier into committed
+`bee.harness.hook` thread observations. Durable subscriptions can consume those
+records. Both real harnesses cover SessionStart, UserPromptSubmit, PreToolUse,
+PostToolUse and Stop. This is not every possible hook, synchronous approval
+interception, default production profile setup or global gateway activation.

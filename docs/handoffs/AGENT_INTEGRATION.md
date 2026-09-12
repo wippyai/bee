@@ -17,6 +17,15 @@ three fixture-only cases (session 78576, 209.2 seconds). These executable checks
 do not establish an authenticated provider turn or cold conversation recovery.
 Global remains unchanged pending the executable-selected project state directory.
 
+The required native-executable gate now fails when configured Codex lacks stdin
+closure instead of returning a green non-execution. The unchanged dedicated
+runner passes 268 cases with both real binaries and isolated provider endpoints
+(`managed-executable-evidence-gate.log`, session 14910). A disposable forced
+capability failure produces 267 passes and one specific configured-Codex failure,
+and the runner rejects the missing required proof
+(`managed-executable-evidence-counterfactual.log`). Ordinary no-binary unit
+checks remain optional and must not be described as real-executable coverage.
+
 Driver configuration delivery is being verified in a separate worktree. Each
 driver owns its configuration format; placement validates and freezes that
 delivery in its existing intent, and both terminal and headless launches consume

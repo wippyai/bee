@@ -76,6 +76,13 @@ local function install_policy(name: string)
     if not applied then error("install gateway fixture policy: " .. tostring(err)) end
 end
 local function admit_root()
+    -- These runner fixtures exercise host-configured roots with literal grant labels.
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    mode.data = {mode = "host_configured"}
+    local selected = registry.snapshot():changes()
+    selected:update(mode)
+    local configured, mode_error = selected:apply()
+    if not configured then error("fixture resource mode: " .. tostring(mode_error)) end
     local entry = registry.get("bee.placement.native:admitted_roots")
     if not entry then error("admitted roots entry") end
     local data = entry.data :: Object

@@ -35,6 +35,8 @@ type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
 type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
+type AvailabilityRequest = {workspace_id: string, name: string}
+type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, present: boolean}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -343,6 +345,92 @@ local function decode_use(value: unknown, extra: {string}): ({[string]: unknown}
         if not bounds.id(object[name]) then return nil, name .. " is not an identifier" end
     end
     return object, nil
+end
+local function decode_availability(value: unknown): (AvailabilityRequest?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "request must be an object" end
+    local unknown_field = bounds.fields(object, {"workspace_id", "name"})
+    if unknown_field then return nil, unknown_field end
+    local workspace_id, name = bounds.id(object.workspace_id), bounds.id(object.name)
+    if not workspace_id then return nil, "workspace_id is not an identifier" end
+    if not name then return nil, "name is not an identifier" end
+    return {workspace_id = workspace_id, name = name}, nil
+end
+local function availability_view(request: AvailabilityRequest, definition_id: string, revision: integer, provider: string,
+    source_kind: string, projection_kind: string, destination: string, present: boolean): Availability
+    return {workspace_id = request.workspace_id, name = request.name, definition_id = definition_id, revision = revision,
+        provider = provider, source_kind = source_kind, projection_kind = projection_kind, destination = destination, present = present}
+end
+-- availability checks the provider-fixed login file without opening it. A
+-- missing stat is the only absence result; a missing or denied fs.get is an
+-- unavailable source, because the source volume itself was not established.
+function M.availability(value: unknown): Reply
+    local request, decode_error = decode_availability(value)
+    if not request then return fail("INVALID", decode_error or "invalid request") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.MANAGE, request.workspace_id) then
+        return fail("DENIED", "caller does not manage workspace " .. request.workspace_id)
+    end
+    local db, open_failure = open()
+    if not db then return open_failure :: Reply end
+    local definition, definition_error = definition_of(db, request.workspace_id, request.name)
+    if definition_error then
+        db:release()
+        return fail("STORAGE", definition_error)
+    end
+    if not definition then
+        db:release()
+        return fail("NOT_FOUND", "credential definition does not exist")
+    end
+    local provider = bounds.member(definition.provider, M.PROVIDERS)
+    local source_kind = text(definition.source_kind)
+    local projection_kind = text(definition.projection_kind)
+    local source_ref = bounds.id(definition.source_ref)
+    local definition_id = bounds.id(definition.definition_id)
+    local revision = integer(definition.revision)
+    local destination = provider and sources.FILE_DESTINATIONS[provider] or nil
+    if not provider or source_kind ~= "fs_directory" or projection_kind ~= "file" or not source_ref
+        or not definition_id or not revision or revision < 1 or not destination or definition.destination ~= destination then
+        db:release()
+        if projection_kind ~= "file" then return fail("INVALID", "availability only supports file projections") end
+        return fail("INVALID", "credential definition has invalid file metadata")
+    end
+    local admitted, admitted_error = sources.host_sources()
+    if not admitted then
+        db:release()
+        return fail("STORAGE", admitted_error or "host sources")
+    end
+    if not sources.admits(admitted, source_ref, request.workspace_id, provider, "file") then
+        db:release()
+        return fail("FORBIDDEN", "the host no longer admits this source")
+    end
+    local directory, directory_error = sources.directory(source_ref)
+    if not directory then
+        db:release()
+        return fail("INVALID", directory_error or "credential source is invalid")
+    end
+    -- Keep the source directory lookup as an explicit configuration check;
+    -- the fs handle is still obtained from the source registry reference, so
+    -- callers cannot substitute the directory metadata or a path.
+    if type(directory.directory) ~= "string" or directory.directory == "" then
+        db:release()
+        return fail("INVALID", "credential source directory is invalid")
+    end
+    local volume, volume_error = fs.get(source_ref)
+    if not volume then
+        db:release()
+        return fail("UNAVAILABLE", "credential source volume unavailable: " .. tostring(volume_error))
+    end
+    local info, stat_error = volume:stat("/" .. destination)
+    db:release()
+    if info then
+        if info.type ~= "file" or info.is_dir == true then return fail("INVALID", "provider login path is not a file") end
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, true))
+    end
+    if stat_error and stat_error:kind() == errors.NOT_FOUND then
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, false))
+    end
+    return fail("UNAVAILABLE", "provider login path could not be inspected")
 end
 -- check: the bindings without bytes, for a placement preparing or
 -- reconciling an attempt.

@@ -16,6 +16,8 @@ effect for projections already issued. A projection binds the authenticated subj
 attempt, the profile, binding and launch-policy digests, the provider's
 fixed destination, the materializer identity, an expiry and the workspace
 authorization epoch. `check` re-checks the bindings without bytes;
+`availability` is a manager-only metadata probe for an existing file
+definition and reports whether its provider-fixed login file is present;
 `materialize` re-checks them for an admitted materializer and returns the
 value once, in a reply nothing persists, recording the generation key, the
 generation and the materializer's actor. A generation key is accepted once

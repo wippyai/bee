@@ -257,6 +257,54 @@ local function define_tests()
             test.eq(#(listed.definitions :: {unknown}), 2)
             clean(call(manager, "list", {workspace_id = ws}))
         end)
+        test.it("reports provider-fixed login availability by stat without exposing bytes", function()
+            local ws = fresh("availability-ws")
+            admit_sources(ws)
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
+
+            local present_def = value(call(manager, "define", {workspace_id = ws, name = "present_login", provider = "codex", source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
+            local missing_def = value(call(manager, "define", {workspace_id = ws, name = "missing_login", provider = "codex", source = {kind = "fs_directory", ref = MISSING_LOGIN_SOURCE}}))
+            value(call(manager, "define", {workspace_id = ws, name = "denied_login", provider = "codex", source = {kind = "fs_directory", ref = UNPRIVILEGED_LOGIN_SOURCE}}))
+            write_file(UNPRIVILEGED_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
+
+            local present = value(call(manager, "availability", {workspace_id = ws, name = "present_login"}))
+            test.eq(present.present, true)
+            test.eq(present.definition_id, present_def.definition_id)
+            test.eq(present.revision, 1)
+            test.eq(present.destination, "auth.json")
+            clean(call(manager, "availability", {workspace_id = ws, name = "present_login"}))
+
+            local missing = value(call(manager, "availability", {workspace_id = ws, name = "missing_login"}))
+            test.eq(missing.present, false)
+            test.eq(missing.definition_id, missing_def.definition_id)
+            test.eq(missing.destination, "auth.json")
+            clean(call(manager, "availability", {workspace_id = ws, name = "missing_login"}))
+
+            -- The source allowlist admits this root, but the host file policy
+            -- deliberately omits it. The probe must fail closed.
+            test.eq(code(call(manager, "availability", {workspace_id = ws, name = "denied_login"})), "UNAVAILABLE")
+            test.eq(code(call(outsider, "availability", {workspace_id = ws, name = "present_login"})), "DENIED")
+
+            local env_def = value(call(manager, "define", {workspace_id = ws, name = "environment", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
+            test.eq(env_def.projection_kind, "environment")
+            test.eq(code(call(manager, "availability", {workspace_id = ws, name = "environment"})), "INVALID")
+
+            local source_entry = registry.get("bee:credential_sources")
+            if not source_entry then error("sources entry") end
+            local source_data = source_entry.data :: {[string]: unknown}
+            local saved_sources = source_data.sources
+            source_data.sources = {}
+            local changes = registry.snapshot():changes()
+            changes:update(source_entry)
+            local applied, apply_error = changes:apply()
+            if not applied then error("remove availability source: " .. tostring(apply_error)) end
+            test.eq(code(call(manager, "availability", {workspace_id = ws, name = "present_login"})), "FORBIDDEN")
+            source_data.sources = saved_sources
+            local restore = registry.snapshot():changes()
+            restore:update(source_entry)
+            local restored, restore_error = restore:apply()
+            if not restored then error("restore availability source: " .. tostring(restore_error)) end
+        end)
         test.it("issues file projections and materializes bytes once to admitted materializer only", function()
             local ws = fresh("ws")
             admit_sources(ws)

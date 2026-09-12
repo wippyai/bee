@@ -239,3 +239,29 @@ node departure, rejoins the retained shell and rejects owner service failures.
 standalone regression is `tests/native_client.py::crashed_client`; actual binary
 acceptance and installation remain pending. This does not prove immediate actor
 EXIT while transport remains alive; that runtime gate is unchanged.
+
+## September 12: managed Agent MCP and Docker requirements
+
+Source audit of exact runtime pin `291f5c6b708c80afe5da07f3223767573b4d183f`
+identifies two remaining native seams. These are requirements, not implemented
+Bee APIs or passing integration claims:
+
+- **OS-assigned HTTP listener port.** `service/http/server.go` binds the configured
+  address but `ensureRunning` probes `s.config.Addr`, and startup status also
+  reports that configured address. With `127.0.0.1:0`, readiness must instead use
+  the actual bound listener address. The host also needs authoritative access to
+  that address for the existing gateway endpoint and exact readiness permission.
+  Retain ownership of the original listener; choosing a free port and releasing
+  it before startup is not acceptable production allocation. No matching open
+  runtime PR was found in the September 12 queue inspection.
+- **Exact Docker attempt mounts.** The pin already has native Docker PTY
+  attachment/resize through `exec.PTYProcess`. Executor volumes are static,
+  while per-process options do not select the admitted project/private HOME
+  mounts. The host executor needs an exact per-attempt mount selection and an
+  execution identity that placement can reconcile after restart. Drivers must
+  not receive Docker authority. Do not mount the entire placement root, create
+  a second container, or introduce a CLI attachment lifecycle.
+
+Changes belong in runtime PRs assigned to Rodrigo (`skhaz`), with native
+acceptance before a Bee pin change. Existing global `f1a29d08` does not claim
+production MCP activation or Docker execution. This audit changed no runtime code.

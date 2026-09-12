@@ -49,6 +49,10 @@ local function main(value: unknown)
         return 1
     end
     local function reveal()
+        if pane == "about" then
+            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width) - math.max(0, height - 5)), offset)))
+            return
+        end
         offset = view.offset(selected(), offset, view.grid(width, height), count(), true)
     end
     local function choose(index: integer)
@@ -143,8 +147,8 @@ local function main(value: unknown)
                 elseif key == "down" then choose(selected() + grid.columns)
                 elseif key == "home" then choose(1)
                 elseif key == "end" then choose(count())
-                elseif key == "pgup" then browse(-(pane == "about" and math.max(1, height - 5) or grid.capacity))
-                elseif key == "pgdown" then browse(pane == "about" and math.max(1, height - 5) or grid.capacity)
+                elseif key == "pgup" then browse(-math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
+                elseif key == "pgdown" then browse(math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
                 elseif key == "tab" then switch(pane == "theme" and "background" or (pane == "background" and "taskbar" or (pane == "taskbar" and "about" or "theme")))
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" then

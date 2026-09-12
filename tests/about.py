@@ -22,10 +22,9 @@ def exercise(packed):
             assert "development source (unknown)" in text, text
             ui.key(b"\x1b[24~")
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
-            ui.resize(18, 8)
+            ui.resize(48, 16)
             ui.wait("BEE SETTINGS", timeout=10)
-            ui.key(b"\x1b[6~")
-            ui.key(b"\x1b[6~")
+            ui.key(b"\x1b[6~" * 60)
             ui.wait("Website", timeout=10)
             ui.quit()
         finally:

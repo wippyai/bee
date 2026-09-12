@@ -1,5 +1,16 @@
 # Agent integration checkpoint — September 12
 
+Launch readmission is now implemented in `fa50d4d`. Its typed continuation
+references retain the original action/thread/session while current owner reads
+and fresh resource grants admit a new attempt. An empty brief prevents prompt
+replay. All 626 Lua tests, 23 focused admission/continuation tests, harness
+isolation and five managed-window cases pass. The broader foundation check is
+still running in `recovery-admission-foundation.log`; no new full-pass claim is
+made. The new admission fixture constructs placement completion explicitly and
+does not prove native cleanup. The Agent app still declares no recovery schema.
+See [the recovery handoff](NATIVE_AGENT_RECOVERY.md) for the native terminal
+identity boundary and the possible Claude inline-configuration route.
+
 The latest component checkpoint adds exclusive retained session homes and
 interactive continuation resolved from committed hook observations. Placement
 uses its existing intent transaction to refuse a second unfinished attempt;

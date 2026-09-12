@@ -6023,3 +6023,31 @@ to `skhaz`. Per-project default state selection before the runtime lock remains
 the installation gate. Agent saved-state/fresh-admission recovery and refreshed
 retained configuration are the next Bee work, without a new persistence owner.
 Wolfden fact 1277 records the component build and current runtime boundary.
+
+### 2026-09-12 Codex: fresh admission for recorded window continuations
+
+Pushed `fa50d4d` on the Agent integration branch. The existing launch contract
+accepts bounded original-request/predecessor/thread references, requires the
+saved plan digest and an empty brief, verifies current owner records and obtains
+fresh grants. It derives the same action and retained session and a new attempt;
+caller-supplied session authority or provider resume strings remain rejected.
+
+All 626 unit tests pass (122.8s), along with 23 focused admission/continuation
+tests, source/pack harness isolation and five managed-window cases. Evidence is
+in `recovery-admission-{all-tests,receipt,managed-window,window-app}.log` under
+the September 12 evidence directory. The first managed-window invocation used
+an incorrect Make target after isolation passed; the corrected target passes.
+The admission fixture uses actual thread/resource owners but constructs its
+completed placement state without starting a process. Native cleanup and cold
+app recovery are still unproven. Foundation job 66125 is running separately.
+
+Exact runtime `291f5c6` source confirms terminal attachment consumes the exec
+handle before asynchronous process start. The returned terminal session has no
+identity accessor; leader/PTY completion alone cannot prove group absence.
+The existing placement cleanup remains the owner of that decision. No runtime
+changes were made. Claude's CLI supports inline MCP/settings configuration,
+which may avoid rewriting retained files; it needs driver integration and
+acceptance. Codex hook/trust file refresh remains unresolved. A generic driver
+configuration proposal must account for empty argv literals and Codex's
+materialization-time HOME-dependent trust data before implementation.
+Wolfden facts 1280–1281 record the evidence. Global Bee remains unchanged.

@@ -325,18 +325,27 @@ local function main()
     -- acknowledges only a claimed row. The carrier record path is exercised
     -- with the retained claim below. A claim or acknowledgment from an epoch
     -- below the highest admitted for the attempt changes nothing.
-    local claimed = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim")
+    local lost_claim = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim whose reply is lost")
+    local lost_list = lost_claim.hooks :: {Object}
+    assert(#lost_list == 3 and lost_list[1].event_id == event_1, "the first three queued submissions are claimed in order")
+    local claimed = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "recover lost claim reply")
     local claimed_list = claimed.hooks :: {Object}
-    assert(#claimed_list == 3 and claimed_list[1].event_id == event_1, "the first three queued submissions are claimed in order")
-    local again_claimed = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim again")
-    assert(#(again_claimed.hooks :: {Object}) == 3 and (again_claimed.hooks :: {Object})[1].event_id ~= event_1, "a second claim under the same epoch takes the next rows, never the claimed ones")
-    local acked = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {event_1}}), "ack")
-    assert(acked.acknowledged == 1, "one acknowledged")
+    assert(#claimed_list == #lost_list, "the lost claim is redelivered at the same bound")
+    for index, item in ipairs(claimed_list) do
+        assert(item.event_id == lost_list[index].event_id, "the same epoch redelivers outstanding rows in order")
+    end
+    local claimed_ids: {string} = {}
+    for index, item in ipairs(claimed_list) do claimed_ids[index] = tostring(item.event_id) end
+    local acked = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack claimed batch")
+    assert(acked.acknowledged == 3, "the recovered batch is acknowledged once")
     local committed_status, committed_body = hook_get("act-k", hook_k, event_1)
     assert(committed_status == 200 and committed_body and committed_body.status == "committed", "status answers committed")
     local replay_status, replay_body = hook_post("act-k", hook_k, first_payload)
     assert(replay_status == 200 and replay_body == "", "a replay of a committed submission answers 200 with an empty body")
-    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {event_1}}), "ack twice").acknowledged == 0, "an acknowledgment is idempotent")
+    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack twice").acknowledged == 0, "an acknowledgment is idempotent")
+    local progressed_claim = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim after acknowledgment")
+    assert(#(progressed_claim.hooks :: {Object}) == 3 and (progressed_claim.hooks :: {Object})[1].event_id ~= event_1,
+        "acknowledgment advances the next bounded claim")
     -- Sealing ends intake at once and keeps the accepted rows for the carrier.
     local pre_seal = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "queue before seal")
     ok(call("bee.gateway:seal", {binding_id = binding_k}), "seal")
@@ -350,8 +359,8 @@ local function main()
     assert(#(taken_over.hooks :: {Object}) == 2, "a higher epoch takes over rows a lower epoch claimed, sealed or not")
     local stale_ack = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {(taken_over.hooks :: {Object})[1].event_id}}), "stale ack")
     assert(stale_ack.acknowledged == 0, "a lower epoch cannot acknowledge what a higher one claimed")
-    local unclaimed_ack = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(again_claimed.hooks :: {Object})[2].event_id}}), "ack without claim")
-    assert(unclaimed_ack.acknowledged == 0, "an epoch that did not claim a row cannot acknowledge it")
+    local unclaimed_ack = ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(progressed_claim.hooks :: {Object})[3].event_id}}), "ack without claim")
+    assert(unclaimed_ack.acknowledged == 0, "an epoch that did not take over a row cannot acknowledge it")
     local admitted_higher = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 4, tools = {"thread_read"}, hooks = {"Stop", "PreToolUse"}, ttl_ms = 60000}), "admit act-k under epoch 4")
     assert(code(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 3})) == "CONFLICT", "a claim below the highest admitted epoch is refused")
     assert(code(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(taken_over.hooks :: {Object})[1].event_id}})) == "CONFLICT",
@@ -363,7 +372,7 @@ local function main()
         if item.status == "committed" then committed_count = committed_count + 1 end
         if item.status == "queued" and (tonumber(item.claimed_epoch) or 0) > 0 then retained_claimed = retained_claimed + 1 end
     end
-    assert(committed_count == 1 and rejected_count > 0 and retained_claimed > 0,
+    assert(committed_count == 3 and rejected_count > 0 and retained_claimed > 0,
         "supersession rejects unclaimed rows, keeps committed rows and retains claimed uncertainty: " .. tostring(committed_count) .. " " .. tostring(rejected_count) .. " " .. tostring(retained_claimed))
     local recovered_after_supersession = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 4, limit = 3}), "reclaim superseded claims")
     assert(#(recovered_after_supersession.hooks :: {Object}) > 0, "the current carrier reclaims a superseded claimed row")

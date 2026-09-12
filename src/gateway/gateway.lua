@@ -939,11 +939,12 @@ local function intake_request(value: unknown, extra: {string}): (Object?, Bindin
     return object, binding, db, carrier_epoch, nil
 end
 -- hook_claim: the carrier takes the next queued submissions of its binding
--- under its epoch; rows a lower epoch claimed are taken over, rows a higher
--- epoch claimed are never touched. An invalid binding rejects only work no
--- carrier claimed. It still lets a current or replacement carrier reclaim
--- claimed rows, because their thread commit may have succeeded before the
--- acknowledgement was lost.
+-- under its epoch. Rows a lower epoch claimed are taken over; rows already
+-- claimed by this epoch are redelivered until acknowledgment, while rows a
+-- higher epoch claimed are never touched. An invalid binding rejects only
+-- work no carrier claimed. It still lets a current or replacement carrier
+-- reclaim claimed rows, because their thread commit may have succeeded before
+-- the acknowledgement was lost.
 function M.hook_claim(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"limit"})
     if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
@@ -974,12 +975,12 @@ function M.hook_claim(value: unknown): Reply
         recovery_only = true
     end
     local claimed_filter = recovery_only and " AND claimed_epoch > 0" or ""
-    local rows, err = tx:query("SELECT event_id FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued' AND claimed_epoch < ?" .. claimed_filter .. " ORDER BY sequence LIMIT ?", {current_binding.binding_id, carrier_epoch, limit})
+    local rows, err = tx:query("SELECT event_id FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued' AND claimed_epoch <= ?" .. claimed_filter .. " ORDER BY sequence LIMIT ?", {current_binding.binding_id, carrier_epoch, limit})
     if err or not rows then tx:rollback(); db:release(); return fail("STORAGE", "read queued hooks") end
     local claimed: {Object} = {}
     for _, row in ipairs(rows) do
         local event_id = tostring((row :: Row).event_id)
-        local result, claim_error = tx:execute("UPDATE bee_gateway_hooks SET claimed_epoch = ?, claimed_at = ?, updated_at = ? WHERE event_id = ? AND status = 'queued' AND claimed_epoch < ?", {carrier_epoch, at, at, event_id, carrier_epoch})
+        local result, claim_error = tx:execute("UPDATE bee_gateway_hooks SET claimed_epoch = ?, claimed_at = ?, updated_at = ? WHERE event_id = ? AND status = 'queued' AND claimed_epoch <= ?", {carrier_epoch, at, at, event_id, carrier_epoch})
         if claim_error then tx:rollback(); db:release(); return fail("STORAGE", "claim hook") end
         if result and (integer(result.rows_affected) or 0) == 1 then
             local detail, detail_error = tx:query("SELECT event_id, event, occurrence, ambiguous, digest, fields_json, provenance, sequence, created_at FROM bee_gateway_hooks WHERE event_id = ?", {event_id})

@@ -98,7 +98,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
             if item.thread_id ~= request.thread_id or item.action_id ~= request.action_id or item.kind ~= "observation"
                 or item.sequence <= sequence or item.sequence > through then return nil, "continuation record does not match its page" end
             sequence = item.sequence
-            if item.attempt_id == request.previous_attempt_id and item.source == "bee" then
+            if item.attempt_id == request.previous_attempt_id and item.source == "bee" and item.producer_id == request.owner_id then
                 local body = bounds.object(item.body)
                 local extension = body and bounds.object(body.data) or nil
                 if extension and extension.type == "extension" and extension.event_name == "bee.harness.hook" then

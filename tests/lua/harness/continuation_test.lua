@@ -80,7 +80,10 @@ local function define_tests()
             local rows: {unknown} = {observation(1025, "provider-session", "old-binding", false, "previous"),
                 observation(1026, "unrelated-session", "other-binding", false, "other-attempt"),
                 observation(1027, "ambiguous-session", "old-binding", true, "previous")}
-            local scanned = 1027
+            local foreign = observation(1028, "forged-session", "old-binding", false, "previous")
+            foreign.producer_id = "another-member"
+            rows[#rows + 1] = foreign
+            local scanned = 1028
             local more = false
             local denied = false
             local reads = 0
@@ -143,6 +146,8 @@ local function define_tests()
             rows = {observation(1025, "provider-session", "new-binding", false, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
             rows = {observation(1025, "provider-session", "old-binding", true, "previous")}
+            test.is_nil(continuation.resolve_window(call, request))
+            rows = {foreign}
             test.is_nil(continuation.resolve_window(call, request))
             rows = {}
             test.is_nil(continuation.resolve_window(call, request))

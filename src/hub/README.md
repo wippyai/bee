@@ -24,9 +24,9 @@ Apply replans in a private worker before publishing the dependency-root change
 and an operation receipt to durable registry history. The worker serializes Bee
 Hub operations, not all registry writers.
 
-Real install/update/uninstall and receipt persistence across restart have passed
-on the existing runtime. Migration execution, interrupted-operation recovery,
-resource filesystem acceptance and full Modules confirmation/apply UI acceptance
-remain incomplete. Basic Modules input, F12 and resize pass from source and pack.
-This source is not yet the globally installed release. Authored component
+Real install/update/uninstall, receipt persistence across restart and uninstalled
+resource filesystem reads pass on the existing runtime. Modules input, F12 and
+resize pass from source and pack. Migration execution, interrupted-operation
+recovery and full live-Hub confirmation/apply UI acceptance remain incomplete.
+Authored component
 overlays and application launch/sharing admission remain separate responsibilities.

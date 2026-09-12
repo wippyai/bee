@@ -23,6 +23,13 @@ local function handle(raw: unknown): {[string]: unknown}
             versions = {{version = "1.0.0", yanked = false}, {version = "0.9.0", yanked = false}}}}
     elseif raw.operation == "inspect" then
         return {ok = true, replayed = false, value = {requirements = {missing = {}, bindings = {}}}}
+    elseif raw.operation == "plan" then
+        return {ok = true, replayed = false, value = {request = raw.request,
+            digest = string.rep("a", 64), ready = true, base_revision = 1,
+            modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}}}
+    elseif raw.operation == "apply" then
+        assert(raw.expected_digest == string.rep("a", 64), "confirmation lost the displayed digest")
+        return {ok = true, replayed = false, value = {state = "complete", message = "Fixture confirmation received"}}
     end
     return {ok = false, replayed = false, code = "FIXTURE", message = "No fixture mutation"}
 end
@@ -58,6 +65,20 @@ def exercise(project, packed, pack):
             ui.key(b"j")
             ui.wait("Parameter name (namespace:name)")
             ui.key(b"\x1b")
+            ui.key(b"p")
+            ui.wait("Ready for confirmation")
+            assert "Fixture confirmation received" not in ui.text(), "planning applied the operation"
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            ui.key(b"\x1b")
+            ui.wait("MODULES  PLAN")
+            assert "Fixture confirmation received" not in ui.text(), "cancelling confirmation applied the operation"
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            ui.key(b"\r")
+            ui.wait("Fixture confirmation received")
+            ui.wait("Receipt state: complete")
+            assert "Applying measured plan" not in ui.text(), "completed operation retained pending status"
             ui.key(b"\x1b[24~")
             ui.wait("MODULES", timeout=8)
             ui.resize(60, 20)
@@ -74,7 +95,7 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
-    print("Modules source/pack: keyword/search, details, JSON shortcut, F12, resize and shutdown pass")
+    print("Modules source/pack: filters, JSON input, plan/review/cancel/confirm, completed receipt, F12, resize and shutdown pass")
 
 
 if __name__ == "__main__":

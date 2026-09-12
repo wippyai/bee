@@ -104,12 +104,18 @@ real `wippy/test` install, update, uninstall, confirmation mismatch and permissi
 denials, then restarts and verifies durable receipts and continued removal.
 `make modules-app-check` uses deterministic fixture Hub replies with the real
 broker, app process and presenter from source and a pack. Keyword clearing,
-independent search, details, JSON parameter keyboard input, F12, resize and
-shutdown pass. It does not prove the entire confirmation/apply UI against live
+independent search, details, JSON parameter keyboard input, plan/review/cancel/
+confirm, completed receipt, F12, resize and shutdown pass. A published or missing
+receipt state is not displayed as completion. It does not prove the entire confirmation/apply UI against live
 Hub; the real mutation API is covered separately above.
 
-Complete resource-file, confirmation/apply UI, migration/recovery and distribution
-acceptance remain release work.
+`make hub-preview-check` reads public `keeper/keeper@0.5.83` as an uninstalled
+test artifact. Root/nested resource listing, chunked file reads, EOF, traversal
+and digest mismatch rejection pass with unchanged registry history. This package
+is test data only; Bee does not install or depend on Keeper.
+
+Complete confirmation/apply UI, migration/recovery and distribution acceptance
+remain release work.
 
 The component follows Keeper's application-level planning and replan-before-apply
 flow without importing Keeper. Runtime changes are outside this lane; earlier

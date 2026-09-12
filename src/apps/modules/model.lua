@@ -291,8 +291,8 @@ function M.apply_result(state: State, reply: Reply)
     local receipt = object(reply.value)
     local code = M.text(reply.code or (reply.ok and "OK" or "FAILED"), 80)
     local message = M.text(reply.message or receipt.message or "Hub operation finished", 512)
-    local status = M.text(receipt.state or (reply.ok and "complete" or "failed"), 80)
-    local complete = reply.ok and status ~= "failed" and status ~= "recovery_required"
+    local status = M.text(receipt.state or (reply.ok and "unknown" or "failed"), 80)
+    local complete = reply.ok and status == "complete"
     state.result = {ok = complete, code = code, message = message, replayed = reply.replayed, state = status}
     if code == "STALE" then state.plan = nil end
     state.phase = "result"

@@ -7,7 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Hub
-    comment: Exact package inspection; dependency resolution and confirmed installation remain gated
+    comment: Scoped package reads and dependency management; migration execution and interrupted publication recovery remain incomplete
 - name: requirements
   kind: library.lua
   source: file://requirements.lua

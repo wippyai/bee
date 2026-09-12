@@ -312,6 +312,7 @@ local function main(value: unknown)
                 local value = completed(found)
                 if found.apply then
                     apply_pending = false
+                    status = ""
                     model.apply_result(state, value)
                 end
                 changed()

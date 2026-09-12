@@ -55,7 +55,7 @@ local function define_tests()
             test.is_nil(state.plan)
             test.eq(state.notice, "plan belongs to an earlier package selection; ignored")
         end)
-        test.it("does not present a failed or recovery-required receipt as a successful operation", function()
+        test.it("requires a completed receipt before presenting a successful operation", function()
             local state = model.new()
             model.apply_result(state, ok({state = "failed", message = "transaction failed"}))
             test.not_nil(state.result)
@@ -63,6 +63,12 @@ local function define_tests()
             model.apply_result(state, ok({state = "recovery_required", message = "check status"}))
             test.not_nil(state.result)
             if state.result then test.is_false(state.result.ok) end
+            model.apply_result(state, ok({state = "published", message = "publication is not completion"}))
+            if state.result then test.is_false(state.result.ok) end
+            model.apply_result(state, ok({}))
+            if state.result then test.is_false(state.result.ok) end
+            model.apply_result(state, ok({state = "complete", message = "done"}))
+            if state.result then test.is_true(state.result.ok) end
         end)
     end)
 end

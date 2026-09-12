@@ -6296,3 +6296,20 @@ Global `f1a29d08` now contains source `660b769`, preserving Hub rollback and
 Agent recovery. All 772 unit cases and native desktop/Modules/Agent checks pass.
 See GLOBAL_BUILD.md and `instructions-rollback-global-install.json`. No node restart.
 MCP activation, Docker and editable instructions remain unfinished.
+
+### 2026-09-12 — Managed MCP and hooks installed with current Hub/Modules
+
+Journal 1487 records global `887d0769`, source `9da558b`, preserving the latest
+Hub requirements/database support and Modules redesign. The four managed Agent
+profiles now expose the two bound-thread read tools; Claude/Codex declare five
+lifecycle hooks. Native fixture children authenticate and read/wait through
+their generated MCP configuration. Native window hook delivery passes.
+The six-file install receipt is `managed-mcp-modules-global-install.json`.
+Running nodes retain their previous code and were not restarted.
+
+The broad check passed through storage, thread restart and resources, then
+stopped at the obsolete no-network-listener assertion (journal 1488). The
+replacement checks one IPv4 loopback listener and rejects anonymous MCP tools;
+desktop regression is running. Do not report full acceptance as green.
+Docker, writable coordination tools, editable profile instructions/memory and
+native-style instruction builders remain unfinished.

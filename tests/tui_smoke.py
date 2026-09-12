@@ -6,6 +6,7 @@ are owned by this harness and cleaned in finally blocks.
 from workspace import database_environment
 import codecs
 import fcntl
+import http.client
 import os
 from pathlib import Path
 import pty
@@ -195,7 +196,7 @@ class Desktop:
         os.close(self.master)
 
     def assert_local_only(self):
-        """Default Linux composition must not bind TCP/UDP network endpoints."""
+        """The native MCP listener is loopback-only and grants no anonymous tools."""
         assert self.process.poll() is None
         process_dir = Path(f"/proc/{self.process.pid}")
         sockets = set()
@@ -214,7 +215,22 @@ class Desktop:
                     continue
                 if fields[3] == "0A" or (protocol.startswith("udp") and fields[1].split(":")[-1] != "0000"):
                     bound.append((protocol, fields[1], fields[3]))
-        assert not bound, f"Default Bee bound network endpoints: {bound}"
+        assert len(bound) == 1, f"Expected one native MCP listener: {bound}"
+        protocol, endpoint, state = bound[0]
+        address, encoded_port = endpoint.split(":")
+        port = int(encoded_port, 16)
+        assert protocol == "tcp" and state == "0A" and address == "0100007F", bound
+        assert 0 < port <= 65535, bound
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        try:
+            connection.request("POST", "/mcp/unauthorized-probe",
+                               body='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}',
+                               headers={"Content-Type": "application/json"})
+            response = connection.getresponse()
+            assert response.status == 401, f"Anonymous MCP request returned {response.status}"
+            response.read(65536)
+        finally:
+            connection.close()
         assert self.process.poll() is None
 
     def exhausted_recovery(self):

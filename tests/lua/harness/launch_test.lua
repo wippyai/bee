@@ -19,6 +19,7 @@ local placement_store = require("placement_store")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
+local EMPTY_DEFINITION = "bee.harness.catalog:setup_empty_definition"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local SOURCE = "bee.harness.catalog:launch_sentinel_key"
@@ -29,7 +30,7 @@ local function fresh(prefix: string): string
 end
 local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy",
     "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:resource_manage_policy",
-    "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee:launch_spawn_policy"}
+    "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -82,8 +83,8 @@ local function prepare_host(workspace: string)
     policy_data.executables = {claude = bin .. "/claude"}
     policy_data.environment = {BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"}
     apply(policy_entry)
-    local roots_entry = registry.get("bee.placement.native:admitted_roots")
-    if not roots_entry then error("admitted roots") end
+    local roots_entry = registry.get("bee:resource_roots")
+    if not roots_entry then error("resource roots") end
     local roots_data = roots_entry.data :: {[string]: unknown}
     local roots = roots_data.roots :: {{[string]: unknown}}
     local present = false
@@ -94,6 +95,11 @@ local function prepare_host(workspace: string)
         roots[#roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
     end
+    local setup_entry = registry.get("bee:harness_setup")
+    if not setup_entry then error("harness setup") end
+    local setup_data = setup_entry.data :: {[string]: unknown}
+    setup_data.roots = {project = ROOT, session = ROOT}
+    apply(setup_entry)
     local mode_entry = registry.get("bee.placement.native:resource_mode")
     if not mode_entry then error("resource mode") end
     local mode_data = mode_entry.data :: {[string]: unknown}
@@ -108,6 +114,15 @@ local function prepare_host(workspace: string)
     value(call("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
     value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
     value(call("bee.credentials:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
+end
+local function setup(workspace: string, definition_ref: string): {[string]: unknown}
+    local plan = value(call("bee.harness.launch:resolve", {definition_ref = definition_ref}))
+    local reply = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
+    return reply :: unknown as {[string]: unknown}
+end
+local function associations(workspace: string): {{[string]: unknown}}
+    local listed = value(call("bee.resources:list", {workspace_id = workspace}))
+    return listed.associations :: {{[string]: unknown}}
 end
 local function restore_host()
     local mode_entry = registry.get("bee.placement.native:resource_mode")
@@ -150,6 +165,74 @@ local function define_tests()
     test.describe("Launch admission", function()
         local workspace = fresh("ws")
         prepare_host(workspace)
+        test.it("sets selected resources once, then admission grants the exact associations", function()
+            local first_workspace = fresh("setup")
+            local first = setup(first_workspace, RETAINED_DEFINITION)
+            test.is_true(first.ok == true)
+            test.eq(#(first.resources :: {unknown}), 2)
+            local before = associations(first_workspace)
+            test.eq(#before, 2)
+            test.eq(before[1].name, "project")
+            test.eq(before[1].revision, 1)
+            test.eq(before[2].name, "session")
+            test.eq(before[2].revision, 1)
+            local retry = setup(first_workspace, RETAINED_DEFINITION)
+            test.is_true(retry.ok == true)
+            local after = associations(first_workspace)
+            test.eq(after[1].association_id, before[1].association_id)
+            test.eq(after[1].revision, before[1].revision)
+            test.eq(after[2].association_id, before[2].association_id)
+            test.eq(after[2].revision, before[2].revision)
+            value(call("bee.credentials:define", {workspace_id = first_workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
+            local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
+                workspace_id = first_workspace, brief = "ping"}))
+            local request = admitted.request :: {[string]: unknown}
+            local resources = request.resources :: {{[string]: unknown}}
+            test.eq(#resources, 2)
+            test.eq(resources[1].root_ref, ROOT)
+            test.eq(resources[2].root_ref, ROOT)
+        end)
+        test.it("refuses changed or conflicting selected setup without replacing an association", function()
+            local conflicting_workspace = fresh("setup-conflict")
+            value(call("bee.resources:associate", {workspace_id = conflicting_workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "read", expected_revision = 0}))
+            local conflict = setup(conflicting_workspace, DEFINITION)
+            test.is_false(conflict.ok == true)
+            test.eq(#associations(conflicting_workspace), 1)
+            local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+            local changed_workspace = fresh("setup-changed")
+            local entry = assert(registry.get(DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.title = "Changed before setup"
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local reply = call("bee.harness.launch:setup", {workspace_id = changed_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+                test.is_false((reply :: unknown as {[string]: unknown}).ok == true)
+                test.eq(#associations(changed_workspace), 0)
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("rejects an unauthorized caller, private backend calls and unknown definitions", function()
+            local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+            local _, no_setup_error = funcs.new():with_actor(security.new_actor("bee.test.setup.denied")):with_scope(security.new_scope({})):call("bee.harness.launch:setup",
+                {workspace_id = fresh("setup-denied"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+            test.is_true(no_setup_error ~= nil)
+            local policy, policy_error = security.policy("bee.harness.catalog:setup_client_policy")
+            if policy_error or not policy then error(tostring(policy_error)) end
+            local _, private_error = funcs.new():with_actor(actor):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
+                {workspace_id = fresh("setup-private"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+            test.is_true(private_error ~= nil)
+            local unknown = call("bee.harness.launch:setup", {workspace_id = fresh("setup-unknown"), definition_ref = "bee.harness.catalog:missing",
+                expected_plan_digest = plan.plan_digest})
+            test.is_false((unknown :: unknown as {[string]: unknown}).ok == true)
+            local empty = setup(fresh("setup-empty"), EMPTY_DEFINITION)
+            test.is_true(empty.ok == true)
+            test.eq(#(empty.resources :: {unknown}), 0)
+        end)
         test.it("decodes an empty window prompt but refuses it for a resolved structured launch", function()
             local request = {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = fresh("workspace"), brief = ""}
             local decoded, decode_error = admission.decode_request(request)

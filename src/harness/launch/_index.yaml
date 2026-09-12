@@ -65,19 +65,21 @@ entries:
   modules: [funcs, security]
   imports:
     bounds: bee.threads.records:bounds
+    admission: bee.harness.launch:admission
   security:
     policies: [bee.harness.launch:setup_facade_policy]
 - name: setup_execution_policy
-  kind: security.policy
+  kind: security.policy.expr
   groups: [harness_setup_execution_scope]
   policy:
+    expression: '(action == "funcs.call" && (resource == "bee.resources:associate" || resource == "bee.resources:list")) || action == "bee.resources.manage" || action == "registry.get"'
     actions: [funcs.call, bee.resources.manage, registry.get]
-    resources: [bee.resources:associate, bee.resources:list, bee:harness_setup, bee.harness.launch:definitions, '*']
+    resources: '*'
     effect: allow
 - name: setup_facade_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend")'
-    actions: [funcs.security, security.policy_group.get, funcs.call]
-    resources: [security, bee.harness.launch:harness_setup_execution_scope, bee.harness.launch:setup_backend]
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend") || action == "registry.snapshot"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, registry.snapshot]
+    resources: '*'
     effect: allow

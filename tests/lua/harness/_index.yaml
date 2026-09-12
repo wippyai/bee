@@ -408,6 +408,25 @@ entries:
     session_resource: session
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: setup_empty_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Fixture with no declared setup resource
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: setup-empty-fixture
+    title: Setup empty fixture
+    command_names: [setup-empty-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: profile_alpha_policy
   kind: registry.entry
   meta:
@@ -491,6 +510,14 @@ entries:
     actions: [funcs.call]
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources:associate, bee.resources:grant,
       bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:read_after]
+    effect: allow
+- name: setup_client_policy
+  kind: security.policy.expr
+  meta: {type: test_support}
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.harness.launch:setup") || action == "bee.harness.setup"'
+    actions: [funcs.call, bee.harness.setup]
+    resources: '*'
     effect: allow
 - name: launch_test
   kind: function.lua

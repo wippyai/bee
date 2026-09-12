@@ -56,6 +56,19 @@ Nonsecret environment and driver options come from the selected host policy;
 credentials are projected separately by the broker. The lower carrier and
 placement contracts remain separate execution primitives.
 
+After a profile has been selected, `bee.harness.launch:setup` accepts its
+workspace, definition and measured plan digest. The caller needs the scoped
+`bee.harness.setup` action; the facade remeasures the plan before it enters a
+fixed resource-management scope. That private scope can only associate or list
+resources. It reloads the selected definition under its measured definition
+digest, then creates its declared `project` and `session` associations with
+create-if-absent revision zero. A retry accepts only the same root, empty
+subpath and writable association, and refuses a mismatch. Definitions with no
+declared resources succeed without consulting the host setup map. The host maps
+the declared names to admitted roots; driver metadata cannot choose a root or
+grant management permission. Admission subsequently uses the ordinary resource
+grant path, which verifies the root digest before issuing a grant.
+
 ## Host binding
 
 The `process_host` requirement links `bee.harness:carrier_host_ref.host_ref`.

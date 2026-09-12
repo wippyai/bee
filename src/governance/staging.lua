@@ -28,7 +28,10 @@ local MAX_PATH_BYTES = 240
 local MAX_FILE_BYTES = 4 * 1024 * 1024
 local MAX_TOTAL_BYTES = 16 * 1024 * 1024
 local MAX_BASE64_BYTES = 5592408
-local MAX_BASE64_TOTAL_BYTES = math.floor((MAX_TOTAL_BYTES + 2) / 3) * 4
+-- Files are encoded independently, so each can carry up to two padding bytes
+-- before its four-byte base64 quantum.  This is the tight aggregate ceiling
+-- for the decoded byte and file-count limits, not the encoding of one blob.
+local MAX_BASE64_TOTAL_BYTES = math.floor((MAX_TOTAL_BYTES + (2 * MAX_FILES) + 2) / 3) * 4
 local MAX_REVISION = 9007199254740991
 
 local function failure(code: string, message: string, value: unknown?): Result

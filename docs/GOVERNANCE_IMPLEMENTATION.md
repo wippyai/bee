@@ -125,6 +125,11 @@ at `674b58a` also calls ordinary `Apply` without the snapshot version. This is
 source evidence for that newer revision, not an executable test of its binary.
 The gate is separate from `make check` while this runtime contract is missing.
 
+The September 11 candidate at runtime `291f5c6b708c80afe5da07f3223767573b4d183f`
+reproduces the same failure with the unchanged executable gate: lint passes,
+then a candidate reviewed at v0 commits as v2 after an intervening v1 write.
+This is current executable evidence; guarded publication remains unavailable.
+
 ## Acceptance
 
 Use an isolated headless Bee composition with no Keeper or view packages.

@@ -69,6 +69,26 @@ local function define_tests()
             test.is_false(foreign.ok)
             test.eq(foreign.code, "DENIED")
         end)
+
+        test.it("accepts the total byte limit when independently padded files reach it", function()
+            local workspace_id = "governance-base64-total-bound"
+            local owner = "bee.test.governance.padding-owner"
+            local file = string.rep("x", 4 * 1024 * 1024)
+            successful(owner, {operation = "create", workspace_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
+            for index = 1, 4 do
+                local put = successful(owner, {operation = "put", workspace_id = workspace_id, expected_revision = index,
+                    idempotency_key = "put-" .. tostring(index), path = "part-" .. tostring(index), content = file})
+                test.eq(put.value and put.value.revision, index + 1)
+            end
+            local frozen = successful(owner, {operation = "freeze", workspace_id = workspace_id, expected_revision = 5, idempotency_key = "freeze"})
+            test.eq(frozen.value and frozen.value.file_count, 4)
+            test.eq(frozen.value and frozen.value.total_bytes, 16 * 1024 * 1024)
+            local overflow = call(owner, {operation = "put", workspace_id = workspace_id, expected_revision = 5,
+                idempotency_key = "overflow", path = "extra", content = "x"}, false)
+            test.is_false(overflow.ok)
+            local unchanged = successful(owner, {operation = "list", workspace_id = workspace_id})
+            test.eq(unchanged.value and unchanged.value.revision, 5)
+        end)
     end)
 end
 

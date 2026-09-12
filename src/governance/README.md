@@ -67,6 +67,8 @@ CAS, replay, frozen-copy and author-ownership behavior. It also proves that the
 ordinary app store denial is retained while a separately scoped actor can use
 the function. These checks do not establish restart durability, Hive transfer,
 destination approval, application installation, overlays or WASM execution.
+The full 16 MiB file-tree boundary is accepted with independent base64 padding
+per file; adding another byte refuses without advancing the edit revision.
 
 The host adapter must supply exact artifact/entry/migration measurements,
 resolved dependencies and references, final requirement bindings, a coherent

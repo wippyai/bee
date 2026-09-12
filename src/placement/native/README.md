@@ -74,8 +74,8 @@ provided bytes remain an error. Native materialization requires explicit `presen
 the broker; absent bytes are accepted only for an optional absent reply. This
 records an unseeded home without placing file credentials in the environment.
 First-use setup preserves the host-selected optional policy and refuses a
-conflicting existing definition. Production default profiles do not yet select
-machine-login sources.
+conflicting existing definition. Default Claude/Codex window profiles select optional machine-login sources.
+Source-free executable acceptance proves both present and absent machine login.
 
 ## Capability
 

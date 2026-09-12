@@ -207,5 +207,5 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: []
+    credentials: [claude_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}

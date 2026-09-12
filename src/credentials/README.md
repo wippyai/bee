@@ -89,9 +89,16 @@ for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 
 First-use harness setup can create definition-declared credential names from
-host-selected source configuration, without reading the secret. Production
-source discovery and default login selection remain unfinished; no file login
-is enabled by default. Docker delivery is unimplemented. Broker `refresh` and
+host-selected source configuration, without reading the secret. Default Claude
+and Codex window definitions select optional machine-login files under the
+host's existing home directory. An absent provider directory/file permits normal
+CLI sign-in in the private retained home; host credential directories are never
+created. The host allowlist owns the relative source path; callers cannot supply
+it. Source metadata and path are bound in the definition digest and rechecked
+before availability or projection use. A changed source requires explicit
+redefinition. Existing definitions with an older digest are refused rather than
+silently retargeted. Source-free executable acceptance proves both present and absent machine login using disposable host homes.
+Docker delivery is unimplemented. Broker `refresh` and
 `write_back` remain false: it neither refreshes provider tokens nor copies
 session changes back to the user's original login files.
 

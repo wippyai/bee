@@ -144,6 +144,7 @@ entries:
     - bee:placement_runner_policy
     - bee:resource_grant_policy
     - bee:resource_resolve_policy
+    - bee:credential_issue_policy
     - bee:credential_materialize_policy
     - bee:gateway_materialize_policy
     - bee:gateway_supervision_policy
@@ -305,6 +306,9 @@ entries:
     comment: Host-selected first-use roots keyed by definition-declared resource names
   data:
     roots: {project: bee:workspace_root, session: bee.placement.native:root}
+    credentials:
+      codex_login: {provider: codex, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
+      claude_login: {provider: claude, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
 - name: workspace_db
   kind: db.sql.sqlite
   file: ${env:bee:workspace_db_path}
@@ -576,13 +580,26 @@ entries:
     actions: [env.get]
     resources: [bee.driver.claude:executable, bee.driver.codex:executable, bee.driver.agy:executable, bee.driver.grok:executable]
     effect: allow
+- name: machine_home
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: home
+  readonly: true
+- name: machine_login_source
+  kind: fs.directory
+  directory: ${env:bee:machine_home}
+  base: project
+  mode: '0500'
+  auto_init: false
 - name: credential_sources
   kind: registry.entry
   meta:
     type: bee.credential_sources
     comment: env.variable entries a workspace may define credentials from, with the audience, provider and projection kinds each admits; host policy, never a workspace choice
   data:
-    sources: []
+    sources:
+    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: codex, projection_kinds: [file], path: .codex/auth.json}
+    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [file], path: .claude/.credentials.json}
 - name: credential_store_policy
   kind: security.policy
   meta:
@@ -597,7 +614,7 @@ entries:
     comment: Host-selected login roots; attached to credential availability for stat-only checks and to the credential materializer for reads
   policy:
     actions: [fs.get, fs.read]
-    resources: [bee:codex_login_source, bee:claude_login_source]
+    resources: [bee:machine_login_source]
     effect: allow
 - name: credential_manage_policy
   kind: security.policy

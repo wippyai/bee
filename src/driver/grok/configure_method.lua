@@ -28,7 +28,9 @@ local function handle(value: unknown): {[string]: unknown}
         }
     end
 
-    return {ok = true, delivery = {arguments = {}, files = files}}
+    local arguments: {string} = {}
+    if request.instructions then arguments = {"--rules", request.instructions} end
+    return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
 return {handle = handle}

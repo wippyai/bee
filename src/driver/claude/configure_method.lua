@@ -28,6 +28,10 @@ local function handle(value: unknown): {[string]: unknown}
     end
     local delivery, delivery_error = gateway_delivery(request.gateway)
     if not delivery then return {ok = false, error = tostring(delivery_error)} end
+    if request.instructions then
+        delivery.arguments[#delivery.arguments + 1] = "--append-system-prompt"
+        delivery.arguments[#delivery.arguments + 1] = request.instructions
+    end
     return {ok = true, delivery = delivery}
 end
 return {handle = handle}

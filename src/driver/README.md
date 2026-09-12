@@ -118,6 +118,32 @@ contributes either value: the carrier copies only the selected policy's
 with shared instructions and MCP gateway content through the existing
 `driver.configure` boundary; a second profile schema is unnecessary.
 
+## Instructions and turn prompts
+
+A launch definition's host-selected policy may declare `instructions`: nonempty
+text up to 4096 bytes, allowing line breaks and tabs. This is persistent profile
+guidance, separate from the request's `brief` (the turn prompt) and dynamic `ctx`
+context. It grants no permissions. The policy and configuration digests include
+it; changing it after planning refuses the stale launch before recording an intent.
+Callers cannot supply it as a launch override.
+
+The driver configuration method maps this field to each native mechanism:
+Claude appends it with `--append-system-prompt`; Grok appends it with `--rules`;
+Codex writes `developer_instructions` in its private configuration. Declaring it
+both in the Codex provider and launch policy is refused as ambiguous. These paths
+preserve the harness's built-in guidance; there is no shared system-prompt
+replacement option. Agy receives the exact text in `.gemini/GEMINI.md` under its private HOME,
+using its documented global-rules mechanism. Its selected `--agent` and turn
+prompt are unchanged. Agy custom agents still control inheritance of ambient
+rules; this file is not a system-prompt replacement. The configuration boundary refuses an instruction file
+when no instructions were selected or its content differs from the selection.
+
+This is a source configuration feature, not an editable picker field. Docker
+profile execution remains a separate acceptance gate. CLI help
+confirms the Claude and Grok flags; Agy 1.2.2
+bundled customization documentation describes the global-rules path; pure delivery tests do not prove a provider
+applied the instructions during an authenticated turn.
+
 ## Claude authentication path
 
 The Claude launch uses stream-json output for structured turns and inline

@@ -262,6 +262,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
+    local instructions, instructions_error = configuration_protocol.instructions(data.instructions)
+    if instructions_error then return nil, nil, instructions_error end
     local provider_ref = data.provider_ref == nil and nil or bounds.id(data.provider_ref)
     if data.provider_ref ~= nil and not provider_ref then return nil, nil, "launch policy provider_ref is not an identifier" end
     local target, target_error = resolver.configure(pinned, request.binding_ref)
@@ -284,7 +286,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     elseif #hooks > 0 then return nil, nil, "launch policy gateway_hooks requires gateway_tools" end
-    return {provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
+    return {instructions = instructions, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -340,7 +342,7 @@ function M.prepare(value: unknown): Reply
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then
         if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
-    elseif configuration.provider_ref or configuration.gateway then
+    elseif configuration.provider_ref or configuration.gateway or configuration.instructions then
         return fail("DENIED", "configured launches require the selected configuration digest")
     end
     local selected_gateway = configuration.gateway

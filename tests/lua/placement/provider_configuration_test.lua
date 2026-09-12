@@ -21,9 +21,10 @@ local POLICY = "bee.placement.native:fixture_agent_policy"
 local PROVIDER = "bee.placement.native:fixture_agent_provider"
 local BINDING = "bee.placement.native:fixture_agent_binding"
 local ACTIVATION = "bee:harness_activation"
+local MODE = "bee.placement.native:resource_mode"
 local ROOTS = "bee.placement.native:admitted_roots"
 local counter = 0
-type RegistryState = {activation: {[string]: unknown}, roots: {[string]: unknown}}
+type RegistryState = {activation: {[string]: unknown}, roots: {[string]: unknown}, mode: {[string]: unknown}}
 
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -47,6 +48,13 @@ local function call(actor: string, method: string, value: unknown): service.Repl
 end
 
 local function admit_root()
+    local mode = registry.get(MODE)
+    if not mode then error("resource mode entry") end
+    mode.data = {mode = "host_configured"}
+    local modes = registry.snapshot():changes()
+    modes:update(mode)
+    local mode_ok, mode_error = modes:apply()
+    if not mode_ok then error(tostring(mode_error)) end
     local entry = registry.get(ROOTS)
     if not entry then error("admitted roots entry") end
     local data = entry.data :: {[string]: unknown}
@@ -72,17 +80,21 @@ end
 local function registry_state(): RegistryState
     local activation = registry.get(ACTIVATION)
     local roots = registry.get(ROOTS)
-    if not activation or not roots then error("registry state entries") end
-    return {activation = clone_object(activation.data), roots = clone_object(roots.data)}
+    local mode = registry.get(MODE)
+    if not activation or not roots or not mode then error("registry state entries") end
+    return {activation = clone_object(activation.data), roots = clone_object(roots.data), mode = clone_object(mode.data)}
 end
 
 local function restore_registry_state(state: RegistryState)
     local activation = registry.get(ACTIVATION)
     local roots = registry.get(ROOTS)
-    if not activation or not roots then error("registry state entries disappeared") end
+    local mode = registry.get(MODE)
+    if not activation or not roots or not mode then error("registry state entries disappeared") end
+    mode.data = clone_object(state.mode)
     activation.data = clone_object(state.activation)
     roots.data = clone_object(state.roots)
     local changes = registry.snapshot():changes()
+    changes:update(mode)
     changes:update(activation)
     changes:update(roots)
     local applied, err = changes:apply()
@@ -221,6 +233,36 @@ local function define_tests()
             local body_ok, body_error = pcall(function()
                 set_activation(true)
                 assert_provider_argument_isolated()
+                -- A profile edit after planning must be refused before creating
+                -- an intent, even when the driver/provider are unchanged.
+                local stale = launch(fresh("instructions"))
+                local host_policy = registry.get(POLICY)
+                if not host_policy then error("fixture launch policy") end
+                local saved_policy = clone_object(host_policy.data)
+                local edited_policy = clone_object(saved_policy)
+                edited_policy.instructions = "Review all changes before finishing."
+                host_policy.data = edited_policy
+                local edits = registry.snapshot():changes()
+                edits:update(host_policy)
+                local applied, apply_error = edits:apply()
+                if not applied then error(tostring(apply_error)) end
+                local checked, check_error = pcall(function()
+                    local reply = call(OWNER, "prepare", stale)
+                    test.is_false(reply.ok)
+                    test.eq(reply.error and reply.error.code, "CONFLICT")
+                    local db, db_error = store.open()
+                    if not db then error(tostring(db_error)) end
+                    local recorded, record_error = store.attempt(db, stale.attempt_id :: string)
+                    db:release()
+                    if record_error then error(record_error) end
+                    test.is_nil(recorded)
+                end)
+                host_policy.data = saved_policy
+                local restore = registry.snapshot():changes()
+                restore:update(host_policy)
+                local restored, restore_error = restore:apply()
+                if not restored then error(tostring(restore_error)) end
+                if not checked then error(tostring(check_error)) end
                 local forged = launch(fresh("attempt"))
                 forged.delivery = {arguments = {}, files = {}}
                 local forged_refused = call(OWNER, "prepare", forged)

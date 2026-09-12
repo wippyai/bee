@@ -6,6 +6,7 @@ local funcs = require("funcs")
 local security = require("security")
 local M = {}
 M.MAX_CONFIGURATION_BYTES = 8192
+M.MAX_INSTRUCTIONS_BYTES = 4096
 M.MAX_DELIVERY_ARGUMENTS = 32
 M.MAX_DELIVERY_ARGUMENT_BYTES = 16384
 M.MAX_DELIVERY_FILES = 8
@@ -14,12 +15,26 @@ M.MAX_GATEWAY_TOOLS = 32
 M.MAX_GATEWAY_HOOKS = 32
 M.MAX_HOME_DIRECTORY_BYTES = 4096
 M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
+M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
-type Request = {provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
+type Request = {instructions: string?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
 
+-- Profile guidance is separate from a turn brief and grants no authority.
+function M.instructions(value: unknown): (string?, string?)
+    if value == nil then return nil, nil end
+    local text = bounds.text(value, M.MAX_INSTRUCTIONS_BYTES)
+    if not text or text == "" then return nil, "instructions must be nonempty text up to 4096 bytes" end
+    for index = 1, #text do
+        local byte = text:byte(index)
+        if (byte < 32 and byte ~= 9 and byte ~= 10 and byte ~= 13) or byte == 127 then
+            return nil, "instructions contain unsupported control bytes"
+        end
+    end
+    return text, nil
+end
 local function environment_name(value: unknown, label: string): (string?, string?)
     local name = bounds.id(value)
     if not name or not name:match("^[A-Z][A-Z0-9_]*$") then return nil, label .. " must be an environment name" end
@@ -56,9 +71,11 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "fixture"})
+    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "fixture", "instructions"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
+    local instructions, instructions_error = M.instructions(request.instructions)
+    if instructions_error then return nil, instructions_error end
     local provider_ref: string? = nil
     local provider: Object? = nil
     if request.provider_ref ~= nil then
@@ -78,7 +95,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         home_directory = bounds.text(request.home_directory, M.MAX_HOME_DIRECTORY_BYTES)
         if not home_directory or home_directory == "" or home_directory:sub(1, 1) ~= "/" then return nil, "configuration request.home_directory must be an absolute bounded path" end
     end
-    return {provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
+    return {instructions = instructions, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
 end
 function M.decode_file(value: unknown): (Configuration?, string?)
     local item = bounds.object(value)
@@ -150,7 +167,7 @@ function M.decode_delivery(value: unknown): (Delivery?, string?)
     end
     return {arguments = arguments, files = files}, nil
 end
-function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?): (Delivery?, string?)
+function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?, instructions: string?): (Delivery?, string?)
     local reply = bounds.object(value)
     if not reply then return nil, "driver configure: reply must be an object" end
     local unexpected = bounds.fields(reply, {"ok", "error", "delivery"})
@@ -169,7 +186,8 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
     for _, file in ipairs(delivery.files) do
         local provider_file = selected_provider ~= nil and file.provider_ref == selected_provider
         local gateway_file = gateway ~= nil and file.provider_ref == M.GATEWAY_PROVIDER_REF
-        if not provider_file and not gateway_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
+        local instructions_file = instructions ~= nil and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.content == instructions
+        if not provider_file and not gateway_file and not instructions_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
     end
     return delivery, nil
 end
@@ -178,7 +196,7 @@ function M.digest(request_value: unknown, target: string): (string?, string?)
     if not request then return nil, request_error end
     local selected = bounds.id(target)
     if not selected then return nil, "configuration target is not an identifier" end
-    local encoded, encode_error = canonical.encode({target = selected, provider_ref = request.provider_ref, provider = request.provider, gateway = request.gateway, fixture = request.fixture})
+    local encoded, encode_error = canonical.encode({target = selected, instructions = request.instructions, provider_ref = request.provider_ref, provider = request.provider, gateway = request.gateway, fixture = request.fixture})
     if not encoded then return nil, "configuration digest: " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, "configuration digest failed" end
@@ -191,6 +209,6 @@ function M.call(target: string, request_value: unknown): (Delivery?, string?)
     if not scoped then return nil, "configuration scope: " .. tostring(scope_error) end
     local raw, call_error = scoped:call(target, request)
     if call_error then return nil, "driver configure: " .. tostring(call_error) end
-    return M.decode_reply(raw, request.provider_ref, request.gateway)
+    return M.decode_reply(raw, request.provider_ref, request.gateway, request.instructions)
 end
 return M

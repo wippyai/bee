@@ -1,5 +1,16 @@
 # Foundation status
 
+The Agent source now accepts persistent `instructions` on a launch definition's
+host-selected policy, separate from the per-turn `brief` and dynamic `ctx`.
+Claude, Codex, Grok and Agy map them through their existing configuration methods;
+plan digests fence changed guidance, and no caller override grants authority.
+Strict lint and all 766 unit cases pass, including instruction delivery and
+stale-policy refusal before placement intent. Hive Manager source/pack acceptance
+also passes after correcting its isolated HOME fixture. The full repository gate
+remains pending, and this source is not installed globally. An editable
+instructions field, Docker profile execution and authenticated provider behavior
+remain unverified; see [driver instructions](../src/driver/README.md#instructions-and-turn-prompts).
+
 Installed Hub build `f276bc2b` adds host-granted migration `up`, captured definition
 receipts, post-commit ledger verification and explicit recovery. A disposable
 local Hub proves real publication/SQL effects, completed replay, SIGKILL after

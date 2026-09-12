@@ -2,6 +2,10 @@
 local test = require("test")
 local hash = require("hash")
 local configuration = require("configuration")
+local claude = require("claude")
+local codex = require("codex")
+local grok = require("grok")
+local agy = require("agy")
 local PROVIDER = "fixture:provider"
 local function file(content: string?): {[string]: unknown}
     local body = content or '{"model":"fixture"}\n'
@@ -19,6 +23,47 @@ local function gateway(action: string): configuration.GatewayInput
 end
 local function define_tests()
     test.describe("Driver configuration delivery boundary", function()
+        test.it("keeps profile instructions separate from turn prompts and measures changes", function()
+            local text = 'Review carefully.\nKeep "quoted" text and `literal` $(words).'
+            local input = {fixture = false, instructions = text}
+            local decoded, err = configuration.decode_request(input)
+            if not decoded then error(tostring(err)) end
+            test.eq(decoded.instructions, text)
+            local original = assert(configuration.digest(input, "fixture:configure"))
+            input.instructions = "Different persistent guidance"
+            test.neq(original, assert(configuration.digest(input, "fixture:configure")))
+            test.is_nil(configuration.decode_request({fixture = false, prompt = "not profile guidance"}))
+            for _, invalid in ipairs({"", string.rep("x", 4097), "bad\0text", "bad\27text"}) do
+                test.is_nil(configuration.decode_request({fixture = false, instructions = invalid}))
+            end
+            local claude_reply = claude.handle({fixture = false, instructions = text})
+            local claude_delivery, claude_error = configuration.decode_reply(claude_reply, nil)
+            if not claude_delivery then error(tostring(claude_error)) end
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt")
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments], text)
+            local grok_delivery, grok_error = configuration.decode_reply(grok.handle({fixture = false, instructions = text}), nil)
+            if not grok_delivery then error(tostring(grok_error)) end
+            test.eq(grok_delivery.arguments[1], "--rules")
+            test.eq(grok_delivery.arguments[2], text)
+            local agy_reply = agy.handle({fixture = false, instructions = text})
+            local agy_delivery, agy_error = configuration.decode_reply(agy_reply, nil, nil, text)
+            if not agy_delivery then error(tostring(agy_error)) end
+            test.eq(#agy_delivery.arguments, 0)
+            test.eq(agy_delivery.files[1].path, ".gemini/GEMINI.md")
+            test.eq(agy_delivery.files[1].content, text)
+            test.is_nil(configuration.decode_reply(agy_reply, nil))
+            test.is_nil(configuration.decode_reply(agy_reply, nil, nil, "different instructions"))
+        end)
+        test.it("renders Codex instructions and refuses ambiguous provider guidance", function()
+            local data = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt"}
+            local provider = {kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = data}
+            local request = {fixture = false, provider_ref = PROVIDER, provider = provider, instructions = "Review carefully.\nKeep boundaries."}
+            local result, err = configuration.decode_reply(codex.handle(request), PROVIDER)
+            if not result then error(tostring(err)) end
+            test.is_true(result.files[1].content:find('developer_instructions = "Review carefully.\\nKeep boundaries."', 1, true) ~= nil)
+            local conflicting = {kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt", developer_instructions = "Other guidance"}}
+            test.eq(codex.handle({fixture = false, provider_ref = PROVIDER, provider = conflicting, instructions = "Profile guidance"}).ok, false)
+        end)
         test.it("accepts measured files and a bounded empty argv literal", function()
             local result, err = configuration.decode_reply({ok = true, delivery = delivery({file(nil)}, {"--setting-sources", ""})}, PROVIDER)
             if not result then error(tostring(err)) end

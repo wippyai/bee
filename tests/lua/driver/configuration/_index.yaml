@@ -10,3 +10,7 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.driver:configuration
+    claude: bee.driver.claude:configure
+    codex: bee.driver.codex:configure
+    grok: bee.driver.grok:configure
+    agy: bee.driver.agy:configure

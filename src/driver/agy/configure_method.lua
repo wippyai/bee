@@ -15,7 +15,12 @@ local function handle(value: unknown): {[string]: unknown}
         end
         local mcp_file, mcp_error = configuration.mcp_file(request.gateway)
         if not mcp_file then return {ok = false, error = tostring(mcp_error)} end
-        files[1] = mcp_file
+        files[#files + 1] = mcp_file
+    end
+    if request.instructions then
+        local file, file_error = configuration.instructions_file(request.instructions)
+        if not file then return {ok = false, error = tostring(file_error)} end
+        files[#files + 1] = file
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end

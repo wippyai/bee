@@ -47,4 +47,14 @@ function M.mcp_file(gateway: configure_protocol.GatewayInput): (configure_protoc
     }, nil
 end
 
+-- Agy reads global persistent rules from its private HOME, separately from
+-- the conversation's user messages. Do not create or change project files.
+function M.instructions_file(text: string): (configure_protocol.Configuration?, string?)
+    local content, content_error = configure_protocol.instructions(text)
+    if not content then return nil, content_error or "instructions are missing" end
+    local digest, digest_error = hash.sha256(content)
+    if not digest then return nil, tostring(digest_error or "instructions digest failed") end
+    return {revision = "bee.agy-instructions@1", path = ".gemini/GEMINI.md", content = content,
+        digest = digest, provider_ref = configure_protocol.INSTRUCTIONS_PROVIDER_REF}, nil
+end
 return M

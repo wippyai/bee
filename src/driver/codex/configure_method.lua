@@ -9,9 +9,12 @@ local function handle(value: unknown): {[string]: unknown}
     local provider, decode_error = configuration.decode(request.provider_ref, request.provider)
     if not provider then return {ok = false, error = tostring(decode_error)} end
     if provider.loopback_fixture and request.fixture ~= true then return {ok = false, error = "loopback fixture provider needs a fixture policy"} end
+    if request.instructions then
+        if provider.developer_instructions then return {ok = false, error = "instructions are declared in both the launch policy and provider"} end
+    end
     local section: string? = nil
     if request.gateway then section = configuration.gateway_section(request.gateway) end
-    local projected, projection_error = configuration.projection(provider, section)
+    local projected, projection_error = configuration.projection(provider, section, request.instructions)
     if not projected then return {ok = false, error = tostring(projection_error)} end
     local files = {{revision = projected.revision, path = projected.path, content = projected.content, digest = projected.digest, provider_ref = projected.provider_ref}}
     if request.gateway and #request.gateway.hooks > 0 then

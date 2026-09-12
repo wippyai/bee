@@ -2,8 +2,10 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +29,53 @@ func loadDeclared(t *testing.T) *Catalog {
 		t.Fatal(err)
 	}
 	return catalog
+}
+
+func loadCatalogWithYAMLMutation(t *testing.T, relative string, mutate func([]byte) []byte) *Catalog {
+	t.Helper()
+	root := t.TempDir()
+	source := filepath.Join(repoRoot(t), "src")
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(source)); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, relative)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, mutate(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := LoadCatalog(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return catalog
+}
+
+func insertYAML(t *testing.T, body []byte, marker, insertion string) []byte {
+	t.Helper()
+	text := string(body)
+	index := strings.Index(text, marker)
+	if index < 0 {
+		t.Fatalf("YAML marker %q not found", marker)
+	}
+	text = text[:index+len(marker)] + insertion + text[index+len(marker):]
+	return []byte(text)
+}
+
+func replaceYAML(t *testing.T, body []byte, marker, replacement string) []byte {
+	t.Helper()
+	text := string(body)
+	index := strings.Index(text, marker)
+	if index < 0 {
+		t.Fatalf("YAML marker %q not found", marker)
+	}
+	text = text[:index] + replacement + text[index+len(marker):]
+	return []byte(text)
 }
 
 func TestDeclaredGraphPasses(t *testing.T) {
@@ -118,5 +167,82 @@ func TestOrdinaryBoundaryDeniesGovernanceStore(t *testing.T) {
 	}
 	if err := CheckSQLiteInventory(catalog); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExactPoliciesRejectUnknownYAMLFields(t *testing.T) {
+	cases := []struct {
+		name  string
+		entry string
+		check func(*Catalog) error
+	}{
+		{name: "base app", entry: "bee:base_app_policy", check: CheckApplicationAdmission},
+		{name: "processes", entry: "bee:processes_policy", check: CheckPresenterProcessTerminalPurity},
+		{name: "client storage", entry: "bee:client_storage_policy", check: CheckClientLaunchIdentity},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			catalog := loadCatalogWithYAMLMutation(t, "src/_index.yaml", func(body []byte) []byte {
+				name := strings.TrimPrefix(test.entry, "bee:")
+				marker := "- name: " + name + "\n  kind: security.policy\n  policy:\n"
+				return insertYAML(t, body, marker, "    conditions: []\n")
+			})
+			entry := catalog.Entries[test.entry]
+			if entry.Policy == nil || len(entry.Policy.Extra) != 1 {
+				t.Fatalf("unknown policy fields were not retained: %#v", entry.Policy)
+			}
+			if err := test.check(catalog); err == nil {
+				t.Fatal("exact policy comparison accepted an unknown YAML field")
+			}
+		})
+	}
+}
+
+func TestTerminalCommandNullKeyIsPresent(t *testing.T) {
+	catalog := loadCatalogWithYAMLMutation(t, "src/core/terminal/_index.yaml", func(body []byte) []byte {
+		marker := "- name: main\n  kind: process.lua\n  source: file://main.lua\n  method: main\n"
+		return insertYAML(t, body, marker, "  meta:\n    command: null\n")
+	})
+	terminal := catalog.Entries["bee.terminal:main"]
+	if !terminal.Meta.CommandPresent {
+		t.Fatal("explicit command:null key was decoded as absent")
+	}
+	if terminal.Meta.Command != nil {
+		t.Fatal("command:null should retain a nil command value")
+	}
+	if err := CheckPresenterProcessTerminalPurity(catalog); err == nil {
+		t.Fatal("terminal command:null must be refused")
+	}
+}
+
+func TestOrdinaryApplicationCommandNullRemainsAllowed(t *testing.T) {
+	catalog := loadCatalogWithYAMLMutation(t, "src/apps/settings/_index.yaml", func(body []byte) []byte {
+		marker := "  meta:\n    type: bee.application\n"
+		return insertYAML(t, body, marker, "    command: null\n")
+	})
+	settings := catalog.Entries["bee.settings:app"]
+	if !settings.Meta.CommandPresent || settings.Meta.Command != nil {
+		t.Fatalf("ordinary app command:null was not preserved as a present nil value: %#v", settings.Meta)
+	}
+	if err := CheckApplicationAdmission(catalog); err != nil {
+		t.Fatalf("ordinary app command:null should retain the old truthiness behavior: %v", err)
+	}
+}
+
+func TestLauncherRejectsScalarYAMLResource(t *testing.T) {
+	catalog := loadCatalogWithYAMLMutation(t, "src/_index.yaml", func(body []byte) []byte {
+		marker := "- name: local_launcher_spawn_policy\n  kind: security.policy\n  policy:\n    actions: [process.spawn, process.spawn.monitored]\n    resources: [bee.launch:supervisor]\n"
+		replacement := "- name: local_launcher_spawn_policy\n  kind: security.policy\n  policy:\n    actions: [process.spawn, process.spawn.monitored]\n    resources: bee.launch:supervisor\n"
+		return replaceYAML(t, body, marker, replacement)
+	})
+	launcher := catalog.Entries["bee:local_launcher_spawn_policy"]
+	if launcher.Policy == nil {
+		t.Fatal("launcher policy missing")
+	}
+	if _, ok := launcher.Policy.Resources.(string); !ok {
+		t.Fatalf("launcher resource did not retain scalar YAML shape: %#v", launcher.Policy.Resources)
+	}
+	if err := CheckClientLaunchIdentity(catalog); err == nil {
+		t.Fatal("scalar launcher resource must be refused")
 	}
 }

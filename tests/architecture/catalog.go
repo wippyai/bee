@@ -41,6 +41,30 @@ type Meta struct {
 	Type        string           `yaml:"type"`
 	Command     *Command         `yaml:"command"`
 	Application *ApplicationMeta `yaml:"application"`
+	// CommandPresent distinguishes an absent command key from command: null.
+	// Ordinary applications retain Python's truthiness behavior for null, while
+	// core command metadata checks can require the key itself to be absent.
+	CommandPresent bool `yaml:"-"`
+}
+
+// UnmarshalYAML records command-key presence because yaml.v3 represents both
+// an absent pointer and an explicit null as nil.
+func (m *Meta) UnmarshalYAML(value *yaml.Node) error {
+	type metaAlias Meta
+	var decoded metaAlias
+	if err := value.Decode(&decoded); err != nil {
+		return err
+	}
+	*m = Meta(decoded)
+	if value.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(value.Content); i += 2 {
+			if value.Content[i].Value == "command" {
+				m.CommandPresent = true
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // ApplicationMeta is the public application envelope.
@@ -63,9 +87,10 @@ type Security struct {
 
 // Policy is a security.policy body. Resources is a string or a list.
 type Policy struct {
-	Effect    string   `yaml:"effect"`
-	Actions   []string `yaml:"actions"`
-	Resources any      `yaml:"resources"`
+	Effect    string         `yaml:"effect"`
+	Actions   []string       `yaml:"actions"`
+	Resources any            `yaml:"resources"`
+	Extra     map[string]any `yaml:",inline"`
 }
 
 // Binding is one host admission row.
@@ -191,6 +216,9 @@ func cloneEntry(entry Entry) Entry {
 		policy := *entry.Policy
 		policy.Actions = append([]string(nil), policy.Actions...)
 		policy.Resources = cloneValue(policy.Resources)
+		if policy.Extra != nil {
+			policy.Extra = cloneValue(policy.Extra).(map[string]any)
+		}
 		entry.Policy = &policy
 	}
 	if entry.Bindings != nil {

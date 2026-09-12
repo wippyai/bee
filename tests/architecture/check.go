@@ -284,7 +284,7 @@ func CheckApplicationAdmission(catalog *Catalog) error {
 	if err != nil {
 		return err
 	}
-	if base.Policy == nil || base.Policy.Effect != "allow" ||
+	if base.Policy == nil || len(base.Policy.Extra) != 0 || base.Policy.Effect != "allow" ||
 		!slicesEqual(base.Policy.Actions, []string{"process.send"}) ||
 		!resourcesEqual(base.Policy.Resources, "*") {
 		return fmt.Errorf("bee:base_app_policy mismatch")
@@ -570,7 +570,7 @@ func CheckPresenterProcessTerminalPurity(catalog *Catalog) error {
 	if err != nil {
 		return err
 	}
-	if processes.Policy == nil || processes.Policy.Effect != "allow" ||
+	if processes.Policy == nil || len(processes.Policy.Extra) != 0 || processes.Policy.Effect != "allow" ||
 		!slicesEqual(processes.Policy.Actions, []string{"system.read"}) ||
 		!resourcesEqual(processes.Policy.Resources, []string{"hosts", "memory", "goroutines", "supervisor"}) {
 		return fmt.Errorf("bee:processes_policy mismatch")
@@ -589,7 +589,7 @@ func CheckPresenterProcessTerminalPurity(catalog *Catalog) error {
 	if terminal.containsModule("security") {
 		return fmt.Errorf("bee.terminal:main modules include security")
 	}
-	if terminal.Meta.Command != nil {
+	if terminal.Meta.CommandPresent {
 		return fmt.Errorf("bee.terminal:main declares a command")
 	}
 	render, err := catalog.require("bee.terminal:render")
@@ -838,7 +838,7 @@ func CheckClientLaunchIdentity(catalog *Catalog) error {
 	if err != nil {
 		return err
 	}
-	if storage.Policy == nil || storage.Policy.Effect != "allow" ||
+	if storage.Policy == nil || len(storage.Policy.Extra) != 0 || storage.Policy.Effect != "allow" ||
 		!slicesEqual(storage.Policy.Actions, []string{"db.get"}) ||
 		!resourcesEqual(storage.Policy.Resources, []string{"bee:client_db"}) {
 		return fmt.Errorf("bee:client_storage_policy mismatch")
@@ -878,7 +878,7 @@ func CheckClientLaunchIdentity(catalog *Catalog) error {
 	if err != nil {
 		return err
 	}
-	if launcher.Policy == nil || !slicesEqual(launcher.Policy.resourceList(), []string{"bee.launch:supervisor"}) {
+	if launcher.Policy == nil || !resourcesEqual(launcher.Policy.Resources, []string{"bee.launch:supervisor"}) {
 		return fmt.Errorf("bee:local_launcher_spawn_policy resources")
 	}
 	return nil

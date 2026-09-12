@@ -1,12 +1,14 @@
 # Foundation status
 
-Global build `237d76a8` combines managed Agent profiles with Hub package reads,
+Hub checkpoint `237d76a8` combines managed Agent profiles with Hub package reads,
 install/update/uninstall, README browsing, scrollable plan review and explicit
 post-publication crash recovery. The combined source passes 746 unit cases and
 the independent desktop suite. Two obsolete managed-Agent fixture assumptions
-were corrected, and all five focused cases pass; remaining desktop gates are
-still running. Migration execution and overlay activation
-remain unfinished. See [the current global build](handoffs/GLOBAL_BUILD.md) and
+were corrected, and all five focused cases pass. A transfer-restart fixture now
+waits for host retirement before replacement admission. The complete foundation
+gate passes in segments after these fixture corrections. Migration execution and overlay activation
+remain unfinished. Global has since advanced to the Agent title build
+`65b91124`, retaining this Hub work. See [the current global build](handoffs/GLOBAL_BUILD.md) and
 [Hub contract](HUB.md) for exact evidence and limits. Older checkpoints below
 retain their historical status.
 

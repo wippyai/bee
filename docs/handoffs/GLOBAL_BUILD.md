@@ -1,6 +1,18 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub recovery and managed Agent profiles
+## Current install: Agent activity titles plus Hub recovery
+
+Global was subsequently refreshed by the Agent lane to SHA
+`65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`,
+source `3e0a3af`, retaining Hub recovery and adding confirmed-hook activity
+titles. The installed provenance and `title-hub-global-install.json` agree.
+Runtime and native pins are unchanged. Native acceptance is recorded in
+`title-hub-native-check.log`; the previous executable and five sidecars are in
+`global-before-title-hub-237d76a8`. Running nodes were retained. The segmented
+foundation results below describe the preceding combined source and its fixture
+corrections, rather than a full check of every subsequent Agent change.
+
+## Previous install: Hub recovery and managed Agent profiles
 
 Global `/home/wolfy-j/.local/bin/bee` has SHA
 `237d76a84ff13494be90d9e360234ff43a3a172612121993ba2c0f3168edac61`.
@@ -20,10 +32,15 @@ The corrected client-desktop suite passes all source/pack variants. The combined
 run passes 746 unit cases, then stops on two managed-Agent fixtures (session-root
 admission and a missing changed-profile notice). Updating those fixtures to the
 current host root and setup refusal passes all five managed-window cases;
-production permissions are unchanged. Remaining desktop checks are running
-separately; this is not yet a complete repository-gate pass. Logs:
+production permissions are unchanged. The continuation caught a transfer-restart
+fixture admitting its replacement before host retirement. Checkpoint `f500961`
+waits for the host's detach acknowledgment; source and pack now pass both failed
+transfer directions. The complete foundation gate passes in segments after these
+fixture corrections, including the separately completed launcher/recovery and
+bundled-app tail. This is not an uninterrupted `make check` pass. Logs:
 `hub-combined-desktop-check.log`, `hub-combined-full-check.log`,
-`hub-combined-managed-corrected.log`, and `hub-combined-check-remainder.log`.
+`hub-combined-managed-corrected.log`, `hub-combined-check-remainder.log`,
+`hub-transfer-retirement-check.log`, and `hub-combined-check-tail.log`.
 
 The executable and five sidecars were verified after SHA-fenced replacement.
 Previous `edf6a7c3` files are in `global-before-combined-recovery-edf6a7c3`;

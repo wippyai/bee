@@ -210,6 +210,19 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             time.sleep("50ms")
         end
         assert(settled, "natural PTY completion never settled an attempt")
+        local retired = false
+        local deadline = time.after("5s")
+        while not retired do
+            local received = channel.select({replies:case_receive(), deadline:case_receive()})
+            assert(received.ok and received.channel == replies, "natural PTY completion did not retire the broker application")
+            local message = received.value
+            if tostring(message:from()) == broker then
+                local data = message:payload():data()
+                if type(data) == "table" and data.op == "closed" and data.id == opened.id and data.instance_id == opened.instance_id then
+                    retired = true
+                end
+            end
+        end
     end
     local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}

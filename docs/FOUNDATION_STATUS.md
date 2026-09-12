@@ -1,5 +1,11 @@
 # Foundation status
 
+Global `668d2e90` adds readable installed-package rows, active action/policy/tab
+choices and preserved README code indentation. Strict lint, 73 focused cases,
+source/pack interaction and native acceptance pass. Running owners retain older
+UI; the full combined repository gate remains outstanding. See
+[current build](handoffs/GLOBAL_BUILD.md) for source and install evidence.
+
 Global `adeb373c` adds Settings → About with loaded bundle identity and Modules
 Clear override, preserving the installed Modules redesign and native MCP work.
 Combined native acceptance passes. The earlier full repository run ended with

@@ -1,5 +1,27 @@
 # Global Bee build — September 12, 2026
 
+## Current install: Modules presentation follow-up
+
+Global SHA `668d2e9078bcbd53935ebb1e5840ee000faae26ea036cdce52e0b6b75fdf8b21`
+contains source `bf41d0a`. Installed packages now separate names and versions from
+installation/dependency details, active choices are highlighted, and README code
+examples retain indentation. Compact rows and scrolling remain supported.
+About, the Bee mark, existing Hub behavior and Agent/MCP features are preserved.
+
+Strict lint, 73 focused tests, source/pack Modules interaction and complete native
+binary acceptance pass. Evidence: `modules-polish-check.log`,
+`modules-polish-native.log`, `modules-polish-installed.png`, and
+`modules-polish-global-install.json` in September 12 local evidence. The installer
+fenced against `4f93cc36`, verified all six files and preserved runtime/native/patch
+identity. Backup: `global-before-modules-polish-4f93cc36`.
+
+No running owners were restarted. Read-only process identity inspection found
+retained global executables including `acb59231` and `7ba0b747`; reconnecting them
+does not load this UI. Settings → About on a fresh owner reports `bf41d0a`.
+The full repository gate on the earlier combined source remains running in
+`hub-current-full-check.log`. Saved update-parameter hydration is being developed
+separately and is not included here.
+
 ## Current install: configure missing dependency parameters
 
 Global SHA `4f93cc36b6bb3e2b95fc81908f78c2344a9836de5feba63f64bf1843670d6b64`

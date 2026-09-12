@@ -23,7 +23,17 @@ local function handle(raw: unknown): {[string]: unknown}
             description = "Packaged module", readme = "# Fixture guide\\nRead this before installing.\\nPackage usage and configuration.", page = 1, total_versions = 2,
             versions = {{version = "1.0.0", yanked = false}, {version = "0.9.0", yanked = false}}}}
     elseif raw.operation == "inspect" then
-        return {ok = true, replayed = false, value = {requirements = {missing = {}, bindings = {}}}}
+        local chosen = false
+        for _, parameter in ipairs(raw.request.parameters or {}) do
+            if parameter.name == "example:enabled" then
+                assert(parameter.value == true, "requirement editor lost boolean type")
+                chosen = true
+            end
+        end
+        return {ok = true, replayed = false, value = {component = "bee/example", version = raw.request.version,
+            digest = string.rep("c", 64), requirements = {missing = {}, requirements = {
+                {id = "example:enabled", has_default = true, default = false, has_selected = chosen, selected = chosen,
+                    targets = {{entry = "example:config", path = ".enabled"}}}}}}}
     elseif raw.operation == "plan" then
         local normalized = raw.request
         if raw.request.action == "uninstall" then normalized = {action = "uninstall", component = raw.request.component,
@@ -121,6 +131,18 @@ def exercise(project, packed, pack):
             ui.key(b"h")
             ui.wait("Fixture guide")
             ui.wait("Read this before installing.")
+            ui.key(b"v")
+            ui.wait("1.0.0")
+            ui.key(b"e")
+            ui.wait("example:enabled")
+            ui.wait("Default")
+            ui.wait("example:config .enabled")
+            ui.key(b"\r")
+            ui.wait("example:enabled JSON: false")
+            ui.key(b"\x7f" * 5 + b"true\r")
+            ui.wait("Selected")
+            ui.key(b"\x1b[24~")
+            ui.wait("example:enabled")
             ui.key(b"v")
             ui.wait("1.0.0")
             # Regression: j navigation previously swallowed this JSON shortcut.

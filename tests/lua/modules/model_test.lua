@@ -4,6 +4,30 @@ local model = require("model")
 local function ok(value: unknown): model.Reply return {ok = true, code = nil, message = nil, value = value, replayed = false} end
 local function define_tests()
     test.describe("Modules model", function()
+        test.it("discovers typed defaults without submitting them and rejects stale requirements", function()
+            local state = model.new()
+            model.select(state, "acme/app")
+            model.select_version(state, "1.0.0")
+            local value = {component = "acme/app", version = "1.0.0", digest = string.rep("a", 64),
+                requirements = {requirements = {
+                    {id = "acme.app:enabled", has_default = true, default = false, has_selected = false,
+                        targets = {{entry = "acme.app:config", path = ".enabled"}}},
+                    {id = "acme.app:name", has_default = true, default = "", has_selected = false, targets = {}},
+                }, missing = {}}}
+            model.apply_inspect(state, ok(value))
+            test.eq(#state.requirements, 2)
+            test.eq(state.requirements[1].json, "false")
+            test.eq(state.requirements[2].json, '""')
+            test.eq(state.requirements[1].origin, "Default")
+            test.eq(#state.parameters, 0)
+            test.is_nil(model.set_parameter(state, state.requirements[1].id, "true"))
+            test.eq(state.parameters[1].value, true)
+            model.select_version(state, "2.0.0")
+            test.eq(#state.requirements, 0)
+            model.apply_inspect(state, ok(value))
+            test.is_nil(state.requirements_digest)
+            test.eq(#state.requirements, 0)
+        end)
         test.it("keeps keyword browsing separate from text search and emits only facade intents", function()
             local state = model.new()
             local catalog = model.catalog_intent(state)

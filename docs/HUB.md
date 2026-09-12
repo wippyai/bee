@@ -255,3 +255,9 @@ denials) and registry read access are retained; exact database/function grants
 are still required. The real-service fixture checks that package functions cannot
 use those private capabilities while SQL up/down and recovery continue to work.
 This scope attenuation is source-only until the next standalone release.
+
+The requirements UI source adds a Requirements tab (`E`) for the selected package
+version. It reads declarations through `inspect`, displays default/selected JSON
+and entry/path targets, and opens the existing JSON editor on the exact selected
+identifier. Defaults remain implicit until edited. Package/version mismatches and
+malformed declarations are rejected. This UI is not yet installed globally.

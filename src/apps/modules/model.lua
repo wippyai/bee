@@ -20,6 +20,7 @@ type Version = {version: string, yanked: boolean}
 type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
 type Module = {component: string, version: string, source: string, direct: boolean, used_by: {string}}
 type Parameter = {name: string, value: unknown, json: string}
+type Requirement = {id: string, json: string, origin: string, targets: {string}}
 type Plan = {digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
 type Operation = {digest: string, component: string, action: string, state: string, message: string, baseline_revision: integer, request: Object?, migration_work: {Object}}
@@ -27,6 +28,7 @@ type Recovery = {digest: string, request: Object, operation: Operation}
 type State = {
     phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, total: integer,
     installed: {Module}, selected: string?, detail: Detail?, selected_version: string?,
+    requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
     action: string, policy: string, parameters: {Parameter}, plan: Plan?, result: Result?, notice: string,
     operation_page: integer, operation_total: integer, operation_page_size: integer, operation_detail_offset: integer, operations: {Operation}, selected_operation: Operation?, recovery: Recovery?,
 }
@@ -134,6 +136,7 @@ end
 function M.new(): State
     return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, total = 0,
         installed = {}, selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
+        requirements_open = false, requirements = {}, requirements_digest = nil, selected_requirement = 1,
         parameters = {}, plan = nil, result = nil, notice = "", operation_page = 1, operation_total = 0,
         operation_page_size = 25, operation_detail_offset = 0, operations = {}, selected_operation = nil, recovery = nil}
 end
@@ -307,6 +310,7 @@ end
 function M.select(state: State, name: string?)
     if name ~= state.selected then
         state.selected, state.detail, state.selected_version, state.parameters = name, nil, nil, {}
+        state.requirements, state.requirements_digest, state.selected_requirement = {}, nil, 1
         state.action, state.policy = "install", "none"
         reset_plan(state)
     end
@@ -314,7 +318,11 @@ function M.select(state: State, name: string?)
 end
 
 function M.select_version(state: State, selected: string?)
-    if selected ~= state.selected_version then state.selected_version = selected; reset_plan(state) end
+    if selected ~= state.selected_version then
+        state.selected_version = selected
+        state.requirements, state.requirements_digest, state.selected_requirement = {}, nil, 1
+        reset_plan(state)
+    end
 end
 
 function M.set_detail_page(state: State, page: integer)
@@ -367,6 +375,69 @@ function M.remove_parameter(state: State, name: string)
     for index, parameter in ipairs(state.parameters) do
         if parameter.name == name then table.remove(state.parameters, index); reset_plan(state); return end
     end
+end
+
+-- Reject incomplete or stale declarations; never manufacture defaults or types.
+local function requirement_list(raw: unknown, maximum: integer): {unknown}?
+    if type(raw) ~= "table" then return nil end
+    local count = 0
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or key > maximum then return nil end
+        count = count + 1
+    end
+    if count ~= #raw then return nil end
+    return raw :: {unknown}
+end
+
+function M.apply_inspect(state: State, reply: Reply)
+    state.requirements, state.requirements_digest = {}, nil
+    if not reply.ok then state.notice = M.text(reply.message or "Requirements unavailable"); return end
+    local value = object(reply.value)
+    local measured = digest(value.digest)
+    if value.component ~= state.selected or value.version ~= state.selected_version or not measured then
+        state.notice = "Requirements did not match the selected package version"; return
+    end
+    local rows = requirement_list(object(value.requirements).requirements, M.MAX_PARAMETERS)
+    if not rows then state.notice = "Invalid package requirements"; return end
+    local decoded: {Requirement}, seen: {[string]: boolean} = {}, {}
+    for _, raw in ipairs(rows) do
+        local row = object(raw)
+        local id = row.id
+        local targets = requirement_list(row.targets, 128)
+        if type(id) ~= "string" or #id > 256 or not id:match("^[^:%s]+:[^:%s]+$") or seen[id]
+            or type(row.has_default) ~= "boolean" or type(row.has_selected) ~= "boolean" or not targets then
+            state.notice = "Invalid package requirement"; return
+        end
+        local encoded, origin = "", "Required"
+        if row.has_selected or row.has_default then
+            local selected = row.default
+            origin = "Default"
+            if row.has_selected then selected = row.selected; origin = "Selected" end
+            local result, problem = json.encode(selected)
+            if not result or problem or #result > 8192 then state.notice = "Invalid requirement value"; return end
+            encoded = result
+        end
+        local paths: {string} = {}
+        for _, raw_target in ipairs(targets) do
+            local target = object(raw_target)
+            if type(target.entry) ~= "string" or type(target.path) ~= "string" or #target.entry > 256 or #target.path > 512 then
+                state.notice = "Invalid requirement target"; return
+            end
+            paths[#paths + 1] = M.text(target.entry, 256) .. " " .. M.text(target.path, 512)
+        end
+        decoded[#decoded + 1] = {id = id, json = encoded, origin = origin, targets = paths}
+        seen[id] = true
+    end
+    state.requirements, state.requirements_digest, state.notice = decoded, measured, ""
+    state.selected_requirement = math.floor(math.max(1, math.min(#decoded, state.selected_requirement)))
+end
+
+function M.show_requirements(state: State, visible: boolean)
+    state.requirements_open = visible
+end
+
+function M.select_requirement(state: State, index: integer)
+    state.selected_requirement = math.floor(math.max(1, math.min(#state.requirements, index)))
 end
 
 function M.apply_catalog(state: State, reply: Reply)

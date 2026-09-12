@@ -25,6 +25,9 @@ check: modules-app-check
 hub-manage-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/hub_inspect.go -runtime "$(abspath $(WIPPY))" -manage
+.PHONY: hub-recovery-check
+hub-recovery-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_recovery.py
 .PHONY: sync-check
 sync-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/sync_module.py

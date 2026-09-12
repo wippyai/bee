@@ -2,8 +2,9 @@
 
 Bee has an optional Hub component with a scoped public API and a Modules TUI
 in development. Real install, update, uninstall and durable receipt restart
-checks pass on the existing runtime. Migration execution and complete recovery
-remain unfinished. This backend milestone is installed globally.
+checks pass on the existing runtime. This backend milestone is installed globally.
+The following explicit interruption-recovery API is source-verified but not yet
+in the global executable. Migration execution remains unfinished.
 
 `bee.hub:call({operation, request?, expected_digest?})` returns
 `{ok, value?, code?, message?, replayed}`. The facade checks the authenticated
@@ -87,8 +88,15 @@ alone does not establish production migration execution.
 Owner serialization does not exclude unrelated registry writers. Automatic
 baseline restoration is attempted only while the observed registry revision
 still equals this operation's publication revision; this is not atomic compare
-and swap. A crash after publication can leave a `published` receipt and needs
-explicit reconciliation, which is not implemented yet.
+and swap. A crash after publication can leave a `published` receipt. New receipts
+capture the expected module inventory in the same registry change as the root.
+After checking `status`, an explicit `apply` with the original confirmed request
+and digest verifies the current root and captured inventory without republishing.
+It marks the receipt complete only when they agree. A later root edit is retained
+and results in `recovery_required`; recovery does not restore the old registry.
+Older published receipts without captured evidence return `UNCERTAIN`. Status
+remains read-only. An operation-history browser and automatic recovery scheduling
+are not implemented.
 
 ## Acceptance and remaining work
 
@@ -127,8 +135,14 @@ retained module to remain present and checks every version captured by the plan.
 `make native-modules-lifecycle-check BEE_BINARY=...` passes real installation,
 historical-version update, removal, repeated-removal refusal and reopen against
 the same registry state. All original bundled package bytes remain unchanged;
-content-addressed cache aliases may be added. Migration execution and interrupted
-publication recovery remain unfinished.
+content-addressed cache aliases may be added.
+
+`make hub-recovery-check` kills the real runtime immediately after publication,
+then reopens the same registry SQLite state and reconciles the original request.
+A second case edits the root before replay and verifies `recovery_required` with
+the edit preserved. The fixture checks explicit success markers, root cardinality,
+selected version, changed-request refusal and read-only status. Its interruption
+hook exists only in a disposable source copy. Migration execution remains unfinished.
 
 The component follows Keeper's application-level planning and replan-before-apply
 flow without importing Keeper. Runtime changes are outside this lane; earlier

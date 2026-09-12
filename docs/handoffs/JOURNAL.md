@@ -6232,3 +6232,20 @@ completed with exit 0, including desktop and recovery checks. This validates
 configuration selection, not automatic credential setup. The Grok native bundle
 passes at 18 modules and 622 entries. Agy's child component is now integrated;
 its shared activation and pack validation are the next combined gate.
+
+Credential broker file support is integrated as `ff95d7c` (source commit
+`76758ce`). Its revised full unit run passed 633 cases, including the populated
+migration, source-policy denial and an actual direct-filesystem probe with an
+authorized positive control. The four-driver bundle passes at 19 modules and
+632 entries before the credential integration. Production profiles, automatic
+login-home delivery and randomized-port MCP remain incomplete; global is unchanged.
+
+The combined unit gate now passes 677/677 after `d441367` preserves bounded Agy
+stream text and prevents partial tool output from becoming completion. File
+credentials refuse before native placement intent until private-home delivery is
+wired. The previously intermittent runner-loss test now injects the durable
+missing-identity state directly: the old kill/sleep/erase setup allowed the
+background sweep to prove exit before identity removal. It now always requires
+uncertainty and refused cleanup. Full combined `make check` session 75912 is
+still running at `bee-evidence/0912/four-driver-credentials-full-check.log`;
+unit success does not yet constitute the full foundation gate.

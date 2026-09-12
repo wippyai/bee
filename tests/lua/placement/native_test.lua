@@ -830,29 +830,20 @@ local function define_tests()
         test.it("keeps uncertainty when the runner is lost without an execution identity", function()
             local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))
-            local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
-            test.eq(started.execution_state, "running")
             local db = store.open()
             if not db then error("store") end
-            local row = store.row(db, prepared.attempt_id)
-            local runner = tostring(row and row.runner_pid)
-            process.terminate(runner)
-            time.sleep("300ms")
-            local _, clear_error = db:execute("UPDATE bee_placement_attempts SET runner_pid = NULL, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+            -- Inject the persisted state left by an unobserved execution.
+            -- Starting and killing a real child first allowed the background
+            -- sweep to prove its exit before the fixture removed its identity.
+            local _, clear_error = db:execute("UPDATE bee_placement_attempts SET execution_state = 'running', runner_pid = NULL, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {prepared.attempt_id})
             db:release()
             if clear_error then error("clear identity: " .. tostring(clear_error)) end
-            -- A runner that reaped its child while being cancelled proves the
-            -- exit itself; reconcile never proves one without an identity.
             local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
-            if reconciled.execution_state == "exited" then
-                test.eq(reconciled.exit_source, "runner")
-            else
-                test.eq(reconciled.execution_state, "uncertain")
-                local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
-                test.eq(stopped.execution_state, "uncertain")
-                local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-                test.eq(blocked.error and blocked.error.code, "CONFLICT")
-            end
+            test.eq(reconciled.execution_state, "uncertain")
+            local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
+            test.eq(stopped.execution_state, "uncertain")
+            local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
+            test.eq(blocked.error and blocked.error.code, "CONFLICT")
         end)
         test.it("resolves grants through the resource authority when the host selects granted mode", function()
             local workspace = fresh("ws")
@@ -929,6 +920,32 @@ local function define_tests()
                 attempt_of(call(OWNER, "stop", {attempt_id = attempt_id, mode = "forced"}))
             end
             resource_mode("host_configured")
+        end)
+        test.it("refuses file credentials before intent until private-home delivery is wired", function()
+            local source = "bee.credentials:codex_login_fixture"
+            local entry = registry.get("bee:credential_sources")
+            if not entry then error("credential sources entry") end
+            local data = entry.data :: {[string]: unknown}
+            local list = data.sources :: {{[string]: unknown}}
+            list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
+            local changes = registry.snapshot():changes()
+            changes:update(entry)
+            local applied, apply_error = changes:apply()
+            if not applied then error(tostring(apply_error)) end
+            local workspace = fresh("ws")
+            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local attempt_id = fresh("attempt")
+            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER, attempt_id = attempt_id, profile_id = "batch",
+                profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")})
+            local request = launch({"sh", "-c", "exit 0"}, "direct_process")
+            request.attempt_id = attempt_id
+            request.projections = {projection.projection_id}
+            local refused = call(OWNER, "prepare", request)
+            test.is_false(refused.ok)
+            test.eq(refused.error.code, "UNAVAILABLE")
+            local absent = call(OWNER, "status", {attempt_id = attempt_id})
+            test.is_false(absent.ok)
+            test.eq(absent.error.code, "NOT_FOUND")
         end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()

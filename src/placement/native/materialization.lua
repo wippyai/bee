@@ -131,13 +131,20 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     for index, projection_id in ipairs(request.projections) do
         local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
-        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string}?} or nil
+        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string, projection_kind: string}?} or nil
         if call_error or not reply or not reply.ok or not reply.value then
             local code = reply and reply.error and reply.error.code or "UNAVAILABLE"
             evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {execution = "exited"})
             return refused("projection " .. projection_id .. ": " .. code)
         end
         local projected = reply.value :: {destination: string, value: string}
+        if reply.value.projection_kind ~= "environment" or type(projected.destination) ~= "string"
+            or #projected.destination > 128 or not projected.destination:match("^[A-Z_][A-Z0-9_]*$")
+            or type(projected.value) ~= "string" or #projected.value == 0 or #projected.value > 8192
+            or projected.value:find("[%z\r\n]") then
+            evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
+            return refused("invalid environment projection")
+        end
         local gateway = request.gateway
         if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
             local conflict = "environment destination " .. projected.destination .. " is already assigned"

@@ -143,6 +143,10 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id) end
     local reply = raw :: Reply
     if not reply.ok then return fail(reply.error and reply.error.code or "DENIED", "projection " .. projection_id .. ": " .. tostring(reply.error and reply.error.code)) end
+    local projection = bounds.object(reply.value)
+    if not projection or projection.projection_kind ~= "environment" then
+        return fail("UNAVAILABLE", "this placement does not yet materialize file credentials")
+    end
     return nil
 end
 -- Checks the gateway binding an attempt holds under its attached carrier

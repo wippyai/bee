@@ -41,4 +41,4 @@ from step 2.
 
 ## What is not in the sequence
 
-Aider. Pause for batch mode. SIGSTOP. Bind-mounting host binaries. Per-driver executor entries. Any harness beyond Claude and Codex before step 15. Any claim of Hive support before step 14's proof.
+Aider. Pause for batch mode. SIGSTOP. Bind-mounting host binaries. Per-driver executor entries. Any claim of Hive support before step 14's proof.

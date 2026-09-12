@@ -1,5 +1,14 @@
 # Foundation status
 
+The September 12 agent-integration branch composes Claude, Codex, Agy and Grok
+as separate driver packs under the shared driver contract. The credential broker
+also supports bounded host-admitted login files, with an append-only populated
+store upgrade and separate filesystem permissions. File delivery into private
+session homes is not yet wired; placement refuses those projections before
+launch. Production Agent profiles, automatic login setup, managed MCP activation
+and Docker placement remain incomplete. These source changes are not in global
+`55b725aa`; see [the journal handoff](handoffs/JOURNAL.md) for validation evidence.
+
 Governed authoring now accepts an ordinary app with an explicit workspace
 operation grant, while preserving its direct database and scope-creation denials.
 The public function validates permission, then uses an existing named scope for

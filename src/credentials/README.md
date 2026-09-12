@@ -60,7 +60,9 @@ definitions, projections, consumed generations, and migration ledger records.
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
-File projection is a broker capability only. Automatic source discovery,
+File projection is a broker capability only. Native placement refuses a file
+projection before recording a launch intent until private-home delivery is wired;
+file contents cannot enter the environment projection route. Automatic source discovery,
 copying into a private writable session home, preserving harness token refresh
 and Docker mounting are still being integrated. No file login is enabled by
 default. `refresh` and `write_back` remain false; the broker neither refreshes

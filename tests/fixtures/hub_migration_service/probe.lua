@@ -92,4 +92,15 @@ local function partial()
     assert(recovered.replayed and #rows == 2 and rows[1].reason == "already_applied" and rows[2].status == "applied", "partial replay did not reconcile the first commit")
     logger:info("HUB_MIGRATION_SERVICE_PASS partial")
 end
-return {partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}
+local function linked()
+    local request = {action = "install", component = "acme/app", version = "1.2.0", migration_policy = "up",
+        parameters = {{name = "acme.storage:target_db", value = "probe:db"}}}
+    local planned = call("plan", request)
+    assert(planned.ok, "linked plan: " .. tostring(planned.message))
+    assert(planned.value.migrations[1].target_db == "probe:db", "plan did not use selected migration database")
+    local result = call("apply", request, planned.value.digest)
+    complete(result)
+    assert(result.value.migration_work.entries[1].target_db == "probe:db", "receipt did not capture selected database")
+    logger:info("HUB_MIGRATION_SERVICE_PASS linked")
+end
+return {linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}

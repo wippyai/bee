@@ -5894,3 +5894,23 @@ Luna's next unit is isolated session-resource admission at
 public MCP and global project-state isolation remain open. Global Bee is
 unchanged. Wolfden journal `01a06e56-ba58-7c5a-bd69-b7feb109a05d`,
 `bee-harness/root`, cursor `jc_H7E57Z5SJH71M`, through seq 1259.
+
+### 2026-09-11 Codex: window-close acceptance complete
+
+The remaining storage/desktop continuation exited successfully. Together with
+616 passing Lua tests, live delayed-hook acceptance, native/managed-window
+checks and the corrected workspace-host fixture, every required foundation
+check passed across the original run and targeted continuations. Source/pack
+close/force stop, failed-delivery recovery, retained terminals, observer fences,
+client transfer/reconnect, launcher/recovery and bundled apps all passed.
+Evidence: `/tmp/bee-window-close-check-remainder-isolated-20260911.log`.
+The earlier cached lint failure and two missing fixture DB paths remain recorded;
+this is not a single uninterrupted full-run claim.
+
+The user reiterated simplicity. Luna's `d9f154c` session-admission candidate stays
+isolated and unaccepted: it lacks actual admission-to-HOME acceptance and reported
+four gateway test failures plus lint failures. Do not enable app resume metadata
+or adopt that policy based only on grant-field tests. Reuse the existing resource
+and checkpoint contracts for the next recovery unit. Global Bee remains unchanged;
+runtime #726 and builder #7 are still open at the previously tested heads.
+Wolfden checkpoint seq 1262, cursor `jc_H7E57Z5SJH71M`.

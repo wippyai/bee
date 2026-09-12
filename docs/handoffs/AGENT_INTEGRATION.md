@@ -24,10 +24,16 @@ now precedes PTY open. Protected host admission selects the close allowance;
 ordinary apps retain 250ms and force stop remains immediate. Full node shutdown
 has its separate deadline and is not conversation-recovery acceptance.
 
-The full follow-up check is still running. Its first lint attempt failed from
-the existing cache with five `expected tty.Viewport, got tty.Viewport` errors;
-the cache and source were preserved before a fresh strict lint passed unchanged
-code. Evidence is in `/tmp/bee-window-close-*-20260911.log`.
+The remaining foundation checks now pass, including storage/restart,
+source/pack permissions and lifecycle, client detach/transfer/recovery, and
+the bundled applications. These completed across the initial run and targeted
+continuations after fixing two governance database path omissions in fixtures;
+this is not a single uninterrupted `make check` run. Its first lint attempt
+failed from the existing cache with five `expected tty.Viewport, got tty.Viewport`
+errors; the cache and source were preserved before fresh strict lint passed
+unchanged code. Evidence is in `/tmp/bee-window-close-*-20260911.log`, with the
+completed desktop continuation in
+`/tmp/bee-window-close-check-remainder-isolated-20260911.log`.
 
 The combined authoring and gateway source passes 600 Lua tests. Earlier managed
 window acceptance passed all three cases with an explicitly bound `/bin/sh`;

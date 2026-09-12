@@ -104,8 +104,12 @@ real `wippy/test` install, update, uninstall, confirmation mismatch and permissi
 denials, then restarts and verifies durable receipts and continued removal.
 `make modules-app-check` uses deterministic fixture Hub replies with the real
 broker, app process and presenter from source and a pack. Keyword clearing,
-independent search, details, JSON parameter keyboard input, plan/review/cancel/
-confirm, completed receipt, F12, resize and shutdown pass. A published or missing
+independent search, multiline README reading, details, JSON parameter keyboard input, plan/review/cancel/
+confirm, completed receipt, F12, resize and shutdown pass. Package details have README and Versions panes (H/V); arrow keys and the mouse
+wheel scroll the README. Installed selection stays in its current list. Change
+review lists changed packages before summarizing unchanged modules. These UI
+changes are source work pending the next standalone installation.
+A published or missing
 receipt state is not displayed as completion. It does not prove the entire confirmation/apply UI against live
 Hub; the real mutation API is covered separately above.
 

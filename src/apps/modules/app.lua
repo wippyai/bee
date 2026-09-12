@@ -42,7 +42,13 @@ local function editable(value: string): string
 end
 
 local function previous(value: string): string
-    return value:sub(1, math.floor(math.max(0, #value - 1)))
+    local start = #value
+    while start > 1 do
+        local byte = value:byte(start)
+        if byte < 0x80 or byte >= 0xC0 then break end
+        start = start - 1
+    end
+    return value:sub(1, math.floor(math.max(0, start - 1)))
 end
 
 local function main(value: unknown)
@@ -58,6 +64,8 @@ local function main(value: unknown)
     local preferences = appearance.defaults()
     local state: model.State = model.new()
     local offset = 0
+    local reading_readme = false
+    local visible_rows = 1
     local hits: {view.Hit} = {}
     local pending: {Pending} = {}
     local reading: ReadPending? = nil
@@ -183,8 +191,11 @@ local function main(value: unknown)
     end
 
     local function choose(name: string, show_details: boolean)
+        local previous_phase = state.phase
         model.select(state, name)
-        if not show_details then model.show(state, "catalog") end
+        if not show_details then model.show(state, previous_phase) end
+        offset = 0
+        reading_readme = false
         invalidate()
         if show_details then details() else changed() end
     end
@@ -196,9 +207,14 @@ local function main(value: unknown)
         for index, raw in ipairs(rows) do
             if type(raw) == "table" and (raw :: Object).component == state.selected then current = index; break end
         end
-        local next = math.max(1, math.min(#rows, current + delta))
+        local next = math.floor(math.max(1, math.min(#rows, current + delta)))
         local raw = rows[next]
-        if type(raw) == "table" and type((raw :: Object).component) == "string" then choose((raw :: Object).component :: string, false) end
+        if type(raw) == "table" and type((raw :: Object).component) == "string" then
+            local old_offset = offset
+            choose((raw :: Object).component :: string, false)
+            offset = math.floor(math.max(0, math.min(old_offset, next - 1)))
+            if next > offset + visible_rows then offset = math.floor(math.max(0, next - visible_rows)) end
+        end
     end
 
     local function version_relative(delta: integer)
@@ -207,6 +223,8 @@ local function main(value: unknown)
         local current = 0
         for index, item in ipairs(detail.versions) do if item.version == state.selected_version then current = index; break end end
         local next = math.floor(math.max(1, math.min(#detail.versions, current + delta)))
+        if next <= offset then offset = next - 1 end
+        if next > offset + visible_rows then offset = math.floor(math.max(0, next - visible_rows)) end
         model.select_version(state, detail.versions[next].version)
         invalidate()
         changed()
@@ -248,6 +266,8 @@ local function main(value: unknown)
         status = ""
         if kind == "catalog" then invalidate(); catalog()
         elseif kind == "installed" then invalidate(); installed()
+        elseif kind == "readme" then reading_readme = true; offset = 0; changed()
+        elseif kind == "versions" then reading_readme = false; offset = 0; changed()
         elseif kind == "details" then details()
         elseif kind == "plan" then plan()
         elseif kind == "component" then choose(key, true)
@@ -274,8 +294,9 @@ local function main(value: unknown)
     while running do
         if dirty then
             local display_status = editor and status or (status ~= "" and status or state.notice)
-            local frame = view.draw(width, height, preferences, state, offset, display_status)
+            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme)
             hits, offset = frame.hits, frame.offset
+            visible_rows = math.floor(math.max(1, frame.capacity))
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
             dirty = false
@@ -322,17 +343,20 @@ local function main(value: unknown)
                 elseif data.type == "resize" then width, height = data.width, data.height; changed()
                 elseif data.type == "key" and data.action ~= "release" then
                     local key, letter = data.key_type, tostring(data.key or "")
+                    if key == "space" then letter = " " end
                     if editor then
                         if key == "esc" or key == "escape" then editor = nil; status = "Cancelled"; changed()
                         elseif key == "enter" then finish_editor()
                         elseif key == "backspace" then editor.buffer = previous(editor.buffer); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed()
-                        elseif #letter == 1 and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
+                        elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
                     else
                         status = ""
                         if key == "up" or letter == "k" then
-                            if state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
+                            if state.phase == "details" and reading_readme then offset = math.floor(math.max(0, offset - 1)); changed()
+                            elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
                         elseif key == "down" or (letter == "j" and state.phase ~= "details") then
-                            if state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
+                            if state.phase == "details" and reading_readme then offset = offset + 1; changed()
+                            elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
                         elseif key == "left" and state.phase == "catalog" then model.set_page(state, state.page - 1); invalidate(); catalog()
                         elseif key == "right" and state.phase == "catalog" then model.set_page(state, state.page + 1); invalidate(); catalog()
                         elseif key == "left" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page - 1); invalidate(); details()
@@ -341,6 +365,8 @@ local function main(value: unknown)
                             if state.phase == "catalog" or state.phase == "installed" then details()
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
+                        elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
+                        elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
                         elseif letter == "/" then begin_editor("query")
                         elseif letter == "K" then begin_editor("keyword")
                         elseif letter == "j" and state.phase == "details" then begin_editor("parameter_name")
@@ -360,7 +386,8 @@ local function main(value: unknown)
                     local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                     if hit then handle_hit(hit.kind, hit.key) end
                 elseif data.type == "mouse" and data.action == "wheel" then
-                    if state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                    if state.phase == "details" and reading_readme then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
+                    elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                 end
                 end

@@ -29,6 +29,7 @@ entries:
   modules: [json]
   imports:
     text: bee.application:text
+    canonical: bee.sync:canonical
 - name: view
   kind: library.lua
   source: file://view.lua

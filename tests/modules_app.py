@@ -19,7 +19,7 @@ local function handle(raw: unknown): {[string]: unknown}
             latest_version = "1.0.0"}}}}
     elseif raw.operation == "details" then
         return {ok = true, replayed = false, value = {component = "bee/example", title = "Preview fixture",
-            description = "Packaged module", readme = "Fixture", page = 1, total_versions = 2,
+            description = "Packaged module", readme = "# Fixture guide\\nRead this before installing.\\nPackage usage and configuration.", page = 1, total_versions = 2,
             versions = {{version = "1.0.0", yanked = false}, {version = "0.9.0", yanked = false}}}}
     elseif raw.operation == "inspect" then
         return {ok = true, replayed = false, value = {requirements = {missing = {}, bindings = {}}}}
@@ -50,18 +50,24 @@ def exercise(project, packed, pack):
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
             ui.key(b"/")
-            ui.key(b"terminal\r")
-            ui.wait("Search: terminal")
+            ui.key("terminal café".encode())
+            ui.key(b"\x7f\r")
+            ui.wait("Search: terminal caf")
             ui.key(b"\x1b[B")
             ui.key(b"\r")
             ui.wait("Packaged module")
+            ui.wait("1.0.0")
+            ui.key(b"h")
+            ui.wait("Fixture guide")
+            ui.wait("Read this before installing.")
+            ui.key(b"v")
             ui.wait("1.0.0")
             # Regression: j navigation previously swallowed this JSON shortcut.
             ui.key(b"j")
             ui.wait("Parameter name (namespace:name)")
             ui.key(b"example:settings\r")
             ui.wait("Parameter JSON value")
-            ui.key(b'{"enabled":true}\r')
+            ui.key(b'{"enabled": true, "title": "two words"}\r')
             ui.key(b"j")
             ui.wait("Parameter name (namespace:name)")
             ui.key(b"\x1b")
@@ -84,6 +90,9 @@ def exercise(project, packed, pack):
             ui.resize(60, 20)
             ui.wait("MODULES")
             ui.quit()
+        except Exception:
+            Path("/tmp/bee-modules-ui-failure.raw").write_bytes(ui.raw)
+            raise
         finally:
             ui.close()
 
@@ -95,7 +104,7 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
-    print("Modules source/pack: filters, JSON input, plan/review/cancel/confirm, completed receipt, F12, resize and shutdown pass")
+    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, F12, resize and shutdown pass")
 
 
 if __name__ == "__main__":

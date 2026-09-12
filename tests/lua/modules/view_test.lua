@@ -6,6 +6,16 @@ local model = require("model")
 local view = require("view")
 local function define_tests()
     test.describe("Modules frame", function()
+        test.it("renders multiline package documentation", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                component = "bee/example", title = "Example", description = "Package", readme = "# Guide\nUsage instructions",
+                versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1,
+            }})
+            local frame = view.draw(80, 24, appearance.defaults(), state, 0, "", true)
+            test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
+        end)
         test.it("keeps rows and hits within every compact canvas", function()
             local state = model.new()
             model.apply_catalog(state, {ok = true, code = nil, message = nil, replayed = false, value = {total = 1, items = {

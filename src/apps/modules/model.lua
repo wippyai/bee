@@ -2,6 +2,7 @@
 -- the application sends these intents to bee.hub:call and folds its typed
 -- transaction replies back here.
 local json = require("json")
+local canonical = require("canonical")
 local text = require("text")
 local M = {}
 
@@ -29,6 +30,17 @@ type State = {
 
 function M.text(value: unknown, limit: integer?): string
     return text.bound(value, limit or M.MAX_TEXT)
+end
+
+local function readme(value: unknown): string
+    if type(value) ~= "string" then return "" end
+    local lines: {string} = {}
+    local content = value:sub(1, 16384)
+    content = content .. "\n"
+    for line in string.gmatch(content, "([^\n]*)\n") do
+        lines[#lines + 1] = M.text(line, 16384)
+    end
+    return table.concat(lines, "\n")
 end
 
 local function object(value: unknown): Object
@@ -241,7 +253,7 @@ function M.apply_details(state: State, reply: Reply)
         end
     end
     state.detail = {component = name, title = M.text(value.title, 160), description = M.text(value.description, 512),
-        readme = M.text(value.readme, 4096), versions = versions, page = math.max(1, integer(value.page)), total_versions = integer(value.total_versions)}
+        readme = readme(value.readme), versions = versions, page = math.max(1, integer(value.page)), total_versions = integer(value.total_versions)}
     if not state.selected_version then for _, item in ipairs(versions) do if not item.yanked then state.selected_version = item.version; break end end end
     state.phase, state.notice = "details", ""
 end
@@ -258,7 +270,7 @@ local function matches_request(state: State, raw: unknown): boolean
     if type(expected_parameters) ~= "table" or type(actual_parameters) ~= "table" or #expected_parameters ~= #actual_parameters then return false end
     for index, expected_parameter in ipairs(expected_parameters :: {unknown}) do
         local left, right = object(expected_parameter), object((actual_parameters :: {unknown})[index])
-        local left_value, right_value = json.encode(left.value), json.encode(right.value)
+        local left_value, right_value = canonical.encode(left.value), canonical.encode(right.value)
         if left.name ~= right.name or not left_value or not right_value or left_value ~= right_value then return false end
     end
     return true

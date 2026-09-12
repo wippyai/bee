@@ -14,7 +14,7 @@ function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
     return nil
 end
 
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?): Frame
     local theme, canvas = appearance.theme(preferences.theme), tty.canvas(width, height)
     local hits: {Hit} = {}
     local function put(x: integer, y: integer, value: string, size: integer, fg: string?, bg: string?)
@@ -27,7 +27,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local function button(x: integer, y: integer, kind: string, label: string, enabled: boolean): integer
         local size = tty.text.width(label)
         if x + size > width or y < 1 or y > height then return x end
-        put(x, y, label, size, enabled and appearance.selection_text(theme) or theme.muted, enabled and theme.accent or theme.surface)
+        local active = kind == state.phase or (kind == "readme" and reading == true)
+            or (kind == "versions" and reading ~= true) or kind == "confirm" or kind == "review" or kind == "plan"
+        put(x, y, label, size, enabled and (active and appearance.selection_text(theme) or theme.text) or theme.muted,
+            enabled and active and theme.accent or theme.surface)
         if enabled then hits[#hits + 1] = {kind = kind, key = "", x = x, y = y, width = size, height = 1} end
         return x + size + 1
     end
@@ -92,6 +95,36 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         line(3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
         if detail then
             line(4, detail.description, theme.text)
+            local tab_x = 2
+            tab_x = button(tab_x, 5, "readme", reading and " [README] " or " README ", true)
+            tab_x = button(tab_x, 5, "versions", not reading and " [Versions] " or " Versions ", true)
+            if reading then
+                local lines: {string} = {}
+                local available = maximum(1, width - 4)
+                local content = detail.readme .. "\n"
+                for paragraph in string.gmatch(content, "([^\n]*)\n") do
+                    local row = ""
+                    for word in paragraph:gmatch("%S+") do
+                        if row ~= "" and tty.text.width(row .. " " .. word) > available then
+                            lines[#lines + 1] = row
+                            row = ""
+                        end
+                        row = row == "" and word or (row .. " " .. word)
+                    end
+                    lines[#lines + 1] = row
+                end
+                if detail.readme == "" then lines = {"No README provided by this package."} end
+                local capacity = maximum(0, height - 8)
+                local next_offset = math.floor(math.max(0, math.min(maximum(0, #lines - capacity), offset)))
+                for slot = 1, capacity do
+                    local row = lines[next_offset + slot]
+                    if not row then break end
+                    line(6 + slot - 1, row, row:match("^#") and theme.accent or theme.text)
+                end
+                button(2, height - 1, "versions", " Choose version ", true)
+                line(height, status ~= "" and status or "↑↓ scroll · V versions · Esc catalog", theme.muted)
+                return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
+            end
             local first, last = 6, height - 4
             local capacity = maximum(0, last - first + 1)
             local next_offset = math.floor(math.max(0, math.min(maximum(0, #detail.versions - capacity), offset)))
@@ -119,9 +152,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 policy_x = button(policy_x, height - 1, "policy_up", " Run migrations ", true)
             end
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
-            if width >= 74 then line(5, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
+            if width >= 74 then line(height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
-        line(height, status ~= "" and status or "↑↓ version · I install · U update · X remove · P prepare · J edit JSON parameter", theme.muted)
+        line(height, status ~= "" and status or "↑↓ version · H README · I install · U update · X remove · P prepare · J edit JSON parameter", theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = detail and maximum(0, height - 9) or 0, offset = offset}
     end
     local plan = state.plan
@@ -143,10 +176,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     line(3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
     line(4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
     local y = 6
+    local unchanged = 0
     for _, raw in ipairs(plan.modules) do
-        if y >= height - 3 then break end
         local item = raw :: {[string]: unknown}
-        line(y, model.text(item.change, 12) .. "  " .. model.text(item.component, 160) .. "  " .. model.text(item.version, 128), theme.text)
+        if item.change == "keep" then unchanged = unchanged + 1
+        elseif y < height - 3 then
+            line(y, model.text(item.change, 12) .. "  " .. model.text(item.component, 160) .. "  " .. model.text(item.version, 128), theme.text)
+            y = y + 1
+        end
+    end
+    if unchanged > 0 and y < height - 3 then
+        line(y, tostring(unchanged) .. " installed modules unchanged", theme.muted)
         y = y + 1
     end
     if #plan.migrations > 0 and y < height - 3 then line(y, tostring(#plan.migrations) .. " migrations · policy " .. state.policy, theme.muted); y = y + 1 end

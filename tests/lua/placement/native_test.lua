@@ -1017,12 +1017,31 @@ local function define_tests()
             end
             local first_request = retained_launch(OWNER, session_ref, "first-login")
             local first_id = first_request.attempt_id :: string
+            local first_launch = first_request.launch :: {[string]: unknown}
+            -- Execute env directly. A shell can remove invalid names such as
+            -- auth.json before its env builtin observes them.
+            first_launch.executable = "/usr/bin/env"
+            first_launch.argv = {}
             first_request.projections = {issue(first_id).projection_id}
             attempt_of(call(OWNER, "prepare", first_request))
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = first_id, recipient = process.pid(), generation = 1}))
             attempt_of(call(OWNER, "start", {attempt_id = first_id}))
+            local child_environment = ""
+            local idle = time.after("1s")
+            while true do
+                local selected = channel.select({outputs:case_receive(), idle:case_receive()})
+                if not selected.ok or selected.channel == idle then break end
+                local data = selected.value:payload():data() :: {[string]: unknown}
+                if data.data then child_environment = child_environment .. tostring(data.data) end
+                process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = math.floor(data.sequence :: number)})
+            end
+            process.unlisten(outputs)
             if not wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).execution_state == "exited"
             end, 8000) then error("first retained login launch did not exit") end
+            test.eq((value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).exit_code, 0)
+            test.is_nil(child_environment:find('{"fixture":"login"}', 1, true))
             local session_key = assert(homes.session_key(OWNER, session_ref))
             local session_path = assert(homes.ensure_session(session_key))
             local home = assert(homes.os_path(session_path .. "/home"))

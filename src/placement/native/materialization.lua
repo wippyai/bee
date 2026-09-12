@@ -148,21 +148,23 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             end
             file_projection = true
             evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "replayed" or "seeded"))
-        elseif projected.projection_kind ~= "environment" or type(projected.destination) ~= "string"
+        else
+            if projected.projection_kind ~= "environment" or type(projected.destination) ~= "string"
             or #projected.destination > 128 or not projected.destination:match("^[A-Z_][A-Z0-9_]*$")
             or type(projected.value) ~= "string" or #projected.value == 0 or #projected.value > 8192
             or projected.value:find("[%z\r\n]") then
-            evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
-            return refused("invalid environment projection")
+                evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
+                return refused("invalid environment projection")
+            end
+            local gateway = request.gateway
+            if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
+                local conflict = "environment destination " .. projected.destination .. " is already assigned"
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
+                return refused(conflict)
+            end
+            environment[projected.destination] = projected.value
+            evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
         end
-        local gateway = request.gateway
-        if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
-            local conflict = "environment destination " .. projected.destination .. " is already assigned"
-            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
-            return refused(conflict)
-        end
-        environment[projected.destination] = projected.value
-        evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
     end
     local delivery = request.delivery
     if not delivery then return refused("attempt has no owner-recorded configuration delivery") end

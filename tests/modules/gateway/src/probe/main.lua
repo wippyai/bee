@@ -456,9 +456,12 @@ local function main()
     -- wait returns a released outcome well before its own deadline, new
     -- admissions are refused, and a bounded read still finishes before the
     -- host's deadline.
+    local before_drain = ok(call("bee.threads.service:get", {thread_id = THREAD}), "read head before drain")
+    local drain_cursor = tonumber(before_drain.head_sequence)
+    assert(drain_cursor and drain_cursor >= 4, "read the current head before the drain wait")
     assert(process.spawn("bee.gateway_probe:drainer", "bee:workers", "400ms"), "spawn drainer")
     local drain_started = time.now()
-    local released = tool("act-d", token_d, "thread_wait", {after_sequence = 4, wait_ms = 4000})
+    local released = tool("act-d", token_d, "thread_wait", {after_sequence = drain_cursor, wait_ms = 4000})
     assert(released.ok == true and (released.value :: Object).status == "released" and (released.value :: Object).reason == "draining", "wait released by drain: " .. tostring(json.encode(released)))
     assert(time.now():sub(drain_started):milliseconds() < 3500, "release came before the wait's own deadline")
     assert(code(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-e", attempt_id = "att-e", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}})) == "UNAVAILABLE", "admission refused after drain")

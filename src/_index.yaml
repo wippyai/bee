@@ -478,6 +478,14 @@ entries:
     actions: [db.get, registry.get, system.read, env.get]
     resources: [bee.credentials:db, bee.credentials:database_ref, bee.credentials:sources_ref, bee:credential_sources, node, '*']
     effect: allow
+- name: credential_file_policy
+  kind: security.policy
+  meta:
+    comment: Host-selected login roots; attached only to the credential materializer
+  policy:
+    actions: [fs.get, fs.read]
+    resources: [bee:codex_login_source, bee:claude_login_source]
+    effect: allow
 - name: credential_manage_policy
   kind: security.policy
   policy:

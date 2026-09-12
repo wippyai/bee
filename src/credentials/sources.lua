@@ -8,6 +8,8 @@ M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER = "bee.placement.native:binding"
 -- The destination a provider adapter admits for an environment projection.
 M.DESTINATIONS = {claude = "ANTHROPIC_API_KEY", codex = "OPENAI_API_KEY"}
+-- The relative file destination a provider adapter admits for a login file projection.
+M.FILE_DESTINATIONS = {claude = ".credentials.json", codex = "auth.json"}
 type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}}
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
@@ -39,10 +41,11 @@ function M.host_sources(): ({Source}?, string?)
             local kinds: {string} = {}
             if type(declared.projection_kinds) == "table" then
                 for _, kind in ipairs(declared.projection_kinds :: {unknown}) do
-                    if kind == "environment" then kinds[#kinds + 1] = "environment" end
+                    if kind == "environment" or kind == "file" then kinds[#kinds + 1] = kind end
                 end
             end
-            if type(declared.ref) == "string" and type(declared.workspace_id) == "string" and type(declared.audience) == "string" and M.DESTINATIONS[declared.provider] then
+            if type(declared.ref) == "string" and type(declared.workspace_id) == "string" and type(declared.audience) == "string"
+                and (M.DESTINATIONS[declared.provider] or M.FILE_DESTINATIONS[declared.provider]) then
                 sources[#sources + 1] = {ref = declared.ref :: string, workspace_id = declared.workspace_id :: string, audience = declared.audience :: string,
                     provider = declared.provider :: string, projection_kinds = kinds}
             end
@@ -70,5 +73,15 @@ function M.variable(ref: string): ({[string]: unknown}?, string?)
     if entry.kind ~= "env.variable" then return nil, "source " .. ref .. " is not an env.variable" end
     local data = type(entry.data) == "table" and entry.data :: {[string]: unknown} or {}
     return {kind = entry.kind, storage = data.storage, variable = data.variable, readonly = data.readonly}, nil
+end
+-- The fs.directory entry behind a login file source, as configuration only.
+function M.directory(ref: string): ({[string]: unknown}?, string?)
+    local entry, err = registry.get(ref)
+    if err or not entry then return nil, "source " .. ref .. " is not in the registry" end
+    if entry.kind ~= "fs.directory" then return nil, "source " .. ref .. " is not an fs.directory" end
+    local data = type(entry.data) == "table" and entry.data :: {[string]: unknown} or {}
+    local directory = type(data.directory) == "string" and data.directory or nil
+    if not directory or directory == "" then return nil, "source " .. ref .. " has no directory" end
+    return {kind = entry.kind, directory = directory, mode = data.mode, readonly = data.readonly}, nil
 end
 return M

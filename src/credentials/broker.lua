@@ -11,6 +11,8 @@ local uuid = require("uuid")
 local security = require("security")
 local system = require("system")
 local env = require("env")
+local fs = require("fs")
+local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local persist = require("persist")
@@ -24,8 +26,10 @@ M.MATERIALIZE = "bee.credentials.materialize"
 M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
 M.MAX_SECRET_BYTES = 8192
+M.MAX_FILE_BYTES = 65536
 M.MAX_LIST = 64
 M.PROVIDERS = {"claude", "codex"}
+M.SOURCE_KINDS = {"env_variable", "fs_directory"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
@@ -112,7 +116,7 @@ end
 function M.define(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source", "projection_kind"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local workspace_id, name = bounds.id(object.workspace_id), bounds.id(object.name)
     if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
@@ -123,7 +127,8 @@ function M.define(value: unknown): Reply
     if not source then return fail("INVALID", "source must be an object") end
     local source_field = bounds.fields(source, {"kind", "ref"})
     if source_field then return fail("INVALID", "source: " .. source_field) end
-    if source.kind ~= "env_variable" then return fail("INVALID", "source.kind must be env_variable") end
+    local source_kind = bounds.member(source.kind, M.SOURCE_KINDS)
+    if not source_kind then return fail("INVALID", "source.kind must be env_variable or fs_directory") end
     local source_ref = bounds.id(source.ref)
     if not source_ref then return fail("INVALID", "source.ref is not an identifier") end
     local caller = actor()
@@ -131,13 +136,39 @@ function M.define(value: unknown): Reply
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
-    if not sources.admits(admitted, source_ref, workspace_id, provider, "environment") then
-        return fail("FORBIDDEN", "source " .. source_ref .. " is not admitted for " .. provider .. " environment projections in workspace " .. workspace_id)
+
+    local projection_kind: string
+    local destination: string?
+    local digest_payload: {[string]: unknown}
+
+    if source_kind == "env_variable" then
+        projection_kind = "environment"
+        if object.projection_kind ~= nil and object.projection_kind ~= "environment" then
+            return fail("INVALID", "env_variable sources only support environment projections")
+        end
+        if not sources.admits(admitted, source_ref, workspace_id, provider, "environment") then
+            return fail("FORBIDDEN", "source " .. source_ref .. " is not admitted for " .. provider .. " environment projections in workspace " .. workspace_id)
+        end
+        local variable, variable_error = sources.variable(source_ref)
+        if not variable then return fail("INVALID", variable_error or "source") end
+        destination = sources.DESTINATIONS[provider]
+        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, variable = variable, projection_kind = projection_kind, destination = destination}
+    else
+        projection_kind = "file"
+        if object.projection_kind ~= nil and object.projection_kind ~= "file" then
+            return fail("INVALID", "login file sources only support file projections")
+        end
+        if not sources.admits(admitted, source_ref, workspace_id, provider, "file") then
+            return fail("FORBIDDEN", "source " .. source_ref .. " is not admitted for " .. provider .. " file projections in workspace " .. workspace_id)
+        end
+        local directory, dir_error = sources.directory(source_ref)
+        if not directory then return fail("INVALID", dir_error or "source") end
+        destination = sources.FILE_DESTINATIONS[provider]
+        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory, projection_kind = projection_kind, destination = destination}
     end
-    local variable, variable_error = sources.variable(source_ref)
-    if not variable then return fail("INVALID", variable_error or "source") end
-    local destination = sources.DESTINATIONS[provider]
-    local digest, digest_error = digest_of({provider = provider, source_kind = "env_variable", source_ref = source_ref, variable = variable, projection_kind = "environment", destination = destination})
+
+    if not destination then return fail("INVALID", "no destination for provider " .. provider) end
+    local digest, digest_error = digest_of(digest_payload)
     if not digest then return fail("INVALID", digest_error or "definition is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
@@ -154,15 +185,15 @@ function M.define(value: unknown): Reply
     local at = stamp(now_ms())
     if existing then
         local revision = (integer(existing.revision) or 0) + 1
-        local _, update_error = db:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = 'env_variable', source_ref = ?, projection_kind = 'environment', destination = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-            {definition_id, revision, provider, source_ref, destination, digest, node(), at, workspace_id, name})
+        local _, update_error = db:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
+            {definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, workspace_id, name})
         if update_error then
             db:release()
             return fail("STORAGE", "replace definition")
         end
     else
-        local _, insert_error = db:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, 'env_variable', ?, 'environment', ?, ?, ?, ?, ?)",
-            {workspace_id, name, definition_id, provider, source_ref, destination, digest, node(), at, at})
+        local _, insert_error = db:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, at})
         if insert_error then
             db:release()
             return fail("STORAGE", "record definition")
@@ -234,7 +265,7 @@ function M.issue_projection(value: unknown): Reply
         db:release()
         return fail("STORAGE", admitted_error or "host sources")
     end
-    if not sources.admits(admitted, text(definition.source_ref) or "", request.workspace_id, text(definition.provider) or "", "environment", request.audience) then
+    if not sources.admits(admitted, text(definition.source_ref) or "", request.workspace_id, text(definition.provider) or "", text(definition.projection_kind) or "environment", request.audience) then
         db:release()
         return fail("FORBIDDEN", "the host does not admit audience " .. request.audience .. " for credential " .. request.name)
     end
@@ -281,7 +312,7 @@ local function holds(db: sql.DB, projection: Row, subject: string, audience: str
     end
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
-    if not sources.admits(admitted, text(definition.source_ref) or "", workspace_id, text(definition.provider) or "", "environment", audience) then
+    if not sources.admits(admitted, text(definition.source_ref) or "", workspace_id, text(definition.provider) or "", text(definition.projection_kind) or "environment", audience) then
         return fail("FORBIDDEN", "the host no longer admits this source for audience " .. audience)
     end
     return nil
@@ -374,13 +405,73 @@ function M.materialize(value: unknown): Reply
         return fail("STORAGE", "record materialization")
     end
     local source_ref = text(definition.source_ref) or ""
-    local secret, secret_error = env.get(source_ref)
-    db:release()
-    if secret_error or type(secret) ~= "string" or secret == "" then return fail("UNAVAILABLE", "source " .. source_ref .. " yields no value") end
-    if #secret > M.MAX_SECRET_BYTES then return fail("INVALID", "source " .. source_ref .. " exceeds " .. tostring(M.MAX_SECRET_BYTES) .. " bytes") end
-    if secret:find("\0", 1, true) or secret:find("[\r\n]") then return fail("INVALID", "source " .. source_ref .. " holds bytes an environment value cannot carry") end
-    return succeed({projection_id = projection.projection_id, destination = projection.destination, projection_kind = projection.projection_kind, encoding = "utf-8",
-        generation = generation, generation_key = generation_key, value = secret})
+    local proj_kind = text(projection.projection_kind) or "environment"
+    local destination = text(projection.destination) or ""
+    local provider = text(definition.provider) or ""
+
+    if proj_kind == "environment" then
+        local secret, secret_error = env.get(source_ref)
+        db:release()
+        if secret_error or type(secret) ~= "string" or secret == "" then return fail("UNAVAILABLE", "source " .. source_ref .. " yields no value") end
+        if #secret > M.MAX_SECRET_BYTES then return fail("INVALID", "source " .. source_ref .. " exceeds " .. tostring(M.MAX_SECRET_BYTES) .. " bytes") end
+        if secret:find("\0", 1, true) or secret:find("[\r\n]") then return fail("INVALID", "source " .. source_ref .. " holds bytes an environment value cannot carry") end
+        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "environment", encoding = "utf-8",
+            generation = generation, generation_key = generation_key, value = secret})
+    elseif proj_kind == "file" then
+        local expected_dest = sources.FILE_DESTINATIONS[provider]
+        if not expected_dest or destination ~= expected_dest then
+            db:release()
+            return fail("CONFLICT", "projection destination does not match provider fixed destination")
+        end
+        local volume, vol_error = fs.get(source_ref)
+        db:release()
+        if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable: " .. tostring(vol_error)) end
+        -- Read at most one byte beyond the limit; never allocate an unbounded
+        -- login file before enforcing its bound. Only the provider-fixed path
+        -- is opened under the host-selected filesystem capability.
+        local file = volume:open("/" .. destination, "r")
+        if not file then return fail("UNAVAILABLE", "source login file unavailable") end
+        local chunks: {string} = {}
+        local size: integer = 0
+        while true do
+            local remaining = M.MAX_FILE_BYTES + 1 - size
+            if remaining <= 0 then break end
+            local chunk, read_error = file:read(math.min(4096, remaining))
+            if read_error and tostring(read_error) == "EOF" then break end
+            if read_error then
+                file:close()
+                return fail("UNAVAILABLE", "source login file could not be read")
+            end
+            if chunk == nil or chunk == "" then break end
+            if type(chunk) ~= "string" then
+                file:close()
+                return fail("UNAVAILABLE", "source login file yielded invalid bytes")
+            end
+            chunks[#chunks + 1] = chunk
+            size = size + #chunk
+        end
+        file:close()
+        local content = table.concat(chunks)
+        if #content == 0 then
+            return fail("UNAVAILABLE", "source file " .. destination .. " is empty")
+        end
+        if #content > M.MAX_FILE_BYTES then
+            return fail("INVALID", "source file " .. destination .. " exceeds " .. tostring(M.MAX_FILE_BYTES) .. " bytes")
+        end
+        local ok, parsed = pcall(json.decode, content)
+        if not ok or type(parsed) ~= "table" then
+            return fail("INVALID", "source file " .. destination .. " is not valid JSON")
+        end
+        -- Login formats belong to the harness. Do not guess OS-keyring
+        -- locations or reinterpret provider fields; only an actual admitted
+        -- file can be projected. Its bytes remain outside persisted state.
+        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",
+            generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
+            definition_revision = definition.revision, provider = provider, value = content})
+    else
+        db:release()
+        return fail("INVALID", "unsupported projection kind " .. proj_kind)
+    end
 end
 function M.revoke(value: unknown): Reply
     local object = bounds.object(value)
@@ -462,8 +553,9 @@ function M.list(value: unknown): Reply
     return succeed({workspace_id = workspace_id, definitions = definition_views, projections = projection_views})
 end
 function M.capabilities(): Reply
-    return succeed({credential_broker = true, projection_kinds = {"environment"}, providers = M.PROVIDERS, destinations = sources.DESTINATIONS, file_projections = false,
-        provider_revocation = false, refresh = false, write_back = false, rotation = "next_materialization", repeat_generation = "refused",
-        max_secret_bytes = M.MAX_SECRET_BYTES, max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = node()})
+    return succeed({credential_broker = true, projection_kinds = {"environment", "file"}, providers = M.PROVIDERS, destinations = sources.DESTINATIONS,
+        file_destinations = sources.FILE_DESTINATIONS, file_projections = true, provider_revocation = false, refresh = false, write_back = false,
+        rotation = "next_materialization", repeat_generation = "refused", max_secret_bytes = M.MAX_SECRET_BYTES, max_file_bytes = M.MAX_FILE_BYTES,
+        max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = node()})
 end
 return M

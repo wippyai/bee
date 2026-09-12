@@ -60,8 +60,31 @@ CREATE TABLE bee_credential_generations (
     PRIMARY KEY (projection_id, generation_key)
 );
 ]]
+local FILE_SOURCES_SQL = [[
+CREATE TABLE bee_credential_definitions_next (
+    workspace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    definition_id TEXT NOT NULL UNIQUE,
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    provider TEXT NOT NULL CHECK (provider IN ('claude', 'codex')),
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('env_variable', 'fs_directory')),
+    source_ref TEXT NOT NULL,
+    projection_kind TEXT NOT NULL CHECK (projection_kind IN ('environment', 'file')),
+    destination TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    owner_node TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, name)
+);
+INSERT INTO bee_credential_definitions_next
+    SELECT * FROM bee_credential_definitions;
+DROP TABLE bee_credential_definitions;
+ALTER TABLE bee_credential_definitions_next RENAME TO bee_credential_definitions;
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
+    {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
 }
 function M.all(): {Migration}
     return list

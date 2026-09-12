@@ -239,7 +239,8 @@ then reopens the same registry SQLite state and reconciles the original request.
 A second case edits the root before replay and verifies `recovery_required` with
 the edit preserved. The fixture checks explicit success markers, root cardinality,
 selected version, changed-request refusal and read-only status. Its interruption
-hook exists only in a disposable source copy. Migration execution remains unfinished.
+hook exists only in a disposable source copy. Migration execution has separate
+SQLite up/down, checkpoint and recovery acceptance described above.
 
 The component follows Keeper's application-level planning and replan-before-apply
 flow without importing Keeper. Runtime changes are outside this lane; earlier
@@ -265,3 +266,15 @@ The next Modules layout separates package titles/versions from descriptions,
 exposes clickable search/filter controls, opens details on README, and uses a
 configuration dialog instead of the footer editor when space permits. Validation
 errors keep the editor open. This presentation update is installed in global source `7649cd7` (SHA `9c70d927`).
+
+Requirements also support clearing the selected override with the visible
+Clear override action or Delete. Hub then supplies the declared default again,
+or marks the requirement missing if it has no default. This is installed in global source `491ad5b` (SHA `adeb373c`).
+
+Missing parameters from dependency planning can now be configured directly from
+the review screen: click a Required row, use Configure required, or press E.
+The editor uses the exact ID reported by the plan. Saving invalidates that plan;
+a new plan and confirmation are required before publication. This source change
+is pending the next release. The current standalone redesign also passes live
+Hub install/update/uninstall/reopen checks while preserving all bundled artifacts
+(`modules-redesign-live-lifecycle.log`).

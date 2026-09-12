@@ -318,6 +318,18 @@ local function main(value: unknown)
         status = ""
         if kind == "save_editor" then finish_editor()
         elseif kind == "cancel_editor" then editor = nil; status = "Cancelled"; changed()
+        elseif kind == "missing" then
+            local measured = state.plan
+            if state.phase == "plan" and measured then
+                for _, id in ipairs(measured.missing) do
+                    if key == "" or key == id then
+                        editor = {field = "parameter_value", buffer = "", name = id}
+                        status = "Enter a JSON value for " .. id
+                        changed()
+                        break
+                    end
+                end
+            end
         elseif kind == "search" then begin_editor("query")
         elseif kind == "keyword" then begin_editor("keyword")
         elseif kind == "catalog" then invalidate(); catalog()
@@ -337,6 +349,14 @@ local function main(value: unknown)
             changed()
         elseif kind == "installed" then invalidate(); installed()
         elseif kind == "requirements" then requirements()
+        elseif kind == "reset_requirement" then
+            local row = state.requirements[state.selected_requirement]
+            if row and row.origin == "Selected" then
+                model.remove_parameter(state, row.id)
+                invalidate()
+                requirements()
+                status = "Override cleared"
+            end
         elseif kind == "requirement" then
             for index, row in ipairs(state.requirements) do if row.id == key then model.select_requirement(state, index); break end end
             edit_requirement()
@@ -451,6 +471,8 @@ local function main(value: unknown)
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
                         elseif letter == "o" or letter == "O" then operation_history()
+                        elseif key == "delete" and state.phase == "details" and state.requirements_open then handle_hit("reset_requirement", "")
+                        elseif letter == "e" and state.phase == "plan" then handle_hit("missing", "")
                         elseif letter == "e" and state.phase == "details" then requirements()
                         elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
                         elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")

@@ -89,7 +89,7 @@ served by the same GitHub release as the binary.
 ## Inside Bee
 
 - **Terminal** — an interactive shell, or an installed command-line program.
-- **Settings** — themes, backgrounds and tab appearance.
+- **Settings** — themes, backgrounds, tab appearance and loaded build details.
 - **Process Manager** — live process and service metrics.
 - **Approvals** — requests from agents that wait on you, decided once and recorded.
 - **Timeline** — a thread's records in order, as its owner committed them.

@@ -25,25 +25,35 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
             artifacts = sorted(state.glob("base/**/vendor/bee/*.wapp"))
             return {str(path.relative_to(state)): hashlib.sha256(path.read_bytes()).hexdigest() for path in artifacts}
 
+        def click_text(text):
+            for y, line in enumerate(ui.screen.display, 1):
+                if text in line:
+                    x = line.index(text) + 1
+                    ui.mouse(0, x, y)
+                    ui.mouse(0, x, y, True)
+                    return
+            raise AssertionError(f"No visible {text!r}\n{ui.text()}")
+
         def select_test():
             ui.wait("MODULES", timeout=20)
             ui.key(b"K")
             ui.wait("Filter by keyword")
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
-            # A one-token query puts wippy/test in a deterministic third row.
+            # Select the package by identity, independent of catalog order.
             ui.key(b"/")
-            ui.wait("Search: ")
+            ui.wait("Search packages")
             ui.key(b"test\r")
             ui.wait("Search: test")
             ui.wait("Test Framework")
-            ui.key(b"\x1b[B" * 3)
-            ui.key(b"\r")
+            click_text("wippy/test")
             ui.wait("Test Framework")
 
         select_test()
+        ui.key(b"v")
         ui.wait("0.4.17")
         ui.wait("0.4.16")
+        click_text("0.4.17")
         baseline = base_hashes()
         assert baseline, "native Bee base artifacts were not materialized"
 
@@ -56,9 +66,11 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
                 for path, digest in baseline.items() if current.get(path) != digest}
             assert not changed, f"{action} changed or removed embedded Bee base artifacts: {changed}"
 
-        def apply(action):
+        def apply(action, version=None):
             ui.key(b"p")
-            ui.wait("Ready for confirmation", timeout=10)
+            ui.wait("Ready for confirmation", timeout=20)
+            if version:
+                ui.wait(version)
             assert not any("remove" in line and "bee/" in line for line in ui.text().splitlines()), \
                 f"{action} plan tries to remove a bundled Bee module\n{ui.text()}"
             ui.key(b"\r")
@@ -68,16 +80,18 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
             ui.wait("Receipt state: complete")
             assert_base_preserved(action)
 
-        apply("install")
+        apply("install", "0.4.17")
         # Reopen the selected package, choose the preceding historical version
         # and update its one Hub dependency root.
         ui.key(b"\x1b")
         ui.wait("MODULES  CATALOG")
         ui.key(b"\r")
         ui.wait("Test Framework")
-        ui.key(b"\x1b[B")
+        ui.key(b"v")
+        ui.wait("0.4.16")
+        click_text("0.4.16")
         ui.key(b"u")
-        apply("update")
+        apply("update", "0.4.16")
         # Uninstall removes exactly the Hub dependency root. A second removal
         # must be rejected, proving the root is absent while the base remains.
         ui.key(b"\x1b")

@@ -129,13 +129,15 @@ pack: lint
 # cases without .wippy/. Keep their governance store inside that fixture too.
 check desktop-check client-storage-check: export BEE_GOVERNANCE_DB = governance.db
 
-check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack headless-check workspace-hosts-check
+check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack about-check headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py
 	$(MAKE) desktop-check WIPPY="$(abspath $(WIPPY))"
 
-.PHONY: desktop-check fresh-pack-check
+.PHONY: desktop-check fresh-pack-check about-check
+about-check: pack
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/about.py
 fresh-pack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fresh_pack.py
 desktop-check:

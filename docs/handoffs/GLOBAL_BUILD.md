@@ -1,5 +1,31 @@
 # Global Bee build — September 12, 2026
 
+## Current install: About and Modules override reset
+
+Global SHA `adeb373c181a5f0f3e4de67aa570c3d215951622111f04ed8ea25ac6ac90dbe6`
+contains production source `491ad5b`. Settings → About shows the loaded bundle's
+version, build/source revision, runtime commit and patch identity, native version
+and website. Long fields wrap and scroll. Development source explicitly reports
+unknown build details, and dirty builds retain that marking. Modules adds Clear
+override to restore a declared default without publishing an installation.
+
+This release preserves global MCP source `9da558b` and the Modules redesign.
+Runtime base `291f5c6b`, existing HTTP patch SHA `e6903cb4` and native revision
+`0f63d30bd718` match the previous global install; this lane changed none of them.
+Source/pack About and override-reset checks, 11 packaging tests and combined
+native desktop/Modules/About/Agent acceptance pass. All 777 units passed on
+pre-MCP About source `541220c`; that is not a full combined-suite claim.
+The earlier full repository run on source `2d9cd31` ended with exit 143 without
+a test-failure report and remains incomplete.
+
+Evidence: `about-source-pack-check-3.log`, `about-unit-check.log`,
+`about-current-native-check.log`, `hub-requirement-reset-check.log`, and
+`about-global-install.json` under September 12 local evidence. The installer
+fenced against `887d0769`, backed up and hash-verified the executable and all five
+sidecars, and verified matching runtime/native pins and patch hashes. Backup:
+`global-before-about-887d0769`. No running nodes were restarted; they continue
+using their loaded UI until restart. Earlier checkpoint sections follow.
+
 ## Current install: managed MCP and lifecycle hooks, latest Modules UI
 
 Global `887d0769562a5f8c64362313e833ad513374b6aa41c330ddf7c1e4e89e045fc9`

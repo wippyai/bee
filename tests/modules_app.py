@@ -35,12 +35,23 @@ local function handle(raw: unknown): {[string]: unknown}
                 {id = "example:enabled", has_default = true, default = false, has_selected = chosen, selected = chosen,
                     targets = {{entry = "example:config", path = ".enabled"}}}}}}}
     elseif raw.operation == "plan" then
+        local missing = {}
+        if raw.request.action ~= "uninstall" then
+            local configured = false
+            for _, parameter in ipairs(raw.request.parameters or {}) do
+                if parameter.name == "dependency:directory" then
+                    assert(parameter.value == "data", "missing requirement editor lost exact value")
+                    configured = true
+                end
+            end
+            if not configured then missing = {"dependency:directory"} end
+        end
         local normalized = raw.request
         if raw.request.action == "uninstall" then normalized = {action = "uninstall", component = raw.request.component,
             migration_policy = raw.request.migration_policy, version = "", parameters = {}} end
         return {ok = true, replayed = false, value = {request = normalized,
-            digest = string.rep("a", 64), ready = true, base_revision = 1,
-            modules = {}, missing = {}, migrations = raw.request.action == "uninstall" and {{id = "fixture:rollback", target_db = "fixture:db"}} or {}, starts = {}, capabilities = {
+            digest = string.rep("a", 64), ready = #missing == 0, base_revision = 1,
+            modules = {}, missing = missing, migrations = raw.request.action == "uninstall" and {{id = "fixture:rollback", target_db = "fixture:db"}} or {}, starts = {}, capabilities = {
                 "fixture:01", "fixture:02", "fixture:03", "fixture:04", "fixture:05", "fixture:06",
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
@@ -142,6 +153,9 @@ def exercise(project, packed, pack):
             ui.wait("false")
             ui.key(b"\x7f" * 5 + b"true\r")
             ui.wait("Selected")
+            ui.key(b"\x1b[3~")
+            ui.wait("Default")
+            ui.wait("false")
             ui.key(b"\x1b[24~")
             ui.wait("example:enabled")
             ui.key(b"v")
@@ -156,6 +170,12 @@ def exercise(project, packed, pack):
             ui.key(b"j")
             ui.wait("Parameter name (namespace:name)")
             ui.key(b"\x1b")
+            ui.key(b"p")
+            ui.wait("Required: dependency:directory")
+            ui.key(b"e")
+            ui.wait("Configure package")
+            ui.wait("dependency:directory")
+            ui.key(b'"data"\r')
             ui.key(b"p")
             ui.wait("Ready for confirmation")
             assert "Fixture confirmation received" not in ui.text(), "planning applied the operation"

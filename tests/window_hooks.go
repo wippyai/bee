@@ -129,11 +129,11 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	}
 	hostContent = strings.Replace(hostContent, readyAnchor, "http://"+endpointAddress+"/ready", 1)
 
-	bindAnchor := "bindings: [bee.driver.claude:binding, bee.driver.codex:binding]"
+	bindAnchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
 	if !strings.Contains(hostContent, bindAnchor) {
 		return "", fmt.Errorf("missing anchor %q in _index.yaml", bindAnchor)
 	}
-	hostContent = strings.Replace(hostContent, bindAnchor, "bindings: [bee.driver.claude:binding, bee.driver.codex:binding, bee.window_hooks_fixture:binding]", 1)
+	hostContent = strings.Replace(hostContent, bindAnchor, strings.TrimSuffix(bindAnchor, "]")+", bee.window_hooks_fixture:binding]", 1)
 	hostContent = strings.Replace(hostContent, "hide_logs: true", "hide_logs: false", 1)
 
 	if err := os.WriteFile(hostFile, []byte(hostContent), 0644); err != nil {

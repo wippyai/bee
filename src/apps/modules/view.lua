@@ -175,22 +175,40 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     line(3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
     line(4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
-    local y = 6
+    local review: {string} = {}
     local unchanged = 0
-    for _, raw in ipairs(plan.modules) do
-        local item = raw :: {[string]: unknown}
+    for _, item in ipairs(plan.modules) do
         if item.change == "keep" then unchanged = unchanged + 1
-        elseif y < height - 3 then
-            line(y, model.text(item.change, 12) .. "  " .. model.text(item.component, 160) .. "  " .. model.text(item.version, 128), theme.text)
-            y = y + 1
+        else
+            review[#review + 1] = model.text(item.change, 12) .. "  " .. model.text(item.component, 160) .. "  " .. model.text(item.version, 128)
         end
     end
-    if unchanged > 0 and y < height - 3 then
-        line(y, tostring(unchanged) .. " installed modules unchanged", theme.muted)
-        y = y + 1
+    if unchanged > 0 then review[#review + 1] = tostring(unchanged) .. " installed modules unchanged" end
+    for _, missing in ipairs(plan.missing) do review[#review + 1] = "Required: " .. missing end
+    if #plan.migrations > 0 then
+        review[#review + 1] = "Migrations · policy " .. state.policy
+        for _, item in ipairs(plan.migrations) do
+            review[#review + 1] = "  " .. model.text(item.id, 256) .. " → " .. model.text(item.target_db, 256)
+        end
     end
-    if #plan.migrations > 0 and y < height - 3 then line(y, tostring(#plan.migrations) .. " migrations · policy " .. state.policy, theme.muted); y = y + 1 end
-    if #plan.capabilities > 0 and y < height - 3 then line(y, tostring(#plan.capabilities) .. " capability entries need review", theme.muted) end
+    if #plan.starts > 0 then
+        review[#review + 1] = "Automatic starts"
+        for _, id in ipairs(plan.starts) do review[#review + 1] = "  " .. id end
+    end
+    if #plan.capabilities > 0 then
+        review[#review + 1] = "Declared capabilities"
+        for _, id in ipairs(plan.capabilities) do review[#review + 1] = "  " .. id end
+    end
+    if #review == 0 then review = {"No package changes"} end
+    local capacity = maximum(0, height - 9)
+    local next_offset = math.floor(math.max(0, math.min(maximum(0, #review - capacity), offset)))
+    line(5, "Review " .. tostring(math.min(#review, next_offset + 1)) .. "–" .. tostring(math.min(#review, next_offset + capacity))
+        .. " of " .. tostring(#review) .. " · ↑↓ scroll", theme.muted)
+    for slot = 1, capacity do
+        local row = review[next_offset + slot]
+        if not row then break end
+        line(5 + slot, row, theme.text)
+    end
     local actions = 2
     if state.phase == "confirm" then
         line(height - 2, "Confirm this exact digest; changing package, version, policy, or JSON clears it.", theme.text)
@@ -202,7 +220,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         actions = button(actions, height - 1, "refresh_plan", " Replan ", true)
         line(height, status ~= "" and status or "Enter reviews immutable plan · R replans · edits invalidate it", theme.muted)
     end
-    return {rows = canvas:rows(), hits = hits, capacity = 0, offset = 0}
+    return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
 end
 
 return M

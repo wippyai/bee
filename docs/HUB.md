@@ -108,6 +108,10 @@ independent search, multiline README reading, details, JSON parameter keyboard i
 confirm, completed receipt, F12, resize and shutdown pass. Package details have README and Versions panes (H/V); arrow keys and the mouse
 wheel scroll the README. Installed selection stays in its current list. Change
 review lists changed packages before summarizing unchanged modules. The standalone Modules UI includes these changes.
+The next source UI makes plan and confirmation effects scrollable with arrow
+keys or the mouse wheel. It lists migration IDs and target databases, automatic
+starts and declared capabilities individually. This follow-up passes 56 focused
+cases and source/pack keyboard checks; it is not in the installed executable yet.
 A published or missing
 receipt state is not displayed as completion. The separate native lifecycle check covers confirmation/apply against live Hub.
 

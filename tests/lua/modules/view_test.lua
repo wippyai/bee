@@ -16,6 +16,27 @@ local function define_tests()
             local frame = view.draw(80, 24, appearance.defaults(), state, 0, "", true)
             test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
         end)
+        test.it("scrolls every plan effect without changing confirmation", function()
+            local state = model.new()
+            model.select(state, "bee/example")
+            model.select_version(state, "1.0.0")
+            local modules: {{[string]: unknown}} = {}
+            for index = 1, 30 do modules[index] = {change = "install", component = "acme/package" .. tostring(index), version = "1.0.0"} end
+            model.apply_plan(state, {ok = true, code = nil, message = nil, replayed = false, value = {
+                digest = string.rep("a", 64), ready = true, base_revision = 1, modules = modules, missing = {},
+                migrations = {{id = "acme:migrate", target_db = "acme:db"}}, starts = {"acme:service"}, capabilities = {"acme:capability"},
+                request = {action = "install", component = "bee/example", version = "1.0.0", parameters = {}, migration_policy = "none"},
+            }})
+            local first = view.draw(70, 18, appearance.defaults(), state, 0, "")
+            test.is_true(table.concat(first.rows, "\n"):find("acme/package1", 1, true) ~= nil)
+            test.is_true(table.concat(first.rows, "\n"):find("acme:capability", 1, true) == nil)
+            test.is_nil(model.confirm(state))
+            local last = view.draw(70, 18, appearance.defaults(), state, 999, "")
+            test.is_true(table.concat(last.rows, "\n"):find("acme:capability", 1, true) ~= nil)
+            test.is_true(table.concat(last.rows, "\n"):find("acme:migrate", 1, true) ~= nil)
+            test.eq(state.phase, "confirm")
+            test.not_nil(model.confirm_intent(state))
+        end)
         test.it("keeps rows and hits within every compact canvas", function()
             local state = model.new()
             model.apply_catalog(state, {ok = true, code = nil, message = nil, replayed = false, value = {total = 1, items = {

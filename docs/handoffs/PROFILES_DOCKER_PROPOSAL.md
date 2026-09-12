@@ -28,9 +28,14 @@ receives its selected environment and broker credential, excludes the other
 profile's variables, and retains a successful receipt and answer without secret
 bytes in thread records or placement evidence. The combined suite is pending.
 
-Still required: a selector must carry its measured plan into start and refuse an
-intervening definition or policy change. The current admission snapshot covers a
-single call; it does not yet fence a prior UI selection. Shared instructions need driver-specific measured rendering
+The next source boundary accepts `expected_plan_digest` on admission/start and
+the private window envelope. A mismatch with the currently resolved definition,
+binding, profile and policy refuses with `CONFLICT` before creating a thread or
+obtaining grants and credentials. Actual broker-spawned window acceptance passes
+with a resolved digest carried through the envelope. All 572 unit tests pass, including a
+changed policy, matching selection and malformed digest.
+The selector itself remains required: it must carry the displayed plan's digest,
+retain it on retries, and require a fresh selection after conflict. Shared instructions need driver-specific measured rendering
 and real-executable checks. Docker placement and its full interactive UI retain
 the acceptance below. No `profile_ref` replacement schema or extra presentation
 decoder is needed for the existing launch definition.

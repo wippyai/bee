@@ -238,6 +238,51 @@ local function define_tests()
             data.title = original
             apply(entry)
         end)
+        test.it("fences admission to the selected plan before creating a thread", function()
+            local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+            local policy_entry = registry.get(POLICY)
+            if not policy_entry then error("launch policy") end
+            local original_policy = policy_entry.data
+            local changed_policy: {[string]: unknown} = {}
+            for key, item in pairs(original_policy :: {[string]: unknown}) do changed_policy[key] = item end
+            changed_policy.start_ms = 23456
+
+            local mismatch_request = fresh("plan-fenced")
+            local ok, failure = pcall(function()
+                policy_entry.data = changed_policy
+                apply(policy_entry)
+                local changed = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                test.neq(changed.plan_digest, selected.plan_digest)
+
+                local refused = call("bee.harness.launch:admit", {request_id = mismatch_request, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest})
+                test.eq(code(refused), "CONFLICT")
+                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. mismatch_request})), "NOT_FOUND")
+            end)
+
+            policy_entry.data = original_policy
+            local restoration = registry.snapshot():changes()
+            restoration:update(policy_entry)
+            local restored, restore_error = restoration:apply()
+            if not restored then error("restore launch policy: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+
+            local restored_plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+            test.eq(restored_plan.plan_digest, selected.plan_digest)
+            local matching_request = fresh("plan-matched")
+            local matching = value(call("bee.harness.launch:admit", {request_id = matching_request, definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest}))
+            local matching_plan = matching.plan :: {[string]: unknown}
+            test.eq(matching_plan.plan_digest, selected.plan_digest)
+            test.eq(matching.thread_id, "thread:" .. matching_request)
+        end)
+        test.it("rejects a malformed expected plan digest", function()
+            local request_id = fresh("plan-malformed")
+            local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", expected_plan_digest = string.rep("A", 64)})
+            test.eq(code(refused), "INVALID")
+            test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+        end)
         test.it("admits for the requester, obtaining an attempt-bound grant and projection in the requester's authority", function()
             local request_id = fresh("request")
             local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))

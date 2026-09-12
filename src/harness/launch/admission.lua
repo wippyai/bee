@@ -53,6 +53,7 @@ type Request = {
     mode: string?,
     workdir: string?,
     thread_id: string?,
+    expected_plan_digest: string?,
 }
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -139,7 +140,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -162,7 +163,16 @@ function M.decode_request(value: unknown): (Request?, string?)
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
-    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id}, nil
+    local expected_plan_digest: string? = nil
+    if object.expected_plan_digest ~= nil then
+        local digest = bounds.text(object.expected_plan_digest, 64)
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "expected_plan_digest must be a lowercase SHA-256 hex digest"
+        end
+        expected_plan_digest = digest
+    end
+    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
+        expected_plan_digest = expected_plan_digest}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -184,6 +194,9 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
     local plan, plan_refused = resolve(pinned, launch, request.mode)
     if not plan then return nil, plan_refused end
+    if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
+        return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
+    end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end
     if request.thread_id and not definition.allows(launch, "thread") then return nil, fail("FORBIDDEN", "definition does not allow a thread override") end

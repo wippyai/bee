@@ -1,5 +1,13 @@
 # Foundation status
 
+Selected launch plans can now be carried into admission with
+`expected_plan_digest`. A changed plan refuses before thread/resource/credential
+effects; a matching plan follows normal admission. All 572 unit tests pass,
+including changed-policy refusal and malformed-digest validation, and actual
+broker-spawned window acceptance passes with the digest in its launch envelope.
+The profile selector and public CLI wiring remain unimplemented. Broader
+validation remains pending; this source is not installed globally.
+
 Native placement now rejects conflicting environment ownership: `HOME` belongs
 to placement, gateway token destinations belong to the gateway, and credential
 projections cannot overwrite either those destinations or policy values. The
@@ -7,7 +15,8 @@ focused native suite passes all 20 tests, including refusal before intent and
 credential-collision refusal before child start without secret bytes in evidence.
 Disabling the credential overwrite guard in a disposable fixture makes exactly
 that regression fail (19 pass, 1 fail).
-The combined profile suite and broader gate remain pending; global Bee is unchanged.
+All 570 combined unit tests pass for environment ownership and named-profile
+isolation. The broader gate remains pending; global Bee is unchanged.
 
 The profile work first corrects launch admission to read its definition, driver
 catalog and policy from one registry snapshot. Managed admission also refuses caller environment before creating a thread;

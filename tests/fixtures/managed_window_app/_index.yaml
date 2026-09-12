@@ -88,6 +88,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json]
   imports:
     appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
@@ -99,6 +100,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json]
   imports:
     appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}

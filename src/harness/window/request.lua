@@ -29,7 +29,7 @@ function M.decode(arguments: {string}, workspace_id: string): (Request?, string?
     if decode_error then return nil, "managed window launch request is not JSON" end
     local object = bounds.object(value)
     if not object then return nil, "managed window launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "brief", "workdir", "thread_id"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "brief", "workdir", "thread_id", "expected_plan_digest"})
     if unknown_field then return nil, unknown_field end
     local request_id = bounds.id(object.request_id)
     local definition_ref = bounds.id(object.definition_ref)
@@ -47,7 +47,15 @@ function M.decode(arguments: {string}, workspace_id: string): (Request?, string?
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
-    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id,
+    local expected_plan_digest: string? = nil
+    if object.expected_plan_digest ~= nil then
+        local digest = bounds.text(object.expected_plan_digest, 64)
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "expected_plan_digest must be a lowercase SHA-256 hex digest"
+        end
+        expected_plan_digest = digest
+    end
+    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, expected_plan_digest = expected_plan_digest,
         brief = brief, mode = "window", workdir = workdir, thread_id = thread_id}, nil
 end
 

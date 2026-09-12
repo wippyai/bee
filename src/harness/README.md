@@ -43,6 +43,14 @@ a composing host reuse its pinned snapshot without side effects; ordinary
 `resolve` and `admit_request` pin internally. A retained snapshot describes its
 own generation even after registry changes. Reading that plan grants no
 permission and does not promise that a later execution will use stale code.
+A caller selecting a resolved plan passes its `plan_digest` back as
+`expected_plan_digest` on admission/start (or in the managed window request).
+Admission compares it with the current measured plan before creating a thread or
+obtaining grants and projections; a changed definition, binding, profile or
+policy returns `CONFLICT`. The digest is a consistency check, not permission.
+An immediate launch with no prior selection may omit it and resolves current
+host configuration. A selector must retain the digest until start and require a
+fresh selection after conflict; it must not silently drop the check on retry.
 Managed launch requests accept no environment map, including an empty one.
 Nonsecret environment and driver options come from the selected host policy;
 credentials are projected separately by the broker. The lower carrier and

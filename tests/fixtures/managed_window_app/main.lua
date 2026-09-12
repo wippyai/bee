@@ -7,6 +7,7 @@ local tty = require("tty")
 local funcs = require("funcs")
 local json = require("json")
 local appearance = require("appearance")
+local admission = require("admission")
 
 local M = {}
 local WORKSPACE = string.rep("a", 32)
@@ -41,8 +42,10 @@ local function run(natural: boolean)
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
     assert(catalogs:receive():from() == broker)
+    local plan, refused = admission.resolve("bee.managed_window_fixture:definition", "window")
+    if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
     local request = assert(json.encode({request_id = natural and "managed-window-natural-request" or "managed-window-request", definition_ref = "bee.managed_window_fixture:definition", brief = "managed window",
-        thread_id = THREAD}))
+        thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = {request}}))
     local opened: {[string]: unknown}? = nil

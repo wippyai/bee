@@ -131,7 +131,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         modified_data.start_ms = 11000
         apply(modified)
         assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
-        wait_for("Profile changed")
+        -- First-use setup now rejects the stale plan before admission. Its
+        -- full message is clipped at this deliberately narrow viewport.
+        wait_for("selected launch plan")
         local refused = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(refused.records :: {{[string]: unknown}}) == 0, "stale selection created work")
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
@@ -418,7 +420,7 @@ end
 -- Read the actual child's files after broker close. These checks never create
 -- a directory and never run another shell to manufacture the marker.
 M.retained = function()
-    local roots = assert(registry.get("bee.placement.native:admitted_roots"))
+    local roots = assert(registry.get("bee:resource_roots"))
     local mode = assert(registry.get("bee.placement.native:resource_mode"))
     local ok, failure = pcall(function()
         local admitted = changed(roots)

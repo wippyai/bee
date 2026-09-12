@@ -3,8 +3,9 @@
 Global build `237d76a8` combines managed Agent profiles with Hub package reads,
 install/update/uninstall, README browsing, scrollable plan review and explicit
 post-publication crash recovery. The combined source passes 746 unit cases and
-the independent desktop suite; the full gate currently has two managed-Agent
-fixture failures under investigation. Migration execution and overlay activation
+the independent desktop suite. Two obsolete managed-Agent fixture assumptions
+were corrected, and all five focused cases pass; remaining desktop gates are
+still running. Migration execution and overlay activation
 remain unfinished. See [the current global build](handoffs/GLOBAL_BUILD.md) and
 [Hub contract](HUB.md) for exact evidence and limits. Older checkpoints below
 retain their historical status.

@@ -39,10 +39,12 @@ install/update/uninstall all pass. Evidence is under `bee-evidence/0912`:
 cases but failed a Settings selector that matched the empty-desktop hint.
 The corrected client-desktop suite passes all source/pack variants. The combined
 run passes 746 unit cases, then stops on two managed-Agent fixtures (session-root
-admission and a missing changed-profile notice). Those are under investigation;
-remaining checks are running separately. This is not a complete repository-gate
-pass. Logs: `hub-combined-desktop-check.log`, `hub-combined-full-check.log`, and
-`hub-combined-check-remainder.log`.
+admission and a missing changed-profile notice). Updating those fixtures to the
+current host root and setup refusal passes all five managed-window cases;
+production permissions are unchanged. Remaining desktop checks are running
+separately; this is not yet a complete repository-gate pass. Logs:
+`hub-combined-desktop-check.log`, `hub-combined-full-check.log`,
+`hub-combined-managed-corrected.log`, and `hub-combined-check-remainder.log`.
 
 The executable and five sidecars were verified after SHA-fenced replacement.
 Previous `edf6a7c3` files are in `global-before-combined-recovery-edf6a7c3`;

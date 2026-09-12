@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const defaultRuntime = "/tmp/bee-runtime-native-recovery-20260911"
+const defaultRuntime = ".wippy/bin/bee-wippy"
 
 const syncIndex = `version: '1.0'
 namespace: bee.sync
@@ -137,7 +137,7 @@ func migrationLedger(root string) (string, error) {
 }
 
 func run() error {
-	runtimeFlag := flag.String("runtime", defaultRuntime, "candidate Wippy runtime")
+	runtimeFlag := flag.String("runtime", defaultRuntime, "Wippy runtime to verify")
 	flag.Parse()
 	runtime, err := filepath.Abs(*runtimeFlag)
 	if err != nil {

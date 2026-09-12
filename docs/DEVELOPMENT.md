@@ -60,12 +60,13 @@ snapshot reads into extra coroutines or introducing another polling layer.
 Core may import core/shared UI, shared UI may import shared UI, and apps may
 import their own helpers/shared UI. Apps may import the public `bee.threads:client` and `bee.threads:protocol`.
 The application envelope additionally imports the pure `bee.threads.records:bounds`
-decoder for opaque thread IDs; the architecture audit checks that its complete
-closure has no runtime modules or security policy. This does not admit thread
+decoder for opaque thread IDs; its complete closure must have no runtime
+modules or security policy. This does not admit thread
 storage or service imports into core. Carrier and native placement share the driver resolver and configuration
 boundary, plus `bee.gateway:configuration`; gateway operations still go through contracts.
 Apps must not import private broker or store implementations. Keep pure reducers free of registry, process, SQL and terminal
-side effects. `make architecture-check` checks the production import graph.
+side effects. Review module boundaries in code review; verify permissions,
+persistence and recovery through behavioral tests.
 
 For a future independent subsystem, add only the slices it actually needs:
 `service/` for its process owner, `persist/` for owned storage, `migrations/` for
@@ -125,7 +126,7 @@ file is not permission to query another owner's tables.
 ## Verification and documentation
 
 `make setup` builds the pinned runtime; `make lint` checks typed production entries;
-`make check` runs model/protocol, storage, architecture and source/pack PTY checks.
+`make check` runs model/protocol, storage and source/pack PTY checks.
 For a confirmed stale Lua cache, preserve a reproduction first, then use
 `make lint LINT_FLAGS=--cache-reset`. Normal lint remains cached and strictly typed.
 `make desktop-check` runs the desktop acceptance portion against an already built

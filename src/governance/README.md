@@ -75,7 +75,7 @@ destination approval, application installation, overlays or WASM execution.
 The full 16 MiB file-tree boundary is accepted with independent base64 padding
 per file; adding another byte refuses without advancing the edit revision.
 
-`make governance-workspace-check GOVERNANCE_RUNTIME=/path/to/candidate` runs a
+`make governance-workspace-check WIPPY=/path/to/runtime` runs a
 bounded Go acceptance proof against two actual boots of one disposable
 `BEE_GOVERNANCE_DB`. It creates, writes and freezes binary content before a
 mutable edit; the restart proves the copied frozen bytes and create/write/freeze

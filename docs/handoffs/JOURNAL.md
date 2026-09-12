@@ -5852,3 +5852,21 @@ retention (`e4d87e2`, focused gateway check passes; real commit-followed-by-lost
 ack acceptance is being added). These branches have not been merged into this
 checkpoint. The shared wolfden journal holds current coordination through seq
 1242 under cursor `jc_H7E57Z5SJH71M`.
+
+### 2026-09-11 — Codex: safe authoring and hook recovery integrated
+
+Governed authoring and claimed-hook recovery are integrated on the isolated
+`feat/agent-integration-20260911` branch. All 600 Lua tests pass on combined
+source; source/pack headless boots pass. The actual gateway proof commits a
+hook, revokes before acknowledgement, replays the exact commit once and then
+acknowledges it. Two authoring boots preserve immutable binary snapshots,
+retry receipts, author denial and the unchanged migration ledger. Stored
+ownership does not bypass current operation or exact-workspace permissions.
+
+The user explicitly rejected architecture tests. Both the obsolete Python
+checker and its Go replacement are removed, along with their Makefile gate.
+Keep module boundaries clear through review and verify runtime behavior.
+No new Python, runtime changes, global replacement or main merge in this unit.
+Interactive Agent cold-resume and public MCP/Hub/overlay activation remain open.
+Wolfden coordination: journal 01a06e56-ba58-7c5a-bd69-b7feb109a05d,
+`bee-harness/root`, cursor `jc_H7E57Z5SJH71M`, through seq 1245.

@@ -70,6 +70,5 @@ here.
 
 ```
 make test                                  # pinned runtime, all suites
-python3 tests/architecture.py              # boundary and admission shape
 python3 tests/inbox_app.py                 # the inbox under the broker
 ```

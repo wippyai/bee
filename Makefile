@@ -1,6 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test threads threads-module resources-module gateway-check pack check architecture-check
+.PHONY: setup run lint test threads threads-module resources-module gateway-check pack check
 setup: native-tools
 .PHONY: sync-check
 sync-check:
@@ -17,9 +17,8 @@ governance-runtime-check:
 
 .PHONY: governance-workspace-check
 governance-workspace-check:
-	@test -n "$(GOVERNANCE_RUNTIME)" -a -x "$(GOVERNANCE_RUNTIME)" || { echo 'Set GOVERNANCE_RUNTIME to the candidate runtime.' >&2; exit 1; }
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_workspace.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_workspace.go -runtime "$(abspath $(GOVERNANCE_RUNTIME))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_workspace.go -runtime "$(abspath $(WIPPY))"
 
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
@@ -77,14 +76,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-.PHONY: architecture-check
-architecture-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture vet ./...
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture test ./...
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture run . "$(abspath .)" "$(abspath $(WIPPY))"
-
-check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check
-	$(MAKE) architecture-check WIPPY="$(abspath $(WIPPY))"
+check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py

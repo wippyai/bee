@@ -1,10 +1,15 @@
 # Foundation status
 
-The September 11 Agent integration source passes 581 Lua tests, managed-window
-acceptance and the remaining source/pack foundation checks in segments. An
-intermittent missing fault diagnostic remains unexplained. Host profile
-selection and MCP decoding are integrated; public MCP activation and native
-Agent conversation recovery remain open. Global Bee is unchanged. See the
+The September 11 Agent integration now includes governed authoring and claimed
+hook recovery. All 600 Lua tests pass; actual restart checks preserve frozen
+authoring content, retry receipts and the migration ledger. Exact operation and
+workspace grants are checked even for the stored author. Revoked hook recovery
+proves a committed record is reconciled once after a lost acknowledgement.
+Source/pack headless checks pass. The earlier intermittent missing fault
+diagnostic remains unexplained; this is not an uninterrupted full-check pass.
+Public MCP activation and native Agent conversation recovery remain open.
+Architecture tests and their build gate were removed at the user's direction;
+behavioral permission and recovery tests remain. Global Bee is unchanged. See the
 [current Agent checkpoint](handoffs/AGENT_INTEGRATION.md).
 
 The Agent window now has a profile-selection phase and `agent` command metadata.

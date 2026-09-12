@@ -1,6 +1,6 @@
 # Agent integration checkpoint — September 11
 
-Source checkpoint `586956d` combines the native Agent picker, host-defined
+The integration branch combines the native Agent picker, host-defined
 profile preflight, measured provider configuration and stricter MCP argument
 decoding. It runs the selected harness's own terminal UI. The host configuration
 example is in [agent profiles](../../examples/agent-profiles/README.md); the
@@ -15,11 +15,17 @@ supplied non-object argument value and keeps the binding's thread scope.
 
 ## Verification
 
-The combined source passes 581 Lua tests and the managed-window fixture passes
-all three cases. The fixture now explicitly binds `/bin/sh`; production
-executable checks remain intact. Packing, architecture, module isolation,
-storage/restart, gateway and source/pack desktop checks have passing evidence
-in segments on the same production source.
+The combined authoring and gateway source passes 600 Lua tests. Earlier managed
+window acceptance passed all three cases with an explicitly bound `/bin/sh`;
+production executable checks remain intact. Source/pack headless checks pass.
+The Go authoring restart probe proves immutable binary snapshots, durable retry
+receipts, foreign-author denial and an unchanged migration ledger across two
+actual boots. The focused gateway check proves a hook committed before revoke
+can be replayed and acknowledged afterward with exactly one thread record.
+
+Architecture tests and their Makefile gate have been removed at the user's
+direction. Code review owns module-boundary assessment; behavioral tests cover
+permissions, persistence and recovery.
 
 The initial full continuation stopped because a packed core-delivery fault
 exited without its expected error text in captured output. All five packed
@@ -40,11 +46,13 @@ retained-session resource contracts; see [the next recovery unit](NATIVE_AGENT_R
 Display reconnect already retains a running app. Cold restart of the same
 native Agent conversation is not implemented.
 
-Governed authoring and claimed-hook recovery are separate integration branches
-under review. Authoring stages caller-owned database content; it grants no
+Governed authoring and claimed-hook recovery are now integrated.
+Authoring stages caller-owned database content; it grants no
 registry publication or overlay activation. Higher service authority stays
 inside host-selected owners. User/agent calls require exact resource scopes;
 app state, traits and overlay metadata cannot select a stronger authority.
+Even the stored author needs a current operation grant for the exact workspace;
+read-only access cannot write or reach another workspace owned by that actor.
 
 The global executable has not been replaced. Actual standalone testing still
 finds the runtime's default state under the shared user directory instead of

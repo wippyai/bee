@@ -1,0 +1,54 @@
+version: '1.0'
+namespace: bee.modules
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, uuid, funcs]
+  imports:
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    model: bee.modules:model
+    view: bee.modules:view
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Modules
+      icon: M
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: modules
+      restart_policy: never
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules: [json]
+  imports:
+    text: bee.application:text
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    model: bee.modules:model
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: Modules may call only the public Hub facade. The facade authorizes the requested package operation before entering its private registry execution scope.
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hub:call]
+    effect: allow
+- name: hub_policy
+  kind: security.policy
+  meta:
+    comment: The Hub facade checks these operation actions against the requested catalog or component; no registry or Hub credential scope is granted to the application.
+  policy:
+    actions: [bee.hub.read, bee.hub.manage]
+    resources: '*'
+    effect: allow

@@ -97,7 +97,8 @@
       "module": "bee/hub",
       "root": "bee.hub",
       "namespaces": [
-        "bee.hub"
+        "bee.hub",
+        "bee.modules"
       ]
     },
     {

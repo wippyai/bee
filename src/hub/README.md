@@ -1,18 +1,32 @@
-# Hub package inspection
+# Hub module management
 
-`bee.hub:inspect.read` reads one exact package version using the runtime Hub
-reader. It returns the artifact's SHA-256 measurement and declared requirement
-bindings. It inherits the caller's Hub permission and accepts no registry URL,
-credentials or host path. Package entries are inspected without publishing or
-starting them. Downloaded artifacts may enter the runtime's verified cache.
+This optional Bee component uses the existing native Hub reader and registry
+APIs. It has no Keeper dependency and requires no runtime changes.
 
-This is the first part of the proposed small Bee Hub installer. It is not a
-dependency resolver, an approved installation plan or a public install tool.
-Transitive resolution, existing-installation reconciliation, approval, guarded
-publication, migrations and activation remain unimplemented here. The runtime
-already owns dependency resolution; Bee must consume its exact proposed changes
-before presenting them for approval. A second Lua dependency solver is not added.
+The public `bee.hub:call` function accepts `{operation, request?, expected_digest?}`
+and returns `{ok, value?, code?, message?, replayed}`. The host grants
+`bee.hub.read` or `bee.hub.manage` for the requested component; the facade
+validates and authorizes the operation before entering its fixed private scope.
+Requests cannot select credentials, a registry URL, an actor or a host path.
 
-Hub/system installations will use durable registry history. Authored component
-changes belong to the separate database-backed overlay owner. Installing or
-inspecting this component grants no publication, activation or sharing authority.
+Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`
+and `installed`. Catalog keyword defaults to `bee`; an empty keyword clears it.
+`state` returns an exact uninstalled artifact's metadata, entries and resources.
+`files` and `read_file` read its embedded resource filesystem. These operations
+may populate the native verified cache but do not publish or start the package.
+They expose packaged assets, not a reconstruction of its source repository.
+See [the API and acceptance status](../../docs/HUB.md) for request examples.
+
+Management operations are `plan`, `apply` and `status`. Planning preserves other
+roots, resolves dependencies and measures the request, registry revision and
+artifacts. Exact dependency pins do not list release history; ranges page lazily.
+Apply replans in a private worker before publishing the dependency-root change
+and an operation receipt to durable registry history. The worker serializes Bee
+Hub operations, not all registry writers.
+
+Real install/update/uninstall and receipt persistence across restart have passed
+on the existing runtime. Migration execution, interrupted-operation recovery,
+resource filesystem acceptance and full Modules confirmation/apply UI acceptance
+remain incomplete. Basic Modules input, F12 and resize pass from source and pack.
+This source is not yet the globally installed release. Authored component
+overlays and application launch/sharing admission remain separate responsibilities.

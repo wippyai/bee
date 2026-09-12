@@ -513,6 +513,15 @@ future work. See [threads](THREADS.md) for the
 implemented API and limits, and [workspace attachments](WORKSPACE_ATTACHMENTS.md)
 for the proposed identity split.
 
+The Hub component now has a scoped read/plan/apply/status API and a Modules app
+under acceptance. Exact artifact state reads and real dependency install, update,
+uninstall and receipt persistence across restart pass on the existing runtime.
+It requires no upstream changes or Keeper dependency. Migration execution,
+interrupted-operation recovery, embedded-resource reads and complete Modules confirmation/apply UI
+acceptance remain incomplete. Basic Modules search, parameter input, F12 and
+resize pass from source and pack; this work is not globally installed yet. See
+[Hub installation and package reads](HUB.md) for the current contract and evidence.
+
 The shell remains the delivery focus. Hub installation, authorized overlay editing,
 MCP, AI drivers and service/run
 lifetimes are separate subsystems, not unfinished responsibilities of the presenter.

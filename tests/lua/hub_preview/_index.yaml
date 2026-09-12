@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.hub_preview
+entries:
+- name: preview_test
+  kind: function.lua
+  source: file://preview_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    preview: bee.hub:preview

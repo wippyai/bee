@@ -4,7 +4,8 @@ local bounds = require("bounds")
 local requirements = require("requirements")
 local M = {}
 type Request = {component: string, version: string, parameters: {requirements.Parameter}}
-type Inspection = {component: string, version: string, digest: string, requirements: requirements.Result}
+type Entry = {id: string, kind: string, meta: {[string]: unknown}, data: unknown}
+type Inspection = {component: string, version: string, digest: string, requirements: requirements.Result, entries: {Entry}}
 
 function M.decode(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
@@ -13,6 +14,10 @@ function M.decode(raw: unknown): (Request?, string?)
     if extra then return nil, extra end
     local component = bounds.line(value.component, 160)
     if not component or not component:match("^[%w_%-%.]+/[%w_%-%.]+$") then
+        return nil, "component must be an org/module name"
+    end
+    local org, name = component:match("^([^/]+)/([^/]+)$")
+    if org == "." or org == ".." or name == "." or name == ".." then
         return nil, "component must be an org/module name"
     end
     local version = bounds.line(value.version, 128)
@@ -48,6 +53,22 @@ function M.read(raw: unknown): (Inspection?, string?)
     end
     local result, requirement_error = requirements.read(entries, request.parameters)
     if not result then return nil, requirement_error end
-    return {component = request.component, version = version, digest = digest, requirements = result}, nil
+    local decoded: {Entry} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw_entry in ipairs(entries) do
+        local entry = bounds.object(raw_entry)
+        if not entry then return nil, "invalid package entry" end
+        local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
+        if not id or not kind or seen[id] then return nil, "invalid or duplicate package entry identity" end
+        seen[id] = true
+        local meta: {[string]: unknown} = {}
+        if entry.meta ~= nil then
+            local supplied = bounds.object(entry.meta)
+            if not supplied then return nil, "invalid package metadata" end
+            meta = supplied
+        end
+        decoded[#decoded + 1] = {id = id, kind = kind, meta = meta, data = entry.data}
+    end
+    return {component = request.component, version = version, digest = digest, requirements = result, entries = decoded}, nil
 end
 return M

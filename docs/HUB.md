@@ -1,41 +1,119 @@
-# Hub installation
+# Hub installation and package reads
 
-Bee's Hub installer is in progress. The implemented first operation reads one
-exact artifact and its declared requirements. Installation, dependency resolution,
-confirmation, migrations and activation are not yet exposed by this component.
+Bee has an optional Hub component with a scoped public API and a Modules TUI
+in development. Real install, update, uninstall and durable receipt restart
+checks pass on the existing runtime. Migration execution and complete recovery
+remain unfinished; the new component is not globally installed yet.
 
-`bee.hub:inspect.read({component, version, parameters})` uses the native Hub
-reader with the caller's existing permission for that module. `parameters` is
-a list of qualified requirement names and bounded JSON values. Native scalar,
-object and array values retain their types. Requests cannot select
-another registry, token, actor, security scope or host path. The result carries
-the actual version, a SHA-256 digest and requirement bindings. Missing values
-are reported; declaring a requirement does not grant access to its value.
+`bee.hub:call({operation, request?, expected_digest?})` returns
+`{ok, value?, code?, message?, replayed}`. The facade checks the authenticated
+caller's `bee.hub.read` or `bee.hub.manage` permission for the exact component
+before calling its private backend. Catalog and installed inventory use the
+`catalog` resource. Caller input cannot choose a registry URL, credential, actor,
+execution scope or host filesystem path.
 
-This reads package entries without publishing or starting them. The native Hub
-reader may download an artifact to its verified cache. The result describes one
-artifact, not the final dependency graph or an approved installation.
+## Read an uninstalled package
 
-`make hub-inspect-check` runs an explicit live-Hub proof against public
-`userspace/docker@0.5.12`, with fresh local state and no inherited credentials.
-It requires a measured result, a permission denial for another package and
-registry publication, and unchanged registry history. Ordinary unit checks cover
-malformed requests, missing bindings and bounded declarations without Hub access.
+Like Kickside's Hub artifact inspection, Bee opens the exact package, reads it
+and closes the handle. No install plan is required. The native Hub reader may
+download to its verified cache; these operations do not publish or start entries.
 
-The intended complete operation remains small: resolve the requested dependency
-through the runtime, show exact changes and missing bindings, obtain confirmation,
-then apply through the authorized owner and record migration results. Keeper's
-Hub flow is a reference; Bee does not import Keeper or duplicate its Lua dependency
-solver. Existing Bee preflight and approvals supply their respective checks.
+```lua
+{operation = "state", request = {
+    component = "userspace/docker", version = "0.5.12"
+}}
+```
 
-On pinned runtime `291f5c6`, dependency resolution and expansion exist in native
-boot code but have no read-only Lua preview operation. Registry changes expose
-apply without the expected-base guarantee required by Bee's existing acceptance
-probe. These native contracts must be established before the installer is enabled.
-Catalog metadata and a Lua read immediately before apply do not supply them.
+The value contains `component`, `version`, `digest`, `metadata`, `entries`
+(including entry data) and `resources`. These are the package's registry state
+and resource descriptors. A package can have entries and no filesystem resources.
 
-The intended storage split is durable registry history for Hub and system
-installations, with authored component changes persisted in Bee's separate
-database and reconstructed as overlays. Application start and sharing must obtain
-user confirmation; sharing must preserve admission at the destination. These are
-installation and activation requirements, not guarantees supplied by inspection.
+Use a resource ID from that result to read an embedded resource filesystem:
+
+```lua
+{operation = "files", request = {
+    component = "bee/example", version = "1.0.0",
+    resource = "example:assets", path = ".", offset = 0, limit = 100
+}}
+{operation = "read_file", request = {
+    component = "bee/example", version = "1.0.0",
+    resource = "example:assets", path = "images/logo.png", offset = 0, limit = 65536
+}}
+```
+
+The example resource and path are illustrative. `files` returns names/types and
+an optional `next_offset`; its offset counts directory entries. `read_file`
+returns `content_base64`, byte `offset`, `size`, `eof` and, when more bytes remain,
+`next_offset`. File chunks default to 64 KiB and have a 1 MiB maximum. Directory
+pages default to 100 entries and have a 1,000-entry maximum. Paths are relative
+to the package resource; traversal is rejected. An optional `expected_digest`
+inside the request binds subsequent reads to the artifact already inspected.
+
+The filesystem exposes assets embedded in the package. It does not reconstruct
+original repository files. Future consumers of state and files are deliberately
+left to their own workflows.
+
+Other reads: `catalog` accepts independent `query`, `keyword` and `page` fields;
+keyword defaults to `bee` and `keyword = ""` clears it. `details` accepts
+`component` and `page` for module details, README and a version page. `inspect`
+accepts an exact component/version and typed requirement parameters, returning
+requirements, entries and digest. `installed` takes no request body and reports
+native ownership, direct roots and dependency users.
+
+## Manage dependencies
+
+`plan` takes `{action, component, version?, parameters?, migration_policy?}`.
+Install/update require an exact version; uninstall takes neither version nor
+parameters. The planner preserves unrelated roots and refuses changes to
+host-configured roots. Exact dependency pins open the artifact without listing
+release history. Version ranges fetch pages only as needed; a large version
+history is not itself an error.
+
+`apply` takes the same request and the displayed plan's `expected_digest` at the
+outer call level. A private worker serializes Bee Hub operations, replans and
+checks the registry revision before publishing the native dependency root and
+receipt. It verifies the resulting inventory against the plan. `status` takes
+that digest and returns the calling actor's durable receipt. Receipts distinguish
+`published`, `complete`, `failed` and `recovery_required`; callers must inspect
+this state even when reading the receipt succeeds. An uncertain call must be
+followed by status inspection rather than a blind retry.
+
+Install/update default to migration policy `none`. An `up` request with migration
+work refuses publication until a migration runner is bound. Uninstall defaults
+to `block`; checking or reverting migrations is not wired yet. Explicit `leave`
+permits removal while retaining migration effects. The current migration adapter
+alone does not establish production migration execution.
+
+Owner serialization does not exclude unrelated registry writers. Automatic
+baseline restoration is attempted only while the observed registry revision
+still equals this operation's publication revision; this is not atomic compare
+and swap. A crash after publication can leave a `published` receipt and needs
+explicit reconciliation, which is not implemented yet.
+
+## Acceptance and remaining work
+
+`make hub-unit-check` runs focused planner, catalog, inventory, migration adapter,
+preview-boundary and Modules model/view tests in a disposable composition.
+`make hub-inspect-check` reads public `userspace/docker@0.5.12`, proves module and
+publication permission denials, and verifies unchanged registry history. Its
+state-preview check sees 96 entries and zero filesystem resources; this does
+not prove a successful file read.
+
+`make hub-manage-check` exercises the scoped facade and private worker against
+real `wippy/test` install, update, uninstall, confirmation mismatch and permission
+denials, then restarts and verifies durable receipts and continued removal.
+`make modules-app-check` uses deterministic fixture Hub replies with the real
+broker, app process and presenter from source and a pack. Keyword clearing,
+independent search, details, JSON parameter keyboard input, F12, resize and
+shutdown pass. It does not prove the entire confirmation/apply UI against live
+Hub; the real mutation API is covered separately above.
+
+Complete resource-file, confirmation/apply UI, migration/recovery and distribution
+acceptance remain release work.
+
+The component follows Keeper's application-level planning and replan-before-apply
+flow without importing Keeper. Runtime changes are outside this lane; earlier
+prototypes were withdrawn. Declarative module packaging remains in Bee's explicit
+build composition. Hub installations use durable registry history. Authored
+component overlays, application start confirmation and destination sharing
+admission belong to their respective owners and are not granted by inspection.

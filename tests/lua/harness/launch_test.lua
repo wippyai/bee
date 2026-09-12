@@ -59,6 +59,15 @@ local function apply(entry: {[string]: unknown})
     local applied, err = changes:apply()
     if not applied then error("apply: " .. tostring(err)) end
 end
+local function carrier_io(): machine.IO
+    return {
+        call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+        send = function(target: string, topic: string, input: unknown) end,
+        self_pid = function(): string return process.pid() end,
+        now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
+        key = function(): string return fresh("key") end,
+    }
+end
 local function fixture_paths(): (string, string)
     local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
     local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
@@ -289,7 +298,40 @@ local function define_tests()
             test.eq(code(refused), "INVALID")
             test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
         end)
-        test.it("refuses an unconfigured provider before it creates launch work", function()
+        test.it("defers driver configuration until placement supplies the actual HOME", function()
+            local binding = assert(registry.get("bee.driver.claude:binding"))
+            local original = binding.data
+            binding.data = {contracts = {{contract = "bee.driver:driver", methods = {
+                prepare = "bee.driver.claude:prepare", dispatch = "bee.driver.claude:dispatch",
+                normalize = "bee.driver.claude:normalize", configure = "bee.harness.catalog:configuration_probe",
+            }}}}
+            local ok, failure = pcall(function()
+                apply(binding)
+                local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                local request_id = fresh("complete-config-inputs")
+                local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest})) :: admission.Admitted
+                local io = carrier_io()
+                local planned, plan_error = machine.plan(io, admitted.request)
+                if not planned then error(tostring(plan_error)) end
+                local prepared, prepare_error = machine.prepare_attempt(io, planned)
+                if not prepared then error(tostring(prepare_error)) end
+                local db = assert(placement_store.open())
+                local row = assert(placement_store.row(db, admitted.attempt_id))
+                local stored, stored_error = placement_store.request(row)
+                db:release()
+                if not stored then error(tostring(stored_error)) end
+                local delivery = stored.delivery
+                if not delivery then error("delivery missing") end
+                test.eq(delivery.arguments[1], "--fixture-home")
+                test.is_true(delivery.arguments[2]:match("^/.*[/]home$") ~= nil)
+                test.eq(row.execution_state, "intended")
+            end)
+            binding.data = original
+            apply(binding)
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("refuses an unconfigured provider before placement records a native attempt", function()
             local definition_entry = assert(registry.get(DEFINITION))
             local policy_entry = assert(registry.get(POLICY))
             local original_definition, original_policy = definition_entry.data, policy_entry.data
@@ -313,11 +355,19 @@ local function define_tests()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure missing provider: " .. tostring(apply_error)) end
-                local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
-                    workspace_id = workspace, brief = ""})
-                test.eq(code(refused), "UNAVAILABLE")
-                test.is_true(tostring(refused.error and refused.error.message):find("configuration", 1, true) ~= nil)
-                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+                local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = ""})) :: admission.Admitted
+                local io = carrier_io()
+                local planned, plan_error = machine.plan(io, admitted.request)
+                if not planned then error(tostring(plan_error)) end
+                local prepared, prepare_error = machine.prepare_attempt(io, planned)
+                test.is_nil(prepared)
+                test.is_true(tostring(prepare_error):find("configuration needs the selected provider", 1, true) ~= nil)
+                local db = assert(placement_store.open())
+                local row, row_error = placement_store.row(db, admitted.attempt_id)
+                db:release()
+                test.is_nil(row_error)
+                test.is_nil(row)
             end)
             definition_entry.data = original_definition
             policy_entry.data = original_policy

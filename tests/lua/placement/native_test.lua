@@ -12,7 +12,9 @@ local registry = require("registry")
 local exec = require("exec")
 local service = require("service")
 local configuration = require("configuration")
+local configuration_protocol = require("configuration_protocol")
 local hash = require("hash")
+local json = require("json")
 local store = require("store")
 local protocol = require("protocol")
 local homes = require("homes")
@@ -22,6 +24,7 @@ local DIGEST = string.rep("b", 64)
 local ROOT = "bee.placement.native:project_fixture"
 local POLICY = "bee.placement.native:test_launch_policy"
 local NO_PROVIDER_POLICY = "bee.placement.native:test_launch_policy_without_provider"
+local FIXTURE_BINDING = "bee.placement.native:fixture_agent_binding"
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -101,7 +104,7 @@ local function launch(command: {string}, required: string): {[string]: unknown}
     local argv: {string} = {}
     for index = 2, #command do argv[index - 1] = command[index] end
     return {idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = fresh("attempt"),
-        binding_ref = "bee.driver.claude:binding", policy_ref = NO_PROVIDER_POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
+        binding_ref = FIXTURE_BINDING, policy_ref = NO_PROVIDER_POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = command[1], argv = argv, environment = {"PROBE_VALUE"}, working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
@@ -118,6 +121,13 @@ local function provider_configuration(): {[string]: unknown}
     return {revision = rendered.revision, path = rendered.path, content = rendered.content,
         digest = rendered.digest, provider_ref = rendered.provider_ref}
 end
+local function provider_configuration_digest(): string
+    local provider = registry.get("bee.placement.native:codex_test_provider")
+    if not provider then error("provider entry") end
+    local digest, digest_error = configuration_protocol.digest({provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex:configure")
+    if not digest then error(tostring(digest_error)) end
+    return digest
+end
 local function retained_launch(owner: string, session_ref: string, marker: string): {[string]: unknown}
     local request = launch({"sh", "-c", "printf '" .. marker .. "\\n' >> \"$HOME/marker\""}, "direct_process")
     request.owner_id = owner
@@ -128,7 +138,7 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     declared.home_ref = "session"
     local resources = request.resources :: {{[string]: unknown}}
     resources[#resources + 1] = {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
-    request.configuration = provider_configuration()
+    request.configuration_digest = provider_configuration_digest()
     return request
 end
 local READONLY = "bee.placement.native:readonly_fixture"
@@ -146,6 +156,18 @@ local function admit_root()
     changes:update(entry)
     local applied, err = changes:apply()
     if not applied then error("admit root: " .. tostring(err)) end
+end
+local function activate_fixture_binding()
+    local entry = registry.get("bee:harness_activation")
+    if not entry then error("harness activation") end
+    local data = entry.data :: {[string]: unknown}
+    local bindings = data.bindings :: {unknown}
+    for _, binding in ipairs(bindings) do if binding == FIXTURE_BINDING then return end end
+    bindings[#bindings + 1] = FIXTURE_BINDING
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local applied, err = changes:apply()
+    if not applied then error("activate fixture binding: " .. tostring(err)) end
 end
 local function wait_for(predicate: () -> boolean, timeout_ms: integer): boolean
     local deadline = time.now():unix_nano() + timeout_ms * 1000000
@@ -197,6 +219,7 @@ end
 local function define_tests()
     test.describe("Native placement", function()
         admit_root()
+        activate_fixture_binding()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)
         local observation = tostring(measured.exit_observation)
@@ -209,13 +232,14 @@ local function define_tests()
                 elseif kind == "home_ref" then
                     request.environment_refs = {HOME = "fixture:home"}
                 else
-                    local gateway: {[string]: unknown} = {tools = {"thread_read"}, destination = "BEE_GATEWAY_TOKEN"}
+                    local gateway: {[string]: unknown} = {endpoint = "127.0.0.1:4312", tools = {"thread_read"}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"}
                     if kind == "gateway" then environment.BEE_GATEWAY_TOKEN = "caller-token" end
                     if kind == "hook" then
+                        gateway.hooks = {"SessionStart"}
                         gateway.hook_destination = "BEE_HOOK_TOKEN"
                         request.environment_refs = {BEE_HOOK_TOKEN = "fixture:token"}
                     end
-                    if kind == "shared_token" then gateway.hook_destination = "BEE_GATEWAY_TOKEN" end
+                    if kind == "shared_token" then gateway.hooks = {"SessionStart"}; gateway.hook_destination = "BEE_GATEWAY_TOKEN" end
                     if kind == "gateway_home" then gateway.destination = "HOME" end
                     request.gateway = gateway
                 end
@@ -470,29 +494,26 @@ local function define_tests()
             end
             process.unlisten(outputs)
         end)
-        test.it("refuses a configuration the host provider does not render, even with a correctly recomputed digest", function()
+        test.it("refuses a stale host configuration digest and retries only the matching plan", function()
             local provider = registry.get("bee.placement.native:codex_test_provider")
             if not provider then error("provider entry") end
             local rendered = assert(configuration.projection(assert(configuration.decode("bee.placement.native:codex_test_provider", provider))))
-            local modified = rendered.content .. 'model_providers.bee.extra = "x"\n'
-            local digest = assert(hash.sha256(modified))
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
             request.binding_ref = "bee.driver.codex:binding"
-            request.configuration = {revision = rendered.revision, path = rendered.path, content = modified, digest = digest, provider_ref = "bee.placement.native:codex_test_provider"}
+            request.configuration_digest = string.rep("0", 64)
             local refused = call(OWNER, "prepare", request)
-            test.eq(refused.error and refused.error.code, "DENIED")
-            test.is_true(tostring(refused.error and refused.error.message):find("does not match", 1, true) ~= nil)
-            request.configuration = {revision = rendered.revision, path = rendered.path, content = rendered.content, digest = rendered.digest, provider_ref = "bee.placement.native:codex_test_provider"}
-            -- The provider is selected by the host launch policy the request
-            -- names, never by the caller: an exact rendering of a provider
-            -- the named policy does not select is refused, and so is a
-            -- policy reference that is not a host launch policy.
+            test.eq(refused.error and refused.error.code, "CONFLICT")
+            test.is_true(tostring(refused.error and refused.error.message):find("inputs changed", 1, true) ~= nil)
+            test.eq(call(OWNER, "status", {attempt_id = request.attempt_id}).error and call(OWNER, "status", {attempt_id = request.attempt_id}).error.code, "NOT_FOUND")
+            request.configuration_digest = provider_configuration_digest()
+            -- A digest from another host selection is a plan conflict, even
+            -- where the replacement policy has no provider of its own.
             request.policy_ref = NO_PROVIDER_POLICY
             request.binding_ref = "bee.driver.claude:binding"
             local unselected = call(OWNER, "prepare", request)
-            test.eq(unselected.error and unselected.error.code, "DENIED")
-            test.is_true(tostring(unselected.error and unselected.error.message):find("selects no provider", 1, true) ~= nil)
+            test.eq(unselected.error and unselected.error.code, "CONFLICT")
+            test.is_true(tostring(unselected.error and unselected.error.message):find("inputs changed", 1, true) ~= nil)
             request.policy_ref = "bee.placement.native:codex_test_provider"
             local foreign = call(OWNER, "prepare", request)
             test.eq(foreign.error and foreign.error.code, "DENIED")
@@ -501,6 +522,27 @@ local function define_tests()
             request.binding_ref = "bee.driver.codex:binding"
             local prepared = attempt_of(call(OWNER, "prepare", request))
             test.eq(prepared.execution_state, "intended")
+            local db, open_error = store.open()
+            if not db then error(open_error or "store") end
+            local row, row_error = store.row(db, prepared.attempt_id)
+            if not row then db:release(); error(row_error or "stored request") end
+            local frozen, frozen_error = store.request(row)
+            db:release()
+            if not frozen then error(frozen_error or "frozen request") end
+            test.eq(#(frozen.delivery and frozen.delivery.files or {}), 1)
+            test.eq((frozen.delivery and frozen.delivery.files[1].digest), rendered.digest)
+            -- A matching idempotency retry returns the existing intent and
+            -- does not replace the owner-recorded driver delivery.
+            test.eq(attempt_of(call(OWNER, "prepare", request)).attempt_id, prepared.attempt_id)
+            local replay_db, replay_open_error = store.open()
+            if not replay_db then error(replay_open_error or "store") end
+            local replay_row, replay_row_error = store.row(replay_db, prepared.attempt_id)
+            if not replay_row then replay_db:release(); error(replay_row_error or "replayed stored request") end
+            local replayed, replay_error = store.request(replay_row)
+            replay_db:release()
+            if not replayed then error(replay_error or "replayed frozen request") end
+            test.eq(replayed.delivery and replayed.delivery.files[1].digest, rendered.digest)
+            test.eq(replayed.delivery and replayed.delivery.files[1].content, rendered.content)
             local started = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
             test.eq(started.execution_state, "running")
             time.sleep("500ms")
@@ -513,6 +555,50 @@ local function define_tests()
                     test.is_nil(tostring(item.detail):find("/home", 1, true))
                 end
             end
+        end)
+        test.it("rejects malformed persisted delivery before creating a home or starting a child", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = POLICY
+            request.binding_ref = "bee.driver.codex:binding"
+            request.configuration_digest = provider_configuration_digest()
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local db, open_error = store.open()
+            if not db then error(open_error or "store") end
+            local row, row_error = store.row(db, prepared.attempt_id)
+            if not row then db:release(); error(row_error or "stored request") end
+            local original = row.request_json :: string
+            local decoded = assert(json.decode(original)) :: {[string]: unknown}
+            local delivery = decoded.delivery :: {[string]: unknown}
+            local file = (delivery.files :: {{[string]: unknown}})[1]
+            local corruptions: {{[string]: unknown}} = {
+                {arguments = {"bad\0argument"}, files = {}},
+                {arguments = {}, files = {file, file}},
+                {arguments = {}, files = {{revision = file.revision, path = "../escape", content = file.content, digest = file.digest, provider_ref = file.provider_ref}}},
+                {arguments = {}, files = {{revision = file.revision, path = file.path, content = "changed", digest = file.digest, provider_ref = file.provider_ref}}},
+                {arguments = {}, files = {}, unsupported = true},
+            }
+            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
+            for index, damaged in ipairs(corruptions) do
+                decoded.delivery = damaged
+                local encoded = assert(json.encode(decoded))
+                local _, write_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {encoded, prepared.attempt_id})
+                if write_error then db:release(); error("corrupt fixture row: " .. tostring(write_error)) end
+                local damaged_row = assert(store.row(db, prepared.attempt_id))
+                local persisted, persisted_error = store.request(damaged_row)
+                test.is_nil(persisted, "persisted delivery corruption " .. tostring(index) .. " was accepted")
+                test.not_nil(persisted_error)
+                local refused = call(OWNER, "start", {attempt_id = prepared.attempt_id})
+                test.eq(refused.error and refused.error.code, "STORAGE")
+                test.is_false(homes.attempt_exists(home_key))
+                test.eq(#kinds(prepared.attempt_id), 1)
+            end
+            local _, restore_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {original, prepared.attempt_id})
+            if restore_error then db:release(); error("restore fixture request: " .. tostring(restore_error)) end
+            local restored_row = assert(store.row(db, prepared.attempt_id))
+            local restored, restored_error = store.request(restored_row)
+            db:release()
+            if not restored then error(restored_error or "restored request") end
+            test.eq(restored.delivery and restored.delivery.files[1].digest, file.digest)
         end)
         test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
@@ -528,7 +614,17 @@ local function define_tests()
             test.is_nil(attempt)
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "DENIED")
-            test.is_true(tostring(refused.error and refused.error.message):find("requires", 1, true) ~= nil)
+            test.is_true(tostring(refused.error and refused.error.message):find("selected configuration digest", 1, true) ~= nil)
+        end)
+        test.it("refuses caller forged delivery before recording intent", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.delivery = {arguments = {}, files = {}}
+            local refused = call(OWNER, "prepare", request)
+            test.is_false(refused.ok)
+            test.eq(refused.error and refused.error.code, "INVALID")
+            test.is_true(tostring(refused.error and refused.error.message):find("delivery", 1, true) ~= nil)
+            local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
+            test.eq(absent.error and absent.error.code, "NOT_FOUND")
         end)
         test.it("atomically admits one competing retained-session intent", function()
             local session_ref = fresh("contended-session")

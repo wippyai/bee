@@ -57,6 +57,7 @@ entries:
   method: handle
   imports:
     configure_protocol: bee.driver:configuration
+    canonical: bee.threads.records:canonical
 - name: dispatch
   kind: function.lua
   source: file://dispatch_method.lua

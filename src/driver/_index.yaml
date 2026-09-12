@@ -29,6 +29,7 @@ entries:
   modules: [hash, funcs, security]
   imports:
     bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
 - name: driver
   kind: contract.definition
   methods:
@@ -39,4 +40,4 @@ entries:
   - name: normalize
     description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report
   - name: configure
-    description: Return the optional private-home configuration from the host-selected provider record
+    description: Return argv arguments and protected private-home files from host-selected configuration inputs

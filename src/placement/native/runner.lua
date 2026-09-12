@@ -89,7 +89,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         evidence(db, attempt_id, "executable.measured", verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. " size " .. tostring(verified.size))
     end
     local argv: {string} = {request.launch.executable}
-    for _, argument in ipairs(request.launch.argv) do argv[#argv + 1] = argument end
+    for _, argument in ipairs(materialized.arguments) do argv[#argv + 1] = argument end
     local proc, exec_error = executor:exec(quote.line(argv), {work_dir = work_dir, env = environment, process_group = group})
     if not proc then
         -- The executor's own text is not recorded: it may quote the command

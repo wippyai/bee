@@ -20,117 +20,41 @@ if [ -n "${BEE_FIXTURE_READ:-}" ]; then
   read -r line
   printf '%s\n' "read:$line" >&2
 fi
+settings_json=""
+mcp_config_json=""
+previous=""
+for argument in "$@"; do
+  case "$previous" in
+    --settings)
+      if [ -z "$settings_json" ]; then settings_json="$argument"; fi ;;
+    --mcp-config)
+      if [ -z "$mcp_config_json" ]; then mcp_config_json="$argument"; fi ;;
+  esac
+  previous="$argument"
+done
 if [ -n "${BEE_FIXTURE_HOOKS:-}" ]; then
   # Hook reporter: the child posts hook events the way Claude Code's http
-  # hook handler would, to the URL the settings adapter in its home names,
-  # with the hook credential from the environment destination, and reports
-  # status codes only. BEE_FIXTURE_HOOKS_FLOOD posts that many extra tool
-  # events back to back so the queue bound is reached.
-  python3 - <<'PY' >&2
-import json, os, urllib.request, urllib.error
-settings = json.load(open(os.path.join(os.environ["HOME"], ".claude/settings.json")))
-url = settings["allowedHttpHookUrls"][0]
-token = os.environ.get("BEE_GATEWAY_HOOK_TOKEN", "")
-def post(payload):
-    request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return response.status, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, ""
-    except Exception as error:
-        return 0, str(error)
-session = "fixture-session"
-events = [
-    {"hook_event_name": "SessionStart", "session_id": session, "source": "startup", "cwd": os.getcwd()},
-    {"hook_event_name": "UserPromptSubmit", "session_id": session, "prompt_id": "prompt-1", "prompt": "the brief"},
-    {"hook_event_name": "PreToolUse", "session_id": session, "prompt_id": "prompt-1", "tool_use_id": "toolu_fixture_1", "tool_name": "Bash", "tool_input": {"command": "true", "secret": "sk-fixture-000"}},
-    {"hook_event_name": "PostToolUse", "session_id": session, "prompt_id": "prompt-1", "tool_use_id": "toolu_fixture_1", "tool_name": "Bash", "tool_response": {"stdout": "", "stderr": ""}, "duration_ms": 5, "decision": "block"},
-    {"hook_event_name": "Stop", "session_id": session, "prompt_id": "prompt-1", "stop_hook_active": False, "last_assistant_message": "done"},
-]
-report = {"statuses": [post(event)[0] for event in events], "bodies_empty": True}
-for event in events[:1]:
-    status, body = post(event)
-    report["replay"] = status
-    if body != "": report["bodies_empty"] = False
-flood = int(os.environ.get("BEE_FIXTURE_HOOKS_FLOOD", "0"))
-if flood:
-    codes = {}
-    for index in range(flood):
-        status, _ = post({"hook_event_name": "PostToolUse", "session_id": session, "prompt_id": "prompt-1", "tool_use_id": "toolu_flood_%d" % index, "tool_name": "Bash"})
-        codes[str(status)] = codes.get(str(status), 0) + 1
-    report["flood"] = codes
-print("hooks:" + json.dumps(report, sort_keys=True))
-PY
+  # hook handler would, to the URL in the --settings literal, with the hook
+  # credential from the environment destination, and reports status codes
+  # only. BEE_FIXTURE_HOOKS_FLOOD posts that many extra tool events back to
+  # back so the queue bound is reached.
+  "$(dirname "$0")/gateway-client" hooks "$settings_json" >&2
 fi
 if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # Gateway client: the child reads the host-approved MCP configuration from
-  # its private home and the bearer token from the environment destination
-  # the configuration names, walks initialization, discovery and a call,
-  # optionally waits and holds, and reports status codes only on stderr.
+  # the --mcp-config literal and the bearer token from the environment
+  # destination the configuration names, walks initialization, discovery and
+  # a call, optionally waits and holds, and reports status codes only on
+  # stderr.
   # A revoked gateway can make placement request cooperative shutdown while
   # this client is holding. Flush its last real HTTP check before exiting;
   # the runner's normal forced-stop deadline remains authoritative.
   gateway_stopping=""
   trap 'gateway_stopping=1' TERM
-  python3 - <<'PY' >&2
-import json, os, signal, threading, time, urllib.request, urllib.error
-stopping = threading.Event()
-signal.signal(signal.SIGTERM, lambda *_: stopping.set())
-config = json.load(open(os.path.join(os.environ["HOME"], ".claude.json")))
-server = config["mcpServers"]["bee"]
-url = server["url"]
-authorization = server["headers"]["Authorization"].replace("${BEE_GATEWAY_TOKEN}", os.environ.get("BEE_GATEWAY_TOKEN", ""))
-def rpc(method, params=None, ident=1, timeout=10):
-    body = json.dumps({"jsonrpc": "2.0", "id": ident, "method": method, "params": params or {}}).encode()
-    request = urllib.request.Request(url, data=body, headers={"Authorization": authorization, "Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.status, json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        return error.code, None
-    except Exception as error:
-        return 0, str(error)
-def outcome(reply):
-    try:
-        return json.loads(reply["result"]["content"][0]["text"])
-    except Exception:
-        return None
-report = {}
-status, initialized = rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "bee-fixture", "version": "0"}})
-report["initialize"] = status
-report["protocol"] = initialized["result"]["protocolVersion"] if status == 200 and initialized else None
-status, listed = rpc("tools/list", ident=2)
-report["list"] = status
-report["tools"] = sorted(tool["name"] for tool in listed["result"]["tools"]) if status == 200 and listed else []
-status, read = rpc("tools/call", {"name": "thread_read", "arguments": {"cursor": 0}}, ident=3)
-report["read"] = status
-value = outcome(read) if status == 200 else None
-report["read_ok"] = bool(value and value.get("ok"))
-wait_ms = int(os.environ.get("BEE_FIXTURE_GATEWAY_WAIT", "0"))
-if wait_ms:
-    started = time.time()
-    head = int(((value or {}).get("value") or {}).get("scanned_through") or 0)
-    # The wait is a wakeup on the head: records the carrier itself commits
-    # wake it, so the client waits again past them until it is released or
-    # its own budget elapses.
-    result = None
-    for attempt in range(12):
-        status, waited = rpc("tools/call", {"name": "thread_wait", "arguments": {"after_sequence": head, "wait_ms": wait_ms}}, ident=4 + attempt, timeout=wait_ms / 1000 + 10)
-        value = outcome(waited) if status == 200 else None
-        result = (value or {}).get("value")
-        if status != 200 or not isinstance(result, dict) or result.get("status") != "ready":
-            break
-        head = int(result.get("scanned_through") or head)
-    report["wait"] = {"status": status, "elapsed_ms": int((time.time() - started) * 1000), "outcome": result}
-hold = float(os.environ.get("BEE_FIXTURE_GATEWAY_HOLD", "0"))
-if hold:
-    stopping.wait(hold)
-    report["after_hold"] = rpc("tools/list", ident=5)[0]
-print("gateway:" + json.dumps(report, sort_keys=True))
-PY
+  gateway_status=0
+  "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" >&2 || gateway_status=$?
   trap - TERM
-  if [ -n "$gateway_stopping" ]; then exit 143; fi
+  if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi
 fi
 if [ -n "${BEE_FIXTURE_HUGE:-}" ]; then
   printf '{"type":"system","subtype":"status","padding":"'

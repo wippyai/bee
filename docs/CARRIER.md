@@ -362,25 +362,29 @@ for the checkpoint, asynchronous delivery and shutdown contract.
 
 ## 10. Generated configuration and stdin end of file
 
-Every driver binding supplies `configure`. During plan measurement, the carrier
-reads the host-selected provider record from its pinned catalog and directly
-calls the activated binding's configured method with copied provider data, an
-optional gateway section and the fixture flag. The request supplies neither a
-target, provider bytes nor a scope. The target comes from the reviewed
-activation and binding in that same snapshot. The reply is either explicit
-no-file output when the policy names no `provider_ref`, or one bounded,
-safe-relative private-home file whose provider identity and SHA-256 digest match
-its copied content.
+Every driver binding supplies `configure`. The carrier measures the activated
+method, copied provider record, gateway endpoint, admitted tools/hooks and
+credential environment names. Placement independently reconstructs those inputs
+from host policy and checks their digest before admitting an attempt. Requests
+cannot supply rendered files, arguments or a private `delivery` value.
 
-Placement repeats that direct scoped call from its independently pinned policy,
-provider, activation and binding snapshot while admitting the launch, and
-requires the request's configuration to match byte for byte before recording
-intent. The caller is authorized to call the configured driver method before an
-empty callee scope starts. The callee receives only the declarative copied DTO;
-it has no placement, registry, executor or nested-call permissions. Creating
-that empty scope is a host-selected protected admission capability for the
-native execution application. That application is trusted to construct and
-replace call scopes; its remaining deny policies do not confine it.
+For a new intent, placement derives its actual private HOME without creating it,
+then calls the activated driver under an empty callee scope. The reply supplies
+bounded argument literals and measured files with safe relative paths. Placement
+freezes this validated delivery in the existing intent row. Identical retries
+reuse that row without calling the renderer again; the caller-request digest
+remains separate from the private output. Both native execution transports
+prepend the frozen arguments and materialize the frozen files.
+
+The callee receives copied configuration inputs and the owner-derived home path,
+with no registry, executor, placement or nested-call permissions. Actor and
+context inheritance are unchanged by scope selection. Constructing the empty
+scope is a protected host-selected capability; metadata grants none of it.
+
+Claude receives MCP and hook JSON through `--mcp-config` and `--settings`, with
+`--strict-mcp-config` and `--setting-sources ""`. Even an unconfigured launch
+supplies explicit empty settings. A fresh attempt can select current endpoints
+without replacing files in its retained conversation home.
 
 Codex renders `.codex/config.toml` from the selected `bee.codex_provider`
 (name, base URL, model, and optional bounded `developer_instructions`; plain
@@ -394,9 +398,9 @@ configuration bound after escaping.
 Placement writes an admitted file with exclusive creation inside the home
 before start (`configuration.materialized`); a pre-existing file refuses the
 start (`configuration.refused`). The key itself reaches the child only through
-the credential broker's environment projection. Gateway content inside a
-provider file is still Codex-specific; another configured driver with gateway
-tools is denied until the driver contract has a generic hook form.
+the credential broker's environment projection. Drivers own their provider, MCP and hook formats. Codex also renders its
+protected hook and trust files using the owner-derived absolute home path.
+Placement has no provider-specific formatting branches.
 A launch that declares `stdin_eof` writes its complete initial input first
 and closes stdin once (`stdin.accepted`, `stdin.closed`, or
 `stdin.uncertain`); placement admits it only where the executor can close
@@ -429,7 +433,8 @@ transaction excludes another unfinished attempt for the same owner/session;
 reuse requires both native exit and completed cleanup. A repeated admission
 replays its original attempt. No additional lock or session store is involved.
 Application checkpoint and provider conversation recovery remain a later
-boundary: recovery must refresh host-owned per-attempt endpoint data explicitly.
+boundary. Claude can refresh per-attempt endpoint settings through argv; Codex
+still refuses changes to an existing protected configuration file.
 
 The managed-window acceptance launches two real shell children through the
 broker, resource admission, carrier checkpoint and placement. It reads each
@@ -455,7 +460,7 @@ cleanup uncertainty, denied reads, conflicting/ambiguous IDs and invalid page
 progress. They also prove native Claude/Codex resume argv contains no prompt
 or stdin input. Both drivers reject option-like resume references, and a window
 plan rejects brief replay before dispatch. Public
-Agent checkpoint/restore wiring, fresh retained configuration and actual
+Agent checkpoint/restore wiring, changed retained Codex configuration and actual
 provider conversation recovery after restart remain separate acceptance gates.
 
 Launch admission now accepts an optional `continuation` containing only

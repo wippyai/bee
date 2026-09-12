@@ -23,20 +23,23 @@ decoder; malformed provider output is refused before executable measurement
 or attempt admission. Driver replies are data, not trusted Lua type assertions.
 
 `configure` receives only copied host-selected provider data, an optional
-gateway section and the fixture flag. Its reply is either explicit no
-configuration for a policy without a provider, or one nonempty, safe relative
-private-home file with a lowercase SHA-256 digest over its content and the
-selected provider identity. The shared decoder rejects unknown fields,
-provider substitution and mismatched bytes. The trusted carrier resolves the
-activated binding and provider from its pinned registry snapshot, then calls
-`configure` under an empty scope. Placement independently renders and compares
-the file while admitting intent. The protected host admission binding grants
+gateway descriptor (endpoint, action/tool/hook identities and environment
+variable names, never token bytes), an optional owner-derived home directory,
+and the fixture flag. Its reply is a bounded delivery of ordered argv literals
+(including an empty literal) and unique, nonempty safe-relative private-home
+files with lowercase SHA-256 digests. The shared decoder rejects unknown
+fields, duplicate paths and mismatched bytes. The carrier fingerprints the
+validated inputs, excluding the owner-derived home directory, under the
+selected configure target; placement rechecks that fingerprint and renders the
+delivery once while recording intent. The renderer still runs under an empty
+scope. The protected host admission binding grants
 scope management to the native harness application; ordinary applications
 cannot enable it through metadata or launch arguments. Actor context remains
 inherited, but the renderer has no placement, registry, executor or nested-call
-permissions. A gateway extension
-to provider configuration remains Codex-only until a generic driver hook
-contract exists.
+permissions. Claude delivers its admitted MCP and hook settings as fresh argv
+JSON with strict MCP and empty setting sources, so a retained provider home is
+not rewritten. Codex uses protected files; changing retained Codex hook/trust
+content still refuses rather than overwriting that home.
 
 A normalizer never reports success from a process exit; only the protocol's
 terminal event does. Answers come from the profile's declared answer path.
@@ -93,8 +96,9 @@ with shared instructions and MCP gateway content through the existing
 
 ## Claude authentication path
 
-The Claude launch is settings-free: `claude -p <brief>` with the stream-json
-output, no stdin protocol and no file in the private home. The API-key path
+The Claude launch uses stream-json output for structured turns and inline
+settings supplied by the configure method, with no generated configuration file
+in the private home. The API-key path
 is selected by the environment alone: the launch policy's `environment`
 carries the host-selected `ANTHROPIC_BASE_URL`, the credential broker
 projects `ANTHROPIC_API_KEY`, and the runner's private `HOME` carries no

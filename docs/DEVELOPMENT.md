@@ -133,7 +133,8 @@ For a confirmed stale Lua cache, preserve a reproduction first, then use
 pack; use `make pack` first when registry entries changed. `make attachments-check`
 is the focused host/broker grant and revocation gate.
 Use focused tests during implementation and the full suite for a behavioral
-foundation change. Test fixtures stay outside `src/` and use disposable databases.
+foundation change. `make test` first builds the Go HTTP helper used by the
+Claude protocol fixture; the executable stays ignored and outside production. Test fixtures stay outside `src/` and use disposable databases.
 Python acceptance boots use `tests/workspace.py::database_environment` to assign
 all subsystem stores to the disposable fixture directory; explicit migration or
 client-store overrides remain local to that fixture.
@@ -141,6 +142,16 @@ Keep tests separate in `tests/lua` and `tests/*.py` for the current pack boundar
 do not mechanically copy Kickside's colocated test convention into production.
 
 Test negative permissions and failures, not only successful UI frames.
+For a changed component, prove its public operations through its real host
+wiring as well as its pure models. A standalone harness must supply the
+declared resources, apply the actual migrations when the component owns a
+store, and demonstrate that missing bindings and unauthorized callers are
+refused. Exercise retry, restart and cancellation at the boundaries affected
+by the change; a constructed completion record does not prove native process
+cleanup. Test reports must count executed cases, not merely registered suites.
+Inspect the assembled release packs for test registrations, fixture data and
+test-library dependencies, including any explicitly embedded filesystem assets.
+Source layout and a passing unit count alone do not establish release acceptance.
 The headless acceptance also inspects service failure events from the actual boot;
 workspace readiness and a clean exit do not excuse a failed background service.
 New runtime patches require upstream Go tests, a refreshed checksum and a clean pinned build.

@@ -21,18 +21,18 @@ type ResourceGrant = {name: string, grant_ref: string, root_ref: string, subpath
 -- streams ended; expiry is recorded as output.lost.
 type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, retain_ms: integer}
 -- A generated configuration file for the private home: reviewed content
--- measured by the carrier, written by the runner with protected creation.
+-- rendered by the driver at admission, written with protected creation.
 type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
+type ConfigurationDelivery = {arguments: {string}, files: {Configuration}}
 -- The plan's measurement of the launch executable, verified by the runner
 -- immediately before exec.
 type ExecutableMeasurement = {revision: string, kind: string, digest: string}
 -- The gateway binding a launch carries: the admitted tool set, the
--- host-approved MCP configuration for the private home, and the
+-- host-approved endpoint and credential destinations, and the
 -- environment destination the runner fills with the materialized token.
 -- The binding itself is resolved by attempt and carrier epoch at
 -- materialization; no token or binding id travels in the request.
-type CodexHooks = {hooks: Configuration, trust: {[string]: string}, profile: string}
-type Gateway = {tools: {string}, configuration: Configuration?, destination: string, hooks: {string}, hook_destination: string?, hook_configuration: Configuration?, codex_hooks: CodexHooks?}
+type Gateway = {endpoint: string, tools: {string}, destination: string, hooks: {string}, hook_destination: string?}
 type LaunchRequest = {
     idempotency_key: string,
     owner_id: string,
@@ -45,7 +45,9 @@ type LaunchRequest = {
     binding_digest: string,
     profile_digest: string,
     launch: driver_types.Launch,
-    configuration: Configuration?,
+    configuration_digest: string?,
+    -- Placement-owned output, never accepted by the request decoder.
+    delivery: ConfigurationDelivery?,
     executable: ExecutableMeasurement?,
     gateway: Gateway?,
     resources: {ResourceGrant},

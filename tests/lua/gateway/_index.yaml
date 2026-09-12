@@ -39,11 +39,12 @@ entries:
   source: file://hooks_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [json]
+  modules: [json, funcs]
   imports:
     test: wippy.test:test
     hooks: bee.gateway:hooks
-    configuration: bee.gateway:configuration
+    configuration: bee.driver:configuration
+    codex_configuration: bee.driver.codex:configuration
 - name: mcp_test
   kind: function.lua
   source: file://mcp_test.lua

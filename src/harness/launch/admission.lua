@@ -15,8 +15,6 @@ local catalog = require("catalog")
 local policy = require("policy")
 local definition = require("definition")
 local carrier = require("carrier")
-local configuration = require("configuration")
-local resolver = require("resolver")
 local placement_types = require("placement_types")
 local continuation = require("continuation")
 local M = {}
@@ -239,30 +237,9 @@ function M.identities(request_id: string): {action_id: string, attempt_id: strin
     return {action_id = "action:" .. request_id, attempt_id = "attempt:" .. request_id}
 end
 
--- Configuration is deliberately deferred until a user has selected a plan.
--- Listing reads declarations only; it never invokes provider code.  Admission
--- runs this existing empty-scope boundary before it creates a thread, attempt,
--- credential projection or native PTY.
-local function preflight_configuration(pinned: catalog.Pinned, plan: Plan): Reply?
-    local configure_target, configure_error = resolver.configure(pinned, plan.binding_ref)
-    if not configure_target then return fail("UNAVAILABLE", configure_error or "binding configure") end
-    local policy_entry = catalog.entry(pinned, plan.policy_ref)
-    if not policy_entry then return fail("NOT_FOUND", "launch policy " .. plan.policy_ref .. " is not in the registry") end
-    local launch_policy, policy_error = policy.decode(plan.policy_ref, policy_entry)
-    if not launch_policy then return fail("NOT_FOUND", policy_error or "policy") end
-    local provider_entry = nil
-    if launch_policy.provider_ref then
-        provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
-        if not provider_entry then return fail("UNAVAILABLE", "provider " .. launch_policy.provider_ref .. " is not in the registry") end
-    end
-    local _, configuration_error = configuration.call(configure_target, {
-        provider_ref = launch_policy.provider_ref,
-        provider = provider_entry,
-        fixture = launch_policy.fixture,
-    })
-    if configuration_error then return fail("UNAVAILABLE", "launch policy " .. plan.policy_ref .. " configuration: " .. configuration_error) end
-    return nil
-end
+-- Plan selection reads declarations. Placement invokes driver configuration
+-- once it can supply the selected gateway and actual private HOME; a partial
+-- render here would reject drivers requiring those host-owned inputs.
 -- admit: for the authenticated requester, resolve the plan, settle the
 -- thread, obtain the attempt-bound resource grant and credential
 -- projections in the requester's own authority, and return the carrier
@@ -281,8 +258,6 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
     end
-    local configuration_refused = preflight_configuration(pinned, plan)
-    if configuration_refused then return nil, configuration_refused end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end
     if request.thread_id and not definition.allows(launch, "thread") then return nil, fail("FORBIDDEN", "definition does not allow a thread override") end

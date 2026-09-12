@@ -18,7 +18,13 @@ local function run(request: Object): Object
     local address = request.address
     local action_id = request.action_id
     assert(type(address) == "string" and type(action_id) == "string", "render request")
-    local projection, render_error = configuration.projection(address :: string, action_id :: string)
+    local provider, provider_error = configuration.decode("bee.gateway_probe:provider", {
+        kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = {
+            schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://example.invalid/v1", model = "fixture"}})
+    if not provider then error(tostring(provider_error)) end
+    local section = configuration.gateway_section({endpoint = address :: string, action_id = action_id :: string,
+        token_environment = "BEE_GATEWAY_TOKEN", tools = {"thread_read"}, hooks = {}})
+    local projection, render_error = configuration.projection(provider, section)
     assert(projection and not render_error, "configuration projection: " .. tostring(render_error))
 
     if request.privileged == true then

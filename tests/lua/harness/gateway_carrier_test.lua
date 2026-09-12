@@ -483,7 +483,10 @@ local function define_tests()
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
             local reported = hook_report(thread_id)
             test.eq(json.encode(reported.statuses), json.encode({202, 202, 202, 202, 202}))
-            test.eq(reported.replay, 202)
+            -- The carrier can commit the first occurrence before the child
+            -- replays it: queued replay is 202, committed replay is 200.
+            -- The records and final queue below still prove exactly one commit.
+            test.is_true(reported.replay == 202 or reported.replay == 200)
             test.eq(reported.bodies_empty, true)
             local committed = hook_records(thread_id)
             local by_event: {[string]: integer} = {}

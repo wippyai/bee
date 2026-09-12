@@ -82,12 +82,12 @@ Bee's window adapter consequently has no recorded group identity for its
 existing cleanup operation. Reuse must keep refusing incomplete cleanup until
 the native terminal lifecycle provides the required identity or cleanup proof.
 
-Retained configuration is currently byte-identical replay only. Exact-runtime
-inspection confirms the Lua FS surface lacks atomic rename/replacement and
-non-following opens; remove followed by exclusive creation is not a safe refresh.
-Claude 2.1.269 offers a possible driver-owned alternative through inline
-`--mcp-config`, `--settings`, `--strict-mcp-config` and explicit settings sources.
-An offline parse check is not integrated-driver or provider acceptance. Codex
-0.154.0 offers configuration overrides but no verified alternate hook-file
-location. These are investigation results, not new runtime requirements or
-callable Bee driver options.
+Driver configuration delivery now separates fresh argument literals from protected
+files. Placement measures the host inputs, renders using its actual home path
+and freezes the output with the attempt. Claude uses inline MCP/settings JSON,
+so a new attempt can select fresh endpoint data without replacing conversation
+files. Codex still uses protected provider/hook/trust files and refuses changed
+content in a retained home. The selected Lua FS surface lacks atomic replacement
+and non-following opens; no remove-and-recreate workaround is introduced.
+This configuration slice does not establish native process-group cleanup or
+activate the app's cold-restart consumer.

@@ -43,13 +43,13 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: run
-  modules: [process, channel, tty, time, security, funcs]
+  modules: [process, channel, tty, time, security, funcs, registry]
   imports:
     test: wippy.test:test
     service: bee.placement.native:service
     window: bee.placement.native:window
   security:
-    policies: [bee.window_native:caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_resolve_policy]
+    policies: [bee.window_native:activation_policy, bee.window_native:caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_resolve_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: child
   kind: process.lua
@@ -81,3 +81,27 @@ entries:
   security:
     policies: [bee:placement_store_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
+- name: activation_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.apply]
+    resources: ['*']
+    effect: allow
+- name: binding
+  kind: contract.binding
+  meta: {type: harness.driver, driver_id: shell-fixture, test_support: true}
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.window_native:unused
+      dispatch: bee.window_native:unused
+      normalize: bee.window_native:unused
+      configure: bee.window_native:configure
+- name: configure
+  kind: function.lua
+  source: file://driver.lua
+  method: configure
+- name: unused
+  kind: function.lua
+  source: file://driver.lua
+  method: unused

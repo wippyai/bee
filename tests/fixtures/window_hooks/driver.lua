@@ -3,10 +3,10 @@ local M = {}
 
 function M.prepare(_: unknown): {[string]: unknown}
     local script = [[
-settings="$HOME/.claude/settings.json"
+settings="$HOME/hook-url"
 url=""
 if [ -f "$settings" ]; then
-    url=$(grep -o 'http://[^"]*' "$settings" | head -n 1)
+    IFS= read -r url < "$settings"
 fi
 
 if [ -z "$BEE_GATEWAY_HOOK_TOKEN" ]; then
@@ -47,10 +47,6 @@ end
 
 function M.normalize(_: unknown): {[string]: unknown}
     return {ok = false, error = "fixture window has no stream normalizer"}
-end
-
-function M.configure(_: unknown): {[string]: unknown}
-    return {ok = true, configuration = nil}
 end
 
 return M

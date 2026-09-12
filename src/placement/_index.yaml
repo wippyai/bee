@@ -20,7 +20,6 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    configuration: bee.driver:configuration
     types: bee.placement:types
     driver_types: bee.driver:types
 - name: transitions

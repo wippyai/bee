@@ -6051,3 +6051,44 @@ acceptance. Codex hook/trust file refresh remains unresolved. A generic driver
 configuration proposal must account for empty argv literals and Codex's
 materialization-time HOME-dependent trust data before implementation.
 Wolfden facts 1280–1281 record the evidence. Global Bee remains unchanged.
+
+### 2026-09-12 Codex: driver-owned configuration delivery and review
+
+The configuration worktree now gives each driver one bounded argument/file
+delivery. Placement supplies the actual HOME and selected gateway, validates
+and freezes the result in its existing intent, and both execution transports
+consume it. The incomplete launch-side render and duplicated gateway/provider
+formatting are removed. Stored requests and deliveries are decoded before
+start; corrupted delivery cannot create a home or start a child. Native call
+isolation is proven against the caller's original provider table, so no extra
+copying layer was added. Unsupported Codex hook events now refuse explicitly.
+
+All 629 Lua cases pass with the actual Claude/Codex binaries selected. The
+launch regression fails on the old preflight and passes with the correction
+(17 cases); the persisted-delivery regression fails on the old reader and
+passes after decoding (24 cases). A fresh full `make check` is running in
+`config-delivery-reviewed-check.log`. The prior candidate executable passed
+native-binary acceptance; the reviewed source is being rebuilt separately.
+The original remaining-foundation run reached desktop checks but caught a
+transient typing error during the store edit; this was fixed before the fresh
+run. These are not yet final complete-foundation or publication claims.
+
+Actual loading of all 15 assembled packs found the older
+`bee.hive_manager:fixture` sample-node table in production. Its removal and a
+Go/Lua acceptance replacement are a separate worktree. Parent review rejected
+the first exit-status-only test runner and requires clean completion markers,
+bounded slow-query checks and a failing-probe counterfactual before acceptance.
+The app pack has 610 entries and no embedded filesystem assets before removal.
+Wolfden facts 1285–1286 record the findings. Global remains unchanged; the
+runtime and builder heads still lack executable-selected per-project state.
+
+Review follow-up: the reviewed configuration executable also passed acceptance
+(SHA `4e0ebdcfb15730f8fe2452769b079250e32392637dcd39ad8e380c287c0eeba7`).
+The full configuration check remains live in session 15767 and has progressed
+past injected structural-delivery failures and window retirement. Hive cleanup
+is committed separately as `ff90c03` (integration `1c8f002`); its final Go/Lua
+source/pack application checks and explicit failed-probe check pass. Actual
+loading of all 15 resulting release packs found 608 entries with no fixture/test
+registrations, test-library references or embedded filesystem assets. Wolfden
+fact 1288 records the cleanup evidence. Combined acceptance remains pending;
+global is unchanged. No new Python files or Python edits are included.

@@ -1,6 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test threads threads-module resources-module gateway-check pack check
+.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module gateway-check pack check
 setup: native-tools
 .PHONY: sync-check
 sync-check:
@@ -24,7 +24,9 @@ run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
-test:
+fixture-gateway-client: tests/fixtures/harness/gateway_client.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
+test: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 .PHONY: hive-reader-check clipboard-contract-check
 hive-reader-check:

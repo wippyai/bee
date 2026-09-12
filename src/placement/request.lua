@@ -7,7 +7,6 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
-local configuration_protocol = require("configuration")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -24,7 +23,6 @@ M.DEFAULT_STOP_GRACE_MS = 5000
 M.DEFAULT_RETAIN_MS = 30000
 M.MAX_RETAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 5000
-M.MAX_CONFIGURATION_BYTES = configuration_protocol.MAX_CONFIGURATION_BYTES
 M.MAX_DRAIN_MS = 600000
 local ENVIRONMENT_NAME = "^[A-Z_][A-Z0-9_]*$"
 local function digest_hex(value: unknown): string?
@@ -156,15 +154,11 @@ local function decode_timeouts(value: unknown): (types.Timeouts?, string?)
     end
     return result, nil
 end
-local function decode_configuration(value: unknown): (types.Configuration?, string?)
-    if value == nil then return nil, nil end
-    return configuration_protocol.decode_file(value)
-end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
     local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id",
-        "binding_digest", "profile_digest", "launch", "configuration", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
+        "binding_digest", "profile_digest", "launch", "configuration_digest", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
     if not key then return nil, "idempotency_key is not an identifier" end
@@ -219,19 +213,22 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     for _, name in ipairs(launch.environment) do
         if environment[name] == nil and refs[name] == nil then return nil, "launch.environment requires " .. name .. " and nothing supplies it" end
     end
-    local configuration, configuration_error = decode_configuration(object.configuration)
-    if configuration_error then return nil, configuration_error end
+    local configuration_digest: string? = nil
+    if object.configuration_digest ~= nil then
+        configuration_digest = digest_hex(object.configuration_digest)
+        if not configuration_digest then return nil, "configuration_digest must be a sha256 hex digest" end
+    end
     local gateway: types.Gateway? = nil
     if object.gateway ~= nil then
         local declared = bounds.object(object.gateway)
         if not declared then return nil, "gateway must be an object" end
-        local unknown_gateway = bounds.fields(declared, {"tools", "configuration", "destination", "hooks", "hook_destination", "hook_configuration", "codex_hooks"})
+        local unknown_gateway = bounds.fields(declared, {"endpoint", "tools", "destination", "hooks", "hook_destination"})
         if unknown_gateway then return nil, "gateway: " .. unknown_gateway end
+        local endpoint = bounds.text(declared.endpoint, 2048)
+        if not endpoint or endpoint == "" or endpoint:find("%c") then return nil, "gateway.endpoint must be bounded text" end
         local tools, tools_error = bounds.ids(declared.tools, true)
         if not tools then return nil, "gateway.tools: " .. tostring(tools_error) end
         if #tools == 0 or #tools > M.MAX_PROJECTIONS then return nil, "gateway.tools must name 1 to " .. tostring(M.MAX_PROJECTIONS) .. " tools" end
-        local gateway_configuration, gateway_configuration_error = decode_configuration(declared.configuration)
-        if gateway_configuration_error then return nil, "gateway." .. gateway_configuration_error end
         local destination = bounds.id(declared.destination)
         if not destination or not destination:match("^[A-Z][A-Z0-9_]*$") then return nil, "gateway.destination must be an environment name" end
         local hook_events, hook_events_error = bounds.ids(declared.hooks == nil and {} or declared.hooks, true)
@@ -242,29 +239,9 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
             hook_destination = bounds.id(declared.hook_destination)
             if not hook_destination or not hook_destination:match("^[A-Z][A-Z0-9_]*$") then return nil, "gateway.hook_destination must be an environment name" end
         end
-        local hook_configuration, hook_configuration_error = decode_configuration(declared.hook_configuration)
-        if hook_configuration_error then return nil, "gateway.hook_" .. hook_configuration_error end
-        local codex_hooks: types.CodexHooks? = nil
-        if declared.codex_hooks ~= nil then
-            local codex = bounds.object(declared.codex_hooks)
-            if not codex then return nil, "gateway.codex_hooks must be an object" end
-            local unknown_codex = bounds.fields(codex, {"hooks", "trust", "profile"})
-            if unknown_codex then return nil, "gateway.codex_hooks: " .. unknown_codex end
-            local hooks_file, hooks_file_error = decode_configuration(codex.hooks)
-            if not hooks_file then return nil, "gateway.codex_hooks." .. tostring(hooks_file_error or "hooks is required") end
-            local trust_object = bounds.object(codex.trust)
-            if not trust_object then return nil, "gateway.codex_hooks.trust must be an object" end
-            local trust: {[string]: string} = {}
-            for label, value in pairs(trust_object) do
-                if not bounds.id(label) or type(value) ~= "string" or not (value :: string):match("^sha256:%x+$") then return nil, "gateway.codex_hooks.trust must map labels to sha256 hashes" end
-                trust[label] = value :: string
-            end
-            local profile = bounds.id(codex.profile)
-            if not profile or not profile:match("^[a-z][a-z0-9_]*$") then return nil, "gateway.codex_hooks.profile must be a profile name" end
-            codex_hooks = {hooks = hooks_file, trust = trust, profile = profile}
-        end
         if #hook_events > 0 and not hook_destination then return nil, "gateway.hooks needs gateway.hook_destination" end
-        gateway = {tools = tools, configuration = gateway_configuration, destination = destination, hooks = hook_events, hook_destination = hook_destination, hook_configuration = hook_configuration, codex_hooks = codex_hooks}
+        if #hook_events == 0 and hook_destination then return nil, "gateway.hook_destination needs admitted hook events" end
+        gateway = {endpoint = endpoint, tools = tools, destination = destination, hooks = hook_events, hook_destination = hook_destination}
     end
     local executable: types.ExecutableMeasurement? = nil
     if object.executable ~= nil then
@@ -294,10 +271,11 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not observation then return nil, "required_exit_observation must be independent or eof_gated" end
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
-    return {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
-        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration = configuration, executable = executable, gateway = gateway,
+    local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
+        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
-        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts}, nil
+        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts}
+    return decoded, nil
 end
 -- The canonical digest of a decoded request: two requests with one
 -- idempotency key and different digests conflict.

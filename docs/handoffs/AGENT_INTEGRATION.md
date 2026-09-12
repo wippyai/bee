@@ -1,15 +1,55 @@
 # Agent integration checkpoint — September 12
 
+Driver configuration delivery is being verified in a separate worktree. Each
+driver owns its configuration format; placement validates and freezes that
+delivery in its existing intent, and both terminal and headless launches consume
+the same prepared arguments. All 629 unit cases pass with the real Claude and
+Codex binaries selected. Strict lint, isolated harness and gateway checks,
+native and managed windows, and HTTP hooks pass. The reviewed standalone
+`bee-config-delivery-reviewed` passes executable acceptance, including embedded
+boot, Settings recovery, terminal scrolling/selection, presenter rejoin and
+the public empty Agent picker. Its SHA-256 is
+`4e0ebdcfb15730f8fe2452769b079250e32392637dcd39ad8e380c287c0eeba7`.
+The remaining full foundation check is still running.
+
+Review removed the incomplete launch-side configure call: a driver requiring
+placement's actual HOME now passes launch admission and renders at placement.
+The regression fails with the old preflight and passes with the correction
+(17 launch cases). Stored requests and private deliveries now pass their typed
+decoders again before start; a corrupted delivery is refused without creating
+a home or child (24 placement cases, with a failure on the old reader).
+Codex rejects unsupported hook events explicitly. A separate probe holds the
+same provider table across the real configure call and proves that native
+argument isolation prevents the driver's mutation from reaching the caller;
+no extra copying layer was added. See `config-delivery-launch-{original,fixed}`,
+`config-delivery-persisted-{original,fixed}`, and
+`config-delivery-reviewed-check` logs in the September 12 evidence directory.
+
+The assembled-pack audit found an older production review fixture,
+`bee.hive_manager:fixture`, among the 610 entries in 15 component packs. This
+sample-node table must leave production with its test-only behavior; the live
+default does not excuse shipping it. No embedded filesystem assets are selected.
+Removal is committed separately as `ff90c03` and integrated as `1c8f002`.
+Its final Go/Lua acceptance passes six source/pack application cases and an
+explicit failing-probe check. Loading all 15 resulting component packs found
+608 entries, no fixture/test registrations or test-library references, and no
+embedded filesystem assets. Combined configuration/cleanup acceptance is still
+pending; this is not a claim of quality parity with Kickside.
+Evidence: `hive-fixture-boundary-final.log`,
+`hive-fixture-boundary-pack-audit.json`, `config-delivery-pack-audit.json` and
+`config-delivery-{foundation,build}.log` in the September 12 evidence directory.
+The global executable remains unchanged.
+
 Launch readmission is now implemented in `fa50d4d`. Its typed continuation
 references retain the original action/thread/session while current owner reads
 and fresh resource grants admit a new attempt. An empty brief prevents prompt
 replay. All 626 Lua tests, 23 focused admission/continuation tests, harness
-isolation and five managed-window cases pass. The broader foundation check is
-still running in `recovery-admission-foundation.log`; no new full-pass claim is
-made. The new admission fixture constructs placement completion explicitly and
+isolation and five managed-window cases pass. The remaining foundation check
+completed successfully in `recovery-admission-foundation.log` (session 66125,
+exit 0). The new admission fixture constructs placement completion explicitly and
 does not prove native cleanup. The Agent app still declares no recovery schema.
 See [the recovery handoff](NATIVE_AGENT_RECOVERY.md) for the native terminal
-identity boundary and the possible Claude inline-configuration route.
+identity boundary and driver-owned configuration delivery.
 
 The latest component checkpoint adds exclusive retained session homes and
 interactive continuation resolved from committed hook observations. Placement
@@ -70,8 +110,8 @@ example is in [agent profiles](../../examples/agent-profiles/README.md); the
 default composition still supplies no production launch definition or MCP
 listener. Authenticated provider turns and public credential setup remain open.
 
-Passive listing invokes no provider code. Selection checks the driver's
-configuration before launch effects, and the displayed plan digest includes
+Passive listing invokes no provider code. Placement checks the driver's
+configuration before native execution intent, and the displayed plan digest includes
 the provider entry. Codex instructions use its accepted `developer_instructions`
 field with bounded, escaped TOML content. MCP read/wait rejects an explicitly
 supplied non-object argument value and keeps the binding's thread scope.

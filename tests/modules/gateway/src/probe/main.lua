@@ -89,7 +89,7 @@ local function prove_configuration_scope(address: string)
     assert(value.scope_create_denied == true, "callee created a custom scope")
     assert(type(value.projection) == "table", "configuration projection must be a table")
     local projection = value.projection :: Object
-    assert(projection.path == ".claude.json", "unexpected rendered configuration path")
+    assert(projection.path == ".codex/config.toml", "unexpected rendered configuration path")
     assert(type(projection.content) == "string" and (projection.content :: string):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
     assert((projection.content :: string):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
 end

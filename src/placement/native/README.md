@@ -26,8 +26,8 @@ session directories live under a placement-owned root.
    key. A launch that names both a retained session and its writable session
    home selects that session's derived `/home` before materializing provider,
    gateway, hook or trust configuration; the attempt home still owns attempt
-   evidence and cleanup. A later attempt may reuse only byte-identical
-   host-approved configuration already in that retained home. It resolves
+   evidence and cleanup. Protected files in a retained home permit only exact
+   replay; argument-based configuration needs no replacement write. It resolves
    environment and working directory from the request and the admitted roots,
    starts the child (in its own process group when the runtime supports it),
    reads its identity, records `running`, and acknowledges.
@@ -151,14 +151,19 @@ attempt becomes `uncertain`. `reconcile` proves absence the same way and
 keeps uncertainty where identity is missing. `cleanup` removes the home
 only from `exited`.
 
-Provider configuration is mandatory when the selected host launch policy names
-`provider_ref`. Omitting it is denied before recording an attempt intent;
-providing a file is admitted only when its provider identity, safe relative
-home path, revision, digest and content match the activated driver's
-host-rendered configuration. Placement pins the policy, provider, activation
-and binding together, then calls `configure` with copied records under an empty
-callee scope. Policies without a provider require that same binding to return
-no file, so a request's binding reference never selects a renderer. Gateway
-sections in a provider file are currently limited to Codex; placement denies a
-configured generic driver combined with gateway tools. The placement regression
-proves that an omitted required configuration creates no attempt row.
+Configured launches must carry the digest of their host-selected provider and
+gateway inputs. Placement reconstructs those inputs from its pinned policy,
+activation and binding, refusing omissions or changes before storing intent.
+Caller-supplied delivery is rejected. For a new intent the activated driver
+renders bounded argument literals and protected files under an empty callee
+scope, using the owner-derived home path. The existing intent stores that
+validated output; identical retries reuse it without re-rendering. Both native
+execution transports use the same materialization component. Drivers own their
+formats, including Claude's inline settings and Codex's files; placement owns
+credential delivery, protected writes and session-home exclusion.
+
+Reading an intent decodes the stored request and its private delivery again,
+including file digests, paths and argument bounds, before creating a home or
+starting a child. Malformed stored content is a storage failure. Its retry
+digest still identifies the original caller request; resolved resource grants
+in the stored request do not redefine that identity.

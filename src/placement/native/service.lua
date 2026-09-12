@@ -43,9 +43,6 @@ local function actor(): string?
     if not current then return nil end
     return bounds.id(current:id())
 end
-local function rendered_configuration(target: string, provider_ref: string?, provider: {[string]: unknown}?, gateway_section: string?, fixture: boolean): ({[string]: unknown}?, string?)
-    return configuration_protocol.call(target, {provider_ref = provider_ref, provider = provider, gateway_section = gateway_section, fixture = fixture})
-end
 local function owned(attempt: types.Attempt): Reply?
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
@@ -238,41 +235,50 @@ function M.authorize_materialization(attempt: types.Attempt, row: store.Row, req
     end
     return materialization_key, nil
 end
--- Resolve and render a selected binding's optional provider file from the
--- placement admission snapshot. The caller contributes only the binding,
--- policy and action identities; the target, provider bytes and scope remain
--- host-selected.
-local function render_from_pinned(pinned: registry.Snapshot, binding_ref: string, policy_ref: string, action_id: string): ({[string]: unknown}?, string?)
-    local policy_entry = resolver.entry(pinned, policy_ref)
+-- Configuration inputs come from one host snapshot, not caller-authored
+-- files. The renderer receives the final owner-derived HOME only when a new
+-- intent is recorded; replay uses that intent's frozen delivery.
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?)
+    local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
-    local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
-    if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not policy_data then return nil, "policy_ref " .. policy_ref .. " is not a host launch policy" end
-    local provider_ref = policy_data.provider_ref == nil and nil or bounds.id(policy_data.provider_ref)
-    if policy_data.provider_ref ~= nil and not provider_ref then return nil, "launch policy provider_ref is not an identifier" end
-    local target, target_error, driver_id = resolver.configure(pinned, binding_ref)
-    if not target then return nil, target_error or "binding is not activated" end
-    local provider_entry: {[string]: unknown}? = nil
+    local data = policy_entry and bounds.object(policy_entry.data) or nil
+    if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
+    local provider_ref = data.provider_ref == nil and nil or bounds.id(data.provider_ref)
+    if data.provider_ref ~= nil and not provider_ref then return nil, nil, "launch policy provider_ref is not an identifier" end
+    local target, target_error = resolver.configure(pinned, request.binding_ref)
+    if not target then return nil, nil, target_error or "binding is not activated" end
+    local provider: {[string]: unknown}? = nil
     if provider_ref then
-        provider_entry = resolver.entry(pinned, provider_ref)
-        if not provider_entry then return nil, "launch policy provider " .. provider_ref .. " is not in the registry" end
+        provider = resolver.entry(pinned, provider_ref)
+        if not provider then return nil, nil, "launch policy provider is not in the registry" end
     end
-    local tools, tools_error = bounds.ids(policy_data.gateway_tools == nil and {} or policy_data.gateway_tools, true)
-    if not tools then return nil, "launch policy gateway_tools: " .. tostring(tools_error) end
-    local gateway_section: string? = nil
-    if provider_ref and #tools > 0 then
-        if driver_id ~= "codex" then return nil, "a provider configuration with gateway tools is currently limited to the Codex driver" end
-        local address, endpoint_error = gateway_configuration.endpoint()
-        if not address then return nil, endpoint_error or "gateway endpoint" end
-        gateway_section = gateway_configuration.codex_section(address, action_id)
-        local hooks, hooks_error = bounds.ids(policy_data.gateway_hooks == nil and {} or policy_data.gateway_hooks, true)
-        if not hooks then return nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
-        if #hooks > 0 then
-            local codex_hooks, hook_error = gateway_configuration.codex_hooks(address, action_id, hooks)
-            if not codex_hooks then return nil, hook_error or "codex hooks" end
-            gateway_section = gateway_section .. codex_hooks.section
-        end
+    local tools, tools_error = bounds.ids(data.gateway_tools == nil and {} or data.gateway_tools, true)
+    if not tools then return nil, nil, "launch policy gateway_tools: " .. tostring(tools_error) end
+    local hooks, hooks_error = bounds.ids(data.gateway_hooks == nil and {} or data.gateway_hooks, true)
+    if not hooks then return nil, nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
+    table.sort(tools); table.sort(hooks)
+    local gateway: configuration_protocol.GatewayInput? = nil
+    if #tools > 0 then
+        local endpoint, endpoint_error = gateway_configuration.endpoint()
+        if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end
+        gateway = {endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
+            token_environment = gateway_configuration.DESTINATION,
+            hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
+    elseif #hooks > 0 then return nil, nil, "launch policy gateway_hooks requires gateway_tools" end
+    return {provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
+end
+local function configured_home(request: types.LaunchRequest): (string?, string?)
+    local path: string? = nil
+    if request.launch.home_ref and request.session_ref then
+        local key, err = homes.session_key(request.owner_id, request.session_ref)
+        if not key then return nil, err end
+        path = "/" .. homes.SESSIONS .. "/" .. key .. "/home"
+    else
+        local key, err = homes.attempt_key(request.owner_id, request.attempt_id)
+        if not key then return nil, err end
+        path = "/" .. homes.ATTEMPTS .. "/" .. key .. "/home"
     end
-    return rendered_configuration(target, provider_ref, provider_entry, gateway_section, policy_data.fixture == true)
+    return homes.os_path(path)
 end
 -- prepare: validate the admitted request against this host, refuse what the
 -- runtime cannot clean, record intent. Same key and digest replays.
@@ -302,107 +308,38 @@ function M.prepare(value: unknown): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    -- Render from this admission snapshot. The request file must be exactly
-    -- the selected driver's result; a no-provider policy requires that same
-    -- driver to return no file.
     local prepare_pinned, prepare_pin_error = resolver.pin()
     if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
-    local expected, render_error = render_from_pinned(prepare_pinned, request.binding_ref, request.policy_ref, request.action_id)
-    if render_error then return fail("DENIED", render_error) end
-    if expected ~= nil then
-        local given = request.configuration
-        if not given then return fail("DENIED", "launch policy " .. request.policy_ref .. " selects a provider and requires its configuration") end
-        if given.revision ~= expected.revision or given.path ~= expected.path or given.digest ~= expected.digest or given.content ~= expected.content or given.provider_ref ~= expected.provider_ref then
-            return fail("DENIED", "configuration does not match what the activated driver renders")
-        end
-    elseif request.configuration then
-        return fail("DENIED", "launch policy " .. request.policy_ref .. " selects no provider configuration")
+    local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
+    if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
+    local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target)
+    if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
+    if request.configuration_digest then
+        if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
+    elseif configuration.provider_ref or configuration.gateway then
+        return fail("DENIED", "configured launches require the selected configuration digest")
     end
-    local policy_entry = resolver.entry(prepare_pinned, request.policy_ref)
-    local policy_data = policy_entry and bounds.object(policy_entry.data) or {}
-    -- A gateway binding is host-selected the same way: the policy names the
-    -- tool set and the configuration must be exactly what the host's
-    -- endpoint renders for this action.
-    if request.gateway then
-        local gateway = request.gateway
-        local declared, tools_error = bounds.ids(policy_data.gateway_tools == nil and {} or policy_data.gateway_tools, true)
-        if not declared then return fail("DENIED", "launch policy gateway_tools: " .. tostring(tools_error)) end
-        table.sort(declared)
-        local wanted: {string} = {}
-        for index, tool in ipairs(gateway.tools) do wanted[index] = tool end
-        table.sort(wanted)
-        if #declared == 0 or #declared ~= #wanted then return fail("DENIED", "gateway tools are not what the launch policy " .. request.policy_ref .. " admits") end
-        for index, tool in ipairs(declared) do
-            if wanted[index] ~= tool then return fail("DENIED", "gateway tools are not what the launch policy " .. request.policy_ref .. " admits") end
+    local selected_gateway = configuration.gateway
+    local gateway = request.gateway
+    if selected_gateway then
+        if not gateway then return fail("DENIED", "launch policy requires its gateway binding") end
+        if gateway.endpoint ~= selected_gateway.endpoint or gateway.destination ~= selected_gateway.token_environment
+            or gateway.hook_destination ~= selected_gateway.hook_token_environment then
+            return fail("DENIED", "gateway endpoint or credential destinations differ from the host selection")
         end
-        if gateway.destination ~= gateway_configuration.DESTINATION then return fail("DENIED", "gateway destination must be " .. gateway_configuration.DESTINATION) end
-        -- Hook events are the policy's, and their adapters are exactly what
-        -- the endpoint renders: the Claude settings adapter for a launch
-        -- without a provider file, the Codex hooks file and trust hashes
-        -- for one with it.
-        local declared_hooks, hooks_error = bounds.ids(policy_data.gateway_hooks == nil and {} or policy_data.gateway_hooks, true)
-        if not declared_hooks then return fail("DENIED", "launch policy gateway_hooks: " .. tostring(hooks_error)) end
-        table.sort(declared_hooks)
-        local wanted_hooks: {string} = {}
-        for index, event in ipairs(gateway.hooks) do wanted_hooks[index] = event end
-        table.sort(wanted_hooks)
-        if #declared_hooks ~= #wanted_hooks then return fail("DENIED", "gateway hooks are not what the launch policy " .. request.policy_ref .. " admits") end
-        for index, event in ipairs(declared_hooks) do
-            if wanted_hooks[index] ~= event then return fail("DENIED", "gateway hooks are not what the launch policy " .. request.policy_ref .. " admits") end
+        local tools: {string} = {}
+        local hooks: {string} = {}
+        for index, item in ipairs(gateway.tools) do tools[index] = item end
+        for index, item in ipairs(gateway.hooks) do hooks[index] = item end
+        table.sort(tools); table.sort(hooks)
+        if #tools ~= #selected_gateway.tools or #hooks ~= #selected_gateway.hooks then return fail("DENIED", "gateway tools or hooks differ from the host selection") end
+        for index, item in ipairs(tools) do
+            if item ~= selected_gateway.tools[index] then return fail("DENIED", "gateway tools differ from the host selection") end
         end
-        if #gateway.hooks > 0 then
-            if gateway.hook_destination ~= gateway_configuration.HOOK_DESTINATION then return fail("DENIED", "gateway hook destination must be " .. gateway_configuration.HOOK_DESTINATION) end
-            local address, endpoint_error = gateway_configuration.endpoint()
-            if not address then return fail("DENIED", endpoint_error or "gateway endpoint") end
-            if request.configuration then
-                if gateway.hook_configuration then return fail("DENIED", "a launch with a provider configuration carries its hooks in the Codex hooks file, not a settings adapter") end
-                local expected_codex, codex_error = gateway_configuration.codex_hooks(address, request.action_id, gateway.hooks)
-                if not expected_codex then return fail("INVALID", codex_error or "codex hooks") end
-                local codex = gateway.codex_hooks
-                if not codex then return fail("DENIED", "a launch with a provider configuration and hook events needs codex_hooks") end
-                local file = codex.hooks
-                if file.revision ~= expected_codex.hooks.revision or file.path ~= expected_codex.hooks.path or file.digest ~= expected_codex.hooks.digest or file.content ~= expected_codex.hooks.content or file.provider_ref ~= expected_codex.hooks.provider_ref then
-                    return fail("DENIED", "codex hooks file does not match what the host endpoint renders for action " .. request.action_id)
-                end
-                if codex.profile ~= expected_codex.profile then return fail("DENIED", "codex hooks profile must be " .. expected_codex.profile) end
-                for label, digest in pairs(expected_codex.trust) do
-                    if codex.trust[label] ~= digest then return fail("DENIED", "codex hook trust for " .. label .. " does not match what the host renders") end
-                end
-                for label in pairs(codex.trust) do
-                    if expected_codex.trust[label] == nil then return fail("DENIED", "codex hook trust names " .. label .. " which the host does not render") end
-                end
-            else
-                if gateway.codex_hooks then return fail("DENIED", "a launch without a provider configuration carries no codex hooks") end
-                local expected_settings, settings_error = gateway_configuration.claude_hooks(address, request.action_id, gateway.hooks)
-                if not expected_settings then return fail("INVALID", settings_error or "hook configuration") end
-                local settings = gateway.hook_configuration
-                if not settings then return fail("DENIED", "a launch without a provider configuration and with hook events needs the hook configuration adapter") end
-                if settings.revision ~= expected_settings.revision or settings.path ~= expected_settings.path or settings.digest ~= expected_settings.digest or settings.content ~= expected_settings.content or settings.provider_ref ~= expected_settings.provider_ref then
-                    return fail("DENIED", "hook configuration does not match what the host endpoint renders for action " .. request.action_id)
-                end
-            end
-        elseif gateway.hook_configuration or gateway.codex_hooks then
-            return fail("DENIED", "hook adapters need admitted hook events")
+        for index, item in ipairs(hooks) do
+            if item ~= selected_gateway.hooks[index] then return fail("DENIED", "gateway hooks differ from the host selection") end
         end
-        -- The configuration lives either in the provider file (verified
-        -- above with the gateway section) or in the standalone file the
-        -- endpoint renders for this action; never both, never neither.
-        local given = gateway.configuration
-        if request.configuration then
-            if given then return fail("DENIED", "a launch with a provider configuration carries the gateway section there, not a second file") end
-        else
-            if not given then return fail("DENIED", "a launch without a provider configuration needs the gateway configuration file") end
-            local address, endpoint_error = gateway_configuration.endpoint()
-            if not address then return fail("DENIED", endpoint_error or "gateway endpoint") end
-            local expected, render_error = gateway_configuration.projection(address, request.action_id)
-            if not expected then return fail("INVALID", render_error or "gateway configuration") end
-            if given.provider_ref ~= expected.provider_ref or given.revision ~= expected.revision or given.path ~= expected.path or given.digest ~= expected.digest or given.content ~= expected.content then
-                return fail("DENIED", "gateway configuration does not match what the host endpoint renders for action " .. request.action_id)
-            end
-        end
-    elseif policy_data.gateway_tools ~= nil then
-        return fail("DENIED", "launch policy " .. request.policy_ref .. " admits gateway tools the request does not carry")
-    end
+    elseif gateway then return fail("DENIED", "launch policy selects no gateway binding") end
     -- A launch line may allow gateway tools by name only within the admitted
     -- set: neither the client's own allow list nor a tool annotation is
     -- authorization, and a wider list is refused before anything runs.
@@ -435,7 +372,17 @@ function M.prepare(value: unknown): Reply
         if existing.request_digest ~= digest then return fail("CONFLICT", "idempotency key reused with a different request") end
         return succeed(attempt)
     end
-    local encoded, encode_error = json.encode(request)
+    local home_directory, home_error = configured_home(request)
+    if not home_directory then db:release(); return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
+    configuration.home_directory = home_directory
+    local delivery, delivery_error = configuration_protocol.call(configure_target, configuration)
+    if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
+    -- Keep the admitted request unchanged: its digest excludes this private
+    -- delivery, while the durable payload includes the validated driver output.
+    local stored: {[string]: unknown} = {}
+    for key, value in pairs(request) do stored[key] = value end
+    stored.delivery = delivery
+    local encoded, encode_error = json.encode(stored)
     if not encoded then
         db:release()
         return fail("INVALID", "request is not encodable")

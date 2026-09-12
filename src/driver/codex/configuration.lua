@@ -27,6 +27,7 @@ M.MAX_DEVELOPER_INSTRUCTIONS_BYTES = 4096
 M.REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 type Provider = {ref: string, name: string, base_url: string, model: string, reasoning_effort: string?, developer_instructions: string?, loopback_fixture: boolean, digest: string}
 type Projection = {revision: string, path: string, content: string, digest: string, provider_ref: string, provider_digest: string}
+type Gateway = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?}
 local function toml_string(value: string): string
     local escaped = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
     return '"' .. escaped .. '"'
@@ -127,5 +128,65 @@ function M.projection(provider: Provider, gateway_section: string?): (Projection
     local digest, hash_error = hash.sha256(content)
     if hash_error or not digest then return nil, "configuration digest failed" end
     return {revision = M.REVISION, path = M.PATH, content = content, digest = digest, provider_ref = provider.ref, provider_digest = provider.digest}, nil
+end
+-- The gateway descriptor is already selected and validated by the host. This
+-- driver owns the Codex syntax that consumes it; it never performs endpoint
+-- lookup or receives token bytes.
+function M.gateway_section(gateway: Gateway): string
+    local url = ("http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id):gsub("\\", "\\\\"):gsub('"', '\\"')
+    local lines = {"[mcp_servers.bee]", 'url = "' .. url .. '"', 'bearer_token_env_var = "' .. gateway.token_environment .. '"', ""}
+    if #gateway.hooks > 0 then
+        local hook_url = ("http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id .. "/mcp"):gsub("\\", "\\\\"):gsub('"', '\\"')
+        lines[#lines + 1] = "[mcp_servers.bee_hooks]"
+        lines[#lines + 1] = 'url = "' .. hook_url .. '"'
+        lines[#lines + 1] = 'bearer_token_env_var = "' .. (gateway.hook_token_environment :: string) .. '"'
+        lines[#lines + 1] = 'omit_tools_from = ["direct", "deferred", "code_mode"]'
+        lines[#lines + 1] = ""
+    end
+    return table.concat(lines, "\n")
+end
+local HOOK_LABELS = {SessionStart = "session_start", UserPromptSubmit = "user_prompt_submit", PreToolUse = "pre_tool_use", PostToolUse = "post_tool_use", Stop = "stop"}
+local HOOK_TEMPLATES = {
+    SessionStart = {event = "${hook_event_name}", session_id = "${session_id}", source = "${source}"},
+    UserPromptSubmit = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", prompt = "${prompt}"},
+    PreToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_input = "${tool_input}"},
+    PostToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_response = "${tool_response}"},
+    Stop = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", last_assistant_message = "${last_assistant_message}"},
+}
+local function measured(revision: string, path: string, content: string, provider_ref: string): (Projection?, string?)
+    local digest, digest_error = hash.sha256(content)
+    if digest_error or not digest then return nil, "configuration digest failed" end
+    return {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref, provider_digest = ""}, nil
+end
+function M.hook_files(gateway: Gateway, home_directory: string): ({Projection}?, string?)
+    if #gateway.hooks == 0 then return {}, nil end
+    local hooks: {[string]: unknown} = {}
+    local trust: {[string]: string} = {}
+    for _, event in ipairs(gateway.hooks) do
+        local template, label = HOOK_TEMPLATES[event], HOOK_LABELS[event]
+        if not template or not label then return nil, "Codex does not support gateway hook event " .. event end
+        local handler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = 2}
+        hooks[event] = {{hooks = {handler}}}
+        local identity, identity_error = canonical.encode({event_name = label, hooks = {handler}})
+        if not identity then return nil, identity_error end
+        local digest, digest_error = hash.sha256(identity)
+        if digest_error or not digest then return nil, "hook trust digest failed" end
+        trust[label] = "sha256:" .. digest
+    end
+    local content, content_error = canonical.encode({hooks = hooks})
+    if not content then return nil, content_error end
+    local hooks_file, hooks_error = measured("bee.codex-hooks@1", ".codex/hooks.json", content .. "\n", "bee:gateway_endpoint")
+    if not hooks_file then return nil, hooks_error end
+    local labels: {string} = {}
+    for label in pairs(trust) do labels[#labels + 1] = label end
+    table.sort(labels)
+    local lines: {string} = {}
+    for _, label in ipairs(labels) do
+        lines[#lines + 1] = "[hooks.state." .. toml_string(home_directory .. "/.codex/hooks.json:" .. label .. ":0:0") .. "]"
+        lines[#lines + 1] = 'trusted_hash = "' .. trust[label] .. '"'
+    end
+    local trust_file, trust_error = measured("bee.codex-hook-trust@1", ".codex/bee.config.toml", table.concat(lines, "\n") .. "\n", "bee:gateway_endpoint")
+    if not trust_file then return nil, trust_error end
+    return {hooks_file, trust_file}, nil
 end
 return M

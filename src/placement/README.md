@@ -17,10 +17,14 @@ directories and receipts; this module owns none of them.
 - A `LaunchRequest` names the owner and its incarnation, the action and
   attempt, the exact binding and profile measurements, the host launch
   policy (`policy_ref`, a `bee.launch_policy` entry that alone selects a
-  configuration's provider), the driver's declarative launch, resource
+  configuration's provider), the configuration-input digest, the driver's
+  declarative launch, resource
   grants by the owner's `grant_ref`, nonsecret environment values and
   host-resolved references, an optional retained `session_ref`, and the
   cleanup capability the launch requires.
+- Driver arguments and files are private placement output frozen with the
+  intent. The caller cannot supply `delivery`; retries preserve the admitted
+  request digest and recorded output.
 - `measure_executable` measures one absolute host path read-only
   (`bee.executable-measurement@1`: content sha256, kind, interpreter line,
   size). A request may carry the plan's `executable` measurement; the runner

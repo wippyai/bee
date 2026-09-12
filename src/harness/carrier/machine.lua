@@ -147,10 +147,7 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, exchange: Exchange?, configuration: placement_types.Configuration?, gateway: placement_types.Gateway?}
-local function configure(target: string, provider_ref: string?, provider: Object?, gateway_section: string?, fixture: boolean): (placement_types.Configuration?, string?)
-    return configuration_protocol.call(target, {provider_ref = provider_ref, provider = provider, gateway_section = gateway_section, fixture = fixture})
-end
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
@@ -198,41 +195,19 @@ local function measure(request: Request): (Measured?, string?)
         if mismatch then return nil, "permission exchange acceptance: " .. mismatch end
         exchange = {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest, approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
     end
-    -- A policy that admits gateway tools binds the host endpoint's MCP
-    -- configuration for this action into the plan: a Claude Code launch
-    -- gets the standalone user-scope file, a Codex launch gets the section
-    -- of its provider configuration. The binding itself is admitted at
-    -- open, after the durable action and attempt preparation.
+    -- The carrier carries only host-selected configuration inputs. Placement
+    -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
-    local gateway_section: string? = nil
+    local gateway_input: configuration_protocol.GatewayInput? = nil
     if #launch_policy.gateway_tools > 0 then
         local address, endpoint_error = gateway_configuration.endpoint()
         if not address then return nil, "gateway: " .. tostring(endpoint_error) end
-        local hook_events = launch_policy.gateway_hooks
         local hook_destination: string? = nil
-        if #hook_events > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
-        if binding.driver_id == "codex" then
-            gateway_section = gateway_configuration.codex_section(address, request.action_id)
-            local codex_hooks: placement_types.CodexHooks? = nil
-            if #hook_events > 0 then
-                local rendered, hooks_error = gateway_configuration.codex_hooks(address, request.action_id, hook_events)
-                if not rendered then return nil, "gateway hooks: " .. tostring(hooks_error) end
-                gateway_section = gateway_section .. rendered.section
-                codex_hooks = {hooks = {revision = rendered.hooks.revision, path = rendered.hooks.path, content = rendered.hooks.content, digest = rendered.hooks.digest, provider_ref = rendered.hooks.provider_ref}, trust = rendered.trust, profile = rendered.profile}
-            end
-            gateway = {tools = launch_policy.gateway_tools, configuration = nil, destination = gateway_configuration.DESTINATION, hooks = hook_events, hook_destination = hook_destination, hook_configuration = nil, codex_hooks = codex_hooks}
-        else
-            local projection, projection_error = gateway_configuration.projection(address, request.action_id)
-            if not projection then return nil, "gateway configuration: " .. tostring(projection_error) end
-            local hook_configuration: placement_types.Configuration? = nil
-            if #hook_events > 0 then
-                local settings, settings_error = gateway_configuration.claude_hooks(address, request.action_id, hook_events)
-                if not settings then return nil, "gateway hooks: " .. tostring(settings_error) end
-                hook_configuration = {revision = settings.revision, path = settings.path, content = settings.content, digest = settings.digest, provider_ref = settings.provider_ref}
-            end
-            gateway = {tools = launch_policy.gateway_tools, configuration = {revision = projection.revision, path = projection.path, content = projection.content, digest = projection.digest, provider_ref = projection.provider_ref}, destination = gateway_configuration.DESTINATION,
-                hooks = hook_events, hook_destination = hook_destination, hook_configuration = hook_configuration, codex_hooks = nil}
-        end
+        if #launch_policy.gateway_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
+        gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
+            hooks = launch_policy.gateway_hooks, hook_destination = hook_destination}
+        gateway_input = {endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
+            token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
@@ -241,16 +216,18 @@ local function measure(request: Request): (Measured?, string?)
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
-    local configuration, configuration_error = configure(configure_target, launch_policy.provider_ref, provider_entry, gateway_section, launch_policy.fixture)
-    if configuration_error then return nil, configuration_error end
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, exchange = exchange, configuration = configuration, gateway = gateway}, nil
+    local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
+        provider = provider_entry, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
+    if not configuration_digest then return nil, configuration_error end
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, exchange = exchange,
+        configuration_digest = configuration_digest, gateway = gateway}
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
 function M.plan(io: IO, request: Request): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, exchange, configuration, gateway = measured.binding, measured.profile, measured.policy, measured.exchange, measured.configuration, measured.gateway
+    local binding, profile, launch_policy, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.exchange, measured.configuration_digest, measured.gateway
     local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
     if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
     local resume_ref: string? = nil
@@ -355,21 +332,12 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
-    local measured_configuration: {[string]: unknown}? = nil
-    if configuration then measured_configuration = {revision = configuration.revision, path = configuration.path, digest = configuration.digest} end
-    local measured_gateway: {[string]: unknown}? = nil
-    if gateway then
-        measured_gateway = {tools = gateway.tools, destination = gateway.destination, hooks = gateway.hooks}
-        if gateway.configuration then measured_gateway.digest = gateway.configuration.digest end
-        if gateway.hook_configuration then measured_gateway.hooks_digest = gateway.hook_configuration.digest end
-        if gateway.codex_hooks then measured_gateway.hooks_digest = gateway.codex_hooks.hooks.digest end
-    end
-    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = measured_configuration, gateway = measured_gateway})
+    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, launch = launch, configuration = configuration, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
     }

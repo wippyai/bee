@@ -10,6 +10,8 @@ local migrations = require("migrations")
 local resources = require("resources")
 local types = require("types")
 local transitions = require("transitions")
+local request_protocol = require("request_protocol")
+local configuration = require("configuration")
 local M = {}
 M.LEDGER = {table = "bee_placement_schema_migrations", label = "placement"}
 M.MAX_EVIDENCE_PAGE = 64
@@ -88,7 +90,25 @@ function M.request(row: Row): (types.LaunchRequest?, string?)
     if not encoded then return nil, "attempt request is missing" end
     local decoded, err = json.decode(encoded)
     if err or type(decoded) ~= "table" then return nil, "attempt request is unreadable" end
-    return decoded :: types.LaunchRequest, nil
+    -- Persisted JSON is another typed boundary. Decode the original admitted
+    -- request separately from the private delivery callers cannot supply.
+    local stored = decoded :: {[string]: unknown}
+    local admitted: {[string]: unknown} = {}
+    for key, value in pairs(stored) do
+        if key ~= "delivery" then admitted[key] = value end
+    end
+    local request, request_error = request_protocol.decode(admitted)
+    if not request then return nil, "attempt request: " .. tostring(request_error) end
+    -- request_digest measures caller input for retry identity. The stored
+    -- request contains owner-resolved resource grants, so it is not that input.
+    if request.attempt_id ~= row.attempt_id or request.owner_id ~= row.owner_id or request.action_id ~= row.action_id then
+        return nil, "attempt request identity differs from its row"
+    end
+    local delivery, delivery_error = configuration.decode_delivery(stored.delivery)
+    if not delivery then return nil, "attempt delivery: " .. tostring(delivery_error) end
+    local retained: types.LaunchRequest = request
+    retained.delivery = delivery
+    return retained, nil
 end
 local function rollback(tx: sql.Transaction)
     tx:rollback()

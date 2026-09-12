@@ -166,11 +166,12 @@ entries:
   source: file://native_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
-  modules: [funcs, security, process, channel, time, registry, exec, hash]
+  modules: [funcs, security, process, channel, time, registry, exec, hash, json]
   security:
     policies: [bee.placement.native:apply_test_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_store_policy, bee:credential_store_policy, bee:resource_resolve_policy, bee:credential_materialize_policy]
   imports:
     configuration: bee.driver.codex:configuration
+    configuration_protocol: bee.driver:configuration
     test: wippy.test:test
     service: bee.placement.native:service
     store: bee.placement.native:store
@@ -189,3 +190,4 @@ entries:
     store: bee.placement.native:store
     homes: bee.placement.native:homes
     quote: bee.driver.kit:quote
+    configuration_protocol: bee.driver:configuration

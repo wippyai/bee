@@ -132,6 +132,8 @@ entries:
     resources: bee.placement.native:resources
     types: bee.placement:types
     transitions: bee.placement:transitions
+    request_protocol: bee.placement:request
+    configuration: bee.driver:configuration
 - name: capability
   kind: library.lua
   source: file://capability.lua
@@ -183,7 +185,6 @@ entries:
     store: bee.placement.native:store
     resources: bee.placement.native:resources
     homes: bee.placement.native:homes
-    gateway_configuration: bee.gateway:configuration
     types: bee.placement:types
 - name: runner
   kind: process.lua

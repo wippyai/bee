@@ -8,10 +8,9 @@ local sql = require("sql")
 local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
-local gateway_configuration = require("gateway_configuration")
 local types = require("types")
 local M = {}
-type Prepared = {environment: {[string]: string}, working_directory: string}
+type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
     local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
         fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
@@ -104,15 +103,19 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     -- Parents this runner creates in the home for its configuration files.
     local created_parents: {[string]: boolean} = {}
-    if request.configuration then
-        local configuration = request.configuration
-        local written, write_error, replayed = homes.write_protected(selected_home_path, configuration.path, configuration.content, created_parents, retained_home)
+    local delivery = request.delivery
+    if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
+    for _, file in ipairs(delivery.files) do
+        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, file.content, created_parents, retained_home)
         if not written then
             evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
             return refused(write_error or "configuration")
         end
-        evidence(db, attempt_id, "configuration.materialized", configuration.revision .. " " .. configuration.path .. " digest " .. configuration.digest .. " in " .. (replayed and "retained" or "new") .. " home " .. home_key)
+        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
     end
+    local arguments: {string} = {}
+    for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
+    for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     local home_os, home_os_error = homes.os_path(selected_home_path .. "/home")
     if not home_os then
         evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
@@ -146,47 +149,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     -- The gateway token is minted at delivery for the binding this attempt
     -- holds under the attached carrier epoch, written nowhere: the
-    -- host-approved MCP configuration goes into the private home with
-    -- protected creation and names the environment destination the bytes
-    -- fill. Evidence carries the generation, never the bytes.
+    -- driver configuration already names the selected environment
+    -- destination the bytes fill. Evidence carries the generation, never the bytes.
     if request.gateway then
         local gateway = request.gateway
-        -- A standalone MCP configuration goes into the home; a launch whose
-        -- provider configuration already carries the gateway section has none.
-        if gateway.configuration then
-            local configured, configure_error = homes.write_protected(selected_home_path, gateway.configuration.path, gateway.configuration.content, created_parents, retained_home)
-            if not configured then
-                evidence(db, attempt_id, "gateway.refused", "configuration: " .. tostring(configure_error), {execution = "exited"})
-                return refused(configure_error or "gateway configuration")
-            end
-        end
         if generation < 1 then
             evidence(db, attempt_id, "gateway.refused", "the attempt is not attached to a carrier", {execution = "exited"})
             return refused("gateway binding: the attempt is not attached to a carrier")
-        end
-        -- The hook adapters go into the home before the credentials: the
-        -- Claude settings adapter, or the Codex hooks file with its trust
-        -- state written under this home's own path into the profile layer.
-        if gateway.hook_configuration then
-            local configured_hooks, hooks_error = homes.write_protected(selected_home_path, gateway.hook_configuration.path, gateway.hook_configuration.content, created_parents, retained_home)
-            if not configured_hooks then
-                evidence(db, attempt_id, "gateway.refused", "hook configuration: " .. tostring(hooks_error), {execution = "exited"})
-                return refused(hooks_error or "gateway hook configuration")
-            end
-        end
-        if gateway.codex_hooks then
-            local codex = gateway.codex_hooks
-            local hooks_written, hooks_write_error = homes.write_protected(selected_home_path, codex.hooks.path, codex.hooks.content, created_parents, retained_home)
-            if not hooks_written then
-                evidence(db, attempt_id, "gateway.refused", "codex hooks: " .. tostring(hooks_write_error), {execution = "exited"})
-                return refused(hooks_write_error or "codex hooks")
-            end
-            local trust_content = gateway_configuration.codex_trust(home_os .. "/.codex", codex.trust)
-            local trust_written, trust_error = homes.write_protected(selected_home_path, ".codex/" .. codex.profile .. ".config.toml", trust_content, created_parents, retained_home)
-            if not trust_written then
-                evidence(db, attempt_id, "gateway.refused", "codex hook trust: " .. tostring(trust_error), {execution = "exited"})
-                return refused(trust_error or "codex hook trust")
-            end
         end
         local raw, call_error = funcs.call(resources.GATEWAY_MATERIALIZE, {attempt_id = attempt_id, carrier_epoch = generation, binding_id = expected_binding, materialization_key = materialization_key})
         local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string, message: string}?, value: {token: string, hook_token: string?, generation: number, binding: {binding_id: string}}?} or nil
@@ -199,15 +168,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         environment[gateway.destination] = materialized.token
         if gateway.hook_destination and materialized.hook_token then environment[gateway.hook_destination] = materialized.hook_token end
         gateway_binding = materialized.binding.binding_id
-        local configured_as = "configuration in the provider file"
-        if gateway.configuration then configured_as = "configuration " .. gateway.configuration.revision .. " " .. gateway.configuration.path .. " digest " .. gateway.configuration.digest end
-        evidence(db, attempt_id, "gateway.materialized", "binding " .. materialized.binding.binding_id .. " credential generation " .. tostring(materialized.generation) .. " under carrier epoch " .. tostring(generation) .. " into " .. gateway.destination .. "; " .. configured_as)
+        evidence(db, attempt_id, "gateway.materialized", "binding " .. materialized.binding.binding_id .. " credential generation " .. tostring(materialized.generation) .. " under carrier epoch " .. tostring(generation) .. " into " .. gateway.destination .. "; driver configuration frozen at admission")
     end
     local work_dir, work_dir_error = resolve_work_dir(request, home_os)
     if not work_dir then
         evidence(db, attempt_id, "workdir.failed", work_dir_error or "working directory", {execution = "exited"})
         return refused(work_dir_error or "working directory")
     end
-    return {environment = environment, working_directory = work_dir}, nil, gateway_binding
+    return {environment = environment, working_directory = work_dir, arguments = arguments}, nil, gateway_binding
 end
 return M

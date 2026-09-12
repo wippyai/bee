@@ -33,7 +33,7 @@ entries:
   method: run
   modules: [exec, funcs, security, sql]
   imports:
-    configuration: bee.gateway:configuration
+    configuration: bee.driver.codex:configuration
 - name: drainer
   kind: process.lua
   source: file://drainer.lua

@@ -146,7 +146,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     end
 
     local argv: {string} = {request.launch.executable}
-    for _, argument in ipairs(request.launch.argv) do argv[#argv + 1] = argument end
+    for _, argument in ipairs(prepared.arguments) do argv[#argv + 1] = argument end
     local child, exec_error = executor:exec(quote.line(argv), {work_dir = prepared.working_directory, env = prepared.environment,
         pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = row.capability == "process_group"})
     if not child then

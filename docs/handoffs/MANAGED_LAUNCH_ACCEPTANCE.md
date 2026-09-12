@@ -12,9 +12,12 @@ The public `bee agent` picker now filters host-defined window definitions before
 admission: the selected policy must contain an absolute executable binding. It
 does not infer the driver's prepared executable; the carrier applies the exact
 policy binding on the prepared launch path. The picker reads declarations only
-and never invokes provider code. Once the user selects a plan, admission invokes the binding's existing empty-scope
-`configure` boundary before it creates a thread, so a Codex policy without a
-provider refuses without launch work. The plan digest includes the selected
+and never invokes provider code. Placement invokes the binding's existing
+empty-scope `configure` boundary with its actual HOME and gateway selection,
+then freezes the validated delivery before recording native execution intent.
+A Codex policy without a provider refuses before a native attempt or PTY is
+created. Logical thread admission and resource grants may already exist; they
+are not evidence of a running child. The plan digest includes the selected
 provider entry, so a changed endpoint or model refuses the stale selection
 before effects. A host can compose the real native
 Claude Code and Codex PTY definitions with the

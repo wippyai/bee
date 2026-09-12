@@ -7,12 +7,13 @@ local time = require("time")
 local security = require("security")
 local funcs = require("funcs")
 local window = require("window")
+local registry = require("registry")
 local OWNER = "bee.window.native.owner"
 local FOREIGN = "bee.window.native.foreign"
 local POLICY = "bee.window_native:launch_policy"
 local function request(attempt_id: string): {[string]: unknown}
     return {idempotency_key = "window-key-" .. attempt_id, owner_id = OWNER, owner_incarnation = 1,
-        action_id = "window-action-" .. attempt_id, attempt_id = attempt_id, binding_ref = "bee.driver.claude:binding",
+        action_id = "window-action-" .. attempt_id, attempt_id = attempt_id, binding_ref = "bee.window_native:binding",
         policy_ref = POLICY, profile_id = "window", binding_digest = string.rep("a", 64), profile_digest = string.rep("b", 64),
         launch = {executable = "sh", argv = {"-c", "IFS= read -r line; printf 'WINDOW:%s\\n' \"$line\"; stty size; sleep 1"}, environment = {}, working_directory_ref = nil, readiness = "none"},
         resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
@@ -53,6 +54,14 @@ local function wait_for(view: tty.Viewport, text: string, timeout_ms: integer): 
     return contains(snapshot)
 end
 local function run()
+    local activation = assert(registry.get("bee:harness_activation"))
+    local data = activation.data :: {[string]: unknown}
+    local bindings = data.bindings :: {string}
+    bindings[#bindings + 1] = "bee.window_native:binding"
+    local changes = registry.snapshot():changes()
+    changes:update(activation)
+    local applied, apply_error = changes:apply()
+    if not applied then error(tostring(apply_error)) end
     assert(window.open)
     local view = assert(tty.viewport({width = 40, height = 12}))
     local parent = process.pid()

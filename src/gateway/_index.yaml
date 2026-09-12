@@ -60,10 +60,7 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, json, registry]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+  modules: [registry]
 - name: hooks
   kind: library.lua
   source: file://hooks.lua

@@ -81,8 +81,11 @@ entries:
   method: normalize
 - name: configure
   kind: function.lua
-  source: file://driver.lua
+  source: file://configure.lua
   method: configure
+  modules: [hash]
+  imports:
+    configuration: bee.driver:configuration
 - name: fixture_policy
   kind: security.policy
   meta: {type: test_support}

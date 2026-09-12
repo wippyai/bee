@@ -25,7 +25,7 @@ local policy = require("policy")
 local claude_launch = require("claude_launch")
 local codex_launch = require("codex_launch")
 local codex_configuration = require("codex_configuration")
-local gateway_configuration = require("gateway_configuration")
+local configuration = require("configuration")
 local quote = require("quote")
 local ACTOR = "bee.test.gateway_harness"
 local CLAUDE_POLICY = "bee.harness.catalog:claude_gateway_policy"
@@ -38,6 +38,8 @@ local CLAUDE_BINDING = "bee.driver.claude:binding"
 local CODEX_BINDING = "bee.driver.codex:binding"
 local CLAUDE_SENTINEL = "sk-ant-sentinel-bee-000"
 local CODEX_SENTINEL = "sk-sentinel-bee-000"
+local GATEWAY_TOKEN = "BEE_GATEWAY_TOKEN"
+local HOOK_TOKEN = "BEE_GATEWAY_HOOK_TOKEN"
 type Object = {[string]: unknown}
 type Outcome = {value: Object?, error: string?}
 local counter = 0
@@ -161,6 +163,22 @@ local function endpoint_address(): string
     if not entry then error("gateway endpoint entry") end
     return tostring((entry.data :: Object).address)
 end
+local function gateway_input(address: string, action_id: string, hooks: {string}?): configuration.GatewayInput
+    return {endpoint = address, action_id = action_id, tools = {"thread_read", "thread_wait"}, hooks = hooks or {},
+        token_environment = GATEWAY_TOKEN, hook_token_environment = hooks and #hooks > 0 and HOOK_TOKEN or nil}
+end
+local function codex_gateway(input: configuration.GatewayInput): codex_configuration.Gateway
+    return {endpoint = input.endpoint, action_id = input.action_id, tools = input.tools, hooks = input.hooks,
+        token_environment = input.token_environment, hook_token_environment = input.hook_token_environment}
+end
+local function claude_delivery(input: configuration.GatewayInput): configuration.Delivery
+    local delivery, delivery_error = configuration.call("bee.driver.claude:configure", {fixture = false, gateway = input})
+    if not delivery then error(tostring(delivery_error)) end
+    return delivery
+end
+local function append_delivery(argv: {string}, delivery: configuration.Delivery)
+    for _, item in ipairs(delivery.arguments) do argv[#argv + 1] = item end
+end
 local function open_gateway()
     call("bee.gateway:open", {address = endpoint_address()})
 end
@@ -247,9 +265,9 @@ end
 local function leak_free(text: string, label: string, sentinel_allowed: boolean?)
     for bearer in text:gmatch("Bearer%s+([^%s\\\"]+)") do
         local sentinel = bearer == CLAUDE_SENTINEL or bearer == CODEX_SENTINEL
-        if bearer ~= "${" .. gateway_configuration.DESTINATION .. "}" and not (sentinel_allowed and sentinel) then error(label .. " carries a bearer value") end
+        if bearer ~= "${" .. GATEWAY_TOKEN .. "}" and not (sentinel_allowed and sentinel) then error(label .. " carries a bearer value") end
     end
-    if text:find(gateway_configuration.DESTINATION .. "=", 1, true) then error(label .. " carries the token destination assignment") end
+    if text:find(GATEWAY_TOKEN .. "=", 1, true) then error(label .. " carries the token destination assignment") end
     if not sentinel_allowed and (text:find(CLAUDE_SENTINEL, 1, true) or text:find(CODEX_SENTINEL, 1, true)) then error(label .. " carries a sentinel key") end
 end
 type Harness = {name: string, bin: string, binding: string, policy: string, source: string, provider: string, credential: string, sentinel: string}
@@ -372,14 +390,13 @@ local function without_variable(harness: Harness)
     local environment: {[string]: string} = {PATH = "/usr/bin:/bin", HOME = home}
     local stdin: string? = nil
     if harness.name == "claude" then
-        local projection, projection_error = gateway_configuration.projection(address, action_id)
-        if not projection then error(projection_error or "gateway projection missing") end
-        write_file(root .. "/home/" .. projection.path, projection.content)
+        local delivery = claude_delivery(gateway_input(address, action_id, nil))
         local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(decode_error or "Claude launch request missing") end
         local specification = claude_launch.specification(decoded)
         argv[1] = harness.bin
-        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
+        append_delivery(argv, delivery)
+        for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
@@ -388,13 +405,13 @@ local function without_variable(harness: Harness)
         (provider_entry.data :: Object).base_url = "http://127.0.0.1:" .. port .. "/v1"
         local provider, provider_error = codex_configuration.decode(PROVIDER, provider_entry :: {[string]: unknown})
         if not provider then error(provider_error or "Codex provider missing") end
-        local content = codex_configuration.render(provider, gateway_configuration.codex_section(address, action_id))
+        local content = codex_configuration.render(provider, codex_configuration.gateway_section(codex_gateway(gateway_input(address, action_id, nil))))
         write_file(root .. "/home/.codex/config.toml", content)
         local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(decode_error or "Codex launch request missing") end
         local specification = codex_launch.specification(decoded)
         argv[1] = harness.bin
-        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
+        for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL
@@ -500,20 +517,14 @@ local function hooks_through_gateway(harness: Harness)
     local argv: {string} = {}
     local environment: {[string]: string} = {PATH = "/usr/bin:/bin", HOME = home, BEE_GATEWAY_TOKEN = tostring(minted.token), BEE_GATEWAY_HOOK_TOKEN = tostring(minted.hook_token)}
     local stdin: string? = nil
-    local hook_url = "http://" .. address .. "/hook/" .. action_id
     if harness.name == "claude" then
-        local projection, projection_error = gateway_configuration.projection(address, action_id)
-        if not projection then error(tostring(projection_error)) end
-        write_file(root .. "/home/" .. projection.path, projection.content)
-        local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. "BEE_GATEWAY_HOOK_TOKEN}"}, allowedEnvVars = {"BEE_GATEWAY_HOOK_TOKEN"}, timeout = 2}
-        local settings: Object = {hooks = {}, allowedHttpHookUrls = {hook_url}, httpHookAllowedEnvVars = {"BEE_GATEWAY_HOOK_TOKEN"}}
-        for _, event in ipairs(HOOK_EVENTS) do (settings.hooks :: Object)[event] = {{matcher = "", hooks = {handler}}} end
-        write_file(root .. "/home/.claude/settings.json", json.encode(settings) or "{}")
+        local delivery = claude_delivery(gateway_input(address, action_id, HOOK_EVENTS))
         local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(tostring(decode_error)) end
         local specification = claude_launch.specification(decoded)
         argv[1] = harness.bin
-        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
+        append_delivery(argv, delivery)
+        for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
@@ -522,31 +533,20 @@ local function hooks_through_gateway(harness: Harness)
         (provider_entry.data :: Object).base_url = "http://127.0.0.1:" .. port .. "/v1"
         local provider, provider_error = codex_configuration.decode(PROVIDER, provider_entry :: {[string]: unknown})
         if not provider then error(tostring(provider_error)) end
-        local section = gateway_configuration.codex_section(address, action_id) .. table.concat({"[mcp_servers.bee_hooks]", 'url = "' .. hook_url .. '/mcp"', 'bearer_token_env_var = "BEE_GATEWAY_HOOK_TOKEN"', 'omit_tools_from = ["direct", "deferred", "code_mode"]', ""}, "\n")
-        local content = codex_configuration.render(provider, section)
+        local input = gateway_input(address, action_id, HOOK_EVENTS)
+        local codex_input = codex_gateway(input)
+        local content = codex_configuration.render(provider, codex_configuration.gateway_section(codex_input))
         write_file(root .. "/home/.codex/config.toml", content)
-        local templates: Object = {
-            SessionStart = {event = "${hook_event_name}", session_id = "${session_id}", source = "${source}"},
-            UserPromptSubmit = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", prompt = "${prompt}"},
-            PreToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_input = "${tool_input}"},
-            PostToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_response = "${tool_response}"},
-            Stop = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", last_assistant_message = "${last_assistant_message}"},
-        }
-        local hooks_file: Object = {}
-        for event, template in pairs(templates) do hooks_file[event] = {{matcher = "", hooks = {{type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = 2}}}} end
-        write_file(root .. "/home/.codex/hooks.json", json.encode({hooks = hooks_file}) or "{}")
+        local files, files_error = codex_configuration.hook_files(codex_input, home)
+        if not files then error(tostring(files_error)) end
+        for _, file in ipairs(files) do write_file(root .. "/home/" .. file.path, file.content) end
         local hashes = drive_app_server(home .. "/.codex", work)
-        local trust: {string} = {}
-        for key, hash_value in pairs(hashes) do
-            trust[#trust + 1] = '[hooks.state."' .. key .. '"]'
-            trust[#trust + 1] = 'trusted_hash = "' .. hash_value .. '"'
-        end
-        write_file(root .. "/home/.codex/config.toml", content .. table.concat(trust, "\n") .. "\n")
-        local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}})
+        if next(hashes) == nil then error("codex app-server listed no generated hooks") end
+        local decoded, decode_error = codex_launch.decode({profile_id = "batch", brief = "read the thread", sandbox = "read-only", gateway_tools = {"thread_read", "thread_wait"}, gateway_hooks = HOOK_EVENTS})
         if not decoded then error(tostring(decode_error)) end
         local specification = codex_launch.specification(decoded)
         argv[1] = harness.bin
-        for index, item in ipairs(specification.argv) do argv[index + 1] = item end
+        for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
         environment.OPENAI_API_KEY = CODEX_SENTINEL

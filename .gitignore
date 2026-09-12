@@ -9,3 +9,4 @@
 __pycache__/
 *.pyc
 *.log
+/tests/fixtures/harness/bin/gateway-client

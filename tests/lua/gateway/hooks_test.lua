@@ -3,8 +3,10 @@
 -- classification of Codex request metadata.
 local test = require("test")
 local json = require("json")
+local funcs = require("funcs")
 local hooks = require("hooks")
 local configuration = require("configuration")
+local codex_configuration = require("codex_configuration")
 type Object = {[string]: unknown}
 local function define_tests()
     test.describe("Gateway hooks", function()
@@ -77,12 +79,17 @@ local function define_tests()
             local _, unknown_event = hooks.normalize("Notification", cleaned)
             test.eq(unknown_event, "event Notification is not in the hook catalog")
         end)
-        test.it("renders the hook adapters both harnesses consume, with Codex trust hashes as the pinned executable computes them", function()
-            local events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"}
-            local claude, claude_error = configuration.claude_hooks("127.0.0.1:18790", "act-1", events)
+        test.it("renders driver-owned hook delivery with Codex trust hashes as the pinned executable computes them", function()
+            local events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
+            local gateway: configuration.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = events, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
+            local raw, call_error = funcs.call("bee.driver.claude:configure", {fixture = false, gateway = gateway})
+            if call_error then error(tostring(call_error)) end
+            local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
             if not claude then error(tostring(claude_error)) end
-            test.eq(claude.path, ".claude/settings.json")
-            local settings = json.decode(claude.content) :: Object
+            local settings_json: string? = nil
+            for index, argument in ipairs(claude.arguments) do if argument == "--settings" then settings_json = claude.arguments[index + 1] end end
+            if not settings_json then error("Claude delivery has no --settings") end
+            local settings = json.decode(settings_json) :: Object
             test.eq(#(settings.allowedHttpHookUrls :: {string}), 1)
             test.eq((settings.allowedHttpHookUrls :: {string})[1], "http://127.0.0.1:18790/hook/act-1")
             test.eq((settings.httpHookAllowedEnvVars :: {string})[1], "BEE_GATEWAY_HOOK_TOKEN")
@@ -91,13 +98,15 @@ local function define_tests()
             test.eq(handler.type, "http")
             test.eq(handler.timeout, 2)
             test.eq((handler.headers :: Object).Authorization, "Bearer ${BEE_GATEWAY_HOOK_TOKEN}")
-            test.is_nil(claude.content:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true))
-            local codex, codex_error = configuration.codex_hooks("127.0.0.1:18790", "act-1", events)
-            if not codex then error(tostring(codex_error)) end
-            test.is_true(codex.section:find('url = "http://127.0.0.1:18790/hook/act-1/mcp"', 1, true) ~= nil)
-            test.is_true(codex.section:find('omit_tools_from = ["direct", "deferred", "code_mode"]', 1, true) ~= nil)
-            test.eq(codex.hooks.path, ".codex/hooks.json")
-            local file = json.decode(codex.hooks.content) :: Object
+            test.is_nil(settings_json:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true))
+            local codex_gateway: codex_configuration.Gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = gateway.tools, hooks = gateway.hooks, token_environment = gateway.token_environment, hook_token_environment = gateway.hook_token_environment}
+            local section = codex_configuration.gateway_section(codex_gateway)
+            test.is_true(section:find('url = "http://127.0.0.1:18790/hook/act-1/mcp"', 1, true) ~= nil)
+            test.is_true(section:find('omit_tools_from = ["direct", "deferred", "code_mode"]', 1, true) ~= nil)
+            local files, files_error = codex_configuration.hook_files(codex_gateway, "/private/home")
+            if not files then error(tostring(files_error)) end
+            test.eq(files[1].path, ".codex/hooks.json")
+            local file = json.decode(files[1].content) :: Object
             test.is_nil((file.hooks :: Object).SessionEnd)
             test.is_true((file.hooks :: Object).PreToolUse ~= nil)
             -- Hashes as codex 0.153.4's app-server listed them for these
@@ -106,10 +115,13 @@ local function define_tests()
             local expected = {pre_tool_use = "sha256:49922a7e9c21cfd3b33757ece1acf3ac24404dc6cc15b6bfde57f1ef3085f171", post_tool_use = "sha256:f2dd2061654a30da6700d45e61a8a65873597b348755a9d2c9a575bc504dbdf1",
                 session_start = "sha256:ab1e5b255471b1fe97946ffec67fda9804e802a644677734d45bef4e0d86113e", user_prompt_submit = "sha256:55863800e78ae17904e7c0f5b587d603cf2caebe4324eb8a730b5b48bbec9ced",
                 stop = "sha256:2933c4dff81f04081d3cbfa40baf0db619a61586ea54da130c5b10bf29c9066c"}
-            for label, digest in pairs(expected) do test.eq(codex.trust[label], digest) end
-            local trust = configuration.codex_trust("/private/home/.codex", codex.trust)
+            local trust = files[2].content
             test.is_true(trust:find('[hooks.state."/private/home/.codex/hooks.json:stop:0:0"]', 1, true) ~= nil)
             test.is_true(trust:find(expected.stop, 1, true) ~= nil)
+            local unsupported_gateway: codex_configuration.Gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = gateway.tools, hooks = {"SessionEnd"}, token_environment = gateway.token_environment, hook_token_environment = gateway.hook_token_environment}
+            local unsupported, unsupported_error = codex_configuration.hook_files(unsupported_gateway, "/private/home")
+            test.is_nil(unsupported)
+            test.eq(unsupported_error, "Codex does not support gateway hook event SessionEnd")
         end)
         test.it("classifies Codex request metadata as hook engine, model, mixed or unclassified", function()
             test.eq(hooks.classify({threadId = "t", progressToken = 1}), "hook_engine")

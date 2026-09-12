@@ -12,6 +12,7 @@ local hash = require("hash")
 local time = require("time")
 local exec = require("exec")
 local quote = require("quote")
+local configuration_protocol = require("configuration_protocol")
 
 local OWNER = "bee.test.third_driver"
 local DIGEST = string.rep("b", 64)
@@ -111,12 +112,32 @@ local function provider_configuration(): {[string]: string}
     local digest = assert(hash.sha256(content))
     return {revision = "bee.fixture-agent-config@1", path = ".fixture-agent/provider.json", content = content, digest = digest, provider_ref = PROVIDER}
 end
+local function provider_configuration_digest(): string
+    local provider = registry.get(PROVIDER)
+    if not provider then error("provider entry") end
+    local digest, digest_error = configuration_protocol.digest({provider_ref = PROVIDER, provider = provider, fixture = true}, "bee.placement.native:fixture_agent_configure")
+    if not digest then error(tostring(digest_error)) end
+    return digest
+end
+local function assert_provider_argument_isolated()
+    local provider = registry.get(PROVIDER)
+    if not provider then error("provider entry") end
+    local held_data = provider.data
+    if type(held_data) ~= "table" then error("provider data") end
+    local delivery, delivery_error = configuration_protocol.call("bee.placement.native:fixture_agent_configure", {provider_ref = PROVIDER, provider = provider, fixture = true})
+    if not delivery then error(tostring(delivery_error or "fixture configuration failed")) end
+    test.is_true(#delivery.files == 1)
+    -- The fixture mutates request.provider.data. Check the exact table held by
+    -- this caller after the cross-function call, rather than re-reading the
+    -- registry (which may itself return a copy).
+    test.is_nil((held_data :: {[string]: unknown}).mutation_probe)
+end
 
 local function launch(attempt_id: string): {[string]: unknown}
     return {idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = attempt_id,
         binding_ref = BINDING, policy_ref = POLICY, profile_id = "batch", binding_digest = DIGEST, profile_digest = DIGEST,
         launch = {executable = "sh", argv = {"-c", "test -s \"$HOME/.fixture-agent/provider.json\""}, environment = {}, working_directory_ref = "project", readiness = "none"},
-        configuration = provider_configuration(), resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
+        configuration_digest = provider_configuration_digest(), resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
 end
 
@@ -199,12 +220,19 @@ local function define_tests()
             local prepared_attempt_id: string? = nil
             local body_ok, body_error = pcall(function()
                 set_activation(true)
+                assert_provider_argument_isolated()
                 local forged = launch(fresh("attempt"))
-                local configuration = forged.configuration :: {[string]: unknown}
-                local content = (configuration.content :: string) .. "forged=true\n"
-                configuration.content = content
-                configuration.digest = assert(hash.sha256(content))
-                denied_without_intent(forged, "does not match")
+                forged.delivery = {arguments = {}, files = {}}
+                local forged_refused = call(OWNER, "prepare", forged)
+                test.is_false(forged_refused.ok)
+                test.eq(forged_refused.error and forged_refused.error.code, "INVALID")
+                test.is_true(tostring(forged_refused.error and forged_refused.error.message):find("delivery", 1, true) ~= nil)
+                local forged_db, forged_open_error = store.open()
+                if not forged_db then error(forged_open_error or "placement store") end
+                local forged_attempt, forged_read_error = store.attempt(forged_db, forged.attempt_id :: string)
+                forged_db:release()
+                if forged_read_error then error(forged_read_error) end
+                test.is_nil(forged_attempt)
 
                 set_activation(false)
                 local inactive = launch(fresh("attempt"))
@@ -228,7 +256,11 @@ local function define_tests()
                 test.is_true(bytes ~= nil and tonumber(bytes) ~= nil and tonumber(bytes) > 0)
                 test.is_true(path:find("/.fixture-agent/provider.json", 1, true) ~= nil)
                 test.is_false(path:find("/.codex/config.toml", 1, true) ~= nil)
-                test.eq(run_command({"cat", path}), (request.configuration :: {[string]: unknown}).content)
+                test.eq(run_command({"cat", path}), provider_configuration().content)
+                local current_provider = registry.get(PROVIDER)
+                local current_data = current_provider and current_provider.data
+                test.is_true(type(current_data) == "table")
+                test.is_nil((current_data :: {[string]: unknown}).mutation_probe)
 
                 wait_for_exit(prepared.attempt_id :: string)
                 local cleaned = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})

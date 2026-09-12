@@ -6249,3 +6249,21 @@ background sweep to prove exit before identity removal. It now always requires
 uncertainty and refused cleanup. Full combined `make check` session 75912 is
 still running at `bee-evidence/0912/four-driver-credentials-full-check.log`;
 unit success does not yet constitute the full foundation gate.
+
+### 2026-09-12 Codex: four-driver global refresh
+
+Wolfden checkpoint 1379 records installed global `78aae0b0`, built from frozen
+production `0e59a16` with unchanged runtime/native pins. Executable, complete
+client and installed-version upgrade checks pass. All 19 packs/633 entries and
+matching license/provenance files were verified; tests and fixtures are absent.
+The 677-case unit gate and corrected hook/module fixtures pass; the broad
+`make check` desktop remainder is still running. Current details and evidence
+are in [GLOBAL_BUILD.md](GLOBAL_BUILD.md). Running nodes were not restarted.
+
+The Agent picker still needs production profiles. Retained-login delivery is in
+an isolated integration worktree, not this global build. Review found and fixed
+file bytes falling through to environment assignment. A complete, authenticated
+raw-child-environment probe now passes 28/28 placement cases and catches an
+injected copy of that bug. Earlier negative-control attempts failed for fixture
+reasons and are not regression evidence. Automatic login discovery, managed MCP
+activation and Docker placement remain unfinished.

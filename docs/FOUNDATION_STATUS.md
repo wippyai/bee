@@ -1,5 +1,13 @@
 # Foundation status
 
+The September 12 global build `78aae0b0` includes four separately packaged harness
+drivers (Claude, Codex, Agy and Grok), with executable/client/upgrade acceptance.
+The Agent picker still needs default production profiles. File-login delivery,
+managed MCP activation and Docker are not complete. The broad source check is
+still running after 677 passing unit cases and corrected module/hook fixtures.
+See [the current global build](handoffs/GLOBAL_BUILD.md) for exact evidence and
+limits; older checkpoints below describe earlier installations.
+
 The September 12 agent-integration branch composes Claude, Codex, Agy and Grok
 as separate driver packs under the shared driver contract. The credential broker
 also supports bounded host-admitted login files, with an append-only populated

@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.hub_inspect_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: inspect_policy
+  kind: security.policy
+  policy:
+    actions: [hub.versions.open]
+    resources: userspace/docker
+    effect: allow
+- name: registry_read_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: '*'
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [hub, logger, registry]
+  imports:
+    inspect: bee.hub:inspect
+  security:
+    policies: [bee.hub_inspect_probe:inspect_policy, bee.hub_inspect_probe:registry_read_policy]
+  meta:
+    command:
+      name: hub-inspect-probe
+      security:
+        actor: {id: bee.hub_inspect_probe}

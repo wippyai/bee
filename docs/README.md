@@ -27,6 +27,7 @@ package these same pages with status and version, not maintain a second copy.
 | Namespaces, contracts and build order for threads, approvals and drivers | [Component layout](COMPONENT_LAYOUT.md) |
 | How overlays and Hub modules add drivers, transports, channels, agents and tools | [Registry extension](REGISTRY_EXTENSION.md) |
 | Independent governance implementation plan and runtime admission gate | [Governance implementation](GOVERNANCE_IMPLEMENTATION.md) |
+| Exact Hub package inspection and remaining installation gates | [Hub installation](HUB.md) |
 | Launch definitions, remote topology, lifecycle states, pause and status | [Launch routing](LAUNCH_ROUTING.md) |
 | Docker placement, workspace resources, dependency chain, thread subscriptions | [Placement and subscriptions](PLACEMENT_AND_SUBSCRIPTIONS.md) |
 | The ordered build with a proof per step | [Build sequence](BUILD_SEQUENCE.md) |

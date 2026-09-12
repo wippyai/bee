@@ -2,6 +2,11 @@ WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
 .PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module gateway-check pack check
 setup: native-tools
+.PHONY: hub-inspect-check
+# Explicit live-Hub proof; ordinary checks do not require Hub network access.
+hub-inspect-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/hub_inspect.go -runtime "$(abspath $(WIPPY))"
 .PHONY: sync-check
 sync-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/sync_module.py

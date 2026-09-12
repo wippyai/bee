@@ -13,7 +13,7 @@ local window_chrome = require("window_chrome")
 local surface = require("surface")
 local connection = require("connection")
 local display_transfer = require("display_transfer")
-type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string}
+type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string, width: (string) -> integer}
 local text = tty.text :: Text
 type Cursor = {x: integer, y: integer, visible: boolean}
 type Content = {rows: {string}, cursor: Cursor?}
@@ -21,6 +21,30 @@ type TabHit = {id: string, x: integer, width: integer, action: string?}
 type Frame = {rows: {string}, tabs: {TabHit}, cursor: Cursor}
 local M = {}
 local function styled(style: string, text: string): string return style .. text .. "\27[0m" end
+
+-- The empty desktop keeps the Bee mark as its focal point.  Put the first
+-- useful action immediately below it on normal terminals, then reduce the
+-- copy before it competes with the mark on narrow displays.
+local function empty_guide(canvas: tty.Canvas, width: integer, height: integer, theme: appearance.Theme)
+    local lines: {string} = {}
+    if width >= 44 and height >= 14 then
+        lines = {"F1 or BEE menu to open an application", "Tools → Modules manages components"}
+    elseif width >= 24 and height >= 9 then
+        lines = {"F1 / BEE: open apps"}
+    elseif width >= 16 and height >= 5 then
+        lines = {"F1: menu"}
+    end
+    if #lines == 0 then return end
+
+    local y = math.floor(math.max(2, (height - #lines) / 2))
+    if height >= 14 then y = math.floor(math.max(2, (height - 6) / 2)) + 7 end
+    if y + #lines - 1 > height then y = height - #lines + 1 end
+    local style = appearance.style(theme.muted, theme.ground)
+    for index, line in ipairs(lines) do
+        local x = math.floor(math.max(1, (width - text.width(line)) / 2 + 1))
+        canvas:put(x, y + index - 1, styled(style, line), math.floor(math.max(0, width - x + 1)))
+    end
+end
 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
@@ -37,7 +61,10 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local selected_span = active_selection and selection.range(active_selection) or nil
     local selected_style = appearance.style(appearance.selection_text(theme), theme.accent)
     chrome.background(canvas, width, height, prefs)
-    if #model.visible(scene) == 0 then chrome.welcome(canvas, width, height, prefs, false) end
+    if #model.visible(scene) == 0 then
+        chrome.welcome(canvas, width, height, prefs, false)
+        empty_guide(canvas, width, height, theme)
+    end
     for _, win in ipairs(model.visible(scene)) do
         local rect = layout.rectangle(scene, win, capture, preview)
         local body = layout.interior(win, rect)

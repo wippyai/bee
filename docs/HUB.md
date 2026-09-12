@@ -107,19 +107,24 @@ broker, app process and presenter from source and a pack. Keyword clearing,
 independent search, multiline README reading, details, JSON parameter keyboard input, plan/review/cancel/
 confirm, completed receipt, F12, resize and shutdown pass. Package details have README and Versions panes (H/V); arrow keys and the mouse
 wheel scroll the README. Installed selection stays in its current list. Change
-review lists changed packages before summarizing unchanged modules. These UI
-changes are source work pending the next standalone installation.
+review lists changed packages before summarizing unchanged modules. The standalone Modules UI includes these changes.
 A published or missing
-receipt state is not displayed as completion. It does not prove the entire confirmation/apply UI against live
-Hub; the real mutation API is covered separately above.
+receipt state is not displayed as completion. The separate native lifecycle check covers confirmation/apply against live Hub.
 
 `make hub-preview-check` reads public `keeper/keeper@0.5.83` as an uninstalled
 test artifact. Root/nested resource listing, chunked file reads, EOF, traversal
 and digest mismatch rejection pass with unchanged registry history. This package
 is test data only; Bee does not install or depend on Keeper.
 
-Complete confirmation/apply UI, migration/recovery and distribution acceptance
-remain release work.
+The bundled planner preserves resident modules outside the dependency-root
+closure. A fresh embedded deployment has no persisted version resolution; the
+first publication may populate that metadata. Verification requires each
+retained module to remain present and checks every version captured by the plan.
+`make native-modules-lifecycle-check BEE_BINARY=...` passes real installation,
+historical-version update, removal, repeated-removal refusal and reopen against
+the same registry state. All original bundled package bytes remain unchanged;
+content-addressed cache aliases may be added. Migration execution and interrupted
+publication recovery remain unfinished.
 
 The component follows Keeper's application-level planning and replan-before-apply
 flow without importing Keeper. Runtime changes are outside this lane; earlier

@@ -50,6 +50,7 @@ end
 function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
+    local controlled = inventory.dependency_members(installed)
     local raw_state = bounds.object(state)
     if not raw_state or type(raw_state.entries) ~= "table" then return nil, "invalid captured registry" end
     local root_id, root_error = M.root_id(request.component)
@@ -67,6 +68,11 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     if existing and existing.id ~= root_id then return nil, "component is managed by host configuration at " .. existing.id end
     if request.action == "install" and existing then return nil, "component already has an installed root; choose update" end
     if request.action ~= "install" and not existing then return nil, "component has no installed Hub root" end
+    for _, item in ipairs(installed.modules) do
+        if item.component == request.component and not controlled[item.component] and (item.entries > 0 or item.version ~= "") then
+            return nil, "component is managed by the host deployment"
+        end
+    end
     if request.action == "uninstall" then
         for _, item in ipairs(installed.modules) do
             if item.component == request.component and #item.used_by > 0 then
@@ -75,6 +81,21 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         end
     else
         roots[#roots + 1] = {component = request.component, version = request.version, parameters = request.parameters}
+    end
+    -- Resident modules can reference a root controlled by this installer.
+    -- Their constraints remain part of the plan even though their owners are
+    -- not themselves candidates for replacement.
+    for _, raw_entry in ipairs(raw_state.entries) do
+        local entry = bounds.object(raw_entry)
+        local owned = entry and bounds.object(entry.registry)
+        local data = entry and bounds.object(entry.data)
+        if entry and owned and data and entry.kind == "ns.dependency" and type(owned.owner) == "string"
+            and owned.owner ~= "" and not controlled[owned.owner] and type(data.component) == "string"
+            and controlled[data.component] then
+            local reference, reference_error = graph.edge(data)
+            if not reference then return nil, reference_error end
+            roots[#roots + 1] = reference
+        end
     end
     local resolved, graph_error = graph.resolve(roots, source)
     if not resolved then return nil, graph_error end
@@ -102,6 +123,9 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
         remaining[item.component] = true
         local old = by_name[item.component]
         local previous = old and old.version or ""
+        if old and not controlled[item.component] and (semver.compare(previous, item.version) or 1) ~= 0 then
+            return nil, "dependency would replace a host-deployment module: " .. item.component
+        end
         local change = previous == "" and "install" or ((semver.compare(previous, item.version) or 1) == 0 and "keep" or "update")
         modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
@@ -123,8 +147,9 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     for _, item in ipairs(installed.modules) do
         if not remaining[item.component] then
-            modules[#modules + 1] = {component = item.component, version = "", previous_version = item.version,
-                digest = "", change = "remove", entries = item.entries, requirements = {requirements = {}, missing = {}}}
+            local remove = controlled[item.component] == true
+            modules[#modules + 1] = {component = item.component, version = remove and "" or item.version, previous_version = item.version,
+                digest = "", change = remove and "remove" or "keep", entries = item.entries, requirements = {requirements = {}, missing = {}}}
         end
     end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)

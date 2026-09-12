@@ -54,6 +54,57 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        test.it("preserves bundled modules outside the dependency-root closure", function()
+            local resident = {id = "bee.core:main", kind = "library.lua", registry = {owner = "bee/core", root = false}}
+            -- A fresh embedded deployment has ownership but no persisted
+            -- resolution. Its retained modules must not become removals or
+            -- invented version selections in the first Hub plan.
+            local captured = state({resident})
+            local prepared, problem = plan.prepare(captured, 1,
+                request({action = "install", component = "acme/app", version = "1.0.0"}),
+                source({["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a")}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                local kept = module_for(prepared.plan.modules, "bee/core")
+                test.not_nil(kept)
+                if kept then test.eq(kept.change, "keep"); test.eq(kept.version, "") end
+            end
+            local known, known_problem = plan.prepare(state({resident}, {
+                {name = "bee/core", version = "0.1.0-dev", source = "hub"},
+            }), 1, request({action = "install", component = "acme/app", version = "1.0.0"}),
+                source({["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a")}))
+            test.is_nil(known_problem)
+            test.not_nil(known)
+            if known then
+                local kept = module_for(known.plan.modules, "bee/core")
+                test.not_nil(kept)
+                if kept then test.eq(kept.change, "keep"); test.eq(kept.version, "0.1.0-dev") end
+            end
+            local replacing = plan.prepare(captured, 1,
+                request({action = "install", component = "bee/core", version = "0.2.0"}),
+                source({["bee/core@0.2.0"] = package("bee/core", "0.2.0", "b")}))
+            test.is_nil(replacing)
+        end)
+        test.it("removes departing root dependencies while keeping the resident host", function()
+            local captured = state({
+                root("acme/app", "1.0.0"),
+                {id = "acme.app:lib", kind = "ns.dependency", registry = {owner = "acme/app", root = false},
+                    data = {component = "acme/lib", version = "1.0.0"}},
+                {id = "acme.lib:main", kind = "library.lua", registry = {owner = "acme/lib", root = false}},
+                {id = "bee.core:main", kind = "library.lua", registry = {owner = "bee/core", root = false}},
+            }, {{name = "acme/app", version = "1.0.0"}, {name = "acme/lib", version = "1.0.0"},
+                {name = "bee/core", version = "0.1.0-dev", source = "hub"}})
+            local prepared, problem = plan.prepare(captured, 2,
+                request({action = "uninstall", component = "acme/app"}), source({}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                for _, item in ipairs(prepared.plan.modules) do
+                    test.eq(item.change, item.component == "bee/core" and "keep" or "remove")
+                end
+            end
+        end)
         test.it("accepts only exact install/update requests and bounded action-specific fields", function()
             local decoded, problem = plan.decode({action = "install", component = "acme/app", version = "v1.2.3",
                 parameters = {{name = "acme.app:port", value = 8080}}})

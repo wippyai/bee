@@ -123,4 +123,24 @@ function M.read(): (Result?, string?)
     if not state then return nil, tostring(state_error) end
     return M.decode(state, snapshot:version():id())
 end
+
+-- Only the dependency closure reachable from explicit registry roots is
+-- controlled by dependency-root changes. Other resident modules belong to
+-- the host deployment and survive an unrelated install or removal.
+function M.dependency_members(state: Result): {[string]: boolean}
+    local members: {[string]: boolean} = {}
+    for _, root in ipairs(state.roots) do members[root.component] = true end
+    local changed = true
+    while changed do
+        changed = false
+        for _, item in ipairs(state.modules) do
+            if not members[item.component] then
+                for _, owner in ipairs(item.used_by) do
+                    if members[owner] then members[item.component] = true; changed = true; break end
+                end
+            end
+        end
+    end
+    return members
+end
 return M

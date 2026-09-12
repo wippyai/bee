@@ -160,7 +160,13 @@ function M.apply(raw: unknown, expected: unknown): Result
         for _, item in ipairs(displayed.modules) do
             if item.change == "remove" then
                 if selected[item.component] then mismatch = "removed module remains installed: " .. item.component end
-            elseif selected[item.component] ~= item.version then
+            elseif selected[item.component] == nil then
+                mismatch = "runtime removed retained module: " .. item.component
+            -- A first Hub operation records the embedded deployment's
+            -- resolution. Before that record exists, retained host modules
+            -- intentionally have no captured version. Their presence is
+            -- verified above; only compare a version the plan measured.
+            elseif item.version ~= "" and selected[item.component] ~= item.version then
                 mismatch = "runtime selected another version for " .. item.component
             end
             selected[item.component] = nil

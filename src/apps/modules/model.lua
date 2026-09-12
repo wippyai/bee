@@ -262,8 +262,14 @@ local function matches_request(state: State, raw: unknown): boolean
     local intent = M.plan_intent(state)
     if not intent or not intent.request then return false end
     local expected, actual = intent.request, object(raw)
-    if expected.action ~= actual.action or expected.component ~= actual.component or expected.version ~= actual.version
+    if expected.action ~= actual.action or expected.component ~= actual.component
         or expected.migration_policy ~= actual.migration_policy then return false end
+    -- The public uninstall request omits version/parameters. The measured
+    -- backend plan returns their normalized empty values.
+    if expected.action == "uninstall" then
+        return actual.version == "" and type(actual.parameters) == "table" and next(actual.parameters) == nil
+    end
+    if expected.version ~= actual.version then return false end
     local expected_parameters = expected.parameters
     local actual_parameters = actual.parameters
     if type(expected_parameters) ~= "table" and type(actual_parameters) ~= "table" then return true end

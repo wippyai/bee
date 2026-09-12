@@ -14,6 +14,9 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: native-modules-lifecycle-check
+native-modules-lifecycle-check:
+	python3 tests/native_modules_lifecycle.py "$(BEE_BINARY)"
 .PHONY: modules-app-check
 modules-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_app.py

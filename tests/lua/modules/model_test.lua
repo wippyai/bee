@@ -45,6 +45,27 @@ local function define_tests()
             test.is_nil(state.plan)
             test.is_nil(model.confirm_intent(state))
         end)
+        test.it("accepts normalized uninstall plans and keeps the public request versionless", function()
+            local state = model.new()
+            model.select(state, "userspace/docker")
+            model.set_action(state, "uninstall")
+            local value = {digest = string.rep("d", 64), ready = true, base_revision = 7,
+                modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {},
+                request = {action = "uninstall", component = "userspace/docker", version = "",
+                    parameters = {}, migration_policy = "block"}}
+            model.apply_plan(state, ok(value))
+            test.not_nil(state.plan)
+            test.is_nil(model.confirm(state))
+            local intent = model.confirm_intent(state)
+            test.not_nil(intent)
+            if intent and intent.request then
+                test.is_nil(intent.request.version)
+                test.is_nil(intent.request.parameters)
+            end
+            model.set_policy(state, "leave")
+            model.apply_plan(state, ok(value))
+            test.is_nil(state.plan)
+        end)
         test.it("ignores a delayed plan for an earlier request", function()
             local state = model.new()
             model.select(state, "userspace/docker")

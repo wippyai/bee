@@ -37,6 +37,34 @@ end
 
 local function define_tests()
     test.describe("Governance authoring boundary", function()
+        test.it("requires current operation and exact workspace permission even for the stored author", function()
+            local owner = "bee.test.governance.scoped-owner"
+            for _, id in ipairs({"governance-scoped-read", "governance-scoped-other"}) do
+                successful(owner, {operation = "create", workspace_id = id, expected_revision = 0, idempotency_key = "create"})
+            end
+            local policies: {security.Policy} = {}
+            for _, name in ipairs({"bee.governance:authoring_call_only_policy", "bee.governance:authoring_exact_read_policy"}) do
+                local policy, policy_error = security.policy(name)
+                if not policy then error("scoped authoring policy: " .. tostring(policy_error)) end
+                policies[#policies + 1] = policy
+            end
+            local executor = funcs.new():with_actor(security.new_actor(owner)):with_scope(security.new_scope(policies))
+            local read, read_error = executor:call(TARGET, {operation = "list", workspace_id = "governance-scoped-read"})
+            if read_error then error(tostring(read_error)) end
+            test.is_true((read :: Reply).ok)
+            local other, other_error = executor:call(TARGET, {operation = "list", workspace_id = "governance-scoped-other"})
+            if other_error then error(tostring(other_error)) end
+            test.is_false((other :: Reply).ok)
+            test.eq((other :: Reply).code, "DENIED")
+            local write, write_error = executor:call(TARGET, {operation = "put", workspace_id = "governance-scoped-read",
+                expected_revision = 1, idempotency_key = "denied-write", path = "entry.lua", content = "return true"})
+            if write_error then error(tostring(write_error)) end
+            test.is_false((write :: Reply).ok)
+            test.eq((write :: Reply).code, "DENIED")
+            local unchanged = successful(owner, {operation = "list", workspace_id = "governance-scoped-read"})
+            test.eq(unchanged.value and unchanged.value.revision, 1)
+        end)
+
         test.it("keeps the ordinary-app store denial while a separately scoped actor stages binary snapshots", function()
             local workspace_id = "governance-authoring-boundary"
             local owner = "bee.test.governance.owner"

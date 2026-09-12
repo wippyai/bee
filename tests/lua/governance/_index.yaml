@@ -1,6 +1,20 @@
 version: '1.0'
 namespace: bee.governance
 entries:
+- name: authoring_call_only_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.governance:workspace_call]
+    effect: allow
+- name: authoring_exact_read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.governance.workspace.read]
+    resources: [governance-scoped-read]
+    effect: allow
 - name: authoring_client_policy
   kind: security.policy
   meta: {type: test_support}

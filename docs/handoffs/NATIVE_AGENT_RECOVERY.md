@@ -17,6 +17,12 @@ verify those references and current profile/resource grants before recovering
 the provider reference from the attempt's durable data. Native PIDs, viewport
 mounts, tokens and credential bytes are not resume data.
 
+Recovery must obtain a fresh host-selected execution scope. A checkpoint cannot
+request a service actor or recover an earlier, stronger grant. Higher-authority
+services keep their permissions inside their own boundary and authorize each
+user or agent request against the exact resource. Changed or removed grants
+must refuse recovery without altering the saved conversation or replaying input.
+
 Hook observations can capture the provider's bounded session ID under the
 admitted binding. They cannot establish readiness or logical success by naming
 a SessionStart or Stop event. Preserve commit uncertainty across gateway cleanup

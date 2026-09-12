@@ -41,6 +41,11 @@ IDs. Every operation also checks the stored author against the authenticated
 actor; an operation grant does not transfer an existing workspace's ownership.
 There are no default authoring grants. The method's protected store policy does
 not grant callers direct database or registry/overlay access.
+Stored ownership never replaces the current operation grant: a read-only author
+cannot write, and a grant for one workspace cannot read another workspace even
+when the same actor created both. Requests cannot select an actor, security
+scope, store or host path. Service, user and agent scopes are selected by host
+admission; loading a trait or restoring saved app data cannot raise that scope.
 
 Requests use `operation` and `workspace_id`. Create uses expected revision zero;
 other mutations use the revision returned by list. Mutations and freeze require

@@ -5928,8 +5928,10 @@ The actual broker-spawned shell writes a marker into its retained HOME, closes
 normally and leaves the marker readable. A distinct second launch keeps its
 own marker and preserves the first. All four managed-window cases pass. The
 earlier simplified admission candidate passed619 unit tests, strict source
-lint, pack and standalone harness isolation. Full combined acceptance is
-running; the new policy-bound test has not yet completed that run.
+lint, pack and standalone harness isolation. The combined source now passes620
+unit tests, including the policy-bound regression, plus native/managed windows,
+live hooks, module/gateway/authoring and source/pack host checks. The full run
+continues through storage and desktop acceptance.
 
 Temporary worktrees and test artifacts were absent on continuation. Committed
 work was restored under `/home/wolfy-j/wippy/worktrees/`, and the exact pinned
@@ -5941,4 +5943,5 @@ changes were included. Provider conversation recovery and public MCP/Hub
 activation remain unfinished. Next, preserve acknowledged broker checkpoint
 state before wiring Agent recovery; no separate persistence manager is needed.
 Wolfden journal remains `01a06e56-ba58-7c5a-bd69-b7feb109a05d`, cursor
-`jc_H7E57Z5SJH71M`, through seq1267.
+`jc_H7E57Z5SJH71M`. Integration checkpoint `488e1a6` is pushed; full acceptance
+and the next isolated broker acknowledgement repair remain in progress.

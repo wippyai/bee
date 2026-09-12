@@ -264,4 +264,4 @@ malformed declarations are rejected. This UI is installed in global source `bd95
 The next Modules layout separates package titles/versions from descriptions,
 exposes clickable search/filter controls, opens details on README, and uses a
 configuration dialog instead of the footer editor when space permits. Validation
-errors keep the editor open. This presentation update is not yet installed.
+errors keep the editor open. This presentation update is installed in global source `7649cd7` (SHA `9c70d927`).

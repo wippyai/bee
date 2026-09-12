@@ -166,6 +166,11 @@ func counterfactual(runtime, root string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
+	for _, name := range []string{"home", "config", "data", "state"} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0700); err != nil {
+			return err
+		}
+	}
 	if err := copyTree(filepath.Join(dir, "src"), filepath.Join(root, "src")); err != nil {
 		return err
 	}

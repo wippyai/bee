@@ -65,13 +65,19 @@ definitions, projections, consumed generations, and migration ledger records.
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
-File projection is a broker capability only. Native placement refuses a file
-projection before recording a launch intent until private-home delivery is wired;
-file contents cannot enter the environment projection route. Automatic source discovery,
-copying into a private writable session home, preserving harness token refresh
-and Docker mounting are still being integrated. No file login is enabled by
-default. `refresh` and `write_back` remain false; the broker neither refreshes
-provider tokens nor writes changes back to the user's login files.
+Native placement accepts file projections only with a selected retained session
+home. It seeds the provider-fixed destination and preserves provider-refreshed
+bytes when the recorded definition identity matches; changed identity or a
+partial seed refuses reuse. See [native placement](../placement/native/README.md)
+for the delivery and filesystem guarantees. File contents never enter the
+environment projection route.
+
+First-use harness setup can create definition-declared credential names from
+host-selected source configuration, without reading the secret. Production
+source discovery and default login selection remain unfinished; no file login
+is enabled by default. Docker delivery is unimplemented. Broker `refresh` and
+`write_back` remain false: it neither refreshes provider tokens nor copies
+session changes back to the user's original login files.
 
 Revocation stops future materialization; a live attempt is stopped by placement at its next
 reconciliation, which the placement sweeper schedules on a fixed delay and

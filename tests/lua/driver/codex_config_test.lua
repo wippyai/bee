@@ -66,6 +66,30 @@ local function define_tests()
             local _, untyped = configuration.decode("host:provider", {id = "host:provider", kind = "registry.entry", meta = {type = "registry.entry"}, data = {}})
             test.eq(untyped, "host:provider is not a bee.codex_provider")
         end)
+        test.it("selects built-in ChatGPT login without a custom API-key endpoint", function()
+            local data: {[string]: unknown} = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt", model = "gpt-5"}
+            local decoded, err = configuration.decode("host:provider", provider(data))
+            if not decoded then error(tostring(err)) end
+            local gateway: configuration.Gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
+            local projected, projection_error = configuration.projection(decoded, configuration.gateway_section(gateway))
+            if not projected then error(tostring(projection_error)) end
+            test.is_true(projected.content:find('forced_login_method = "chatgpt"', 1, true) ~= nil)
+            test.is_true(projected.content:find('cli_auth_credentials_store = "file"', 1, true) ~= nil)
+            test.is_true(projected.content:find('[mcp_servers.bee]', 1, true) ~= nil)
+            test.is_nil(projected.content:find("env_key", 1, true))
+            test.is_nil(projected.content:find("base_url", 1, true))
+            test.is_nil(projected.content:find("[model_providers.", 1, true))
+            data.base_url = "https://other.example/v1"
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+            data.base_url = nil; data.loopback_fixture = false
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+            data.loopback_fixture = nil; data.name = "custom"
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+            data.name = "openai"; data.authentication = "automatic"
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+            data.authentication = "api_key"
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+        end)
         test.it("renders gateway and path-bound hook trust without token bytes", function()
             local gateway: configuration.Gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
             local section = configuration.gateway_section(gateway)

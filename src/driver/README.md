@@ -47,6 +47,21 @@ Everything a provider declares in `meta.driver` is decoded by
 `bee.driver:profile` with exact shapes and conservative defaults; an unknown
 field or an unsupported value rejects the binding.
 
+## User-login configuration
+
+A host Codex provider may select `authentication: chatgpt`, `name: openai`
+and a reviewed model. That mode uses Codex's built-in OpenAI provider and
+file credential storage, without a custom base URL or API-key environment
+selection. A base URL, custom provider name or fixture endpoint is refused
+for this mode. Omitting `authentication` retains the API-key configuration.
+MCP and hook configuration still use the same admitted gateway delivery.
+
+This implements configuration selection only. Automatically discovering the
+user's login, copying it into private writable session state, refreshing that
+state across cold launches and Docker execution are not yet accepted. No login
+file is read by this pure driver; the credential materializer owns that boundary.
+The configuration follows the [official Codex authentication contract](https://developers.openai.com/codex/auth).
+
 ## Testing
 
 `make test` runs `tests/lua/driver`: profile validation, framing with

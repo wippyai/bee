@@ -1,11 +1,12 @@
 -- MIT. The generated Codex provider configuration: the one file the
--- private CODEX_HOME needs for the API-key path. A host-owned provider
+-- private CODEX_HOME needs for the selected login method. A host-owned provider
 -- entry selects the endpoint, model and optional developer instructions; this
 -- module decodes it exactly,
 -- renders only the reviewed fields as TOML with proper string escaping,
 -- and measures the result. No arbitrary TOML, includes, commands or
 -- caller-selected destination ever pass through here, and the key itself
--- stays in the credential broker's environment projection.
+-- stays in the credential broker. ChatGPT uses the built-in OpenAI provider
+-- and a separately admitted login file, never a custom credential endpoint.
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -25,7 +26,7 @@ M.MAX_CONFIGURATION_BYTES = 8192
 -- shared generated-file bound so a gateway section can still be appended.
 M.MAX_DEVELOPER_INSTRUCTIONS_BYTES = 4096
 M.REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-type Provider = {ref: string, name: string, base_url: string, model: string, reasoning_effort: string?, developer_instructions: string?, loopback_fixture: boolean, digest: string}
+type Provider = {ref: string, name: string, base_url: string?, authentication: string?, model: string, reasoning_effort: string?, developer_instructions: string?, loopback_fixture: boolean, digest: string}
 type Projection = {revision: string, path: string, content: string, digest: string, provider_ref: string, provider_digest: string}
 type Gateway = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?}
 local function toml_string(value: string): string
@@ -70,7 +71,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     if meta.type ~= M.PROVIDER_TYPE then return nil, ref .. " is not a " .. M.PROVIDER_TYPE end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "name", "base_url", "model", "reasoning_effort", "developer_instructions", "loopback_fixture"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "name", "base_url", "model", "reasoning_effort", "developer_instructions", "loopback_fixture", "authentication"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.PROVIDER_SCHEMA then return nil, ref .. ": schema_revision must be " .. M.PROVIDER_SCHEMA end
     local name = bounds.id(data.name)
@@ -91,11 +92,21 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     end
     local loopback = data.loopback_fixture == true
     if data.loopback_fixture ~= nil and type(data.loopback_fixture) ~= "boolean" then return nil, ref .. ": loopback_fixture must be a boolean" end
-    local base_url, url_error = endpoint(data.base_url, loopback)
-    if not base_url then return nil, ref .. ": " .. tostring(url_error) end
+    local authentication = data.authentication == nil and "api_key" or bounds.member(data.authentication, {"api_key", "chatgpt"})
+    if not authentication then return nil, ref .. ": authentication must be api_key or chatgpt" end
+    local base_url: string? = nil
+    if authentication == "chatgpt" then
+        if name ~= "openai" or data.base_url ~= nil or data.loopback_fixture ~= nil then
+            return nil, ref .. ": chatgpt uses the built-in openai provider without base_url or loopback_fixture"
+        end
+    else
+        local url_error: string?
+        base_url, url_error = endpoint(data.base_url, loopback)
+        if not base_url then return nil, ref .. ": " .. tostring(url_error) end
+    end
     local digest, digest_error = measurable(data)
     if not digest then return nil, ref .. ": " .. tostring(digest_error) end
-    return {ref = ref, name = name, base_url = base_url, model = model, reasoning_effort = reasoning_effort, developer_instructions = developer_instructions, loopback_fixture = loopback, digest = digest}, nil
+    return {ref = ref, name = name, base_url = base_url, authentication = authentication, model = model, reasoning_effort = reasoning_effort, developer_instructions = developer_instructions, loopback_fixture = loopback, digest = digest}, nil
 end
 -- render: exactly the reviewed fields, nothing else.
 function M.render(provider: Provider, gateway_section: string?): string
@@ -106,12 +117,17 @@ function M.render(provider: Provider, gateway_section: string?): string
     }
     if provider.reasoning_effort then lines[#lines + 1] = "model_reasoning_effort = " .. toml_string(provider.reasoning_effort) end
     if provider.developer_instructions then lines[#lines + 1] = "developer_instructions = " .. toml_string(provider.developer_instructions) end
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "[model_providers." .. provider.name .. "]"
-    lines[#lines + 1] = "name = " .. toml_string(provider.name)
-    lines[#lines + 1] = "base_url = " .. toml_string(provider.base_url)
-    lines[#lines + 1] = "env_key = " .. toml_string(M.ENV_KEY)
-    lines[#lines + 1] = "wire_api = " .. toml_string(M.WIRE_API)
+    if provider.authentication == "chatgpt" then
+        lines[#lines + 1] = 'forced_login_method = "chatgpt"'
+        lines[#lines + 1] = 'cli_auth_credentials_store = "file"'
+    else
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "[model_providers." .. provider.name .. "]"
+        lines[#lines + 1] = "name = " .. toml_string(provider.name)
+        lines[#lines + 1] = "base_url = " .. toml_string(provider.base_url or "")
+        lines[#lines + 1] = "env_key = " .. toml_string(M.ENV_KEY)
+        lines[#lines + 1] = "wire_api = " .. toml_string(M.WIRE_API)
+    end
     lines[#lines + 1] = ""
     local content = table.concat(lines, "\n")
     -- The gateway section is rendered by the gateway library and appended

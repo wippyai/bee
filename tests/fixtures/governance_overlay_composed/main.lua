@@ -8,28 +8,30 @@ local DEPENDENCY = "bee.governance_overlay_composed_probe:dependency"
 local SUBJECT = "bee.governance_overlay_composed_probe:subject"
 
 local function main()
+    local base = registry.snapshot()
+    assert(base)
+    local dependency = base:get(DEPENDENCY)
+    assert(dependency and type(dependency.data) == "table" and dependency.data.value == "base-v1",
+        "review did not observe the original dependency")
     local reviewed, review_error = registry.overlay(OWNER)
     assert(reviewed, tostring(review_error))
     local reviewed_version = reviewed:version():id()
+    assert(reviewed_version == base:version():id(), "review snapshots do not share the durable base")
     local candidate = reviewed:changes()
     assert(candidate)
     assert(candidate:create({
         id = SUBJECT,
         kind = "registry.entry",
-        meta = {depends_on = {DEPENDENCY}},
-        data = {value = "reviewed-against-base-v1"},
+        data = {dependency = DEPENDENCY, expected_value = dependency.data.value, value = "reviewed-against-base-v1"},
     }))
 
-    local base = registry.snapshot()
-    assert(base)
     local base_change = base:changes()
     assert(base_change)
-    local dependency = base:get(DEPENDENCY)
-    assert(dependency)
     dependency.data = {value = "base-v2"}
     assert(base_change:update(dependency))
     local committed, base_error = base_change:apply()
     assert(committed, tostring(base_error))
+    assert(committed:id() ~= reviewed_version, "intervening write did not advance the durable base")
 
     local applied, stale_error = candidate:apply()
     if applied then

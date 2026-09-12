@@ -35,11 +35,7 @@ func runCommand(ctx context.Context, directory string, environment []string, run
 	}
 	command.WaitDelay = 3 * time.Second
 	command.Env = commandEnvironment(environment)
-	output, err := command.CombinedOutput()
-	if command.Process != nil && command.Process.Pid > 0 {
-		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
-	}
-	return output, err
+	return command.CombinedOutput()
 }
 
 func commandEnvironment(overrides []string) []string {
@@ -84,6 +80,7 @@ func disposableEnvironment(root string) []string {
 		"HOME=" + home,
 		"XDG_CONFIG_HOME=" + config,
 		"XDG_DATA_HOME=" + data,
+		"XDG_STATE_HOME=" + filepath.Join(root, "state"),
 		"GOMAXPROCS=2",
 	}
 }

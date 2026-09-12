@@ -1,8 +1,11 @@
 # Working on Bee
 
-This guide describes available development operations. In-app self-edit, Hub
-installation and MCP tools are planned in [PACKAGE_BOUNDARIES.md](PACKAGE_BOUNDARIES.md);
-there are no published Bee tools for those operations yet.
+This guide describes available development operations. The optional Hub component
+provides scoped package reads, planning and installation through `bee.hub:call`
+and the Modules application; see [the implemented Hub contract](HUB.md), including
+its migration limits. MCP activation and end-to-end in-app self-edit remain
+unfinished. [Package boundaries](PACKAGE_BOUNDARIES.md) also contains proposals;
+use implementation contracts to determine which operations are callable.
 
 Read `README.md`, `docs/FOUNDATION_STATUS.md` and `docs/DEVELOPMENT.md` first.
 The [local acceptance checkpoint](LOCAL_FOUNDATION_ACCEPTANCE.md) separates verified

@@ -1,4 +1,4 @@
-"""Source-free public `bee agent`: empty picker, presenter rejoin and no work."""
+"""Source-free public `bee agent`: default picker, presenter rejoin and no work."""
 from pathlib import Path
 import sqlite3
 import sys
@@ -8,6 +8,13 @@ import time
 from native_workspace import NativeDesktop
 from native_client import owner_handle, stop_owner, live_owners, owner_pidfd
 
+EXPECTED_PROFILES = ("Claude Code", "Codex CLI", "Antigravity CLI", "Grok CLI")
+
+
+def wait_for_profiles(ui):
+    for profile in EXPECTED_PROFILES:
+        ui.wait(profile)
+
 binary = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="bee-native-agent-") as temporary:
     folder = Path(temporary) / "project"
@@ -16,17 +23,20 @@ with tempfile.TemporaryDirectory(prefix="bee-native-agent-") as temporary:
     ui = NativeDesktop(binary, folder, state, arguments=("agent",))
     owner = None
     try:
-        ui.wait("No agent profiles", timeout=20)
+        ui.wait("Choose a profile", timeout=20)
+        wait_for_profiles(ui)
         owner = owner_handle(ui, binary, state)
         ui.key(b"r")
-        ui.wait("No agent profiles")
+        ui.wait("Choose a profile")
+        wait_for_profiles(ui)
         ui.key(b"\x1b[24~")
-        ui.wait("No agent profiles")
+        ui.wait("Choose a profile")
+        wait_for_profiles(ui)
         ui.key(b"\x1b")
         deadline = time.monotonic() + 3
-        while "No agent profiles" in ui.text() and time.monotonic() < deadline:
+        while "Choose a profile" in ui.text() and time.monotonic() < deadline:
             ui.pump(.05)
-        assert "No agent profiles" not in ui.text(), "Escape did not close the picker"
+        assert "Choose a profile" not in ui.text(), "Escape did not close the picker"
         assert ui.process.poll() is None, "Closing Agent exited the desktop"
         elapsed = ui.quit()
     finally:
@@ -40,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-agent-") as temporary:
     try:
         for table in ("bee_thread_heads", "bee_thread_actions", "bee_thread_attempts"):
             assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0, (
-                f"Opening an empty Agent picker created work in {table}")
+                f"Opening the default Agent picker created work in {table}")
     finally:
         connection.close()
-print(f"Native bee agent: public command, empty picker, F12, close without work; detach {elapsed:.3f}s")
+print(f"Native bee agent: public command, default picker, F12, close without work; detach {elapsed:.3f}s")

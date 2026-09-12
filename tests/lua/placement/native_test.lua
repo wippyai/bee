@@ -537,7 +537,8 @@ local function define_tests()
             local a, a_error = caller(OWNER):async("bee.placement.native:prepare", first)
             local b, b_error = caller(OWNER):async("bee.placement.native:prepare", second)
             if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
-            local replies = {await(a), await(b)}
+            local first_reply, second_reply = await(a), await(b)
+            local replies = {first_reply, second_reply}
             local admitted = 0
             local refused = 0
             for _, reply in ipairs(replies) do
@@ -550,6 +551,26 @@ local function define_tests()
             end
             test.eq(admitted, 1)
             test.eq(refused, 1)
+            local rejected = first_reply.ok and second or first
+            local db, open_error = store.open()
+            if not db then error(open_error or "open store") end
+            local absent, read_error = store.attempt(db, rejected.attempt_id :: string)
+            db:release()
+            if read_error then error(read_error) end
+            test.is_nil(absent)
+
+            -- An overlapping retry is not a second holder: both replies name
+            -- the one recorded intent, with no additional receipt.
+            local replay = retained_launch(OWNER, fresh("replay-session"), "same-request")
+            local first_retry, first_retry_error = caller(OWNER):async("bee.placement.native:prepare", replay)
+            local second_retry, second_retry_error = caller(OWNER):async("bee.placement.native:prepare", replay)
+            if first_retry_error or not first_retry or second_retry_error or not second_retry then error("start replay race: " .. tostring(first_retry_error or second_retry_error)) end
+            local replay_a, replay_b = attempt_of(await(first_retry)), attempt_of(await(second_retry))
+            test.eq(replay_a.attempt_id, replay.attempt_id)
+            test.eq(replay_b.attempt_id, replay.attempt_id)
+            local receipt = kinds(replay.attempt_id :: string)
+            test.eq(#receipt, 1)
+            test.eq(receipt[1], "intent.recorded")
         end)
         test.it("retains a selected session home across attempts without adopting changed configuration", function()
             local session_ref = fresh("session")

@@ -83,6 +83,17 @@ policies; host binding alone is not Hub or Hive installation acceptance.
 
 ## Agent profile picker
 
+Agent activity belongs on the existing application title surface:
+`bee.application:client.title`. Bee-native applications use that same API.
+Committed harness hooks can supply bounded activity labels; prompt text and
+tool arguments must not become titles. Hook-driven title updates are currently
+being integrated and are not part of the installed `edf6a7c3` checkpoint.
+
+Native CLI terminal-title sequences are a separate source. Selected runtime
+`291f5c6b` does not expose VT title changes through `exec` terminal sessions;
+the proxy currently forwards mode and cursor callbacks. Forwarding those titles
+needs a runtime terminal-session capability, not a second ANSI parser in Bee.
+
 A profile describes **harness + isolation + options + MCP scope**. The shipped
 defaults are registry declarations owned by the separate driver components.
 Editable DB-backed profiles and policy-controlled exchange through `bee.sync`

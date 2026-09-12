@@ -391,7 +391,19 @@ M.natural = function() run(true) end
 M.select = function()
     local definition = assert(registry.get("bee.managed_window_fixture:selector_definition"))
     local policy = assert(registry.get("bee.managed_window_fixture:policy"))
+    local defaults: {{[string]: unknown}} = {}
     local ok, failure = pcall(function()
+        local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
+        for _, entry in ipairs(found) do
+            local meta = entry.meta :: {[string]: unknown}
+            if meta.test_support ~= true then
+                defaults[#defaults + 1] = entry
+                local hidden_default = changed(entry)
+                local data = hidden_default.data :: {[string]: unknown}
+                data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
+                apply(hidden_default)
+            end
+        end
         local hidden = changed(definition)
         local hidden_data = hidden.data :: {[string]: unknown}
         hidden_data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
@@ -400,6 +412,7 @@ M.select = function()
     end)
     apply(definition)
     apply(policy)
+    for _, entry in ipairs(defaults) do apply(reply(entry)) end
     if not ok then error(tostring(failure)) end
 end
 -- Read the actual child's files after broker close. These checks never create

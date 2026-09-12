@@ -92,9 +92,38 @@ local function copy_table(value: Entry): Entry
     return result
 end
 
+-- Production defaults are covered by executable acceptance. These cases own
+-- their inventory and restore the shipped definitions even after a failure.
+local function isolated_it(name: string, body: () -> ())
+    test.it(name, function()
+        local saved: {Entry} = {}
+        local changes = registry.snapshot():changes()
+        local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
+        for _, entry in ipairs(found) do
+            local meta = entry.meta :: Entry
+            if meta.test_support ~= true then
+                saved[#saved + 1] = entry
+                local hidden = copy_table(entry)
+                local data = copy_table(entry.data :: Entry)
+                local presentation = copy_table(data.presentation :: Entry)
+                presentation.start_menu = false
+                data.presentation = presentation; hidden.data = data
+                changes:update(hidden)
+            end
+        end
+        local applied, apply_error = changes:apply()
+        if not applied then error(tostring(apply_error)) end
+        local ok, failure = pcall(body)
+        local restore = registry.snapshot():changes()
+        for _, entry in ipairs(saved) do restore:update(entry) end
+        local restored, restore_error = restore:apply()
+        if not restored then error(tostring(restore_error)) end
+        if not ok then error(tostring(failure)) end
+    end)
+end
 local function define_tests()
     test.describe("Window launch selection", function()
-        test.it("renders bounded profiles without terminal controls and disables invisible launch", function()
+        isolated_it("renders bounded profiles without terminal controls and disables invisible launch", function()
             local listed: selection.Choices = {items = {{definition_ref = "fixture:profile", title = "Profile\27]52;injected", launch_id = "profile", plan_digest = string.rep("a", 64)}}, unavailable = 0}
             local frame = view.draw(40, 10, appearance.defaults(), listed, 1, "")
             test.eq(#frame.rows, 10)
@@ -107,7 +136,7 @@ local function define_tests()
             test.eq(thin.capacity, 0)
             for _, hit in ipairs(thin.hits) do test.is_true(hit.action ~= "open") end
         end)
-        test.it("returns an empty eligible list when only hidden or batch definitions exist", function()
+        isolated_it("returns an empty eligible list when only hidden or batch definitions exist", function()
             local entries = {
                 definition("empty-hidden", "Hidden empty fixture", "selection-empty-hidden", "window", false),
                 definition("empty-batch", "Batch empty fixture", "selection-empty-batch", "batch", true),
@@ -120,7 +149,7 @@ local function define_tests()
             end)
         end)
 
-        test.it("sorts valid window definitions and measures independent plans", function()
+        isolated_it("sorts valid window definitions and measures independent plans", function()
             local entries = {
                 definition("zulu", "Zulu window", "selection-zulu", "window", true),
                 definition("alpha", "Alpha window", "selection-alpha", "window", true),
@@ -146,7 +175,7 @@ local function define_tests()
             end)
         end)
 
-        test.it("keeps an inactive profile visible with its refusal and disables launch", function()
+        isolated_it("keeps an inactive profile visible with its refusal and disables launch", function()
             local original = assert(registry.get(ACTIVATION))
             local changed = copy_table(original)
             local original_data = original.data :: Entry
@@ -189,7 +218,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
 
-        test.it("requires an absolute policy binding without inferring the prepared executable key", function()
+        isolated_it("requires an absolute policy binding without inferring the prepared executable key", function()
             local policy = assert(registry.get(POLICY))
             local original_policy = policy.data
             local distinct = copy_table(policy)
@@ -238,7 +267,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
 
-        test.it("keeps a pinned selection stable across a later policy mutation", function()
+        isolated_it("keeps a pinned selection stable across a later policy mutation", function()
             local entry = definition("pinned", "Pinned window", "selection-pinned", "window", true)
             local policy = assert(registry.get(POLICY))
             local original_policy_data = policy.data
@@ -273,7 +302,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
 
-        test.it("refuses an incomplete definition list above the bound", function()
+        isolated_it("refuses an incomplete definition list above the bound", function()
             local entries: {Entry} = {}
             for index = 1, selection.MAX_DEFINITIONS + 1 do
                 entries[#entries + 1] = definition("bounded-" .. tostring(index), "Bounded " .. tostring(index),

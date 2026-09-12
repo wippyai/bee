@@ -10,6 +10,21 @@ threads contract has to offer for that. Read [thread records](THREAD_RECORDS.md)
 
 ## Terms
 
+The user-facing profile is **harness + isolation + options + MCP scope**.
+The profile selects a harness component, its execution environment and version,
+its options, and the permitted MCP surface. Context is supplied dynamically for
+each run from the authenticated user, workspace, thread and delegated grants;
+profile data never grants authority or embeds live context/token values.
+Host authorization remains the ceiling for both profile selection and runtime
+context. Docker image/version and mounts belong to isolation configuration.
+
+This is the product contract. Current `harness.profile` entries describe a
+driver's supported execution modes, and `bee.launch_definition` plus protected
+launch policies compose the implemented native launch. A custom profile editor,
+Docker placement and production MCP activation are not complete yet.
+Future Bee-native agents may use a different application UI while remaining
+peer components, using the same threads and subscriptions for communication.
+
 | Term | Meaning |
 |---|---|
 | Carrier | One Wippy process per attempt that owns the driver protocol and the logical turn state. It holds no executor and no SQL of its own. |

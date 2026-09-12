@@ -1,6 +1,39 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Agent activity titles plus Hub recovery
+## Current install: optional machine login for managed agents
+
+Global `/home/wolfy-j/.local/bin/bee` has SHA
+`acab69b8e487c4743cfa3967cf32a74add001f77cfba42e9e9ffe4454bd7036a`.
+Production code matches `f4e3993` (integrated as `4141cbd`); the candidate was
+built before the final documentation and test-only observation changes.
+Runtime `291f5c6b` and native `0f63d30bd718` remain unchanged. Five sidecars were
+installed and hash-verified; existing nodes were not restarted.
+
+Default Claude/Codex window profiles now select optional machine-login sources.
+Host-selected paths under the existing user home seed only the provider's private
+retained login file. Missing login files/directories allow ordinary CLI sign-in;
+permission, unavailable volume and malformed-file errors still refuse. Host
+credential directories are never created and refreshed private login bytes never
+write back to the machine source. Definition metadata pins the source path and
+refuses retargeted projections. File credentials do not enter the environment.
+
+The exact installed candidate passed standalone desktop and Modules acceptance
+(`machine-login-native-grant-check.log`), then Go Agent acceptance with disposable
+present/absent machine logins (`machine-login-selector-observation-check.log`).
+The latter fixed an observation bug: synchronized terminal updates may contain
+only changed cells. Initial missing credential-issue admission was fixed in the
+Agent's explicit host binding; the original failures remain in the evidence logs.
+Source lint and 756 units passed before that final grant. Full `make check`
+against the final production source remains running in session 13080,
+`bee-evidence/0912/machine-login-full-check.log`.
+
+Install receipt: `bee-evidence/0912/machine-login-global-install.json`.
+Backup: `global-before-machine-login-849166aa`. Start a fresh node with `bee`, or
+open the Agent picker using `bee agent`. Existing nodes retain loaded code.
+Production MCP/hook activation, Docker and successful cold conversation recovery
+remain unfinished; app checkpoint wiring alone does not prove cold recovery.
+
+## Previous install: Agent activity titles plus Hub recovery
 
 Global `/home/wolfy-j/.local/bin/bee` has SHA
 `65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`.

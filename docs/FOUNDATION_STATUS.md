@@ -1,5 +1,14 @@
 # Foundation status
 
+Global `acab69b8` adds optional machine-login reuse to the managed Claude/Codex
+window profiles. Executable acceptance proves both disposable present and absent
+login sources, private retained HOME, and no creation of host credential folders.
+The Agent host explicitly grants credential issuance; other apps gain no policy.
+Source metadata/path changes invalidate existing credential projections.
+The full repository check is still running; production MCP activation, Docker
+and cold conversation recovery remain unfinished. See the
+[current build evidence](handoffs/GLOBAL_BUILD.md).
+
 Global build `237d76a8` combines managed Agent profiles with Hub package reads,
 install/update/uninstall, README browsing, scrollable plan review and explicit
 post-publication crash recovery. The combined source passes 746 unit cases and

@@ -17,7 +17,10 @@ are included, but default production profile setup, MCP listener activation,
 Docker, Hub installation and DB-backed overlay activation remain unfinished.
 The new authoring boundary preserves caller storage/scope denials while allowing
 explicitly admitted workspace operations. All 626 unit cases and two-boot
-authoring checks pass. The complete source foundation check is still running.
+authoring checks pass. The complete source `make check` also passed (session
+43383, `authoring-scoped-check.log`), including native identity/installer/bundle,
+module isolation, storage, source/pack desktops, launcher/recovery and app gates.
+The existing desktop-lifecycle type-convergence warning remains.
 
 The real installed-to-candidate upgrade preserves Settings, workspace identity
 and applied migrations. All manifested databases respect explicit `--state-dir`.

@@ -1,5 +1,17 @@
 # Agent integration checkpoint — September 12
 
+Global has since been refreshed from source `97a9af2` at the user's request,
+with unfinished backends accepted. Installed SHA starts `55b725aa`; see
+[current global build](GLOBAL_BUILD.md) for upgrade/native evidence and the
+remaining user-wide default-state limitation. Managed agents are not complete
+end to end: drivers, native terminal views, configuration delivery and five-hook
+thread integration are implemented, but first-use profile/credential setup,
+production MCP activation, cold conversation recovery and Docker remain open.
+The public Agent picker still has no default production launch profiles.
+The authoring source completed full `make check` (session 43383,
+`authoring-scoped-check.log`): 626 cases and all foundation/application gates
+pass. This does not establish the unfinished managed-agent workflow.
+
 Combined source `343eefa` includes driver configuration delivery and the Hive
 fixture cleanup. Its standalone `bee-config-hive-reviewed` passes embedded boot,
 Settings recovery, terminal input/scrolling/selection/copy, presenter rejoin and
@@ -15,7 +27,8 @@ The separate full configuration `make check` completed successfully (session
 and application gates. The combined source passes 626 unit cases after removing
 three fixture-only cases (session 78576, 209.2 seconds). These executable checks
 do not establish an authenticated provider turn or cold conversation recovery.
-Global remains unchanged pending the executable-selected project state directory.
+That checkpoint was not installed; the later global refresh above supersedes
+its installation hold while preserving the disclosed default-state limitation.
 
 The required native-executable gate now fails when configured Codex lacks stdin
 closure instead of returning a green non-execution. The unchanged dedicated

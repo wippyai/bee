@@ -6187,3 +6187,19 @@ after a temporary `.bash_history` cleanup race. Default state remains user-wide,
 as in the previous install; this was disclosed before installation. Explicit
 `--state-dir` isolates every database. No live user node was restarted.
 See [the global build handoff](GLOBAL_BUILD.md); Wolfden fact 1327 records the install.
+
+### September 12: full authoring source gate complete; Docker login requirement
+
+Full `make check` session 43383 completed with exit 0: 626 unit cases, native
+identity/installer/bundle, module isolation, permissions/storage, desktop and
+launcher/recovery, Inbox, Hive Manager and Timeline. Evidence remains
+`bee-evidence/0912/authoring-scoped-check.log`; the existing desktop-lifecycle
+type-convergence warning remains. Global `55b725aa` is unchanged.
+
+The user requires Docker Claude/Codex to automatically reuse the machine's
+existing harness login. Existing broker API-key projection does not meet that
+requirement. Private writable login-file materialization and the public launch
+configuration are in progress; no production subscription-login or Docker claim
+yet. Host homes must not be mounted wholesale, and credential contents must not
+enter registry entries, persisted receipts, hashes or logs. Hub continues in
+the collaborator lane; overlays remain deferred until agents work.

@@ -25,9 +25,12 @@ local function handle(raw: unknown): {[string]: unknown}
     elseif raw.operation == "inspect" then
         return {ok = true, replayed = false, value = {requirements = {missing = {}, bindings = {}}}}
     elseif raw.operation == "plan" then
-        return {ok = true, replayed = false, value = {request = raw.request,
+        local normalized = raw.request
+        if raw.request.action == "uninstall" then normalized = {action = "uninstall", component = raw.request.component,
+            migration_policy = raw.request.migration_policy, version = "", parameters = {}} end
+        return {ok = true, replayed = false, value = {request = normalized,
             digest = string.rep("a", 64), ready = true, base_revision = 1,
-            modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {
+            modules = {}, missing = {}, migrations = raw.request.action == "uninstall" and {{id = "fixture:rollback", target_db = "fixture:db"}} or {}, starts = {}, capabilities = {
                 "fixture:01", "fixture:02", "fixture:03", "fixture:04", "fixture:05", "fixture:06",
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
@@ -53,6 +56,10 @@ local function handle(raw: unknown): {[string]: unknown}
             return {ok = true, replayed = true, value = {state = "complete", message = "Fixture recovery confirmed"}}
         end
         assert(raw.expected_digest == string.rep("a", 64), "confirmation lost the displayed digest")
+        if raw.request.action == "uninstall" then
+            assert(raw.request.migration_policy == "down", "rollback selection was lost")
+            return {ok = true, replayed = false, value = {state = "complete", message = "Fixture rollback confirmed"}}
+        end
         return {ok = true, replayed = false, value = {state = "complete", message = "Fixture confirmation received"}}
     end
     return {ok = false, replayed = false, code = "FIXTURE", message = "No fixture mutation"}
@@ -141,6 +148,26 @@ def exercise(project, packed, pack):
             ui.wait("Fixture confirmation received")
             ui.wait("Receipt state: complete")
             assert "Applying measured plan" not in ui.text(), "completed operation retained pending status"
+            ui.key(b"\x1b")
+            ui.key(b"\x1b[B\r")
+            ui.wait("Packaged module")
+            ui.key(b"x")
+            ui.wait("Roll back")
+            for y, line in enumerate(ui.screen.display, 1):
+                x = line.find("Roll back")
+                if x >= 0:
+                    ui.mouse(0, x + 3, y)
+                    break
+            else:
+                raise AssertionError("rollback policy button is not visible")
+            ui.key(b"p")
+            ui.wait("Migrations · policy down")
+            ui.wait("fixture:rollback")
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            assert "Fixture rollback confirmed" not in ui.text(), "rollback ran before confirmation"
+            ui.key(b"\r")
+            ui.wait("Fixture rollback confirmed")
             ui.key(b"\x1b[24~")
             ui.wait("MODULES", timeout=8)
             ui.resize(60, 20)
@@ -160,7 +187,7 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
-    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, cold recovery review/cancel/confirm/status, F12, resize and shutdown pass")
+    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, cold recovery review/cancel/confirm/status, rollback policy/review/confirm, F12, resize and shutdown pass")
 
 
 if __name__ == "__main__":

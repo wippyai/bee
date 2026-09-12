@@ -1,5 +1,14 @@
 # Foundation status
 
+The rollback source keeps a durable removal receipt before calling down
+migrations, retains the root on partial failure, and publishes root deletion with
+its completion phase atomically. Real SQLite acceptance covers normal rollback,
+completed replay, crashes before/after root deletion, changed-definition refusal
+and partial failure/retry. Confirmation plans now list removed migrations.
+Strict lint, 69 focused Hub tests and source/pack rollback review/confirmation
+pass. Full combined checks remain pending; global is still the history/recovery
+build `2f3f8e5a`.
+
 The Hub history source adds caller-owned paged receipts and an explicit recovery
 review in Modules. Real service acceptance covers pagination, read-only access,
 actor isolation and replay using the persisted request. Source/pack application

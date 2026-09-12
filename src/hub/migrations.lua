@@ -7,7 +7,7 @@ local M = {}
 M.MAX_MIGRATIONS = 128
 
 type Entry = {id: string, meta: {[string]: unknown}, registry: {[string]: unknown}}
-type RunnerResult = {migrations: {unknown}?}
+type RunnerResult = {migrations: {unknown}?, error: string?}
 type DatabaseRunner = {
     run_next: (DatabaseRunner, {[string]: unknown}) -> RunnerResult,
     rollback: (DatabaseRunner, {[string]: unknown}) -> RunnerResult,
@@ -210,16 +210,21 @@ function M.execute(source: Source, raw: unknown): (Result?, string?)
             if #wanted > 0 then
                 local ok, part = pcall(function() return database:rollback({count = #wanted, allowed_ids = wanted}) end)
                 if not ok then return partial(request.operation, rows, "rollback migrations for " .. target_db .. ": " .. tostring(part)) end
+                local incomplete: string? = nil
                 for _, id in ipairs(wanted) do
                     local row = result_row(part, id)
-                    if not row then return partial(request.operation, rows, "migration not discovered by runner: " .. id) end
-                    if row.status ~= "reverted" then return partial(request.operation, rows, "migration did not revert: " .. id) end
-                    local committed, commit_error = ledger(source, target_db, id)
-                    if committed == nil then return partial(request.operation, rows, commit_error or "verify migration ledger") end
-                    if committed then return partial(request.operation, rows, "migration ledger still records application: " .. id) end
-                    local item = by_id[id]
-                    rows[#rows + 1] = {id = id, target_db = target_db, module = item.module, status = "reverted"}
+                    if not row then incomplete = incomplete or "migration not discovered by runner: " .. id
+                    else
+                        if row.status ~= "reverted" then return partial(request.operation, rows, "migration did not revert: " .. id) end
+                        local committed, commit_error = ledger(source, target_db, id)
+                        if committed == nil then return partial(request.operation, rows, commit_error or "verify migration ledger") end
+                        if committed then return partial(request.operation, rows, "migration ledger still records application: " .. id) end
+                        local item = by_id[id]
+                        rows[#rows + 1] = {id = id, target_db = target_db, module = item.module, status = "reverted"}
+                    end
                 end
+                if type(part) == "table" and type(part.error) == "string" then incomplete = part.error end
+                if incomplete then return partial(request.operation, rows, incomplete) end
             end
         end
     end

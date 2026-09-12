@@ -55,6 +55,18 @@ def main():
                   "targets": [{"entry": "acme.storage:first", "path": ".meta.target_db"}]}),
             entry("acme.storage", "first", "function.lua", {"source": source, "method": "run", "modules": ["sql"]},
                   {"type": "migration", "target_db": "raw:database", "timestamp": "2026-09-12T12:00:00Z"})]
+        rollback_first = source.replace("    local tx = assert(db:begin())",
+            '    if options.direction == "down" then\n'
+            '        local gate, problem = db:query("SELECT ready FROM fixture_rollback_gate")\n'
+            '        if not gate then db:release(); error(tostring(problem)) end\n'
+            '    end\n    local tx = assert(db:begin())')
+        packages["acme/app@1.3.0"] = [entry("acme.app", "definition", "ns.definition"),
+            entry("acme.app", "storage", "ns.dependency", {"component": "acme/storage", "version": "1.3.0"})]
+        packages["acme/storage@1.3.0"] = [entry("acme.storage", "definition", "ns.definition"),
+            entry("acme.storage", "first", "function.lua", {"source": rollback_first, "method": "run", "modules": ["sql"]},
+                  {"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"}),
+            entry("acme.storage", "second", "function.lua", {"source": source.replace("fixture_payload", "fixture_second"), "method": "run", "modules": ["sql"]},
+                  {"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})]
         descriptions = folder / "packages.json"
         descriptions.write_text(json.dumps(packages))
         server_log = (folder / "server.log").open("w")
@@ -64,7 +76,7 @@ def main():
             assert ready.select(15), "fixture Hub did not announce its listener"
             url = server.stdout.readline().strip()
         assert url.startswith("http://127.0.0.1:"), url
-        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history"):
+        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history", "rollback", "rollback_crash", "rollback_published", "rollback_tamper", "rollback_partial"):
             workspace = folder / mode
             workspace.mkdir()
             prepare_fixture(workspace)
@@ -82,12 +94,12 @@ def main():
                  "security": {"policies": ["probe:caller", "probe:manage", "probe:read"]},
                  "meta": {"command": {"name": "migration-service-probe", "security": {"actor": {"id": "probe.migration_service"}}}}},
             ]
-            if mode == "tamper":
+            if mode in ("tamper", "rollback_tamper"):
                 entries.append({"name": "fixture_operator", "kind": "security.policy",
                                 "policy": {"actions": ["registry.apply", "registry.update.function.lua"],
                                            "resources": "*", "effect": "allow"}})
                 entries[-2]["security"]["policies"].append("probe:fixture_operator")
-            if mode == "partial":
+            if mode in ("partial", "rollback_partial"):
                 entries.append({"name": "fixture_prerequisite", "kind": "security.policy",
                                 "policy": {"actions": ["db.get"], "resources": ["probe:db"], "effect": "allow"}})
                 entries[-2]["security"]["policies"].append("probe:fixture_prerequisite")
@@ -98,11 +110,16 @@ def main():
             command = [str(RUNTIME), "run", "--verbose", "--host", "bee:workers", "--", "migration-service-probe"]
             environment = {"HOME": os.environ["HOME"], "PATH": os.environ["PATH"],
                            "WIPPY_REGISTRY": url, "XDG_CONFIG_HOME": str(workspace / "config")}
-            if mode in ("crash", "tamper"):
+            if mode in ("crash", "tamper", "rollback_crash", "rollback_published", "rollback_tamper"):
                 service = workspace / "src/hub/service.lua"
                 original = service.read_text()
-                anchor = "    if result then work.rows = result.rows end\n"
-                assert original.count(anchor) == 1
+                if mode == "rollback_published":
+                    anchor = "    -- Schema has changed: never restore an earlier registry version here.\n"
+                elif mode.startswith("rollback_"):
+                    anchor = "    if migration_error then return incomplete_removal(receipt, migration_error) end\n"
+                else:
+                    anchor = "    if result then work.rows = result.rows end\n"
+                assert original.count(anchor) == 1, anchor
                 service.write_text(original.replace(anchor, anchor + '    print("HUB_MIGRATION_SCHEMA_COMMITTED")\n    while true do end\n'))
                 log = workspace / "crash-runtime.log"
                 with log.open("w") as output_file:
@@ -124,7 +141,8 @@ def main():
                 entries = yaml.safe_load((probe / "_index.yaml").read_text())
                 for item in entries["entries"]:
                     if item["name"] == "run":
-                        item["method"] = "tamper" if mode == "tamper" else "recover"
+                        item["method"] = {"tamper": "tamper", "crash": "recover", "rollback_crash": "rollback_recover",
+                                          "rollback_published": "rollback_finish", "rollback_tamper": "rollback_changed"}[mode]
                 (probe / "_index.yaml").write_text(yaml.safe_dump(entries, sort_keys=False))
             result = subprocess.run(command, cwd=workspace, env=environment,
                                     capture_output=True, text=True, timeout=60)
@@ -149,6 +167,9 @@ def main():
                     assert tables == {"_migrations", "fixture_payload"}, tables
                     assert connection.execute("SELECT id FROM _migrations").fetchall() == [("acme.storage:first",)]
                     assert connection.execute("SELECT value FROM fixture_payload").fetchall() == [("committed",)]
+                elif mode.startswith("rollback"):
+                    assert tables == ({"_migrations", "fixture_rollback_gate"} if mode == "rollback_partial" else {"_migrations"}), tables
+                    assert connection.execute("SELECT id FROM _migrations").fetchall() == []
                 elif mode == "partial":
                     assert tables == {"_migrations", "fixture_payload", "fixture_second", "fixture_gate"}, tables
                     assert connection.execute("SELECT id FROM _migrations ORDER BY id").fetchall() == [("acme.storage:first",), ("acme.storage:second",)]
@@ -166,7 +187,7 @@ def main():
         if server_log is not None:
             server_log.close()
     shutil.rmtree(folder)
-    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, absent ledger and denied database grant pass")
+    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, rollback/replay, rollback SIGKILL before/after root removal, changed rollback definition refusal, partial rollback recovery, absent ledger and denied database grant pass")
 
 
 if __name__ == "__main__":

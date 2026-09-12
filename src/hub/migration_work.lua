@@ -202,6 +202,32 @@ function M.capture(prepared: plan.Prepared): (Work?, string?)
     return {entries = entries, rows = {}}, nil
 end
 
+-- Removal captures installed definitions, including orphaned dependencies.
+function M.capture_removed(state: unknown, components: {[string]: boolean}): (Work?, string?)
+    local snapshot = bounds.object(state)
+    if not snapshot then return nil, "registry snapshot is invalid" end
+    local supplied, problem = dense(snapshot.entries, "registry snapshot entries", MAX_STATE_ENTRIES)
+    if not supplied then return nil, problem end
+    local entries: {Definition} = {}
+    for _, raw in ipairs(supplied) do
+        local entry = bounds.object(raw)
+        local metadata = entry and bounds.object(entry.meta) or nil
+        local ownership = entry and bounds.object(entry.registry) or nil
+        local owner = ownership and component(ownership.owner) or nil
+        if entry and metadata and metadata.type == "migration" and owner and components[owner] then
+            if entry.kind ~= "function.lua" then return nil, "migration is not a function.lua entry" end
+            local measured, measure_error = measure("function.lua", metadata, entry.data)
+            if not measured then return nil, measure_error end
+            local captured, capture_error = definition({id = entry.id, component = owner,
+                target_db = metadata.target_db, timestamp = metadata.timestamp, digest = measured}, "removed migration")
+            if not captured then return nil, capture_error end
+            entries[#entries + 1] = captured
+        end
+    end
+    if #entries == 0 then return nil, nil end
+    return M.decode({entries = entries, rows = {}})
+end
+
 function M.entries(work: Work): {migrations.Entry}
     local result: {migrations.Entry} = {}
     for _, definition in ipairs(work.entries) do

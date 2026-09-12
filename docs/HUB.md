@@ -111,15 +111,29 @@ Uninstall defaults to `block`. Every removed module is checked, including
 orphaned dependencies removed by an update. Applied migrations block publication;
 an absent ledger permits removal without creating a ledger. Missing database
 grants or unreadable ledgers refuse publication. Explicit `leave` permits removal
-while retaining migration effects. `down` still refuses: executing rollback before
-definition removal needs its own durable phase and recovery checks.
+while retaining migration effects. The source now supports explicit `down`:
+the removal plan lists owned migrations, including orphaned dependencies. Before
+executing them, the worker records the root digest, baseline module inventory,
+exact migration definitions and original request. Rollback runs under current
+host-selected grants; partial reverted rows remain durable and failures retain
+the dependency root with `recovery_required`.
+
+Recovery rechecks the root, inventory, definitions and grants, then reconciles
+ledger entries already reverted. The worker checks them again after rollback and
+commits root deletion with `removal.published = true` in the same registry change.
+A crash after that commit resumes inventory verification without calling deleted
+migration functions. No registry restoration follows schema changes. This rollback
+source is not installed globally yet.
 
 These changes are installed in global build `f276bc2b`, preserving Agent recovery
 and optional machine login. SQLite library and
 real-service acceptance cover up/replay, committed-schema interruption/restart,
 partial failure/retry, changed-definition refusal after restart, removal block/leave,
 absent ledgers, requirement-linked targets and denied database access.
-PostgreSQL/MySQL and newly installed database resources need service acceptance.
+SQLite acceptance also covers rollback/replay, SIGKILL after schema rollback
+and after root deletion, refusal after a changed rollback definition, and partial
+rollback/retry with only the remaining function executed. PostgreSQL/MySQL and
+newly installed database resources need service acceptance.
 Execution currently requires the target database resource to exist before
 publication. Concurrent external registry writers and independent migration
 runners are not serialized by the Hub worker. The public runner's discovery path

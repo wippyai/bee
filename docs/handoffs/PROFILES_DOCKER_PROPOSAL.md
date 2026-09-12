@@ -19,10 +19,18 @@ launch admission rejects caller environment before any thread/resource/credentia
 effect. The lower carrier and placement remain general execution primitives.
 All 567 unit tests and managed-window acceptance pass for these boundaries.
 
-Still required: two named definitions for one kit must prove distinct effective
-configuration and credential isolation; changes before start must be refused;
-host-owned environment destinations must not silently replace placement or
-credential values. Shared instructions need driver-specific measured rendering
+The native environment-ownership follow-up passes all 20 focused native tests:
+placement owns HOME, gateway destinations cannot collide, and credential
+projections cannot overwrite existing values. Removing the overwrite guard makes
+exactly the credential-collision regression fail. A focused real-child test also
+passes for two named definitions sharing one Claude batch profile: each child
+receives its selected environment and broker credential, excludes the other
+profile's variables, and retains a successful receipt and answer without secret
+bytes in thread records or placement evidence. The combined suite is pending.
+
+Still required: a selector must carry its measured plan into start and refuse an
+intervening definition or policy change. The current admission snapshot covers a
+single call; it does not yet fence a prior UI selection. Shared instructions need driver-specific measured rendering
 and real-executable checks. Docker placement and its full interactive UI retain
 the acceptance below. No `profile_ref` replacement schema or extra presentation
 decoder is needed for the existing launch definition.

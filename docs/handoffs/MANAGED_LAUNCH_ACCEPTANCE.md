@@ -9,9 +9,10 @@ definition is installed, and the default composition does not start the gateway
 listener. Public Claude/Codex aliases still launch ordinary native Terminals.
 
 The public `bee agent` picker now filters host-defined window definitions before
-admission: the selected policy must bind an absolute executable for its activated
-driver. It reads declarations only and never invokes provider code. Once the
-user selects a plan, admission invokes the binding's existing empty-scope
+admission: the selected policy must contain an absolute executable binding. It
+does not infer the driver's prepared executable; the carrier applies the exact
+policy binding on the prepared launch path. The picker reads declarations only
+and never invokes provider code. Once the user selects a plan, admission invokes the binding's existing empty-scope
 `configure` boundary before it creates a thread, so a Codex policy without a
 provider refuses without launch work. The plan digest includes the selected
 provider entry, so a changed endpoint or model refuses the stale selection

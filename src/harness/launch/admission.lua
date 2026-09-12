@@ -124,9 +124,15 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry)
     if not launch_policy then return nil, fail("NOT_FOUND", policy_error or "policy") end
     if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
-    local executable = launch_policy.executables[binding.driver_id]
-    if not executable or executable:sub(1, 1) ~= "/" then
-        return nil, fail("UNAVAILABLE", "launch policy " .. launch.policy_ref .. " does not bind an absolute " .. binding.driver_id .. " executable")
+    -- A listed profile needs a host-selected executable, but this passive
+    -- read cannot know the driver's eventual launch.executable. The carrier
+    -- binds that prepared name to this policy's exact key before placement.
+    local has_absolute_executable = false
+    for _, executable in pairs(launch_policy.executables) do
+        if executable:sub(1, 1) == "/" then has_absolute_executable = true end
+    end
+    if not has_absolute_executable then
+        return nil, fail("UNAVAILABLE", "launch policy " .. launch.policy_ref .. " has no absolute executable binding")
     end
     -- Provider data selects part of the generated private-home configuration.
     -- Its exact registry entry therefore belongs to the displayed plan fence,

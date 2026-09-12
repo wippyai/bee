@@ -1,7 +1,7 @@
 # Host-defined Agent profiles
 
 Bee's `agent` command opens a native Agent window. It lists only launch
-definitions whose activated driver has a host-selected absolute executable.
+definitions whose policy contains a host-selected absolute executable binding.
 After a user selects one, Bee validates provider configuration through that
 driver's existing contract before creating launch work. The selected program
 runs in the retained Bee PTY; it is not an emulated chat UI.
@@ -13,8 +13,9 @@ an overlay. A host building Bee today can append the entries in
 not give an application registry write permission to make these records live.
 
 Before adding the fragment, resolve each installed binary to a literal absolute
-path and replace both `REPLACE` paths. The policy rejects a relative path before
-an Agent profile is selectable. Replace the Codex model with the reviewed model
+path and replace both `REPLACE` paths. The picker refuses a policy with no
+absolute executable binding. The carrier applies the matching policy key only
+after the driver prepares its executable. Replace the Codex model with the reviewed model
 the host intends to use. The example selects the existing native placement with
 `process_group` cleanup and independent exit observation; do not weaken either
 value to make a host pass.

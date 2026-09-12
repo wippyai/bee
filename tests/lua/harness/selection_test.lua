@@ -8,9 +8,7 @@ local view = require("view")
 local appearance = require("appearance")
 
 local CLAUDE = "bee.driver.claude:binding"
-local CODEX = "bee.driver.codex:binding"
 local POLICY = "bee.harness.catalog:selection_policy"
-local CODEX_POLICY = "bee.harness.catalog:codex_fixture_policy"
 local ACTIVATION = "bee:harness_activation"
 local PREFIX = "bee.harness.catalog:selection_"
 
@@ -182,44 +180,48 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
 
-        test.it("shows only profiles with the selected driver's host executable", function()
+        test.it("requires an absolute policy binding without inferring the prepared executable key", function()
             local policy = assert(registry.get(POLICY))
-            local codex_policy = assert(registry.get(CODEX_POLICY))
-            local original_policy, original_codex = policy.data, codex_policy.data
-            local empty = copy_table(policy)
-            local empty_data = copy_table(policy.data :: Entry)
-            empty_data.executables = {codex = "/bin/true"}
-            empty.data = empty_data
-            local codex = copy_table(codex_policy)
-            local codex_data = copy_table(codex_policy.data :: Entry)
-            codex_data.executables = {codex = "/bin/true"}
-            codex.data = codex_data
-            local unconfigured = definition("unconfigured", "Unconfigured Claude", "selection-unconfigured", "window", true)
-            local missing_provider = definition("missing-provider", "Missing Codex provider", "selection-missing-provider", "window", true, CODEX, POLICY)
-            local configured = definition("configured-codex", "Configured Codex", "selection-configured-codex", "window", true, CODEX, CODEX_POLICY)
+            local original_policy = policy.data
+            local distinct = copy_table(policy)
+            local distinct_data = copy_table(policy.data :: Entry)
+            distinct_data.executables = {codex = "/bin/true"}
+            distinct.data = distinct_data
+            local relative = copy_table(policy)
+            local relative_data = copy_table(policy.data :: Entry)
+            relative_data.executables = {codex = "bin/codex"}
+            relative.data = relative_data
+            local claude = definition("distinct-executable", "Claude with a distinct executable key", "selection-distinct-executable", "window", true)
             local ok, failure = pcall(function()
-                apply_create({unconfigured, missing_provider, configured})
+                apply_create({claude})
                 local changes = registry.snapshot():changes()
-                changes:update(empty)
-                changes:update(codex)
+                changes:update(distinct)
                 local applied, apply_error = changes:apply()
-                if not applied then error("configure selection policies: " .. tostring(apply_error)) end
+                if not applied then error("set distinct executable binding: " .. tostring(apply_error)) end
                 local result = choices(selection.snapshot())
-                test.eq(#result.items, 2)
-                test.eq(result.items[1].definition_ref, PREFIX .. "configured-codex")
-                test.eq(result.items[2].definition_ref, PREFIX .. "missing-provider")
-                test.eq(result.unavailable, 1)
+                -- Listing preserves only the measured choice. It does not
+                -- pre-bind the Claude driver's eventual executable to codex;
+                -- machine.plan remains the exact prepared-name mapper.
+                test.eq(#result.items, 1)
+                test.eq(result.items[1].definition_ref, PREFIX .. "distinct-executable")
+                has_only_choice_fields(result.items[1])
+                test.eq(result.unavailable, 0)
+                local relative_changes = registry.snapshot():changes()
+                relative_changes:update(relative)
+                local relative_applied, relative_error = relative_changes:apply()
+                if not relative_applied then error("set relative executable binding: " .. tostring(relative_error)) end
+                local unavailable = choices(selection.snapshot())
+                test.eq(#unavailable.items, 0)
+                test.eq(unavailable.unavailable, 1)
             end)
             local restored, restore_error = pcall(function()
                 policy.data = original_policy
-                codex_policy.data = original_codex
                 local changes = registry.snapshot():changes()
                 changes:update(policy)
-                changes:update(codex_policy)
                 local applied, apply_error = changes:apply()
                 if not applied then error("restore selection policies: " .. tostring(apply_error)) end
             end)
-            local removed, remove_error = pcall(function() remove({unconfigured, missing_provider, configured}) end)
+            local removed, remove_error = pcall(function() remove({claude}) end)
             if not restored then error(tostring(restore_error)) end
             if not removed then error(tostring(remove_error)) end
             if not ok then error(tostring(failure)) end

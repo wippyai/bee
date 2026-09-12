@@ -1,0 +1,33 @@
+-- MIT. Authoring request schemas never accept authority or execution flags.
+local test = require("test")
+local protocol = require("protocol")
+local function define_tests()
+    test.describe("Governance authoring protocol", function()
+        test.it("decodes text and canonical binary writes", function()
+            local text = protocol.decode({operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "write", path = "child/service.lua", content = "return true"})
+            test.not_nil(text)
+            if text then test.eq(text.content, "return true") end
+            local binary = protocol.decode({operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "binary", path = "a.wasm", content_base64 = "AP8="})
+            test.not_nil(binary)
+            if binary then test.eq(binary.content, "\0\255") end
+        end)
+        test.it("rejects authority fields and fields inappropriate to the operation", function()
+            test.not_nil(protocol.decode({operation = "list", workspace_id = "demo", snapshot_digest = string.rep("a", 64)}))
+            test.is_nil(protocol.decode({operation = "list", workspace_id = "demo", snapshot_digest = "latest"}))
+            test.is_nil(protocol.decode({operation = "list", workspace_id = "demo", actor = "admin"}))
+            test.is_nil(protocol.decode({operation = "list", workspace_id = "demo", expected_revision = 1}))
+            test.is_nil(protocol.decode({operation = "freeze", workspace_id = "demo", expected_revision = 1, idempotency_key = "freeze", approved = true}))
+            test.is_nil(protocol.decode({operation = "activate", workspace_id = "demo"}))
+            test.is_nil(protocol.decode({operation = "create", workspace_id = "demo", expected_revision = 1, idempotency_key = "create"}))
+        end)
+        test.it("requires CAS and refuses ambiguous encodings and escaping paths", function()
+            test.is_nil(protocol.decode({operation = "put", workspace_id = "demo", path = "entry", content = "x"}))
+            for _, path in ipairs({"../x", "/x", "a//b", "a/", "C:entry", "a\\b"}) do
+                test.is_nil(protocol.decode({operation = "read", workspace_id = "demo", path = path}))
+            end
+            test.is_nil(protocol.decode({operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "x", path = "entry", content = "x", content_base64 = "eA=="}))
+            test.is_nil(protocol.decode({operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "x", path = "entry", content_base64 = "eA==\n"}))
+        end)
+    end)
+end
+return test.run_cases(define_tests)

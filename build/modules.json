@@ -69,6 +69,13 @@
       ]
     },
     {
+      "module": "bee/governance",
+      "root": "bee.governance",
+      "namespaces": [
+        "bee.governance"
+      ]
+    },
+    {
       "module": "bee/harness",
       "root": "bee.harness",
       "namespaces": [

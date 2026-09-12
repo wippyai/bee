@@ -299,7 +299,7 @@ entries:
     comment: Host-selected boundary for ordinary applications; native execution components receive reviewed policies separately
   policy:
     actions: [db.get]
-    resources: [bee.placement.native:db, bee.resources:db, bee.credentials:db]
+    resources: [bee.placement.native:db, bee.resources:db, bee.credentials:db, bee.governance:db]
     effect: deny
 - name: client_storage_policy
   kind: security.policy

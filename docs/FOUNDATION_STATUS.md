@@ -125,7 +125,10 @@ including source-free packaging after adding the node database to the fixture's
 isolated environment. The two-runtime feed gate also passes with the race-enabled
 harness. This is source evidence, not a global binary installation or Hub publication.
 See [sync and inbox](SYNC_AND_INBOX.md) for authority, retention and enrollment
-limits; governance, Hub installation and overlay activation remain separate.
+limits. Governance source now provides a host-admitted, caller-owned staging
+workspace with revision checks, retry receipts and frozen file snapshots. It has
+no default authoring grants and cannot activate an overlay, install from Hub, or
+replicate through Hive; those remain separate acceptance gates.
 
 The currently installed September 10 candidate (production c3b2c9f, native
 ced4008999f4, runtime674b58a1) passed full `make check`: 494 Lua tests,

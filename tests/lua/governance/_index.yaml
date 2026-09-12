@@ -1,0 +1,50 @@
+version: '1.0'
+namespace: bee.governance
+entries:
+- name: authoring_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.governance.workspace.read, bee.governance.workspace.write]
+    resources: '*'
+    effect: allow
+- name: direct_store_probe
+  kind: function.lua
+  source: file://direct_store_probe.lua
+  method: handle
+  modules: [sql]
+  meta: {type: test_support}
+- name: workspace_protocol_test
+  kind: function.lua
+  source: file://workspace_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.governance:workspace_protocol
+- name: preflight_test
+  kind: function.lua
+  source: file://preflight_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    preflight: bee.governance:preflight
+- name: workspace_test
+  kind: function.lua
+  source: file://workspace_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    workspace: bee.governance:workspace
+- name: authoring_test
+  kind: function.lua
+  source: file://authoring_test.lua
+  method: run
+  modules: [funcs, security]
+  security:
+    policies: [bee.governance:authoring_client_policy]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test

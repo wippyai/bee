@@ -1,0 +1,127 @@
+version: '1.0'
+namespace: bee.governance
+entries:
+- name: definition
+  kind: ns.definition
+  module: governance
+  readme: file://README.md
+  meta:
+    title: Bee governance authoring
+    comment: Caller-owned migrated staging and measured-closure checks; install/update execution remains gated
+- name: preflight
+  kind: library.lua
+  source: file://preflight.lua
+  modules: [hash]
+  imports:
+    canonical: bee.sync:canonical
+- name: workspace
+  kind: library.lua
+  source: file://workspace.lua
+  modules: [hash]
+  imports:
+    canonical: bee.sync:canonical
+- name: workspace_protocol
+  kind: library.lua
+  source: file://workspace_protocol.lua
+  modules: [base64]
+  imports: {bounds: bee.threads.records:bounds}
+- name: target_db
+  kind: ns.requirement
+  default: bee.governance:db
+  meta: {comment: Host-selected SQLite store for private authoring workspaces and frozen content}
+  targets:
+  - entry: bee.governance:database_ref
+    path: .resource_ref
+- name: database_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: db_path
+  kind: env.variable
+  storage: bee.governance:environment
+  variable: BEE_GOVERNANCE_DB
+  default: .wippy/governance.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.governance:db_path}
+  lifecycle: {auto_start: true}
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}
+- name: staging
+  kind: library.lua
+  source: file://staging.lua
+  modules: [sql, hash, base64]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance:migrations
+    protocol: bee.governance:workspace_protocol
+    workspace: bee.governance:workspace
+    bounds: bee.threads.records:bounds
+- name: authoring
+  kind: library.lua
+  source: file://authoring.lua
+  modules: [security, system]
+  imports:
+    protocol: bee.governance:workspace_protocol
+    staging: bee.governance:staging
+    resources: bee.governance:staging_resources
+    transaction: bee.persist:transaction
+- name: staging_policy
+  kind: security.policy
+  policy:
+    actions: [db.get, registry.get, system.read]
+    resources: [bee.governance:db, bee.governance:database_ref, node]
+    effect: allow
+- name: workspace_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Author a caller-owned workspace with revision checks; freeze content without executing or approving it
+- name: workspace_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.governance:workspace_contract
+    methods: {call: bee.governance:workspace_call}
+- name: workspace_call
+  kind: function.lua
+  source: file://workspace_method.lua
+  method: handle
+  imports: {authoring: bee.governance:authoring}
+  security: {policies: [bee.governance:staging_policy]}
+  meta:
+    type: tool
+    title: Governance authoring workspace
+    llm_alias: BeeWorkspace
+    llm_description: Create, list, read, put, remove or freeze files in your host-admitted private workspace. Writes require the current revision and a stable retry key. Freeze stages measured content only; it neither requests approval nor activates it. Binary files use canonical base64. There is no host filesystem or registry access.
+    input_schema: |
+      {"type":"object","additionalProperties":false,"required":["operation","workspace_id"],"properties":{"operation":{"type":"string","enum":["create","list","read","put","remove","freeze"]},"workspace_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+- name: authoring_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Governance authoring
+    comment: Caller-owned durable staging only; no registry writer or approval capability
+  prompt: |
+    Use BeeWorkspace to author packs and changes as files. Create with revision
+    zero; list before editing to obtain the current revision. Put replaces one
+    whole file; remove deletes one file. Both need expected_revision and a stable
+    idempotency_key. Retry an uncertain write with the identical request and key;
+    a changed request needs a new key. On conflict, reread and reconcile first.
+    Use content for source text or content_base64 for binary assets. Read returns
+    base64 content and a digest. Paths are relative and confined to this virtual
+    workspace, not OS paths. Freeze with expected_revision and a retry key to
+    retain an exact candidate. Freeze is not approval, installation or execution.
+    Pass snapshot_digest to list/read to inspect that retained candidate instead
+    of current files; the returned revision is the frozen revision.
+    Host policy admits each workspace operation; this trait grants no authority.
+  tools: [bee.governance:workspace_call]

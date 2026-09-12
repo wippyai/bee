@@ -1,12 +1,27 @@
 # Bee governance implementation plan
 
-Status: implementation work in progress. These operations are not shipped APIs.
+Status: source now includes private, host-admitted authoring workspaces. Overlay
+activation, Hub resolution or installation, approval consumption, and Hive
+replication remain unimplemented.
 
 Bee owns a small governance subsystem. It has no Keeper, Kickside, web view,
-or language-model dependency. The first acceptance target is a headless install
-and update of a private Hub component, including its migrations. The existing
+or language-model dependency. The first publication acceptance target remains a
+headless install and update of a private Hub component, including its migrations.
+The existing
 `wolfy-j/bee-registry-planner` package only plans harness activation and stores
 candidates; it does not satisfy this target.
+
+The current authoring seam is `bee.governance:workspace_call` through its local
+contract: create, list, read, put, remove and freeze caller-owned virtual files.
+Writes use an expected revision plus a stable idempotency key; freeze retains a
+measured copy and does not publish or execute it. The protected function checks
+the authenticated actor and a host-supplied read or write operation on the exact
+workspace ID. No default authoring operation policy is installed.
+The ordinary application boundary still denies direct governance-store access;
+on the current runtime that deny also applies when an ordinary app calls the
+store-backed function. The source therefore does not yet expose authoring to a
+bundled app. A host may admit a separately scoped external actor while a future
+dedicated owner/process boundary is designed and accepted.
 
 ## Decision and ownership
 

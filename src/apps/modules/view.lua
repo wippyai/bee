@@ -29,7 +29,7 @@ function M.hit(hits: {Hit}, x: integer, y: integer): Hit?
     return nil
 end
 
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?): Frame
+local function draw_base(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?): Frame
     local theme, canvas = appearance.theme(preferences.theme), tty.canvas(width, height)
     local hits: {Hit} = {}
     local function put(x: integer, y: integer, value: string, size: integer, fg: string?, bg: string?)
@@ -62,34 +62,55 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     x = button(x, 2, "catalog", " Catalog ", true)
     x = button(x, 2, "installed", " Installed ", true)
     x = button(x, 2, "operations", " Operations ", true)
-    x = button(x, 2, "details", " Details ", state.selected ~= nil)
-    x = button(x, 2, "plan", " Plan ", state.selected ~= nil)
+    if state.phase ~= "catalog" and state.phase ~= "installed" then
+        x = button(x, 2, "details", " Package ", state.selected ~= nil)
+    end
     if state.phase == "catalog" then
         local filters = "Keyword: " .. (state.keyword == "" and "all" or state.keyword) .. "  Search: " .. (state.query == "" and "(none)" or state.query)
         if width < 56 then filters = "Keyword " .. (state.keyword == "" and "all" or state.keyword) end
         line(3, filters, theme.muted)
-        local first, last = 4, height - 2
-        local capacity = maximum(0, last - first + 1)
+        local roomy = width >= 48 and height >= 16
+        local first = roomy and 6 or 4
+        local stride = roomy and 3 or 1
+        local capacity = maximum(0, (height - 2 - first) // stride)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.catalog - capacity), offset)))
-        if #state.catalog == 0 then line(first, "No packages on this page", theme.muted) end
+        if roomy then
+            local search_x = button(2, 4, "search", " Search packages… ", true)
+            search_x = button(search_x, 4, "keyword", " Change keyword ", true)
+            put(search_x + 1, 4, tostring(state.total) .. " packages", maximum(0, width - search_x - 2), theme.muted)
+        end
+        if #state.catalog == 0 then
+            line(first, "No packages on this page", theme.text)
+            if roomy then line(first + 1, "Try another search or clear the keyword filter.", theme.muted) end
+        end
         for slot = 1, capacity do
             local item = state.catalog[next_offset + slot]
             if not item then break end
-            local y, selected = first + slot - 1, item.component == state.selected
+            local y, selected = first + (slot - 1) * stride, item.component == state.selected
             local label = item.title ~= "" and item.title or item.component
-            if width >= 58 then label = label .. "  " .. item.component .. "  " .. item.latest_version .. "  " .. item.description
-            elseif width >= 32 then label = label .. "  " .. item.latest_version end
-            line(y, label, selected and appearance.selection_text(theme) or theme.text, selected and theme.accent or theme.surface)
-            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = 1}
+            local foreground = selected and appearance.selection_text(theme) or theme.text
+            local background = selected and theme.accent or theme.surface
+            if roomy then
+                line(y, " " .. label, foreground, background)
+                local version_width = tty.text.width(item.latest_version)
+                if version_width > 0 and tty.text.width(label) + version_width + 6 < width then
+                    put(width - version_width - 2, y, item.latest_version, version_width, foreground, background)
+                end
+                line(y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
+                line(y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
+            else
+                line(y, label, foreground, background)
+            end
+            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = stride}
         end
         local actions = 2
-        actions = button(actions, height - 1, "previous", " Prev ", state.page > 1)
-        actions = button(actions, height - 1, "next", " Next ", #state.catalog > 0 and state.total > state.page * #state.catalog)
+        actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
+        actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
         line(height, status ~= "" and status or "Type / to search · K changes keyword · Enter details · ←/→ page", theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "installed" then
-        line(3, "Installed roots and their measured closure", theme.muted)
+        line(3, "Your installed packages", theme.muted)
         local first, last = 4, height - 2
         local capacity = maximum(0, last - first + 1)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.installed - capacity), offset)))
@@ -164,7 +185,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if state.phase == "details" then
         line(3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
         if detail then
-            line(4, detail.description, theme.text)
+            line(4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2
             tab_x = button(tab_x, 5, "readme", reading and " [README] " or " README ", true)
             tab_x = button(tab_x, 5, "versions", not reading and not state.requirements_open and " [Versions] " or " Versions ", true)
@@ -213,7 +234,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                     if not row then break end
                     line(6 + slot - 1, row, row:match("^#") and theme.accent or theme.text)
                 end
-                button(2, height - 1, "versions", " Choose version ", true)
+                local action_x = button(2, height - 1, "versions", " Choose version ", true)
+                action_x = button(action_x, height - 1, "requirements", " Configure ", true)
+                action_x = button(action_x, height - 1, "plan", " Review installation ", state.selected_version ~= nil)
                 line(height, status ~= "" and status or "↑↓ scroll · V versions · Esc catalog", theme.muted)
                 return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
@@ -352,4 +375,51 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
 end
 
+type Editor = {field: string, buffer: string, name: string?}
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?): Frame
+    local frame = draw_base(width, height, preferences, state, offset, editor and "" or status, reading)
+    if not editor then return frame end
+    if width < 28 or height < 14 then return draw_base(width, height, preferences, state, offset, status, reading) end
+    local theme = appearance.theme(preferences.theme)
+    local canvas = tty.canvas(width, height)
+    for y, row in ipairs(frame.rows) do canvas:put(1, y, row, width) end
+    local w = math.floor(math.min(76, width - 4))
+    local h = math.floor(math.min(13, height - 4))
+    local left, top = (width - w) // 2 + 1, (height - h) // 2 + 1
+    local function row(y: integer, value: string, fg: string?)
+        canvas:put(left, y, appearance.style(theme.border, theme.surface) .. "│" .. string.rep(" ", w - 2) .. "│" .. RESET, w)
+        canvas:put(left + 2, y, appearance.style(fg or theme.text, theme.surface) .. tty.text.truncate(value, w - 4, "…") .. RESET, w - 4)
+    end
+    canvas:put(left, top, appearance.style(theme.accent, theme.surface) .. "╭" .. string.rep("─", w - 2) .. "╮" .. RESET, w)
+    for y = top + 1, top + h - 2 do row(y, "") end
+    local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword" or "Configure package")
+    row(top + 1, title, theme.accent)
+    row(top + 3, editor.name or (editor.field == "parameter_name" and "Parameter name (namespace:name)" or title), theme.muted)
+    local remaining = editor.buffer
+    local lines: {string} = {}
+    local size = w - 5
+    while remaining ~= "" do
+        local part = tty.text.truncate(remaining, size, "")
+        if part == "" then break end
+        lines[#lines + 1] = part
+        remaining = remaining:sub(#part + 1)
+    end
+    local capacity = maximum(1, h - 8)
+    local first = maximum(1, #lines - capacity + 1)
+    for slot = 1, capacity do
+        local value = lines[first + slot - 1] or ""
+        if first + slot - 1 == maximum(1, #lines) then value = value .. "▏" end
+        row(top + 3 + slot, value)
+    end
+    local hint = editor.field == "parameter_value" and "JSON: text, number, true/false, object or array" or "Type to edit; Escape keeps the previous value"
+    if status:find("not JSON", 1, true) or status:find("required", 1, true) or status:find("cannot", 1, true) then hint = status end
+    row(top + h - 3, hint, theme.muted)
+    row(top + h - 2, " Enter Save     Esc Cancel", theme.accent)
+    canvas:put(left, top + h - 1, appearance.style(theme.accent, theme.surface) .. "╰" .. string.rep("─", w - 2) .. "╯" .. RESET, w)
+    local hits: {Hit} = {
+        {kind = "save_editor", key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
+        {kind = "cancel_editor", key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
+    }
+    return {rows = canvas:rows(), hits = hits, capacity = frame.capacity, offset = frame.offset, operation_detail_offset = frame.operation_detail_offset}
+end
 return M

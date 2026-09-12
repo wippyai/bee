@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-") as temporary:
         ui.wait("MODULES", timeout=20)
         ui.wait("Keyword: bee")
         ui.key(b"K")
-        ui.wait("Keyword (empty is all): bee")
+        ui.wait("Filter by keyword")
         ui.key(b"\x7f\x7f\x7f\r")
         ui.wait("Keyword: all")
         ui.key(b"/")

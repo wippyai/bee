@@ -1,10 +1,9 @@
 # Hub installation and package reads
 
 Bee has an optional Hub component with a scoped public API and a Modules TUI
-in development. Real install, update, uninstall and durable receipt restart
-checks pass on the existing runtime. This backend milestone is installed globally.
-The explicit interruption-recovery API and scrollable plan review are included
-in global build `237d76a8`. Migration execution remains unfinished.
+for browsing, requirements editing and reviewed installation. Real install,
+update, uninstall, SQLite migration and durable receipt restart checks pass on
+the existing runtime. Global build `7ba0b747` includes those behaviors.
 
 `bee.hub:call({operation, request?, expected_digest?})` returns
 `{ok, value?, code?, message?, replayed}`. The facade checks the authenticated
@@ -261,3 +260,8 @@ version. It reads declarations through `inspect`, displays default/selected JSON
 and entry/path targets, and opens the existing JSON editor on the exact selected
 identifier. Defaults remain implicit until edited. Package/version mismatches and
 malformed declarations are rejected. This UI is installed in global source `bd95d44` (SHA `7ba0b747`).
+
+The next Modules layout separates package titles/versions from descriptions,
+exposes clickable search/filter controls, opens details on README, and uses a
+configuration dialog instead of the footer editor when space permits. Validation
+errors keep the editor open. This presentation update is not yet installed.

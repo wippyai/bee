@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-lifecycle-") as temp
         def select_test():
             ui.wait("MODULES", timeout=20)
             ui.key(b"K")
-            ui.wait("Keyword (empty is all): bee")
+            ui.wait("Filter by keyword")
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
             # A one-token query puts wippy/test in a deterministic third row.

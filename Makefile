@@ -165,7 +165,7 @@ hive-lan-check: hive-harness-check
 		-host-address "$(HIVE_HOST_ADDRESS)" -client-address "$(HIVE_CLIENT_ADDRESS)"
 
 .PHONY: managed-launch-check
-managed-launch-check:
+managed-launch-check: fixture-gateway-client
 	@test -n "$(BEE_RUNTIME)" -a -n "$(BEE_CLAUDE_BIN)" -a -n "$(BEE_CODEX_BIN)" || { echo 'Set BEE_RUNTIME (combined runtime), BEE_CLAUDE_BIN and BEE_CODEX_BIN.'; exit 1; }
 	env -u ANTHROPIC_API_KEY BEE_RUNTIME="$(abspath $(BEE_RUNTIME))" BEE_CLAUDE_BIN="$(BEE_CLAUDE_BIN)" BEE_CODEX_BIN="$(BEE_CODEX_BIN)" python3 tests/managed_launch.py
 

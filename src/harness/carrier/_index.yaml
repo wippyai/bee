@@ -30,6 +30,13 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     checkpoint: bee.harness.carrier:checkpoint
+- name: hook_records
+  kind: library.lua
+  source: file://hook_records.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    gateway_hooks: bee.gateway:hooks
 - name: machine
   kind: library.lua
   source: file://machine.lua
@@ -53,6 +60,7 @@ entries:
     placement_types: bee.placement:types
     placement_protocol: bee.placement.native:protocol
     launch_request: bee.placement:request
+    hook_records: bee.harness.carrier:hook_records
 - name: process
   kind: process.lua
   source: file://process.lua

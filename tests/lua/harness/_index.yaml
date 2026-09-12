@@ -96,6 +96,9 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     settle: bee.harness.carrier:settle
     driver_types: bee.driver:types
+    hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway:hooks
+    canonical: bee.threads.records:canonical
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua

@@ -26,6 +26,7 @@ local placement_types = require("placement_types")
 local placement_protocol = require("placement_protocol")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
+local hook_records = require("hook_records")
 local M = {}
 M.PLACEMENT_BINDING = "bee.placement.native:binding"
 M.PLACEMENT = "bee.placement.native"
@@ -440,25 +441,6 @@ local function gateway_revoke(io: IO, binding_id: string?)
     if not binding_id then return end
     io.call(M.GATEWAY .. ":revoke", {binding_id = binding_id})
 end
--- One hook submission as the carrier records it: an extension observation
--- keyed by the occurrence (or the event id when the occurrence is
--- ambiguous), so a second commit of the same submission after a crash
--- between commit and acknowledgment replays the record instead of
--- duplicating it. Allowlisted fields only travel; the gateway kept nothing
--- else.
-local function hook_record(session: Session, item: Object): {[string]: unknown}
-    local binding_id = tostring(session.checkpoint.gateway_binding)
-    local key = "hook:" .. tostring(item.event_id)
-    if item.ambiguous ~= true then key = "hook:" .. binding_id .. ":" .. tostring(item.event) .. ":" .. tostring(item.occurrence) end
-    -- The body carries nothing of the committing carrier, so a replacement
-    -- recommitting the same submission replays the record byte for byte.
-    -- Canonical encoding, so two processes encode one submission alike.
-    local payload = canonical.encode({event_id = item.event_id, event = item.event, occurrence = item.occurrence, ambiguous = item.ambiguous == true, provenance = item.provenance, sequence = item.sequence,
-        fields = item.fields, binding_id = binding_id}) or "{}"
-    local record: {[string]: unknown} = {source = "bee", body = {type = "extension", event_key = key, data = {type = "extension", event_name = "bee.harness.hook", event_revision = "1", payload_json = payload}}}
-    if session.turn_open then record.turn_id = session.turn_id end
-    return record
-end
 -- drain_hooks: claim what the gateway queued for this binding under this
 -- carrier's epoch, commit it through the carrier's own commit path, then
 -- acknowledge; a crash between the commit and the acknowledgment is
@@ -485,12 +467,11 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
         local items = claimed.hooks
         if type(items) ~= "table" or #(items :: {Object}) == 0 then return drained, nil end
         step(io, "hooks_claimed")
-        local records: {{[string]: unknown}} = {}
-        local event_ids: {string} = {}
-        for index, item in ipairs(items :: {Object}) do
-            records[index] = hook_record(session, item)
-            event_ids[index] = tostring(item.event_id)
-        end
+        local turn_id = session.turn_open and session.turn_id or nil
+        local batch, batch_error = hook_records.batch(binding_id :: string, turn_id, items)
+        if not batch then return drained, "hook batch: " .. tostring(batch_error) end
+        local records = batch.records :: {{[string]: unknown}}
+        local event_ids = batch.event_ids :: {string}
         local committed, commit_error = M.commit(io, session, records)
         if not committed then return drained, commit_error end
         step(io, "hooks_committed")

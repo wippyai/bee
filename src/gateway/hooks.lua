@@ -151,4 +151,89 @@ function M.control_free(payload: Object): Object
     end
     return cleaned
 end
+local ALLOWED_STORED_FIELDS: {string} = {"event", "content_sizes", "content_digests"}
+for _, name in ipairs(M.CLAIM_FIELDS) do ALLOWED_STORED_FIELDS[#ALLOWED_STORED_FIELDS + 1] = name end
+for name in pairs(M.ENUMERATED) do ALLOWED_STORED_FIELDS[#ALLOWED_STORED_FIELDS + 1] = name end
+for _, name in ipairs(M.BOOLEAN_FIELDS) do ALLOWED_STORED_FIELDS[#ALLOWED_STORED_FIELDS + 1] = name end
+for _, name in ipairs(M.NUMBER_FIELDS) do ALLOWED_STORED_FIELDS[#ALLOWED_STORED_FIELDS + 1] = name end
+for _, name in ipairs(M.IDENTIFIER_FIELDS) do ALLOWED_STORED_FIELDS[#ALLOWED_STORED_FIELDS + 1] = name end
+function M.stored_fields(value: unknown): (Object?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "fields must be an object" end
+    local unknown_field = bounds.fields(object, ALLOWED_STORED_FIELDS)
+    if unknown_field then return nil, unknown_field end
+    if type(object.event) ~= "string" or not M.known(object.event) then
+        return nil, "invalid or unknown event in hook fields"
+    end
+    local fields: Object = {event = object.event}
+    for _, name in ipairs(M.CLAIM_FIELDS) do
+        local val = object[name]
+        if val ~= nil then
+            local id = bounds.id(val)
+            if not id then return nil, name .. " is not an identifier" end
+            fields[name] = id
+        end
+    end
+    for name, allowed in pairs(M.ENUMERATED) do
+        local val = object[name]
+        if val ~= nil then
+            if type(val) ~= "string" or not member(allowed, val :: string) then
+                return nil, "invalid enum value for " .. name
+            end
+            fields[name] = val
+        end
+    end
+    for _, name in ipairs(M.BOOLEAN_FIELDS) do
+        local val = object[name]
+        if val ~= nil then
+            if type(val) ~= "boolean" then return nil, name .. " must be boolean" end
+            fields[name] = val
+        end
+    end
+    for _, name in ipairs(M.NUMBER_FIELDS) do
+        local val = object[name]
+        if val ~= nil then
+            if type(val) ~= "number" or val ~= val or val == math.huge or val == -math.huge or val < 0 then
+                return nil, name .. " must be a finite non-negative number"
+            end
+            fields[name] = val
+        end
+    end
+    for _, name in ipairs(M.IDENTIFIER_FIELDS) do
+        local val = object[name]
+        if val ~= nil then
+            if type(val) ~= "string" or #val == 0 or #val > 128 or not val:match("^[A-Za-z0-9_.:/%-]+$") then
+                return nil, name .. " is not an identifier"
+            end
+            fields[name] = val
+        end
+    end
+    if object.content_sizes ~= nil then
+        local sizes = bounds.object(object.content_sizes)
+        if not sizes then return nil, "content_sizes must be an object" end
+        local clean_sizes: Object = {}
+        for k, v in pairs(sizes) do
+            if type(k) ~= "string" or not member(M.CONTENT_FIELDS, k) then return nil, "unknown content_sizes field: " .. tostring(k) end
+            local count = bounds.count(v)
+            if count == nil then return nil, "content_sizes." .. tostring(k) .. " must be a non-negative integer" end
+            clean_sizes[k] = count
+        end
+        fields.content_sizes = clean_sizes
+    end
+    if object.content_digests ~= nil then
+        local digests = bounds.object(object.content_digests)
+        if not digests then return nil, "content_digests must be an object" end
+        local clean_digests: Object = {}
+        for k, v in pairs(digests) do
+            if type(k) ~= "string" or not member(M.CONTENT_FIELDS, k) then return nil, "unknown content_digests field: " .. tostring(k) end
+            if type(v) ~= "string" or #v ~= 64 or not v:match("^[0-9a-fA-F]+$") then
+                return nil, "content_digests." .. tostring(k) .. " must be a 64-character hex digest"
+            end
+            clean_digests[k] = v
+        end
+        fields.content_digests = clean_digests
+    end
+    return fields, nil
+end
+M.decode_stored_fields = M.stored_fields
 return M

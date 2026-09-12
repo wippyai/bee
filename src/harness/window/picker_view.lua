@@ -23,7 +23,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     line(1, "AGENT", false, false)
     if height >= 5 then line(2, "Choose a profile", false, true) end
-    local capacity = math.floor(math.max(0, height - 5))
+    local show_summary = height >= 10
+    local capacity = math.floor(math.max(0, height - (show_summary and 6 or 5)))
     if width <= 2 then capacity = 0 end
     local first = math.floor(math.max(1, selected - capacity + 1))
     for row = 1, capacity do
@@ -36,6 +37,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if #choices.items == 0 and height >= 5 then line(3, "No agent profiles are configured on this node", false, true) end
     local choice = choices.items[selected]
+    if show_summary and choice and choice.summary then line(height - 3, choice.summary, false, true) end
     if height >= 3 then
         local x = 2
         for _, action in ipairs({{name = "open", label = " Open "}, {name = "refresh", label = " Refresh "}, {name = "close", label = " Close "}}) do

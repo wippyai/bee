@@ -157,3 +157,14 @@ Missing credential configuration is refused before creating resources. A later
 operation failure may leave earlier creations intact; retries reuse them.
 Production's credential map remains empty, so this does not yet discover or
 project the user's machine login automatically.
+
+The Agent picker source now summarizes the selected measured profile: project or
+configured directory, whether persistent profile instructions are selected, and
+the number of configured gateway tools. It reads that summary from the same
+immutable registry snapshot as admission planning. Counts describe configuration,
+not a live MCP listener or granted authority. Instruction text, environment values
+and credential contents are not included in the summary. Compact windows retain
+the existing list and actions without the summary row. This UI addition passes the native Agent selector acceptance, including the
+summary before launching Claude/Codex and retained session/login behavior.
+The initial unit run passed 772 cases; the final selection/view check passed
+14 cases including exclusion of private instruction text.

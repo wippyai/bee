@@ -903,7 +903,15 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	if err := ui.waitFor(label, 25*time.Second); err != nil {
 		return err
 	}
-	if err := ui.send(selection); err != nil {
+	if err := ui.send(strings.TrimSuffix(selection, "\r")); err != nil {
+		return err
+	}
+	for _, detail := range []string{"Configured folder", "No instructions", "0 tools configured"} {
+		if err := ui.waitFor(detail, 5*time.Second); err != nil {
+			return fmt.Errorf("selected profile summary: %w", err)
+		}
+	}
+	if err := ui.send("\r"); err != nil {
 		return err
 	}
 	if err := ui.waitFor("BEE_MANAGED_AGENT_READY", 25*time.Second); err != nil {

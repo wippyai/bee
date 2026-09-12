@@ -80,7 +80,7 @@ local function choices(value: Choices?, err: string?): Choices
 end
 
 local function has_only_choice_fields(item: Choice)
-    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true, unavailable = true}
+    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true, unavailable = true, summary = true}
     for key, _ in pairs(item :: {[string]: unknown}) do
         if not fields[tostring(key)] then error("selection leaked field " .. tostring(key)) end
     end
@@ -170,8 +170,33 @@ local function define_tests()
                 test.neq(result.items[1].plan_digest, result.items[2].plan_digest)
                 test.eq(#result.items[1].plan_digest, 64)
                 test.eq(#result.items[2].plan_digest, 64)
+                test.eq(result.items[1].summary, "Project folder · No instructions · 0 tools configured")
+                local frame = view.draw(100, 12, appearance.defaults(), result, 1, "")
+                test.is_true(table.concat(frame.rows):find("Project folder", 1, true) ~= nil)
+                test.is_true(table.concat(frame.rows):find("No instructions", 1, true) ~= nil)
                 has_only_choice_fields(result.items[1])
                 has_only_choice_fields(result.items[2])
+            end)
+        end)
+
+        isolated_it("summarizes configured guidance without exposing its text", function()
+            local original = registry.get(POLICY)
+            if not original then error("missing selection policy") end
+            local configured = copy_table(original)
+            configured.id = PREFIX .. "guidance_policy"
+            local data = copy_table(original.data :: Entry)
+            data.instructions = "PRIVATE_GUIDANCE_SENTINEL"
+            configured.data = data
+            with_entries({configured, definition("guided", "Guided profile", "selection-guided", "window", true, nil,
+                PREFIX .. "guidance_policy")}, function()
+                local result = choices(selection.snapshot())
+                test.eq(#result.items, 1)
+                test.eq(result.items[1].summary, "Project folder · Profile instructions · 0 tools configured")
+                local frame = view.draw(100, 12, appearance.defaults(), result, 1, "")
+                local rows = table.concat(frame.rows)
+                test.is_true(rows:find("Profile instructions", 1, true) ~= nil)
+                test.is_true(rows:find("PRIVATE_GUIDANCE_SENTINEL", 1, true) == nil)
+                has_only_choice_fields(result.items[1])
             end)
         end)
 

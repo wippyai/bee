@@ -50,6 +50,7 @@ entries:
     definitions: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
+    policy: bee.harness.carrier:policy
 - name: setup_backend
   kind: function.lua
   source: file://setup_backend.lua

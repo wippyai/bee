@@ -1,5 +1,14 @@
 # Foundation status
 
+Native Agent windows now attach their placement attempt before opening the PTY
+and receive a host-selected cooperative close allowance. The actual child/HTTP
+hook test passes with a three-second claim delay: input remains responsive,
+duplicate submissions produce one observation, and the cancellation receipt is
+durable before the broker reports close. All 616 Lua tests and three managed
+window tests pass. The broader foundation check is still running. The initial
+cached lint failure was preserved; fresh strict lint passes unchanged source
+with the existing desktop-lifecycle warning. Global Bee is unchanged.
+
 The September 11 Agent integration now includes governed authoring and claimed
 hook recovery. All 600 Lua tests pass; actual restart checks preserve frozen
 authoring content, retry receipts and the migration ledger. Exact operation and

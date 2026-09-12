@@ -12,7 +12,7 @@ function M.accepts_updates(state: State): boolean
         or state.phase == "close_confirming" or state.phase == "close_unresponsive"
 end
 function M.start(now: number): State return {phase = "starting", deadline = now + 3, failure = ""} end
-function M.reduce(state: State, event: Event, now: number): (State, Effect)
+function M.reduce(state: State, event: Event, now: number, close_grace_ms: integer?): (State, Effect)
     if state.phase == "stopped" then return state, "none" end
     if event == "exit" then
         local failed = state.phase == "starting" or state.failure ~= ""
@@ -30,14 +30,14 @@ function M.reduce(state: State, event: Event, now: number): (State, Effect)
         return {phase = "close_confirming", deadline = 0, failure = ""}, "none"
     end
     if event == "accept_close" and (state.phase == "close_requested" or state.phase == "close_confirming") then
-        return {phase = "stopping", deadline = now + 0.25, failure = ""}, "close"
+        return {phase = "stopping", deadline = now + (close_grace_ms or 250) / 1000, failure = ""}, "close"
     end
     if event == "cancel_close" and (state.phase == "close_requested" or state.phase == "close_confirming"
         or state.phase == "close_unresponsive") then
         return {phase = "ready", deadline = 0, failure = ""}, "close_cancelled"
     end
     if event == "stop" and (state.phase == "starting" or state.phase == "ready") then
-        return {phase = "stopping", deadline = now + 0.25, failure = state.phase == "starting" and "cancelled" or ""}, "close"
+        return {phase = "stopping", deadline = now + (close_grace_ms or 250) / 1000, failure = state.phase == "starting" and "cancelled" or ""}, "close"
     end
     if event == "force_stop" then
         return {phase = "terminating", deadline = now + 1, failure = state.failure}, "terminate"

@@ -228,7 +228,7 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.add(dialogs, spec, item.close_request_id or "", item.execution_pid, true) then publish_dialogs() end
     end
     local function transition(item: Instance, event: lifecycle.Event)
-        local next_state, effect = lifecycle.reduce(item.state, event, now())
+        local next_state, effect = lifecycle.reduce(item.state, event, now(), item.binding.close_grace_ms)
         item.state = next_state
         if effect == "opened" then
             -- Readiness belongs to the producer. A missing or failed consumer

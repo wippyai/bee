@@ -51,13 +51,16 @@ process-manager-check:
 .PHONY: window-retirement-check
 window-retirement-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_retirement.py
-.PHONY: window-native-check managed-window-app-check managed-provider-window-check
+.PHONY: window-native-check managed-window-app-check managed-provider-window-check window-hooks-check
 window-native-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/window_native.py
 managed-provider-window-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_provider_window.py
 managed-window-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_window_app.py
+window-hooks-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))"
 .PHONY: layout-ack-check
 layout-ack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import personalization; personalization.acknowledged_layout()'
@@ -76,7 +79,7 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
-check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack headless-check workspace-hosts-check
+check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py

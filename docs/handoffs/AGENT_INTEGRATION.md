@@ -15,6 +15,20 @@ supplied non-object argument value and keeps the binding's thread scope.
 
 ## Verification
 
+The current window follow-up passes 616 Lua tests and all three managed-window
+tests. A real child submits duplicate hooks through its generated HTTP gateway
+configuration. With the actual claim operation delayed three seconds, terminal
+input remains responsive, one observation commits and is acknowledged, and
+close returns only after the cancellation receipt is durable. Placement attachment
+now precedes PTY open. Protected host admission selects the close allowance;
+ordinary apps retain 250ms and force stop remains immediate. Full node shutdown
+has its separate deadline and is not conversation-recovery acceptance.
+
+The full follow-up check is still running. Its first lint attempt failed from
+the existing cache with five `expected tty.Viewport, got tty.Viewport` errors;
+the cache and source were preserved before a fresh strict lint passed unchanged
+code. Evidence is in `/tmp/bee-window-close-*-20260911.log`.
+
 The combined authoring and gateway source passes 600 Lua tests. Earlier managed
 window acceptance passed all three cases with an explicitly bound `/bin/sh`;
 production executable checks remain intact. Source/pack headless checks pass.

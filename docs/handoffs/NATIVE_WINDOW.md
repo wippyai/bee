@@ -264,6 +264,9 @@ The window commits its pinned carrier checkpoint before opening the native child
 This checkpoint records driver, profile, plan, carrier epoch and any retained
 session or gateway binding identity. It contains no provider credentials and
 does not create a logical turn or a successful result.
+After that commit, placement attaches the attempt to the window actor at the
+prepared carrier generation. Gateway validation requires this attachment before
+the PTY may start. An unconfirmed attachment refuses the child start.
 
 While the PTY runs, the actor drives one asynchronous gateway or carrier call
 alongside terminal input, lifecycle and completion channels. It validates the
@@ -282,3 +285,11 @@ reconciliation. Placement then finishes and revokes the binding. Explicit close
 can record cancellation only when this drain completed. Cold application resume,
 provider conversation restoration and public scoped MCP activation remain
 separate acceptance gates.
+
+`make window-hooks-check` runs an actual shell child through generated hook
+configuration, HTTP admission, the window actor and the thread owner. The child
+submits the same event twice; acceptance requires one committed observation and
+gateway acknowledgement, with no invented turn records. A fixture delay in the
+real claim operation checks responsive PTY input and graceful close while hook
+delivery takes seconds. The disposable listener address is fixture configuration;
+this does not establish public MCP port-zero discovery or readiness.

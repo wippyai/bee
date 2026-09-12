@@ -15,6 +15,17 @@ local function define_tests()
             test.is_nil(contract.binding(base))
         end)
 
+        test.it("decodes a bounded cooperative close grace for host bindings", function()
+            local ordinary = assert(contract.binding({definition_id = "test:app", policies = {}}))
+            test.eq(ordinary.close_grace_ms, 250)
+            test.eq(assert(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = 0})).close_grace_ms, 0)
+            test.eq(assert(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = 60000})).close_grace_ms, 60000)
+            for _, value in ipairs({-1, 60001, 1.5, "250", {}} :: {unknown}) do
+                test.is_nil(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = value}))
+            end
+            test.is_nil(contract.binding({definition_id = "test:app", policies = {}, close_grace = 60000}))
+        end)
+
         test.it("limits observer requests to exact bind targets", function()
             local value = {version = 1, request_id = "observe", op = "bind", id = "view", instance_id = "instance", observer = true}
             local request = contract.request(value)

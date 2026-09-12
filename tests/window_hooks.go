@@ -13,11 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
 const (
-	defaultRuntime = "/tmp/bee-runtime-native-recovery-20260911"
+	defaultRuntime = ".wippy/bin/bee-wippy"
 	markerSuccess  = "BEE_WINDOW_HOOKS_ACCEPTANCE: OK"
 )
 
@@ -76,21 +77,29 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	if err := copyDir(filepath.Join(tempDir, "src", "tests", "window_hooks"), windowHooksFixture); err != nil {
 		return "", fmt.Errorf("copy window_hooks fixture: %w", err)
 	}
+	// Inject latency only in this disposable gateway method. It still calls
+	// the real owner, so terminal input must progress while the call is pending.
+	if err := copyFile(filepath.Join(tempDir, "src", "gateway", "hook_claim_method.lua"), filepath.Join(windowHooksFixture, "claim.lua")); err != nil {
+		return "", err
+	}
+	gatewayIndex := filepath.Join(tempDir, "src", "gateway", "_index.yaml")
+	gatewayBytes, err := os.ReadFile(gatewayIndex)
+	if err != nil {
+		return "", err
+	}
+	claimAnchor := "source: file://hook_claim_method.lua\n  method: handle\n"
+	if strings.Count(string(gatewayBytes), claimAnchor) != 1 {
+		return "", fmt.Errorf("missing fixture claim method declaration")
+	}
+	if err := os.WriteFile(gatewayIndex, []byte(strings.Replace(string(gatewayBytes), claimAnchor, claimAnchor+"  modules: [time]\n", 1)), 0600); err != nil {
+		return "", err
+	}
 
 	// 4. Copy runtime config files
 	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
 		srcFile := filepath.Join(repoRoot, name)
-		if _, err := os.Stat(srcFile); err == nil {
-			if err := copyFile(filepath.Join(tempDir, name), srcFile); err != nil {
-				return "", fmt.Errorf("copy %s: %w", name, err)
-			}
-		} else {
-			// Fallback defaults if missing
-			if name == ".wippy.yaml" {
-				_ = os.WriteFile(filepath.Join(tempDir, name), []byte("version: '1.0'\nshutdown:\n  timeout: 3s\n"), 0644)
-			} else {
-				_ = os.WriteFile(filepath.Join(tempDir, name), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0644)
-			}
+		if err := copyFile(filepath.Join(tempDir, name), srcFile); err != nil {
+			return "", fmt.Errorf("copy %s: %w", name, err)
 		}
 	}
 
@@ -175,7 +184,6 @@ func isolatedEnvironment(tempDir string) []string {
 func runHarness() error {
 	runtimeFlag := flag.String("runtime", defaultRuntime, "path to runtime executable")
 	srcFlag := flag.String("src", "", "source directory to stage (defaults to repository root)")
-	expectRed := flag.Bool("expect-red", false, "expect test to fail (for proving RED on integration lacking hook delivery)")
 	keepTemp := flag.Bool("keep-temp", false, "do not delete temporary directory after run")
 	flag.Parse()
 
@@ -238,15 +246,13 @@ func runHarness() error {
 	cmd := exec.CommandContext(ctx, runtimePath, "run", "--host", "bee:terminal", "--", "window-hooks-acceptance")
 	cmd.Dir = tempDir
 	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 3 * time.Second
 	output, runErr := cmd.CombinedOutput()
 	outStr := string(output)
-
-	if *expectRed {
-		if runErr == nil && strings.Contains(outStr, markerSuccess) {
-			return fmt.Errorf("expected RED failure against %s, but acceptance passed unexpectedly:\n%s", srcDir, outStr)
-		}
-		fmt.Printf("PROVED MEANINGFUL RED against %s (gateway endpoint: %s):\n%s\n", srcDir, endpoint, outStr)
-		return nil
+	if strings.Contains(outStr, "Bearer ") {
+		return fmt.Errorf("credential header reached captured output")
 	}
 
 	if runErr != nil {

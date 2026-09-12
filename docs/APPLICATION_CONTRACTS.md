@@ -334,8 +334,12 @@ an explicit Force stop/Cancel dialog. Cancellation reports `cancelled` to close
 callers and sends `bee.application.close.result` to the app with its original
 request ID and `action: "cancel"`. Apps that pause work during negotiation must
 resume on this authenticated result, decoded with
-`client.close_result(launch, sender, payload)` and matched to their pending request. Acceptance begins the existing 250ms
-cooperative cleanup, followed by termination if necessary. Repeated close clicks
+`client.close_result(launch, sender, payload)` and matched to their pending request.
+Acceptance begins cooperative cleanup, followed by termination if necessary.
+The protected host admission binding selects `close_grace_ms`, an integer from
+0 to 60000, defaulting to 250. The native Agent window has a 60000ms allowance
+for pending hook delivery and its receipt. Application metadata and close replies
+cannot extend that allowance; explicit force stop bypasses it. Repeated close clicks
 share one negotiation; stale IDs and forged senders/tokens cannot accept it.
 A pending ordinary query is cancelled when close negotiation begins. New queries
 during negotiation receive `busy`; title announcements remain accepted.
@@ -353,7 +357,10 @@ individual app close still removes its record. Completion waits for observed app
 exits and known persistence requests, with a bounded failure path that reports
 unacknowledged cleanup. Only a successful checkpoint receipt guarantees a committed
 save. Apps requiring a save before consent must await that receipt before accepting;
-a queued send is insufficient, and final cleanup has only a 250ms grace period. Launching new apps is rejected
+a queued send is insufficient. The per-app allowance does not extend the overall
+workspace shutdown deadline: the broker still reports incomplete cleanup after
+3.5 seconds. Agent conversation recovery across node shutdown remains a separate
+acceptance gate. Launching new apps is rejected
 while quit is pending. Apps that accept without a question do not add a prompt.
 
 The failed-presenter recovery screen retains Ctrl+Q as an emergency exit that

@@ -1,4 +1,5 @@
--- Real native-window hook acceptance fixture.
+-- MIT. Real native-window hook acceptance fixture.
+local io = require("io")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -145,6 +146,7 @@ local function execute()
     assert(hook_submitted, "actual hook was not accepted by real gateway (expected HOOK_HTTP_CODE:202)")
 
     -- 7. Verify terminal input is functional
+    local input_started = time.now():unix_nano()
     assert(view:send({type = "paste", text = "first-pty-check"}))
     assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
     local pty_functional_before = false
@@ -157,6 +159,7 @@ local function execute()
         time.sleep("25ms")
     end
     assert(pty_functional_before, "terminal input is not functional before hook commit")
+    assert(time.now():unix_nano() - input_started < 1000000000, "PTY input waited for the delayed gateway claim")
 
     -- 8. Verify hook committed by window as thread extension without turn
     local hook_committed = false
@@ -196,8 +199,11 @@ local function execute()
     assert(committed_record ~= nil, "missing committed hook observation record")
     assert(committed_record.turn_id == nil, "committed hook must not have a turn_id (extension without turn)")
 
-    -- 9. Verify hook acknowledged once by real gateway
-    if committed_binding_id and committed_binding_id ~= "" then
+    -- Commit and acknowledgment are separate asynchronous operations.
+    assert(committed_binding_id and committed_binding_id ~= "", "hook omitted binding identity")
+    assert(committed_event_id and committed_event_id ~= "", "hook omitted event identity")
+    local acknowledged = false
+    for _ = 1, 100 do
         local queue_res = call("bee.gateway:hook_queue", {binding_id = committed_binding_id})
         local queue_val = reply(queue_res.value)
         local found_hook: {[string]: unknown}? = nil
@@ -207,9 +213,10 @@ local function execute()
                 break
             end
         end
-        assert(found_hook ~= nil, "committed hook not found in gateway queue")
-        assert(found_hook.status == "committed", "hook status in gateway must be committed (acknowledged once)")
+        if found_hook and found_hook.status == "committed" then acknowledged = true; break end
+        time.sleep("25ms")
     end
+    assert(acknowledged, "gateway did not acknowledge the committed hook")
 
     -- 10. Verify terminal input stays functional after hook commit
     assert(view:send({type = "paste", text = "second-pty-check"}))
@@ -232,36 +239,39 @@ local function execute()
         local message = assert(replies:receive())
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then
-            closed = data.error_code == ""
+            assert(data.error_code == "", "managed window close failed: " .. tostring(data.error))
+            closed = true
         end
     end
     assert(closed, "managed window close failed")
 
-    -- 12. Verify single attempt receipt with outcome cancelled
-    local settled = false
+    -- Broker completion observes EXIT, so the durable receipt must exist now.
+    local final_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
     local receipts = 0
-    for _ = 1, 100 do
-        local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
-        local value = reply(records.value)
-        for _, item in ipairs(value.records :: {{[string]: unknown}}) do
-            if item.kind == "receipt" then
-                receipts = receipts + 1
-                local body = reply(item.body)
-                assert(body.scope == "attempt" and body.outcome == "cancelled", "expected cancelled receipt")
-                settled = true
-            end
+    for _, item in ipairs(final_page.records :: {{[string]: unknown}}) do
+        if item.kind == "receipt" then
+            receipts = receipts + 1
+            local body = reply(item.body)
+            assert(body.scope == "attempt" and body.outcome == "cancelled", "expected cancelled receipt")
         end
-        if settled then break end
-        time.sleep("50ms")
     end
     assert(receipts == 1, "expected exactly one cancelled receipt")
+    local hook_count = 0
+    for _, record in ipairs(final_page.records :: {{[string]: unknown}}) do
+        assert(record.kind ~= "turn.request" and record.kind ~= "turn.end", "native hooks invented a logical turn")
+        if record.kind == "observation" then
+            local body = reply(record.body)
+            if tostring(body.event_key):find("^hook:") then hook_count = hook_count + 1 end
+        end
+    end
+    assert(hook_count == 1, "replayed child submissions must leave exactly one hook observation")
 
     -- 13. Teardown
     view:close()
     process.terminate(broker)
     process.unlisten(catalogs)
     process.unlisten(replies)
-    print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
+    io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
 end
 
 M.main = execute

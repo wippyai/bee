@@ -9,7 +9,7 @@ type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"
 type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, thread_id: string?, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}, observer: boolean?}
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string}
-type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, catalog_read: boolean, scope_management: boolean}
+type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, catalog_read: boolean, scope_management: boolean, close_grace_ms: integer}
 local function request_op(value: unknown): RequestOp?
     if value == "open" then return "open" end
     if value == "close" then return "close" end
@@ -91,7 +91,7 @@ end
 function M.binding(value: unknown): Binding?
     if type(value) ~= "table" or type(value.policies) ~= "table" then return nil end
     for key in pairs(value) do
-        if key ~= "definition_id" and key ~= "policies" and key ~= "appearance_write" and key ~= "application_stop" and key ~= "catalog_read" and key ~= "scope_management" then return nil end
+        if key ~= "definition_id" and key ~= "policies" and key ~= "appearance_write" and key ~= "application_stop" and key ~= "catalog_read" and key ~= "scope_management" and key ~= "close_grace_ms" then return nil end
     end
     local id = M.text(value.definition_id, 160)
     if not id or id == "" then return nil end
@@ -110,7 +110,11 @@ function M.binding(value: unknown): Binding?
     if value.application_stop ~= nil and type(value.application_stop) ~= "boolean" then return nil end
     if value.catalog_read ~= nil and type(value.catalog_read) ~= "boolean" then return nil end
     if value.scope_management ~= nil and type(value.scope_management) ~= "boolean" then return nil end
+    local close_grace_ms = value.close_grace_ms
+    if close_grace_ms ~= nil and (type(close_grace_ms) ~= "number" or close_grace_ms ~= close_grace_ms
+        or close_grace_ms < 0 or close_grace_ms > 60000 or close_grace_ms ~= math.floor(close_grace_ms)) then return nil end
     return {definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
-        application_stop = value.application_stop == true, catalog_read = value.catalog_read == true, scope_management = value.scope_management == true}
+        application_stop = value.application_stop == true, catalog_read = value.catalog_read == true, scope_management = value.scope_management == true,
+        close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms)}
 end
 return M

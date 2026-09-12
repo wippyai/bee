@@ -186,6 +186,15 @@ local function main(value: unknown)
         tty.stop(); process.unlisten(closes)
         error("Managed window checkpoint: " .. tostring(checkpoint_error))
     end
+    local attached, attachment_error = call(machine.PLACEMENT .. ":attach", {
+        attempt_id = admitted.attempt_id, recipient = process.pid(), generation = prepared.epoch,
+    })
+    if not attached then
+        if prepared.gateway_binding then call(machine.GATEWAY .. ":revoke", {binding_id = prepared.gateway_binding}) end
+        receipt(admitted, prepared.epoch, "uncertain", "native placement attachment was not confirmed: " .. tostring(attachment_error))
+        tty.stop(); process.unlisten(closes)
+        error("Managed window attachment: " .. tostring(attachment_error))
+    end
     local width, height = tty.screen_size()
     local terminal, terminal_error = window.open(admitted.attempt_id, {width = width, height = height,
         term = "xterm-256color", expected_binding = prepared.gateway_binding})

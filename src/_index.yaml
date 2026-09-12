@@ -128,6 +128,7 @@ entries:
   # Only this host binding grants the authority to admit and own that child.
   - definition_id: bee.harness.window:app
     scope_management: true
+    close_grace_ms: 60000
     policies:
     - bee:carrier_policy
     - bee:placement_store_policy

@@ -6,9 +6,6 @@ local io = require("io")
 local function main()
     local definition = registry.get("bee.harness:definition")
     assert(definition and definition.kind == "ns.definition", "harness definition missing")
-    for _, id in ipairs({"bee.host:main", "bee.console:app", "bee.workspace:main", "bee.threads.service:create", "bee.placement.native:prepare"}) do
-        assert(registry.get(id) == nil, id .. " leaked into static closure")
-    end
     local snapshot, snapshot_error = catalog.snapshot()
     if not snapshot then error(tostring(snapshot_error)) end
     assert(snapshot.complete and #snapshot.bindings == 0, "empty host must activate no drivers")

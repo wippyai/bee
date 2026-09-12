@@ -10,7 +10,7 @@ entries:
     required_exit_observation: eof_gated
     start_ms: 10000
     stop_grace_ms: 500
-    drain_ms: 2000
+    drain_ms: 5000
     runner_drain_ms: 500
     fixture: true
     executables: {sh: /bin/sh}
@@ -94,7 +94,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, time, security, tty, funcs, json, registry]
+  modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
@@ -110,7 +110,7 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: run
-  modules: [process, channel, time, security, tty, funcs, json, registry]
+  modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission

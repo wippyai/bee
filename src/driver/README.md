@@ -63,9 +63,13 @@ environment alone: it selects the API-key path only through a provider
 configuration in the private `CODEX_HOME`. `bee.driver.codex:configuration`
 renders that file from the host's `bee.codex_provider` entry named by the
 launch policy (`provider_ref`): only the provider name, base URL,
-model and optional `reasoning_effort` (`low`, `medium`, `high`, `xhigh` or
-`max`), with `env_key = "OPENAI_API_KEY"` and the responses wire API, plain
-http for the loopback fixture only; the plan digest pins the adapter
+model, optional `reasoning_effort` (`low`, `medium`, `high`, `xhigh` or
+`max`) and optional bounded `developer_instructions` (ordinary text plus
+escaped line breaks, carriage returns and tabs), with
+`env_key = "OPENAI_API_KEY"` and the responses wire API, plain
+http for the loopback fixture only. Unsupported control bytes are rejected,
+and the rendered file remains within the shared 8192-byte configuration bound
+after escaping. The plan digest pins the adapter
 revision and the rendered digest, and placement writes it with exclusive
 creation. `tests/lua/harness/codex_runner_test.lua` proves API-key
 authentication-path selection through the runner with a sentinel key and a
@@ -80,10 +84,12 @@ The Claude driver accepts only a bounded model identifier and the executable's
 `low`, `medium`, `high`, `xhigh` or `max` effort values, then emits
 `--model` and `--effort`. Codex keeps its model and optional reasoning effort
 in the host-selected provider entry; its generated TOML emits only
-`model_reasoning_effort` for the same five accepted values. The caller never
+the reviewed `model_reasoning_effort` and `developer_instructions` keys. The caller never
 contributes either value: the carrier copies only the selected policy's
 `prepare_options`, and provider configuration is rendered from the policy's
-`provider_ref`.
+`provider_ref`. A Codex launch definition can therefore select a provider
+with shared instructions and MCP gateway content through the existing
+`driver.configure` boundary; a second profile schema is unnecessary.
 
 ## Claude authentication path
 

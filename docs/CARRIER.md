@@ -371,8 +371,14 @@ native execution application. That application is trusted to construct and
 replace call scopes; its remaining deny policies do not confine it.
 
 Codex renders `.codex/config.toml` from the selected `bee.codex_provider`
-(name, base URL, model; plain http only for the loopback fixture under a
-fixture policy), with `env_key = "OPENAI_API_KEY"` and the responses wire API.
+(name, base URL, model, and optional bounded `developer_instructions`; plain
+http only for the loopback fixture under a fixture policy), with
+`env_key = "OPENAI_API_KEY"` and the responses wire API. The field name is
+the pinned Codex 0.154.0 configuration key; `--strict-config exec` rejects
+the older guessed `model_instructions` name. Instructions allow ordinary text
+and escaped line breaks, carriage returns and tabs; unsupported control bytes
+are rejected, and the rendered file must remain within the shared 8192-byte
+configuration bound after escaping.
 Placement writes an admitted file with exclusive creation inside the home
 before start (`configuration.materialized`); a pre-existing file refuses the
 start (`configuration.refused`). The key itself reaches the child only through

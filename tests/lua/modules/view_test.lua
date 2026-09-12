@@ -6,6 +6,19 @@ local model = require("model")
 local view = require("view")
 local function define_tests()
     test.describe("Modules frame", function()
+        test.it("keeps configuration dialogs inside the canvas and captures clicks", function()
+            for _, width in ipairs({28, 40, 100}) do
+                local frame = view.draw(width, 18, appearance.defaults(), model.new(), 0, "", false,
+                    {field = "parameter_value", name = "example:enabled", buffer = "false"})
+                local rendered = table.concat(frame.rows, "\n")
+                test.is_true(rendered:find("Configure package", 1, true) ~= nil)
+                test.is_true(rendered:find("false", 1, true) ~= nil)
+                for _, hit in ipairs(frame.hits) do
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
+                end
+            end
+        end)
         test.it("renders multiline package documentation", function()
             local state = model.new()
             model.select(state, "bee/example")

@@ -164,6 +164,8 @@ local function main(value: unknown)
         local intent = model.details_intent(state)
         if not intent then status = "Select a package first"; changed(); return end
         model.show(state, "details")
+        reading_readme = true
+        model.show_requirements(state, false)
         begin(intent)
         changed()
     end
@@ -290,7 +292,8 @@ local function main(value: unknown)
             return
         else
             local problem = model.set_parameter(state, active.name or "", active.buffer)
-            if problem then status = problem else status = "Parameter saved"; invalidate(); if state.requirements_open then requirements() end end
+            if problem then status = problem; changed(); return end
+            status = "Parameter saved"; invalidate(); if state.requirements_open then requirements() end
             changed()
         end
         editor = nil
@@ -313,7 +316,11 @@ local function main(value: unknown)
 
     local function handle_hit(kind: string, key: string)
         status = ""
-        if kind == "catalog" then invalidate(); catalog()
+        if kind == "save_editor" then finish_editor()
+        elseif kind == "cancel_editor" then editor = nil; status = "Cancelled"; changed()
+        elseif kind == "search" then begin_editor("query")
+        elseif kind == "keyword" then begin_editor("keyword")
+        elseif kind == "catalog" then invalidate(); catalog()
         elseif kind == "operations" then operation_history()
         elseif kind == "operation" then
             local _, problem = model.select_operation(state, key)
@@ -342,7 +349,7 @@ local function main(value: unknown)
         elseif kind == "previous" then model.set_page(state, state.page - 1); invalidate(); catalog()
         elseif kind == "next" then model.set_page(state, state.page + 1); invalidate(); catalog()
         elseif kind == "refresh" then invalidate(); installed()
-        elseif kind == "install" or kind == "update" or kind == "uninstall" then model.set_action(state, kind); invalidate(); changed()
+        elseif kind == "install" or kind == "update" or kind == "uninstall" then model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate(); changed()
         elseif kind == "plan" or kind == "refresh_plan" then plan()
         elseif kind == "parameter" then begin_editor("parameter_name")
         elseif kind == "policy_none" then model.set_policy(state, "none"); invalidate(); changed()
@@ -361,7 +368,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local display_status = editor and status or (status ~= "" and status or state.notice)
-            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme)
+            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor)
             hits, offset = frame.hits, frame.offset
             model.set_operation_detail_offset(state, frame.operation_detail_offset)
             visible_rows = math.floor(math.max(1, frame.capacity))

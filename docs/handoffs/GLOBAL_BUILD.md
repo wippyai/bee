@@ -1,6 +1,22 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub requirements and package databases
+## Current install: Modules layout and configuration dialog
+
+Global SHA `9c70d927590a5988ad3239b378bcb10885a488770642b31254d4e85041c85ebf`
+contains source `7649cd7`. Modules separates titles, versions and descriptions,
+exposes search/filter buttons, opens package details on README and presents a
+configuration dialog. Invalid JSON keeps the editor open. All prior Hub and
+Agent features are preserved; runtime/native pins are unchanged.
+
+72 focused cases, source/pack interaction and full native binary acceptance pass.
+Rendered catalog, README and editor screens were inspected. Evidence:
+`hub-redesign-final-focused.log`, `hub-redesign-ui-4.log`,
+`modules-redesign-native-check.log`, `modules-redesign-global-install.json`.
+The installer verified and backed up the executable and five sidecars against
+previous global `7ba0b747`. No running nodes were restarted; retained nodes keep
+their loaded UI. About/build information remains in progress.
+
+## Previous install: Hub requirements and package databases
 
 Global SHA `7ba0b747ff45661f93be0cbcfec4bfc588b9cb17deeaf4558e0e5067e6d7ed29`
 contains production source `bd95d44`. It preserves Agent profile details and

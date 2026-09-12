@@ -5945,3 +5945,29 @@ state before wiring Agent recovery; no separate persistence manager is needed.
 Wolfden journal remains `01a06e56-ba58-7c5a-bd69-b7feb109a05d`, cursor
 `jc_H7E57Z5SJH71M`. Integration checkpoint `488e1a6` is pushed; full acceptance
 and the next isolated broker acknowledgement repair remain in progress.
+
+### 2026-09-12 Codex: acknowledged broker checkpoints
+
+The broker now keeps a pending checkpoint separately and updates its live
+resume state only after a correlated successful owner acknowledgement.
+Refusal and timeout preserve its previous acknowledged state. The real fixture
+app forwards the receipt it received from the broker before the owner asks for
+another attachment, so the test does not assume ordering across listener
+channels. Host-selected fixture admission is restored even on failure.
+
+Parent counterfactual evidence uses the same final fixture: the original broker
+at `5981d89` fails after the explicit refusal receipt; the patched broker at
+`dc93430` passes all five cases, including successful update and timeout.
+Evidence lives in `checkpoint-parent-original.log` and
+`checkpoint-parent-fixed.log` under the September12 evidence directory above.
+The child's saved baseline logs unexpectedly passed and are not negative
+evidence; this parent comparison replaces that claim.
+
+The previous full run stopped at `tests/control_delivery.py`: the injected
+failure exited nonzero but reported a terminated desktop dependency instead of
+the original send failure. The dependency identity has not yet been established.
+Luna is isolating that path on a separate branch. All earlier checks through
+storage/restart, resources, connection UI, fresh pack, taskbar, personalization,
+titles, interactions and close passed; later desktop gates remain outstanding.
+No full-pass or conversation-recovery claim is made. Shared main, runtime and
+the global executable remain untouched.

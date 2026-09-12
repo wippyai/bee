@@ -15,6 +15,13 @@ sync-hive-check:
 governance-runtime-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/governance_runtime.py
 
+.PHONY: governance-overlay-check governance-overlay-composed-base-check
+governance-overlay-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_overlay.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_overlay.go -runtime "$(abspath $(WIPPY))" -gate owner
+governance-overlay-composed-base-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_overlay.go -runtime "$(abspath $(WIPPY))" -gate composed-base
+
 .PHONY: governance-workspace-check
 governance-workspace-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_workspace.go

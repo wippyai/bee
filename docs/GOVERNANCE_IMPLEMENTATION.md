@@ -130,6 +130,24 @@ reproduces the same failure with the unchanged executable gate: lint passes,
 then a candidate reviewed at v0 commits as v2 after an intervening v1 write.
 This is current executable evidence; guarded publication remains unavailable.
 
+The native overlay owner gate is implemented by `tests/governance_overlay.go`.
+`make governance-overlay-check` runs strict fixture lint, then the owner-only
+proof in a bounded process with a disposable HOME and state directory. It covers
+owner admission and denial, per-entry scope, owner generation CAS, collision,
+explicit deletion and unchanged durable history. The pinned September 11
+executable passes with `GOVERNANCE_OVERLAY_OWNER_PASS`.
+
+`make governance-overlay-composed-base-check` is an independent required gate,
+and is intentionally absent from `make check` while the runtime contract is
+missing. Its fixture reviews an owner A overlay against durable dependency v1,
+changes that dependency to v2, and then applies the reviewed A change. The
+runtime must return `Conflict` before changing effective state. The pinned
+executable instead emits `GOVERNANCE_COMPOSED_BASE_STALE_ACCEPTED`, after the
+fixture confirms the reviewed value is effective alongside retained dependency
+value v2, and the Go runner exits nonzero with the explicit missing-capability
+diagnostic. A process failure without that marker is reported as an unrelated
+runtime or fixture failure, so a crash cannot satisfy this evidence.
+
 ## Acceptance
 
 Use an isolated headless Bee composition with no Keeper or view packages.

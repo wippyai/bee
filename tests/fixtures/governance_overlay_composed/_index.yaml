@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.governance_overlay_composed_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.apply, registry.overlay.get, registry.overlay.apply, registry.overlay.create.registry.entry, registry.overlay.update.registry.entry, registry.overlay.delete.registry.entry]
+    resources: '*'
+    effect: allow
+- name: dependency
+  kind: registry.entry
+  data: {value: base-v1}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [registry, logger]
+  security:
+    policies: [bee.governance_overlay_composed_probe:policy]
+  meta:
+    command:
+      name: governance-overlay-composed-probe
+      security:
+        actor: {id: bee.governance_overlay_composed_probe}

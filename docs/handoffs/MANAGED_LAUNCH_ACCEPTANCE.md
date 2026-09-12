@@ -100,9 +100,11 @@ The requested user experience is Claude Code or Codex's own interactive UI insid
 a retained Bee Terminal. The earlier `bee-legacy/os-harness/src/window.lua` and
 native driver implementations are reference material only, never dependencies.
 They distinguish interactive PTY windows from structured headless sessions.
-The current production catalog supports only stream-json; adding a PTY profile
-must follow its actual carrier, readiness and lifecycle acceptance, not simply
-mark that protocol compatible.
+The catalog now supports stream-json and PTY window profiles. Native-window,
+managed-window and hook acceptance exercise the PTY path; production still needs
+host-defined profiles and credentials before a provider can be selected. The
+[current integration checkpoint](AGENT_INTEGRATION.md) records executable
+evidence and the remaining conversation-recovery boundary.
 
 The interactive path must reuse native terminal attachment and Bee's retained
 application/view lifetimes. Driver-selected argv, typed model/reasoning and

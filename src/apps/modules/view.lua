@@ -330,6 +330,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     line(3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
     line(4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
     local review: {string} = {}
+    local required: {[integer]: string} = {}
     local unchanged = 0
     for _, item in ipairs(plan.modules) do
         if item.change == "keep" then unchanged = unchanged + 1
@@ -338,7 +339,10 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         end
     end
     if unchanged > 0 then review[#review + 1] = tostring(unchanged) .. " installed modules unchanged" end
-    for _, missing in ipairs(plan.missing) do review[#review + 1] = "Required: " .. missing end
+    for _, missing in ipairs(plan.missing) do
+        review[#review + 1] = "Required: " .. missing .. "  ·  Configure…"
+        required[#review] = missing
+    end
     if #plan.migrations > 0 then
         review[#review + 1] = "Migrations · policy " .. state.policy
         for _, item in ipairs(plan.migrations) do
@@ -361,7 +365,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     for slot = 1, capacity do
         local row = review[next_offset + slot]
         if not row then break end
-        line(5 + slot, row, theme.text)
+        local missing = required[next_offset + slot]
+        line(5 + slot, row, missing and theme.accent or theme.text)
+        if missing and state.phase == "plan" then hits[#hits + 1] = {kind = "missing", key = missing, x = 1, y = 5 + slot, width = width, height = 1} end
     end
     local actions = 2
     if state.phase == "confirm" then
@@ -372,6 +378,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     else
         actions = button(actions, height - 1, "review", " Confirm… ", plan.ready)
         actions = button(actions, height - 1, "refresh_plan", " Replan ", true)
+        button(actions, height - 1, "missing", " Configure required ", #plan.missing > 0)
         line(height, status ~= "" and status or "Enter reviews immutable plan · R replans · edits invalidate it", theme.muted)
     end
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}

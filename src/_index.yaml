@@ -412,7 +412,7 @@ entries:
     comment: Driver bindings this host activates; discovery alone activates nothing
   data:
     schema_revision: bee.harness-activation@1
-    bindings: [bee.driver.claude:binding, bee.driver.codex:binding]
+    bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]
 - name: thread_create_policy
   kind: security.policy
   policy:

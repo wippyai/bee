@@ -60,6 +60,11 @@
       ]
     },
     {
+      "module": "bee/driver-agy",
+      "root": "bee.driver.agy",
+      "namespaces": ["bee.driver.agy"]
+    },
+    {
       "module": "bee/driver-claude",
       "root": "bee.driver.claude",
       "namespaces": ["bee.driver.claude"]

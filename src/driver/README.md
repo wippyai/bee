@@ -13,7 +13,7 @@ commits.
 | `bee.driver` | Binding schema types, profile validation, strict activation/configuration decoding, and the `driver` contract (prepare, dispatch, normalize, configure) |
 | `bee.driver.kit` | Pure helpers: JSONL framing with fragment carry-over and a byte bound, POSIX quoting, observation builders |
 | `bee.driver.transport.stream_json` | Frames bytes into JSON envelopes for stream-json protocols |
-| `bee.driver.claude`, `bee.driver.codex` | Provider bindings: profiles, launch specification, protocol normalization |
+| `bee.driver.agy`, `bee.driver.claude`, `bee.driver.codex`, `bee.driver.grok` | Separate provider components: profiles, launch specification, protocol normalization |
 
 ## Rules
 

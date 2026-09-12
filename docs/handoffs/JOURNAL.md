@@ -6226,3 +6226,9 @@ Credential file source/upgrade and retained writable login-home work continue
 in isolated lanes. Random-port MCP requires the actual owned listener endpoint;
 no port probing or reserve-close helper was added. Wolfden facts 1359 and 1361
 record the integration boundaries. Global `55b725aa` remains unchanged.
+
+The Codex ChatGPT-login configuration's full `make check` (session 79852)
+completed with exit 0, including desktop and recovery checks. This validates
+configuration selection, not automatic credential setup. The Grok native bundle
+passes at 18 modules and 622 entries. Agy's child component is now integrated;
+its shared activation and pack validation are the next combined gate.

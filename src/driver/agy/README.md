@@ -1,47 +1,25 @@
 # bee.driver.agy
 
-The Antigravity CLI (`agy`) driver binding for the Bee harness.
+The Antigravity CLI driver is assembled as `bee/driver-agy`, separate from the
+shared `bee/driver` contract, kit and transport. It returns launch specifications,
+normalizes protocol records and renders admitted configuration. Placement owns
+execution; the host selects profiles, executable and permissions.
 
-This child component provides declarative launch generation, stream-json protocol normalization, configuration delivery, and native terminal interactive profiles for `agy`.
+The `session` and `batch` profiles use stream-json print mode, with one canonical
+user envelope on stdin. The `window` profile launches the ordinary Agy TUI.
+Continuation uses the recorded `--conversation` reference. Host options use
+Agy's native `mode`, model and effort vocabulary. Foreign `permission_mode` and
+`max_turns` options are refused; only the explicit host option
+`dangerously_skip_permissions` can select that CLI bypass.
 
-## Responsibility and Capabilities
+Protocol handling follows captured `init`, `step_update` and nested `result`
+frames. State, usage and fault fields are decoded at the boundary; conversation
+identity changes cannot replace the pinned session. Missing terminal results
+remain uncertain. Tests use captured protocol fixtures and malformed records;
+they remain outside the production pack.
 
-| Component | Role |
-|---|---|
-| `bee.driver.agy:prepare` | Builds initial declarative launch specifications for `session`, `batch`, and `window` modes; expresses host-policy options without hardcoding a model |
-| `bee.driver.agy:dispatch` | Builds resumed launch specifications requiring an existing `resume_ref` (`--conversation`) |
-| `bee.driver.agy:normalize` | Structurally validates bounded incoming state, including every terminal answer, resume reference, usage counter/cost and fault field; pins conversation identity on init; refuses conflicting envelope/body or later conversation IDs; bounds each delta and the retained answer; normalizes wire envelopes into typed thread observations |
-| `bee.driver.agy:configure` | Validates configuration requests; generates `.gemini/config/mcp_config.json` for gateway tools; refuses unsupported provider configuration and gateway HTTP hooks |
-
-## Status and Gates
-
-In accordance with Bee foundation conventions, unproven capabilities are strictly labeled:
-- `M.AGY_AUTHENTICATION = "unproven"`: Headless authentication requires an existing user profile under `HOME`; `GEMINI_API_KEY` alone is not an account session and disables hooks. No automated credentials are admitted.
-- `M.AGY_HOOKS = "unproven"`: Agy supports only local command hooks, not gateway HTTP hooks. Gateway HTTP hook requests are rejected, and unsupported hook capability claims are excluded from the profile.
-- `M.AGY_MCP = "unproven"`: MCP configuration is generated as a private-home file (`.gemini/config/mcp_config.json`) supporting stdio and HTTP gateway tools with environment expansion `${GATEWAY_TOKEN}`, verified via `agy mcp help` and isolated fixture config. Live in-harness MCP operation is not yet verified through automated gates.
-
-The normalizer treats the nested `result` object and its status as the terminal
-boundary. A successful result must carry response text and a valid usage object
-when usage is present; malformed usage, response, identity or status values fail
-the turn. A single response delta is capped at the thread record bound before
-observation emission, and retained answer text is capped at the same bound.
-
-## Profiles
-
-1. **`session` (default)**:
-   - Mode: `session`, protocol: `stream-json`, revision: `agy-stream-json-1`
-   - Stdin user turn encoded via canonical JSON; `readiness = "protocol:init"`
-   - Per-process resume using `--conversation <uuid>`
-   - MCP client transports: `stdio`, `streamable_http` (unsupported `sse` and `ws` excluded; hooks excluded)
-2. **`batch`**:
-   - Mode: `batch`, protocol: `stream-json`, revision: `agy-stream-json-1`
-   - Same structured turn format as session
-3. **`window`**:
-   - Mode: `window`, protocol: `pty`, revision: `native-window-1`
-   - Direct interactive TUI session with `readiness = "terminal:attached"`
-   - Prompts passed via `--prompt-interactive <brief>`; empty prompt opens the native UI
-   - Resuming passes `--conversation <uuid>`
-
-## Integration Seam
-
-This child component owns only `src/driver/agy` and `tests/lua/driver/agy`. The shared build manifest `build/modules.json` does not yet list `bee.driver.agy` under the `bee/driver` module namespaces; registering that entry and adding activation declarations in the harness catalog are shared repository integration seams reserved for parent review.
+Gateway configuration generates `.gemini/config/mcp_config.json` with a scoped
+Bee URL and environment-token reference. Unsupported provider configuration and
+HTTP hooks are refused. Automatic user-login reuse and a live managed MCP turn
+remain unverified. Driver activation does not supply a production launch profile,
+credentials or execution permissions.

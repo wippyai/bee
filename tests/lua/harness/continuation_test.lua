@@ -168,6 +168,13 @@ local function define_tests()
             local claude_launch = claude.specification(claude_request)
             test.eq(table.concat(claude_launch.argv, " "), "--permission-mode default -r provider-session")
             test.is_nil(claude_launch.stdin)
+            -- A recorded reference is one argument, never an extra CLI flag.
+            for _, reference in ipairs({"--dangerously-bypass-approvals-and-sandbox", "--dangerously-skip-permissions", "--", "-p"}) do
+                test.is_nil(codex.decode({profile_id = "window", brief = "", resume_ref = reference}))
+                test.is_nil(claude.decode({profile_id = "window", brief = "", resume_ref = reference}))
+                test.is_nil(codex.decode({profile_id = "batch", brief = "next", resume_ref = reference}))
+                test.is_nil(claude.decode({profile_id = "batch", brief = "next", resume_ref = reference}))
+            end
         end)
         test.it("routes window plans through interactive resume and rejects brief replay before dispatch", function()
             local snapshot, snapshot_error = catalog.snapshot()

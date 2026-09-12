@@ -44,6 +44,7 @@ function M.decode(value: unknown): (Request?, string?)
     if object.resume_ref ~= nil then
         resume = bounds.id(object.resume_ref)
         if not resume then return nil, "resume_ref is not an identifier" end
+        if resume:sub(1, 1) == "-" then return nil, "resume_ref must not be a command-line option" end
     end
     return {profile_id = profile_id, brief = brief, sandbox = sandbox, resume_ref = resume, gateway_hooks = hooks}, nil
 end

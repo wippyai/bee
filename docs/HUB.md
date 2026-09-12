@@ -79,22 +79,39 @@ that digest and returns the calling actor's durable receipt. Receipts distinguis
 this state even when reading the receipt succeeds. An uncertain call must be
 followed by status inspection rather than a blind retry.
 
-Install/update default to migration policy `none`. An `up` request with migration
-work refuses publication until a migration runner is bound. Uninstall defaults
-to `block`; checking or reverting migrations is not wired yet. Explicit `leave`
-permits removal while retaining migration effects. The current migration adapter
-alone does not establish production migration execution. The source adapter now
-checks the target ledger after each runner success, as well as before an
-idempotent skip. A contradictory or unreadable ledger returns partial evidence
-with an error; it never records the unverified migration as completed. This
-adapter follow-up is not yet in global build `237d76a8`.
+Install/update default to migration policy `none`. The source supports `up`
+under host-selected exact database and function grants in
+`bee.hub:execution_scope`. Before publication it captures each selected migration's
+ID, owner, target database, timestamp and definition digest. Already-applied IDs
+must match their existing definitions. The dependency root and captured work are
+published in one registry change. The worker verifies the installed definitions,
+executes package functions and checks their ledger before recording completion.
+No Keeper package or migration DSL is imported by Bee.
 
-Production migration integration still requires a host-bound runner and exact
-database grants, migration IDs and results in the durable operation receipt,
-and restart reconciliation of that ledger evidence. Registry restoration alone
-cannot undo schema effects. The public runner's `run_next` and `rollback`
-support exact allowed IDs; its general `run` does not. Its discovery path can
-initialize the ledger, so it must not be reused as a read-only preview.
+The internal binding uses the standard function contract (`database_id`,
+`direction`, `id`). Package functions own schema and ledger transactions. An
+interrupted install can be resumed with the original confirmed `apply` request:
+root, module inventory, exact definitions and current permissions are rechecked;
+committed ledger entries become idempotent skips. Partial results are retained
+in the receipt's `migration_work.rows`; failures remain `recovery_required`.
+Registry definitions are never restored after migration execution.
+
+Uninstall defaults to `block`. Every removed module is checked, including
+orphaned dependencies removed by an update. Applied migrations block publication;
+an absent ledger permits removal without creating a ledger. Missing database
+grants or unreadable ledgers refuse publication. Explicit `leave` permits removal
+while retaining migration effects. `down` still refuses: executing rollback before
+definition removal needs its own durable phase and recovery checks.
+
+These changes are source-only and not installed globally. SQLite library and
+real-service acceptance cover up/replay, committed-schema interruption/restart,
+partial failure/retry, changed-definition refusal after restart, removal block/leave,
+absent ledgers and denied database access. PostgreSQL/MySQL, newly installed database
+resources and requirement-linked migration targets need service acceptance.
+Execution currently requires the target database resource to exist before
+publication. Concurrent external registry writers and independent migration
+runners are not serialized by the Hub worker. The public runner's discovery path
+can initialize the ledger, so it must not be reused for read-only preview.
 
 Owner serialization does not exclude unrelated registry writers. Automatic
 baseline restoration is attempted only while the observed registry revision
@@ -113,6 +130,26 @@ are not implemented.
 
 `make hub-unit-check` runs focused planner, catalog, inventory, migration adapter,
 preview-boundary and Modules model/view tests in a disposable composition.
+`make hub-migration-runner-check HUB_MIGRATION_PACK=...` opens the pinned public
+`wippy/migration@0.3.17` artifact as test input. Its unchanged libraries and toy
+migrations prove real SQLite up/repeat/down and excluded-ID behavior through
+both the public runner and Bee's binding. Separate scopes prove missing database
+and function grants refuse execution. Reading an absent ledger and these denied
+attempts leave the target database without tables. The artifact's dependencies
+and bootloader are not activated. This checks library compatibility, not installation
+or production receipt recovery. Failed fixtures retain their databases and logs;
+the repository lock is copied unchanged into each fixture.
+`make hub-migration-service-check` serves disposable package artifacts through a
+local Hub transport and calls the actual scoped facade and publication worker.
+It verifies SQL effects, durable results, completed replay, orphan removal guards,
+explicit leave, and an actual SIGKILL after schema commit followed by restart
+reconciliation. A second migration deliberately fails after the first commits;
+the partial receipt survives, and an explicit retry after its external prerequisite
+is supplied skips the first migration and applies only the remaining work. A
+separately authorized host edit after interruption changes a migration body through
+the native registry API; replay refuses its changed digest without completing work.
+Test transport helpers remain outside production and use the
+repository's existing native dependencies with read-only Go module resolution.
 `make hub-inspect-check` reads public `userspace/docker@0.5.12`, proves module and
 publication permission denials, and verifies unchanged registry history. Its
 state-preview check sees 96 entries and zero filesystem resources; this does

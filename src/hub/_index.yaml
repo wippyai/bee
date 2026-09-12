@@ -7,7 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Hub
-    comment: Scoped package reads and dependency management; migration execution and interrupted publication recovery remain incomplete
+    comment: Scoped package reads, dependency management and publication recovery; migration execution remains incomplete
 - name: requirements
   kind: library.lua
   source: file://requirements.lua
@@ -67,6 +67,21 @@ entries:
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
+- name: migration_runner
+  kind: library.lua
+  source: file://migration_runner.lua
+  modules: [sql, funcs, security]
+  imports:
+    migrations: bee.hub:migrations
+- name: migration_work
+  kind: library.lua
+  source: file://migration_work.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    plan: bee.hub:plan
+    migrations: bee.hub:migrations
 - name: service
   kind: library.lua
   source: file://service.lua
@@ -79,6 +94,9 @@ entries:
     inspect: bee.hub:inspect
     transaction: bee.persist:transaction
     inventory: bee.hub:inventory
+    migration_runner: bee.hub:migration_runner
+    migrations: bee.hub:migrations
+    migration_work: bee.hub:migration_work
 - name: worker
   kind: process.lua
   source: file://worker.lua

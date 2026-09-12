@@ -14,6 +14,14 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: hub-migration-runner-check
+hub-migration-runner-check:
+	@test -n "$(HUB_MIGRATION_PACK)" || { echo 'Set HUB_MIGRATION_PACK to the wippy/migration 0.3.17 artifact.'; exit 1; }
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_migration_runner.py "$(HUB_MIGRATION_PACK)"
+.PHONY: hub-migration-service-check
+hub-migration-service-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_migration_service.py
+check: hub-migration-service-check
 .PHONY: native-modules-lifecycle-check
 native-modules-lifecycle-check:
 	python3 tests/native_modules_lifecycle.py "$(BEE_BINARY)"

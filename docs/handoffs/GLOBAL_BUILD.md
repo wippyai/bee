@@ -1,6 +1,25 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Agent instructions plus Hub rollback
+## Current install: visible Agent profile summary
+
+Global SHA `4a35163ef401c974b3087640460548a9027314c8c880fcb6a37c0cec1d96a340`
+uses source `d05b47c`, retaining Agent instructions and Hub rollback. The picker
+shows selected folder policy, whether instructions are configured, and configured
+tool count. The count does not claim live MCP activation or authorization.
+Native Claude/Codex launch checks prove all three details fit the default window;
+private instruction text is excluded by the focused selection test.
+
+Validation: initial 772 unit cases, final 14-case selection/view proof, strict
+lint, standalone build and native selector (four profiles, F12, project cwd,
+retained HOME, present/absent machine login). The initial native check caught an
+incorrect fixture expectation and clipped wording; the final native check passes.
+The previous combined source full gate remains running, not claimed passed.
+Receipt: `agent-profile-details-global-install.json`. Executable and five sidecars
+were fenced against `f1a29d08`, backed up and hash-verified after replacement.
+Backup: `global-before-profile-details-f1a29d08`. No running node was restarted.
+Production MCP, Docker and editable profiles/instructions remain unfinished.
+
+## Previous install: Agent instructions plus Hub rollback
 
 Global Bee SHA `f1a29d083ff1620e8e12757d80c954017833e82dc52d8caf18d06651bcfc4577`
 contains production source from `660b769`: four-driver persistent instructions,

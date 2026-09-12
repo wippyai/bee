@@ -1,5 +1,10 @@
 # Foundation status
 
+Global `4a35163e` adds the Agent profile summary: folder policy, instruction
+status and configured tool count. The native selector proves readable details
+before Claude/Codex launch. It retains the previous Agent/Hub implementation;
+see [current build](handoffs/GLOBAL_BUILD.md) for validation and remaining work.
+
 Global `f1a29d08` now combines four-harness persistent instructions with Hub
 history and migration rollback. Strict lint, 772 units, native desktop/Modules/Agent
 acceptance and focused source/pack connection UI pass. See the

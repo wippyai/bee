@@ -265,3 +265,12 @@ Bee APIs or passing integration claims:
 Changes belong in runtime PRs assigned to Rodrigo (`skhaz`), with native
 acceptance before a Bee pin change. Existing global `f1a29d08` does not claim
 production MCP activation or Docker execution. This audit changed no runtime code.
+
+HTTP port-zero startup is now proposed in
+[runtime PR #737](https://github.com/wippyai/runtime/pull/737), assigned to
+Rodrigo (`skhaz`), commit `20e657b4ee`. It uses the bound address for readiness,
+existing status details and request metadata only when port zero is configured;
+fixed-port named hosts preserve their configured address. Native HTTP tests,
+vet and focused race coverage pass, including real requests, cancellation and
+sequential restart with the old port reserved. No new discovery API was added.
+The PR is unmerged; Bee's runtime pin and global executable remain unchanged.

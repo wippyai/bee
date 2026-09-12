@@ -161,6 +161,12 @@ func stage(root string, broken bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create staging directory: %w", err)
 	}
+	staged := false
+	defer func() {
+		if !staged {
+			os.RemoveAll(folder)
+		}
+	}()
 	grouped := make(map[string][]map[string]interface{})
 	identities := make([]string, 0, len(selected))
 	for identity := range selected {
@@ -217,11 +223,12 @@ func stage(root string, broken bool) (string, error) {
 	if err := os.WriteFile(filepath.Join(folder, ".wippy.yaml"), []byte("version: '1.0'\nshutdown:\n  timeout: 2s\n"), 0600); err != nil {
 		return "", err
 	}
+	staged = true
 	return folder, nil
 }
 
 func databaseEnvironment(folder string) []string {
-	names := []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node"}
+	names := []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance"}
 	environment := make([]string, 0, len(names))
 	for _, name := range names {
 		environment = append(environment, "BEE_"+strings.ToUpper(name)+"_DB="+filepath.Join(folder, name+".db"))

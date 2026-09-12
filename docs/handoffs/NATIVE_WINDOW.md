@@ -227,17 +227,17 @@ process API. Production cleanup, authenticated turns and physical-client/F12
 retention remain separate gates; production requirements were not relaxed.
 See [the runtime cutover](RUNTIME_MAIN_CUTOVER.md) for current toolchain evidence.
 
-## Static harness isolation proof
+## Standalone harness acceptance
 
-`make harness-module` stages all harness entries and its exact reviewed static
-import closure in a small host. The 28 external library entries include native
+`make harness-module` stages the harness and its declared imports
+in a small host. These imports include native
 placement materialization and storage helpers used by the managed window; no
 desktop owner, thread service, placement operation or running placement service
-is loaded. Exact registry coverage, lint and boot pass against both staged source
+is loaded. Lint and boot pass against both staged source
 and a source-free pack. The catalog is empty on an empty host, a linked process
 host reaches request validation, and an unlinked host refuses before admission.
 Host policies in this fixture deny execution. This
-is a static composition proof, not successful carrier execution, package
+is standalone composition acceptance, not successful carrier execution, package
 installation or Hive activation; those still need the full dependency owners.
 
 ## September 11 desktop acceptance follow-up

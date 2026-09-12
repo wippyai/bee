@@ -30,6 +30,15 @@ admitted binding. They cannot establish readiness or logical success by naming
 a SessionStart or Stop event. Preserve commit uncertainty across gateway cleanup
 before using the observations as recovery evidence.
 
+The existing `bee.threads.service:read_after` operation can recover that ID
+from committed observations; no second provider-session store is required.
+Use its action filter and bounded pages, advancing by `scanned_through`.
+An eventual resume consumer must check the exact predecessor attempt and its
+recorded gateway binding, decode the `bee.harness.hook` payload, and reject
+ambiguous or conflicting session IDs. Current thread membership still governs
+the read. Resolving an old binding's observations grants no use of that binding;
+the new attempt needs fresh admission. This resolver is not yet implemented.
+
 Interactive close normally produces a cancelled/uncertain attempt, unlike a
 structured successful turn. Do not fake a successful terminal outcome to pass
 the structured continuation helper. An explicit interactive resume may reopen

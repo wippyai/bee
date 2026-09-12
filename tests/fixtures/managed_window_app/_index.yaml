@@ -13,7 +13,7 @@ entries:
     drain_ms: 1000
     runner_drain_ms: 500
     fixture: true
-    executables: {}
+    executables: {sh: /bin/sh}
     environment: {}
 - name: binding
   kind: contract.binding

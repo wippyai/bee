@@ -1,0 +1,119 @@
+version: '1.0'
+namespace: bee.window_hooks_fixture
+entries:
+- name: policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {sh: /bin/sh}
+    environment: {}
+    gateway_tools: [thread_read]
+    gateway_hooks: [PreToolUse]
+- name: binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: window_hooks_fixture
+    test_support: true
+    profiles_ref: bee.window_hooks_fixture:profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.window_hooks_fixture:prepare
+      dispatch: bee.window_hooks_fixture:dispatch
+      normalize: bee.window_hooks_fixture:normalize
+      configure: bee.window_hooks_fixture:configure
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.window_hooks_fixture:binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Window hooks fixture
+      implementation_version: 0.1.0
+      default_profile: window
+      profiles:
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: fixture-pty-1
+        answer_path: {strategy: none}
+- name: definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: window-hooks-fixture
+    title: Window hooks fixture
+    command_names: []
+    binding_ref: bee.window_hooks_fixture:binding
+    profile_id: window
+    policy_ref: bee.window_hooks_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: prepare
+  kind: function.lua
+  source: file://driver.lua
+  method: prepare
+- name: dispatch
+  kind: function.lua
+  source: file://driver.lua
+  method: dispatch
+- name: normalize
+  kind: function.lua
+  source: file://driver.lua
+  method: normalize
+- name: configure
+  kind: function.lua
+  source: file://driver.lua
+  method: configure
+- name: fixture_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.gateway.manage, bee.threads.carrier, registry.get, funcs.security, security.scope.create]
+    resources: ['*', custom, security]
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, time, security, tty, funcs, json, registry]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_lifecycle_policy, bee:thread_observe_policy, bee:thread_carrier_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee.window_hooks_fixture:fixture_policy]
+  meta:
+    command:
+      name: window-hooks-acceptance
+      short: Prove native-window hook acceptance
+      security:
+        actor: {id: bee.test.gateway}
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules: [process, channel, time, security, tty, funcs, json, registry]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_lifecycle_policy, bee:thread_observe_policy, bee:thread_carrier_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee.window_hooks_fixture:fixture_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}

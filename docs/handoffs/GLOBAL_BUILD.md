@@ -1,6 +1,27 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub recovery and managed Agent profiles
+## Current install: Agent activity titles plus Hub recovery
+
+Global `/home/wolfy-j/.local/bin/bee` has SHA
+`65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`.
+Source `3e0a3af` combines the newer Hub recovery checkpoint with confirmed-hook
+activity titles and Go native Agent acceptance. Runtime and native pins are
+unchanged. All five sidecars were installed and verified alongside the executable.
+
+`make native-binary-check` passes against this exact candidate: embedded desktop,
+Settings recovery, Terminal scrolling/selection, presenter rejoin, Modules
+interaction, four Agent defaults, and fixture Codex launch with project cwd and
+separate retained session home. Evidence: `bee-evidence/0912/title-hub-native-check.log`;
+install receipt: `title-hub-global-install.json`. The prior binary and sidecars
+are in `global-before-title-hub-237d76a8`. Running nodes were not restarted.
+
+Hook activity titles use committed thread events through the existing app-title
+API. Automatic CLI hook/MCP activation, credential setup, cold conversation
+recovery and Docker remain incomplete. This update does not claim a full
+repository-gate pass; the preceding combined fixture failures are recorded below.
+
+
+## Previous install: Hub recovery and managed Agent profiles
 
 Global `/home/wolfy-j/.local/bin/bee` has SHA
 `237d76a84ff13494be90d9e360234ff43a3a172612121993ba2c0f3168edac61`.

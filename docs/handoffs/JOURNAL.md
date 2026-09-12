@@ -6267,3 +6267,24 @@ raw-child-environment probe now passes 28/28 placement cases and catches an
 injected copy of that bug. Earlier negative-control attempts failed for fixture
 reasons and are not regression evidence. Automatic login discovery, managed MCP
 activation and Docker placement remain unfinished.
+
+### 2026-09-12 Codex: driver components and visible profile readiness
+
+Wolfden checkpoints 1387 and 1391 confirm the frozen four-driver foundation
+check completed in segments. Retained-login delivery passed 680 unit cases and
+native/managed/hook/resource checks; it remains separate from the global binary.
+The Agent picker now keeps unavailable declared profiles visible, with the
+admission refusal and disabled Open. Its updated 680-case unit gate passes;
+actual selector acceptance passes, while a natural-completion grant-revocation
+assertion in the same suite is being reproduced against the unchanged baseline.
+
+Every harness keeps its own driver package, profiles and default launch
+configuration for eventual separate Hub installation and management. Default
+production declarations and automatic local setup are still being integrated;
+this does not yet establish first-use launch, managed MCP or Docker.
+
+The Hub lane installed global `acb59231` (checkpoints 1388–1389), preserving the
+four drivers, and is investigating real retained-node attachment. This lane will
+not replace its global during that investigation. Native host-path work is based
+on the installed native revision `3e895bae936f`, not the older native sources in
+the agent integration checkout; runtime remains `291f5c6b` with no new patch.

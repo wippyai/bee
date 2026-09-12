@@ -29,15 +29,19 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     for row = 1, capacity do
         local index = first + row - 1
         local choice = choices.items[index]
-        if choice then line(row + 2, choice.title, index == selected, false) end
+        if choice then
+            local label = choice.title .. (choice.unavailable and " · Unavailable" or "")
+            line(row + 2, label, index == selected, choice.unavailable ~= nil)
+        end
     end
-    if #choices.items == 0 and height >= 5 then line(3, "No agent profiles are ready on this node", false, true) end
+    if #choices.items == 0 and height >= 5 then line(3, "No agent profiles are configured on this node", false, true) end
+    local choice = choices.items[selected]
     if height >= 3 then
         local x = 2
         for _, action in ipairs({{name = "open", label = " Open "}, {name = "refresh", label = " Refresh "}, {name = "close", label = " Close "}}) do
             local size = #action.label
             if x + size - 1 <= width then
-                local enabled = action.name ~= "open" or (#choices.items > 0 and capacity > 0)
+                local enabled = action.name ~= "open" or (choice ~= nil and not choice.unavailable and capacity > 0)
                 canvas:put(x, height - 1, appearance.style(enabled and appearance.selection_text(theme) or theme.muted,
                     enabled and theme.accent or theme.surface) .. action.label .. reset, size)
                 if enabled then hits[#hits + 1] = {action = action.name, x = x, y = height - 1, width = size} end
@@ -46,6 +50,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
     end
     local message = status
+    if message == "" and choice and choice.unavailable then message = choice.unavailable end
     if message == "" and choices.unavailable > 0 then message = tostring(choices.unavailable) .. " profiles unavailable" end
     if height >= 2 then line(height, message, false, true) end
     return {rows = canvas:rows(), first = first, capacity = capacity, hits = hits}

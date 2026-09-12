@@ -7,7 +7,7 @@ local admission = require("admission")
 local bounds = require("bounds")
 local M = {}
 M.MAX_DEFINITIONS = 64
-type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string}
+type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string, unavailable: string?}
 type Choices = {items: {Choice}, unavailable: integer}
 function M.read(pinned: catalog.Pinned): (Choices?, string?)
     local found, find_error = pinned:find({["meta.type"] = definitions.TYPE})
@@ -22,12 +22,16 @@ function M.read(pinned: catalog.Pinned): (Choices?, string?)
             if not definition then
                 result.unavailable = result.unavailable + 1
             elseif definition.presentation.start_menu and definition.default_mode == "window" then
-                local plan = admission.read(pinned, ref, "window")
+                local plan, refused = admission.read(pinned, ref, "window")
                 if plan then
                     result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,
                         launch_id = definition.launch_id, plan_digest = plan.plan_digest}
                 else
                     result.unavailable = result.unavailable + 1
+                    local fault = refused and refused.error
+                    result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,
+                        launch_id = definition.launch_id, plan_digest = "",
+                        unavailable = fault and fault.message or "Profile is unavailable on this node"}
                 end
             end
         else

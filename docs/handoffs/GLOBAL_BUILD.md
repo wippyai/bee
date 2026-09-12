@@ -1,6 +1,14 @@
 # Global Bee build — September 12, 2026
 
-## Current install: four harness driver components
+## Current install: Hub lane refresh
+
+The Hub lane subsequently installed `acb59231c7aba26ec5eecdc9286e795821704b12088d09d9f574daf46094a876`
+from production `3d82628`, retaining all four driver packages. Wolfden checkpoints
+1388–1389 record its acceptance and an active real-user retained-node attachment
+incident. The Hub lane owns that investigation. Agent UI changes below remain
+separate; this lane has not replaced that binary.
+
+## Previous install: four harness driver components
 
 Global SHA256 `78aae0b0a16c3d65222f0c35425d3a5e1deb229e3ba8fe34ddda4f0d58d966dc`.
 Production source `0e59a16`; checkpoint `bf8da36` adds test-only corrections.
@@ -15,7 +23,7 @@ activation. The credential broker includes bounded provider login-file sources;
 this build still refuses their delivery to placement. Default production Agent
 profiles, automatic login setup, managed MCP activation and Docker remain
 unfinished. The public Agent picker is still empty. Retained-login delivery is
-being verified separately and is not part of this installed binary.
+verified separately and is not part of this installed binary.
 
 Native binary and the complete native client suite pass, including retained
 terminals, observation, independent displays, concurrent cold admission and
@@ -24,8 +32,9 @@ Settings, workspace identity and applied migrations. All databases respect
 explicit `--state-dir`; the default remains user-wide `~/.config/bee`.
 
 The source gate passed 677 unit cases, native/managed windows and corrected hook
-and module-isolation fixtures. The remaining `make check` desktop gates are still
-running: this is not yet a full-check pass. Evidence is under `bee-evidence/0912`:
+and module-isolation fixtures. The remaining `make check` desktop gates completed
+successfully, including source/pack Hive Manager and Timeline. This is a segmented
+full check after fixture corrections, not an uninterrupted run. Evidence is under `bee-evidence/0912`:
 `four-drivers-global-{build,acceptance,install}.log`,
 `four-drivers-installed-upgrade.log`, `four-drivers-pack-audit.json`,
 `resources-module-go-check.log`, and `four-driver-credentials-check-remainder.log`.

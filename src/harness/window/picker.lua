@@ -88,7 +88,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if activate and frame.capacity > 0 then
             local choice = listed.items[selected]
-            if choice then
+            if choice and not choice.unavailable then
                 local request_id = assert(uuid.v7())
                 local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
                     expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})

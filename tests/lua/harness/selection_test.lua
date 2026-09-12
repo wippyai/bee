@@ -13,7 +13,7 @@ local ACTIVATION = "bee:harness_activation"
 local PREFIX = "bee.harness.catalog:selection_"
 
 type Entry = {[string]: unknown}
-type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string}
+type Choice = selection.Choice
 type Choices = {items: {Choice}, unavailable: integer}
 
 local function definition(id: string, title: string, launch_id: string, mode: string, start_menu: boolean, binding_ref: string?, policy_ref: string?): Entry
@@ -80,7 +80,7 @@ local function choices(value: Choices?, err: string?): Choices
 end
 
 local function has_only_choice_fields(item: Choice)
-    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true}
+    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true, unavailable = true}
     for key, _ in pairs(item :: {[string]: unknown}) do
         if not fields[tostring(key)] then error("selection leaked field " .. tostring(key)) end
     end
@@ -146,7 +146,7 @@ local function define_tests()
             end)
         end)
 
-        test.it("counts a visible definition with an inactive binding as unavailable", function()
+        test.it("keeps an inactive profile visible with its refusal and disables launch", function()
             local original = assert(registry.get(ACTIVATION))
             local changed = copy_table(original)
             local original_data = original.data :: Entry
@@ -165,8 +165,17 @@ local function define_tests()
                 local applied, apply_error = activation_changes:apply()
                 if not applied then error("deactivate Claude fixture: " .. tostring(apply_error)) end
                 local result = choices(selection.snapshot())
-                test.eq(#result.items, 0)
+                test.eq(#result.items, 1)
                 test.eq(result.unavailable, 1)
+                local item = result.items[1]
+                test.eq(item.title, "Inactive Claude window")
+                test.eq(item.plan_digest, "")
+                test.is_true(item.unavailable ~= nil)
+                has_only_choice_fields(item)
+                local frame = view.draw(100, 10, appearance.defaults(), result, 1, "")
+                test.is_true(table.concat(frame.rows):find("Inactive Claude window", 1, true) ~= nil)
+                test.is_true(table.concat(frame.rows):find("not usable on this host", 1, true) ~= nil)
+                for _, hit in ipairs(frame.hits) do test.is_true(hit.action ~= "open") end
             end)
             local activation_restored, activation_error = pcall(function()
                 local restore_changes = registry.snapshot():changes()
@@ -211,8 +220,10 @@ local function define_tests()
                 local relative_applied, relative_error = relative_changes:apply()
                 if not relative_applied then error("set relative executable binding: " .. tostring(relative_error)) end
                 local unavailable = choices(selection.snapshot())
-                test.eq(#unavailable.items, 0)
+                test.eq(#unavailable.items, 1)
                 test.eq(unavailable.unavailable, 1)
+                test.eq(unavailable.items[1].plan_digest, "")
+                test.is_true(unavailable.items[1].unavailable ~= nil)
             end)
             local restored, restore_error = pcall(function()
                 policy.data = original_policy

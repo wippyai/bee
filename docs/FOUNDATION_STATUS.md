@@ -1,21 +1,38 @@
 # Foundation status
 
-The September 12 global build `78aae0b0` includes four separately packaged harness
+The September 12 build `78aae0b0` includes four separately packaged harness
 drivers (Claude, Codex, Agy and Grok), with executable/client/upgrade acceptance.
 The Agent picker still needs default production profiles. File-login delivery,
-managed MCP activation and Docker are not complete. The broad source check is
-still running after 677 passing unit cases and corrected module/hook fixtures.
+managed MCP activation and Docker are not complete. The broad source check
+completed in segments after 677 passing unit cases and corrected module/hook fixtures.
 See [the current global build](handoffs/GLOBAL_BUILD.md) for exact evidence and
 limits; older checkpoints below describe earlier installations.
+
+The Hub lane subsequently installed `acb59231`, retaining these four driver
+packages and adding Modules. Its journal checkpoints 1388–1389 record the
+installation and an active retained-node attachment investigation. The Agent
+picker changes here are not installed in that binary.
+
+The Agent selection source now keeps a valid but unavailable window profile in
+the list, shows its admission refusal and disables Open. Refresh rebuilds the
+snapshot; ready profiles still require the displayed plan digest at admission.
+All 680 unit cases pass. The actual managed-window selector passes; the same
+suite's natural-completion input-revocation assertion failed and is under
+separate baseline investigation. Production defaults are being integrated, so
+this does not yet establish first-use managed launch.
 
 The September 12 agent-integration branch composes Claude, Codex, Agy and Grok
 as separate driver packs under the shared driver contract. The credential broker
 also supports bounded host-admitted login files, with an append-only populated
 store upgrade and separate filesystem permissions. File delivery into private
-session homes is not yet wired; placement refuses those projections before
-launch. Production Agent profiles, automatic login setup, managed MCP activation
-and Docker placement remain incomplete. These source changes are not in global
-`55b725aa`; see [the journal handoff](handoffs/JOURNAL.md) for validation evidence.
+session homes is implemented on the separate retained-login integration branch:
+the selected private home receives one exact admitted provider file before
+configuration, and resume preserves harness-refreshed bytes. All 680 unit cases,
+native/managed window, hook and resource-isolation gates pass; a deliberately
+injected environment leak fails the secret-absence assertion. This delivery is
+not in global `78aae0b0`. Production Agent profiles, automatic login setup,
+managed MCP activation and Docker placement remain incomplete. See
+[the journal handoff](handoffs/JOURNAL.md) for validation evidence.
 
 Governed authoring now accepts an ordinary app with an explicit workspace
 operation grant, while preserving its direct database and scope-creation denials.

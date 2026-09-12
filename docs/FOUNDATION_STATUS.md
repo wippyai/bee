@@ -6,7 +6,9 @@ actor isolation and replay using the persisted request. Source/pack application
 acceptance covers cold recovery without a local plan, cancellation, confirmation,
 status refresh, F12 and compact layouts. Strict lint and 68 focused Hub tests
 pass. The original migration source full regression also passes; the combined
-history source regression remains pending. This UI is not installed globally.
+history source regression remains pending. The UI is installed globally as
+`2f3f8e5a`, preserving Agent recovery and optional machine login. Native desktop,
+Modules, Agent and real empty-history/F12 checks pass. Running nodes were retained.
 
 Installed Hub build `f276bc2b` adds host-granted migration `up`, captured definition
 receipts, post-commit ledger verification and explicit recovery. A disposable

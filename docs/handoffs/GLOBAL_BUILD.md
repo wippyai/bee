@@ -1,6 +1,33 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub migrations plus default machine login
+## Current install: Hub operation history and recovery review
+
+Global Bee now has SHA
+`2f3f8e5ab1f970c4acbe070da10530ba6ceec828b13972421052457f028001d3`,
+source `efa29db`. Modules adds Operations (O), paged caller-owned receipts,
+scrollable stored requests and migration results, and separate explicit recovery
+confirmation. Status access remains read-only; retries use the original request
+and digest. Older receipts without a stored request remain view-only.
+
+The build passes 68 focused Hub tests, real history/privacy/migration acceptance,
+source/pack cold recovery review/cancel/confirm/status and native desktop,
+Modules and Agent checks. A source-free probe also opens the real empty history
+and retains it across F12. The first history build and full regression exposed
+a page-number inference error in a different lint composition; explicit integer
+decoding fixes it. Strict release lint and service checks pass. The corrected
+full run remains active in `hub-history-release-full-check.log`; the earlier
+migration source full run passed in `hub-migration-full-check.log`.
+
+Runtime and native pins are unchanged. Executable and five sidecar hashes were
+verified before and after replacement, with a final check that global was still
+`f276bc2b`. Evidence: `hub-history-global-install.json`,
+`hub-history-native-check.log`, `hub-history-native-history.log`,
+`hub-history-release-service.log`, `hub-history-ui-app-3.log` and
+`hub-history-ui-unit-3.log`. Backup: `global-before-hub-history-f276bc2b`.
+No running node was restarted. Migration rollback and databases first created by
+the same installation remain unfinished.
+
+## Previous install: Hub migrations plus default machine login
 
 Global `/home/wolfy-j/.local/bin/bee` now has SHA
 `f276bc2b0edaa85d1385e91783f4820156f41cb1730cefd410e3089e0546d100`,

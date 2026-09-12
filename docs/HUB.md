@@ -141,7 +141,7 @@ and right; PgUp/PgDn scrolls the selected receipt details. Recoverable receipts 
 review and confirmation. The review scrolls through saved version, JSON values
 and migration rows. Escape cancels without applying. Confirm sends the
 original request and digest; no automatic retry is scheduled. Older receipts
-without a request remain view-only. This history UI is not yet installed globally.
+without a request remain view-only. This history UI is installed in global build `2f3f8e5a` (source `efa29db`).
 
 ## Acceptance and remaining work
 

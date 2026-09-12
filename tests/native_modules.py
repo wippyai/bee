@@ -29,9 +29,15 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-") as temporary:
         ui.wait("Search: terminal")
         ui.resize(60, 20)
         ui.wait("MODULES")
+        ui.key(b"o")
+        ui.wait("MODULES  OPERATIONS")
+        ui.wait("No Hub operations recorded")
+        ui.key(b"\x1b[24~")
+        ui.wait("MODULES  OPERATIONS", timeout=8)
+        ui.wait("No Hub operations recorded")
         ui.quit()
     finally:
         ui.close()
         for pid in live_owners(binary, state):
             stop_owner(owner_pidfd(pid, binary, state))
-print("Native Modules: admitted source-free launch, independent filters, F12, resize and detach pass")
+print("Native Modules: admitted source-free launch, independent filters, F12, resize, real empty operation history and detach pass")

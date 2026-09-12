@@ -1,4 +1,26 @@
-# Agent integration checkpoint — September 11
+# Agent integration checkpoint — September 12
+
+The current standalone candidate includes retained Agent homes and acknowledged
+application checkpoints. The host launch definition selects the session
+resource; separate launches keep separate homes. The broker exposes a new
+resume value only after the workspace confirms persistence. Neither change
+enables cold provider-conversation recovery yet.
+
+On this source, all 620 Lua tests and five real managed-window cases pass,
+along with strict lint and source/pack headless and two-workspace host checks.
+The standalone build packages 15 components. Its executable checks pass embedded
+boot, Settings recovery, Terminal, scrolling, selection/copy, aliases, literal
+arguments, presenter rejoin and the public Agent picker. The picker still needs
+host-defined profiles; this is not an authenticated provider-turn proof.
+
+Global installation remains gated on executable-selected per-project state.
+The runtime and builder PR heads remain unchanged. Desktop continuation and the
+earlier lost control-delivery diagnostic are tracked in the shared journal;
+there is no new full-foundation pass claim. Evidence is under
+`/home/wolfy-j/wippy/bee-evidence/0912/`, including
+`checkpoint-native-binary.log` and `checkpoint-integration-remainder.log`.
+
+The earlier checkpoints below describe their own source and test runs.
 
 The integration branch combines the native Agent picker, host-defined
 profile preflight, measured provider configuration and stricter MCP argument

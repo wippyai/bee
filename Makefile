@@ -81,7 +81,8 @@ threads-module:
 harness-module:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/harness_module.go -root .. -runtime "$(abspath $(WIPPY))"
 resources-module:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources_module.py
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/resources_module.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/resources_module.go -root .. -runtime "$(abspath $(WIPPY))"
 gateway-check:
 	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
 pack: lint

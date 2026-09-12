@@ -19,6 +19,8 @@ entries:
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
     carrier: bee.harness.carrier:machine
+    configuration: bee.driver:configuration
+    resolver: bee.driver:resolver
     placement_types: bee.placement:types
 - name: resolve
   kind: function.lua

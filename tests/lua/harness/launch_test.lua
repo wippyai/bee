@@ -283,6 +283,94 @@ local function define_tests()
             test.eq(code(refused), "INVALID")
             test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
         end)
+        test.it("refuses an unconfigured provider before it creates launch work", function()
+            local definition_entry = assert(registry.get(DEFINITION))
+            local policy_entry = assert(registry.get(POLICY))
+            local original_definition, original_policy = definition_entry.data, policy_entry.data
+            local changed_definition: {[string]: unknown} = {}
+            local changed_policy: {[string]: unknown} = {}
+            for name, value in pairs(original_definition :: {[string]: unknown}) do changed_definition[name] = value end
+            for name, value in pairs(original_policy :: {[string]: unknown}) do changed_policy[name] = value end
+            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.profile_id = "window"
+            changed_definition.default_mode = "window"
+            changed_definition.credentials = {}
+            changed_policy.executables = {codex = "/bin/true"}
+            changed_policy.prepare_options = {sandbox = "read-only"}
+            changed_policy.provider_ref = nil
+            local request_id = fresh("missing-provider")
+            local ok, failure = pcall(function()
+                definition_entry.data = changed_definition
+                policy_entry.data = changed_policy
+                local changes = registry.snapshot():changes()
+                changes:update(definition_entry)
+                changes:update(policy_entry)
+                local applied, apply_error = changes:apply()
+                if not applied then error("configure missing provider: " .. tostring(apply_error)) end
+                local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = ""})
+                test.eq(code(refused), "UNAVAILABLE")
+                test.is_true(tostring(refused.error and refused.error.message):find("configuration", 1, true) ~= nil)
+                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            end)
+            definition_entry.data = original_definition
+            policy_entry.data = original_policy
+            local restoration = registry.snapshot():changes()
+            restoration:update(definition_entry)
+            restoration:update(policy_entry)
+            local restored, restore_error = restoration:apply()
+            if not restored then error("restore missing provider: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("fences a selected plan when its host provider changes", function()
+            local definition_entry = assert(registry.get(DEFINITION))
+            local codex_policy = assert(registry.get("bee.harness.catalog:codex_fixture_policy"))
+            local provider = assert(registry.get("bee.harness.catalog:codex_fixture_provider"))
+            local original_definition, original_policy, original_provider = definition_entry.data, codex_policy.data, provider.data
+            local changed_definition: {[string]: unknown} = {}
+            local changed_policy: {[string]: unknown} = {}
+            local changed_provider: {[string]: unknown} = {}
+            for name, value in pairs(original_definition :: {[string]: unknown}) do changed_definition[name] = value end
+            for name, value in pairs(original_policy :: {[string]: unknown}) do changed_policy[name] = value end
+            for name, value in pairs(original_provider :: {[string]: unknown}) do changed_provider[name] = value end
+            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.profile_id = "window"
+            changed_definition.default_mode = "window"
+            changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
+            changed_definition.credentials = {}
+            changed_policy.executables = {codex = "/bin/true"}
+            local request_id = fresh("provider-fenced")
+            local ok, failure = pcall(function()
+                definition_entry.data = changed_definition
+                codex_policy.data = changed_policy
+                local initial = registry.snapshot():changes()
+                initial:update(definition_entry)
+                initial:update(codex_policy)
+                local applied, apply_error = initial:apply()
+                if not applied then error("configure provider fence: " .. tostring(apply_error)) end
+                local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                changed_provider.model = "gpt-5.1"
+                provider.data = changed_provider
+                local update = registry.snapshot():changes()
+                update:update(provider)
+                local updated, update_error = update:apply()
+                if not updated then error("change provider: " .. tostring(update_error)) end
+                local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "", expected_plan_digest = selected.plan_digest})
+                test.eq(code(refused), "CONFLICT")
+                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            end)
+            definition_entry.data = original_definition
+            codex_policy.data = original_policy
+            provider.data = original_provider
+            local restoration = registry.snapshot():changes()
+            restoration:update(definition_entry)
+            restoration:update(codex_policy)
+            restoration:update(provider)
+            local restored, restore_error = restoration:apply()
+            if not restored then error("restore provider fence: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("admits for the requester, obtaining an attempt-bound grant and projection in the requester's authority", function()
             local request_id = fresh("request")
             local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))

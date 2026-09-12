@@ -129,6 +129,24 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: selection_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Selection-only policy with a harmless absolute path; no carrier test executes it
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
 - name: gateway_fixture_policy
   kind: registry.entry
   meta:

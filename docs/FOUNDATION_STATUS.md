@@ -10,8 +10,17 @@ current narrow-window follow-up also passes its six focused selection tests.
 Native packaging covers 14 modules / 589 entries. The source-free executable
 `bee agent` path passes empty-catalog, F12, close-without-work and 0.120-second
 detach acceptance. Broader checks remain pending; this source is not installed
-globally. Production
-Claude/Codex profile configuration and authenticated-turn acceptance remain open.
+globally. A selectable profile now requires its host policy to bind the
+driver's absolute executable. Provider configuration remains driver-owned and
+is checked after a user selects the plan but before Bee creates launch work;
+for example, a Codex policy without its provider refuses without creating a
+thread. A named provider entry is measured into the selected plan, so changing
+its model or endpoint requires refresh and refuses a stale selection. Listing
+never executes a driver function. The host-owned
+[source fragment](../examples/agent-profiles/README.md) supplies the current
+build-time composition path for Claude Code and Codex window definitions.
+Installation and overlay activation remain unimplemented. Authenticated turns,
+production process-tree cleanup and scoped MCP remain open acceptance gates.
 
 Selected launch plans can now be carried into admission with
 `expected_plan_digest`. A changed plan refuses before thread/resource/credential

@@ -8,7 +8,9 @@ local view = require("view")
 local appearance = require("appearance")
 
 local CLAUDE = "bee.driver.claude:binding"
-local POLICY = "bee.harness.catalog:fixture_policy"
+local CODEX = "bee.driver.codex:binding"
+local POLICY = "bee.harness.catalog:selection_policy"
+local CODEX_POLICY = "bee.harness.catalog:codex_fixture_policy"
 local ACTIVATION = "bee:harness_activation"
 local PREFIX = "bee.harness.catalog:selection_"
 
@@ -16,7 +18,7 @@ type Entry = {[string]: unknown}
 type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string}
 type Choices = {items: {Choice}, unavailable: integer}
 
-local function definition(id: string, title: string, launch_id: string, mode: string, start_menu: boolean, binding_ref: string?): Entry
+local function definition(id: string, title: string, launch_id: string, mode: string, start_menu: boolean, binding_ref: string?, policy_ref: string?): Entry
     return {id = PREFIX .. id, kind = "registry.entry", meta = {type = "bee.launch_definition", test_support = true}, data = {
         schema_revision = "bee.launch-definition@1",
         launch_id = launch_id,
@@ -24,7 +26,7 @@ local function definition(id: string, title: string, launch_id: string, mode: st
         command_names = {launch_id},
         binding_ref = binding_ref or CLAUDE,
         profile_id = "window",
-        policy_ref = POLICY,
+        policy_ref = policy_ref or POLICY,
         default_mode = mode,
         allowed_overrides = {},
         workdir_policy = {kind = "caller_workspace"},
@@ -176,6 +178,49 @@ local function define_tests()
             end)
             local removed, remove_error = pcall(function() remove({entry}) end)
             if not activation_restored then error(tostring(activation_error)) end
+            if not removed then error(tostring(remove_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
+
+        test.it("shows only profiles with the selected driver's host executable", function()
+            local policy = assert(registry.get(POLICY))
+            local codex_policy = assert(registry.get(CODEX_POLICY))
+            local original_policy, original_codex = policy.data, codex_policy.data
+            local empty = copy_table(policy)
+            local empty_data = copy_table(policy.data :: Entry)
+            empty_data.executables = {codex = "/bin/true"}
+            empty.data = empty_data
+            local codex = copy_table(codex_policy)
+            local codex_data = copy_table(codex_policy.data :: Entry)
+            codex_data.executables = {codex = "/bin/true"}
+            codex.data = codex_data
+            local unconfigured = definition("unconfigured", "Unconfigured Claude", "selection-unconfigured", "window", true)
+            local missing_provider = definition("missing-provider", "Missing Codex provider", "selection-missing-provider", "window", true, CODEX, POLICY)
+            local configured = definition("configured-codex", "Configured Codex", "selection-configured-codex", "window", true, CODEX, CODEX_POLICY)
+            local ok, failure = pcall(function()
+                apply_create({unconfigured, missing_provider, configured})
+                local changes = registry.snapshot():changes()
+                changes:update(empty)
+                changes:update(codex)
+                local applied, apply_error = changes:apply()
+                if not applied then error("configure selection policies: " .. tostring(apply_error)) end
+                local result = choices(selection.snapshot())
+                test.eq(#result.items, 2)
+                test.eq(result.items[1].definition_ref, PREFIX .. "configured-codex")
+                test.eq(result.items[2].definition_ref, PREFIX .. "missing-provider")
+                test.eq(result.unavailable, 1)
+            end)
+            local restored, restore_error = pcall(function()
+                policy.data = original_policy
+                codex_policy.data = original_codex
+                local changes = registry.snapshot():changes()
+                changes:update(policy)
+                changes:update(codex_policy)
+                local applied, apply_error = changes:apply()
+                if not applied then error("restore selection policies: " .. tostring(apply_error)) end
+            end)
+            local removed, remove_error = pcall(function() remove({unconfigured, missing_provider, configured}) end)
+            if not restored then error(tostring(restore_error)) end
             if not removed then error(tostring(remove_error)) end
             if not ok then error(tostring(failure)) end
         end)

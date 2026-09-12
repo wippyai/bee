@@ -1,6 +1,29 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub lane refresh
+## Current install: Hub and managed Agent profiles
+
+Global `/home/wolfy-j/.local/bin/bee` has SHA
+`edf6a7c3e3f0b8a767ab0a1075043d60ada03420b6c5d4192df9239e03ca6eeb`.
+Production source is `c6d20c5`, combining installed Hub `93ad6d7` with Agent
+`45b7cea`; native `0f63d30bd718`, runtime `291f5c6b708c`. All 20 packs and five
+sidecars are retained. The prior `7764156f` executable and sidecars are backed up
+under `bee-evidence/0912/global-before-agent-hub-7764156f`.
+
+The combined source passes 745 unit tests. Actual native acceptance proves the
+default profile picker, disabled unavailable selection, F12 and close without
+creating work, plus Modules filters/F12/resize. The actual installed global
+also launches a fixture Codex through Agent in the project cwd with a separate
+session home; files survive app and node exit. Evidence is in
+`bee-evidence/0912/agent-hub-{global,installed}-*`.
+
+Run `bee agent`, or open Agent from the menu, on a freshly started node. Existing
+retained nodes keep their loaded code until restarted. Automatic credential
+setup, cold conversation recovery, production MCP activation, Docker, profile
+replication and hook-driven titles remain unfinished. This is not complete
+managed-agent acceptance. The old native selector script still expects an empty
+catalog; the current default-profile acceptance was run as a temporary probe.
+
+## Previous install: Hub lane refresh
 
 The Hub lane subsequently installed `acb59231c7aba26ec5eecdc9286e795821704b12088d09d9f574daf46094a876`
 from production `3d82628`, retaining all four driver packages. Wolfden checkpoints

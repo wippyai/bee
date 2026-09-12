@@ -1,6 +1,17 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Agent recovery plus Hub recovery
+## Current install: default machine login plus Agent recovery
+
+Global has since advanced to SHA
+`acab69b8e487c4743cfa3967cf32a74add001f77cfba42e9e9ffe4454bd7036a`,
+source `f4e3993` (the candidate preceded documentation/test-only final edits).
+`machine-login-global-install.json` records native desktop, Modules and Agent
+acceptance, preserved running nodes, and backup
+`global-before-machine-login-849166aa`. The Hub migration integration now includes
+this installed source plus selected migration database requirements. Its next
+candidate has not yet replaced global.
+
+## Previous install: Agent recovery plus Hub recovery
 
 The executable and installed provenance now agree on SHA
 `849166aaffa7a12688396513f8a7be688da7d75d3b43816a150dee21f9970028`,

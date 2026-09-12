@@ -267,6 +267,10 @@ ID and `error_code`/`error`. Success means the workspace database transaction
 committed. Only one outstanding request per app is retained; replaced requests
 receive `superseded`, and waiting requests have a five-second deadline. Apps should
 checkpoint during work and avoid depending on a final shutdown exchange.
+The broker keeps a pending candidate separately from the last acknowledged
+resume state. Only a correlated successful owner reply changes the state in
+live application descriptions; refusal, timeout and supersession preserve the
+previous acknowledged value. A timeout leaves the write outcome unknown.
 
 The workspace preserves acknowledged data, logical instance/view IDs, their optional
 thread associations, geometry, window mode and preferences. On boot, automatic

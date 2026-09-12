@@ -18,7 +18,7 @@ local shutdown = require("shutdown")
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
-type Checkpoint = {request_id: string, pid: string, deadline: number}
+type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
     client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
@@ -477,10 +477,10 @@ local function main(owner: string, initial_preferences: unknown)
                             end
                         end
                         local routed_id = uuid.v7()
-                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid, deadline = now() + 5}
+                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid, deadline = now() + 5,
+                            resume_state = data.resume_state}
                         local record = identified(item, "open", routed_id)
                         record.resume_state = data.resume_state
-                        item.resume_state = data.resume_state
                         process.send(owner, "bee.application.checkpoint", record)
                     end
                 end
@@ -490,6 +490,12 @@ local function main(owner: string, initial_preferences: unknown)
             if type(data) == "table" and data.version == 1 and type(data.request_id) == "string" then
                 local waiter = checkpoint_waiters[data.request_id]
                 if waiter then
+                    -- Live descriptions retain the last acknowledged state.
+                    -- A queued write, refusal or timeout cannot replace it.
+                    if data.error_code == "" and data.error == "" then
+                        local item = find_pid(waiter.pid)
+                        if item then item.resume_state = waiter.resume_state end
+                    end
                     process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
                         error_code = type(data.error_code) == "string" and data.error_code or "invalid_result",
                         error = type(data.error) == "string" and data.error or "Invalid persistence result"})

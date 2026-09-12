@@ -94,6 +94,14 @@
       ]
     },
     {
+      "module": "bee/hub",
+      "root": "bee.hub",
+      "namespaces": [
+        "bee.hub",
+        "bee.modules"
+      ]
+    },
+    {
       "module": "bee/harness",
       "root": "bee.harness",
       "namespaces": [

@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.hub
+entries:
+- name: requirements_test
+  kind: function.lua
+  source: file://requirements_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    requirements: bee.hub:requirements
+- name: inspect_test
+  kind: function.lua
+  source: file://inspect_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    inspect: bee.hub:inspect

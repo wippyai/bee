@@ -128,6 +128,10 @@ bee terminal
 bee codex
 ```
 
+An ordinary `bee` opens the Bee desktop without starting an application. The
+empty desktop keeps the Bee mark and shows `F1`/the `BEE` menu as the way to
+open one; `Tools → Modules` is the component-management surface.
+
 Run from the desired project directory. The native program must be installed on
 PATH. The current candidate selects embedded code by default while preserving shared
 registry history and application databases. `bee --base` is an explicit recovery

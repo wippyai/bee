@@ -124,6 +124,11 @@ entries:
     policies:
     - bee:ordinary_app_subsystem_boundary
     - bee.timeline:client_policy
+  - definition_id: bee.modules:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.modules:client_policy
+    - bee.modules:hub_policy
   # The Agent picker and selected native harness share one broker terminal.
   # Only this host binding grants the authority to admit and own that child.
   - definition_id: bee.harness.window:app

@@ -1,7 +1,7 @@
 """Two-binary base-code upgrade regression; never uses --base or user stores.
 
-Use an older Bee without Hive Manager as the first binary and the current build
-as the second. This proves base selection and workspace identity preservation;
+Select a Tools application added between the previous and current binary
+(Hive Manager by default). This proves base selection and workspace identity preservation;
 authorized registry-overlay preservation remains a separate required gate.
 """
 from pathlib import Path
@@ -18,7 +18,7 @@ def identity(state):
                 db.execute("SELECT id,name,checksum FROM workspace_schema_migrations ORDER BY id").fetchall())
 
 
-def run(previous, current):
+def run(previous, current, added_application="Hive Manager"):
     with tempfile.TemporaryDirectory(prefix="bee-native-upgrade-") as temporary:
         folder = Path(temporary)
         state = folder / "state"
@@ -30,7 +30,7 @@ def run(previous, current):
             old.wait("Theme: Ocean")
             old.open_start()
             old.choose("Tools")
-            assert "Hive Manager" not in old.text(), "Previous binary must predate Hive Manager"
+            assert added_application not in old.text(), f"Previous binary already has {added_application}"
             old.key(b"\x1b")
             old.key(b"\x1b")
             old.quit()
@@ -47,7 +47,7 @@ def run(previous, current):
             new.wait("Theme: Ocean")
             new.open_start()
             new.choose("Tools")
-            new.wait("Hive Manager")
+            new.wait(added_application)
             assert "Test Status" not in new.text(), new.text()
             new.key(b"\x1b")
             new.key(b"\x1b")
@@ -62,6 +62,6 @@ def run(previous, current):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: native_upgrade.py PREVIOUS_BEE CURRENT_BEE")
-    run(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve())
+    if len(sys.argv) not in (3, 4):
+        raise SystemExit("usage: native_upgrade.py PREVIOUS_BEE CURRENT_BEE [ADDED_APPLICATION]")
+    run(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3] if len(sys.argv) == 4 else "Hive Manager")

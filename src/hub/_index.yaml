@@ -1,0 +1,180 @@
+version: '1.0'
+namespace: bee.hub
+entries:
+- name: definition
+  kind: ns.definition
+  module: hub
+  readme: file://README.md
+  meta:
+    title: Bee Hub
+    comment: Scoped package reads and dependency management; migration execution and interrupted publication recovery remain incomplete
+- name: requirements
+  kind: library.lua
+  source: file://requirements.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+- name: inspect
+  kind: library.lua
+  source: file://inspect.lua
+  modules: [hub]
+  imports:
+    bounds: bee.threads.records:bounds
+    requirements: bee.hub:requirements
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    requirements: bee.hub:requirements
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [hub]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: preview
+  kind: library.lua
+  source: file://preview.lua
+  modules: [hub, fs, base64]
+  imports:
+    bounds: bee.threads.records:bounds
+    inspect: bee.hub:inspect
+- name: semver
+  kind: library.lua
+  source: file://semver.lua
+- name: graph
+  kind: library.lua
+  source: file://graph.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    requirements: bee.hub:requirements
+    inspect: bee.hub:inspect
+    semver: bee.hub:semver
+    canonical: bee.sync:canonical
+- name: plan
+  kind: library.lua
+  source: file://plan.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    graph: bee.hub:graph
+    inventory: bee.hub:inventory
+    requirements: bee.hub:requirements
+    semver: bee.hub:semver
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules: [registry, security, hash]
+  imports:
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+    plan: bee.hub:plan
+    catalog: bee.hub:catalog
+    inspect: bee.hub:inspect
+    transaction: bee.persist:transaction
+    inventory: bee.hub:inventory
+- name: worker
+  kind: process.lua
+  source: file://worker.lua
+  method: main
+  modules: [process, security]
+  imports:
+    service: bee.hub:service
+    transaction: bee.persist:transaction
+  meta: {type: internal}
+- name: backend
+  kind: function.lua
+  source: file://backend.lua
+  method: handle
+  modules: [security, process, uuid, time, channel]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.hub:catalog
+    inventory: bee.hub:inventory
+    inspect: bee.hub:inspect
+    service: bee.hub:service
+    transaction: bee.persist:transaction
+    preview: bee.hub:preview
+  meta: {type: internal}
+- name: call
+  kind: function.lua
+  source: file://facade.lua
+  method: handle
+  modules: [security, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.hub:catalog
+    inspect: bee.hub:inspect
+    plan: bee.hub:plan
+    transaction: bee.persist:transaction
+    preview: bee.hub:preview
+  security: {policies: [bee.hub:facade_policy]}
+- name: facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.hub:execution_scope") || (action == "funcs.call" && resource == "bee.hub:backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.hub:execution_scope, bee.hub:backend]
+    effect: allow
+- name: execution_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [bee.hub.execute]
+    resources: [bee.hub:backend, bee.hub:worker]
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [registry.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list]
+    resources: '*'
+    effect: allow
+- name: publisher_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [registry.apply, registry.apply_version]
+    resources: '*'
+    effect: allow
+- name: dependency_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency]
+    resources: 'bee.hub.deps:*'
+    effect: allow
+- name: receipt_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [registry.create.registry.entry, registry.update.registry.entry]
+    resources: 'bee.hub.operations:*'
+    effect: allow
+- name: worker_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [process.spawn, process.host]
+    resources: [bee.hub:worker, bee:workers]
+    effect: allow
+- name: worker_name_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [process.registry.register, process.registry.register.local, process.registry.unregister]
+    resources: [bee.hub.publisher]
+    effect: allow
+- name: worker_reply_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [process.send]
+    resources: '*'
+    effect: allow

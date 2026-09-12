@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.hub_catalog
+entries:
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    catalog: bee.hub:catalog

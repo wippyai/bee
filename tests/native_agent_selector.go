@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/creack/pty"
 	_ "github.com/mattn/go-sqlite3"
@@ -36,6 +37,7 @@ type desktop struct {
 	frame    uint64
 	log      []byte
 	pending  []byte
+	screen   *terminalScreen
 	wait     <-chan error
 	done     <-chan struct{}
 	readDone <-chan struct{}
@@ -62,7 +64,7 @@ func newDesktop(binary, project, state, home string) (*desktop, error) {
 	if err != nil {
 		return nil, fmt.Errorf("start Bee PTY: %w", err)
 	}
-	d := &desktop{cmd: cmd, terminal: terminal, mu: make(chan struct{}, 1)}
+	d := &desktop{cmd: cmd, terminal: terminal, mu: make(chan struct{}, 1), screen: newTerminalScreen(100, 30)}
 	wait := make(chan error, 1)
 	done := make(chan struct{})
 	go func() {
@@ -125,6 +127,9 @@ func appendTail(existing, addition []byte, limit int) []byte {
 }
 
 func (d *desktop) consumeFrames() {
+	if d.screen == nil {
+		d.screen = newTerminalScreen(100, 30)
+	}
 	for {
 		start := bytes.Index(d.pending, []byte(frameStart))
 		if start < 0 {
@@ -145,63 +150,338 @@ func (d *desktop) consumeFrames() {
 			return
 		}
 		contentEnd := len(frameStart) + end
-		d.latest = visible(d.pending[len(frameStart):contentEnd])
+		d.screen.apply(d.pending[len(frameStart):contentEnd])
+		d.latest = d.screen.render()
 		d.frame++
 		d.pending = append([]byte(nil), d.pending[contentEnd+len(frameEnd):]...)
 	}
 }
 
-// visible removes terminal control sequences while preserving the frame's text.
-// The Bee presenter emits complete synchronized frames, so an entire latest
-// frame is sufficient to assert current UI state without retaining a screen
-// emulator or unbounded scrollback.
-func visible(input []byte) string {
-	var out strings.Builder
-	for i := 0; i < len(input); {
-		if input[i] != 0x1b {
-			if input[i] >= 0x20 || input[i] == '\n' || input[i] == '\r' || input[i] == '\t' {
-				out.WriteByte(input[i])
-			}
-			i++
-			continue
-		}
-		i++
-		if i == len(input) {
-			break
-		}
-		if input[i] == '[' {
-			i++
-			for i < len(input) {
-				c := input[i]
-				i++
-				if c >= 0x40 && c <= 0x7e {
-					break
-				}
-			}
-			continue
-		}
-		// OSC, DCS and the other string controls terminate at BEL or ST.
-		if input[i] == ']' || input[i] == 'P' || input[i] == '^' || input[i] == '_' || input[i] == 'X' {
-			i++
-			for i < len(input) {
-				if input[i] == 0x07 {
-					i++
-					break
-				}
-				if input[i] == 0x1b && i+1 < len(input) && input[i+1] == '\\' {
-					i += 2
-					break
-				}
-				i++
-			}
-			continue
-		}
-		// A two-byte ESC command has no visible text.
-		i++
-	}
-	return out.String()
+// terminalScreen is the bounded current viewport. Synchronized presenter
+// frames contain terminal updates, not necessarily full repaints, so retaining
+// this fixed-size screen is necessary to keep unchanged rows truthful while
+// applying cursor-positioned edits and erases.
+type terminalScreen struct {
+	width, height  int
+	rows           [][]rune
+	x, y           int
+	savedX, savedY int
 }
 
+func newTerminalScreen(width, height int) *terminalScreen {
+	s := &terminalScreen{width: width, height: height, rows: make([][]rune, height)}
+	for row := range s.rows {
+		s.rows[row] = make([]rune, width)
+		for col := range s.rows[row] {
+			s.rows[row][col] = ' '
+		}
+	}
+	return s
+}
+
+func (s *terminalScreen) clampCursor() {
+	if s.x < 0 {
+		s.x = 0
+	}
+	if s.y < 0 {
+		s.y = 0
+	}
+	if s.x > s.width {
+		s.x = s.width
+	}
+	if s.y >= s.height {
+		s.y = s.height - 1
+	}
+}
+
+func (s *terminalScreen) clearCell(row, col int) {
+	if row >= 0 && row < s.height && col >= 0 && col < s.width {
+		s.rows[row][col] = ' '
+	}
+}
+
+func (s *terminalScreen) clearLine(mode int) {
+	s.clampCursor()
+	start, end := 0, s.width-1
+	switch mode {
+	case 0:
+		start = s.x
+	case 1:
+		end = s.x
+	case 2:
+		// The whole row is cleared.
+	}
+	for col := start; col <= end; col++ {
+		s.clearCell(s.y, col)
+	}
+}
+
+func (s *terminalScreen) clearDisplay(mode int) {
+	s.clampCursor()
+	start, end := 0, s.height*s.width-1
+	switch mode {
+	case 0:
+		start = s.y*s.width + s.x
+	case 1:
+		end = s.y*s.width + s.x
+	case 2, 3:
+		// The whole viewport is cleared.
+	}
+	for offset := start; offset <= end; offset++ {
+		s.clearCell(offset/s.width, offset%s.width)
+	}
+}
+
+func csiParameters(raw string) []int {
+	if len(raw) > 0 && (raw[0] == '?' || raw[0] == '>' || raw[0] == '=') {
+		raw = raw[1:]
+	}
+	if raw == "" {
+		return []int{0}
+	}
+	parts := strings.Split(raw, ";")
+	result := make([]int, len(parts))
+	for i, part := range parts {
+		if part == "" {
+			result[i] = 0
+			continue
+		}
+		value := 0
+		for _, c := range part {
+			if c < '0' || c > '9' {
+				value = 0
+				break
+			}
+			value = value*10 + int(c-'0')
+			if value > 10000 {
+				value = 10000
+				break
+			}
+		}
+		result[i] = value
+	}
+	return result
+}
+
+func csiCount(params []int) int {
+	if len(params) == 0 || params[0] == 0 {
+		return 1
+	}
+	return params[0]
+}
+
+func (s *terminalScreen) csi(raw string, final byte) {
+	params := csiParameters(raw)
+	first := csiCount(params)
+	switch final {
+	case 'A':
+		s.y -= first
+	case 'B', 'e':
+		s.y += first
+	case 'C', 'a':
+		s.x += first
+	case 'D':
+		s.x -= first
+	case 'E':
+		s.y += first
+		s.x = 0
+	case 'F':
+		s.y -= first
+		s.x = 0
+	case 'G', '`':
+		s.x = first - 1
+	case 'd':
+		s.y = first - 1
+	case 'H', 'f':
+		row, col := 1, 1
+		if len(params) > 0 && params[0] != 0 {
+			row = params[0]
+		}
+		if len(params) > 1 && params[1] != 0 {
+			col = params[1]
+		}
+		s.y, s.x = row-1, col-1
+	case 'J':
+		s.clearDisplay(params[0])
+	case 'K':
+		s.clearLine(params[0])
+	case 'P':
+		s.clampCursor()
+		n := first
+		if n > s.width-s.x {
+			n = s.width - s.x
+		}
+		row := s.rows[s.y]
+		copy(row[s.x:], row[s.x+n:])
+		for col := s.width - n; col < s.width; col++ {
+			row[col] = ' '
+		}
+	case '@':
+		s.clampCursor()
+		n := first
+		if n > s.width-s.x {
+			n = s.width - s.x
+		}
+		row := s.rows[s.y]
+		copy(row[s.x+n:], row[s.x:s.width-n])
+		for col := s.x; col < s.x+n; col++ {
+			row[col] = ' '
+		}
+	case 'X':
+		s.clampCursor()
+		for col := s.x; col < s.x+first && col < s.width; col++ {
+			s.clearCell(s.y, col)
+		}
+	case 'S':
+		n := first
+		if n > s.height {
+			n = s.height
+		}
+		for i := 0; i < n; i++ {
+			copy(s.rows, s.rows[1:])
+			s.rows[s.height-1] = make([]rune, s.width)
+			for col := range s.rows[s.height-1] {
+				s.rows[s.height-1][col] = ' '
+			}
+		}
+	case 'T':
+		n := first
+		if n > s.height {
+			n = s.height
+		}
+		for i := 0; i < n; i++ {
+			s.rows = append([][]rune{make([]rune, s.width)}, s.rows[:s.height-1]...)
+			for col := range s.rows[0] {
+				s.rows[0][col] = ' '
+			}
+		}
+	case 's':
+		s.savedX, s.savedY = s.x, s.y
+	case 'u':
+		s.x, s.y = s.savedX, s.savedY
+	}
+	s.clampCursor()
+}
+
+func (s *terminalScreen) put(r rune) {
+	if s.x >= s.width {
+		s.x, s.y = 0, s.y+1
+	}
+	s.clampCursor()
+	s.rows[s.y][s.x] = r
+	s.x++
+}
+
+func (s *terminalScreen) apply(input []byte) {
+	for i := 0; i < len(input); {
+		if input[i] == 0x1b {
+			i++
+			if i >= len(input) {
+				break
+			}
+			switch input[i] {
+			case '[':
+				i++
+				start := i
+				for i < len(input) && (input[i] < 0x40 || input[i] > 0x7e) {
+					i++
+				}
+				if i < len(input) {
+					s.csi(string(input[start:i]), input[i])
+					i++
+				}
+			case ']', 'P', '^', '_', 'X':
+				i++
+				for i < len(input) {
+					if input[i] == 0x07 {
+						i++
+						break
+					}
+					if input[i] == 0x1b && i+1 < len(input) && input[i+1] == '\\' {
+						i += 2
+						break
+					}
+					i++
+				}
+			case '7':
+				s.savedX, s.savedY = s.x, s.y
+				i++
+			case '8':
+				s.x, s.y = s.savedX, s.savedY
+				i++
+			case 'c':
+				s.clearDisplay(2)
+				s.x, s.y, s.savedX, s.savedY = 0, 0, 0, 0
+				i++
+			case 'D':
+				s.y++
+				s.clampCursor()
+				i++
+			case 'E':
+				s.y++
+				s.x = 0
+				s.clampCursor()
+				i++
+			case 'M':
+				s.y--
+				s.clampCursor()
+				i++
+			default:
+				i++
+			}
+			continue
+		}
+		switch input[i] {
+		case '\r':
+			s.x = 0
+			i++
+		case '\n':
+			s.y++
+			s.clampCursor()
+			i++
+		case '\b':
+			s.x--
+			s.clampCursor()
+			i++
+		case '\t':
+			s.x = (s.x/8 + 1) * 8
+			s.clampCursor()
+			i++
+		case 0x07:
+			i++
+		default:
+			r, size := utf8.DecodeRune(input[i:])
+			if size == 0 {
+				return
+			}
+			s.put(r)
+			i += size
+		}
+	}
+}
+
+func (s *terminalScreen) render() string {
+	last := -1
+	rows := make([]string, len(s.rows))
+	for row, cells := range s.rows {
+		end := len(cells)
+		for end > 0 && cells[end-1] == ' ' {
+			end--
+		}
+		rows[row] = string(cells[:end])
+		if end > 0 {
+			last = row
+		}
+	}
+	if last < 0 {
+		return ""
+	}
+	return strings.Join(rows[:last+1], "\n")
+}
+
+// visible removes terminal control sequences while preserving only the text
+// in one byte string. It remains useful for callers that need a one-off text
+// extraction; consumeFrames uses terminalScreen because frames are deltas.
 func (d *desktop) snapshot() (string, uint64, []byte) {
 	d.mu <- struct{}{}
 	defer func() { <-d.mu }()

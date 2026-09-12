@@ -48,8 +48,8 @@ the credential broker supplies secrets; precedence is not used to hide conflicts
 
 ## Retained provider login destinations
 
-`homes.retain_login` is a placement helper for a broker integration that has not
-yet been wired into runtime materialization. It accepts bounded opaque bytes and
+`homes.retain_login` receives broker file projections during runtime materialization
+only after a launch selects its retained session home. It accepts bounded opaque bytes and
 only two fixed home-relative targets: Codex `.codex/auth.json` and Claude
 `.claude/.credentials.json`. The first seed records a separate nonsecret
 provider/definition-id/definition-revision identity only after the opaque file
@@ -132,11 +132,15 @@ those writes uncertain; the recipient must not write them again on its own.
 
 A launch names credential projection ids. `prepare` checks each binding
 through `bee.credentials:check` for the owner it admitted with the attempt
-as scope; the runner materializes each through `bee.credentials:materialize`
-right before the child starts and places the value in the child's
-environment at the provider's fixed destination; evidence carries only the
-projection id and the outcome, and the stored request never carries a
-value. `start` and `reconcile` re-check the bindings like resource grants.
+as scope. Environment projections materialize right before the child starts
+at the provider's fixed environment destination. A file projection requires
+the selected retained session home, validates its provider-fixed login
+destination and nonsecret definition identity, then writes its opaque bytes
+before immutable driver configuration. One file projection may select a
+retained home; matching later resumes preserve provider-refreshed bytes.
+Evidence carries only the projection id and outcome, and the stored request
+never carries a value. `start` and `reconcile` re-check the bindings like
+resource grants.
 
 ## Supervision
 

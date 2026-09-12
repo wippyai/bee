@@ -137,17 +137,27 @@ local function admit_resources(request: types.LaunchRequest): ({Resolved}?, Repl
     end
     return resolved_list, nil
 end
--- Checks one credential projection's bindings without bytes.
-local function check_projection(request: types.LaunchRequest, projection_id: string): Reply?
+-- Checks one credential projection's bindings without bytes. File logins are
+-- meaningful only in a caller-selected retained home: an attempt home would
+-- discard them on cleanup.
+local function check_projection(request: types.LaunchRequest, projection_id: string): (Reply?, string?)
     local raw, call_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id, attempt_id = request.attempt_id})
-    if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id) end
+    if call_error or type(raw) ~= "table" then return fail("UNAVAILABLE", "credential broker did not answer for projection " .. projection_id), nil end
     local reply = raw :: Reply
-    if not reply.ok then return fail(reply.error and reply.error.code or "DENIED", "projection " .. projection_id .. ": " .. tostring(reply.error and reply.error.code)) end
+    if not reply.ok then return fail(reply.error and reply.error.code or "DENIED", "projection " .. projection_id .. ": " .. tostring(reply.error and reply.error.code)), nil end
     local projection = bounds.object(reply.value)
-    if not projection or projection.projection_kind ~= "environment" then
-        return fail("UNAVAILABLE", "this placement does not yet materialize file credentials")
+    if not projection then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil end
+    if projection.projection_kind == "environment" then return nil, "environment" end
+    if projection.projection_kind ~= "file" then return fail("DENIED", "projection " .. projection_id .. " has unsupported kind"), nil end
+    if not request.session_ref or not request.launch.home_ref then
+        return fail("DENIED", "file credential projections require a selected retained home"), nil
     end
-    return nil
+    local source, source_error = homes.decode_login_source({provider = projection.provider,
+        definition_id = projection.definition_id, definition_revision = projection.definition_revision})
+    if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
+        return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
+    end
+    return nil, "file"
 end
 -- Checks the gateway binding an attempt holds under its attached carrier
 -- epoch; bindings, never bytes.
@@ -198,9 +208,14 @@ local function recheck_grants(row: store.Row, request: types.LaunchRequest): (Re
             if refused then return refused, "grant" end
         end
     end
+    local file_projection = false
     for _, projection_id in ipairs(request.projections) do
-        local refused = check_projection(request, projection_id)
+        local refused, kind = check_projection(request, projection_id)
         if refused then return refused, "credential" end
+        if kind == "file" then
+            if file_projection then return fail("DENIED", "only one file credential projection may select a retained home"), "credential" end
+            file_projection = true
+        end
     end
     if request.gateway then
         local refused = check_gateway(row, request)
@@ -298,9 +313,14 @@ function M.prepare(value: unknown): Reply
     if not digest then return fail("INVALID", digest_error or "request is not measurable") end
     local resolved_grants, resources_refused = admit_resources(request)
     if not resolved_grants then return resources_refused :: Reply end
+    local file_projection = false
     for _, projection_id in ipairs(request.projections) do
-        local refused = check_projection(request, projection_id)
+        local refused, kind = check_projection(request, projection_id)
         if refused then return refused end
+        if kind == "file" then
+            if file_projection then return fail("DENIED", "only one file credential projection may select a retained home") end
+            file_projection = true
+        end
     end
     local measured = capability.measure()
     if not types.satisfies(measured.capability, request.required_cleanup) then
@@ -808,7 +828,7 @@ function M.capabilities(): Reply
         executable_measurement = {streaming = measurement.streaming, read_only_volume = measurement.read_only_volume, detail = measurement.detail},
         resource_authority = mode, delegated_resource_grants = mode == "granted",
         revocation_enforcement = {mode = "stop_on_reconcile", scheduling_delay_ms = M.SWEEP_INTERVAL_MS, reconcile_timeout_ms = M.RECONCILE_TIMEOUT_MS, stop_grace_ms = "per attempt", sweep_bound = M.SWEEP_BOUND},
-        credential_broker = true, credential_projections = {"environment"}, max_chunk_bytes = protocol.MAX_CHUNK_BYTES,
+        credential_broker = true, credential_projections = {"environment", "file"}, max_chunk_bytes = protocol.MAX_CHUNK_BYTES,
         gateway = {materialization = "placement_authorized_key", token_projection = "environment", takeover_grace_ms = protocol.TAKEOVER_GRACE_MS, seal_on = {"child_exit"}, revocation_on = {"refused_start", "carrier_loss_without_takeover", "reconcile_end", "carrier_close"},
             hook_events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop"}, shutdown_events_not_admitted = {"SessionEnd", "StopFailure"}},
         max_write_bytes = protocol.MAX_WRITE_BYTES, max_outstanding_chunks = protocol.MAX_OUTSTANDING_CHUNKS, max_spool_bytes = protocol.MAX_SPOOL_BYTES,

@@ -131,7 +131,8 @@ local function retained_content(vol: fs.FS, path: string, content: string): stri
         if type(chunk) ~= "string" or chunk == "" then break end
         found = found .. (chunk :: string)
     end
-    file:close()
+    local closed, close_error = file:close()
+    if closed == false then return "close retained configuration: " .. tostring(close_error) end
     if #found > M.MAX_REPLAY_BYTES then return "retained configuration exceeds replay bound" end
     if found ~= content then return "retained configuration differs from host-approved content" end
     return nil
@@ -219,7 +220,8 @@ local function read_bounded(vol: fs.FS, path: string, bound: integer): (string?,
         if chunk == "" then break end
         found = found .. (chunk :: string)
     end
-    file:close()
+    local closed, close_error = file:close()
+    if closed == false then return nil, "close retained login identity: " .. tostring(close_error) end
     if #found > bound then return nil, "retained login identity exceeds bound" end
     return found, nil
 end
@@ -234,21 +236,21 @@ local function write_exclusive(vol: fs.FS, path: string, content: string): strin
     if closed == false then return "close retained login: " .. tostring(close_error) end
     return nil
 end
-local function create_login_parent(vol: fs.FS, root: string, relative: string): string?
+local function create_login_parent(vol: fs.FS, root: string, relative: string): (string?, string?)
     local parent = (root .. "/" .. relative):match("^(.*)/[^/]+$")
-    if not parent or parent == root then return nil end
+    if not parent or parent == root then return nil, nil end
     if vol:exists(parent) then
-        return "retained login parent already exists"
+        return nil, "retained login parent already exists"
     end
     local made, mkdir_error = vol:mkdir(parent)
-    if not made then return "create retained login parent: " .. tostring(mkdir_error) end
-    return nil
+    if not made then return nil, "create retained login parent: " .. tostring(mkdir_error) end
+    return parent, nil
 end
 -- Seeds one fixed provider login destination. On later resumes it verifies
 -- the non-secret source identity and leaves the destination untouched: the
 -- harness's opaque refresh is therefore retained without applying immutable
 -- configuration replay rules to authentication bytes.
-function M.retain_login(home_path: string, value: unknown, opaque: string): (string?, string?, boolean?)
+function M.retain_login(home_path: string, value: unknown, opaque: string, created: {[string]: boolean}?): (string?, string?, boolean?)
     local destination, decode_error = M.decode_login_source(value)
     if not destination then return nil, decode_error end
     if #opaque == 0 or #opaque > M.MAX_LOGIN_BYTES then return nil, "login bytes exceed bound" end
@@ -272,8 +274,12 @@ function M.retain_login(home_path: string, value: unknown, opaque: string): (str
         return target, nil, true
     end
     if target_exists then return nil, "retained login is incomplete" end
-    local parent_error = create_login_parent(vol, root, destination.path)
+    local parent, parent_error = create_login_parent(vol, root, destination.path)
     if parent_error then return nil, parent_error end
+    -- A provider login can precede immutable driver configuration in the
+    -- same provider directory. Record only the parent this runner just made;
+    -- write_protected still refuses every parent it did not create itself.
+    if parent and created then created[parent] = true end
     -- The ready marker is written only after the opaque bytes. A failed or
     -- interrupted seed leaves no accepted marker and is refused on resume.
     local write_error = write_exclusive(vol, target, opaque)

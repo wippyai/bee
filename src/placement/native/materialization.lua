@@ -103,19 +103,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     -- Parents this runner creates in the home for its configuration files.
     local created_parents: {[string]: boolean} = {}
-    local delivery = request.delivery
-    if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
-    for _, file in ipairs(delivery.files) do
-        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, file.content, created_parents, retained_home)
-        if not written then
-            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
-            return refused(write_error or "configuration")
-        end
-        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
-    end
-    local arguments: {string} = {}
-    for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
-    for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     local home_os, home_os_error = homes.os_path(selected_home_path .. "/home")
     if not home_os then
         evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
@@ -126,8 +113,10 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")
     end
-    -- Credential projections arrive as bytes in a reply nothing persists;
-    -- only the projection id and the outcome reach evidence.
+    -- Credential projections arrive as bytes in a reply nothing persists.
+    -- File logins run before immutable driver configuration so their provider
+    -- parent remains runner-owned for this materialization.
+    local file_projection = false
     for index, projection_id in ipairs(request.projections) do
         local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
@@ -137,8 +126,29 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {execution = "exited"})
             return refused("projection " .. projection_id .. ": " .. code)
         end
-        local projected = reply.value :: {destination: string, value: string}
-        if reply.value.projection_kind ~= "environment" or type(projected.destination) ~= "string"
+        local projected = reply.value :: {destination: string, value: string, projection_kind: string}
+        if projected.projection_kind == "file" then
+            if not retained_home or file_projection then
+                evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
+                return refused("invalid file login projection")
+            end
+            local login = reply.value :: {destination: string, value: string, projection_kind: string,
+                provider: unknown, definition_id: unknown, definition_revision: unknown}
+            local source = homes.decode_login_source({provider = login.provider,
+                definition_id = login.definition_id, definition_revision = login.definition_revision})
+            if not source or projected.destination ~= (source.path:match("[^/]+$") :: string)
+                or type(projected.value) ~= "string" then
+                evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
+                return refused("invalid file login projection")
+            end
+            local _, login_error, replayed = homes.retain_login(selected_home_path, source.source, projected.value, created_parents)
+            if login_error then
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
+                return refused("file login projection refused")
+            end
+            file_projection = true
+            evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "replayed" or "seeded"))
+        elseif projected.projection_kind ~= "environment" or type(projected.destination) ~= "string"
             or #projected.destination > 128 or not projected.destination:match("^[A-Z_][A-Z0-9_]*$")
             or type(projected.value) ~= "string" or #projected.value == 0 or #projected.value > 8192
             or projected.value:find("[%z\r\n]") then
@@ -154,6 +164,19 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         environment[projected.destination] = projected.value
         evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
     end
+    local delivery = request.delivery
+    if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
+    for _, file in ipairs(delivery.files) do
+        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, file.content, created_parents, retained_home)
+        if not written then
+            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
+            return refused(write_error or "configuration")
+        end
+        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
+    end
+    local arguments: {string} = {}
+    for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
+    for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     -- The gateway token is minted at delivery for the binding this attempt
     -- holds under the attached carrier epoch, written nowhere: the
     -- driver configuration already names the selected environment

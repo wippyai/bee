@@ -61,6 +61,21 @@ local function admit_credential_source()
     local applied, err = changes:apply()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
+local function admit_login_source(source: string)
+    local entry = registry.get("bee:credential_sources")
+    if not entry then error("credential sources entry") end
+    local data = entry.data :: {[string]: unknown}
+    local list = data.sources :: {{[string]: unknown}}
+    list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
+    local file_policy = registry.get("bee:credential_file_policy")
+    if not file_policy then error("credential file policy entry") end
+    file_policy.data.policy.resources = {source}
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    changes:update(file_policy)
+    local applied, apply_error = changes:apply()
+    if not applied then error("admit login source: " .. tostring(apply_error)) end
+end
 local function resource_mode(mode: string)
     local entry = registry.get("bee.placement.native:resource_mode")
     if not entry then error("resource mode entry") end
@@ -971,17 +986,9 @@ local function define_tests()
             end
             resource_mode("host_configured")
         end)
-        test.it("refuses file credentials before intent until private-home delivery is wired", function()
+        test.it("refuses file credentials before intent without a selected retained home", function()
             local source = "bee.credentials:codex_login_fixture"
-            local entry = registry.get("bee:credential_sources")
-            if not entry then error("credential sources entry") end
-            local data = entry.data :: {[string]: unknown}
-            local list = data.sources :: {{[string]: unknown}}
-            list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
-            local changes = registry.snapshot():changes()
-            changes:update(entry)
-            local applied, apply_error = changes:apply()
-            if not applied then error(tostring(apply_error)) end
+            admit_login_source(source)
             local workspace = fresh("ws")
             credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
             local attempt_id = fresh("attempt")
@@ -992,10 +999,58 @@ local function define_tests()
             request.projections = {projection.projection_id}
             local refused = call(OWNER, "prepare", request)
             test.is_false(refused.ok)
-            test.eq(refused.error.code, "UNAVAILABLE")
+            test.eq(refused.error.code, "DENIED")
             local absent = call(OWNER, "status", {attempt_id = attempt_id})
             test.is_false(absent.ok)
             test.eq(absent.error.code, "NOT_FOUND")
+        end)
+        test.it("delivers one retained Codex login before provider configuration and preserves a refreshed login", function()
+            local source = "bee.credentials:codex_login_fixture"
+            admit_login_source(source)
+            test.eq(shell("mkdir -p .wippy/codex-login-fixture && printf '{\"fixture\":\"login\"}' > .wippy/codex-login-fixture/auth.json"), "")
+            local workspace = fresh("login-workspace")
+            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local session_ref = fresh("login-session")
+            local function issue(attempt_id: string): {[string]: unknown}
+                return credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER, attempt_id = attempt_id, profile_id = "batch",
+                    profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("login-key")})
+            end
+            local first_request = retained_launch(OWNER, session_ref, "first-login")
+            local first_id = first_request.attempt_id :: string
+            first_request.projections = {issue(first_id).projection_id}
+            attempt_of(call(OWNER, "prepare", first_request))
+            attempt_of(call(OWNER, "start", {attempt_id = first_id}))
+            if not wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000) then error("first retained login launch did not exit") end
+            local session_key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(session_key))
+            local home = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("test -f " .. home .. "/.codex/auth.json && test -f " .. home .. "/.codex/config.toml"), "")
+            test.eq(shell("printf '{\"fixture\":\"refreshed\"}' > " .. home .. "/.codex/auth.json"), "")
+            local second_request = retained_launch(OWNER, session_ref, "second-login")
+            local second_id = second_request.attempt_id :: string
+            second_request.projections = {issue(second_id).projection_id}
+            attempt_of(call(OWNER, "prepare", second_request))
+            attempt_of(call(OWNER, "start", {attempt_id = second_id}))
+            if not wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = second_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000) then error("second retained login launch did not exit") end
+            test.eq(shell("cat " .. home .. "/.codex/auth.json"), '{"fixture":"refreshed"}')
+            local page = value(call(OWNER, "evidence", {attempt_id = second_id, limit = 64}))
+            for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                test.is_nil(tostring(item.detail):find("refreshed", 1, true))
+            end
+            local changed_request = retained_launch(OWNER, session_ref, "changed-login")
+            local changed_id = changed_request.attempt_id :: string
+            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            changed_request.projections = {issue(changed_id).projection_id}
+            attempt_of(call(OWNER, "prepare", changed_request))
+            local refused = call(OWNER, "start", {attempt_id = changed_id})
+            test.is_false(refused.ok)
+            test.eq(refused.error and refused.error.code, "UNAVAILABLE")
+            test.is_true(has(kinds(changed_id), "credential.refused"))
+            test.is_nil(shell("cat " .. home .. "/marker"):find("changed-login", 1, true))
         end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()

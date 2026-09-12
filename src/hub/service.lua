@@ -13,8 +13,9 @@ local canonical = require("canonical")
 local hash = require("hash")
 local M = {}
 type Result = transaction.Result
+type ExpectedModule = {component: string, version: string, change: string}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
-    baseline_revision: integer, message: string, action: string}
+    baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -41,6 +42,30 @@ function M.prepare(raw: unknown): (plan.Prepared?, string?)
     return plan.prepare(state, revision, request, source())
 end
 
+local function expected_modules(raw: unknown): {ExpectedModule}?
+    if type(raw) ~= "table" then return nil end
+    local count = 0
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
+        count = count + 1
+    end
+    if count ~= #raw or count > 512 then return nil end
+    local result: {ExpectedModule} = {}
+    local seen: {[string]: boolean} = {}
+    for _, item in ipairs(raw :: {unknown}) do
+        local value = bounds.object(item)
+        if not value then return nil end
+        local component = bounds.line(value.component, 160)
+        local version = bounds.text(value.version, 128)
+        local change = bounds.member(value.change, {"keep", "install", "update", "remove"})
+        if not component or not version or not change or seen[component] then return nil end
+        if (change == "install" or change == "update") and version == "" then return nil end
+        seen[component] = true
+        result[#result + 1] = {component = component, version = version, change = change}
+    end
+    return result
+end
+
 local function decode_receipt(raw: unknown): Receipt?
     local value = bounds.object(raw)
     if not value then return nil end
@@ -51,8 +76,10 @@ local function decode_receipt(raw: unknown): Receipt?
     if not actor or not measured or not component or not state or not baseline or not message or not action then return nil end
     local request_digest = digest(value.request_digest)
     if value.request_digest ~= nil and not request_digest then return nil end
+    local expected = expected_modules(value.expected_modules)
+    if value.expected_modules ~= nil and not expected then return nil end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action}
+        baseline_revision = baseline, message = message, action = action, expected_modules = expected}
 end
 
 function M.status(raw: unknown): Result
@@ -86,6 +113,61 @@ local function save(receipt: Receipt): Result
     return transaction.success(receipt, false)
 end
 
+local function verify(expected: {ExpectedModule}, actual: inventory.Result): string?
+    local selected: {[string]: string} = {}
+    for _, item in ipairs(actual.modules) do selected[item.component] = item.version end
+    for _, item in ipairs(expected) do
+        if item.change == "remove" then
+            if selected[item.component] then return "removed module remains installed: " .. item.component end
+        elseif selected[item.component] == nil then
+            return "runtime removed retained module: " .. item.component
+        elseif item.version ~= "" and selected[item.component] ~= item.version then
+            return "runtime selected another version for " .. item.component
+        end
+        selected[item.component] = nil
+    end
+    if next(selected) then return "runtime installed modules outside the displayed plan" end
+    return nil
+end
+
+local function reconcile(receipt: Receipt, request: plan.Request): Result
+    local expected = receipt.expected_modules
+    if not expected then return transaction.failure("UNCERTAIN", "published operation has no captured recovery evidence") end
+    local snapshot, problem = registry.snapshot()
+    if not snapshot then return transaction.failure("UNAVAILABLE", tostring(problem)) end
+    local root_id, root_error = plan.root_id(request.component)
+    if not root_id then return transaction.failure("INTERNAL", tostring(root_error)) end
+    local state, state_error = snapshot:state()
+    if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+    -- The complete snapshot carries derived dependency ownership; get() only
+    -- returns the authored entry fields.
+    local root = nil
+    for _, entry in ipairs(state.entries) do
+        if entry.id == root_id then root = entry; break end
+    end
+    local mismatch: string? = nil
+    if request.action == "uninstall" then
+        if root then mismatch = "removed dependency root is present" end
+    elseif not root or root.kind ~= "ns.dependency" or not root.registry or root.registry.root ~= true then
+        mismatch = "published dependency root is absent or no longer a root"
+    else
+        local data = bounds.object(root.data)
+        local observed = data and plan.decode({action = request.action, component = data.component, version = data.version,
+            parameters = data.parameters, migration_policy = request.migration_policy}) or nil
+        local encoded = observed and canonical.encode(observed) or nil
+        local measured = encoded and hash.sha256(encoded) or nil
+        if measured ~= receipt.request_digest then mismatch = "published dependency root differs from the confirmed request" end
+    end
+    local actual, inventory_error = inventory.decode(state, snapshot:version():id())
+    if not actual then return transaction.failure("UNAVAILABLE", tostring(inventory_error)) end
+    mismatch = mismatch or verify(expected, actual)
+    receipt.state = mismatch and "recovery_required" or "complete"
+    receipt.message = mismatch or "Published dependency change verified after interruption"
+    local result = save(receipt)
+    result.replayed = true
+    return result
+end
+
 -- Called only inside the named publication worker after facade authorization.
 function M.apply(raw: unknown, expected: unknown): Result
     if not security.can("bee.hub.execute", "bee.hub:worker") then return transaction.failure("DENIED", "Hub worker authority required") end
@@ -105,6 +187,7 @@ function M.apply(raw: unknown, expected: unknown): Result
         if not receipt or receipt.request_digest ~= request_digest then
             return transaction.failure("STALE", "request differs from the recorded operation; refresh its plan")
         end
+        if receipt.state == "published" then return reconcile(receipt, decoded) end
         previous.replayed = true
         return previous
     end
@@ -146,32 +229,19 @@ function M.apply(raw: unknown, expected: unknown): Result
     elseif request.action == "update" then staged, stage_error = changes:update(entry)
     else staged, stage_error = changes:delete(displayed.root_id) end
     if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
+    local expected: {ExpectedModule} = {}
+    for _, item in ipairs(displayed.modules) do
+        expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
+    end
     local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
-        baseline_revision = displayed.base_revision, state = "published", message = ""}
+        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected}
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()
     if not applied then return transaction.failure("FAILED", tostring(apply_error)) end
     local actual, inventory_error = inventory.read()
     local mismatch: string? = inventory_error
-    if actual then
-        local selected: {[string]: string} = {}
-        for _, item in ipairs(actual.modules) do selected[item.component] = item.version end
-        for _, item in ipairs(displayed.modules) do
-            if item.change == "remove" then
-                if selected[item.component] then mismatch = "removed module remains installed: " .. item.component end
-            elseif selected[item.component] == nil then
-                mismatch = "runtime removed retained module: " .. item.component
-            -- A first Hub operation records the embedded deployment's
-            -- resolution. Before that record exists, retained host modules
-            -- intentionally have no captured version. Their presence is
-            -- verified above; only compare a version the plan measured.
-            elseif item.version ~= "" and selected[item.component] ~= item.version then
-                mismatch = "runtime selected another version for " .. item.component
-            end
-            selected[item.component] = nil
-        end
-        if next(selected) then mismatch = "runtime installed modules outside the displayed plan" end
+    if actual then mismatch = verify(expected, actual)
     else mismatch = inventory_error or "cannot verify installed module inventory" end
     if mismatch then
         receipt.state, receipt.message = "recovery_required", mismatch

@@ -1,5 +1,14 @@
 # Foundation status
 
+Global build `237d76a8` combines managed Agent profiles with Hub package reads,
+install/update/uninstall, README browsing, scrollable plan review and explicit
+post-publication crash recovery. The combined source passes 746 unit cases and
+the independent desktop suite; the full gate currently has two managed-Agent
+fixture failures under investigation. Migration execution and overlay activation
+remain unfinished. See [the current global build](handoffs/GLOBAL_BUILD.md) and
+[Hub contract](HUB.md) for exact evidence and limits. Older checkpoints below
+retain their historical status.
+
 The September 12 build `78aae0b0` includes four separately packaged harness
 drivers (Claude, Codex, Agy and Grok), with executable/client/upgrade acceptance.
 The Agent picker still needs default production profiles. File-login delivery,

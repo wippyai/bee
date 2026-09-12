@@ -26,7 +26,10 @@ local function handle(raw: unknown): {[string]: unknown}
     elseif raw.operation == "plan" then
         return {ok = true, replayed = false, value = {request = raw.request,
             digest = string.rep("a", 64), ready = true, base_revision = 1,
-            modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {}}}
+            modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {
+                "fixture:01", "fixture:02", "fixture:03", "fixture:04", "fixture:05", "fixture:06",
+                "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
+                "fixture:last"}}}
     elseif raw.operation == "apply" then
         assert(raw.expected_digest == string.rep("a", 64), "confirmation lost the displayed digest")
         return {ok = true, replayed = false, value = {state = "complete", message = "Fixture confirmation received"}}
@@ -74,6 +77,8 @@ def exercise(project, packed, pack):
             ui.key(b"p")
             ui.wait("Ready for confirmation")
             assert "Fixture confirmation received" not in ui.text(), "planning applied the operation"
+            ui.key(b"\x1b[B" * 20)
+            ui.wait("fixture:last")
             ui.key(b"\r")
             ui.wait("MODULES  CONFIRM")
             ui.key(b"\x1b")

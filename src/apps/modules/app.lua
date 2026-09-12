@@ -167,6 +167,7 @@ local function main(value: unknown)
         local intent, problem = model.plan_intent(state)
         if not intent then status = problem or "Cannot prepare a plan"; changed(); return end
         model.show(state, "plan")
+        offset = 0
         begin(intent)
         changed()
     end
@@ -352,10 +353,10 @@ local function main(value: unknown)
                     else
                         status = ""
                         if key == "up" or letter == "k" then
-                            if state.phase == "details" and reading_readme then offset = math.floor(math.max(0, offset - 1)); changed()
+                            if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
                             elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
                         elseif key == "down" or (letter == "j" and state.phase ~= "details") then
-                            if state.phase == "details" and reading_readme then offset = offset + 1; changed()
+                            if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
                             elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
                         elseif key == "left" and state.phase == "catalog" then model.set_page(state, state.page - 1); invalidate(); catalog()
                         elseif key == "right" and state.phase == "catalog" then model.set_page(state, state.page + 1); invalidate(); catalog()
@@ -386,7 +387,7 @@ local function main(value: unknown)
                     local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                     if hit then handle_hit(hit.kind, hit.key) end
                 elseif data.type == "mouse" and data.action == "wheel" then
-                    if state.phase == "details" and reading_readme then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
+                    if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
                     elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                 end

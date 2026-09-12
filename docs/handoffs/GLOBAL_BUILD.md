@@ -1,6 +1,36 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub and managed Agent profiles
+## Current install: Hub recovery and managed Agent profiles
+
+Global `/home/wolfy-j/.local/bin/bee` has SHA
+`237d76a84ff13494be90d9e360234ff43a3a172612121993ba2c0f3168edac61`.
+Production source `c7bad34` retains the combined Agent build below and adds full
+scrollable plan/confirmation effects plus explicit interrupted-publication
+reconciliation. Acceptance checkpoint `f971b81` corrects desktop menu readiness
+and the native selector's obsolete empty-catalog expectation. Runtime
+`291f5c6b708c` and native `0f63d30bd718` are unchanged.
+
+Focused Hub tests, Modules source/pack interaction, actual SIGKILL/restart and
+later-conflict recovery, native desktop/Agent/Modules acceptance, and native
+install/update/uninstall all pass. Evidence is under `bee-evidence/0912`:
+`hub-combined-followup-check.log`, `hub-combined-native-corrected.log`, and
+`hub-combined-lifecycle-check.log`. The earlier full Hub run passed 732 unit
+cases but failed a Settings selector that matched the empty-desktop hint.
+The corrected client-desktop suite passes all source/pack variants. The combined
+run passes 746 unit cases, then stops on two managed-Agent fixtures (session-root
+admission and a missing changed-profile notice). Those are under investigation;
+remaining checks are running separately. This is not a complete repository-gate
+pass. Logs: `hub-combined-desktop-check.log`, `hub-combined-full-check.log`, and
+`hub-combined-check-remainder.log`.
+
+The executable and five sidecars were verified after SHA-fenced replacement.
+Previous `edf6a7c3` files are in `global-before-combined-recovery-edf6a7c3`;
+`hub-combined-global-install.json` records the install. Running nodes and their
+terminals were retained; the new executable takes effect on a fresh node.
+Migration execution, operation-history UI and overlay activation remain
+unfinished. See [Hub](../HUB.md) for the callable operations and recovery limits.
+
+## Previous install: Hub and managed Agent profiles
 
 Global `/home/wolfy-j/.local/bin/bee` has SHA
 `edf6a7c3e3f0b8a767ab0a1075043d60ada03420b6c5d4192df9239e03ca6eeb`.
@@ -20,8 +50,9 @@ Run `bee agent`, or open Agent from the menu, on a freshly started node. Existin
 retained nodes keep their loaded code until restarted. Automatic credential
 setup, cold conversation recovery, production MCP activation, Docker, profile
 replication and hook-driven titles remain unfinished. This is not complete
-managed-agent acceptance. The old native selector script still expects an empty
-catalog; the current default-profile acceptance was run as a temporary probe.
+managed-agent acceptance. At this checkpoint the native selector script still
+expected an empty catalog; default-profile acceptance was a temporary probe.
+The current checkpoint above updates the permanent test.
 
 ## Previous install: Hub lane refresh
 

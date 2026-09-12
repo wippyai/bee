@@ -1,6 +1,35 @@
 # Global Bee build — September 12, 2026
 
-## Current install: default machine login plus Agent recovery
+## Current install: Hub migrations plus default machine login
+
+Global `/home/wolfy-j/.local/bin/bee` now has SHA
+`f276bc2b0edaa85d1385e91783f4820156f41cb1730cefd410e3089e0546d100`,
+source `f5beb06`. It retains installed Agent recovery and optional machine-login
+behavior and adds host-granted Hub migration `up`, selected database requirement
+planning, durable migration results, and explicit ledger/definition recovery.
+Removal checks include orphaned dependencies; explicit `leave` preserves schema.
+Migration `down`, newly installed database targets and operation-history UI remain
+unfinished. See [Hub](../HUB.md) for exact grants and callable behavior.
+
+The candidate passes 63 focused Hub tests and actual local-Hub publication/SQL
+acceptance, including schema-commit SIGKILL/restart, partial failure/retry,
+changed-definition refusal, linked database requirements and denied database
+access. Native desktop, Modules and Agent present/absent machine-login checks
+pass, as does native Modules install/update/uninstall. A native Agent fixture
+initially lost unchanged rows in partial terminal redraws; its bounded screen
+reader now passes the regression and actual selector acceptance. These are
+focused combined-source and native results; the original Hub source's full
+repository run remains separately tracked in `hub-migration-full-check.log`.
+
+Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. The executable and
+five sidecars were verified against their provenance, backed up, and replaced
+only after rechecking the previous `acab69b8` files. Evidence:
+`hub-migration-final-source-check.log`, `hub-migration-final-native-check.log`,
+`hub-migration-global-install.json`; backup `global-before-hub-migrations-acab69b8`.
+No running node was restarted. Retained nodes continue their loaded code until
+the user restarts them.
+
+## Previous install: default machine login plus Agent recovery
 
 Global has since advanced to SHA
 `acab69b8e487c4743cfa3967cf32a74add001f77cfba42e9e9ffe4454bd7036a`,

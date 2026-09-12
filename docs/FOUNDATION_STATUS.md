@@ -1,6 +1,6 @@
 # Foundation status
 
-The current Hub source adds host-granted migration `up`, captured definition
+Installed Hub build `f276bc2b` adds host-granted migration `up`, captured definition
 receipts, post-commit ledger verification and explicit recovery. A disposable
 local Hub proves real publication/SQL effects, completed replay, SIGKILL after
 schema commit followed by restart, partial failure/retry and refusal after a
@@ -8,7 +8,8 @@ host-authorized definition change. Removal checks
 include orphaned dependencies; `leave` retains their schema. Selected migration database requirements also pass real service acceptance.
 Strict lint and 63 focused Hub tests pass. Migration `down`, newly installed
 database resources and the complete regression gate remain pending.
-This source is not installed globally; see [Hub](HUB.md) for the exact limits.
+The combined native build preserves Agent recovery and optional machine login;
+see [Hub](HUB.md) and [global evidence](handoffs/GLOBAL_BUILD.md) for exact limits.
 
 Hub checkpoint `237d76a8` combines managed Agent profiles with Hub package reads,
 install/update/uninstall, README browsing, scrollable plan review and explicit

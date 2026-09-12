@@ -107,7 +107,8 @@ grants or unreadable ledgers refuse publication. Explicit `leave` permits remova
 while retaining migration effects. `down` still refuses: executing rollback before
 definition removal needs its own durable phase and recovery checks.
 
-These changes are source-only and not installed globally. SQLite library and
+These changes are installed in global build `f276bc2b`, preserving Agent recovery
+and optional machine login. SQLite library and
 real-service acceptance cover up/replay, committed-schema interruption/restart,
 partial failure/retry, changed-definition refusal after restart, removal block/leave,
 absent ledgers, requirement-linked targets and denied database access.

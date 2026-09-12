@@ -1,6 +1,25 @@
 # Global Bee build — September 12, 2026
 
-## Current install: durable migration rollback
+## Current install: Agent instructions plus Hub rollback
+
+Global Bee SHA `f1a29d083ff1620e8e12757d80c954017833e82dc52d8caf18d06651bcfc4577`
+contains production source from `660b769`: four-driver persistent instructions,
+Agent recovery/machine login, and Hub history/migration rollback together.
+Strict lint and 772 unit cases pass. Native desktop, Modules and Agent selector
+acceptance pass, including project cwd, retained private HOME and present/absent
+machine login. The Go Hub service acceptance includes rollback and crash recovery.
+Source/pack connection UI passes after adding the missing governance database
+fixture override; the earlier full gate's 1.052-second exit remains an unexplained
+timing failure, not a passing full-suite claim.
+
+Executable and all five sidecars were fenced against the previous `1da5b5c6`
+installation, backed up, replaced and hash-verified. Receipt:
+`instructions-rollback-global-install.json`; backup:
+`global-before-instructions-rollback-1da5b5c6`. No running node was restarted.
+Production MCP activation, Docker execution and editable instructions UI remain
+unfinished. Older checkpoints below describe their respective installations.
+
+## Previous install: durable migration rollback
 
 Global Bee now has SHA
 `1da5b5c66e897413c104502b1cf96a8a1e11a7c178564d9cd15eaa2fbb3cf7ea`,

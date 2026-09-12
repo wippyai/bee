@@ -1,5 +1,11 @@
 # Foundation status
 
+Global `f1a29d08` now combines four-harness persistent instructions with Hub
+history and migration rollback. Strict lint, 772 units, native desktop/Modules/Agent
+acceptance and focused source/pack connection UI pass. See the
+[current build](handoffs/GLOBAL_BUILD.md) for scope and remaining gates.
+The dated source/install paragraphs below retain their earlier checkpoint context.
+
 The Agent source now accepts persistent `instructions` on a launch definition's
 host-selected policy, separate from the per-turn `brief` and dynamic `ctx`.
 Claude, Codex, Grok and Agy map them through their existing configuration methods;

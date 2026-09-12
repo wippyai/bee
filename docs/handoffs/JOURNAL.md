@@ -6288,3 +6288,11 @@ four drivers, and is investigating real retained-node attachment. This lane will
 not replace its global during that investigation. Native host-path work is based
 on the installed native revision `3e895bae936f`, not the older native sources in
 the agent integration checkout; runtime remains `291f5c6b` with no new patch.
+
+### 2026-09-12 — Combined Agent instructions global
+
+Journal 1467–1468 records combined validation and the governance fixture fix.
+Global `f1a29d08` now contains source `660b769`, preserving Hub rollback and
+Agent recovery. All 772 unit cases and native desktop/Modules/Agent checks pass.
+See GLOBAL_BUILD.md and `instructions-rollback-global-install.json`. No node restart.
+MCP activation, Docker and editable instructions remain unfinished.

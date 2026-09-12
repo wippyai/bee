@@ -192,6 +192,9 @@ function M.execute(source: Source, raw: unknown): (Result?, string?)
                     local row = result_row(part, item.id)
                     if not row then return partial(request.operation, rows, "migration not discovered by runner: " .. item.id) end
                     if row.status ~= "applied" then return partial(request.operation, rows, "migration did not apply: " .. item.id) end
+                    local committed, commit_error = ledger(source, target_db, item.id)
+                    if committed == nil then return partial(request.operation, rows, commit_error or "verify migration ledger") end
+                    if not committed then return partial(request.operation, rows, "migration ledger does not confirm application: " .. item.id) end
                     rows[#rows + 1] = {id = item.id, target_db = target_db, module = item.module, status = "applied"}
                 end
             end
@@ -211,6 +214,9 @@ function M.execute(source: Source, raw: unknown): (Result?, string?)
                     local row = result_row(part, id)
                     if not row then return partial(request.operation, rows, "migration not discovered by runner: " .. id) end
                     if row.status ~= "reverted" then return partial(request.operation, rows, "migration did not revert: " .. id) end
+                    local committed, commit_error = ledger(source, target_db, id)
+                    if committed == nil then return partial(request.operation, rows, commit_error or "verify migration ledger") end
+                    if committed then return partial(request.operation, rows, "migration ledger still records application: " .. id) end
                     local item = by_id[id]
                     rows[#rows + 1] = {id = id, target_db = target_db, module = item.module, status = "reverted"}
                 end

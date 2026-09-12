@@ -83,7 +83,11 @@ Install/update default to migration policy `none`. An `up` request with migratio
 work refuses publication until a migration runner is bound. Uninstall defaults
 to `block`; checking or reverting migrations is not wired yet. Explicit `leave`
 permits removal while retaining migration effects. The current migration adapter
-alone does not establish production migration execution.
+alone does not establish production migration execution. The source adapter now
+checks the target ledger after each runner success, as well as before an
+idempotent skip. A contradictory or unreadable ledger returns partial evidence
+with an error; it never records the unverified migration as completed. This
+adapter follow-up is not yet in global build `237d76a8`.
 
 Owner serialization does not exclude unrelated registry writers. Automatic
 baseline restoration is attempted only while the observed registry revision
@@ -116,10 +120,10 @@ independent search, multiline README reading, details, JSON parameter keyboard i
 confirm, completed receipt, F12, resize and shutdown pass. Package details have README and Versions panes (H/V); arrow keys and the mouse
 wheel scroll the README. Installed selection stays in its current list. Change
 review lists changed packages before summarizing unchanged modules. The standalone Modules UI includes these changes.
-The next source UI makes plan and confirmation effects scrollable with arrow
+The installed UI makes plan and confirmation effects scrollable with arrow
 keys or the mouse wheel. It lists migration IDs and target databases, automatic
 starts and declared capabilities individually. This follow-up passes 56 focused
-cases and source/pack keyboard checks; it is not in the installed executable yet.
+cases and source/pack keyboard checks and is included in global `237d76a8`.
 A published or missing
 receipt state is not displayed as completion. The separate native lifecycle check covers confirmation/apply against live Hub.
 

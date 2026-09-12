@@ -29,6 +29,14 @@ refused without being echoed. Materializer authentication is entry-scoped:
 the materialize action is attached to the placement service and runner
 entries and to no caller-selectable scope.
 
+`define` accepts `optional: true` for file sources only. A missing provider
+login file then consumes the generation and returns its definition metadata
+with `present: false` and no `value`; the next generation can try again.
+Populated files return `present: true` and the optional flag alongside their
+bounded bytes. Missing required files, permission failures, invalid JSON and
+other source failures remain errors. Environment definitions always have
+`optional: false`.
+
 The broker projects API keys into `ANTHROPIC_API_KEY` (Claude) or
 `OPENAI_API_KEY` (Codex), or reads an admitted login file. File sources name a
 host-selected `fs.directory` using `source.kind: fs_directory`; their filenames
@@ -65,6 +73,10 @@ projection kinds by rebuilding `bee_credential_definitions` with strict SQLite
 CHECK constraints (`provider IN ('claude', 'codex')`, `source_kind IN ('env_variable', 'fs_directory')`,
 `projection_kind IN ('environment', 'file')`), while preserving all existing populated
 definitions, projections, consumed generations, and migration ledger records.
+
+Migration 3 (`optional_files`) adds the constrained `optional` flag to
+definitions with a default of false; it is additive and preserves existing
+definitions, projections and the applied migration ledger.
 
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.

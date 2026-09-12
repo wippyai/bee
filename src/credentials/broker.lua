@@ -36,7 +36,7 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
 type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
 type AvailabilityRequest = {workspace_id: string, name: string}
-type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, present: boolean}
+type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, present: boolean, optional: boolean}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -107,7 +107,7 @@ local function epoch_of(db: sql.DB, workspace_id: string): (integer?, string?)
 end
 local function definition_view(row: Row): {[string]: unknown}
     return {workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, revision = row.revision, provider = row.provider,
-        source_kind = row.source_kind, source_ref = row.source_ref, projection_kind = row.projection_kind, destination = row.destination, digest = row.digest,
+        source_kind = row.source_kind, source_ref = row.source_ref, projection_kind = row.projection_kind, destination = row.destination, optional = integer(row.optional) == 1, digest = row.digest,
         owner_node = row.owner_node, created_at = row.created_at, updated_at = row.updated_at}
 end
 -- A projection as callers see it: bindings, never bytes.
@@ -126,7 +126,7 @@ end
 function M.define(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source", "projection_kind", "expected_revision"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source", "projection_kind", "expected_revision", "optional"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local workspace_id, name = bounds.id(object.workspace_id), bounds.id(object.name)
     if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
@@ -135,6 +135,11 @@ function M.define(value: unknown): Reply
     if object.expected_revision ~= nil then
         expected_revision = bounds.count(object.expected_revision)
         if expected_revision == nil then return fail("INVALID", "expected_revision must be a nonnegative integer") end
+    end
+    local optional = false
+    if object.optional ~= nil then
+        if type(object.optional) ~= "boolean" then return fail("INVALID", "optional must be a boolean") end
+        optional = object.optional :: boolean
     end
     local provider = bounds.member(object.provider, M.PROVIDERS)
     if not provider then return fail("INVALID", "provider must be claude or codex") end
@@ -157,6 +162,7 @@ function M.define(value: unknown): Reply
     local digest_payload: {[string]: unknown}
 
     if source_kind == "env_variable" then
+        if optional then return fail("INVALID", "optional credentials require a file source") end
         projection_kind = "environment"
         if object.projection_kind ~= nil and object.projection_kind ~= "environment" then
             return fail("INVALID", "env_variable sources only support environment projections")
@@ -167,7 +173,7 @@ function M.define(value: unknown): Reply
         local variable, variable_error = sources.variable(source_ref)
         if not variable then return fail("INVALID", variable_error or "source") end
         destination = sources.DESTINATIONS[provider]
-        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, variable = variable, projection_kind = projection_kind, destination = destination}
+        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, variable = variable, projection_kind = projection_kind, destination = destination, optional = optional}
     else
         projection_kind = "file"
         if object.projection_kind ~= nil and object.projection_kind ~= "file" then
@@ -179,7 +185,7 @@ function M.define(value: unknown): Reply
         local directory, dir_error = sources.directory(source_ref)
         if not directory then return fail("INVALID", dir_error or "source") end
         destination = sources.FILE_DESTINATIONS[provider]
-        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory, projection_kind = projection_kind, destination = destination}
+        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory, projection_kind = projection_kind, destination = destination, optional = optional}
     end
 
     if not destination then return fail("INVALID", "no destination for provider " .. provider) end
@@ -202,12 +208,12 @@ function M.define(value: unknown): Reply
         if id_error or not definition_id then return transaction.failure("STORAGE", "definition id") :: TransactionResult end
         local at = stamp(now_ms())
         if existing then
-            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-                {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, workspace_id, name})
+            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, optional = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
+                {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, node(), at, workspace_id, name})
             if update_error then return transaction.failure("STORAGE", "replace definition") :: TransactionResult end
         else
-            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
-                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, at})
+            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, optional, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
+                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, node(), at, at})
             if insert_error then return transaction.failure("STORAGE", "record definition") :: TransactionResult end
         end
         local stored, stored_error = definition_in(tx, workspace_id, name)
@@ -357,9 +363,9 @@ local function decode_availability(value: unknown): (AvailabilityRequest?, strin
     return {workspace_id = workspace_id, name = name}, nil
 end
 local function availability_view(request: AvailabilityRequest, definition_id: string, revision: integer, provider: string,
-    source_kind: string, projection_kind: string, destination: string, present: boolean): Availability
+    source_kind: string, projection_kind: string, destination: string, present: boolean, optional: boolean): Availability
     return {workspace_id = request.workspace_id, name = request.name, definition_id = definition_id, revision = revision,
-        provider = provider, source_kind = source_kind, projection_kind = projection_kind, destination = destination, present = present}
+        provider = provider, source_kind = source_kind, projection_kind = projection_kind, destination = destination, present = present, optional = optional}
 end
 -- availability checks the provider-fixed login file without opening it. A
 -- missing stat is the only absence result; a missing or denied fs.get is an
@@ -388,9 +394,10 @@ function M.availability(value: unknown): Reply
     local source_ref = bounds.id(definition.source_ref)
     local definition_id = bounds.id(definition.definition_id)
     local revision = integer(definition.revision)
+    local optional_value = integer(definition.optional)
     local destination = provider and sources.FILE_DESTINATIONS[provider] or nil
     if not provider or source_kind ~= "fs_directory" or projection_kind ~= "file" or not source_ref
-        or not definition_id or not revision or revision < 1 or not destination or definition.destination ~= destination then
+        or not definition_id or not revision or revision < 1 or (optional_value ~= 0 and optional_value ~= 1) or not destination or definition.destination ~= destination then
         db:release()
         if projection_kind ~= "file" then return fail("INVALID", "availability only supports file projections") end
         return fail("INVALID", "credential definition has invalid file metadata")
@@ -425,10 +432,10 @@ function M.availability(value: unknown): Reply
     db:release()
     if info then
         if info.type ~= "file" or info.is_dir == true then return fail("INVALID", "provider login path is not a file") end
-        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, true))
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, true, optional_value == 1))
     end
     if stat_error and stat_error:kind() == errors.NOT_FOUND then
-        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, false))
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, false, optional_value == 1))
     end
     return fail("UNAVAILABLE", "provider login path could not be inspected")
 end
@@ -511,6 +518,12 @@ function M.materialize(value: unknown): Reply
     local proj_kind = text(projection.projection_kind) or "environment"
     local destination = text(projection.destination) or ""
     local provider = text(definition.provider) or ""
+    local optional_value = integer(definition.optional)
+    if optional_value ~= 0 and optional_value ~= 1 then
+        db:release()
+        return fail("STORAGE", "credential optional flag is corrupt")
+    end
+    local optional = optional_value == 1
 
     if proj_kind == "environment" then
         local secret, secret_error = env.get(source_ref)
@@ -532,8 +545,15 @@ function M.materialize(value: unknown): Reply
         -- Read at most one byte beyond the limit; never allocate an unbounded
         -- login file before enforcing its bound. Only the provider-fixed path
         -- is opened under the host-selected filesystem capability.
-        local file = volume:open("/" .. destination, "r")
-        if not file then return fail("UNAVAILABLE", "source login file unavailable") end
+        local file, open_error = volume:open("/" .. destination, "r")
+        if not file then
+            if optional and open_error and open_error:kind() == errors.NOT_FOUND then
+                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",
+                    generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
+                    definition_revision = definition.revision, provider = provider, present = false, optional = true})
+            end
+            return fail("UNAVAILABLE", "source login file unavailable")
+        end
         local chunks: {string} = {}
         local size: integer = 0
         while true do
@@ -570,7 +590,7 @@ function M.materialize(value: unknown): Reply
         -- file can be projected. Its bytes remain outside persisted state.
         return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",
             generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
-            definition_revision = definition.revision, provider = provider, value = content})
+            definition_revision = definition.revision, provider = provider, present = true, optional = optional, value = content})
     else
         db:release()
         return fail("INVALID", "unsupported projection kind " .. proj_kind)

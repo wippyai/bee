@@ -41,7 +41,7 @@ local function define_tests()
                     'materializer','retry-key',1,'2099-01-01',0,'created')]])
             execute(old, [[INSERT INTO bee_credential_generations VALUES ('projection','consumed-key',1,'runner','created')]])
             local statements = {
-                "SELECT * FROM bee_credential_definitions ORDER BY definition_id",
+                "SELECT workspace_id,name,definition_id,revision,provider,source_kind,source_ref,projection_kind,destination,digest,owner_node,created_at,updated_at FROM bee_credential_definitions ORDER BY definition_id",
                 "SELECT * FROM bee_credential_projections ORDER BY projection_id",
                 "SELECT * FROM bee_credential_generations ORDER BY projection_id, generation_key",
                 "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id = 1",
@@ -53,32 +53,42 @@ local function define_tests()
             for index, statement in ipairs(statements) do test.eq(rows(current, statement), before[index]) end
             execute(current, [[INSERT INTO bee_credential_definitions VALUES
                 ('workspace','file-login','file-definition',1,'codex','fs_directory','host:login','file','auth.json','file-config-digest','node','created','updated')]])
-            local after = rows(current, "SELECT * FROM bee_credential_definitions ORDER BY definition_id")
+            local after = rows(current, statements[1])
             current:release()
-            local again = opened(2)
-            test.eq(rows(again, "SELECT * FROM bee_credential_definitions ORDER BY definition_id"), after)
+            local again = opened(3)
+            test.eq(rows(again, statements[1]), after)
+            for index = 2, 3 do test.eq(rows(again, statements[index]), before[index]) end
+            local migrated, migrated_error = again:query("SELECT name,optional FROM bee_credential_definitions ORDER BY definition_id")
+            test.is_nil(migrated_error)
+            test.eq(#(migrated :: {unknown}), 2)
+            for _, row in ipairs(migrated :: {{[string]: unknown}}) do test.eq(row.optional, 0) end
             -- Verify migration 2 schema check constraints enforce provider, source_kind and projection_kind
             local _, bad_provider = again:execute([[INSERT INTO bee_credential_definitions VALUES
-                ('ws','bad-p','def-bp',1,'unsupported','fs_directory','host:login','file','auth.json','d','node','created','updated')]])
+                ('ws','bad-p','def-bp',1,'unsupported','fs_directory','host:login','file','auth.json','d','node','created','updated',0)]])
             test.is_true(bad_provider ~= nil)
 
             local _, bad_source_kind = again:execute([[INSERT INTO bee_credential_definitions VALUES
-                ('ws','bad-sk','def-bsk',1,'codex','socket','host:login','file','auth.json','d','node','created','updated')]])
+                ('ws','bad-sk','def-bsk',1,'codex','socket','host:login','file','auth.json','d','node','created','updated',0)]])
             test.is_true(bad_source_kind ~= nil)
 
             local _, bad_proj_kind = again:execute([[INSERT INTO bee_credential_definitions VALUES
-                ('ws','bad-pk','def-bpk',1,'codex','fs_directory','host:login','socket','auth.json','d','node','created','updated')]])
+                ('ws','bad-pk','def-bpk',1,'codex','fs_directory','host:login','socket','auth.json','d','node','created','updated',0)]])
             test.is_true(bad_proj_kind ~= nil)
 
-            -- Verify migration ledger records both migrations and stores no secrets
+            local _, bad_optional = again:execute("UPDATE bee_credential_definitions SET optional = 2 WHERE name = 'login'")
+            test.is_true(bad_optional ~= nil)
+
+            -- Verify migration ledger records all migrations and stores no secrets
             local ledger_rows, ledger_err = again:query("SELECT * FROM " .. broker.LEDGER.table .. " ORDER BY id")
             test.is_nil(ledger_err)
             test.is_true(ledger_rows ~= nil)
-            test.eq(#(ledger_rows :: {unknown}), 2)
+            test.eq(#(ledger_rows :: {unknown}), 3)
             local l1 = (ledger_rows :: {{[string]: unknown}})[1]
             local l2 = (ledger_rows :: {{[string]: unknown}})[2]
+            local l3 = (ledger_rows :: {{[string]: unknown}})[3]
             test.eq(l1.name, "credentials")
             test.eq(l2.name, "file_sources")
+            test.eq(l3.name, "optional_files")
 
             test.eq(rows(again, statements[3]), before[3])
             again:release()

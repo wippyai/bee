@@ -1,5 +1,20 @@
 # Global Bee build — September 12, 2026
 
+## Current install: configure missing dependency parameters
+
+Global SHA `4f93cc36b6bb3e2b95fc81908f78c2344a9836de5feba63f64bf1843670d6b64`
+contains source `c5f636e`. Missing dependency parameters can be edited directly
+from plan rows or Configure required (E). Saving invalidates the old plan;
+publication still requires a new measured plan and confirmation.
+Strict lint, source/pack editing/replan/recovery checks and full native binary
+acceptance pass. About, Modules redesign and global MCP are preserved.
+Evidence: `hub-missing-configuration-check.log`, `hub-plan-config-native-check.log`,
+`hub-plan-config-global-install.json`. The combined full repository gate runs
+separately in `hub-current-full-check.log`; completion is not yet established.
+The installer fenced against `adeb373c`, backed up/hash-verified the executable
+and five sidecars, and checked matching runtime/native/patch identity. No nodes
+were restarted. Earlier checkpoint sections follow.
+
 ## Current install: About and Modules override reset
 
 Global SHA `adeb373c181a5f0f3e4de67aa570c3d215951622111f04ed8ea25ac6ac90dbe6`

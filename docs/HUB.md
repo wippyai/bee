@@ -274,7 +274,7 @@ or marks the requirement missing if it has no default. This is installed in glob
 Missing parameters from dependency planning can now be configured directly from
 the review screen: click a Required row, use Configure required, or press E.
 The editor uses the exact ID reported by the plan. Saving invalidates that plan;
-a new plan and confirmation are required before publication. This source change
-is pending the next release. The current standalone redesign also passes live
+a new plan and confirmation are required before publication. This is installed
+in global source `c5f636e` (SHA `4f93cc36`). The current standalone redesign also passes live
 Hub install/update/uninstall/reopen checks while preserving all bundled artifacts
 (`modules-redesign-live-lifecycle.log`).

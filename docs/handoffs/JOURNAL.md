@@ -5870,3 +5870,27 @@ No new Python, runtime changes, global replacement or main merge in this unit.
 Interactive Agent cold-resume and public MCP/Hub/overlay activation remain open.
 Wolfden coordination: journal 01a06e56-ba58-7c5a-bd69-b7feb109a05d,
 `bee-harness/root`, cursor `jc_H7E57Z5SJH71M`, through seq 1245.
+
+### 2026-09-11 Codex: native window hook delivery and cooperative close
+
+Pushed `5b82a43` on `feat/agent-integration-20260911`. Native windows now attach
+placement before PTY start. Protected host bindings select a bounded close
+allowance; the Agent window can finish its hook drain and receipt, ordinary
+apps keep 250ms, and explicit force stop remains immediate. A real shell child
+submits duplicate HTTP hooks through generated configuration; with a three-second
+claim delay, input stays responsive, exactly one observation commits, and the
+cancellation receipt exists before the broker reports close. All 616 Lua tests
+and three managed-window tests pass.
+
+The broader check passed module, gateway, authoring, pack and headless gates.
+Its cached lint error was preserved and fresh strict lint passed unchanged source.
+The two-workspace fixture omitted its governance DB path; `8afb018` fixes that
+and passes source/pack. Remaining source-free fixtures receive an explicit
+working-directory governance path through their Makefile acceptance targets;
+storage/desktop checks are still running. No Python edits or runtime changes.
+
+Luna's next unit is isolated session-resource admission at
+`/tmp/bee-window-session-admission-20260911`. Native conversation cold-resume,
+public MCP and global project-state isolation remain open. Global Bee is
+unchanged. Wolfden journal `01a06e56-ba58-7c5a-bd69-b7feb109a05d`,
+`bee-harness/root`, cursor `jc_H7E57Z5SJH71M`, through seq 1259.

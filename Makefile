@@ -79,6 +79,10 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
+# Source-free acceptance boots run in disposable working directories, including
+# cases without .wippy/. Keep their governance store inside that fixture too.
+check desktop-check client-storage-check: export BEE_GOVERNANCE_DB = governance.db
+
 check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py

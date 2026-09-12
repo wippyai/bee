@@ -16,6 +16,7 @@ local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local persist = require("persist")
+local transaction = require("transaction")
 local migrations = require("migrations")
 local sources = require("sources")
 local M = {}
@@ -33,6 +34,7 @@ M.SOURCE_KINDS = {"env_variable", "fs_directory"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
+type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -83,6 +85,12 @@ local function definition_of(db: sql.DB, workspace_id: string, name: string): (R
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+local function definition_in(tx: sql.Transaction, workspace_id: string, name: string): (Row?, string?)
+    local rows, err = tx:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? AND name = ?", {workspace_id, name})
+    if err or not rows then return nil, "read definition" end
+    if #rows == 0 then return nil, nil end
+    return rows[1] :: Row, nil
+end
 local function projection_of(db: sql.DB, projection_id: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_credential_projections WHERE projection_id = ?", {projection_id})
     if err or not rows then return nil, "read projection" end
@@ -116,11 +124,16 @@ end
 function M.define(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source", "projection_kind"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "provider", "source", "projection_kind", "expected_revision"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local workspace_id, name = bounds.id(object.workspace_id), bounds.id(object.name)
     if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
     if not name then return fail("INVALID", "name is not an identifier") end
+    local expected_revision: integer? = nil
+    if object.expected_revision ~= nil then
+        expected_revision = bounds.count(object.expected_revision)
+        if expected_revision == nil then return fail("INVALID", "expected_revision must be a nonnegative integer") end
+    end
     local provider = bounds.member(object.provider, M.PROVIDERS)
     if not provider then return fail("INVALID", "provider must be claude or codex") end
     local source = bounds.object(object.source)
@@ -172,37 +185,39 @@ function M.define(value: unknown): Reply
     if not digest then return fail("INVALID", digest_error or "definition is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local existing, existing_error = definition_of(db, workspace_id, name)
-    if existing_error then
-        db:release()
-        return fail("STORAGE", existing_error)
-    end
-    local definition_id, id_error = uuid.v7()
-    if id_error or not definition_id then
-        db:release()
-        return fail("STORAGE", "definition id")
-    end
-    local at = stamp(now_ms())
-    if existing then
-        local revision = (integer(existing.revision) or 0) + 1
-        local _, update_error = db:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-            {definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, workspace_id, name})
-        if update_error then
-            db:release()
-            return fail("STORAGE", "replace definition")
+    local result: TransactionResult = transaction.write(db, "credential definition", function(tx: sql.Transaction): TransactionResult
+        local existing, existing_error = definition_in(tx, workspace_id, name)
+        if existing_error then return transaction.failure("STORAGE", existing_error) :: TransactionResult end
+        local current_revision = 0
+        if existing then
+            current_revision = integer(existing.revision)
+            if not current_revision then return transaction.failure("STORAGE", "definition revision is corrupt") :: TransactionResult end
         end
-    else
-        local _, insert_error = db:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, at})
-        if insert_error then
-            db:release()
-            return fail("STORAGE", "record definition")
+        if expected_revision ~= nil and expected_revision ~= current_revision then
+            return transaction.failure("CONFLICT", "expected_revision does not match the credential definition") :: TransactionResult
         end
-    end
-    local stored = definition_of(db, workspace_id, name)
+        local definition_id, id_error = uuid.v7()
+        if id_error or not definition_id then return transaction.failure("STORAGE", "definition id") :: TransactionResult end
+        local at = stamp(now_ms())
+        if existing then
+            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
+                {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, workspace_id, name})
+            if update_error then return transaction.failure("STORAGE", "replace definition") :: TransactionResult end
+        else
+            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
+                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, digest, node(), at, at})
+            if insert_error then return transaction.failure("STORAGE", "record definition") :: TransactionResult end
+        end
+        local stored, stored_error = definition_in(tx, workspace_id, name)
+        if stored_error or not stored then return transaction.failure("STORAGE", stored_error or "read definition") :: TransactionResult end
+        if stored.definition_id ~= definition_id then
+            return transaction.failure("CONFLICT", "credential definition was created concurrently") :: TransactionResult
+        end
+        return transaction.success(definition_view(stored), false) :: TransactionResult
+    end) :: TransactionResult
     db:release()
-    if not stored then return fail("STORAGE", "read definition") end
-    return succeed(definition_view(stored))
+    if not result.ok then return fail(result.code or "STORAGE", result.message or "define failed") end
+    return succeed(result.value)
 end
 type Issue = {workspace_id: string, name: string, audience: string, attempt_id: string, profile_id: string, profile_digest: string, binding_digest: string, launch_policy_digest: string, idempotency_key: string, ttl: integer}
 local function decode_issue(value: unknown): (Issue?, string?)

@@ -5,7 +5,12 @@ workspace from a source the host admits (`bee:credential_sources`: an
 `env.variable` entry, the workspace or `*`, the audience or `*`, a provider,
 the projection kinds allowed); its digest covers configuration and source
 identity, never bytes, and redefining it moves to the next revision so
-existing projections stop resolving. The allowlist is checked again at
+existing projections stop resolving. `define` accepts `expected_revision`: zero
+creates only when absent; a positive revision replaces only that exact definition.
+The revision check, write and returned view share one transaction. A mismatch
+returns `CONFLICT` without invalidating projections. Omission preserves explicit
+unconditional replacement. First-use setup must use zero and inspect a conflict
+rather than replace an existing login configuration. The allowlist is checked again at
 every `check` and `materialize`, so removing a source or an audience takes
 effect for projections already issued. A projection binds the authenticated subject, an audience, one
 attempt, the profile, binding and launch-policy digests, the provider's

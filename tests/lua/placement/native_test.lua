@@ -760,6 +760,56 @@ local function define_tests()
             test.eq(denied.error and denied.error.code, "INVALID")
             test.eq(denied.error and denied.error.message, "launch.home_ref names no resource")
         end)
+        test.it("seeds fixed private login destinations and preserves harness-refreshed bytes", function()
+            local session_key = assert(homes.session_key(OWNER, fresh("login-session")))
+            local session_path = assert(homes.ensure_session(session_key))
+            local source = {provider = "codex", definition_id = "bee.test.codex_login", definition_revision = 1}
+            local seeded, seed_error, resumed = homes.retain_login(session_path, source, "initial-login-bytes")
+            test.not_nil(seeded)
+            test.is_nil(seed_error)
+            test.is_false(resumed == true)
+            local home = assert(homes.os_path(session_path .. "/home"))
+            -- A provider owns the opaque bytes once seeded. This stands in for
+            -- a harness refresh between retained launches.
+            test.eq(shell("printf refreshed-login-bytes > " .. home .. "/.codex/auth.json"), "")
+            local replayed, replay_error, replay = homes.retain_login(session_path, source, "stale-broker-bytes")
+            test.not_nil(replayed)
+            test.is_nil(replay_error)
+            test.is_true(replay == true)
+            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "refreshed-login-bytes")
+            local claude_key = assert(homes.session_key(OWNER, fresh("claude-login-session")))
+            local claude_session = assert(homes.ensure_session(claude_key))
+            local claude = assert(homes.retain_login(claude_session,
+                {provider = "claude", definition_id = "bee.test.claude_login", definition_revision = 1}, "claude-login-bytes"))
+            test.is_true(claude:find("/.claude/.credentials.json", 1, true) ~= nil)
+        end)
+        test.it("refuses changed or incomplete retained login state without exposing bytes", function()
+            local session_key = assert(homes.session_key(OWNER, fresh("login-reject-session")))
+            local session_path = assert(homes.ensure_session(session_key))
+            local source = {provider = "codex", definition_id = "bee.test.login_source", definition_revision = 1}
+            assert(homes.retain_login(session_path, source, "opaque-login-not-in-errors"))
+            for _, changed in ipairs({
+                {provider = "claude", definition_id = "bee.test.login_source", definition_revision = 1},
+                {provider = "codex", definition_id = "bee.test.other_login_source", definition_revision = 1},
+                {provider = "codex", definition_id = "bee.test.login_source", definition_revision = 2},
+            }) do
+                local _, changed_error = homes.retain_login(session_path, changed, "different-opaque-login-bytes")
+                test.eq(changed_error, "retained login source changed")
+                test.is_nil(changed_error:find("opaque-login-not-in-errors", 1, true))
+                test.is_nil(changed_error:find("different-opaque-login-bytes", 1, true))
+            end
+            local partial_key = assert(homes.session_key(OWNER, fresh("login-partial-session")))
+            local partial_session = assert(homes.ensure_session(partial_key))
+            local made, made_error = homes.write_protected(partial_session, ".codex/auth.json", "partial", {[(partial_session .. "/home/.codex")] = true}, true)
+            test.not_nil(made)
+            test.is_nil(made_error)
+            local _, partial_error = homes.retain_login(partial_session, source, "opaque-login-not-in-errors")
+            test.eq(partial_error, "retained login is incomplete")
+            -- This inspects the live root; the assertion is not inferred from
+            -- the fs.directory manifest's requested mode.
+            local root = assert(homes.os_path("/"))
+            test.eq(shell("stat -c %a " .. root):match("%d+"), "700")
+        end)
         test.it("keeps a retained home excluded when its placement is uncertain", function()
             local session_ref = fresh("uncertain-session")
             local first = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "uncertain")))

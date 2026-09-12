@@ -146,6 +146,8 @@ entries:
   source: file://homes.lua
   modules: [fs, hash]
   imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
     resources: bee.placement.native:resources
 - name: identity
   kind: library.lua

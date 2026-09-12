@@ -46,6 +46,25 @@ the child starts. Error replies and evidence name the destination and projection
 they contain no credential bytes. Policies supply nonsecret configuration while
 the credential broker supplies secrets; precedence is not used to hide conflicts.
 
+## Retained provider login destinations
+
+`homes.retain_login` is a placement helper for a broker integration that has not
+yet been wired into runtime materialization. It accepts bounded opaque bytes and
+only two fixed home-relative targets: Codex `.codex/auth.json` and Claude
+`.claude/.credentials.json`. The first seed records a separate nonsecret
+provider/definition-id/definition-revision identity only after the opaque file
+has been completely written. A matching resume leaves the login file untouched,
+so bytes refreshed by the harness persist. A changed provider, definition or
+revision, or either half of an interrupted seed, refuses reuse. It neither emits
+evidence nor treats opaque bytes as immutable configuration. The native fixture
+checks the placement root's actual `0700` mode rather than registry metadata.
+The helper reads the root's actual numeric `fs.FileInfo.mode` and refuses group
+or other access; it does not infer privacy from the registry declaration. The
+pinned `fs` write contract reports an error for a short write, so a successful
+write plus successful close is the ready-marker precondition. It has no fsync
+operation: ready-marker ordering refuses interrupted process writes, but is not
+a machine-power-loss durability claim.
+
 ## Capability
 
 `capability.measure` starts a probe child with `process_group` and reads its

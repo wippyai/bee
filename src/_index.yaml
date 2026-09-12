@@ -664,6 +664,14 @@ entries:
     actions: [db.get, registry.get, system.read]
     resources: [bee.resources:db, bee.resources:database_ref, bee.resources:roots_ref, bee.placement.native:admitted_roots, node, '*']
     effect: allow
+- name: resource_environment_policy
+  kind: security.policy
+  meta:
+    comment: Resource root identity may resolve only the host-selected path variables
+  policy:
+    actions: [env.get]
+    resources: [bee.placement.native:root_path, bee:project_path]
+    effect: allow
 - name: resource_manage_policy
   kind: security.policy
   meta:

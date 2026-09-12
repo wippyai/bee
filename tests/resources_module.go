@@ -46,11 +46,24 @@ local function ok(reply: {[string]: unknown}, method: string): {[string]: unknow
     assert(reply.ok == true, method .. " failed: " .. tostring(type(reply.error) == "table" and (reply.error :: {[string]: unknown}).message))
     return reply.value :: {[string]: unknown}
 end
-local function main()
+local function main(phase: string?)
+    if phase == "changed" then
+        local listed = ok(call(nil, "list", {workspace_id = WORKSPACE}), "list")
+        local grants = listed.grants :: {{[string]: unknown}}
+        assert(#grants == 1, "changed-root probe lost its original grant")
+        local refused = call(nil, "resolve", {grant_id = tostring(grants[1].grant_id), subject = ACTOR, audience = ACTOR})
+        assert(refused.ok == false and (refused.error :: {[string]: unknown}).code == "CONFLICT", "changed root did not fence the grant")
+        return
+    end
     ok(call(nil, "associate", {workspace_id = WORKSPACE, name = "root", root_ref = "bee.placement.native:root", subpath = "", allowed_access = "write"}), "associate")
     local granted = ok(call(nil, "grant", {workspace_id = WORKSPACE, name = "root", access = "read", purpose = "project", audience = ACTOR, idempotency_key = "k"}), "grant")
     local grant_id = tostring(granted.grant_id)
     ok(call(nil, "resolve", {grant_id = grant_id, subject = ACTOR, audience = ACTOR}), "resolve")
+    -- The resource methods carry their production function scopes. A root
+    -- backed by an unrelated environment variable must remain inaccessible
+    -- even though this probe's caller has a broad test scope.
+    local unrelated = call(nil, "associate", {workspace_id = WORKSPACE, name = "unrelated", root_ref = "bee.placement.native:unrelated_env_root", subpath = "", allowed_access = "write", expected_revision = 0})
+    assert(unrelated.ok == false and (unrelated.error :: {[string]: unknown}).code == "INVALID", "unrelated environment variable was readable")
     -- An actor without the resolve policy cannot resolve a grant.
     local denied = call(security.new_scope({}), "resolve", {grant_id = grant_id, subject = ACTOR, audience = ACTOR})
     assert(denied.ok == false and (denied.error :: {[string]: unknown}).code == "DENIED", "unauthorized resolve was not denied")
@@ -231,7 +244,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleBase(folder); err != nil {
 		return err
 	}
-	resourcePolicyNames := []string{"resource_store_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
+	resourcePolicyNames := []string{"resource_store_policy", "resource_environment_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
 	hostEntries := make([]map[string]interface{}, 0, len(resourcePolicyNames)+1)
 	for _, name := range resourcePolicyNames {
 		entry, err := resourcesModuleNamed(root, name)
@@ -246,8 +259,10 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 			Version: "1.0", Namespace: "bee.placement.native", Entries: []map[string]interface{}{
 				{"name": "environment", "kind": "env.storage.os", "lifecycle": map[string]interface{}{"auto_start": true}},
 				{"name": "root_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_PLACEMENT_ROOT", "default": ".wippy/placement", "readonly": true},
+				{"name": "unrelated_secret_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_UNRELATED_SECRET_PATH", "default": ".wippy/unrelated-secret", "readonly": true},
 				{"name": "root", "kind": "fs.directory", "directory": "${env:bee.placement.native:root_path}", "auto_init": true, "mode": "0700"},
-				{"name": "admitted_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.placement_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}}}},
+				{"name": "unrelated_env_root", "kind": "fs.directory", "directory": "${env:bee.placement.native:unrelated_secret_path}", "auto_init": true},
+				{"name": "admitted_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.placement_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}},
 			},
 		}); err != nil {
 			return err
@@ -397,6 +412,16 @@ func resourcesModuleOneClosure(root, runtime string, credentials bool) error {
 	output, err := resourcesModuleRun(runtime, folder, environment, true, "run", map[bool]string{true: "cred-probe", false: "res-probe"}[credentials])
 	if err != nil {
 		return fmt.Errorf("%s closure probe failed: %w", map[bool]string{true: "credentials", false: "resources"}[credentials], err)
+	}
+	if !credentials {
+		changedRoot := filepath.Join(folder, "resource-root-changed")
+		if err := os.Mkdir(changedRoot, 0700); err != nil {
+			return fmt.Errorf("create changed resource root: %w", err)
+		}
+		changedEnvironment := resourcesModuleDatabaseEnvironment(folder, changedRoot)
+		if _, err := resourcesModuleRun(runtime, folder, changedEnvironment, true, "run", "res-probe", "changed"); err != nil {
+			return fmt.Errorf("resources changed-root probe failed: %w", err)
+		}
 	}
 	if credentials && strings.Contains(output, "module-secret-9c2e") {
 		return fmt.Errorf("secret appeared in credentials probe output")

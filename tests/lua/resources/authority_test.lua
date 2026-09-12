@@ -12,6 +12,7 @@ local persist = require("persist")
 local resources = require("resources")
 local PROJECT = "bee.resources:project_fixture"
 local SHARED = "bee.resources:shared_fixture"
+local UNRELATED_ENV_ROOT = "bee.resources:unrelated_env_root"
 local MANAGER, USER, OTHER, PLACEMENT = "bee.test.manager", "bee.test.user", "bee.test.other", "bee.test.placement"
 local counter = 0
 local function fresh(prefix: string): string
@@ -50,6 +51,16 @@ local function code(reply: authority.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
+local function await(future: any): authority.Reply
+    local response = future:response()
+    local payload, open = response:receive()
+    local value, err = future:result()
+    if err then error("async associate: " .. tostring(err)) end
+    if not open or not payload then error("async associate closed without a reply") end
+    local data: unknown = value:data()
+    if type(data) ~= "table" then error("async associate returned " .. type(data)) end
+    return data :: authority.Reply
+end
 local function admit_roots()
     local entry = registry.get("bee.placement.native:admitted_roots")
     if not entry then error("admitted roots entry") end
@@ -57,9 +68,10 @@ local function admit_roots()
     local roots = data.roots :: {{[string]: unknown}}
     local present: {[string]: boolean} = {}
     for _, root in ipairs(roots) do present[tostring(root.root_ref)] = true end
-    if present[PROJECT] and present[SHARED] then return end
+    if present[PROJECT] and present[SHARED] and present[UNRELATED_ENV_ROOT] then return end
     if not present[PROJECT] then roots[#roots + 1] = {root_ref = PROJECT, access = "write"} end
     if not present[SHARED] then roots[#roots + 1] = {root_ref = SHARED, access = "read"} end
+    if not present[UNRELATED_ENV_ROOT] then roots[#roots + 1] = {root_ref = UNRELATED_ENV_ROOT, access = "write"} end
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
@@ -85,6 +97,56 @@ local function define_tests()
             local listed = value(call(manager, "list", {workspace_id = workspace}))
             test.eq(#(listed.associations :: {unknown}), 2)
             test.eq(code(call(user, "list", {workspace_id = workspace})), "DENIED")
+        end)
+        test.it("creates an association once under concurrent zero CAS and preserves it on stale CAS", function()
+            local workspace = fresh("cas")
+            local first, first_error = manager:async("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+                subpath = "first", allowed_access = "write", expected_revision = 0})
+            local second, second_error = manager:async("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = PROJECT,
+                subpath = "second", allowed_access = "write", expected_revision = 0})
+            if first_error or not first or second_error or not second then error("start association race: " .. tostring(first_error or second_error)) end
+            local replies = {await(first), await(second)}
+            local created: authority.Reply? = nil
+            local conflicts = 0
+            for _, reply in ipairs(replies) do
+                if reply.ok then created = reply else
+                    test.eq(reply.error and reply.error.code, "CONFLICT")
+                    conflicts = conflicts + 1
+                end
+            end
+            test.eq(conflicts, 1)
+            if not created then error("association race created nothing") end
+            local association = created.value :: {[string]: unknown}
+            test.eq(association.revision, 1)
+            local listed = value(call(manager, "list", {workspace_id = workspace}))
+            test.eq(#(listed.associations :: {unknown}), 1)
+            local current = (listed.associations :: {{[string]: unknown}})[1]
+            test.eq(current.revision, 1)
+            test.eq(current.subpath, association.subpath)
+
+            local granted = value(call(user, "grant", {workspace_id = workspace, name = "project", access = "write", purpose = "project",
+                audience = USER, attempt_id = "cas-attempt"}))
+            local stale = call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "stale",
+                allowed_access = "write", expected_revision = 0})
+            test.eq(code(stale), "CONFLICT")
+            local after_stale = value(call(manager, "list", {workspace_id = workspace}))
+            local unchanged = (after_stale.associations :: {{[string]: unknown}})[1]
+            test.eq(unchanged.revision, 1)
+            test.eq(unchanged.association_id, association.association_id)
+            value(call(placement, "resolve", {grant_id = granted.grant_id, subject = USER, audience = USER, attempt_id = "cas-attempt"}))
+
+            local updated = value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "updated",
+                allowed_access = "write", expected_revision = 1}))
+            test.eq(updated.revision, 2)
+            test.neq(updated.association_id, association.association_id)
+            test.eq(code(call(placement, "resolve", {grant_id = granted.grant_id, subject = USER, audience = USER, attempt_id = "cas-attempt"})), "CONFLICT")
+        end)
+        test.it("does not let resource authority read an unrelated environment variable", function()
+            local workspace = fresh("env-denied")
+            test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "secret", root_ref = UNRELATED_ENV_ROOT,
+                subpath = "", allowed_access = "write", expected_revision = 0})), "INVALID")
+            local listed = value(call(manager, "list", {workspace_id = workspace}))
+            test.eq(#(listed.associations :: {unknown}), 0)
         end)
         test.it("grants bind the authenticated subject and resolve only for the admitted placement, subject and audience", function()
             local workspace = fresh("ws")

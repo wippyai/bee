@@ -11,6 +11,18 @@ entries:
   meta: {type: test_support}
   directory: .wippy/resources-shared
   auto_init: true
+- name: unrelated_secret_storage
+  kind: env.storage.memory
+- name: unrelated_secret
+  kind: env.variable
+  storage: bee.resources:unrelated_secret_storage
+  variable: RESOURCE_UNRELATED_SECRET
+  default: .wippy/resource-unrelated-secret
+- name: unrelated_env_root
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: ${env:bee.resources:unrelated_secret}
+  auto_init: true
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}

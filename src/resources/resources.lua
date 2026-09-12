@@ -1,6 +1,8 @@
 -- MIT. Linked references of the resource authority: the store and the
 -- host's admitted roots, the ceiling every association stays under.
 local registry = require("registry")
+local env = require("env")
+local system = require("system")
 local M = {}
 M.DATABASE_REF = "bee.resources:database_ref"
 M.ROOTS_REF = "bee.resources:roots_ref"
@@ -43,6 +45,30 @@ function M.root(root_ref: string): ({[string]: unknown}?, string?)
     local data = entry.data
     local directory = type(data) == "table" and data.directory or nil
     if type(directory) ~= "string" or directory == "" then return nil, "resource root " .. root_ref .. " has no directory" end
-    return {kind = entry.kind, meta = entry.meta, data = data}, nil
+    -- Resource identity follows the resolved host path. Keeping only the
+    -- registry placeholder in the digest would let a changed host cwd or
+    -- host-selected variable silently retarget an existing grant.
+    local variable, rest = directory:match("^%${env:([^}]+)}(.*)$")
+    if variable then
+        local value, env_error = env.get(variable)
+        if env_error or type(value) ~= "string" or value == "" then
+            return nil, "resource root " .. root_ref .. " names an unset variable " .. variable
+        end
+        directory = value .. rest
+    end
+    if directory:find("%${") then return nil, "resource root " .. root_ref .. " has an unresolved placeholder" end
+    if not directory:find("^/") then
+        local cwd, cwd_error = system.process.cwd()
+        if cwd_error or type(cwd) ~= "string" or cwd == "" then
+            return nil, "resource root " .. root_ref .. " is relative and the working directory is unavailable"
+        end
+        directory = cwd .. "/" .. directory:gsub("^%./", "")
+    end
+    local resolved_data: {[string]: unknown} = {}
+    if type(data) == "table" then
+        for key, value in pairs(data :: {[string]: unknown}) do resolved_data[key] = value end
+    end
+    resolved_data.directory = directory
+    return {kind = entry.kind, meta = entry.meta, data = resolved_data}, nil
 end
 return M

@@ -12,6 +12,7 @@ local system = require("system")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local persist = require("persist")
+local transaction = require("transaction")
 local migrations = require("migrations")
 local resources = require("resources")
 local M = {}
@@ -27,6 +28,7 @@ M.PURPOSES = {"project", "output", "cache", "session"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
+type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -97,6 +99,12 @@ local function association_of(db: sql.DB, workspace_id: string, name: string): (
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+local function association_in(tx: sql.Transaction, workspace_id: string, name: string): (Row?, string?)
+    local rows, err = tx:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? AND name = ?", {workspace_id, name})
+    if err or not rows then return nil, "read association" end
+    if #rows == 0 then return nil, nil end
+    return rows[1] :: Row, nil
+end
 local function grant_of(db: sql.DB, grant_id: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_resource_grants WHERE grant_id = ?", {grant_id})
     if err or not rows then return nil, "read grant" end
@@ -109,7 +117,7 @@ end
 function M.associate(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "root_ref", "subpath", "allowed_access"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "root_ref", "subpath", "allowed_access", "expected_revision"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local workspace_id, name, root_ref = bounds.id(object.workspace_id), bounds.id(object.name), bounds.id(object.root_ref)
     if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
@@ -119,6 +127,11 @@ function M.associate(value: unknown): Reply
     if not subpath then return fail("INVALID", subpath_error or "invalid subpath") end
     local allowed = bounds.member(object.allowed_access == nil and "read" or object.allowed_access, M.ACCESS)
     if not allowed then return fail("INVALID", "allowed_access must be read or write") end
+    local expected_revision: integer? = nil
+    if object.expected_revision ~= nil then
+        expected_revision = bounds.count(object.expected_revision)
+        if expected_revision == nil then return fail("INVALID", "expected_revision must be a nonnegative integer") end
+    end
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
@@ -133,38 +146,41 @@ function M.associate(value: unknown): Reply
     if not root_digest then return fail("INVALID", digest_error or "root is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
-    local existing, existing_error = association_of(db, workspace_id, name)
-    if existing_error then
-        db:release()
-        return fail("STORAGE", existing_error)
-    end
-    local at = stamp(now_ms())
-    local revision = 1
-    local association_id, id_error = uuid.v7()
-    if id_error or not association_id then
-        db:release()
-        return fail("STORAGE", "association id")
-    end
-    if existing then
-        revision = (integer(existing.revision) or 0) + 1
-        local _, update_error = db:execute("UPDATE bee_resource_associations SET association_id = ?, revision = ?, root_ref = ?, root_digest = ?, subpath = ?, allowed_access = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-            {association_id, revision, root_ref, root_digest, subpath, allowed, node(), at, workspace_id, name})
-        if update_error then
-            db:release()
-            return fail("STORAGE", "replace association")
+    local result: TransactionResult = transaction.write(db, "associate", function(tx: sql.Transaction): TransactionResult
+        local existing, existing_error = association_in(tx, workspace_id, name)
+        if existing_error then return transaction.failure("STORAGE", existing_error) :: TransactionResult end
+        local current_revision = 0
+        if existing then
+            current_revision = integer(existing.revision)
+            if not current_revision then return transaction.failure("STORAGE", "association revision is corrupt") :: TransactionResult end
         end
-    else
-        local _, insert_error = db:execute("INSERT INTO bee_resource_associations (workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed_access, owner_node, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            {workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed, node(), at, at})
-        if insert_error then
-            db:release()
-            return fail("STORAGE", "record association")
+        if expected_revision ~= nil and expected_revision ~= current_revision then
+            return transaction.failure("CONFLICT", "expected_revision does not match the association") :: TransactionResult
         end
-    end
-    local stored = association_of(db, workspace_id, name)
+        local at = stamp(now_ms())
+        local revision = current_revision + 1
+        local association_id, id_error = uuid.v7()
+        if id_error or not association_id then return transaction.failure("STORAGE", "association id") :: TransactionResult end
+        if existing then
+            local _, update_error = tx:execute("UPDATE bee_resource_associations SET association_id = ?, revision = ?, root_ref = ?, root_digest = ?, subpath = ?, allowed_access = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
+                {association_id, revision, root_ref, root_digest, subpath, allowed, node(), at, workspace_id, name})
+            if update_error then return transaction.failure("STORAGE", "replace association") :: TransactionResult end
+        else
+            local _, insert_error = tx:execute("INSERT INTO bee_resource_associations (workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed_access, owner_node, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
+                {workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed, node(), at, at})
+            if insert_error then return transaction.failure("STORAGE", "record association") :: TransactionResult end
+        end
+        local stored, stored_error = association_in(tx, workspace_id, name)
+        if stored_error or not stored then return transaction.failure("STORAGE", stored_error or "read association") :: TransactionResult end
+        if not existing and stored.association_id ~= association_id then
+            if expected_revision == 0 then return transaction.failure("CONFLICT", "association was created concurrently") :: TransactionResult end
+            return transaction.failure("STORAGE", "association changed during creation") :: TransactionResult
+        end
+        return transaction.success(association_view(stored), false) :: TransactionResult
+    end) :: TransactionResult
     db:release()
-    if not stored then return fail("STORAGE", "read association") end
-    return succeed(association_view(stored))
+    if not result.ok then return fail(result.code or "STORAGE", result.message or "associate failed") end
+    return succeed(result.value)
 end
 -- grant: the authenticated actor is the subject; the audience is the
 -- placement owner the grant is for; the association and root are pinned
@@ -228,6 +244,16 @@ function M.grant(value: unknown): Reply
     if not association then
         db:release()
         return fail("NOT_FOUND", "no association " .. name .. " in workspace " .. workspace_id)
+    end
+    local root, root_error = resources.root(text(association.root_ref) or "")
+    if not root then
+        db:release()
+        return fail("CONFLICT", root_error or "root is gone")
+    end
+    local root_digest = digest_of(root)
+    if root_digest ~= association.root_digest then
+        db:release()
+        return fail("CONFLICT", "root definition changed; the association needs replacement")
     end
     if rank(access) > rank(text(association.allowed_access) or "read") then
         db:release()

@@ -113,8 +113,14 @@ function M.status(raw: unknown, options: unknown?): Result
     if not measured then
         local request = bounds.object(options == nil and {} or options)
         if not request or bounds.fields(request, {"page"}) then return transaction.failure("INVALID", "invalid operation history request") end
-        local page = request.page == nil and 1 or bounds.count(request.page)
-        if not page or page < 1 or page > 10000 then return transaction.failure("INVALID", "invalid operation history page") end
+        local page: integer = 1
+        if request.page ~= nil then
+            local decoded_page = bounds.count(request.page)
+            if not decoded_page or decoded_page < 1 or decoded_page > 10000 then
+                return transaction.failure("INVALID", "invalid operation history page")
+            end
+            page = decoded_page
+        end
         local state, state_error = snapshot:state()
         if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
         local owned: {Receipt} = {}

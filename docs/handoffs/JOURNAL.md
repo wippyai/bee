@@ -6174,6 +6174,16 @@ The broader foundation check is still running at this checkpoint.
 
 Native packaging passes: all 15 assembled packs load with 610 entries and no
 test/fixture registrations or embedded assets (`authoring-scoped-pack-audit.json`).
-No runtime, service, migration or core change was added. Global is unchanged.
+No runtime, service, migration or core change was added.
 Hub installation, desired overlay publication/reconstruction and the native
 composed-base publication fence remain unfinished.
+
+User subsequently requested a global refresh with unfinished backends accepted.
+Installed SHA `55b725aa8c4483037e3396d91860fc23159a6158e4b46c32435cade5298abe82`,
+source `97a9af2`, with verified binary/provenance sidecars and a retained previous
+binary. Native terminal/selector tests and the real installed-to-candidate upgrade
+pass. Public client checks pass across the initial run and a focused continuation
+after a temporary `.bash_history` cleanup race. Default state remains user-wide,
+as in the previous install; this was disclosed before installation. Explicit
+`--state-dir` isolates every database. No live user node was restarted.
+See [the global build handoff](GLOBAL_BUILD.md); Wolfden fact 1327 records the install.

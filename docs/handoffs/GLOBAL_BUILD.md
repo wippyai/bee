@@ -1,6 +1,41 @@
-# Global Bee build — September 11, 2026
+# Global Bee build — September 12, 2026
 
-## Current install: live local Hive display catalog
+## Current install: managed-agent components and scoped authoring
+
+Global SHA256 `55b725aa8c4483037e3396d91860fc23159a6158e4b46c32435cade5298abe82`.
+Source `97a9af2` on `feat/agent-integration-20260911`; runtime `291f5c6b`,
+native `3e895bae936f`. Built through `make standalone` as
+`bee-evidence/0912/bee-authoring-global-candidate` and installed atomically with
+license/provenance sidecars. The previous global is retained in
+`bee-evidence/0912/global-before-authoring-5c604fa7`. Running nodes were not
+restarted; they retain their loaded code.
+
+The user requested a global refresh with unfinished backends accepted. Native
+terminal, scrolling/copy, presenter rejoin and the empty public Agent picker pass.
+Managed profiles, provider configuration and five-hook integration components
+are included, but default production profile setup, MCP listener activation,
+Docker, Hub installation and DB-backed overlay activation remain unfinished.
+The new authoring boundary preserves caller storage/scope denials while allowing
+explicitly admitted workspace operations. All 626 unit cases and two-boot
+authoring checks pass. The complete source foundation check is still running.
+
+The real installed-to-candidate upgrade preserves Settings, workspace identity
+and applied migrations. All manifested databases respect explicit `--state-dir`.
+Both the previous and current binaries default to user-wide `~/.config/bee`;
+automatic per-project node selection remains unfinished. This limitation was
+disclosed before installation; no launcher wrapper was added.
+
+Public client acceptance covers retained terminals, independent displays,
+observation, concurrent cold admission and reconnect after client SIGKILL.
+Its initial run passed behavior checks but hit a temporary-directory cleanup race
+when a shell recreated `.bash_history`; the unchanged concurrent-start and
+crash-recovery continuation passes. This is segmented client validation, not an
+uninterrupted client-suite pass. Evidence under `bee-evidence/0912`:
+`authoring-global-{build,native,client,client-continuation,upgrade}.log`.
+All 15 assembled release packs load with 610 entries and no test/fixture
+registrations or embedded assets (`authoring-scoped-pack-audit.json`).
+
+## Previous install: live local Hive display catalog
 
 Global SHA256 `5c604fa7ab5f3c7eaa903c7ed2a79c8eb8b467fa6c0ee738b1c016471c9e026a`.
 Production source `7bee2ab`, artifact `/tmp/bee-live-catalog-locality-20260911`.

@@ -8,7 +8,11 @@ the two-boot authoring check pass; callers cannot access the private scope or
 backend after the call. No runtime change, service or migration was added.
 Hub installation and DB-backed additive overlay activation remain unfinished;
 system/Hub definitions use registry history, while app edits will use stored
-definitions projected through overlays. Global is unchanged.
+definitions projected through overlays. Global is now refreshed at the user's
+request (SHA `55b725aa`); native acceptance and an actual upgrade preserve Settings,
+identity and migration history. Automatic per-project state selection remains
+unfinished; explicit `--state-dir` isolates all databases. See
+[current global build](handoffs/GLOBAL_BUILD.md).
 
 The combined September 12 integration checkpoint (`343eefa`) has a verified
 standalone with driver-owned configuration delivery and no Hive review fixture

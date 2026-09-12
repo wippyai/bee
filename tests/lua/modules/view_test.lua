@@ -19,15 +19,39 @@ local function define_tests()
                 end
             end
         end)
+        test.it("keeps installed dependencies readable and reachable after scrolling", function()
+            local state = model.new()
+            local modules: {{[string]: unknown}} = {}
+            for index = 1, 20 do
+                modules[index] = {component = "bee/package" .. tostring(index), version = "1.0.0", source = "hub", direct = index == 1,
+                    used_by = index == 1 and {} or {"bee/package1"}}
+            end
+            model.apply_installed(state, {ok = true, code = nil, message = nil, replayed = false, value = {modules = modules, roots = {}}})
+            for _, width in ipairs({24, 48, 80}) do
+                local frame = view.draw(width, 18, appearance.defaults(), state, 999, "")
+                local found = false
+                for _, hit in ipairs(frame.hits) do
+                    if hit.kind == "component" and hit.key == "bee/package20" then found = true end
+                    test.is_true(hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= 18)
+                end
+                test.is_true(found)
+                if width >= 48 then
+                    local rendered = table.concat(frame.rows, "\n")
+                    test.is_true(rendered:find("Dependency", 1, true) ~= nil)
+                    test.is_true(rendered:find("Required by", 1, true) ~= nil)
+                end
+            end
+        end)
         test.it("renders multiline package documentation", function()
             local state = model.new()
             model.select(state, "bee/example")
             model.apply_details(state, {ok = true, code = nil, message = nil, replayed = false, value = {
-                component = "bee/example", title = "Example", description = "Package", readme = "# Guide\nUsage instructions",
+                component = "bee/example", title = "Example", description = "Package", readme = "# Guide\nUsage instructions\n```lua\n    enabled = false\n```",
                 versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1,
             }})
             local frame = view.draw(80, 24, appearance.defaults(), state, 0, "", true)
             test.is_true(table.concat(frame.rows, "\n"):find("Usage instructions", 1, true) ~= nil)
+            test.is_true(table.concat(frame.rows, "\n"):find("    enabled = false", 1, true) ~= nil)
         end)
         test.it("scrolls every plan effect without changing confirmation", function()
             local state = model.new()

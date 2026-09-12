@@ -147,6 +147,9 @@ fixture confirms the reviewed value is effective alongside retained dependency
 value v2, and the Go runner exits nonzero with the explicit missing-capability
 diagnostic. A process failure without that marker is reported as an unrelated
 runtime or fixture failure, so a crash cannot satisfy this evidence.
+This probe covers the durable part of the composed base. Changes in a different
+ephemeral overlay, exact dependency expansion and migration/readiness ordering
+still need their own acceptance before installation can be enabled.
 
 ## Acceptance
 

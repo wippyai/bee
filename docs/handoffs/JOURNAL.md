@@ -6106,3 +6106,28 @@ check 15767 is still live, through terminal/scroll and into lifecycle/recovery.
 Runtime PR 726 and builder PR 7 remain open on the same pinned heads; obsolete
 remote-monitor PR 716 is already closed. No runtime changes were made. Global
 SHA remains `5c604fa7ab5f3c7eaa903c7ed2a79c8eb8b467fa6c0ee738b1c016471c9e026a`.
+
+### 2026-09-12 Codex: completed foundation check and precise overlay gate
+
+The full configuration `make check` (session 15767) completed with exit 0,
+including 629 unit cases and all isolation, storage/restart, terminal, client,
+lifecycle and application gates. The combined configuration/Hive source also
+passes all 626 unit cases (session 78576, 209.2 seconds); three old fixture-only
+cases were removed. Executable and assembled-pack evidence above remains valid.
+The independently runnable managed-launch target now builds its Go HTTP fixture
+itself; harness module documentation matches the public Agent/PTY path.
+
+Native overlay gates are integrated as `506e299` and `a05cb9a`, using Go/Lua
+fixtures outside production. The owner-only gate passes. The independent
+composed durable-base requirement fails for the expected reason on runtime
+`291f5c6`: a reviewed overlay at version 0 commits alongside the dependency
+changed at version 1. The fixture reads both effective values before emitting
+`GOVERNANCE_COMPOSED_BASE_STALE_ACCEPTED`; a crash cannot count as this evidence.
+Parent review added explicit initial dependency/base assertions and removed a
+post-Wait process-group kill. Evidence: `overlay-owner-reviewed.log` and
+`overlay-composed-reviewed.log`. This adds no runtime API or production writer.
+Other-overlay fencing, exact expansion and activation lifecycle remain unproven.
+
+Required-executable test guards are being tightened separately: an explicitly
+selected native binary must not turn missing runtime capability into a green
+non-execution. No Python changes or global installation accompany this work.

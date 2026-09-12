@@ -10,8 +10,10 @@ pass. Loading the 15 assembled release packs confirms 608 entries without test
 or fixture registrations/references and without embedded assets. Evidence:
 `config-hive-combined-{build,native,app}.log` and
 `config-hive-combined-pack-audit.json` in the September 12 evidence directory.
-The separate full configuration check remains live; it has passed terminal and
-scrolling checks and reached lifecycle/client recovery. These executable checks
+The separate full configuration `make check` completed successfully (session
+15767), including 629 unit cases, isolated hosts, storage/restart and all desktop
+and application gates. The combined source passes 626 unit cases after removing
+three fixture-only cases (session 78576, 209.2 seconds). These executable checks
 do not establish an authenticated provider turn or cold conversation recovery.
 Global remains unchanged pending the executable-selected project state directory.
 
@@ -25,7 +27,8 @@ native and managed windows, and HTTP hooks pass. The reviewed standalone
 boot, Settings recovery, terminal scrolling/selection, presenter rejoin and
 the public empty Agent picker. Its SHA-256 is
 `4e0ebdcfb15730f8fe2452769b079250e32392637dcd39ad8e380c287c0eeba7`.
-The remaining full foundation check is still running.
+The full foundation check completed successfully in
+`config-delivery-reviewed-check.log` (session 15767).
 
 Review removed the incomplete launch-side configure call: a driver requiring
 placement's actual HOME now passes launch admission and renders at placement.
@@ -48,8 +51,8 @@ Removal is committed separately as `ff90c03` and integrated as `1c8f002`.
 Its final Go/Lua acceptance passes six source/pack application cases and an
 explicit failing-probe check. Loading all 15 resulting component packs found
 608 entries, no fixture/test registrations or test-library references, and no
-embedded filesystem assets. Combined configuration/cleanup acceptance is still
-pending; this is not a claim of quality parity with Kickside.
+embedded filesystem assets. Combined unit, Hive application and executable
+acceptance now pass; this is not a claim of quality parity with Kickside.
 Evidence: `hive-fixture-boundary-final.log`,
 `hive-fixture-boundary-pack-audit.json`, `config-delivery-pack-audit.json` and
 `config-delivery-{foundation,build}.log` in the September 12 evidence directory.

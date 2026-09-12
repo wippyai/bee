@@ -5,7 +5,8 @@ standalone with driver-owned configuration delivery and no Hive review fixture
 in production. Native acceptance and the combined Hive application checks pass;
 all 15 assembled packs contain 608 entries without test/fixture registrations
 or test-library references. The configuration slice's full foundation check
-is still running. Global remains unchanged until project-directory isolation is
+passes, as do all 626 combined unit cases after fixture removal. Global remains
+unchanged until project-directory isolation is
 supported by the runtime. See [current integration evidence](handoffs/AGENT_INTEGRATION.md).
 
 The current source removes Hive Manager's review-node table and fixture selector.

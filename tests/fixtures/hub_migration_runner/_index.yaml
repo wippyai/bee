@@ -1,0 +1,136 @@
+version: '1.0'
+namespace: probe
+entries:
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: db
+  kind: db.sql.sqlite
+  file: .wippy/probe.db
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [db.get, funcs.call, registry.get]
+    resources: ['*']
+    effect: allow
+- name: adapter
+  kind: library.lua
+  source: file://hub/migrations.lua
+  imports:
+    migration_runner: wippy.migration:runner
+- name: migration_binding
+  kind: library.lua
+  source: file://hub/migration_runner.lua
+  modules: [sql, funcs, security]
+  imports:
+    migrations: probe:adapter
+- name: run
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [sql, logger, registry]
+  imports:
+    adapter: probe:adapter
+    migration_runner: wippy.migration:runner
+    migration_binding: probe:migration_binding
+    migration_first: acme.app:10_first
+    migration_second: acme.app:20_second
+    migration_excluded: acme.app:99_excluded
+  security:
+    policies: [probe:policy]
+  meta:
+    command:
+      name: real-migration-probe
+      security:
+        actor: {id: probe.real_migration}
+- name: negative_db
+  kind: db.sql.sqlite
+  file: .wippy/negative.db
+- name: evidence_db
+  kind: db.sql.sqlite
+  file: .wippy/evidence.db
+- name: negative_policy
+  kind: security.policy
+  policy:
+    actions:
+    - '*'
+    resources:
+    - '*'
+    effect: allow
+- name: func_only
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - probe:negative_allowed
+    - probe:negative_absent
+    - probe:negative_attempt
+    - acme.app:10_first
+    effect: allow
+- name: db_only
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - probe:negative_allowed
+    - probe:negative_absent
+    - probe:negative_attempt
+    effect: allow
+- name: db_grant
+  kind: security.policy
+  policy:
+    actions:
+    - db.get
+    resources:
+    - probe:negative_db
+    effect: allow
+- name: negative_run
+  kind: process.lua
+  source: file://negative_probe.lua
+  method: main
+  modules:
+  - sql
+  - logger
+  - registry
+  - funcs
+  - security
+  imports:
+    adapter: probe:adapter
+    migration_runner: wippy.migration:runner
+    migration_binding: probe:migration_binding
+    negative: probe:negative_allowed
+    migration_first: acme.app:10_first
+    migration_second: acme.app:20_second
+    migration_excluded: acme.app:99_excluded
+  security:
+    policies:
+    - probe:negative_policy
+  meta:
+    command:
+      name: negative-migration-probe
+      security:
+        actor:
+          id: probe.real_migration
+- name: negative_allowed
+  kind: function.lua
+  source: file://negative.lua
+  method: allowed
+  imports:
+    adapter: probe:adapter
+    migration_binding: probe:migration_binding
+- name: negative_absent
+  kind: function.lua
+  source: file://negative.lua
+  method: absent
+  imports:
+    adapter: probe:adapter
+    migration_binding: probe:migration_binding
+- name: negative_attempt
+  kind: function.lua
+  source: file://negative.lua
+  method: attempt
+  imports:
+    adapter: probe:adapter
+    migration_binding: probe:migration_binding

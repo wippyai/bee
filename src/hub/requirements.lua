@@ -147,4 +147,52 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
     end
     return {requirements = requirements, missing = missing}, nil
 end
+-- Project only the component contract's migration database hole. Native
+-- linking still owns all general paths and is verified after publication.
+type Entry = {id: string, kind: string, meta: {[string]: unknown}, data: unknown}
+function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?)
+    local supplied, supplied_error = dense(raw, "migration package entries", M.MAX_PACKAGE_ENTRIES)
+    if not supplied then return nil, supplied_error end
+    local entries: {Entry} = {}
+    for _, item in ipairs(supplied) do
+        local entry = bounds.object(item)
+        local id = entry and bounds.id(entry.id) or nil
+        local kind = entry and bounds.id(entry.kind) or nil
+        local meta = entry and bounds.object(entry.meta) or nil
+        if not entry or not id or not kind or not meta then return nil, "invalid migration package entry" end
+        entries[#entries + 1] = {id = id, kind = kind, meta = meta, data = entry.data}
+    end
+    local migrations: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do
+        if entry.meta.type == "migration" then migrations[entry.id] = true end
+    end
+    local targets: {[string]: string} = {}
+    for _, requirement in ipairs(selected.requirements) do
+        if requirement.has_selected or requirement.has_default then
+            local value = requirement.default
+            if requirement.has_selected then value = requirement.selected end
+            for _, target in ipairs(requirement.targets) do
+                if migrations[target.entry] and (target.path == "meta.target_db" or target.path == ".meta.target_db") then
+                    local database = bounds.id(value)
+                    if not database then return nil, "migration database requirement must be an identifier: " .. requirement.id end
+                    if targets[target.entry] and targets[target.entry] ~= database then
+                        return nil, "conflicting migration database requirements for " .. target.entry
+                    end
+                    targets[target.entry] = database
+                end
+            end
+        end
+    end
+    local result: {Entry} = {}
+    for _, entry in ipairs(entries) do
+        local database = targets[entry.id]
+        if database then
+            local meta: {[string]: unknown} = {}
+            for key, value in pairs(entry.meta) do meta[key] = value end
+            meta.target_db = database
+            result[#result + 1] = {id = entry.id, kind = entry.kind, meta = meta, data = entry.data}
+        else result[#result + 1] = entry end
+    end
+    return result, nil
+end
 return M

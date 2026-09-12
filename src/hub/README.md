@@ -25,8 +25,11 @@ and an operation receipt to durable registry history. The worker serializes Bee
 Hub operations, not all registry writers.
 
 Real install/update/uninstall, receipt persistence across restart and uninstalled
-resource filesystem reads pass on the existing runtime. Modules input, F12 and
-resize pass from source and pack. Migration execution, interrupted-operation
-recovery and full live-Hub confirmation/apply UI acceptance remain incomplete.
+resource filesystem reads pass on the existing runtime. Modules confirmation,
+input, F12 and resize have source/pack and executable acceptance. Publication
+recovery verifies the original root and inventory. Source-only migration `up`
+now captures exact definitions and verifies SQL ledger evidence across restart;
+removal checks all departing owners. Migration `down` and complete migration
+failure recovery acceptance remain unfinished.
 Authored component
 overlays and application launch/sharing admission remain separate responsibilities.

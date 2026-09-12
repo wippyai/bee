@@ -175,6 +175,9 @@ function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
         local selected, problem = requirements.read(item.entries, supplied)
         if not selected then return nil, problem end
         item.requirements = selected
+        local projected, projection_error = requirements.migration_targets(item.entries, selected)
+        if not projected then return nil, projection_error end
+        item.entries = projected
         for _, id in ipairs(selected.missing) do missing[#missing + 1] = id end
         for _, entry in ipairs(item.entries) do
             if ids[entry.id] then return nil, "packages collide at " .. entry.id end

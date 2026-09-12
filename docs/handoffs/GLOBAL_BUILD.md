@@ -1,58 +1,85 @@
 # Global Bee build — September 12, 2026
 
-## Current install: optional machine login for managed agents
+## Current install: Hub migrations plus default machine login
 
-Global `/home/wolfy-j/.local/bin/bee` has SHA
-`acab69b8e487c4743cfa3967cf32a74add001f77cfba42e9e9ffe4454bd7036a`.
-Production code matches `f4e3993` (integrated as `4141cbd`); the candidate was
-built before the final documentation and test-only observation changes.
-Runtime `291f5c6b` and native `0f63d30bd718` remain unchanged. Five sidecars were
-installed and hash-verified; existing nodes were not restarted.
+Global `/home/wolfy-j/.local/bin/bee` now has SHA
+`f276bc2b0edaa85d1385e91783f4820156f41cb1730cefd410e3089e0546d100`,
+source `f5beb06`. It retains installed Agent recovery and optional machine-login
+behavior and adds host-granted Hub migration `up`, selected database requirement
+planning, durable migration results, and explicit ledger/definition recovery.
+Removal checks include orphaned dependencies; explicit `leave` preserves schema.
+Migration `down`, newly installed database targets and operation-history UI remain
+unfinished. See [Hub](../HUB.md) for exact grants and callable behavior.
 
-Default Claude/Codex window profiles now select optional machine-login sources.
-Host-selected paths under the existing user home seed only the provider's private
-retained login file. Missing login files/directories allow ordinary CLI sign-in;
-permission, unavailable volume and malformed-file errors still refuse. Host
-credential directories are never created and refreshed private login bytes never
-write back to the machine source. Definition metadata pins the source path and
-refuses retargeted projections. File credentials do not enter the environment.
+The candidate passes 63 focused Hub tests and actual local-Hub publication/SQL
+acceptance, including schema-commit SIGKILL/restart, partial failure/retry,
+changed-definition refusal, linked database requirements and denied database
+access. Native desktop, Modules and Agent present/absent machine-login checks
+pass, as does native Modules install/update/uninstall. A native Agent fixture
+initially lost unchanged rows in partial terminal redraws; its bounded screen
+reader now passes the regression and actual selector acceptance. These are
+focused combined-source and native results; the original Hub source's full
+repository run remains separately tracked in `hub-migration-full-check.log`.
 
-The exact installed candidate passed standalone desktop and Modules acceptance
-(`machine-login-native-grant-check.log`), then Go Agent acceptance with disposable
-present/absent machine logins (`machine-login-selector-observation-check.log`).
-The latter fixed an observation bug: synchronized terminal updates may contain
-only changed cells. Initial missing credential-issue admission was fixed in the
-Agent's explicit host binding; the original failures remain in the evidence logs.
-Source lint and 756 units passed before that final grant. Full `make check`
-against the final production source remains running in session 13080,
-`bee-evidence/0912/machine-login-full-check.log`.
+Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. The executable and
+five sidecars were verified against their provenance, backed up, and replaced
+only after rechecking the previous `acab69b8` files. Evidence:
+`hub-migration-final-source-check.log`, `hub-migration-final-native-check.log`,
+`hub-migration-global-install.json`; backup `global-before-hub-migrations-acab69b8`.
+No running node was restarted. Retained nodes continue their loaded code until
+the user restarts them.
 
-Install receipt: `bee-evidence/0912/machine-login-global-install.json`.
-Backup: `global-before-machine-login-849166aa`. Start a fresh node with `bee`, or
-open the Agent picker using `bee agent`. Existing nodes retain loaded code.
-Production MCP/hook activation, Docker and successful cold conversation recovery
-remain unfinished; app checkpoint wiring alone does not prove cold recovery.
+The Agent lane additionally proved both Claude and Codex with present/absent
+synthetic login sources against the preceding `acab69b8` global; that provider
+coverage is retained alongside this branch's current-screen reader. Evidence:
+`claude-codex-global-login-check.log`. Combined coverage on the newer global passes as well: `make
+native-agent-selector-check` exercised both providers with present and absent
+synthetic login sources (`hub-agent-combined-selector-check.log`). This verifies
+credential delivery and terminal behavior, not paid-provider authentication.
+
+The combined source checkpoint passes lint and all 764 unit cases. Both Hub
+migration acceptance entrypoints now run in Go, with SQL up/replay/down,
+permission denial and schema-commit crash/restart checks passing through their
+Makefile targets (`hub-migration-go-final.log`). Test sources remain outside the
+production pack. These test changes do not require replacing the installed
+executable, whose production source matches this integration.
+
+## Previous install: default machine login plus Agent recovery
+
+Global has since advanced to SHA
+`acab69b8e487c4743cfa3967cf32a74add001f77cfba42e9e9ffe4454bd7036a`,
+source `f4e3993` (the candidate preceded documentation/test-only final edits).
+`machine-login-global-install.json` records native desktop, Modules and Agent
+acceptance, preserved running nodes, and backup
+`global-before-machine-login-849166aa`. The Hub migration integration now includes
+this installed source plus selected migration database requirements. Its next
+candidate has not yet replaced global.
+
+## Previous install: Agent recovery plus Hub recovery
+
+The executable and installed provenance now agree on SHA
+`849166aaffa7a12688396513f8a7be688da7d75d3b43816a150dee21f9970028`,
+source `32cd49f`. It adds retained Agent recovery and credential availability.
+Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. Local evidence is
+`agent-recovery-global-install.json` and `agent-recovery-native-check.log`;
+the latter passes native desktop, Modules and Agent selector/cwd/private-home
+acceptance. The prior executable and sidecars are in
+`global-before-agent-recovery-65b91124`. Running nodes were not restarted.
+
+The Hub migration candidate merges this installed source with Hub commit
+`0b63194`. It has not replaced global; combined acceptance remains pending.
 
 ## Previous install: Agent activity titles plus Hub recovery
 
-Global `/home/wolfy-j/.local/bin/bee` has SHA
-`65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`.
-Source `3e0a3af` combines the newer Hub recovery checkpoint with confirmed-hook
-activity titles and Go native Agent acceptance. Runtime and native pins are
-unchanged. All five sidecars were installed and verified alongside the executable.
-
-`make native-binary-check` passes against this exact candidate: embedded desktop,
-Settings recovery, Terminal scrolling/selection, presenter rejoin, Modules
-interaction, four Agent defaults, and fixture Codex launch with project cwd and
-separate retained session home. Evidence: `bee-evidence/0912/title-hub-native-check.log`;
-install receipt: `title-hub-global-install.json`. The prior binary and sidecars
-are in `global-before-title-hub-237d76a8`. Running nodes were not restarted.
-
-Hook activity titles use committed thread events through the existing app-title
-API. Automatic CLI hook/MCP activation, credential setup, cold conversation
-recovery and Docker remain incomplete. This update does not claim a full
-repository-gate pass; the preceding combined fixture failures are recorded below.
-
+Global was subsequently refreshed by the Agent lane to SHA
+`65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`,
+source `3e0a3af`, retaining Hub recovery and adding confirmed-hook activity
+titles. The installed provenance and `title-hub-global-install.json` agree.
+Runtime and native pins are unchanged. Native acceptance is recorded in
+`title-hub-native-check.log`; the previous executable and five sidecars are in
+`global-before-title-hub-237d76a8`. Running nodes were retained. The segmented
+foundation results below describe the preceding combined source and its fixture
+corrections, rather than a full check of every subsequent Agent change.
 
 ## Previous install: Hub recovery and managed Agent profiles
 
@@ -74,10 +101,15 @@ The corrected client-desktop suite passes all source/pack variants. The combined
 run passes 746 unit cases, then stops on two managed-Agent fixtures (session-root
 admission and a missing changed-profile notice). Updating those fixtures to the
 current host root and setup refusal passes all five managed-window cases;
-production permissions are unchanged. Remaining desktop checks are running
-separately; this is not yet a complete repository-gate pass. Logs:
+production permissions are unchanged. The continuation caught a transfer-restart
+fixture admitting its replacement before host retirement. Checkpoint `f500961`
+waits for the host's detach acknowledgment; source and pack now pass both failed
+transfer directions. The complete foundation gate passes in segments after these
+fixture corrections, including the separately completed launcher/recovery and
+bundled-app tail. This is not an uninterrupted `make check` pass. Logs:
 `hub-combined-desktop-check.log`, `hub-combined-full-check.log`,
-`hub-combined-managed-corrected.log`, and `hub-combined-check-remainder.log`.
+`hub-combined-managed-corrected.log`, `hub-combined-check-remainder.log`,
+`hub-transfer-retirement-check.log`, and `hub-combined-check-tail.log`.
 
 The executable and five sidecars were verified after SHA-fenced replacement.
 Previous `edf6a7c3` files are in `global-before-combined-recovery-edf6a7c3`;

@@ -214,6 +214,20 @@ local function main(mode: string?)
                 local event = selected.value
                 if event.kind == process.event.EXIT and tostring(event.from) == pid then
                     assert(desktops.exited(retained_desktops, event), "Failed " .. label .. " client did not release its desktop")
+                    break
+                end
+            end
+            -- Our EXIT observation does not order the host's own cleanup.
+            -- Its detach acknowledgment follows broker unbind and retirement
+            -- of the old display identity, making replacement admission valid.
+            while true do
+                local selected = channel.select({results:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then error("Timed out waiting for host retirement of " .. label) end
+                local message = selected.value
+                assert(tostring(message:from()) == host)
+                local value: unknown = message:payload():data()
+                if type(value) == "table" and value.recipient == pid and value.op == "detach" and value.error_code ~= "busy" then
+                    assert(value.error_code == "", "Host failed to retire " .. label .. ": " .. tostring(value.error))
                     return
                 end
             end

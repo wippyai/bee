@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: tests.hub_migration_work
+entries:
+- name: migration_work_test
+  kind: function.lua
+  source: file://migration_work_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    migration_work: bee.hub:migration_work
+    plan: bee.hub:plan

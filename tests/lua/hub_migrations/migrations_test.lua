@@ -17,7 +17,7 @@ local function allowed_ids(options: {[string]: unknown}): {string}
     return ids
 end
 
-local function source(entries: {migrations.Entry}, applied: {[string]: boolean}, calls: {Call}): migrations.Source
+local function source(entries: {migrations.Entry}, applied: {[string]: boolean}, calls: {Call}, commit: boolean?): migrations.Source
     return {
         entries = entries,
         runner = {
@@ -26,6 +26,7 @@ local function source(entries: {migrations.Entry}, applied: {[string]: boolean},
                     run_next = function(_: migrations.DatabaseRunner, options: {[string]: unknown}): migrations.RunnerResult
                         local ids = allowed_ids(options)
                         calls[#calls + 1] = {operation = "up", target_db = target_db, ids = ids}
+                        if commit ~= false then applied[target_db .. "\n" .. ids[1]] = true end
                         return {migrations = {{id = ids[1], status = "applied"}}}
                     end,
                     rollback = function(_: migrations.DatabaseRunner, options: {[string]: unknown}): migrations.RunnerResult
@@ -33,7 +34,10 @@ local function source(entries: {migrations.Entry}, applied: {[string]: boolean},
                         local count = type(options.count) == "number" and math.floor(options.count) or nil
                         calls[#calls + 1] = {operation = "down", target_db = target_db, ids = ids, count = count}
                         local rows: {unknown} = {}
-                        for _, id in ipairs(ids) do rows[#rows + 1] = {id = id, status = "reverted"} end
+                        for _, id in ipairs(ids) do
+                            if commit ~= false then applied[target_db .. "\n" .. id] = false end
+                            rows[#rows + 1] = {id = id, status = "reverted"}
+                        end
                         return {migrations = rows}
                     end,
                 }
@@ -126,14 +130,18 @@ local function define_tests()
 
         test.it("returns completed rows when a later runner result cannot prove execution", function()
             local first, second = "acme.app:01", "acme.app:02"
+            local applied: {[string]: boolean} = {}
             local partial = source({
                 entry(first, "acme/app", "app:db", "2026-01-01"), entry(second, "acme/app", "app:db", "2026-01-02"),
-            }, {}, {})
+            }, applied, {})
             partial.runner.setup = function(_: string): (migrations.DatabaseRunner?, string?)
                 return {
                     run_next = function(_: migrations.DatabaseRunner, options: {[string]: unknown}): migrations.RunnerResult
                         local ids = allowed_ids(options)
-                        if ids[1] == first then return {migrations = {{id = first, status = "applied"}}} end
+                        if ids[1] == first then
+                            applied["app:db\n" .. first] = true
+                            return {migrations = {{id = first, status = "applied"}}}
+                        end
                         return {migrations = {}}
                     end,
                     rollback = function(_: migrations.DatabaseRunner, _: {[string]: unknown}): migrations.RunnerResult
@@ -146,6 +154,36 @@ local function define_tests()
             test.not_nil(result)
             test.not_nil(problem)
             if result then test.eq(result.rows[1].id, first) end
+        end)
+
+        test.it("refuses runner success when the durable ledger did not change", function()
+            local id = "acme.app:01"
+            for _, operation in ipairs({"up", "down"}) do
+                local applied = {["app:db\n" .. id] = operation == "down"}
+                local calls: {Call} = {}
+                local result, problem = migrations.execute(source({entry(id, "acme/app", "app:db", "2026-01-01")},
+                    applied, calls, false), {operation = operation, components = {"acme/app"}, entry_ids = {id}})
+                test.eq(#calls, 1)
+                test.not_nil(problem)
+                test.not_nil(result)
+                if result then test.eq(#result.rows, 0) end
+            end
+        end)
+
+        test.it("preserves a ledger read failure after the runner reports success", function()
+            local id = "acme.app:01"
+            local pending = source({entry(id, "acme/app", "app:db", "2026-01-01")}, {}, {})
+            local reads = 0
+            pending.is_applied = function(_: string, _: string): (boolean?, string?)
+                reads = reads + 1
+                if reads == 1 then return false, nil end
+                return nil, "ledger connection lost"
+            end
+            local result, problem = migrations.execute(pending,
+                {operation = "up", components = {"acme/app"}, entry_ids = {id}})
+            test.eq(problem, "ledger connection lost")
+            test.not_nil(result)
+            if result then test.eq(#result.rows, 0) end
         end)
     end)
 end

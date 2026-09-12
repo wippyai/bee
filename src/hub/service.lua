@@ -11,11 +11,15 @@ local transaction = require("transaction")
 local inventory = require("inventory")
 local canonical = require("canonical")
 local hash = require("hash")
+local migration_runner = require("migration_runner")
+local migrations = require("migrations")
+local migration_work = require("migration_work")
 local M = {}
 type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
-    baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?}
+    baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?,
+    migration_work: migration_work.Work?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -78,8 +82,10 @@ local function decode_receipt(raw: unknown): Receipt?
     if value.request_digest ~= nil and not request_digest then return nil end
     local expected = expected_modules(value.expected_modules)
     if value.expected_modules ~= nil and not expected then return nil end
+    local work = value.migration_work ~= nil and migration_work.decode(value.migration_work) or nil
+    if value.migration_work ~= nil and not work then return nil end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action, expected_modules = expected}
+        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work}
 end
 
 function M.status(raw: unknown): Result
@@ -130,6 +136,46 @@ local function verify(expected: {ExpectedModule}, actual: inventory.Result): str
     return nil
 end
 
+-- Work is captured in the publication receipt before any package function
+-- runs. After interruption, exact definitions and ledger state are checked
+-- again under current host permissions.
+local function migrate(receipt: Receipt): Result
+    local work = receipt.migration_work
+    if not work then return save(receipt) end
+    local snapshot, snapshot_error = registry.snapshot()
+    local state, state_error
+    if snapshot then state, state_error = snapshot:state() end
+    local verified, verify_error = migration_work.verify(work, state)
+    if not verified then
+        receipt.state = "recovery_required"
+        receipt.message = tostring(snapshot_error or state_error or verify_error)
+        return save(receipt)
+    end
+    local entries = migration_work.entries(work)
+    local allowed, grant_error = migration_runner.allowed(entries)
+    if not allowed then
+        receipt.state, receipt.message = "recovery_required", grant_error or "migration permissions changed"
+        return save(receipt)
+    end
+    local ids: {string}, components: {string} = {}, {}
+    local seen: {[string]: boolean} = {}
+    for _, entry in ipairs(work.entries) do
+        ids[#ids + 1] = entry.id
+        if not seen[entry.component] then
+            seen[entry.component] = true
+            components[#components + 1] = entry.component
+        end
+    end
+    local result, problem = migrations.execute(migration_runner.source(entries),
+        {operation = "up", entry_ids = ids, components = components})
+    if result then work.rows = result.rows end
+    receipt.state = problem and "recovery_required" or "complete"
+    receipt.message = problem or "Dependency change and selected migrations completed"
+    -- Never restore registry definitions after migration execution: schema
+    -- transactions and registry publication are separate commits.
+    return save(receipt)
+end
+
 local function reconcile(receipt: Receipt, request: plan.Request): Result
     local expected = receipt.expected_modules
     if not expected then return transaction.failure("UNCERTAIN", "published operation has no captured recovery evidence") end
@@ -163,7 +209,7 @@ local function reconcile(receipt: Receipt, request: plan.Request): Result
     mismatch = mismatch or verify(expected, actual)
     receipt.state = mismatch and "recovery_required" or "complete"
     receipt.message = mismatch or "Published dependency change verified after interruption"
-    local result = save(receipt)
+    local result = mismatch and save(receipt) or migrate(receipt)
     result.replayed = true
     return result
 end
@@ -187,7 +233,9 @@ function M.apply(raw: unknown, expected: unknown): Result
         if not receipt or receipt.request_digest ~= request_digest then
             return transaction.failure("STALE", "request differs from the recorded operation; refresh its plan")
         end
-        if receipt.state == "published" then return reconcile(receipt, decoded) end
+        if receipt.state == "published" or (receipt.state == "recovery_required" and receipt.migration_work ~= nil) then
+            return reconcile(receipt, decoded)
+        end
         previous.replayed = true
         return previous
     end
@@ -197,23 +245,59 @@ function M.apply(raw: unknown, expected: unknown): Result
     local displayed = prepared.plan
     if displayed.digest ~= measured then return transaction.failure("STALE", "the install plan changed; refresh and confirm it again") end
     if not displayed.ready then return transaction.failure("INCOMPLETE", "fill the missing package requirements") end
-    -- The public migration runner is an optional composition dependency. Never
-    -- publish an 'up' plan and then discover that its runner is unavailable.
-    if displayed.request.migration_policy == "up" and #displayed.migrations > 0 then
-        return transaction.failure("UNAVAILABLE", "package migrations need the host migration runner binding")
-    end
     local baseline, baseline_error = registry.snapshot()
     if not baseline then return transaction.failure("UNAVAILABLE", tostring(baseline_error)) end
     if baseline:version():id() ~= displayed.base_revision then return transaction.failure("STALE", "registry changed while preparing the operation") end
     local request = displayed.request
-    if request.action == "uninstall" then
+    local work: migration_work.Work? = nil
+    if request.migration_policy == "up" and #displayed.migrations > 0 then
+        local captured, capture_error = migration_work.capture(prepared)
+        if not captured then return transaction.failure("INVALID", capture_error or "cannot capture migration work") end
+        local entries = migration_work.entries(captured)
+        local allowed, grant_error = migration_runner.allowed(entries)
+        if not allowed then return transaction.failure("DENIED", grant_error or "host migration grants required") end
         local state, state_error = baseline:state()
         if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
-        for _, entry in ipairs(state.entries) do
-            if entry.registry and entry.registry.owner == request.component and entry.meta and entry.meta.type == "migration" then
-                if request.migration_policy ~= "leave" then
-                    return transaction.failure("UNAVAILABLE", "checking or reverting package migrations needs the host migration runner binding")
+        local readable = migration_runner.source(entries)
+        for _, entry in ipairs(captured.entries) do
+            local applied, ledger_error = readable.is_applied(entry.target_db, entry.id)
+            if applied == nil then return transaction.failure("UNAVAILABLE", ledger_error or "cannot read migration ledger") end
+            if applied then
+                local unchanged, change_error = migration_work.verify({entries = {entry}, rows = {}}, state)
+                if not unchanged then
+                    return transaction.failure("BLOCKED", "already-applied migration definition differs: " .. entry.id .. "; " .. tostring(change_error))
                 end
+            end
+        end
+        work = captured
+    end
+    -- Removing a root can also remove its orphaned dependencies. Check every
+    -- removed owner, not only the root selected in the UI.
+    local removed: {[string]: boolean} = {}
+    for _, item in ipairs(displayed.modules) do
+        if item.change == "remove" then removed[item.component] = true end
+    end
+    if next(removed) and request.migration_policy ~= "leave" then
+        local state, state_error = baseline:state()
+        if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+        local selected: {migrations.Entry} = {}
+        for _, entry in ipairs(state.entries) do
+            local owner = entry.registry and entry.registry.owner
+            if type(owner) == "string" and removed[owner] and entry.meta and entry.meta.type == "migration" then
+                selected[#selected + 1] = {id = entry.id, meta = entry.meta, registry = entry.registry}
+            end
+        end
+        if #selected > 0 and request.migration_policy == "down" then
+            return transaction.failure("UNAVAILABLE", "reverting package migrations needs durable migration execution")
+        end
+        local readable = migration_runner.source(selected)
+        for _, entry in ipairs(selected) do
+            local target = bounds.id(entry.meta.target_db)
+            if not target then return transaction.failure("INVALID", "migration has no resolved database: " .. entry.id) end
+            local applied, ledger_error = readable.is_applied(target, entry.id)
+            if applied == nil then return transaction.failure("UNAVAILABLE", ledger_error or "cannot check migration ledger") end
+            if applied then
+                return transaction.failure("BLOCKED", "applied migration prevents removal: " .. entry.id .. "; select leave or revert explicitly")
             end
         end
     end
@@ -234,7 +318,7 @@ function M.apply(raw: unknown, expected: unknown): Result
         expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
     end
     local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
-        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected}
+        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected, migration_work = work}
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()
@@ -254,6 +338,6 @@ function M.apply(raw: unknown, expected: unknown): Result
         return save(receipt)
     end
     receipt.state, receipt.message = "complete", "Dependency root " .. request.action .. " completed"
-    return save(receipt)
+    return migrate(receipt)
 end
 return M

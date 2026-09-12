@@ -85,7 +85,7 @@ local function define_tests()
             if not written_config:find("model_providers.bee", 1, true) then error("the isolated configuration was not written: [" .. written_config .. "]") end
             -- The admitted launch exactly as the driver prepares it: the brief on
             -- stdin, read until end of file, which needs a runtime that can
-            -- close stdin; without that the gate stays open here too.
+            -- close stdin. A configured executable makes this a required capability.
             local specification = launch.specification({profile_id = "exec", brief = "say hi", sandbox = "read-only", resume_ref = nil})
             test.eq(specification.stdin_eof, true)
             local argv: {string} = {codex}
@@ -109,8 +109,7 @@ local function define_tests()
                 endpoint_out:close()
                 endpoint_executor:release()
                 shell("rm -rf " .. root)
-                test.eq(launch.CODEX_AUTHENTICATION, "unproven")
-                return
+                error("the configured Codex executable requires placement close_stdin")
             end
             local started, start_error = proc:start()
             if not started then error("start codex: " .. tostring(start_error)) end

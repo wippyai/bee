@@ -187,6 +187,9 @@ make managed-launch-check BEE_RUNTIME=$HOME/kickside/runtime-combined4/bin/wippy
 harness, driver, credentials and thread suites against the named runtime,
 and fails unless every real-executable proof passed (Codex and Claude
 authentication paths, Claude acceptance and the carrier control matrix).
+When the required executables are configured, their native proof cases fail
+if the runtime lacks a required capability such as Codex stdin closure; they
+cannot report a passing proof name after that unavailable path.
 The suites open a loopback endpoint fixture, an isolated home and a
 sentinel key; no provider is contacted.
 

@@ -4,7 +4,8 @@
 -- sentinel key, the pinned executable and a controlled local endpoint.
 -- The endpoint answers 401, so a passing run proves path selection only,
 -- never provider acceptance or a completed turn. Without the executable
--- the gate is reported open; without stdin closure placement refuses.
+-- the ordinary unit-test gate is reported open. A configured executable
+-- requires stdin closure; managed-launch-check must fail if it is unavailable.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -321,12 +322,9 @@ local function define_tests()
             local projection_id = projection_for(workspace, attempt_id)
             local launch_request = request(thread_id, attempt_id, POLICY, {projection_id})
             if capabilities.stdin_close ~= true then
-                local refused = await_carrier(spawn_carrier("bee.harness.carrier:process", launch_request, "open", nil), "unsupported stdin closure")
-                test.is_nil(refused.value)
-                test.is_true(tostring(refused.error):find("cannot close a child's stdin", 1, true) ~= nil)
                 stop_endpoint()
-                test.eq(launch.CODEX_AUTHENTICATION, "unproven")
-                return
+                shell("rm -rf " .. root)
+                error("the configured Codex executable requires placement stdin_close")
             end
             local pid = spawn_carrier("bee.harness.carrier:process", launch_request, "open", nil)
             -- The late write goes in once the endpoint has recorded the

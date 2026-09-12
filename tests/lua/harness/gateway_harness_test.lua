@@ -610,8 +610,8 @@ local HARNESSES: {Harness} = {
     {name = "codex", bin = "", binding = CODEX_BINDING, policy = CODEX_POLICY, source = CODEX_SOURCE, provider = "codex", credential = "openai", sentinel = CODEX_SENTINEL},
 }
 -- Codex reads its brief until end of file, so both Codex proofs need a
--- runtime that can close a child's stdin; without it the gate stays open,
--- as the Codex authentication proofs report it.
+-- runtime that can close a child's stdin. With a configured Codex executable
+-- the dedicated managed-launch gate requires that capability.
 local function ready_for(harness: Harness): boolean
     local bin = binary(harness.name .. "_bin")
     if not bin then return false end
@@ -622,8 +622,7 @@ local function ready_for(harness: Harness): boolean
     if harness.name == "codex" then
         local capabilities = call("bee.placement.native:capabilities", {})
         if capabilities.stdin_close ~= true then
-            test.eq(codex_launch.CODEX_AUTHENTICATION, "unproven")
-            return false
+            error("the configured Codex executable requires placement stdin_close")
         end
     end
     return true

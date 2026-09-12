@@ -146,8 +146,12 @@ for identity, entry in entries.items():
         if location.parts[0] == "driver":
             assert target_location.parts[0] == "driver" or target.startswith("bee.threads.records:"), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] != ("carrier",):
-            managed_window_targets = {"bee.application:client", "bee.placement.native:window"}
-            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:") or (identity == "bee.harness.launch:admission" and target == "bee.placement:types") or (identity == "bee.harness.window:app" and target in managed_window_targets), (identity, target)
+            managed_window_interfaces = {
+                "bee.harness.window:app": {"bee.application:client", "bee.placement.native:window"},
+                "bee.harness.window:picker": {"bee.application:client", "bee.desktop:appearance"},
+                "bee.harness.window:picker_view": {"bee.application:text", "bee.desktop:appearance"},
+            }
+            assert target_location.parts[0] in {"harness", "driver"} or target.startswith("bee.threads.records:") or (identity == "bee.harness.launch:admission" and target == "bee.placement:types") or target in managed_window_interfaces.get(identity, set()), (identity, target)
         if location.parts[0] == "harness" and location.parts[1:2] == ("carrier",):
             assert target_location.parts[0] in {"harness", "driver", "placement"} or target.startswith("bee.threads.records:") or (identity in gateway_configuration_consumers and target == "bee.gateway:configuration"), (identity, target)
         if location.parts[0] == "hive":

@@ -193,8 +193,8 @@ function M.stored_fields(value: unknown): (Object?, string?)
     for _, name in ipairs(M.NUMBER_FIELDS) do
         local val = object[name]
         if val ~= nil then
-            if type(val) ~= "number" or val ~= val or val == math.huge or val == -math.huge or val < 0 then
-                return nil, name .. " must be a finite non-negative number"
+            if type(val) ~= "number" or val ~= val or val == math.huge or val == -math.huge then
+                return nil, name .. " must be a finite number"
             end
             fields[name] = val
         end
@@ -235,5 +235,4 @@ function M.stored_fields(value: unknown): (Object?, string?)
     end
     return fields, nil
 end
-M.decode_stored_fields = M.stored_fields
 return M

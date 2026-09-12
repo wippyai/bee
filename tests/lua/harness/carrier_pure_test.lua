@@ -218,7 +218,9 @@ local function define_tests()
                 session_id = "sess-norm",
                 turn_id = "turn-norm",
                 prompt = "test prompt text",
-                duration_ms = 42,
+                -- The intake already accepts finite numeric observations;
+                -- record decoding must not strand one after admission.
+                duration_ms = -1,
                 tool_name = "tool_1",
             })
             test.is_nil(norm_err)
@@ -383,7 +385,7 @@ local function define_tests()
             bad_bool.fields = {event = "Stop", stop_hook_active = "not a bool"}
             test.is_nil(hook_records.batch(binding_id, turn_id, {bad_bool}))
             local bad_num = make_valid_item("e1", "PostToolUse", false)
-            bad_num.fields = {event = "PostToolUse", duration_ms = -1}
+            bad_num.fields = {event = "PostToolUse", duration_ms = "slow"}
             test.is_nil(hook_records.batch(binding_id, turn_id, {bad_num}))
             local bad_tool = make_valid_item("e1", "PreToolUse", false)
             bad_tool.fields = {event = "PreToolUse", tool_name = "has space"}

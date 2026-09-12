@@ -465,11 +465,11 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
         end
         local claimed = bounds.object(reply.value) or {}
         local items = claimed.hooks
-        if type(items) ~= "table" or #(items :: {Object}) == 0 then return drained, nil end
-        step(io, "hooks_claimed")
         local turn_id = session.turn_open and session.turn_id or nil
         local batch, batch_error = hook_records.batch(binding_id :: string, turn_id, items)
         if not batch then return drained, "hook batch: " .. tostring(batch_error) end
+        if #batch.event_ids == 0 then return drained, nil end
+        step(io, "hooks_claimed")
         local records = batch.records :: {{[string]: unknown}}
         local event_ids = batch.event_ids :: {string}
         local committed, commit_error = M.commit(io, session, records)

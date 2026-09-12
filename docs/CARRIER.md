@@ -348,6 +348,16 @@ polling stays the fallback through a missing projection, exhausted
 delivery, subscription loss (the next tick reopens it) and reconnect; the
 subscription is closed at settlement.
 
+## Claimed hook records
+
+`bee.harness.carrier:hook_records.batch` decodes up to 16 claimed hooks into
+canonical thread observations and their acknowledgment IDs. It rejects malformed
+or sparse batches and duplicate IDs before commit, preserves the gateway's
+accepted field values and stable event keys, and omits `turn_id` when no turn
+exists. An empty decoded batch is idle; a malformed reply is a delivery error.
+The structured carrier uses this helper. Native-window delivery is still being
+integrated and does not yet have end-to-end acceptance.
+
 ## 10. Generated configuration and stdin end of file
 
 Every driver binding supplies `configure`. During plan measurement, the carrier

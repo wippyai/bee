@@ -11,6 +11,7 @@ from workspace import fixture_workspace, pack_fixture
 
 
 FACADE = '''
+local recovered = false
 local function handle(raw: unknown): {[string]: unknown}
     if type(raw) ~= "table" then return {ok = false, replayed = false} end
     if raw.operation == "catalog" then
@@ -30,7 +31,27 @@ local function handle(raw: unknown): {[string]: unknown}
                 "fixture:01", "fixture:02", "fixture:03", "fixture:04", "fixture:05", "fixture:06",
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
+    elseif raw.operation == "status" then
+        local rows = {}
+        for index = 1, 12 do rows[index] = {id = "recovery:step" .. tostring(index), target_db = "recovery:db", module = "bee/recovery", status = "applied"} end
+        local receipt = {digest = string.rep("b", 64), action = "install", component = "bee/recovery",
+            baseline_revision = 42, state = recovered and "complete" or "recovery_required",
+            message = recovered and "Fixture recovery confirmed" or "Schema committed; receipt pending",
+            request = {action = "install", component = "bee/recovery", version = "2.0.0", parameters = {{name = "recovery:settings", value = {enabled = true}}}, migration_policy = "up"},
+            migration_work = {rows = rows}}
+        if raw.expected_digest then
+            assert(raw.expected_digest == string.rep("b", 64), "cold recovery status lost receipt digest")
+            return {ok = true, replayed = false, value = receipt}
+        end
+        return {ok = true, replayed = false, value = {operations = {receipt}, page = 1, total = 1, page_size = 25}}
     elseif raw.operation == "apply" then
+        if raw.expected_digest == string.rep("b", 64) then
+            assert(type(raw.request) == "table" and raw.request.component == "bee/recovery"
+                and raw.request.version == "2.0.0" and raw.request.migration_policy == "up"
+                and raw.request.parameters[1].value.enabled == true, "recovery changed stored request")
+            recovered = true
+            return {ok = true, replayed = true, value = {state = "complete", message = "Fixture recovery confirmed"}}
+        end
         assert(raw.expected_digest == string.rep("a", 64), "confirmation lost the displayed digest")
         return {ok = true, replayed = false, value = {state = "complete", message = "Fixture confirmation received"}}
     end
@@ -47,6 +68,36 @@ def exercise(project, packed, pack):
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Preview fixture", timeout=10)
+            # Cold recovery: no package selection or plan exists in this app.
+            ui.key(b"o")
+            ui.wait("MODULES  OPERATIONS")
+            ui.wait("bee/recovery")
+            ui.key(b"\x1b[B")
+            ui.wait("Schema committed; receipt pending")
+            ui.key(b"\x1b[6~" * 8)
+            ui.wait("recovery:step12")
+            ui.key(b"\r")
+            ui.wait("Review recovery")
+            ui.wait('"enabled":true')
+            ui.key(b"\x1b[B" * 24)
+            ui.wait("recovery:step12")
+            assert "Fixture recovery confirmed" not in ui.text(), "review dispatched recovery"
+            ui.key(b"\x1b")
+            ui.wait("MODULES  OPERATIONS")
+            ui.wait("recovery_required")
+            ui.key(b"\r")
+            ui.wait("Review recovery")
+            ui.key(b"\x1b[24~")
+            ui.wait("Review recovery", timeout=8)
+            ui.resize(60, 20)
+            ui.wait("Confirm recovery")
+            ui.key(b"\r")
+            ui.wait("Fixture recovery confirmed")
+            ui.wait("Receipt state: complete")
+            ui.key(b"r")
+            ui.wait("Fixture recovery confirmed")
+            ui.resize(100, 30)
+            ui.key(b"\x1b")
             ui.wait("Keyword: bee")
             ui.key(b"K")
             ui.wait("Keyword (empty is all): bee")
@@ -109,7 +160,7 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
-    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, F12, resize and shutdown pass")
+    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, cold recovery review/cancel/confirm/status, F12, resize and shutdown pass")
 
 
 if __name__ == "__main__":

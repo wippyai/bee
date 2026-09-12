@@ -63,7 +63,7 @@ local function recover(tamper)
         assert(changes:update({id = stored.id, kind = stored.kind, meta = stored.meta, data = stored.data}))
         assert(changes:apply())
     end
-    local result = call("apply", {action = "install", component = "acme/app", version = "1.0.0", migration_policy = "up"}, receipt.digest)
+    local result = call("apply", receipt.request, receipt.digest)
     if tamper then
         assert(result.ok and result.replayed and result.value.state == "recovery_required", "changed definition was accepted")
         assert(result.value.message:find("definition digest differs", 1, true), "unexpected definition refusal: " .. tostring(result.value.message))
@@ -103,4 +103,39 @@ local function linked()
     assert(result.value.migration_work.entries[1].target_db == "probe:db", "receipt did not capture selected database")
     logger:info("HUB_MIGRATION_SERVICE_PASS linked")
 end
-return {linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}
+local function history()
+    for _ = 1, 13 do
+        complete(apply({action = "install", component = "acme/app", version = "1.0.0"}))
+        complete(apply({action = "uninstall", component = "acme/app"}))
+    end
+    local revision = assert(registry.snapshot()):version():id()
+    local first = call("status", {page = 1})
+    local second = call("status", {page = 2})
+    assert(first.ok and second.ok, "operation history unavailable")
+    assert(first.value.total == 26 and first.value.page_size == 25 and #first.value.operations == 25, "history first page is incomplete")
+    assert(second.value.page == 2 and #second.value.operations == 1, "history second page is incomplete")
+    assert(first.value.operations[25].baseline_revision > second.value.operations[1].baseline_revision, "operation history order is unstable")
+    local latest = first.value.operations[1]
+    assert(latest.request.action == "uninstall" and latest.request.version == nil and latest.request.parameters == nil, "stored uninstall request is not callable")
+    complete(call("apply", latest.request, latest.digest))
+    assert(not call("status", {page = 0}).ok, "invalid history page accepted")
+    assert(not call("status", false).ok, "non-object history request accepted")
+    assert(not call("status", {page = 1}, first.value.operations[1].digest).ok, "mixed history and exact lookup accepted")
+    assert(assert(registry.snapshot()):version():id() == revision, "reading history or replaying completed work changed registry")
+    logger:info("HUB_MIGRATION_SERVICE_PASS history")
+end
+local function other_actor()
+    local history = call("status", {page = 1})
+    assert(history.ok and history.value.total == 0 and #history.value.operations == 0, "history leaked another actor's operations")
+    local state = assert(assert(registry.snapshot()):state())
+    for _, entry in ipairs(state.entries) do
+        if entry.id:sub(1, 19) == "bee.hub.operations:" then
+            local denied = call("status", nil, entry.data.digest)
+            assert(not denied.ok and denied.code == "DENIED", "foreign receipt was disclosed")
+            logger:info("HUB_OPERATION_HISTORY_ACTOR_PASS")
+            return
+        end
+    end
+    error("no foreign operation available for actor test")
+end
+return {history = history, other_actor = other_actor, linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}

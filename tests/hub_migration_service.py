@@ -64,7 +64,7 @@ def main():
             assert ready.select(15), "fixture Hub did not announce its listener"
             url = server.stdout.readline().strip()
         assert url.startswith("http://127.0.0.1:"), url
-        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper", "linked"):
+        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history"):
             workspace = folder / mode
             workspace.mkdir()
             prepare_fixture(workspace)
@@ -131,6 +131,16 @@ def main():
             output = result.stdout + result.stderr
             (workspace / "runtime.log").write_text(output)
             assert result.returncode == 0 and f"HUB_MIGRATION_SERVICE_PASS {mode}" in output, output
+            if mode == "history":
+                document = yaml.safe_load((probe / "_index.yaml").read_text())
+                for item in document["entries"]:
+                    if item["name"] == "run":
+                        item["method"] = "other_actor"
+                        item["meta"]["command"]["security"]["actor"]["id"] = "probe.other_actor"
+                (probe / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
+                foreign = subprocess.run(command, cwd=workspace, env=environment, capture_output=True, text=True, timeout=60)
+                (workspace / "other-actor.log").write_text(foreign.stdout + foreign.stderr)
+                assert foreign.returncode == 0 and "HUB_OPERATION_HISTORY_ACTOR_PASS" in foreign.stdout + foreign.stderr, foreign.stdout + foreign.stderr
             database = workspace / ".wippy/migration.db"
             assert database.is_file(), "missing target database"
             with sqlite3.connect(database) as connection:
@@ -156,7 +166,7 @@ def main():
         if server_log is not None:
             server_log.close()
     shutil.rmtree(folder)
-    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, orphan removal block, absent ledger and denied database grant pass")
+    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, absent ledger and denied database grant pass")
 
 
 if __name__ == "__main__":

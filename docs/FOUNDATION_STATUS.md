@@ -1,5 +1,13 @@
 # Foundation status
 
+The Hub history source adds caller-owned paged receipts and an explicit recovery
+review in Modules. Real service acceptance covers pagination, read-only access,
+actor isolation and replay using the persisted request. Source/pack application
+acceptance covers cold recovery without a local plan, cancellation, confirmation,
+status refresh, F12 and compact layouts. Strict lint and 68 focused Hub tests
+pass. The original migration source full regression also passes; the combined
+history source regression remains pending. This UI is not installed globally.
+
 Installed Hub build `f276bc2b` adds host-granted migration `up`, captured definition
 receipts, post-commit ledger verification and explicit recovery. A disposable
 local Hub proves real publication/SQL effects, completed replay, SIGKILL after

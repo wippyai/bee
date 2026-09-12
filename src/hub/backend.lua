@@ -81,7 +81,7 @@ local function handle(raw: unknown): Result
         local expected = bounds.line(value.expected_digest, 64)
         if not expected then return transaction.failure("INVALID", "confirmation digest is required") end
         return publish(value.request, expected)
-    elseif value.operation == "status" then return service.status(value.expected_digest) end
+    elseif value.operation == "status" then return service.status(value.expected_digest, value.request) end
     return transaction.failure("INVALID", "unknown Hub operation")
 end
 return {handle = handle}

@@ -33,7 +33,7 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules: [tty]
+  modules: [tty, json]
   imports:
     appearance: bee.desktop:appearance
     model: bee.modules:model

@@ -79,6 +79,13 @@ that digest and returns the calling actor's durable receipt. Receipts distinguis
 this state even when reading the receipt succeeds. An uncertain call must be
 followed by status inspection rather than a blind retry.
 
+Without `expected_digest`, `status` accepts `request = {page = 1}` and returns
+`{operations, page, total, page_size = 25}`. It lists only the caller's receipts,
+newest baseline revision first, from current registry state. It does not fetch
+registry version history or change registry state. New receipts also retain the
+normalized public request, verified against its request digest on read; old
+receipts remain readable without that field.
+
 Install/update default to migration policy `none`. The source supports `up`
 under host-selected exact database and function grants in
 `bee.hub:execution_scope`. Before publication it captures each selected migration's
@@ -128,8 +135,13 @@ and digest verifies the current root and captured inventory without republishing
 It marks the receipt complete only when they agree. A later root edit is retained
 and results in `recovery_required`; recovery does not restore the old registry.
 Older published receipts without captured evidence return `UNCERTAIN`. Status
-remains read-only. An operation-history browser and automatic recovery scheduling
-are not implemented.
+remains read-only. The source Modules application opens operation history with
+Operations or O, selects receipts with arrows or the mouse, and pages with left
+and right; PgUp/PgDn scrolls the selected receipt details. Recoverable receipts with a stored request offer a separate recovery
+review and confirmation. The review scrolls through saved version, JSON values
+and migration rows. Escape cancels without applying. Confirm sends the
+original request and digest; no automatic retry is scheduled. Older receipts
+without a request remain view-only. This history UI is not yet installed globally.
 
 ## Acceptance and remaining work
 

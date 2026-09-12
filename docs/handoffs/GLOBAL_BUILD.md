@@ -19,7 +19,8 @@ pass, as does native Modules install/update/uninstall. A native Agent fixture
 initially lost unchanged rows in partial terminal redraws; its bounded screen
 reader now passes the regression and actual selector acceptance. These are
 focused combined-source and native results; the original Hub source's full
-repository run remains separately tracked in `hub-migration-full-check.log`.
+repository run has now passed, separately recorded in `hub-migration-full-check.log`.
+That run covers source `0b63194`, not the later combined history UI source.
 
 Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. The executable and
 five sidecars were verified against their provenance, backed up, and replaced

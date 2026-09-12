@@ -84,12 +84,16 @@ local function main(value: unknown)
         generation = generation + 1
     end
 
+    local function read_operation(intent: model.Intent): string
+        return intent.operation == "status" and intent.expected_digest == nil and "history" or intent.operation
+    end
     local function fold_read(operation: string, value: Reply)
         if operation == "catalog" then model.apply_catalog(state, value)
         elseif operation == "installed" then model.apply_installed(state, value)
         elseif operation == "details" then model.apply_details(state, value)
         elseif operation == "plan" then model.apply_plan(state, value)
-        elseif operation == "status" then model.apply_result(state, value) end
+        elseif operation == "status" then model.apply_result(state, value)
+        elseif operation == "history" then model.apply_history(state, value) end
     end
 
     local function start_read()
@@ -98,7 +102,7 @@ local function main(value: unknown)
         requested = nil
         local future, err = funcs.new():async(model.HUB, next.intent)
         if not future or err then
-            if next.generation == generation then fold_read(next.intent.operation, {ok = false, replayed = false, code = "UNCERTAIN", message = tostring(err or "Hub dispatch unavailable"), value = nil}) end
+            if next.generation == generation then fold_read(read_operation(next.intent), {ok = false, replayed = false, code = "UNCERTAIN", message = tostring(err or "Hub dispatch unavailable"), value = nil}) end
             start_read()
             changed()
             return
@@ -106,12 +110,12 @@ local function main(value: unknown)
         local response = future:response()
         if not response then
             future:cancel()
-            if next.generation == generation then fold_read(next.intent.operation, {ok = false, replayed = false, code = "UNAVAILABLE", message = "Hub response channel unavailable", value = nil}) end
+            if next.generation == generation then fold_read(read_operation(next.intent), {ok = false, replayed = false, code = "UNAVAILABLE", message = "Hub response channel unavailable", value = nil}) end
             start_read()
             changed()
             return
         end
-        reading = {future = future, response = response, operation = next.intent.operation, generation = next.generation, retired = false}
+        reading = {future = future, response = response, operation = read_operation(next.intent), generation = next.generation, retired = false}
     end
 
     local function begin(intent: model.Intent): boolean
@@ -172,6 +176,14 @@ local function main(value: unknown)
         changed()
     end
 
+    local function operation_history()
+        invalidate()
+        model.show(state, "operations")
+        offset = 0
+        begin(model.operation_history_intent(state))
+        changed()
+    end
+
     local function check_status()
         local intent = model.status_intent(state)
         if not intent then status = "No measured operation to check"; changed(); return end
@@ -216,6 +228,25 @@ local function main(value: unknown)
             offset = math.floor(math.max(0, math.min(old_offset, next - 1)))
             if next > offset + visible_rows then offset = math.floor(math.max(0, next - visible_rows)) end
         end
+    end
+
+    local function operation_relative(delta: integer)
+        if #state.operations == 0 then return end
+        local current = 0
+        for index, item in ipairs(state.operations) do
+            if state.selected_operation and item.digest == state.selected_operation.digest then current = index; break end
+        end
+        local next = math.floor(math.max(1, math.min(#state.operations, current + delta)))
+        model.select_operation(state, state.operations[next].digest)
+        if next <= offset then offset = next - 1 end
+        if next > offset + visible_rows then offset = math.floor(math.max(0, next - visible_rows)) end
+        invalidate()
+        changed()
+    end
+
+    local function cancel_confirmation()
+        if state.recovery then operation_history()
+        else model.show(state, "plan"); changed() end
     end
 
     local function version_relative(delta: integer)
@@ -266,6 +297,20 @@ local function main(value: unknown)
     local function handle_hit(kind: string, key: string)
         status = ""
         if kind == "catalog" then invalidate(); catalog()
+        elseif kind == "operations" then operation_history()
+        elseif kind == "operation" then
+            local _, problem = model.select_operation(state, key)
+            if problem then status = problem end
+            invalidate(); changed()
+        elseif kind == "operations_previous" then model.set_operation_page(state, state.operation_page - 1); operation_history()
+        elseif kind == "operations_next" then model.set_operation_page(state, state.operation_page + 1); operation_history()
+        elseif kind == "recover" then
+            if apply_pending then status = "An apply is still pending"
+            else
+                local problem = model.recover(state)
+                if problem then status = problem else offset = 0; invalidate() end
+            end
+            changed()
         elseif kind == "installed" then invalidate(); installed()
         elseif kind == "readme" then reading_readme = true; offset = 0; changed()
         elseif kind == "versions" then reading_readme = false; offset = 0; changed()
@@ -286,7 +331,7 @@ local function main(value: unknown)
         elseif kind == "policy_down" then model.set_policy(state, "down"); invalidate(); changed()
         elseif kind == "review" then local problem = model.confirm(state); if problem then status = problem end; changed()
         elseif kind == "confirm" then confirm()
-        elseif kind == "cancel" then model.show(state, "plan"); changed()
+        elseif kind == "cancel" then cancel_confirmation()
         elseif kind == "status" then check_status() end
     end
 
@@ -297,6 +342,7 @@ local function main(value: unknown)
             local display_status = editor and status or (status ~= "" and status or state.notice)
             local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme)
             hits, offset = frame.hits, frame.offset
+            model.set_operation_detail_offset(state, frame.operation_detail_offset)
             visible_rows = math.floor(math.max(1, frame.capacity))
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -354,18 +400,26 @@ local function main(value: unknown)
                         status = ""
                         if key == "up" or letter == "k" then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
+                            elseif state.phase == "operations" then operation_relative(-1)
                             elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
                         elseif key == "down" or (letter == "j" and state.phase ~= "details") then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
+                            elseif state.phase == "operations" then operation_relative(1)
                             elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
+                        elseif (key == "pgup" or key == "pgdown") and state.phase == "operations" then
+                            model.set_operation_detail_offset(state, state.operation_detail_offset + (key == "pgup" and -3 or 3)); changed()
+                        elseif key == "left" and state.phase == "operations" then handle_hit("operations_previous", "")
+                        elseif key == "right" and state.phase == "operations" then handle_hit("operations_next", "")
                         elseif key == "left" and state.phase == "catalog" then model.set_page(state, state.page - 1); invalidate(); catalog()
                         elseif key == "right" and state.phase == "catalog" then model.set_page(state, state.page + 1); invalidate(); catalog()
                         elseif key == "left" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page - 1); invalidate(); details()
                         elseif key == "right" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page + 1); invalidate(); details()
                         elseif key == "enter" then
                             if state.phase == "catalog" or state.phase == "installed" then details()
+                            elseif state.phase == "operations" then handle_hit("recover", "")
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
+                        elseif letter == "o" or letter == "O" then operation_history()
                         elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
                         elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
                         elseif letter == "/" then begin_editor("query")
@@ -375,9 +429,9 @@ local function main(value: unknown)
                         elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
                         elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
                         elseif letter == "p" and state.phase == "details" then plan()
-                        elseif letter == "r" then if state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
+                        elseif letter == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
                         elseif key == "esc" or key == "escape" then
-                            if state.phase == "confirm" then model.show(state, "plan"); changed()
+                            if state.phase == "confirm" then cancel_confirmation()
                             elseif state.phase == "details" then model.show(state, "catalog"); changed()
                             elseif state.phase == "result" then model.show(state, "catalog"); changed()
                             else running = false end
@@ -388,6 +442,7 @@ local function main(value: unknown)
                     if hit then handle_hit(hit.kind, hit.key) end
                 elseif data.type == "mouse" and data.action == "wheel" then
                     if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
+                    elseif state.phase == "operations" then operation_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                 end

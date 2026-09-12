@@ -65,6 +65,14 @@ write plus successful close is the ready-marker precondition. It has no fsync
 operation: ready-marker ordering refuses interrupted process writes, but is not
 a machine-power-loss durability claim.
 
+An optional source can seed no bytes while recording the same source binding
+with `optional=true`. A matching retained home then preserves either an absent
+file or a file created by interactive sign-in; later machine credentials never
+replace either choice. Required sources still refuse a missing login file.
+Changing optional policy also changes the binding and refuses reuse. Empty
+provided bytes remain an error. This helper support does not yet enable optional
+machine-login projections in production profiles.
+
 ## Capability
 
 `capability.measure` starts a probe child with `process_group` and reads its

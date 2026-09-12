@@ -16,7 +16,7 @@ M.REPLAY_CHUNK_BYTES = 4096
 -- the harness may refresh them while it owns the private home.
 M.MAX_LOGIN_BYTES = 65536
 M.MAX_LOGIN_IDENTITY_BYTES = 2048
-type LoginSource = {provider: string, definition_id: string, definition_revision: integer}
+type LoginSource = {provider: string, definition_id: string, definition_revision: integer, optional: boolean?}
 type LoginDestination = {path: string, identity_path: string, source: LoginSource}
 local function key(kind: string, id: string): (string?, string?)
     local digest, err = hash.sha256(kind .. "\n" .. id)
@@ -186,7 +186,7 @@ end
 function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     local object = bounds.object(value)
     if not object then return nil, "login source must be an object" end
-    local unknown_field = bounds.fields(object, {"provider", "definition_id", "definition_revision"})
+    local unknown_field = bounds.fields(object, {"provider", "definition_id", "definition_revision", "optional"})
     if unknown_field then return nil, unknown_field end
     local provider = bounds.member(object.provider, {"codex", "claude"})
     if not provider then return nil, "login provider is unsupported" end
@@ -194,10 +194,14 @@ function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     if not definition_id then return nil, "login definition_id is not an identifier" end
     local definition_revision = bounds.integer(object.definition_revision)
     if not definition_revision or definition_revision < 1 then return nil, "login definition_revision is not positive" end
+    if object.optional ~= nil and type(object.optional) ~= "boolean" then return nil, "login optional must be boolean" end
+    local source: LoginSource = {provider = provider, definition_id = definition_id, definition_revision = definition_revision}
+    -- Required sources retain their existing identity encoding.
+    if object.optional == true then source.optional = true end
     local path, identity_path = login_paths(provider)
     if not path or not identity_path then return nil, "login provider is unsupported" end
     return {path = path, identity_path = identity_path,
-        source = {provider = provider, definition_id = definition_id, definition_revision = definition_revision}}, nil
+        source = source}, nil
 end
 local function read_bounded(vol: fs.FS, path: string, bound: integer): (string?, string?)
     local file, open_error = vol:open(path, "r")
@@ -250,10 +254,12 @@ end
 -- the non-secret source identity and leaves the destination untouched: the
 -- harness's opaque refresh is therefore retained without applying immutable
 -- configuration replay rules to authentication bytes.
-function M.retain_login(home_path: string, value: unknown, opaque: string, created: {[string]: boolean}?): (string?, string?, boolean?)
+function M.retain_login(home_path: string, value: unknown, opaque: string?, created: {[string]: boolean}?): (string?, string?, boolean?)
     local destination, decode_error = M.decode_login_source(value)
     if not destination then return nil, decode_error end
-    if #opaque == 0 or #opaque > M.MAX_LOGIN_BYTES then return nil, "login bytes exceed bound" end
+    if opaque == nil then
+        if destination.source.optional ~= true then return nil, "required login bytes missing" end
+    elseif #opaque == 0 or #opaque > M.MAX_LOGIN_BYTES then return nil, "login bytes exceed bound" end
     local identity, identity_error = canonical.encode(destination.source)
     if not identity then return nil, "encode retained login identity: " .. tostring(identity_error) end
     if #identity > M.MAX_LOGIN_IDENTITY_BYTES then return nil, "retained login identity exceeds bound" end
@@ -270,7 +276,7 @@ function M.retain_login(home_path: string, value: unknown, opaque: string, creat
         local found, read_error = read_bounded(vol, identity_target, M.MAX_LOGIN_IDENTITY_BYTES)
         if not found then return nil, read_error end
         if found ~= identity then return nil, "retained login source changed" end
-        if not target_exists then return nil, "retained login is incomplete" end
+        if not target_exists and destination.source.optional ~= true then return nil, "retained login is incomplete" end
         return target, nil, true
     end
     if target_exists then return nil, "retained login is incomplete" end
@@ -282,8 +288,12 @@ function M.retain_login(home_path: string, value: unknown, opaque: string, creat
     if parent and created then created[parent] = true end
     -- The ready marker is written only after the opaque bytes. A failed or
     -- interrupted seed leaves no accepted marker and is refused on resume.
-    local write_error = write_exclusive(vol, target, opaque)
-    if write_error then return nil, write_error end
+    if opaque ~= nil then
+        local write_error = write_exclusive(vol, target, opaque)
+        if write_error then return nil, write_error end
+    end
+    -- Optional absence commits the source binding too. Later CLI sign-in or
+    -- sign-out belongs to this private home and must not trigger reseeding.
     local identity_write_error = write_exclusive(vol, identity_target, identity)
     if identity_write_error then return nil, identity_write_error end
     return target, nil, false

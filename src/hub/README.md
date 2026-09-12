@@ -36,8 +36,18 @@ departing owners, including orphaned dependencies. Explicit `down` records its
 work before reverting migrations, retains the root on partial failure, and
 commits root removal with its receipt. Recovery checks the original definitions
 and skips ledger work already committed. Database and function access require
-exact host-selected grants. Targets must currently exist before installation;
-newly installed database resources remain unfinished. SQLite acceptance covers
-partial failure, retry and crashes before and after root removal.
+exact host-selected grants. A target may be an existing host resource or a SQL
+database supplied by this installation. Newly supplied database definitions are
+measured and verified after publication; an empty-ledger checkpoint is saved
+before any migration runs. Existing matching ledger IDs refuse migration until
+reviewed. Recovery verifies both migration and database definitions and skips
+work committed after that checkpoint. SQL resource fields such as .file and .dsn
+can use selected/default requirement values. SQLite acceptance covers new
+databases, ledger collisions, partial failure, retry and crashes around the
+checkpoint, schema commit and root removal.
 
 Authored component overlays and application launch/sharing admission remain separate responsibilities.
+
+Package migrations retain host-supplied permissions and registry reads, with
+Hub's private publication, receipt, worker and scope-editing policies removed
+from their call scope. Host database and function grants remain required.

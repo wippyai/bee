@@ -326,6 +326,9 @@ func checkServiceDatabase(folder, mode string) error {
 		return fmt.Errorf("%s database tables = %v, want %s", mode, rows, want)
 	}
 	if want == "" {
+		if strings.HasPrefix(mode, "newdb") {
+			return checkNewServiceDatabase(folder, mode)
+		}
 		return nil
 	}
 	rows, err = sqlLines(database, "SELECT id FROM _migrations ORDER BY id")
@@ -361,6 +364,85 @@ func checkServiceDatabase(folder, mode string) error {
 			return fmt.Errorf("partial second payload = %v", rows)
 		}
 	}
+	if strings.HasPrefix(mode, "newdb") {
+		return checkNewServiceDatabase(folder, mode)
+	}
+	return nil
+}
+
+func checkNewServiceDatabase(folder, mode string) error {
+	if mode == "newdb_denied" {
+		if _, err := os.Stat(filepath.Join(folder, ".wippy/package.db")); !os.IsNotExist(err) {
+			return fmt.Errorf("denied installation created its database: %v", err)
+		}
+		return nil
+	}
+	database := filepath.Join(folder, ".wippy/package.db")
+	if mode == "newdb_default" {
+		database = filepath.Join(folder, ".wippy/default-package.db")
+	} else if mode == "newdb_linked" {
+		database = filepath.Join(folder, ".wippy/selected-package.db")
+	}
+	if info, err := os.Stat(database); err != nil || info.IsDir() {
+		return fmt.Errorf("new database path %q is unavailable: %v", database, err)
+	}
+	rows, err := sqlLines(database, "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+	if err != nil {
+		return err
+	}
+	rollback := mode == "newdb_rollback" || mode == "newdb_rollback_tamper"
+	wantTables := "_migrations,fixture_payload"
+	if rollback {
+		wantTables = "_migrations"
+	}
+	if strings.Join(rows, ",") != wantTables {
+		return fmt.Errorf("%s database tables = %v, want %s", mode, rows, wantTables)
+	}
+	rows, err = sqlLines(database, "SELECT id FROM _migrations ORDER BY id")
+	if err != nil {
+		return err
+	}
+	if rollback {
+		if len(rows) != 0 {
+			return fmt.Errorf("%s migration ledger = %v", mode, rows)
+		}
+	} else {
+		if strings.Join(rows, ",") != "acme.storage:first" {
+			return fmt.Errorf("%s migration ledger = %v", mode, rows)
+		}
+		rows, err = sqlLines(database, "SELECT value FROM fixture_payload")
+		if err != nil {
+			return err
+		}
+		wantValue := "committed"
+		if mode == "newdb_collision" {
+			wantValue = "prior"
+		}
+		if strings.Join(rows, ",") != wantValue {
+			return fmt.Errorf("%s payload = %v, want %s", mode, rows, wantValue)
+		}
+	}
+	if mode == "newdb_tamper" || mode == "newdb_rollback_tamper" {
+		substituted := filepath.Join(folder, ".wippy/substituted.db")
+		if _, statErr := os.Stat(substituted); statErr == nil {
+			rows, err = sqlLines(substituted, "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+			if err != nil {
+				return err
+			}
+			if len(rows) != 0 {
+				return fmt.Errorf("changed database received migration effects: %v", rows)
+			}
+		}
+	}
+	return nil
+}
+
+func createCollisionDatabase(folder string) error {
+	database := filepath.Join(folder, ".wippy/package.db")
+	output, err := exec.Command("sqlite3", database, "CREATE TABLE _migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL); INSERT INTO _migrations VALUES ('acme.storage:first', '2026-01-01'); CREATE TABLE fixture_payload (value TEXT); INSERT INTO fixture_payload VALUES ('prior');").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("create collision database: %w: %s", err, strings.TrimSpace(string(output)))
+	}
 	return nil
 }
 
@@ -385,11 +467,11 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	}
 	index := serviceIndex(mode)
 	if mode == "tamper" {
-		index = appendPolicy(index, "fixture_operator", "registry.apply, registry.update.function.lua", "*")
+		index = appendPolicy(index, "fixture_operator", "registry.apply, registry.update.function.lua, registry.update.db.sql.sqlite", "*")
 		index = strings.Replace(index, "[probe:caller, probe:manage, probe:read]", "[probe:caller, probe:manage, probe:read, probe:fixture_operator]", 1)
 	}
-	if mode == "rollback_tamper" {
-		index = appendPolicy(index, "fixture_operator", "registry.apply, registry.update.function.lua", "*")
+	if mode == "rollback_tamper" || mode == "newdb_tamper" || mode == "newdb_rollback_tamper" {
+		index = appendPolicy(index, "fixture_operator", "registry.apply, registry.update.function.lua, registry.update.db.sql.sqlite", "*")
 		index = strings.Replace(index, "[probe:caller, probe:manage, probe:read]", "[probe:caller, probe:manage, probe:read, probe:fixture_operator]", 1)
 	}
 	if mode == "partial" {
@@ -403,11 +485,19 @@ func runMode(runtime, folder, hubURL, mode string) error {
 	if mode != "denied" {
 		index = appendPolicy(index, "migration_database", "db.get", "probe:db", "bee.hub:execution_scope")
 	}
+	if strings.HasPrefix(mode, "newdb") && mode != "newdb_denied" {
+		index = appendPolicy(index, "package_database", "db.get", "acme.storage:db", "bee.hub:execution_scope")
+	}
 	if err := os.WriteFile(filepath.Join(folder, "src/migration_probe/_index.yaml"), []byte(index), 0600); err != nil {
 		return err
 	}
+	if mode == "newdb_collision" {
+		if err := createCollisionDatabase(folder); err != nil {
+			return err
+		}
+	}
 	environment := runEnvironment(folder, hubURL)
-	if mode == "crash" || mode == "tamper" || mode == "rollback_crash" || mode == "rollback_published" || mode == "rollback_tamper" {
+	if mode == "crash" || mode == "tamper" || mode == "rollback_crash" || mode == "rollback_published" || mode == "rollback_tamper" || mode == "newdb_crash" || mode == "newdb_before" || mode == "newdb_checkpoint" || mode == "newdb_tamper" || mode == "newdb_rollback_tamper" {
 		service := filepath.Join(folder, "src/hub/service.lua")
 		original, err := os.ReadFile(service)
 		if err != nil {
@@ -416,13 +506,21 @@ func runMode(runtime, folder, hubURL, mode string) error {
 		anchor := "    if result then work.rows = result.rows end\n"
 		if mode == "rollback_published" {
 			anchor = "    -- Schema has changed: never restore an earlier registry version here.\n"
-		} else if strings.HasPrefix(mode, "rollback_") {
+		} else if strings.HasPrefix(mode, "rollback_") || mode == "newdb_rollback_tamper" {
 			anchor = "    if migration_error then return incomplete_removal(receipt, migration_error) end\n"
+		} else if mode == "newdb_before" {
+			anchor = "        -- Commit the empty-ledger evidence before any package function runs.\n"
+		} else if mode == "newdb_checkpoint" {
+			anchor = "        if not recorded.ok then return recorded end\n        return migrate(receipt)\n"
 		}
 		if strings.Count(string(original), anchor) != 1 {
 			return fmt.Errorf("migration service injection anchor %q is not unique", anchor)
 		}
-		injected := strings.Replace(string(original), anchor, anchor+"    print(\"HUB_MIGRATION_SCHEMA_COMMITTED\")\n    while true do end\n", 1)
+		replacement := anchor + "    print(\"HUB_MIGRATION_SCHEMA_COMMITTED\")\n    while true do end\n"
+		if mode == "newdb_checkpoint" {
+			replacement = "        if not recorded.ok then return recorded end\n        print(\"HUB_MIGRATION_SCHEMA_COMMITTED\")\n        while true do end\n        return migrate(receipt)\n"
+		}
+		injected := strings.Replace(string(original), anchor, replacement, 1)
 		if err := os.WriteFile(service, []byte(injected), 0600); err != nil {
 			return err
 		}
@@ -448,6 +546,16 @@ func runMode(runtime, folder, hubURL, mode string) error {
 			oldMethod, method = "rollback_published", "rollback_finish"
 		case "rollback_tamper":
 			oldMethod, method = "rollback_tamper", "rollback_changed"
+		case "newdb_crash":
+			oldMethod, method = "newdb_crash", "newdb_recover"
+		case "newdb_before":
+			oldMethod, method = "newdb_before", "newdb_start"
+		case "newdb_checkpoint":
+			oldMethod, method = "newdb_checkpoint", "newdb_ready"
+		case "newdb_tamper":
+			oldMethod, method = "newdb_tamper", "newdb_changed"
+		case "newdb_rollback_tamper":
+			oldMethod, method = "newdb_rollback_tamper", "newdb_rollback_changed"
 		}
 		updated := strings.Replace(string(data), "method: "+oldMethod, "method: "+method, 1)
 		if err := os.WriteFile(filepath.Join(folder, "src/migration_probe/_index.yaml"), []byte(updated), 0600); err != nil {
@@ -541,13 +649,17 @@ func run() error {
 		"    if options.direction == \"down\" then\n        local gate, problem = db:query(\"SELECT ready FROM fixture_rollback_gate\")\n        if not gate then db:release(); error(tostring(problem)) end\n    end\n    local tx = assert(db:begin())", 1)
 	packages := map[string][]wapp.Entry{
 		"acme/app@1.0.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.0.0"}, nil)},
-		"acme/storage@1.0.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"})},
+		"acme/storage@1.0.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"})},
 		"acme/app@1.1.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.1.0"}, nil)},
-		"acme/storage@1.1.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"}), packageEntryFor("acme.storage", "second", "function.lua", map[string]any{"source": second, "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})},
+		"acme/storage@1.1.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"}), packageEntryFor("acme.storage", "second", "function.lua", map[string]any{"source": second, "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})},
 		"acme/app@1.2.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.2.0"}, nil)},
-		"acme/storage@1.2.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "target_db", "ns.requirement", map[string]any{"default": "raw:default", "targets": []any{map[string]any{"entry": "acme.storage:first", "path": ".meta.target_db"}}}, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "raw:database", "timestamp": "2026-09-12T12:00:00Z"})},
+		"acme/storage@1.2.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "target_db", "ns.requirement", map[string]any{"default": "raw:default", "targets": []any{map[string]any{"entry": "acme.storage:first", "path": ".meta.target_db"}}}, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "raw:database", "timestamp": "2026-09-12T12:00:00Z"})},
 		"acme/app@1.3.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.3.0"}, nil)},
-		"acme/storage@1.3.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": rollbackFirst, "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"}), packageEntryFor("acme.storage", "second", "function.lua", map[string]any{"source": strings.ReplaceAll(string(source), "fixture_payload", "fixture_second"), "method": "run", "modules": []string{"sql"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})},
+		"acme/storage@1.3.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": rollbackFirst, "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T12:00:00Z"}), packageEntryFor("acme.storage", "second", "function.lua", map[string]any{"source": strings.ReplaceAll(string(source), "fixture_payload", "fixture_second"), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})},
+		"acme/app@1.4.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.4.0"}, nil)},
+		"acme/storage@1.4.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "db", "db.sql.sqlite", map[string]any{"file": ".wippy/package.db"}, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "acme.storage:db", "timestamp": "2026-09-12T12:00:00Z"})},
+		"acme/app@1.5.0":     {packageEntryFor("acme.app", "definition", "ns.definition", nil, nil), packageEntryFor("acme.app", "storage", "ns.dependency", map[string]any{"component": "acme/storage", "version": "1.5.0"}, nil)},
+		"acme/storage@1.5.0": {packageEntryFor("acme.storage", "definition", "ns.definition", nil, nil), packageEntryFor("acme.storage", "db", "db.sql.sqlite", map[string]any{"file": ".wippy/package.db"}, nil), packageEntryFor("acme.storage", "database_file", "ns.requirement", map[string]any{"default": ".wippy/default-package.db", "targets": []any{map[string]any{"entry": "acme.storage:db", "path": ".file"}}}, nil), packageEntryFor("acme.storage", "first", "function.lua", map[string]any{"source": string(source), "method": "run", "modules": []string{"sql", "security"}}, map[string]any{"type": "migration", "target_db": "acme.storage:db", "timestamp": "2026-09-12T12:00:00Z"})},
 	}
 	descriptions := filepath.Join(folder, "packages.json")
 	encoded, err := json.Marshal(packages)
@@ -566,7 +678,7 @@ func run() error {
 		_ = server.Wait()
 		_ = serverLog.Close()
 	}()
-	for _, mode := range []string{"absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history", "rollback", "rollback_crash", "rollback_published", "rollback_tamper", "rollback_partial"} {
+	for _, mode := range []string{"absent", "applied", "denied", "crash", "partial", "tamper", "linked", "history", "rollback", "rollback_crash", "rollback_published", "rollback_tamper", "rollback_partial", "newdb", "newdb_collision", "newdb_denied", "newdb_crash", "newdb_before", "newdb_checkpoint", "newdb_tamper", "newdb_rollback", "newdb_default", "newdb_linked", "newdb_rollback_tamper"} {
 		workspace := filepath.Join(folder, mode)
 		if err := os.Mkdir(workspace, 0700); err != nil {
 			return err
@@ -585,7 +697,7 @@ func run() error {
 		}
 	}
 	succeeded = true
-	fmt.Println("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, rollback/replay, rollback SIGKILL before/after root removal, changed rollback definition refusal, partial rollback recovery, absent ledger and denied database grant pass")
+	fmt.Println("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, paged actor-owned history, orphan removal block, rollback/replay, rollback SIGKILL before/after root removal, changed rollback definition refusal, partial rollback recovery, new package database/checkpoint/recovery/collision checks, selected/default database paths, absent ledger and denied database grant pass")
 	return nil
 }
 

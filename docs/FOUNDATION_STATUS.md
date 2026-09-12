@@ -1,5 +1,12 @@
 # Foundation status
 
+Global `7ba0b747` now combines Hub requirements editing and package-created
+database migrations with the latest Agent profile details/instructions.
+Native binary acceptance, source/pack Modules UI, 71 focused Hub cases and Go
+SQLite crash/rollback service acceptance pass. Full repository acceptance remains
+outstanding. See the [current build](handoffs/GLOBAL_BUILD.md) for exact evidence.
+The paragraphs below retain earlier checkpoint context.
+
 Global `4a35163e` adds the Agent profile summary: folder policy, instruction
 status and configured tool count. The native selector proves readable details
 before Claude/Codex launch. It retains the previous Agent/Hub implementation;
@@ -22,6 +29,15 @@ repository gate stopped at a 1.052-second exit against its one-second limit;
 this source is not installed globally. An editable
 instructions field, Docker profile execution and authenticated provider behavior
 remain unverified; see [driver instructions](../src/driver/README.md#instructions-and-turn-prompts).
+
+New database source supports migration targets supplied by the installation.
+It verifies database definitions and saves an empty-ledger checkpoint before
+running migrations. Real SQLite acceptance covers selected/default database paths,
+ledger collisions, denied grants, crashes around the checkpoint and schema commit,
+changed database refusal, and rollback of the new resource. Strict lint and 70
+focused Hub cases pass. Native acceptance passed on isolated Hub source `d6671c6`. Integration with
+global Agent profile source `d05b47c` is underway; the combined candidate and
+full acceptance remain pending.
 
 The rollback source keeps a durable removal receipt before calling down
 migrations, retains the root on partial failure, and publishes root deletion with

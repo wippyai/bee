@@ -166,6 +166,68 @@ local function rollback_recover(published, tamper)
     if not published then assert(result.value.migration_work.rows[1].reason == "not_applied", "restart reran reverted migration") end
     logger:info("HUB_MIGRATION_SERVICE_PASS " .. (published and "rollback_published" or "rollback_crash"))
 end
+local function new_database(mode)
+    local before = assert(registry.snapshot()):version():id()
+    local request = {action = "install", component = "acme/app", version = "1.4.0", migration_policy = "up"}
+    if mode == "newdb_default" or mode == "newdb_linked" then request.version = "1.5.0" end
+    if mode == "newdb_linked" then request.parameters = {{name = "acme.storage:database_file", value = ".wippy/selected-package.db"}} end
+    local result, digest = apply(request)
+    if mode == "newdb_denied" then
+        assert(not result.ok and result.code == "DENIED", "new database bypassed host grant")
+        assert(assert(registry.snapshot()):version():id() == before, "denied new database published a root")
+    elseif mode == "newdb_collision" then
+        assert(result.ok and result.value.state == "recovery_required" and not result.value.migration_work.ledger_checked, "existing ledger was adopted")
+        assert(result.value.message:find("already records migration", 1, true), tostring(result.value.message))
+        local retry = call("apply", request, digest)
+        assert(retry.ok and retry.value.state == "recovery_required" and #retry.value.migration_work.rows == 0, "retry adopted existing schema")
+    else
+        complete(result)
+        assert(result.value.migration_work.ledger_checked and result.value.migration_work.databases[1].id == "acme.storage:db", "new database checkpoint missing")
+        if mode == "newdb_rollback" or mode == "newdb_rollback_tamper" then
+            complete(apply({action = "uninstall", component = "acme/app", migration_policy = "down"}))
+            assert(#call("installed").value.modules == 0, "new database remained after rollback removal")
+        end
+    end
+    logger:info("HUB_MIGRATION_SERVICE_PASS " .. mode)
+end
+local function new_database_recover(mode)
+    local receipt = call("status", {page = 1}).value.operations[1]
+    assert(receipt and receipt.state == "published" and receipt.migration_work.databases[1].id == "acme.storage:db", "missing interrupted new database work")
+    assert(receipt.migration_work.ledger_checked == (mode ~= "newdb_before"), "new database ledger phase is wrong")
+    if mode == "newdb_tamper" then
+        local snapshot = assert(registry.snapshot())
+        local stored = assert(snapshot:get("acme.storage:db"))
+        stored.data.file = ".wippy/substituted.db"
+        local changes = assert(snapshot:changes())
+        assert(changes:update({id = stored.id, kind = stored.kind, meta = stored.meta, data = stored.data}))
+        assert(changes:apply())
+    end
+    local result = call("apply", receipt.request, receipt.digest)
+    if mode == "newdb_tamper" then
+        assert(result.ok and result.value.state == "recovery_required" and result.value.message:find("database definition differs", 1, true), "changed database was accepted")
+    else
+        complete(result)
+        local row = result.value.migration_work.rows[1]
+        assert(result.replayed and result.value.migration_work.ledger_checked, "new database did not recover")
+        if mode == "newdb_crash" then assert(row.reason == "already_applied", "new database recovery repeated schema work")
+        else assert(row.status == "applied", "new database checkpoint prevented initial migration") end
+    end
+    logger:info("HUB_MIGRATION_SERVICE_PASS " .. mode)
+end
+local function new_database_rollback_changed()
+    local receipt = call("status", {page = 1}).value.operations[1]
+    assert(receipt.action == "uninstall" and not receipt.removal.published and receipt.migration_work.databases[1].new == false, "rollback database evidence missing")
+    local snapshot = assert(registry.snapshot())
+    local stored = assert(snapshot:get("acme.storage:db"))
+    stored.data.file = ".wippy/substituted.db"
+    local changes = assert(snapshot:changes())
+    assert(changes:update({id = stored.id, kind = stored.kind, meta = stored.meta, data = stored.data}))
+    assert(changes:apply())
+    local result = call("apply", receipt.request, receipt.digest)
+    assert(result.ok and result.value.state == "recovery_required" and result.value.message:find("database definition differs", 1, true), "rollback accepted changed target database")
+    assert(#call("installed").value.modules == 2, "rollback removed definitions after target changed")
+    logger:info("HUB_MIGRATION_SERVICE_PASS newdb_rollback_tamper")
+end
 local function history()
     for _ = 1, 13 do
         complete(apply({action = "install", component = "acme/app", version = "1.0.0"}))
@@ -201,7 +263,16 @@ local function other_actor()
     end
     error("no foreign operation available for actor test")
 end
-return {rollback_partial = rollback_partial, rollback = rollback, rollback_crash = rollback, rollback_published = rollback, rollback_tamper = rollback,
+return {newdb_rollback_tamper = function() new_database("newdb_rollback_tamper") end, newdb_rollback_changed = new_database_rollback_changed,
+    newdb_default = function() new_database("newdb_default") end, newdb_linked = function() new_database("newdb_linked") end,
+    newdb = function() new_database("newdb") end,
+    newdb_collision = function() new_database("newdb_collision") end, newdb_denied = function() new_database("newdb_denied") end,
+    newdb_crash = function() new_database("newdb_crash") end, newdb_before = function() new_database("newdb_before") end,
+    newdb_checkpoint = function() new_database("newdb_checkpoint") end, newdb_tamper = function() new_database("newdb_tamper") end,
+    newdb_rollback = function() new_database("newdb_rollback") end,
+    newdb_recover = function() new_database_recover("newdb_crash") end, newdb_start = function() new_database_recover("newdb_before") end,
+    newdb_ready = function() new_database_recover("newdb_checkpoint") end, newdb_changed = function() new_database_recover("newdb_tamper") end,
+    rollback_partial = rollback_partial, rollback = rollback, rollback_crash = rollback, rollback_published = rollback, rollback_tamper = rollback,
     rollback_recover = function() rollback_recover(false, false) end,
     rollback_finish = function() rollback_recover(true, false) end,
     rollback_changed = function() rollback_recover(false, true) end,

@@ -167,7 +167,29 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             line(4, detail.description, theme.text)
             local tab_x = 2
             tab_x = button(tab_x, 5, "readme", reading and " [README] " or " README ", true)
-            tab_x = button(tab_x, 5, "versions", not reading and " [Versions] " or " Versions ", true)
+            tab_x = button(tab_x, 5, "versions", not reading and not state.requirements_open and " [Versions] " or " Versions ", true)
+            tab_x = button(tab_x, 5, "requirements", state.requirements_open and " [Requirements] " or " Requirements ", true)
+            if state.requirements_open then
+                local capacity = maximum(0, math.floor((height - 9) / 3))
+                local selected = state.selected_requirement
+                local first = math.max(1, selected - capacity + 1)
+                if not state.requirements_digest then line(7, state.notice ~= "" and state.notice or "Loading requirements…", theme.muted)
+                elseif #state.requirements == 0 then line(7, "This version declares no requirements.", theme.muted) end
+                for slot = 1, capacity do
+                    local row = state.requirements[first + slot - 1]
+                    if not row then break end
+                    local y = 6 + (slot - 1) * 3
+                    local active = first + slot - 1 == selected
+                    line(y, row.id .. " · " .. row.origin, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
+                    line(y + 1, row.json == "" and "Choose a JSON value" or row.json, theme.text)
+                    line(y + 2, table.concat(row.targets, " · "), theme.muted)
+                    hits[#hits + 1] = {kind = "requirement", key = row.id, x = 1, y = y, width = width, height = 3}
+                end
+                button(2, height - 2, "plan", " Prepare ", state.requirements_digest ~= nil)
+                line(height - 1, "Defaults are used unless you choose a value.", theme.muted)
+                line(height, status ~= "" and status or "↑↓ select · Enter edit JSON · V versions · P prepare", theme.muted)
+                return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = 0, operation_detail_offset = 0}
+            end
             if reading then
                 local lines: {string} = {}
                 local available = maximum(1, width - 4)

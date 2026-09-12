@@ -127,6 +127,7 @@ local function define_tests()
         test.it("captures removed owners from installed definitions and rejects edited recovery", function()
             local entry = package_entry({source = "return 1"})
             local state = runtime(entry)
+            state.entries[2] = {id = TARGET, kind = "db.sql.sqlite", meta = {}, data = {file = "existing.db"}, registry = {owner = COMPONENT}}
             local work, problem = migration_work.capture_removed(state, {[COMPONENT] = true})
             test.is_nil(problem)
             test.not_nil(work)
@@ -135,6 +136,29 @@ local function define_tests()
             test.is_true(migration_work.verify(work, state))
             test.is_false(migration_work.verify(work, runtime(package_entry({source = "return 2"}))))
             test.is_nil(migration_work.capture_removed(state, {["other/module"] = true}))
+        end)
+        test.it("requires a declared database and a checkpoint before new database results", function()
+            local entry = package_entry({source = "return 1"})
+            local measured = captured(entry)
+            local package = prepared(entry)
+            local missing, missing_error = migration_work.capture_databases(measured, package, {entries = {}})
+            test.is_nil(missing)
+            test.not_nil(missing_error)
+            package.resolved.packages[1].entries[2] = {id = TARGET, kind = "db.sql.sqlite", meta = {}, data = {file = "new.db"}}
+            local work, problem = migration_work.capture_databases(measured, package, {entries = {}})
+            test.is_nil(problem)
+            test.not_nil(work)
+            if not work then return end
+            test.eq(work.ledger_checked, false)
+            local extra = {id = "acme.storage:second", component = COMPONENT,
+                target_db = "acme.storage:other_db", timestamp = work.entries[1].timestamp,
+                digest = work.entries[1].digest}
+            test.is_nil(migration_work.decode({entries = {work.entries[1], extra}, rows = {},
+                databases = work.databases, ledger_checked = false}))
+            local invalid = {entries = work.entries, databases = work.databases, ledger_checked = false,
+                rows = {{id = ID, target_db = TARGET, module = COMPONENT, status = "applied"}}}
+            test.is_nil(migration_work.decode(invalid))
+            test.is_nil(migration_work.decode({entries = work.entries, rows = {}, ledger_checked = true}))
         end)
     end)
 end

@@ -147,8 +147,8 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
     end
     return {requirements = requirements, missing = missing}, nil
 end
--- Project only the component contract's migration database hole. Native
--- linking still owns all general paths and is verified after publication.
+-- Project migration database references and top-level SQL configuration holes.
+-- Native linking still owns general paths and is verified after publication.
 type Entry = {id: string, kind: string, meta: {[string]: unknown}, data: unknown}
 function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?)
     local supplied, supplied_error = dense(raw, "migration package entries", M.MAX_PACKAGE_ENTRIES)
@@ -162,11 +162,13 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
         if not entry or not id or not kind or not meta then return nil, "invalid migration package entry" end
         entries[#entries + 1] = {id = id, kind = kind, meta = meta, data = entry.data}
     end
-    local migrations: {[string]: boolean} = {}
+    local migrations: {[string]: boolean}, databases: {[string]: boolean} = {}, {}
     for _, entry in ipairs(entries) do
         if entry.meta.type == "migration" then migrations[entry.id] = true end
+        if entry.kind == "db.sql.sqlite" or entry.kind == "db.sql.postgres" or entry.kind == "db.sql.mysql" then databases[entry.id] = true end
     end
     local targets: {[string]: string} = {}
+    local configurations: {[string]: {[string]: unknown}} = {}
     for _, requirement in ipairs(selected.requirements) do
         if requirement.has_selected or requirement.has_default then
             local value = requirement.default
@@ -179,6 +181,18 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
                         return nil, "conflicting migration database requirements for " .. target.entry
                     end
                     targets[target.entry] = database
+                elseif databases[target.entry] then
+                    -- SQL resource configuration uses top-level native fields,
+                    -- such as .file or .dsn. Do not reproduce the general linker.
+                    local field = target.path:match("^%.?([%w_]+)$")
+                    if field and field ~= "meta" then
+                        local configuration = configurations[target.entry] or {}
+                        if configuration[field] ~= nil and canonical.encode(configuration[field]) ~= canonical.encode(value) then
+                            return nil, "conflicting migration database configuration for " .. target.entry .. "." .. field
+                        end
+                        configuration[field] = value
+                        configurations[target.entry] = configuration
+                    end
                 end
             end
         end
@@ -191,7 +205,17 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
             for key, value in pairs(entry.meta) do meta[key] = value end
             meta.target_db = database
             result[#result + 1] = {id = entry.id, kind = entry.kind, meta = meta, data = entry.data}
-        else result[#result + 1] = entry end
+        else
+            local configuration = configurations[entry.id]
+            if configuration then
+                local original = bounds.object(entry.data)
+                if not original then return nil, "invalid SQL resource configuration: " .. entry.id end
+                local data: {[string]: unknown} = {}
+                for key, value in pairs(original) do data[key] = value end
+                for key, value in pairs(configuration) do data[key] = value end
+                result[#result + 1] = {id = entry.id, kind = entry.kind, meta = entry.meta, data = data}
+            else result[#result + 1] = entry end
+        end
     end
     return result, nil
 end

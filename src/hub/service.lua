@@ -244,7 +244,7 @@ local function remove_with_migrations(receipt: Receipt): Result
     end
     local source = migration_runner.source(entries)
     local result, migration_error = migrations.execute(source, {operation = "down", entry_ids = ids, components = components})
-    if result then receipt.migration_work = {entries = work.entries, rows = result.rows} end
+    if result then receipt.migration_work = {entries = work.entries, rows = result.rows, databases = work.databases, ledger_checked = work.ledger_checked} end
     if migration_error then return incomplete_removal(receipt, migration_error) end
     -- Recheck after package functions have run, before deleting definitions.
     local current, current_error = registry.snapshot()
@@ -296,6 +296,28 @@ local function migrate(receipt: Receipt): Result
     if not allowed then
         receipt.state, receipt.message = "recovery_required", grant_error or "migration permissions changed"
         return save(receipt)
+    end
+    if work.databases and not work.ledger_checked then
+        local targets: {[string]: boolean} = {}
+        for _, database in ipairs(work.databases) do if database.new then targets[database.id] = true end end
+        local readable = migration_runner.source(entries)
+        for _, entry in ipairs(work.entries) do
+            if targets[entry.target_db] then
+                local applied, ledger_error = readable.is_applied(entry.target_db, entry.id)
+                if applied == nil or applied then
+                    receipt.state = "recovery_required"
+                    receipt.message = ledger_error or "new database already records migration " .. entry.id .. "; review existing schema"
+                    return save(receipt)
+                end
+            end
+        end
+        -- Commit the empty-ledger evidence before any package function runs.
+        -- A restart before this checkpoint repeats only the read, never an up.
+        receipt.migration_work = {entries = work.entries, rows = work.rows, databases = work.databases, ledger_checked = true}
+        receipt.state, receipt.message = "published", "New database ledger checked; migrations have not started"
+        local recorded = save(receipt)
+        if not recorded.ok then return recorded end
+        return migrate(receipt)
     end
     local ids: {string}, components: {string} = {}, {}
     local seen: {[string]: boolean} = {}
@@ -403,14 +425,21 @@ function M.apply(raw: unknown, expected: unknown): Result
         if not allowed then return transaction.failure("DENIED", grant_error or "host migration grants required") end
         local state, state_error = baseline:state()
         if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+        local deferred, database_error = migration_work.capture_databases(captured, prepared, state)
+        if not deferred then return transaction.failure("UNAVAILABLE", database_error or "cannot capture new migration databases") end
+        captured = deferred
+        local new_targets: {[string]: boolean} = {}
+        for _, database in ipairs(captured.databases or {}) do if database.new then new_targets[database.id] = true end end
         local readable = migration_runner.source(entries)
         for _, entry in ipairs(captured.entries) do
-            local applied, ledger_error = readable.is_applied(entry.target_db, entry.id)
-            if applied == nil then return transaction.failure("UNAVAILABLE", ledger_error or "cannot read migration ledger") end
-            if applied then
-                local unchanged, change_error = migration_work.verify({entries = {entry}, rows = {}}, state)
-                if not unchanged then
-                    return transaction.failure("BLOCKED", "already-applied migration definition differs: " .. entry.id .. "; " .. tostring(change_error))
+            if not new_targets[entry.target_db] then
+                local applied, ledger_error = readable.is_applied(entry.target_db, entry.id)
+                if applied == nil then return transaction.failure("UNAVAILABLE", ledger_error or "cannot read migration ledger") end
+                if applied then
+                    local unchanged, change_error = migration_work.verify({entries = {entry}, rows = {}}, state)
+                    if not unchanged then
+                        return transaction.failure("BLOCKED", "already-applied migration definition differs: " .. entry.id .. "; " .. tostring(change_error))
+                    end
                 end
             end
         end

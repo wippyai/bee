@@ -13,7 +13,8 @@ local MAX_PACKAGE_ENTRIES = 512
 local MAX_STATE_ENTRIES = 16384
 
 type Definition = {id: string, component: string, target_db: string, timestamp: string, digest: string}
-type Work = {entries: {Definition}, rows: {migrations.Row}}
+type Database = {id: string, owner: string, kind: string, digest: string, new: boolean}
+type Work = {entries: {Definition}, rows: {migrations.Row}, databases: {Database}?, ledger_checked: boolean?}
 
 local function dense(raw: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(raw) ~= "table" then return nil, label .. " must be a dense list" end
@@ -120,7 +121,7 @@ end
 function M.decode(raw: unknown): (Work?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "migration work must be an object" end
-    local extra = bounds.fields(value, {"entries", "rows"})
+    local extra = bounds.fields(value, {"entries", "rows", "databases", "ledger_checked"})
     if extra then return nil, extra end
     local supplied, list_error = dense(value.entries, "migration work entries", MAX_WORK)
     if not supplied then return nil, list_error end
@@ -136,7 +137,31 @@ function M.decode(raw: unknown): (Work?, string?)
     end
     local rows, rows_error = decode_rows(value.rows, definitions)
     if not rows then return nil, rows_error end
-    return {entries = entries, rows = rows}, nil
+    local databases: {Database}? = nil
+    if value.databases ~= nil then
+        local raw_databases, database_error = dense(value.databases, "migration databases", MAX_WORK)
+        if not raw_databases or #raw_databases == 0 then return nil, database_error or "migration databases must not be empty" end
+        if type(value.ledger_checked) ~= "boolean" then return nil, "migration databases need a ledger checkpoint" end
+        if not value.ledger_checked and #rows > 0 then return nil, "migration results precede the ledger checkpoint" end
+        local targets: {[string]: boolean}, seen: {[string]: boolean} = {}, {}
+        for _, entry in ipairs(entries) do targets[entry.target_db] = true end
+        databases = {}
+        for _, raw_database in ipairs(raw_databases) do
+            local item = bounds.object(raw_database)
+            if not item or bounds.fields(item, {"id", "owner", "kind", "digest", "new"}) then return nil, "invalid migration database definition" end
+            local id, measured = target(item.id), digest(item.digest)
+            local owner = item.owner == "" and "" or component(item.owner)
+            local kind = bounds.member(item.kind, {"db.sql.sqlite", "db.sql.postgres", "db.sql.mysql"})
+            if not id or not targets[id] or seen[id] or owner == nil or not measured or not kind or type(item.new) ~= "boolean"
+                or (item.new and owner == "") then return nil, "invalid migration database definition" end
+            databases[#databases + 1] = {id = id, owner = owner, kind = kind, digest = measured, new = item.new}
+            seen[id] = true
+        end
+        for id in pairs(targets) do
+            if not seen[id] then return nil, "missing migration database definition: " .. id end
+        end
+    elseif value.ledger_checked ~= nil then return nil, "ledger checkpoint has no database definitions" end
+    return {entries = entries, rows = rows, databases = databases, ledger_checked = value.ledger_checked}, nil
 end
 
 function M.capture(prepared: plan.Prepared): (Work?, string?)
@@ -199,7 +224,66 @@ function M.capture(prepared: plan.Prepared): (Work?, string?)
         entries[#entries + 1] = {id = id, component = package_entry.component, target_db = target_db,
             timestamp = at, digest = measured}
     end
-    return {entries = entries, rows = {}}, nil
+    local work: Work = {entries = entries, rows = {}, databases = nil, ledger_checked = nil}
+    return work, nil
+end
+
+-- Capture existing target definitions too: replacing a resource must not turn
+-- recovery into a skip against a different, empty database.
+function M.capture_databases(work: Work, prepared: plan.Prepared?, state: unknown): (Work?, string?)
+    local snapshot = bounds.object(state)
+    if not snapshot then return nil, "invalid database baseline" end
+    local resident, state_error = dense(snapshot.entries, "database baseline entries", MAX_STATE_ENTRIES)
+    if not resident then return nil, state_error end
+    local candidates: {[string]: Database} = {}
+    local present: {[string]: boolean}, wanted: {[string]: boolean} = {}, {}
+    for _, entry in ipairs(work.entries) do wanted[entry.target_db] = true end
+    local function database(raw: unknown, owner: string, is_new: boolean): (Database?, string?)
+        local entry = bounds.object(raw)
+        local id = entry and target(entry.id) or nil
+        local kind = entry and bounds.member(entry.kind, {"db.sql.sqlite", "db.sql.postgres", "db.sql.mysql"}) or nil
+        if not entry or not id or not kind then return nil, nil end
+        local meta = bounds.object(entry.meta) or {}
+        local measured, measure_error = measure(kind, meta, entry.data)
+        if not measured then return nil, measure_error end
+        return {id = id, owner = owner, kind = kind, digest = measured, new = is_new}, nil
+    end
+    for _, raw_entry in ipairs(resident) do
+        local entry = bounds.object(raw_entry)
+        local id = entry and bounds.id(entry.id) or nil
+        if id and wanted[id] then
+            present[id] = true
+            local ownership = entry and bounds.object(entry.registry) or nil
+            local owner = ownership and ownership.owner or ""
+            if type(owner) ~= "string" then return nil, "invalid database ownership" end
+            local captured, problem = database(entry, owner, false)
+            if problem then return nil, problem end
+            if captured then candidates[id] = captured end
+        end
+    end
+    if prepared then
+        for _, package in ipairs(prepared.resolved.packages) do
+            for _, entry in ipairs(package.entries) do
+                if wanted[entry.id] and not present[entry.id] then
+                    local captured, problem = database(entry, package.component, true)
+                    if problem then return nil, problem end
+                    if captured then candidates[entry.id] = captured end
+                end
+            end
+        end
+    end
+    local databases: {Database}, seen: {[string]: boolean} = {}, {}
+    local checked = true
+    for _, entry in ipairs(work.entries) do
+        if not seen[entry.target_db] then
+            local captured = candidates[entry.target_db]
+            if not captured then return nil, "migration database is not an existing or planned SQL resource: " .. entry.target_db end
+            databases[#databases + 1] = captured
+            if captured.new then checked = false end
+            seen[entry.target_db] = true
+        end
+    end
+    return M.decode({entries = work.entries, rows = work.rows, databases = databases, ledger_checked = checked})
 end
 
 -- Removal captures installed definitions, including orphaned dependencies.
@@ -225,7 +309,9 @@ function M.capture_removed(state: unknown, components: {[string]: boolean}): (Wo
         end
     end
     if #entries == 0 then return nil, nil end
-    return M.decode({entries = entries, rows = {}})
+    local work, problem = M.decode({entries = entries, rows = {}})
+    if not work then return nil, problem end
+    return M.capture_databases(work, nil, state)
 end
 
 function M.entries(work: Work): {migrations.Entry}
@@ -274,6 +360,24 @@ function M.verify(work: Work, state: unknown): (boolean, string?)
         local measured, measure_error = measure("function.lua", meta, entry.data)
         if not measured then return false, measure_error end
         if measured ~= definition.digest then return false, "migration definition digest differs at runtime: " .. definition.id end
+    end
+    for _, database in ipairs(checked.databases or {}) do
+        local found: {[string]: unknown}? = nil
+        for _, raw_entry in ipairs(raw_entries) do
+            local entry = bounds.object(raw_entry)
+            if entry and entry.id == database.id then
+                if found then return false, "duplicate migration database " .. database.id end
+                found = entry
+            end
+        end
+        local ownership = found and bounds.object(found.registry) or nil
+        local meta = found and bounds.object(found.meta) or nil
+        if not found or not ownership or (ownership.owner or "") ~= database.owner or found.kind ~= database.kind then
+            return false, "migration database ownership or kind differs: " .. database.id
+        end
+        local measured, measure_error = measure(database.kind, meta or {}, found.data)
+        if not measured then return false, measure_error end
+        if measured ~= database.digest then return false, "migration database definition differs: " .. database.id end
     end
     return true, nil
 end

@@ -91,6 +91,7 @@ local function main(value: unknown)
         if operation == "catalog" then model.apply_catalog(state, value)
         elseif operation == "installed" then model.apply_installed(state, value)
         elseif operation == "details" then model.apply_details(state, value)
+        elseif operation == "inspect" then model.apply_inspect(state, value)
         elseif operation == "plan" then model.apply_plan(state, value)
         elseif operation == "status" then model.apply_result(state, value)
         elseif operation == "history" then model.apply_history(state, value) end
@@ -164,6 +165,14 @@ local function main(value: unknown)
         if not intent then status = "Select a package first"; changed(); return end
         model.show(state, "details")
         begin(intent)
+        changed()
+    end
+
+    local function requirements()
+        model.show_requirements(state, true)
+        reading_readme, offset = false, 0
+        local intent = model.inspect_intent(state)
+        if intent then begin(intent) else status = "Choose a version first" end
         changed()
     end
 
@@ -281,7 +290,7 @@ local function main(value: unknown)
             return
         else
             local problem = model.set_parameter(state, active.name or "", active.buffer)
-            if problem then status = problem else status = "Parameter saved"; invalidate() end
+            if problem then status = problem else status = "Parameter saved"; invalidate(); if state.requirements_open then requirements() end end
             changed()
         end
         editor = nil
@@ -291,6 +300,14 @@ local function main(value: unknown)
         if field == "query" then editor = {field = field, buffer = state.query}; status = "Search: " .. state.query
         elseif field == "keyword" then editor = {field = field, buffer = state.keyword}; status = "Keyword (empty is all): " .. state.keyword
         else editor = {field = "parameter_name", buffer = ""}; status = "Parameter name (namespace:name): " end
+        changed()
+    end
+
+    local function edit_requirement()
+        local row = state.requirements[state.selected_requirement]
+        if not row then status = "Select a requirement first"; changed(); return end
+        editor = {field = "parameter_value", buffer = row.json, name = row.id}
+        status = row.id .. " JSON: " .. row.json
         changed()
     end
 
@@ -312,8 +329,12 @@ local function main(value: unknown)
             end
             changed()
         elseif kind == "installed" then invalidate(); installed()
-        elseif kind == "readme" then reading_readme = true; offset = 0; changed()
-        elseif kind == "versions" then reading_readme = false; offset = 0; changed()
+        elseif kind == "requirements" then requirements()
+        elseif kind == "requirement" then
+            for index, row in ipairs(state.requirements) do if row.id == key then model.select_requirement(state, index); break end end
+            edit_requirement()
+        elseif kind == "readme" then model.show_requirements(state, false); reading_readme = true; offset = 0; changed()
+        elseif kind == "versions" then model.show_requirements(state, false); reading_readme = false; offset = 0; changed()
         elseif kind == "details" then details()
         elseif kind == "plan" then plan()
         elseif kind == "component" then choose(key, true)
@@ -401,10 +422,12 @@ local function main(value: unknown)
                         if key == "up" or letter == "k" then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
                             elseif state.phase == "operations" then operation_relative(-1)
+                            elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement - 1); changed()
                             elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
                         elseif key == "down" or (letter == "j" and state.phase ~= "details") then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
                             elseif state.phase == "operations" then operation_relative(1)
+                            elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + 1); changed()
                             elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
                         elseif (key == "pgup" or key == "pgdown") and state.phase == "operations" then
                             model.set_operation_detail_offset(state, state.operation_detail_offset + (key == "pgup" and -3 or 3)); changed()
@@ -415,11 +438,13 @@ local function main(value: unknown)
                         elseif key == "left" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page - 1); invalidate(); details()
                         elseif key == "right" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page + 1); invalidate(); details()
                         elseif key == "enter" then
-                            if state.phase == "catalog" or state.phase == "installed" then details()
+                            if state.phase == "details" and state.requirements_open then edit_requirement()
+                            elseif state.phase == "catalog" or state.phase == "installed" then details()
                             elseif state.phase == "operations" then handle_hit("recover", "")
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
                         elseif letter == "o" or letter == "O" then operation_history()
+                        elseif letter == "e" and state.phase == "details" then requirements()
                         elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
                         elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
                         elseif letter == "/" then begin_editor("query")
@@ -443,6 +468,7 @@ local function main(value: unknown)
                 elseif data.type == "mouse" and data.action == "wheel" then
                     if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
                     elseif state.phase == "operations" then operation_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                    elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)); changed()
                     elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                 end

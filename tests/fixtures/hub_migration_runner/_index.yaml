@@ -10,7 +10,7 @@ entries:
 - name: policy
   kind: security.policy
   policy:
-    actions: [db.get, funcs.call, registry.get]
+    actions: [db.get, funcs.call, registry.get, funcs.security, security.scope.create]
     resources: ['*']
     effect: allow
 - name: adapter

@@ -89,7 +89,18 @@ function M.source(entries: {migrations.Entry}): migrations.Source
         if not entry or entry.meta.target_db ~= target then error("migration is outside the captured database selection") end
         local allowed, grant_error = M.allowed({entry})
         if not allowed then error(grant_error or "migration grant denied") end
-        local result, call_error = funcs.call(id, {database_id = target, direction = direction, id = id})
+        -- Retain host policies, including denials, but never pass the
+        -- component's private publication/worker authority to package code.
+        local scope = security.scope()
+        if not scope then error("migration execution scope unavailable") end
+        for _, name in ipairs({"execution_policy", "publisher_policy", "dependency_policy",
+            "receipt_policy", "worker_policy", "worker_name_policy", "worker_reply_policy",
+            "migration_context_policy"}) do
+            scope = scope:without("bee.hub:" .. name)
+        end
+        local executor, scope_error = funcs.new():with_scope(scope)
+        if not executor then error(tostring(scope_error)) end
+        local result, call_error = executor:call(id, {database_id = target, direction = direction, id = id})
         if call_error then error(tostring(call_error)) end
         if type(result) ~= "table" or type(result.status) ~= "string" then error("invalid migration function result") end
         if result.status == "error" then error(type(result.error) == "string" and result.error or "migration function failed") end

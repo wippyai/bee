@@ -34,16 +34,18 @@ The broker projects API keys into `ANTHROPIC_API_KEY` (Claude) or
 host-selected `fs.directory` using `source.kind: fs_directory`; their filenames
 are fixed by provider: `auth.json` for Codex and `.credentials.json` for Claude.
 Callers cannot choose a path, filename or mount. The host's `bee:credential_file_policy`
-grants filesystem access separately from source metadata and is attached only
-to materialization. Registry source metadata in `bee:credential_sources` alone cannot
-grant filesystem read: if a source ref is admitted by metadata but absent from
-`bee:credential_file_policy`, materialization fails closed (`UNAVAILABLE`). Adding
-another source requires an explicit host policy grant naming the login root.
+grants filesystem access separately from source metadata and is attached to
+availability for a stat-only check and to materialization for bounded reads.
+Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
+read: if a source ref is admitted by metadata but absent from
+`bee:credential_file_policy`, availability and materialization fail closed
+(`UNAVAILABLE`). Adding another source requires an explicit host policy grant
+naming the login root.
 
 Ordinary callers (workspace managers, projection subjects, and outsiders) cannot
 directly read login files or invoke `check` or `materialize`. The broker methods
-accessible to ordinary callers (`define`, `issue_projection`, `list`, `revoke`,
-`revoke_all`, `capabilities`) and error replies carry only identifiers, digests
+accessible to ordinary callers (`define`, `issue_projection`, `list`, `availability`,
+`revoke`, `revoke_all`, `capabilities`) and error replies carry only identifiers, digests
 and status views; they never echo secret bytes. Secret file contents are strictly
 absent from persisted database state: definitions, projections, generations,
 epochs, and the schema migration ledger (`bee_credential_schema_migrations`) never

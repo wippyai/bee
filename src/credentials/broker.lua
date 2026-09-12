@@ -416,10 +416,10 @@ function M.availability(value: unknown): Reply
         db:release()
         return fail("INVALID", "credential source directory is invalid")
     end
-    local volume, volume_error = fs.get(source_ref)
+    local volume = fs.get(source_ref)
     if not volume then
         db:release()
-        return fail("UNAVAILABLE", "credential source volume unavailable: " .. tostring(volume_error))
+        return fail("UNAVAILABLE", "credential source volume unavailable")
     end
     local info, stat_error = volume:stat("/" .. destination)
     db:release()

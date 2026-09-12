@@ -242,6 +242,24 @@ EXIT while transport remains alive; that runtime gate is unchanged.
 
 ## September 12: managed Agent MCP and Docker requirements
 
+Local gateway activation work now reads an OS-selected loopback address through
+the native supervisor state. The candidate uses runtime HTTP port-zero PR #737,
+composed onto Bee's current launch-ABI pin; this is not a released runtime pin.
+Two native address cases and 775 unit cases pass, including the appended gateway
+migration 8's preservation of populated credentials and listener state. Explicit
+open and readiness now also compare native execution identity. Focused native
+admission, drain preservation and explicit-open checks pass, as do two-runtime
+gateway operations. Actual native service restart acceptance remains unfinished.
+
+The checksummed upstream patch is now tracked as
+`build/patches/runtime-http-port0.patch`, with provenance alongside it. The
+manifest no longer references ignored local build input. Production port-zero
+listeners pass the two-runtime gateway acceptance. Default profiles now declare
+the two bound-thread read tools; Claude/Codex also declare the five supported
+hooks. Standalone managed launch and authenticated child MCP pass using fixture
+executables. The refreshed full regression remains pending. See GLOBAL_BUILD.md
+for the installed build and its limits.
+
 Source audit of exact runtime pin `291f5c6b708c80afe5da07f3223767573b4d183f`
 identifies two remaining native seams. These are requirements, not implemented
 Bee APIs or passing integration claims:

@@ -144,6 +144,18 @@ confirms the Claude and Grok flags; Agy 1.2.2
 bundled customization documentation describes the global-rules path; pure delivery tests do not prove a provider
 applied the instructions during an authenticated turn.
 
+### Planned instruction builders
+
+Profile memory must contribute additional instructions, preserving the harness's
+built-in guidance. Follow native `wippy/agent` traits: `build_func_id` contributes
+prompt text at compilation with merged context, while `prompt_func_id` runs on
+each native agent step. Bee has not implemented these fields for CLI profiles.
+A builder must run under explicitly granted permissions and current `ctx`, return
+bounded text, and become part of the measured launch configuration. Persistent
+memory remains owned by its existing store; instruction building grants no store
+access. Refreshing instructions during a running CLI conversation requires that
+harness's supported mechanism and its own acceptance proof.
+
 ## Claude authentication path
 
 The Claude launch uses stream-json output for structured turns and inline

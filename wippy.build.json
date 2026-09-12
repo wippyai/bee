@@ -13,7 +13,12 @@
       "meshclient",
       "physicalclient"
     ],
-    "patches": []
+    "patches": [
+      {
+        "path": "build/patches/runtime-http-port0.patch",
+        "sha256": "e6903cb4b71912d5f3cb96b18e281f964fd6d2bc523740b20f5c882ac24ca033"
+      }
+    ]
   },
   "application": {
     "module": "bee/bee",

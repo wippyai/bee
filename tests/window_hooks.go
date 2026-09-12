@@ -117,13 +117,13 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	}
 	hostContent := string(hostBytes)
 
-	addrAnchor := "address: 127.0.0.1:18790"
+	addrAnchor := "address: 127.0.0.1:0"
 	if !strings.Contains(hostContent, addrAnchor) {
 		return "", fmt.Errorf("missing anchor %q in _index.yaml", addrAnchor)
 	}
 	hostContent = strings.Replace(hostContent, addrAnchor, "address: "+endpointAddress, 1)
 
-	readyAnchor := "http://127.0.0.1:18790/ready"
+	readyAnchor := "http://127.0.0.1:*/ready"
 	if !strings.Contains(hostContent, readyAnchor) {
 		return "", fmt.Errorf("missing anchor %q in _index.yaml", readyAnchor)
 	}
@@ -138,6 +138,20 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 
 	if err := os.WriteFile(hostFile, []byte(hostContent), 0644); err != nil {
 		return "", fmt.Errorf("write _index.yaml: %w", err)
+	}
+
+	gatewayFile := filepath.Join(tempDir, "src", "gateway", "_index.yaml")
+	gatewayBytes, err = os.ReadFile(gatewayFile)
+	if err != nil {
+		return "", err
+	}
+	const selectedListener = "default: bee:gateway_listener"
+	if !strings.Contains(string(gatewayBytes), selectedListener) {
+		return "", fmt.Errorf("missing gateway listener target")
+	}
+	gatewayContent := strings.Replace(string(gatewayBytes), selectedListener, "default: bee.managed:listener", 1)
+	if err := os.WriteFile(gatewayFile, []byte(gatewayContent), 0644); err != nil {
+		return "", err
 	}
 
 	// 7. Patch src/managed/_index.yaml with checked anchor

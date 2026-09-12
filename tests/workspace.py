@@ -34,10 +34,15 @@ def configure_managed_gateway(folder, address=None):
     assert endpoint is not None and readiness is not None
     endpoint["data"]["address"] = selected
     resources = readiness["policy"]["resources"]
-    original = "http://127.0.0.1:18790/ready"
+    original = "http://127.0.0.1:*/ready"
     assert original in resources
     resources[resources.index(original)] = f"http://{selected}/ready"
     host.write_text(yaml.safe_dump(document, sort_keys=False))
+    gateway = folder / "src/gateway/_index.yaml"
+    gateway_document = yaml.safe_load(gateway.read_text())
+    target = next(entry for entry in gateway_document["entries"] if entry["name"] == "target_listener")
+    target["default"] = "bee.managed:listener"
+    gateway.write_text(yaml.safe_dump(gateway_document, sort_keys=False))
     listeners = []
     for index in (folder / "src").rglob("_index.yaml"):
         entry_document = yaml.safe_load(index.read_text())

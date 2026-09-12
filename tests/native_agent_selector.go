@@ -5,9 +5,11 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -858,6 +860,217 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
+type mcpReply struct {
+	JSONRPC string          `json:"jsonrpc"`
+	Result  json.RawMessage `json:"result"`
+	Error   json.RawMessage `json:"error"`
+}
+
+type mcpProbeReport struct {
+	Provider         string   `json:"provider"`
+	InitializeStatus int      `json:"initialize_status"`
+	ListStatus       int      `json:"list_status"`
+	ReadStatus       int      `json:"read_status"`
+	WaitStatus       int      `json:"wait_status"`
+	Tools            []string `json:"tools"`
+	ReadOK           bool     `json:"read_ok"`
+	WaitOK           bool     `json:"wait_ok"`
+}
+
+// mcpProbeConfig extracts only the URL and token environment name from the
+// driver's generated configuration. The token itself is read from the child
+// environment and is never written to a report or diagnostic.
+func mcpProbeConfig(provider string, args []string) (string, string, bool) {
+	if provider == "claude" {
+		for index, arg := range args {
+			if arg != "--mcp-config" || index+1 >= len(args) {
+				continue
+			}
+			var document struct {
+				Servers map[string]struct {
+					URL     string            `json:"url"`
+					Headers map[string]string `json:"headers"`
+				} `json:"mcpServers"`
+			}
+			if json.Unmarshal([]byte(args[index+1]), &document) != nil {
+				return "", "", false
+			}
+			server, ok := document.Servers["bee"]
+			if !ok || server.URL == "" {
+				return "", "", false
+			}
+			authorization := server.Headers["Authorization"]
+			const prefix, suffix = "Bearer ${", "}"
+			if !strings.HasPrefix(authorization, prefix) || !strings.HasSuffix(authorization, suffix) {
+				return "", "", false
+			}
+			name := strings.TrimSuffix(strings.TrimPrefix(authorization, prefix), suffix)
+			if name == "" || strings.ContainsAny(name, "=\x00\r\n") {
+				return "", "", false
+			}
+			return server.URL, name, true
+		}
+		return "", "", false
+	}
+	if provider != "codex" {
+		return "", "", false
+	}
+	config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".codex", "config.toml"))
+	if err != nil {
+		return "", "", false
+	}
+	var url, tokenName string
+	inBeeServer := false
+	for _, line := range strings.Split(string(config), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inBeeServer = line == "[mcp_servers.bee]"
+			continue
+		}
+		if inBeeServer && strings.HasPrefix(line, "url = \"") && strings.HasSuffix(line, "\"") {
+			url = strings.TrimSuffix(strings.TrimPrefix(line, "url = \""), "\"")
+		}
+		if inBeeServer && strings.HasPrefix(line, "bearer_token_env_var = \"") && strings.HasSuffix(line, "\"") {
+			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "bearer_token_env_var = \""), "\"")
+		}
+	}
+	return url, tokenName, url != "" && tokenName != ""
+}
+
+func mcpProbeRequest(client *http.Client, url, token, method string, params map[string]any, id int) (int, mcpReply, bool) {
+	payload, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+	if err != nil {
+		return 0, mcpReply{}, false
+	}
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return 0, mcpReply{}, false
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		return 0, mcpReply{}, false
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1024*1024))
+	if err != nil {
+		return response.StatusCode, mcpReply{}, false
+	}
+	var reply mcpReply
+	if json.Unmarshal(body, &reply) != nil || reply.JSONRPC != "2.0" {
+		return response.StatusCode, mcpReply{}, false
+	}
+	return response.StatusCode, reply, true
+}
+
+func mcpProbeReportFile(path string, report mcpProbeReport) {
+	data, err := json.Marshal(report)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0600)
+}
+
+func runMCPProbe(provider, reportPath string, args []string) int {
+	report := mcpProbeReport{Provider: provider, Tools: []string{}}
+	defer func() { mcpProbeReportFile(reportPath, report) }()
+	url, tokenName, ok := mcpProbeConfig(provider, args)
+	if !ok || os.Getenv(tokenName) == "" {
+		return 1
+	}
+	parsed, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil || parsed.URL.Scheme != "http" || parsed.URL.Host == "" ||
+		(parsed.URL.Hostname() != "127.0.0.1" && parsed.URL.Hostname() != "localhost") ||
+		!strings.HasPrefix(parsed.URL.Path, "/mcp/") {
+		return 1
+	}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DisableKeepAlives: true},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	token := os.Getenv(tokenName)
+	var initReply mcpReply
+	report.InitializeStatus, initReply, ok = mcpProbeRequest(client, url, token, "initialize", map[string]any{
+		"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "bee-native-agent", "version": "0"},
+	}, 1)
+	_ = initReply
+	if !ok || report.InitializeStatus != http.StatusOK {
+		return 1
+	}
+	var listReply mcpReply
+	report.ListStatus, listReply, ok = mcpProbeRequest(client, url, token, "tools/list", map[string]any{}, 2)
+	if !ok || report.ListStatus != http.StatusOK {
+		return 1
+	}
+	var listed struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != 2 {
+		return 1
+	}
+	for _, tool := range listed.Tools {
+		if tool.Name == "" {
+			return 1
+		}
+		report.Tools = append(report.Tools, tool.Name)
+	}
+	sort.Strings(report.Tools)
+	if len(report.Tools) != 2 || report.Tools[0] != "thread_read" || report.Tools[1] != "thread_wait" {
+		return 1
+	}
+	var readReply mcpReply
+	report.ReadStatus, readReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+		"name": "thread_read", "arguments": map[string]any{"cursor": 0},
+	}, 3)
+	if !ok || report.ReadStatus != http.StatusOK {
+		return 1
+	}
+	var readResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if json.Unmarshal(readReply.Result, &readResult) != nil || len(readResult.Content) != 1 || readResult.IsError {
+		return 1
+	}
+	var readValue struct {
+		OK    bool `json:"ok"`
+		Value struct {
+			ScannedThrough int `json:"scanned_through"`
+		} `json:"value"`
+	}
+	if json.Unmarshal([]byte(readResult.Content[0].Text), &readValue) != nil || !readValue.OK {
+		return 1
+	}
+	report.ReadOK = true
+	var waitReply mcpReply
+	report.WaitStatus, waitReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+		"name": "thread_wait", "arguments": map[string]any{"after_sequence": readValue.Value.ScannedThrough, "wait_ms": 0},
+	}, 4)
+	if !ok || report.WaitStatus != http.StatusOK {
+		return 1
+	}
+	var waitResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if json.Unmarshal(waitReply.Result, &waitResult) != nil || len(waitResult.Content) != 1 || waitResult.IsError {
+		return 1
+	}
+	var waitValue struct {
+		OK bool `json:"ok"`
+	}
+	if json.Unmarshal([]byte(waitResult.Content[0].Text), &waitValue) != nil || !waitValue.OK {
+		return 1
+	}
+	report.WaitOK = true
+	return 0
+}
+
 func managedLaunch(binary, provider string, machineLogin bool) error {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
@@ -866,6 +1079,7 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	defer os.RemoveAll(root)
 	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
 	report := filepath.Join(root, "launch-paths")
+	mcpReport := filepath.Join(root, "mcp-report")
 	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
 		return err
 	}
@@ -886,7 +1100,12 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 		}
 	}
 	cli := filepath.Join(project, "bin", provider)
-	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) + "\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	helper := filepath.Join(filepath.Dir(os.Args[0]), filepath.Base(os.Args[0]))
+	if resolved, helperErr := filepath.EvalSymlinks(os.Args[0]); helperErr == nil {
+		helper = resolved
+	}
+	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) +
+		"\nif ! " + shellQuote(helper) + " mcp-probe " + shellQuote(provider) + " " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
 	}
@@ -906,7 +1125,7 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	if err := ui.send(strings.TrimSuffix(selection, "\r")); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "0 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "2 tools configured"} {
 		if err := ui.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("selected profile summary: %w", err)
 		}
@@ -916,6 +1135,17 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	}
 	if err := ui.waitFor("BEE_MANAGED_AGENT_READY", 25*time.Second); err != nil {
 		return err
+	}
+	mcpData, err := os.ReadFile(mcpReport)
+	if err != nil {
+		return fmt.Errorf("read managed MCP report: %w", err)
+	}
+	var mcpResult mcpProbeReport
+	if err := json.Unmarshal(mcpData, &mcpResult); err != nil || mcpResult.Provider != provider ||
+		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
+		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK ||
+		!mcpResult.ReadOK || !mcpResult.WaitOK || strings.Join(mcpResult.Tools, ",") != "thread_read,thread_wait" {
+		return fmt.Errorf("managed MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	retained, err = ownerChild(ui.cmd.Process.Pid, binary, state, 10*time.Second)
 	if err != nil {
@@ -985,6 +1215,9 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 }
 
 func main() {
+	if len(os.Args) >= 4 && os.Args[1] == "mcp-probe" {
+		os.Exit(runMCPProbe(os.Args[2], os.Args[3], os.Args[4:]))
+	}
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: native_agent_selector BEE_BINARY")
 		os.Exit(2)

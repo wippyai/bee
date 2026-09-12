@@ -7,6 +7,7 @@ listener and thread owner. The default source still declares no listener;
 supervisor lane's pinned lint failure does not block it."""
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -21,8 +22,10 @@ def gateway_workspace():
         for name in (".wippy.yaml", "wippy.lock"):
             shutil.copy2(ROOT / name, folder / name)
         for child in (ROOT / "tests/modules/gateway/src").iterdir():
+            if os.environ.get("BEE_GATEWAY_NATIVE") == "1" and child.name == "managed":
+                continue
             shutil.copytree(child, folder / "src" / child.name)
-        address = configure_managed_gateway(folder)
+        address = "native" if os.environ.get("BEE_GATEWAY_NATIVE") == "1" else configure_managed_gateway(folder)
         yield folder, address
 
 
@@ -33,7 +36,8 @@ def main():
     with ExitStack() as fixtures:
         workspaces = [fixtures.enter_context(gateway_workspace()) for _ in range(2)]
         addresses = [address for _, address in workspaces]
-        assert len(set(addresses)) == len(addresses), addresses
+        if os.environ.get("BEE_GATEWAY_NATIVE") != "1":
+            assert len(set(addresses)) == len(addresses), addresses
         runs = []
         try:
             for folder, _ in workspaces:

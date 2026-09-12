@@ -3,15 +3,22 @@
 Agreed with Astra 2026-09-09 (rounds 56 to 58). `bee.gateway` is the
 authenticated thread port a managed harness child reaches over loopback HTTP:
 `/mcp/{action}` for tools, later `/hook/{action}` for lifecycle observations.
-It is a package, not a core entry: the default desktop composition carries no
-listener and stays network-free; the listener lives only in an explicit
-managed host composition that also carries `bee:launch_policy_managed`.
+The gateway owns bindings and credentials; the host composition owns the native
+HTTP listener. The activation candidate uses loopback port zero, resolves the
+bound address through supervisor state, and declares `thread_read` and
+`thread_wait` in the four default Agent window policies. Claude and Codex also
+declare the five supported lifecycle hooks. Agy and Grok currently refuse HTTP
+hook configuration. Actual standalone child MCP passes for Claude/Codex fixture
+executables using their generated configuration and delivered token: initialize,
+both declared tools, thread read and bounded wait. This does not prove a provider
+conversation or complete agent orchestration. The refreshed full regression is
+still running; see the global-build handoff for installation status.
 
 ## Authority boundaries
 
 | Boundary | Rule |
 |---|---|
-| Listener | An `http.service` on a host-selected loopback address, owned by the managed host composition; the host owns its lifetime. The default composition has no `http.service` (architecture check) and binds no endpoint (desktop smoke). Lua cannot start or stop a supervised service, so no per-attempt listener. |
+| Listener | A native `http.service` on an OS-selected loopback port, owned by the host composition. Authorized admission initializes its stored generation; the same execution preserves its epoch and drain decision. A replacement execution requires a new generation. The host owns the service lifetime; closing an attempt never closes the listener. |
 | Binding | Each admitted attempt owns one revocable gateway binding: subject, action, attempt, thread, owner incarnation, expiry and the exact tool set. Carrier exit revokes the binding, never the listener. |
 | Token | `admit` binds without bytes. The bytes are minted by the gateway at delivery only: placement's service, at one start, calls `authorize_materialization` for the binding the carrier recorded and hands the one-time key it receives to the runner it spawns; the runner calls `materialize` for the binding its attempt holds under the carrier epoch it is attached to (the binding issued at the highest epoch not above it), names that binding, presents the key (hash compared, window bounded by the start budget, consumed by use), receives the bytes once for the binding's current credential generation, and puts them nowhere but the child's environment under `BEE_GATEWAY_TOKEN`. A process that merely shares the runner's actor cannot materialize; the credential records the authenticated caller. Every accepted presentation of a token is counted on the credential (`presented_count`, `last_presented_at`), which is how a client's authentication is proven without bytes. Only the sha256 is stored, in a credentials table keyed by binding and generation. A generation cannot be materialized twice; a lost reply is recovered only by an explicit `reissue`, which is a compare-and-set on the expected generation and revokes the previous credentials, never by replay. Bytes never enter URLs, arguments, records, evidence or logs. The credential broker gains no token semantics. |
 | Configuration | The host selects the endpoint, tools, hooks and credential environment names. The carrier measures those inputs; placement independently checks them and asks the activated driver to render bounded arguments/files using the actual private HOME. The intent freezes that delivery. Claude uses inline `--mcp-config` and `--settings` JSON with explicit settings sources; Codex renders `.codex/config.toml` and its hook/trust files. Neither carries credential bytes. Both transports materialize tokens only into the selected environment names. Driver tool flags and MCP annotations do not authorize gateway operations. |

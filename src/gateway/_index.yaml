@@ -19,8 +19,8 @@ entries:
 - name: target_listener
   kind: ns.requirement
   meta:
-    comment: The managed host's http.service that serves the gateway endpoints; unlinked in the default composition, which has no listener
-  default: bee.managed:listener
+    comment: The host-selected native HTTP service that serves the gateway endpoints
+  default: bee:gateway_listener
   targets:
   - entry: bee.gateway:listener_ref
     path: .resource_ref
@@ -57,10 +57,19 @@ entries:
   source: file://mcp.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: address
+  kind: function.lua
+  source: file://address_method.lua
+  method: handle
+  modules: [registry, system]
+  imports:
+    configuration: bee.gateway:configuration
+  security:
+    policies: [bee:gateway_address_policy]
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [registry]
+  modules: [registry, funcs]
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
@@ -86,7 +95,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: admit
   kind: function.lua
   source: file://admit_method.lua
@@ -94,7 +103,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: revoke
   kind: function.lua
   source: file://revoke_method.lua
@@ -102,7 +111,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: materialize
   kind: function.lua
   source: file://materialize_method.lua
@@ -110,7 +119,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: authorize_materialization
   kind: function.lua
   source: file://authorize_materialization_method.lua
@@ -118,7 +127,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: reissue
   kind: function.lua
   source: file://reissue_method.lua
@@ -126,7 +135,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: revoke_attempt
   kind: function.lua
   source: file://revoke_attempt_method.lua
@@ -134,7 +143,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: check
   kind: function.lua
   source: file://check_method.lua
@@ -142,7 +151,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: drain
   kind: function.lua
   source: file://drain_method.lua
@@ -150,7 +159,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: ready
   kind: function.lua
   source: file://ready_method.lua
@@ -158,7 +167,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy, bee:gateway_readiness_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_readiness_policy]
 - name: ready_http
   kind: function.lua
   source: file://ready_http_method.lua
@@ -167,7 +176,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_http
   kind: function.lua
   source: file://hook_http_method.lua
@@ -177,7 +186,7 @@ entries:
     gateway: bee.gateway:gateway
     hooks: bee.gateway:hooks
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_status_http
   kind: function.lua
   source: file://hook_http_method.lua
@@ -187,7 +196,7 @@ entries:
     gateway: bee.gateway:gateway
     hooks: bee.gateway:hooks
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_mcp_http
   kind: function.lua
   source: file://hook_mcp_method.lua
@@ -198,7 +207,7 @@ entries:
     mcp: bee.gateway:mcp
     hooks: bee.gateway:hooks
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: seal
   kind: function.lua
   source: file://seal_method.lua
@@ -206,7 +215,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_claim
   kind: function.lua
   source: file://hook_claim_method.lua
@@ -214,7 +223,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_ack
   kind: function.lua
   source: file://hook_ack_method.lua
@@ -222,7 +231,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_reject
   kind: function.lua
   source: file://hook_reject_method.lua
@@ -230,7 +239,7 @@ entries:
   imports:
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: hook_queue
   kind: function.lua
   source: file://hook_queue_method.lua
@@ -240,7 +249,7 @@ entries:
     bounds: bee.threads.records:bounds
     gateway: bee.gateway:gateway
   security:
-    policies: [bee:gateway_store_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy]
 - name: mcp_http
   kind: function.lua
   source: file://mcp_method.lua
@@ -250,4 +259,4 @@ entries:
     gateway: bee.gateway:gateway
     mcp: bee.gateway:mcp
   security:
-    policies: [bee:gateway_store_policy, bee:gateway_execute_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy]

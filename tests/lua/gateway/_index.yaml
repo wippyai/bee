@@ -54,3 +54,57 @@ entries:
     test: wippy.test:test
     mcp: bee.gateway:mcp
     gateway: bee.gateway:gateway
+- name: ephemeral_listener
+  kind: http.service
+  meta: {type: test_support}
+  addr: 127.0.0.1:0
+  lifecycle: {auto_start: true}
+- name: address_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, registry.update.registry.entry, registry.get, funcs.call]
+    resources: ['*']
+    effect: allow
+- name: address_test
+  kind: function.lua
+  source: file://address_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, funcs]
+  security:
+    policies: [bee.gateway:address_test_policy]
+  imports:
+    test: wippy.test:test
+    configuration: bee.gateway:configuration
+- name: native_admission_db_path
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_GATEWAY_NATIVE_ADMISSION_DB
+  default: .wippy/gateway-native-admission.db
+  readonly: true
+- name: native_admission_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: ${env:bee.gateway:native_admission_db_path}
+  lifecycle:
+    auto_start: true
+- name: native_admission_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, registry.apply, registry.update.registry.entry, registry.get, funcs.call]
+    resources: ['*']
+    effect: allow
+- name: native_admission_test
+  kind: function.lua
+  source: file://native_admission_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, funcs, security, sql, json, time]
+  security:
+    policies: [bee.gateway:native_admission_test_policy]
+  imports:
+    test: wippy.test:test
+    configuration: bee.gateway:configuration

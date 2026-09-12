@@ -168,10 +168,15 @@ CREATE INDEX bee_gateway_hooks_status ON bee_gateway_hooks(binding_id, status, s
 local SEAL_SQL = [[
 ALTER TABLE bee_gateway_bindings ADD COLUMN sealed_at TEXT;
 ]]
+-- Native listener identity fences address reuse and service replacement.
+local NATIVE_LISTENER_SQL = [[
+ALTER TABLE bee_gateway_listener ADD COLUMN native_key TEXT;
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
         {id = 5, name = "hooks", sql = HOOKS_SQL, rebuild = true}, {id = 6, name = "intake", sql = INTAKE_SQL, rebuild = true},
-        {id = 7, name = "seal", sql = SEAL_SQL, rebuild = false}}
+        {id = 7, name = "seal", sql = SEAL_SQL, rebuild = false},
+        {id = 8, name = "native_listener", sql = NATIVE_LISTENER_SQL, rebuild = false}}
 end
 return M

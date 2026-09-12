@@ -120,7 +120,7 @@ local function random_text(): (string?, string?)
     return encoded, nil
 end
 local function listener_of(db: sql.DB): (Row?, string?)
-    local rows, err = db:query("SELECT epoch, address, secret, drained, opened_at, drain_deadline_at FROM bee_gateway_listener WHERE singleton = 1")
+    local rows, err = db:query("SELECT epoch, address, secret, drained, opened_at, drain_deadline_at, native_key FROM bee_gateway_listener WHERE singleton = 1")
     if err or not rows then return nil, "read listener" end
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
@@ -160,10 +160,34 @@ local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
 end
+-- A permitted admission may initialize the host-selected native listener.
+-- The conditional upsert gives simultaneous admissions one epoch and secret.
+local function synchronize_native_listener(db: sql.DB): (boolean, string?)
+    local configured, config_error = configuration.configured()
+    if not configured then return false, config_error end
+    if configured ~= "127.0.0.1:0" then return true, nil end
+    local current, current_error = configuration.current()
+    if not current or not current.native_key then return false, current_error or "native listener identity is unavailable" end
+    local secret, secret_error = random_text()
+    if not secret then return false, secret_error end
+    local _, write_error = db:execute("INSERT INTO bee_gateway_listener (singleton, epoch, address, secret, drained, opened_at, native_key) VALUES (1, 1, ?, ?, 0, ?, ?) " ..
+        "ON CONFLICT(singleton) DO UPDATE SET epoch = bee_gateway_listener.epoch + 1, address = excluded.address, secret = excluded.secret, drained = 0, drain_deadline_at = NULL, opened_at = excluded.opened_at, native_key = excluded.native_key " ..
+        "WHERE bee_gateway_listener.native_key IS NOT excluded.native_key", {current.address, secret, stamp(now_ms()), current.native_key})
+    if write_error then return false, "record native listener" end
+    local rechecked, recheck_error = configuration.current()
+    if not rechecked or rechecked.native_key ~= current.native_key then return false, recheck_error or "native listener changed during admission" end
+    return true, nil
+end
 function M.generation(db: sql.DB): (Generation?, Reply?)
     local listener, listener_error = listener_of(db)
     if listener_error then return nil, fail("STORAGE", listener_error) end
     if not listener then return nil, fail("UNAVAILABLE", "the gateway listener has not been opened") end
+    if listener.native_key ~= nil then
+        local current, current_error = configuration.current()
+        if not current or current.native_key ~= listener.native_key then
+            return nil, fail("UNAVAILABLE", current_error or "native listener changed; a new admission is required")
+        end
+    end
     local count, count_error = restarts()
     if not count then return nil, fail("UNAVAILABLE", count_error or "listener restarts unknown") end
     return {epoch = integer(listener.epoch) or 0, restarts = count}, nil
@@ -186,9 +210,9 @@ function M.open(value: unknown): Reply
     if unknown_field then return fail("INVALID", unknown_field) end
     local address = bounds.line(object.address, 120)
     if not address or not address:find("^127%.0%.0%.1:%d+$") then return fail("INVALID", "address must be a loopback host and port") end
-    local configured, endpoint_error = M.endpoint()
-    if not configured then return fail("UNAVAILABLE", endpoint_error or "gateway endpoint") end
-    if address ~= configured then return fail("DENIED", "address is not the host-configured gateway endpoint") end
+    local selected, endpoint_error = configuration.current()
+    if not selected then return fail("UNAVAILABLE", endpoint_error or "gateway endpoint") end
+    if address ~= selected.address then return fail("DENIED", "address is not the host-configured gateway endpoint") end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, "listener") then return fail("DENIED", "caller does not manage the gateway listener") end
     local secret, secret_error = random_text()
@@ -198,11 +222,17 @@ function M.open(value: unknown): Reply
     local current, current_error = listener_of(db)
     if current_error then db:release(); return fail("STORAGE", current_error) end
     local epoch = (current and (integer(current.epoch) or 0) or 0) + 1
-    local _, write_error = db:execute("INSERT INTO bee_gateway_listener (singleton, epoch, address, secret, drained, drain_deadline_at, opened_at) VALUES (1, ?, ?, ?, 0, NULL, ?) " ..
-        "ON CONFLICT(singleton) DO UPDATE SET epoch = excluded.epoch, address = excluded.address, secret = excluded.secret, drained = 0, drain_deadline_at = NULL, opened_at = excluded.opened_at",
-        {epoch, address, secret, stamp(now_ms())})
+    local _, write_error = db:execute("INSERT INTO bee_gateway_listener (singleton, epoch, address, secret, drained, drain_deadline_at, opened_at, native_key) VALUES (1, ?, ?, ?, 0, NULL, ?, NULLIF(?, '')) " ..
+        "ON CONFLICT(singleton) DO UPDATE SET epoch = excluded.epoch, address = excluded.address, secret = excluded.secret, drained = 0, drain_deadline_at = NULL, opened_at = excluded.opened_at, native_key = excluded.native_key",
+        {epoch, address, secret, stamp(now_ms()), selected.native_key or ""})
     db:release()
     if write_error then return fail("STORAGE", "record listener") end
+    if selected.native_key then
+        local rechecked, recheck_error = configuration.current()
+        if not rechecked or rechecked.native_key ~= selected.native_key then
+            return fail("UNAVAILABLE", recheck_error or "native listener changed during open")
+        end
+    end
     return succeed({epoch = epoch, address = address})
 end
 -- admit: binds the admitted subject, action, attempt, thread, owner
@@ -264,6 +294,8 @@ function M.admit(value: unknown): Reply
     if not request_digest then return fail("INVALID", digest_error or "request is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
+    local synchronized, synchronization_error = synchronize_native_listener(db)
+    if not synchronized then db:release(); return fail("UNAVAILABLE", synchronization_error or "native listener unavailable") end
     local listener, listener_error = listener_of(db)
     if listener_error then db:release(); return fail("STORAGE", listener_error) end
     if not listener then db:release(); return fail("UNAVAILABLE", "the gateway listener has not been opened") end
@@ -727,6 +759,11 @@ function M.ready(value: unknown): Reply
         binding = found
     end
     db:release()
+    local selected, selection_error = configuration.current()
+    if not selected then return fail("UNAVAILABLE", selection_error or "gateway endpoint") end
+    if listener.address ~= selected.address or listener.native_key ~= selected.native_key then
+        return fail("UNAVAILABLE", "the stored listener is not the host-selected execution")
+    end
     local nonce, nonce_error = random_text()
     if not nonce then return fail("STORAGE", nonce_error or "nonce") end
     local address = tostring(listener.address)

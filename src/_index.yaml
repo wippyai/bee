@@ -511,6 +511,8 @@ entries:
     executables: {}
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_codex_window
   kind: registry.entry
@@ -529,6 +531,8 @@ entries:
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
     provider_ref: bee.driver.codex:default_provider
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_agy_window
   kind: registry.entry
@@ -546,6 +550,7 @@ entries:
     executables: {}
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
+    gateway_tools: [thread_read, thread_wait]
     prepare_options: {}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -563,6 +568,7 @@ entries:
     executables: {}
     executable_env: {grok: bee.driver.grok:executable}
     environment: {}
+    gateway_tools: [thread_read, thread_wait]
     prepare_options: {}
 - name: carrier_policy
   kind: security.policy
@@ -640,9 +646,53 @@ entries:
   kind: registry.entry
   meta:
     type: bee.gateway_endpoint
-    comment: The one loopback address the managed host's listener serves; open refuses any other and the readiness policy is pinned to it
+    comment: Native HTTP selects and retains an available loopback port; gateway address resolves it from supervisor state
   data:
-    address: 127.0.0.1:18790
+    address: 127.0.0.1:0
+- name: gateway_listener
+  kind: http.service
+  addr: 127.0.0.1:0
+  lifecycle: {auto_start: true}
+- name: gateway_router
+  kind: http.router
+  meta: {server: 'bee:gateway_listener'}
+  prefix: /
+- name: gateway_ready
+  kind: http.endpoint
+  meta: {router: 'bee:gateway_router'}
+  method: GET
+  path: /ready
+  func: bee.gateway:ready_http
+- name: gateway_mcp
+  kind: http.endpoint
+  meta: {router: 'bee:gateway_router'}
+  method: POST
+  path: /mcp/:action
+  func: bee.gateway:mcp_http
+- name: gateway_hook
+  kind: http.endpoint
+  meta: {router: 'bee:gateway_router'}
+  method: POST
+  path: /hook/:action
+  func: bee.gateway:hook_http
+- name: gateway_hook_status
+  kind: http.endpoint
+  meta: {router: 'bee:gateway_router'}
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway:hook_status_http
+- name: gateway_hook_mcp
+  kind: http.endpoint
+  meta: {router: 'bee:gateway_router'}
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway:hook_mcp_http
+- name: gateway_address_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read]
+    resources: [bee.gateway:listener_ref, bee:gateway_endpoint, supervisor]
+    effect: allow
 - name: gateway_store_policy
   kind: security.policy
   meta:
@@ -651,13 +701,19 @@ entries:
     actions: [db.get, registry.get, system.read]
     resources: [bee.gateway:db, bee.gateway:database_ref, bee.gateway:listener_ref, bee:gateway_endpoint, supervisor]
     effect: allow
+- name: gateway_address_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway:address]
+    effect: allow
 - name: gateway_readiness_policy
   kind: security.policy
   meta:
-    comment: The readiness probe may request exactly the configured loopback endpoint's ready path and nothing else
+    comment: Internal readiness only; the function pins the host-selected native address and authenticates its nonce response. No agent receives this network policy.
   policy:
     actions: [http_client.request, http_client.private_ip]
-    resources: [http://127.0.0.1:18790/ready, 127.0.0.1]
+    resources: ['http://127.0.0.1:*/ready', 127.0.0.1]
     effect: allow
 - name: gateway_admit_policy
   kind: security.policy

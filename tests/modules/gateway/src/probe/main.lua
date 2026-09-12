@@ -15,10 +15,17 @@ local THREAD = "gateway-thread"
 type Object = {[string]: unknown}
 local ADDRESS = ""
 local function endpoint(): string
-    local entry, err = registry.get("bee:gateway_endpoint")
-    assert(not err and entry and type(entry.data) == "table", "gateway endpoint")
-    local address = (entry.data :: Object).address
-    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
+    local selected, err = funcs.call("bee.gateway:address", {})
+    -- Auto-start services become ready asynchronously. Wait only for the
+    -- reported starting state; a failed or missing service is an immediate error.
+    for _ = 1, 100 do
+        if not err or not tostring(err):find("gateway listener is starting", 1, true) then break end
+        time.sleep("20ms")
+        selected, err = funcs.call("bee.gateway:address", {})
+    end
+    assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
+    local address = (selected :: Object).address
+    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$") and address ~= "127.0.0.1:0", "gateway endpoint address")
     return address :: string
 end
 local function key(): string return "k-" .. tostring(time.now():unix_nano()) end
@@ -101,6 +108,9 @@ local function main()
     ok(call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = key(), title = "Gateway"}), "create")
     for index = 1, 3 do record("line " .. tostring(index)) end
     local token_a, binding_a = admit("act-a")
+    local readiness_response, readiness_error = http_client.get("http://" .. ADDRESS .. "/ready", {timeout = "2s", query = {nonce = "fixture-readiness"}})
+    assert(readiness_response, "readiness request: " .. tostring(readiness_error))
+    if readiness_response.status_code ~= 200 then error("readiness refused: " .. tostring(readiness_response.body)) end
     local ready = ok(call("bee.gateway:ready", {binding_id = binding_a}), "ready")
     assert(ready.listening == true and (ready.generation :: Object).epoch == 1, "readiness under epoch 1")
     assert(ready.binding_valid == true, "binding A valid")

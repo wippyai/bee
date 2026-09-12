@@ -85,10 +85,11 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: run
-  modules: [process, channel, time, security, tty, funcs, json, registry]
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
@@ -97,10 +98,11 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: natural
-  modules: [process, channel, time, security, tty, funcs, json, registry]
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
@@ -125,10 +127,11 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: select
-  modules: [process, channel, time, security, tty, funcs, json, registry]
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
@@ -138,4 +141,46 @@ entries:
   policy:
     actions: [registry.apply]
     resources: '*'
+    effect: allow
+
+- name: session_root
+  kind: fs.directory
+  directory: .
+  auto_init: false
+- name: retained_definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: retained-window-fixture
+    title: Retained window fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    session_resource: retained
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: retained_test
+  kind: function.lua
+  source: file://main.lua
+  method: retained
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:resource_manage_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:retained_read_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: retained_read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get]
+    resources: [bee.placement.native:root]
     effect: allow

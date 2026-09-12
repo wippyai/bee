@@ -5914,3 +5914,31 @@ or adopt that policy based only on grant-field tests. Reuse the existing resourc
 and checkpoint contracts for the next recovery unit. Global Bee remains unchanged;
 runtime #726 and builder #7 are still open at the previously tested heads.
 Wolfden checkpoint seq 1262, cursor `jc_H7E57Z5SJH71M`.
+
+### 2026-09-12 Codex: retained Agent file admission
+
+Integrated the simplified optional `session_resource` field after real window
+acceptance. Admission derives a session identity and obtains the authenticated
+actor's attempt-bound writable resource grant; callers cannot supply either.
+The Agent's protected host binding now permits obtaining that grant. Its ninth
+policy exposed the old eight-policy limit; the decoder now allows sixteen and
+tests reject oversized and sparse compositions.
+
+The actual broker-spawned shell writes a marker into its retained HOME, closes
+normally and leaves the marker readable. A distinct second launch keeps its
+own marker and preserves the first. All four managed-window cases pass. The
+earlier simplified admission candidate passed619 unit tests, strict source
+lint, pack and standalone harness isolation. Full combined acceptance is
+running; the new policy-bound test has not yet completed that run.
+
+Temporary worktrees and test artifacts were absent on continuation. Committed
+work was restored under `/home/wolfy-j/wippy/worktrees/`, and the exact pinned
+toolchain was rebuilt through the Makefile. New evidence is retained under
+`/home/wolfy-j/wippy/bee-evidence/0912/`; the live proof is
+`retained-window-final.log`. Initial fixture failures and corrections remain
+recorded there. Global Bee and shared main are unchanged. No Python or runtime
+changes were included. Provider conversation recovery and public MCP/Hub
+activation remain unfinished. Next, preserve acknowledged broker checkpoint
+state before wiring Agent recovery; no separate persistence manager is needed.
+Wolfden journal remains `01a06e56-ba58-7c5a-bd69-b7feb109a05d`, cursor
+`jc_H7E57Z5SJH71M`, through seq1267.

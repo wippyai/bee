@@ -2,8 +2,10 @@
 
 Proposal, not a shipped recovery contract. The existing app checkpoint/restore
 protocol remains the shell boundary; the structured carrier already retains
-provider resume references, but the current interactive Agent app declares no
-resume schema and does not select a retained-session resource.
+provider resume references. Launch definitions can now name one host-selected
+`session_resource`; the Agent binding allows obtaining its own grant for that
+resource. The interactive Agent app still declares no resume schema and does
+not recover provider conversations.
 
 An interactive Agent must retain both the provider conversation ID and its
 session files. Use the existing placement session_ref/home resource and the

@@ -417,3 +417,21 @@ The configuration write trusts the runtime fs module's containment of
 symlinks below the placement root; the runner creates the configuration
 parent itself inside the home it just created and refuses any existing
 entry there, but it does not resolve links on its own.
+
+Launch admission can select a retained provider home through a host-owned
+`session_resource` name. It derives one bounded session identity from the
+workspace and launch request, obtains a separate writable session resource
+grant, and passes both to placement. Omission keeps the per-attempt home.
+Placement reuses the session home only when the launch names its writable
+session grant. Existing retained configuration is accepted only when its
+content is byte-identical to the host-approved file. Application checkpoint
+and provider conversation recovery remain a later boundary: recovery must
+refresh host-owned per-attempt endpoint data explicitly and coordinate
+ownership so two live attempts never share one provider home.
+
+The managed-window acceptance launches two real shell children through the
+broker, resource admission, carrier checkpoint and placement. It reads each
+child's marker after normal close and proves the second launch preserves the
+first file. Existing detach/rebind, revoked-input and truthful receipt checks
+also pass. This proves retained files for distinct launches, not provider
+conversation recovery after a node restart.

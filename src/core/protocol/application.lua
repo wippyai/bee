@@ -98,7 +98,7 @@ function M.binding(value: unknown): Binding?
     local policies: {string} = {}
     local count = 0
     for key in pairs(value.policies) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 8 then return nil end
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
         count = count + 1
     end
     for i = 1, count do

@@ -14,6 +14,7 @@ local time = require("time")
 local admission = require("admission")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
+local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local SOURCE = "bee.harness.catalog:launch_sentinel_key"
@@ -92,6 +93,7 @@ local function prepare_host(workspace: string)
     sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
     apply(sources_entry)
     value(call("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+    value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
     value(call("bee.credentials:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
 end
 local function restore_host()
@@ -402,6 +404,60 @@ local function define_tests()
             local denied, err = outsider:call("bee.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             if err then error(tostring(err)) end
             test.eq(code(denied :: admission.Reply), "FORBIDDEN")
+        end)
+        test.it("refuses caller-selected session identities and resources before creating work", function()
+            for _, field in ipairs({"session_ref", "session_resource"}) do
+                local request_id = fresh("session-injection")
+                local request: {[string]: unknown} = {request_id = request_id, definition_ref = RETAINED_DEFINITION,
+                    workspace_id = workspace, brief = "ping"}
+                request[field] = "caller-selected"
+                test.eq(code(call("bee.harness.launch:admit", request)), "INVALID")
+                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            end
+        end)
+        test.it("uses a host-selected retained session resource with a retry-stable identity", function()
+            local request_id = fresh("retained")
+            local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            test.is_true(type(admitted.session_ref) == "string" and (admitted.session_ref :: string):match("^session:[0-9a-f]+$") ~= nil)
+            local carrier_request = admitted.request :: {[string]: unknown}
+            test.eq(carrier_request.session_ref, admitted.session_ref)
+            local resources = carrier_request.resources :: {{[string]: unknown}}
+            test.eq(#resources, 2)
+            local session_grant = nil
+            for _, resource in ipairs(resources) do
+                if resource.purpose == "session" then session_grant = resource end
+            end
+            if not session_grant then error("retained session grant missing") end
+            test.eq(session_grant.name, "session")
+            test.eq(session_grant.access, "write")
+            local replay = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            test.eq(replay.session_ref, admitted.session_ref)
+            local replay_resources = (replay.request :: {[string]: unknown}).resources :: {{[string]: unknown}}
+            local replay_grant = nil
+            for _, resource in ipairs(replay_resources) do
+                if resource.purpose == "session" then replay_grant = resource end
+            end
+            test.eq(replay_grant and replay_grant.grant_ref, session_grant.grant_ref)
+            local other = value(call("bee.harness.launch:admit", {request_id = fresh("retained"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            test.neq(other.session_ref, admitted.session_ref)
+        end)
+        test.it("refuses a host definition whose retained resource is unavailable before creating a thread", function()
+            local entry = assert(registry.get(RETAINED_DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.session_resource = "missing-session"
+            local request_id = fresh("retained-denied")
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local refused = call("bee.harness.launch:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"})
+                test.eq(code(refused), "NOT_FOUND")
+                test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("recovers a start that failed after placement intent and before the first checkpoint", function()
             local request_id = fresh("request")

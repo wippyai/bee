@@ -45,6 +45,7 @@ type Plan = {
 type Admitted = {
     plan: Plan, request: carrier.Request, requester: string,
     thread_id: string, action_id: string, attempt_id: string,
+    session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
 }
 type Request = {
@@ -83,6 +84,19 @@ local function digest_of(value: unknown): (string?, string?)
     local sum, hash_error = hash.sha256(encoded)
     if hash_error or not sum then return nil, "digest failed" end
     return sum, nil
+end
+local function resource_grant(value: {[string]: unknown}, workspace_id: string, name: string, purpose: placement_types.Purpose, audience: string, attempt_id: string): (placement_types.ResourceGrant?, string?)
+    local grant_id, returned_workspace, returned_name = bounds.id(value.grant_id), bounds.id(value.workspace_id), bounds.id(value.name)
+    local root_ref, returned_subject, returned_audience = bounds.id(value.root_ref), bounds.id(value.subject), bounds.id(value.audience)
+    local subpath = bounds.subpath(value.subpath)
+    if not grant_id or not returned_workspace or not returned_name or not root_ref or not returned_subject or not returned_audience or not subpath then
+        return nil, "resource grant returned an invalid identity or subpath"
+    end
+    if returned_workspace ~= workspace_id or returned_name ~= name or returned_subject ~= audience or returned_audience ~= audience
+        or value.access ~= "write" or value.purpose ~= purpose or value.attempt_id ~= attempt_id then
+        return nil, "resource grant returned the wrong scope"
+    end
+    return {name = returned_name, grant_ref = grant_id, root_ref = root_ref, subpath = subpath, access = "write", purpose = purpose}, nil
 end
 -- resolve: the measured plan for a definition, with no effects. The plan
 -- digest pins the definition, the binding and profile measurements and
@@ -257,22 +271,43 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     local ids = M.identities(request.request_id)
     local thread_id = request.thread_id
     if launch.thread_policy.kind == "named" then thread_id = launch.thread_policy.thread_ref end
+    if not thread_id and launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
+    local workdir_name = request.workdir
+    if launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
+    if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
+    local session_resource = launch.session_resource
+    if session_resource and workdir_name == session_resource then
+        return nil, fail("INVALID", "workdir resource duplicates the session resource")
+    end
+    -- Session authority is selected by the host definition. A retained
+    -- session gets one stable digest-derived identity per launch request, while the
+    -- default remains ephemeral and receives no session grant.
+    local resources: {placement_types.ResourceGrant} = {}
+    local session_ref: string? = nil
+    if session_resource then
+        local session_digest, session_error = digest_of({workspace_id = request.workspace_id, request_id = request.request_id})
+        if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
+        session_ref = "session:" .. session_digest
+        local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
+            audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":session"})
+        if not granted then return nil, grant_refused end
+        local typed, grant_error = resource_grant(granted, request.workspace_id, session_resource, "session", requester, ids.attempt_id)
+        if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
+        resources[#resources + 1] = typed
+    end
     if not thread_id then
-        if launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
         local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = launch.title})
         if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
     end
-    local resources: {placement_types.ResourceGrant} = {}
     local working: string? = nil
-    local workdir_name = request.workdir
-    if launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
-    if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
     if workdir_name then
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = workdir_name, access = "write", purpose = "project",
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":workdir"})
         if not granted then return nil, grant_refused end
-        resources[1] = {name = workdir_name, grant_ref = tostring(granted.grant_id), root_ref = tostring(granted.root_ref), subpath = tostring(granted.subpath), access = "write", purpose = "project"}
+        local typed, grant_error = resource_grant(granted, request.workspace_id, workdir_name, "project", requester, ids.attempt_id)
+        if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
+        resources[#resources + 1] = typed
         working = workdir_name
     end
     local projections: {string} = {}
@@ -285,8 +320,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
-        working_directory = working, projections = projections, workspace_id = request.workspace_id}
-    return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id}, nil
+        working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref}
+    return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
 end
 -- External callers keep the operation reply; local execution paths consume
 -- the typed admitted request without decoding our own value a second time.

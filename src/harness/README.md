@@ -89,3 +89,19 @@ Production profile configuration and authenticated harness acceptance remain
 required before ordinary Claude/Codex aliases can use this managed route. An
 empty catalog displays an empty picker; it does not infer executable paths,
 credentials or a launch policy from registry metadata.
+
+Launch definitions may name `session_resource: <host-resource>` to retain
+provider state. Admission derives a bounded identity from the workspace and
+launch request and obtains a writable
+`purpose: session` grant for the authenticated application actor and that
+attempt. Retries with the same request ID reuse the same session identity and
+grant. Without this field, placement uses its normal per-attempt home.
+Placement selects the retained session home from the
+grant. The host resource association must be writable and available before
+child launch, and callers cannot provide a session resource or grant.
+
+This slice retains files for later attempts; it does not implement application
+checkpoint or provider conversation recovery. Retained configuration is
+replayed only byte-identically, so a future recovery path must explicitly
+refresh host-owned per-attempt endpoint data and prevent two live attempts from
+using the same provider home.

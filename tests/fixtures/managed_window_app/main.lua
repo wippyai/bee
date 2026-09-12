@@ -9,6 +9,8 @@ local json = require("json")
 local appearance = require("appearance")
 local registry = require("registry")
 local admission = require("admission")
+local homes = require("homes")
+local fs = require("fs")
 
 local M = {}
 local WORKSPACE = string.rep("a", 32)
@@ -43,12 +45,21 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     result.data = data
     return result
 end
-local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?)
+local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?): string?
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
+    if retained_id then THREAD = "managed-window-thread:" .. retained_id end
+    local definition_ref = retained_id and "bee.managed_window_fixture:retained_definition" or "bee.managed_window_fixture:definition"
+    local request_id = retained_id or (natural and "managed-window-natural-request" or "managed-window-request")
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local function receive_reply()
+        local deadline = time.after("5s")
+        local received = channel.select({replies:case_receive(), deadline:case_receive()})
+        assert(received.ok and received.channel == replies, "broker reply timed out")
+        return received.value
+    end
     local broker_policy, broker_error = security.policy("bee:broker_policy")
     if not broker_policy then error(tostring(broker_error)) end
     local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
@@ -56,16 +67,27 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
-    assert(catalogs:receive():from() == broker)
-    local plan, refused = admission.resolve("bee.managed_window_fixture:definition", "window")
+    local events = assert(process.events())
+    local catalog_deadline = time.after("5s")
+    while true do
+        local received = channel.select({catalogs:case_receive(), events:case_receive(), catalog_deadline:case_receive()})
+        assert(received.ok and received.channel ~= catalog_deadline, "broker catalog timed out")
+        if received.channel == catalogs then
+            assert(tostring(received.value:from()) == broker)
+            break
+        elseif received.value.kind == process.event.EXIT and tostring(received.value.from) == broker then
+            error("broker exited before catalog: " .. tostring(received.value.result and received.value.result.error))
+        end
+    end
+    local plan, refused = admission.resolve(definition_ref, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
-    local request = assert(json.encode({request_id = natural and "managed-window-natural-request" or "managed-window-request", definition_ref = "bee.managed_window_fixture:definition", brief = "managed window",
+    local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
-        local message = assert(replies:receive())
+        local message = receive_reply()
         if tostring(message:from()) == broker then
             local data = message:payload():data()
             if type(data) == "table" and data.request_id == "open" and data.op == "open" then opened = data :: {[string]: unknown} end
@@ -76,7 +98,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local mounted = ""
     while mounted == "" do
-        local message = assert(replies:receive())
+        local message = receive_reply()
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-one" and data.op == "attached" then
             assert(data.error_code == "")
@@ -130,7 +152,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local live_records = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
     local live_attempt: string? = nil
     for _, record in ipairs(live_records.records :: {{[string]: unknown}}) do
-        if record.kind == "attempt.started" and type(record.attempt_id) == "string" then live_attempt = record.attempt_id end
+        if record.kind == "attempt.started" and type(record.attempt_id) == "string" then
+            if retained_id then assert(record.attempt_id == admission.identities(request_id).attempt_id, "retained launch read another attempt") end
+            live_attempt = record.attempt_id
+        end
     end
     assert(live_attempt, "running native window has no started attempt")
     local saved = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = live_attempt}).value)
@@ -139,11 +164,16 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local point = reply(saved.checkpoint)
     assert(point.schema_revision == "bee.carrier.checkpoint@1" and point.binding_ref == "bee.managed_window_fixture:binding",
         "native checkpoint must pin the admitted driver")
+    local session_ref: string? = nil
+    if retained_id then
+        assert(type(point.retained_session_ref) == "string", "retained window checkpoint lost session identity")
+        session_ref = point.retained_session_ref :: string
+    end
     assert(saved.open_turn_id == nil and point.terminal == nil, "native checkpoint invented a logical turn result")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "detach", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
     local detached = false
     while not detached do
-        local message = assert(replies:receive())
+        local message = receive_reply()
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "detach" and data.op == "bind" then detached = data.error_code == "" end
     end
@@ -152,7 +182,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local rebound = ""
     while rebound == "" do
-        local message = assert(replies:receive())
+        local message = receive_reply()
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then rebound = tostring(data.mount) end
     end
@@ -162,7 +192,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
         local closed = false
         while not closed do
-            local message = assert(replies:receive())
+            local message = receive_reply()
             local data = message:payload():data()
             if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then closed = data.error_code == "" end
         end
@@ -187,6 +217,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     for _, item in ipairs(value.records :: {{[string]: unknown}}) do
         kinds[tostring(item.kind)] = true
         if item.kind == "receipt" then
+            assert(item.attempt_id == live_attempt, "receipt belongs to another attempt")
             receipts = receipts + 1
             local body = reply(item.body)
             assert(body.scope == "attempt" and body.outcome == (natural and "uncertain" or "cancelled"), "receipt must distinguish terminal completion from explicit cancellation")
@@ -202,6 +233,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     next_view:close(); view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies)
+    return session_ref
 end
 
 M.run = function() run(false) end
@@ -218,6 +250,46 @@ M.select = function()
     end)
     apply(definition)
     apply(policy)
+    if not ok then error(tostring(failure)) end
+end
+-- Read the actual child's files after broker close. These checks never create
+-- a directory and never run another shell to manufacture the marker.
+M.retained = function()
+    local roots = assert(registry.get("bee.placement.native:admitted_roots"))
+    local mode = assert(registry.get("bee.placement.native:resource_mode"))
+    local ok, failure = pcall(function()
+        local admitted = changed(roots)
+        admitted.data = {roots = {{root_ref = "bee.managed_window_fixture:session_root", access = "write"}}}
+        apply(admitted)
+        local granted = changed(mode)
+        granted.data = {mode = "granted"}
+        apply(granted)
+        call("bee.resources:associate", {workspace_id = WORKSPACE, name = "retained",
+            root_ref = "bee.managed_window_fixture:session_root", subpath = "", allowed_access = "write"})
+        local actor = security.actor()
+        if not actor then error("fixture has no authenticated actor") end
+        local vol = assert(fs.get("bee.placement.native:root"))
+        local function marker(session_ref: string): string
+            local key, key_error = homes.session_key(actor:id(), session_ref)
+            if not key then error(tostring(key_error)) end
+            local file, open_error = vol:open("/sessions/" .. key .. "/home/marker.txt", "r")
+            if not file then error("retained child marker is absent: " .. tostring(open_error)) end
+            local content = file:read(128)
+            file:close()
+            assert(type(content) == "string", "retained marker is not text")
+            return content :: string
+        end
+        local first = run(false, false, nil, nil, "retained-first")
+        if not first then error("first window has no retained session") end
+        assert(marker(first) == "retained-first", "normal close lost the first child's files")
+        local second = run(false, false, nil, nil, "retained-second")
+        if not second then error("second window has no retained session") end
+        assert(first ~= second, "distinct launches share a session")
+        assert(marker(second) == "retained-second", "second child wrote outside its retained home")
+        assert(marker(first) == "retained-first", "second child overwrote the first conversation")
+    end)
+    apply(roots)
+    apply(mode)
     if not ok then error(tostring(failure)) end
 end
 return M

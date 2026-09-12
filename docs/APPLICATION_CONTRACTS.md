@@ -10,7 +10,7 @@ A **workspace** owns a desktop lifetime; a **presenter** is its replaceable UI.
 A **service** is not a view-owned instance; that lifetime is reserved for a later
 subsystem. Do not use PID, definition ID and instance ID interchangeably.
 
-Current limits: 64 admitted definitions, 16 view-owned instances, 8 policy bindings
+Current limits: 64 admitted definitions, 16 view-owned instances, 16 policy bindings
 per definition, 16 stop waiters per instance, 128 completed owner request IDs.
 Deduplication is bounded and in-memory, not durable exactly-once execution.
 

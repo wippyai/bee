@@ -134,6 +134,7 @@ entries:
     - bee:placement_store_policy
     - bee:placement_exec_policy
     - bee:placement_runner_policy
+    - bee:resource_grant_policy
     - bee:resource_resolve_policy
     - bee:credential_materialize_policy
     - bee:gateway_materialize_policy

@@ -27,6 +27,7 @@ type Definition = {
     allowed_overrides: {string},
     workdir_policy: WorkdirPolicy,
     thread_policy: ThreadPolicy,
+    session_resource: string?,
     credentials: {string},
     presentation: {start_menu: boolean, fullscreen: boolean, reuse: string},
 }
@@ -68,7 +69,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
     local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "policy_ref", "default_mode",
-        "allowed_overrides", "workdir_policy", "thread_policy", "credentials", "presentation"})
+        "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "presentation"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local launch_id, binding_ref, profile_id, policy_ref = bounds.id(data.launch_id), bounds.id(data.binding_ref), bounds.id(data.profile_id), bounds.id(data.policy_ref)
@@ -91,6 +92,11 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not workdir then return nil, ref .. ": " .. tostring(workdir_error) end
     local thread, thread_error = decode_thread(data.thread_policy)
     if not thread then return nil, ref .. ": " .. tostring(thread_error) end
+    local session_resource: string? = nil
+    if data.session_resource ~= nil then
+        session_resource = bounds.id(data.session_resource)
+        if not session_resource then return nil, ref .. ": session_resource is not an identifier" end
+    end
     local credentials, credentials_error = bounds.ids(data.credentials == nil and {} or data.credentials, true)
     if not credentials then return nil, ref .. ": credentials: " .. tostring(credentials_error) end
     local presentation = bounds.object(data.presentation == nil and {} or data.presentation)
@@ -104,7 +110,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
     return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id,
-        policy_ref = policy_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, credentials = credentials,
+        policy_ref = policy_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse}}, nil
 end
 function M.load(ref: string): (Definition?, string?)

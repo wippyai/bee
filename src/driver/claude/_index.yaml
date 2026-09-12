@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.driver.claude
 entries:
+- name: definition
+  kind: ns.definition
+  module: driver-claude
+  readme: file://README.md
+  meta:
+    title: Bee Claude driver
+    comment: Optional harness binding; host activation and launch policies authorize its use
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

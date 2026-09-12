@@ -55,11 +55,19 @@
       "root": "bee.driver",
       "namespaces": [
         "bee.driver",
-        "bee.driver.claude",
-        "bee.driver.codex",
         "bee.driver.kit",
         "bee.driver.transport"
       ]
+    },
+    {
+      "module": "bee/driver-claude",
+      "root": "bee.driver.claude",
+      "namespaces": ["bee.driver.claude"]
+    },
+    {
+      "module": "bee/driver-codex",
+      "root": "bee.driver.codex",
+      "namespaces": ["bee.driver.codex"]
     },
     {
       "module": "bee/gateway",

@@ -59,12 +59,19 @@ The publish-dry-run patch allows credential-free publication packing with an
 explicit version; [runtime PR #684](https://github.com/wippyai/runtime/pull/684)
 prepares that fix upstream. Uploads still require credentials.
 
-`BEE_VERSION=0.1.0-dev make standalone` prepares the 12 explicitly owned modules
+`BEE_VERSION=0.1.0-dev make standalone` prepares the explicitly owned modules
 in `build/modules.json`. Child namespaces remain slices of their named owner;
 each module has one `ns.definition`. The build freezes `src/`, runs strict lint,
 checks source inventory, and packs through Wippy's existing namespace exclusions.
 Source-free loading must match every pack's assigned IDs and kinds exactly.
 Missing or multiply owned namespaces and extra module roots fail the build.
+
+Claude and Codex each have a separate driver pack (`bee/driver-claude` and
+`bee/driver-codex`). The shared `bee/driver` pack owns the contract, kit and
+transport. Installing a driver does not activate it or grant execution: the host
+still selects its profile, executable and permissions. This split passed native
+bundle assembly with 17 modules and 612 entries; production launch profiles and
+independent Hub publication remain separate work.
 
 `build/bundle.py` writes checksummed artifacts under `dist/native-bundles/` and
 atomically replaces `dist/bee.bundle.build.json` only after every pack passes.

@@ -28,6 +28,7 @@ M.MAX_BRIEF_BYTES = 16384
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
+    title: string,
     definition_ref: string,
     definition_digest: string,
     launch_id: string,
@@ -163,7 +164,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         provider = provider_digest, mode = chosen})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
-    return {definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
+    return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest}, nil
 end

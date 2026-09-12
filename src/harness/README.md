@@ -85,9 +85,14 @@ policies; host binding alone is not Hub or Hive installation acceptance.
 
 Agent activity belongs on the existing application title surface:
 `bee.application:client.title`. Bee-native applications use that same API.
-Committed harness hooks can supply bounded activity labels; prompt text and
-tool arguments must not become titles. Hook-driven title updates are currently
-being integrated and are not part of the installed `edf6a7c3` checkpoint.
+Committed harness hooks supply fixed activity labels such as `Working`,
+`Using tool`, `Stopped` and `Needs attention`. Ambiguous observations show
+`Activity uncertain`; hook stops never imply a successful attempt. Prompt text
+and tool arguments cannot become titles. The selected profile name stays in
+the title, bounded with the existing text sanitizer. Updates follow a confirmed
+thread commit; claims, failed commits and stale replies cannot publish activity.
+An actual native-child/gateway/broker fixture proves the resulting title update.
+This source change is not part of the installed `edf6a7c3` checkpoint.
 
 Native CLI terminal-title sequences are a separate source. Selected runtime
 `291f5c6b` does not expose VT title changes through `exec` terminal sessions;

@@ -18,6 +18,7 @@ local machine = require("machine")
 local window = require("window")
 local picker = require("picker")
 local hooks = require("hooks")
+local text = require("text")
 local delivery = require("delivery")
 local records = require("records")
 
@@ -218,11 +219,12 @@ local function main(value: unknown)
         error("Managed window thread start: " .. tostring(started_error))
     end
     if not selected then
-        client.title(launch, admitted.plan.launch_id)
+        client.title(launch, text.bound(admitted.plan.title, 77))
         client.ready(launch, {negotiate_close = true})
     end
 
     local done = terminal:done()
+    local published_activity: string? = nil
     local closing = false
     local pending = delivery.advance(driver, now_ms())
     while true do
@@ -237,6 +239,12 @@ local function main(value: unknown)
         if timer then timer:stop() end
         if pending and selected.channel == pending.response then
             delivery.complete(driver, pending, now_ms())
+            local activity = state.activity
+            if activity and activity ~= published_activity then
+                local suffix = " · " .. activity
+                local sent = client.title(launch, text.bound(admitted.plan.title, 77 - #suffix) .. suffix)
+                if sent then published_activity = activity end
+            end
             pending = delivery.advance(driver, now_ms())
         elseif not selected.ok or selected.channel == done then
             break

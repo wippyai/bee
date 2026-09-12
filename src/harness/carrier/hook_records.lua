@@ -14,6 +14,14 @@ type Object = {[string]: unknown}
 type Batch = {
     records: {{[string]: unknown}},
     event_ids: {string},
+    activity: string?,
+}
+
+local ACTIVITY: {[string]: string} = {
+    SessionStart = "Session started", UserPromptSubmit = "Working",
+    PreToolUse = "Using tool", PostToolUse = "Working",
+    PostToolUseFailure = "Tool failed", Stop = "Stopped",
+    StopFailure = "Needs attention", SessionEnd = "Session ended",
 }
 
 local ALLOWED_TOP_FIELDS: {string} = {
@@ -56,11 +64,12 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
         return nil, "hook claim exceeds limit of " .. tostring(M.MAX_CLAIMED_HOOKS)
     end
     if count == 0 then
-        return {records = {}, event_ids = {}}, nil
+        return {records = {}, event_ids = {}, activity = nil}, nil
     end
 
     local records: {{[string]: unknown}} = {}
     local event_ids: {string} = {}
+    local activity: string? = nil
     local seen_event_ids: {[string]: boolean} = {}
 
     for index = 1, count do
@@ -165,9 +174,12 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
 
         records[index] = record
         event_ids[index] = event_id
+        activity = item.ambiguous == true and "Activity uncertain" or ACTIVITY[item.event]
     end
 
-    return {records = records, event_ids = event_ids}, nil
+    -- Only fixed labels leave the decoder; no prompt, tool input or arbitrary
+    -- provider text becomes presentation. The window publishes after commit.
+    return {records = records, event_ids = event_ids, activity = activity}, nil
 end
 
 return M

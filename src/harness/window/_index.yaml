@@ -30,6 +30,7 @@ entries:
   modules: [tty, process, channel, time, funcs, uuid]
   imports:
     client: bee.application:client
+    text: bee.application:text
     window_request: bee.harness.window:request
     input_event: bee.harness.window:input
     admission: bee.harness.launch:admission

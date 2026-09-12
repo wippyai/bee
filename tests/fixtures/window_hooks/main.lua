@@ -218,6 +218,25 @@ local function execute()
     end
     assert(acknowledged, "gateway did not acknowledge the committed hook")
 
+    -- The actual app publishes activity through the existing broker title API.
+    local title_deadline = time.after("3s")
+    local titled = false
+    while not titled do
+        local event = channel.select({replies:case_receive(), title_deadline:case_receive()})
+        if event.channel == title_deadline or not event.ok then break end
+        local message = event.value
+        if tostring(message:from()) == broker then
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.op == "title" and data.id == opened.id
+                and data.instance_id == opened.instance_id then
+                assert(data.title == "Window hooks fixture" or data.title == "Window hooks fixture · Using tool",
+                    "unexpected fixture hook title: " .. tostring(data.title))
+                titled = data.title == "Window hooks fixture · Using tool"
+            end
+        end
+    end
+    assert(titled, "committed native hook did not reach the broker title API")
+
     -- 10. Verify terminal input stays functional after hook commit
     assert(view:send({type = "paste", text = "second-pty-check"}))
     assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))

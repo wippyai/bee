@@ -63,6 +63,9 @@ def write_build_metadata(source, manifest, version, root):
         runtime_repository = unknown
     if not isinstance(runtime_commit, str) or not runtime_commit:
         runtime_commit = unknown
+    patches = runtime.get("patches", [])
+    for patch in patches:
+        runtime_commit += " + patch " + patch["sha256"][:12]
     native_entries = manifest.get("native", [])
     native_modules, native_versions = [], []
     if isinstance(native_entries, list):

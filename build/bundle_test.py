@@ -65,6 +65,17 @@ class BundleTest(unittest.TestCase):
             self.assertIn('runtime_commit = "' + "r" * 40 + '"', generated)
             self.assertIn('native_version = "v1.2.3"', generated)
 
+    def test_about_distinguishes_patched_runtime_builds(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            manifest = {"runtime": {"repository": "runtime", "commit": "a" * 40,
+                        "patches": [{"sha256": "b" * 64}]}}
+            with patch.object(bundle, "source_revision", return_value="c" * 40 + "-dirty"):
+                bundle.write_build_metadata(source, manifest, "0.1.0", source)
+            generated = (source / "src/apps/settings/build_info.lua").read_text()
+            self.assertIn("a" * 40 + " + patch " + "b" * 12, generated)
+            self.assertIn('build = "cccccccccccc-dirty"', generated)
+
     def test_new_namespace_requires_explicit_owner(self):
         self.entries["bee.new:app"] = "process.lua"
         with self.assertRaisesRegex(ValueError, "unowned=.*bee.new"):

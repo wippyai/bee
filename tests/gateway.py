@@ -59,7 +59,7 @@ def main():
                     except subprocess.TimeoutExpired:
                         run.kill()
                         run.wait()
-    print("Gateway slices 1, 2 and hook endpoints: hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
+    print("Gateway slices 1, 2 and hook endpoints: explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
           "ambiguity per delivery, allowlisted queue fields, Codex metadata classification, payload and queue bounds; authenticated loopback readiness with epoch and restart generation, admission without bytes, materialize once per credential generation, "
           "reissue as compare-and-set, supersession and revoke_attempt fenced by carrier epoch, cross-attempt and expiry and revocation refused, thread_read as the bound subject, "
           "bounded read-only thread_wait with no delivery mark, drain releasing an in-flight wait with an explicit outcome and refusing admissions, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; actor/context inheritance remains outside this scope-only proof")

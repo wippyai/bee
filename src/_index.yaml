@@ -750,10 +750,10 @@ entries:
 - name: gateway_execute_policy
   kind: security.policy
   meta:
-    comment: The MCP endpoint may invoke exactly the two tool operations, as the bound subject under the tool's host-named scope; the thread owner authorizes each call by membership, and the endpoint holds no thread authority of its own
+    comment: The MCP endpoint may invoke exactly the admitted tool operations, as the bound subject under each tool's host-named scope; the thread owner authorizes each call by membership, and the endpoint holds no thread authority of its own
   policy:
     actions: [funcs.security, security.scope.create, security.actor.create, security.policy.get, funcs.call]
-    resources: ['*', bee.threads.service:read_after, bee.threads.delivery:watch]
+    resources: ['*', bee.threads.service:read_after, bee.threads.delivery:watch, bee.threads.service:record]
     effect: allow
 - name: gateway_tool_read_policy
   kind: security.policy
@@ -762,6 +762,14 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.threads.service:read_after, bee.threads.delivery:watch]
+    effect: allow
+- name: gateway_tool_message_policy
+  kind: security.policy
+  meta:
+    comment: The bound MCP subject may append only a decoded message through the thread authority; the endpoint supplies thread and action/attempt context
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:record]
     effect: allow
 - name: resource_store_policy
   kind: security.policy

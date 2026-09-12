@@ -3,25 +3,40 @@
 -- them, and the tool catalog is a closed table. Nothing here executes a
 -- tool or reads a store; the handler maps a call to one owner operation.
 local bounds = require("bounds")
+local message = require("message")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
 M.MAX_BODY_BYTES = 65536
 type Object = {[string]: unknown}
 type Call = {id: unknown, method: string, params: Object, notification: boolean}
-type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object}
+type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
+local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false}
+local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 local TOOLS: {Tool} = {
     {name = "thread_read", description = "Read committed records of the bound thread after a cursor", operation = "bee.threads.service:read_after",
         policies = {"bee:gateway_tool_read_policy"},
-        schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}}}},
+        schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}}}, annotations = READ_ANNOTATIONS},
     {name = "thread_wait", description = "Wait, read-only and bounded, for the bound thread to move past a cursor; claims nothing", operation = "bee.threads.delivery:watch",
         policies = {"bee:gateway_tool_read_policy"},
-        schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}},
+        schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}, annotations = READ_ANNOTATIONS},
+    {name = "thread_message", description = "Append one message to the bound thread as the authenticated subject", operation = "bee.threads.service:record",
+        policies = {"bee:gateway_tool_message_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content"}, properties = {
+            idempotency_key = {type = "string", minLength = 1, maxLength = 160}, message_id = {type = "string", minLength = 1, maxLength = 160},
+            message_kind = {type = "string", enum = {"request", "progress", "reply", "notification"}},
+            recipient_ids = {type = "array", maxItems = 64, items = {type = "string", minLength = 1, maxLength = 160}},
+            content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
+            in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
+            outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
+        }}},
 }
 M.TOOLS = TOOLS
--- Every advertised tool is read-only, idempotent and closed-world; clients
--- that gate tool calls on annotations run them without a prompt.
-M.ANNOTATIONS = {readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false}
+-- The old name remains as a read-only compatibility value. Advertised tools
+-- carry their own annotations so writing tools cannot be presented as read-only.
+M.ANNOTATIONS = READ_ANNOTATIONS
+M.READ_ANNOTATIONS = READ_ANNOTATIONS
+M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?
     for _, tool in ipairs(TOOLS) do if tool.name == name then return tool end end
     return nil
@@ -67,7 +82,7 @@ function M.list(admitted: {string}): Object
     for _, name in ipairs(admitted) do allowed[name] = true end
     local tools: {Object} = {}
     for _, tool in ipairs(TOOLS) do
-        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description, inputSchema = tool.schema, annotations = M.ANNOTATIONS} end
+        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description, inputSchema = tool.schema, annotations = tool.annotations} end
     end
     return {tools = tools}
 end
@@ -116,5 +131,29 @@ function M.wait_arguments(params: Object): (Object?, string?)
     if not wait_ms or wait_ms < 0 then return nil, "wait_ms must be a nonnegative integer" end
     -- The transport budget bounds every wait; the owner subtracts its margin.
     return {after_sequence = after, wait_ms = wait_ms, transport_budget_ms = M.TRANSPORT_BUDGET_MS}, nil
+end
+-- Message arguments are the public message shape without sender, thread or
+-- lifecycle context. The full message decoder remains the authority for its
+-- nested content, references and kind-specific invariants.
+function M.message_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"})
+    if unknown_field then return nil, unknown_field end
+    local key = bounds.id(arguments.idempotency_key)
+    if not key then return nil, "idempotency_key is required and must be an identifier" end
+    local candidate: Object = {}
+    for _, name in ipairs({"message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"}) do
+        if arguments[name] ~= nil then candidate[name] = arguments[name] end
+    end
+    -- message.decode requires a sender; the endpoint strips this sentinel
+    -- before calling the owner, which supplies the authenticated actor.
+    candidate.sender_id = "gateway-mcp-subject"
+    local decoded, decode_error = message.decode(candidate)
+    if not decoded then return nil, "message: " .. tostring(decode_error) end
+    local body: Object = {message_id = decoded.message_id, message_kind = decoded.message_kind, recipient_ids = decoded.recipient_ids, content = decoded.content}
+    if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
+    if decoded.outcome then body.outcome = decoded.outcome end
+    return {idempotency_key = key, body = body}, nil
 end
 return M

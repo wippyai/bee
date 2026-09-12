@@ -50,6 +50,10 @@ local function reply_result(reply: unknown, call_error: unknown): Object
 end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object): Object
     request.thread_id = binding.thread_id
+    if tool.name == "thread_message" then
+        request.kind = "message"
+        request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
+    end
     local executor, failure = subject_executor(binding, tool)
     if not executor then return failure :: Object end
     local reply, call_error = executor:call(tool.operation, request)
@@ -127,7 +131,8 @@ local function handle(): nil
     local arguments: Object? = nil
     local argument_error: string? = nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(call.params)
-    else arguments, argument_error = mcp.wait_arguments(call.params) end
+    elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(call.params)
+    else arguments, argument_error = mcp.message_arguments(call.params) end
     if not arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, argument_error or "invalid arguments")); return nil end
     if tool.name == "thread_wait" then answer(response, http.STATUS.OK, mcp.result(call.id, wait(binding, tool, arguments)))
     else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments))) end

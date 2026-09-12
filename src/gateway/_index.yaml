@@ -57,6 +57,7 @@ entries:
   source: file://mcp.lua
   imports:
     bounds: bee.threads.records:bounds
+    message: bee.threads.records:message
 - name: address
   kind: function.lua
   source: file://address_method.lua

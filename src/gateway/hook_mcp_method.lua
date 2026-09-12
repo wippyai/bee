@@ -19,7 +19,7 @@ local function answer(response: http.Response, status: number, body: Object)
     response:write_json(body)
 end
 local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded, never answered with a decision",
-    inputSchema = {type = "object"}, annotations = mcp.ANNOTATIONS}
+    inputSchema = {type = "object"}, annotations = mcp.WRITE_ANNOTATIONS}
 local function handle(): nil
     local request = http.request()
     local response = http.response()

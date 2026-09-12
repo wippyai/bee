@@ -70,8 +70,12 @@ with `optional=true`. A matching retained home then preserves either an absent
 file or a file created by interactive sign-in; later machine credentials never
 replace either choice. Required sources still refuse a missing login file.
 Changing optional policy also changes the binding and refuses reuse. Empty
-provided bytes remain an error. This helper support does not yet enable optional
-machine-login projections in production profiles.
+provided bytes remain an error. Native materialization requires explicit `present` and `optional` flags from
+the broker; absent bytes are accepted only for an optional absent reply. This
+records an unseeded home without placing file credentials in the environment.
+First-use setup preserves the host-selected optional policy and refuses a
+conflicting existing definition. Production default profiles do not yet select
+machine-login sources.
 
 ## Capability
 

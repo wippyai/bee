@@ -32,10 +32,10 @@ local function ensure(workspace: string, name: string, root: string): (boolean, 
     end
     return false, "association conflict was not readable"
 end
-type Credential = {provider: string, source: {kind: string, ref: string}, projection_kind: string}
+type Credential = {provider: string, source: {kind: string, ref: string}, projection_kind: string, optional: boolean}
 local function credential(value: unknown): Credential?
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"provider", "source", "projection_kind"}) then return nil end
+    if not object or bounds.fields(object, {"provider", "source", "projection_kind", "optional"}) then return nil end
     local provider = bounds.member(object.provider, {"claude", "codex"})
     local source = bounds.object(object.source)
     if not provider or not source or bounds.fields(source, {"kind", "ref"}) then return nil end
@@ -44,16 +44,19 @@ local function credential(value: unknown): Credential?
     if not kind or not ref then return nil end
     local projection = kind == "fs_directory" and "file" or "environment"
     if object.projection_kind ~= nil and object.projection_kind ~= projection then return nil end
-    return {provider = provider, source = {kind = kind, ref = ref}, projection_kind = projection}
+    if object.optional ~= nil and type(object.optional) ~= "boolean" then return nil end
+    if object.optional == true and projection ~= "file" then return nil end
+    return {provider = provider, source = {kind = kind, ref = ref}, projection_kind = projection, optional = object.optional == true}
 end
 local function same_credential(value: unknown, chosen: Credential): boolean
     local object = bounds.object(value)
     return object ~= nil and object.provider == chosen.provider and object.source_kind == chosen.source.kind
         and object.source_ref == chosen.source.ref and object.projection_kind == chosen.projection_kind
+        and object.optional == chosen.optional
 end
 local function ensure_credential(workspace: string, name: string, chosen: Credential): (boolean, string?)
     local reply, call_error = funcs.call("bee.credentials:define", {workspace_id = workspace, name = name,
-        provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, expected_revision = 0})
+        provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, optional = chosen.optional, expected_revision = 0})
     local value = bounds.object(reply)
     if call_error or not value then return false, tostring(call_error or "define credential") end
     if value.ok == true and same_credential(value.value, chosen) then return true, nil end

@@ -5997,3 +5997,29 @@ in provider-session checkpoint fields was paused and is not integrated.
 The next isolated placement slice prevents concurrent use of one retained
 session home through the existing intent transaction. No new persistence or
 lock owner is needed. Wolfden facts1272–1274 retain the evidence and decisions.
+
+### 2026-09-12 Codex: retained-session components built and verified
+
+Integration source `cf667d8` includes retained-home exclusion, committed-hook
+interactive continuation and rejection of option-like provider resume IDs.
+The combined source passed 625 Lua tests, isolation, five managed-window cases
+and actual hook acceptance. Producer qualification has a controlled failing
+counterfactual; final continuation/provider/config fixtures pass 18 tests.
+The earlier exclusion implementation's trailing-nil SQL parameter regression
+failed 55 tests before its fix; corrected exclusion and replay runs each pass
+622 tests. Those failures remain in the evidence directory.
+
+The final standalone builds 15 components / 610 entries and passes the native
+executable suite, including the public empty Agent picker (detach 0.103s).
+Artifact: `/home/wolfy-j/wippy/bee-evidence/0912/bee-agent-components-final`.
+SHA256: `e9f38335e5b138a9433d2145f6b92ecce2c3341a59f2c5cf1ba48855ab623f98`.
+Evidence: `agent-components-provider-fixtures.log` and
+`agent-components-final-{build,native}.log`. This does not prove public provider
+conversation recovery or fix the earlier control-delivery diagnostic.
+
+Global remains unchanged. Fresh upstream checks confirm runtime main and
+PRs 703/726 and builder 7 are unchanged; all three PRs remain open and assigned
+to `skhaz`. Per-project default state selection before the runtime lock remains
+the installation gate. Agent saved-state/fresh-admission recovery and refreshed
+retained configuration are the next Bee work, without a new persistence owner.
+Wolfden fact 1277 records the component build and current runtime boundary.

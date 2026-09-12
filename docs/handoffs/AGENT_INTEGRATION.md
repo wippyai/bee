@@ -1,5 +1,33 @@
 # Agent integration checkpoint — September 12
 
+The latest component checkpoint adds exclusive retained session homes and
+interactive continuation resolved from committed hook observations. Placement
+uses its existing intent transaction to refuse a second unfinished attempt;
+the carrier checks the predecessor, authenticated observation producer and
+gateway binding before using the existing driver resume operation. Claude and
+Codex reject option-like resume references. No additional store or manager is
+introduced. The Agent app's saved-state and fresh-admission recovery wiring is
+still pending.
+
+Combined verification passed 625 Lua tests, harness isolation, five actual
+managed-window cases and real window hook acceptance. The following producer
+qualification change passed seven focused tests, with a counterfactual failure
+when its guard was removed. The subsequent option-reference guard also passed
+those seven tests. The final source `cf667d8` passes 18 focused continuation and
+existing provider/configuration fixture tests with strict lint. Its standalone
+passes embedded boot, Settings recovery, Terminal interaction, presenter rejoin
+and the public empty Agent picker. The 15-component executable is
+`bee-agent-components-final` in the evidence directory, SHA-256
+`e9f38335e5b138a9433d2145f6b92ecce2c3341a59f2c5cf1ba48855ab623f98`.
+Evidence: `interactive-continuation-integration.log`,
+`interactive-continuation-producer-{original,fixed}.log`,
+`interactive-continuation-option-boundary.log` and
+`agent-components-native-binary.log`, `agent-components-provider-fixtures.log`
+and `agent-components-final-{build,native}.log` in the September 12 evidence directory.
+Global remains unchanged while per-project default state selection is gated.
+
+## Earlier checkpoint acceptance
+
 The current standalone candidate includes retained Agent homes and acknowledged
 application checkpoints. The host launch definition selects the session
 resource; separate launches keep separate homes. The broker exposes a new

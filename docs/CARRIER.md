@@ -424,10 +424,12 @@ workspace and launch request, obtains a separate writable session resource
 grant, and passes both to placement. Omission keeps the per-attempt home.
 Placement reuses the session home only when the launch names its writable
 session grant. Existing retained configuration is accepted only when its
-content is byte-identical to the host-approved file. Application checkpoint
-and provider conversation recovery remain a later boundary: recovery must
-refresh host-owned per-attempt endpoint data explicitly and coordinate
-ownership so two live attempts never share one provider home.
+content is byte-identical to the host-approved file. The existing intent
+transaction excludes another unfinished attempt for the same owner/session;
+reuse requires both native exit and completed cleanup. A repeated admission
+replays its original attempt. No additional lock or session store is involved.
+Application checkpoint and provider conversation recovery remain a later
+boundary: recovery must refresh host-owned per-attempt endpoint data explicitly.
 
 The managed-window acceptance launches two real shell children through the
 broker, resource admission, carrier checkpoint and placement. It reads each
@@ -441,8 +443,9 @@ from the predecessor's committed hook observations. The request supplies the
 previous attempt and retained session; owner lookups check the action, actor,
 driver/profile measurements and session. Native exit and completed cleanup
 are required before a bounded, member-authorized thread scan. Only eligible
-observations committed by that actor under the predecessor's recorded gateway binding supply a session
-ID; ambiguous occurrences supply none and conflicting IDs refuse. The plan
+observations committed by that actor under the predecessor's recorded gateway
+binding supply a session ID; ambiguous occurrences supply none and conflicting
+IDs refuse. The plan
 calls the driver's existing resume method with an empty brief. It never
 replays the original prompt or changes a cancelled/uncertain attempt into
 a successful one. Structured continuation retains its successful-turn rule.
@@ -450,6 +453,7 @@ a successful one. Structured continuation retains its successful-turn rule.
 The focused continuation tests cover sparse pages, mismatched references,
 cleanup uncertainty, denied reads, conflicting/ambiguous IDs and invalid page
 progress. They also prove native Claude/Codex resume argv contains no prompt
-or stdin input, and a window plan rejects brief replay before dispatch. Public
+or stdin input. Both drivers reject option-like resume references, and a window
+plan rejects brief replay before dispatch. Public
 Agent checkpoint/restore admission, fresh retained configuration and actual
 provider conversation recovery after restart remain separate acceptance gates.

@@ -1,5 +1,12 @@
 # Foundation status
 
+The September 11 Agent integration source passes 581 Lua tests, managed-window
+acceptance and the remaining source/pack foundation checks in segments. An
+intermittent missing fault diagnostic remains unexplained. Host profile
+selection and MCP decoding are integrated; public MCP activation and native
+Agent conversation recovery remain open. Global Bee is unchanged. See the
+[current Agent checkpoint](handoffs/AGENT_INTEGRATION.md).
+
 The Agent window now has a profile-selection phase and `agent` command metadata.
 It lists bounded host-defined window profiles, carries the displayed plan into
 admission, and requires refresh after a changed plan. Real broker acceptance

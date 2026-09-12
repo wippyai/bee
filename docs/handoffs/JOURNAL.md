@@ -5828,3 +5828,27 @@ Project-state runtime cutover, authenticated provider turns, production terminal
 cleanup, generic gateway extensions, profiles and Docker remain separate work.
 No self-modification API work has started. Wolfden evidence: 1194–1197, followed
 by the final integration checkpoint.
+
+### 2026-09-11 — Codex: Agent integration checkpoint and scoped recovery boundary
+
+Isolated branch `feat/agent-integration-20260911` integrates host profile
+preflight, bounded Codex developer instructions and MCP argument validation.
+At source `586956d`, 581 Lua tests, managed-window 3/3, source/pack foundation
+and desktop recipes pass in segments. One packed fault-injection run exited
+without its expected diagnostic; the focused rerun passes, but the original
+failure remains unexplained. No uninterrupted full-check claim is made.
+See `AGENT_INTEGRATION.md` for the evidence and remaining gates.
+
+The user reiterated durable provider session identity and separate service,
+user and agent scopes. Native Agent recovery must reuse app checkpoints and
+retained-session resources, preserving current authorization and avoiding
+prompt replay; `NATIVE_AGENT_RECOVERY.md` is the proposed next integration unit.
+Global Bee and runtime source are unchanged. Runtime #726 and builder #7 are
+still open on the tested heads and assigned to Rodrigo.
+
+Parallel isolated work: governed authoring (`a4b4ef4`, 599 Lua tests and native
+pack 15 modules / 607 entries), Go architecture-check parity, and claimed-hook
+retention (`e4d87e2`, focused gateway check passes; real commit-followed-by-lost-
+ack acceptance is being added). These branches have not been merged into this
+checkpoint. The shared wolfden journal holds current coordination through seq
+1242 under cursor `jc_H7E57Z5SJH71M`.

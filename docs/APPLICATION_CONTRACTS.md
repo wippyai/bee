@@ -285,6 +285,10 @@ rejoin a live PTY; the current native Terminal deliberately declares no cold-res
 contract. Database migration version, registry version, application revision and
 resume schema are separate version domains.
 
+The native Agent window has not yet connected provider session observations to
+this recovery protocol. Its proposed integration reuses retained session files
+and acknowledged checkpoints; see [native Agent recovery](handoffs/NATIVE_AGENT_RECOVERY.md).
+
 Stored JSON is opaque application data, not serialized authority. It must not
 contain reusable grants, credentials or runtime objects. The database is a local
 workspace file, not an encrypted secret store. Future overlay/Hub activation must

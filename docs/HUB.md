@@ -3,7 +3,7 @@
 Bee has an optional Hub component with a scoped public API and a Modules TUI
 in development. Real install, update, uninstall and durable receipt restart
 checks pass on the existing runtime. Migration execution and complete recovery
-remain unfinished; the new component is not globally installed yet.
+remain unfinished. This backend milestone is installed globally.
 
 `bee.hub:call({operation, request?, expected_digest?})` returns
 `{ok, value?, code?, message?, replayed}`. The facade checks the authenticated

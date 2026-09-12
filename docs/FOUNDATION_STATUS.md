@@ -520,7 +520,7 @@ It requires no upstream changes or Keeper dependency. Migration execution,
 interrupted-operation recovery and complete Modules confirmation/apply UI
 acceptance remain incomplete. Uninstalled embedded-resource listing, chunked reads
 and unchanged registry history pass against a public artifact. Basic Modules search, parameter input, F12 and
-resize pass from source and pack; this work is not globally installed yet. See
+resize pass from source and pack; this backend milestone is installed globally. See
 [Hub installation and package reads](HUB.md) for the current contract and evidence.
 
 The shell remains the delivery focus. Hub installation, authorized overlay editing,

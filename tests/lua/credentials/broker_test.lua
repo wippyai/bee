@@ -311,6 +311,51 @@ local function define_tests()
             local restored, restore_error = restore:apply()
             if not restored then error("restore availability source: " .. tostring(restore_error)) end
         end)
+        test.it("pins a host-selected nested login path and refuses source retargeting", function()
+            local ws = fresh("nested-login")
+            admit_sources(ws)
+            local function select_path(path: string)
+                local entry = registry.get("bee:credential_sources")
+                if not entry then error("sources") end
+                for _, source in ipairs(entry.data.sources :: {{[string]: unknown}}) do
+                    if source.ref == CODEX_LOGIN_SOURCE then source.path = path end
+                end
+                local changes = registry.snapshot():changes()
+                changes:update(entry)
+                local applied, err = changes:apply()
+                if not applied then error(tostring(err)) end
+            end
+            select_path(".codex/auth.json")
+            local volume = fs.get(CODEX_LOGIN_SOURCE)
+            if not volume then error("fixture volume") end
+            if not volume:exists(".codex") then
+                local made, err = volume:mkdir(".codex")
+                if not made then error(tostring(err)) end
+            end
+            write_file(CODEX_LOGIN_SOURCE, ".codex/auth.json", CODEX_FILE_SENTINEL)
+            value(call(manager, "define", {workspace_id = ws, name = "login", provider = "codex",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}, optional = true}))
+            test.eq(value(call(manager, "availability", {workspace_id = ws, name = "login"})).present, true)
+            local attempt = fresh("attempt")
+            local projection = issue(user, ws, "login", attempt)
+            local request = {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}
+            test.eq(value(call(runner, "check", request)).destination, "auth.json")
+            select_path("different/auth.json")
+            test.eq(code(call(manager, "availability", {workspace_id = ws, name = "login"})), "CONFLICT")
+            test.eq(code(call(runner, "check", request)), "CONFLICT")
+            local rejected = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = fresh("generation")})
+            test.eq(code(rejected), "CONFLICT")
+            clean(rejected)
+            select_path(".codex/auth.json")
+            local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = fresh("generation")}))
+            test.eq(materialized.value, CODEX_FILE_SENTINEL)
+            test.eq(materialized.destination, "auth.json")
+            select_path("../escape")
+            test.eq(code(call(manager, "availability", {workspace_id = ws, name = "login"})), "STORAGE")
+            admit_sources(ws)
+        end)
         test.it("issues file projections and materializes bytes once to admitted materializer only", function()
             local ws = fresh("ws")
             admit_sources(ws)

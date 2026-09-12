@@ -28,12 +28,18 @@ const (
 	logLimit   = 64 * 1024
 )
 
+type observedFrame struct {
+	sequence uint64
+	text     string
+}
+
 type desktop struct {
 	cmd      *exec.Cmd
 	terminal *os.File
 	mu       chan struct{}
 	latest   string
 	frame    uint64
+	history  []observedFrame
 	log      []byte
 	pending  []byte
 	wait     <-chan error
@@ -147,14 +153,17 @@ func (d *desktop) consumeFrames() {
 		contentEnd := len(frameStart) + end
 		d.latest = visible(d.pending[len(frameStart):contentEnd])
 		d.frame++
+		d.history = append(d.history, observedFrame{sequence: d.frame, text: d.latest})
+		if len(d.history) > 32 {
+			d.history = d.history[len(d.history)-32:]
+		}
 		d.pending = append([]byte(nil), d.pending[contentEnd+len(frameEnd):]...)
 	}
 }
 
 // visible removes terminal control sequences while preserving the frame's text.
-// The Bee presenter emits complete synchronized frames, so an entire latest
-// frame is sufficient to assert current UI state without retaining a screen
-// emulator or unbounded scrollback.
+// Synchronized frames may contain only changed cells. This extracts emitted
+// text; it does not reconstruct the current screen.
 func visible(input []byte) string {
 	var out strings.Builder
 	for i := 0; i < len(input); {
@@ -208,14 +217,27 @@ func (d *desktop) snapshot() (string, uint64, []byte) {
 	return d.latest, d.frame, append([]byte(nil), d.log...)
 }
 
+// Readiness is an observed emission after a fence, not a search of only the
+// most recent cell delta (which may already omit the readiness text).
+func (d *desktop) observed(text string, after uint64) bool {
+	d.mu <- struct{}{}
+	defer func() { <-d.mu }()
+	for _, frame := range d.history {
+		if frame.sequence > after && strings.Contains(frame.text, text) {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *desktop) waitFor(text string, timeout time.Duration) error {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		latest, _, log := d.snapshot()
-		if strings.Contains(latest, text) {
+		_, _, log := d.snapshot()
+		if d.observed(text, 0) {
 			return nil
 		}
 		select {
@@ -254,8 +276,8 @@ func (d *desktop) waitForAfter(text string, previous uint64, timeout time.Durati
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		latest, frame, log := d.snapshot()
-		if frame > previous && strings.Contains(latest, text) {
+		_, _, log := d.snapshot()
+		if d.observed(text, previous) {
 			return nil
 		}
 		select {
@@ -508,7 +530,7 @@ func defaultPicker(binary string) error {
 	}
 	for _, profile := range []string{"Antigravity", "Claude", "Codex", "Grok"} {
 		latest, _, _ := ui.snapshot()
-		if !strings.Contains(latest, profile) {
+		if !ui.observed(profile, 0) {
 			return fmt.Errorf("picker omitted default profile %q\n%s", profile, latest)
 		}
 	}
@@ -555,7 +577,7 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
-func managedLaunch(binary string) error {
+func managedLaunch(binary string, machineLogin bool) error {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
 		return err
@@ -565,6 +587,15 @@ func managedLaunch(binary string) error {
 	report := filepath.Join(root, "launch-paths")
 	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
 		return err
+	}
+	const fixtureLogin = `{"fixture":"machine-login"}`
+	if machineLogin {
+		if err := os.MkdirAll(filepath.Join(home, ".codex"), 0700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(home, ".codex", "auth.json"), []byte(fixtureLogin), 0600); err != nil {
+			return err
+		}
 	}
 	cli := filepath.Join(project, "bin", "codex")
 	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) + "\nprintf 'BEE_MANAGED_CODEX_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
@@ -617,6 +648,22 @@ func managedLaunch(binary string) error {
 	if childHome == projectPath {
 		return errors.New("managed Codex HOME was the project directory")
 	}
+	login, loginErr := os.ReadFile(filepath.Join(childHome, ".codex", "auth.json"))
+	if machineLogin {
+		if loginErr != nil || string(login) != fixtureLogin {
+			return errors.New("machine login was not seeded into private home")
+		}
+	} else {
+		if !os.IsNotExist(loginErr) {
+			return errors.New("absent machine login unexpectedly produced a login file")
+		}
+		if _, err := os.Stat(filepath.Join(home, ".codex")); !os.IsNotExist(err) {
+			return errors.New("launch created a machine credential directory")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(childHome, ".bee-retained-login-ready.json")); err != nil {
+		return fmt.Errorf("login source binding missing: %w", err)
+	}
 	marker := filepath.Join(childHome, "bee-session-proof")
 	data, err := os.ReadFile(marker)
 	if err != nil || string(data) != "retained" {
@@ -660,9 +707,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "default Agent picker acceptance failed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := managedLaunch(binary); err != nil {
-		fmt.Fprintf(os.Stderr, "managed Agent launch acceptance failed: %v\n", err)
-		os.Exit(1)
+	for _, present := range []bool{false, true} {
+		if err := managedLaunch(binary, present); err != nil {
+			fmt.Fprintf(os.Stderr, "managed Agent launch (machine login=%v) failed: %v\n", present, err)
+			os.Exit(1)
+		}
 	}
-	fmt.Println("Native bee agent: four default profiles, no-work picker, F12, Escape close, project cwd, separate retained HOME and durable session file")
+	fmt.Println("Native bee agent: four default profiles, no-work picker, F12, Escape close, project cwd, separate retained HOME durable session file, and present/absent machine login")
 }

@@ -185,7 +185,10 @@ function M.define(value: unknown): Reply
         local directory, dir_error = sources.directory(source_ref)
         if not directory then return fail("INVALID", dir_error or "source") end
         destination = sources.FILE_DESTINATIONS[provider]
-        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory, projection_kind = projection_kind, destination = destination, optional = optional}
+        local path, path_error = sources.file_path(admitted, source_ref, workspace_id, provider, nil)
+        if not path then return fail("FORBIDDEN", path_error or "file source path unavailable") end
+        digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory,
+            path = path, projection_kind = projection_kind, destination = destination, optional = optional}
     end
 
     if not destination then return fail("INVALID", "no destination for provider " .. provider) end
@@ -318,6 +321,21 @@ function M.issue_projection(value: unknown): Reply
     if not stored then return fail("STORAGE", "read projection") end
     return succeed(projection_view(stored))
 end
+-- Recheck the host-selected file source against the definition before using
+-- its capability. Host edits cannot retarget an already-issued projection.
+local function file_binding(definition: Row, workspace_id: string, audience: string?): (string?, Reply?)
+    local admitted, admitted_error = sources.host_sources()
+    if not admitted then return nil, fail("STORAGE", admitted_error or "host sources") end
+    local ref, provider = text(definition.source_ref) or "", text(definition.provider) or ""
+    local path, path_error = sources.file_path(admitted, ref, workspace_id, provider, audience)
+    if not path then return nil, fail("FORBIDDEN", path_error or "file source unavailable") end
+    local directory, directory_error = sources.directory(ref)
+    if not directory then return nil, fail("INVALID", directory_error or "file source unavailable") end
+    local digest = digest_of({provider = provider, source_kind = "fs_directory", source_ref = ref, directory = directory,
+        path = path, projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1})
+    if not digest or digest ~= definition.digest then return nil, fail("CONFLICT", "credential source changed; redefine before use") end
+    return path, nil
+end
 -- The checks every use of a projection repeats; nil means it holds.
 local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
     if projection.revoked_at ~= nil then return fail("REVOKED", "projection was revoked at " .. tostring(projection.revoked_at)) end
@@ -337,6 +355,10 @@ local function holds(db: sql.DB, projection: Row, subject: string, audience: str
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
     if not sources.admits(admitted, text(definition.source_ref) or "", workspace_id, text(definition.provider) or "", text(definition.projection_kind) or "environment", audience) then
         return fail("FORBIDDEN", "the host no longer admits this source for audience " .. audience)
+    end
+    if definition.projection_kind == "file" then
+        local _, binding_error = file_binding(definition, workspace_id, audience)
+        if binding_error then return binding_error end
     end
     return nil
 end
@@ -423,12 +445,14 @@ function M.availability(value: unknown): Reply
         db:release()
         return fail("INVALID", "credential source directory is invalid")
     end
+    local path, binding_error = file_binding(definition, request.workspace_id, nil)
+    if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
     local volume = fs.get(source_ref)
     if not volume then
         db:release()
         return fail("UNAVAILABLE", "credential source volume unavailable")
     end
-    local info, stat_error = volume:stat("/" .. destination)
+    local info, stat_error = volume:stat("/" .. path)
     db:release()
     if info then
         if info.type ~= "file" or info.is_dir == true then return fail("INVALID", "provider login path is not a file") end
@@ -539,13 +563,15 @@ function M.materialize(value: unknown): Reply
             db:release()
             return fail("CONFLICT", "projection destination does not match provider fixed destination")
         end
-        local volume, vol_error = fs.get(source_ref)
+        local path, binding_error = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
+        if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
+        local volume = fs.get(source_ref)
         db:release()
-        if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable: " .. tostring(vol_error)) end
+        if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable") end
         -- Read at most one byte beyond the limit; never allocate an unbounded
         -- login file before enforcing its bound. Only the provider-fixed path
         -- is opened under the host-selected filesystem capability.
-        local file, open_error = volume:open("/" .. destination, "r")
+        local file, open_error = volume:open("/" .. path, "r")
         if not file then
             if optional and open_error and open_error:kind() == errors.NOT_FOUND then
                 return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",

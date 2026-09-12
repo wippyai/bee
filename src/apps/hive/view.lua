@@ -1,7 +1,7 @@
 -- MIT. The Hive Manager frame: the Hive state, the nodes as membership and
 -- their owners report them, the selected node's desktops, explicit control
--- and observe actions and the status line. A fixture source is named on
--- every frame. Every text comes through the model's bounding.
+-- and observe actions and the status line. Every text comes through the
+-- model's bounding.
 local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
@@ -49,14 +49,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         put(2, y, tty.text.truncate(value, maximum(0, width - 2), "…"), maximum(0, width - 2), fg, bg)
     end
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    local title = "HIVE MANAGER"
-    if state.source == "fixture" then title = title .. "   FIXTURE DATA, not a live Hive: " .. state.source_label end
-    line(1, title, state.source == "fixture" and appearance.selection_text(theme) or theme.text, state.source == "fixture" and theme.accent or theme.surface)
+    line(1, "HIVE MANAGER", theme.text, theme.surface)
     local hive_line = "Hive: unknown"
     if state.hive == "running" then hive_line = "Hive: supervisor running on this node"
     elseif state.hive == "unavailable" then hive_line = "Hive supervisor unavailable: " .. state.hive_detail end
     line(2, hive_line, theme.muted)
-    if state.source ~= "fixture" and width >= 52 then
+    if width >= 52 then
         local online, clients = 0, 0
         for _, node in ipairs(state.nodes) do
             if node.status == "reachable" then online = online + 1 end

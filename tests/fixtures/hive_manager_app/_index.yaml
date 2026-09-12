@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.hive_manager_probe
+entries:
+- name: policy
+  kind: security.policy
+  meta: {test_support: true}
+  policy:
+    actions: ['*']
+    resources: ['*']
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, time, security, tty, io]
+  imports:
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee.hive_manager_probe:policy]
+  meta:
+    command:
+      name: hive-manager-app-probe
+      short: Exercise Hive Manager through its broker viewport

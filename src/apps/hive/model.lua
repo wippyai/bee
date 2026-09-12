@@ -26,7 +26,7 @@ type NodeSessions = {owner_generation: string, desktops: {[string]: Session}}
 type Pane = "nodes" | "desktops"
 type Hive = "unknown" | "running" | "unavailable"
 type State = {
-    source: string, source_label: string, hive: Hive, hive_detail: string, membership_detail: string, generation: integer,
+    hive: Hive, hive_detail: string, membership_detail: string, generation: integer,
     nodes: {Node}, index: {[string]: Node}, names: {[string]: string}, catalogs: {[string]: Catalog},
     selected_node: string?, selected_desktop: string?, wanted_node: string?, wanted_desktop: string?,
     pane: Pane, pending: Attach?, outcome: string, sessions: {[string]: NodeSessions}, technical: boolean,
@@ -50,8 +50,8 @@ function M.names(value: unknown): {[string]: string}
     end
     return names
 end
-function M.new(source: string, source_label: string, names: {[string]: string}): State
-    return {source = source, source_label = source_label, hive = "unknown", hive_detail = "", membership_detail = "", generation = 0,
+function M.new(names: {[string]: string}): State
+    return {hive = "unknown", hive_detail = "", membership_detail = "", generation = 0,
         nodes = {}, index = {}, names = names, catalogs = {}, selected_node = nil, selected_desktop = nil, wanted_node = nil, wanted_desktop = nil, pane = "nodes",
         pending = nil, outcome = "", sessions = {}, technical = false}
 end

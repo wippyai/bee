@@ -1,9 +1,8 @@
 -- MIT. The Hive Manager application: named Bees as membership and their
 -- owners report them, each node's desktops as its owner lists them, and
 -- explicit control or observe requests confirmed by the viewer. It reads
--- through one typed directory; the live directory asks this node's
--- supervisor and grants nothing, the fixture directory is a host-admitted
--- table named on every frame. Opening the manager enables no Hive.
+-- through one typed live directory. It asks this node's supervisor and grants
+-- nothing. Opening the manager enables no Hive.
 local tty = require("tty")
 local client = require("client")
 local channel = require("channel")
@@ -19,12 +18,9 @@ local view = require("view")
 local directory = require("directory")
 local hive = require("hive")
 local types = require("types")
-local SOURCE = "bee.hive_manager:source"
-local FIXTURE = "bee.hive_manager:fixture"
 local NAMES = "bee.hive_manager:names"
 local POLL = "5s"
 local CALL_TIMEOUT = "2s"
-type Object = {[string]: unknown}
 local function entry_data(id: string): unknown
     local entry = registry.get(id)
     if not entry or type(entry.data) ~= "table" then return nil end
@@ -35,16 +31,7 @@ local function own_node(): string
     if not node or node == "" then return "local" end
     return node
 end
--- The host selects the source. Anything but an explicit, decodable fixture
--- is the live directory; a fixture is never the silent default.
-local function open_directory(handle: hive.Client): (directory.Directory, string)
-    local source = entry_data(SOURCE)
-    local kind = type(source) == "table" and (source :: Object).kind or nil
-    if kind == directory.FIXTURE then
-        local fixture, err = directory.decode_fixture(entry_data(FIXTURE))
-        if not fixture then error("Invalid Hive Manager fixture: " .. tostring(err)) end
-        return directory.fixture(fixture), fixture.label
-    end
+local function open_directory(handle: hive.Client): directory.Directory
     return directory.live({
         local_node = own_node(),
         lookup = hive.supervisor,
@@ -53,7 +40,7 @@ local function open_directory(handle: hive.Client): (directory.Directory, string
             return handle:call(owner, target, input, {timeout = options.timeout})
         end,
         timeout = CALL_TIMEOUT,
-    }), ""
+    })
 end
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -69,8 +56,8 @@ local function main(value: unknown)
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local source, source_label = open_directory(handle)
-    local state: model.State = model.new(source.source, source_label, model.names(entry_data(NAMES)))
+    local source = open_directory(handle)
+    local state: model.State = model.new(model.names(entry_data(NAMES)))
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid Hive Manager checkpoint") end
     local offset = 0
     local hits: {view.Hit} = {}

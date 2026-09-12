@@ -1,5 +1,5 @@
 -- MIT. The frame fits every terminal size, keeps hits inside it, names a
--- fixture source on every frame, shows the unavailable supervisor state without
+-- shows the unavailable supervisor state without
 -- inventing nodes, and lets no control sequence from an owner through.
 local test = require("test")
 local tty = require("tty")
@@ -9,7 +9,7 @@ local directory = require("directory")
 local types = require("types")
 local appearance = require("appearance")
 local function populated(source: string): model.State
-    local state = model.new(source, "review fixture", {forge = "Forge"})
+    local state = model.new({forge = "Forge"})
     model.set_supervisor(state, true, "")
     local members: {directory.Member} = {}
     for index = 1, 12 do
@@ -53,7 +53,6 @@ local function define_tests()
             local frame = view.draw(120, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("HIVE MANAGER", 1, true) ~= nil)
-            test.is_nil(text:find("FIXTURE DATA", 1, true))
             test.is_true(text:find("this unavailable", 1, true) == nil)
             test.is_true(text:find("this present      Forge (forge)", 1, true) ~= nil)
             test.is_true(text:find("     present      node-2", 1, true) ~= nil)
@@ -103,7 +102,7 @@ local function define_tests()
             test.is_true(first)
         end)
         test.it("separates membership from service readiness and keeps Raft roles in details", function()
-            local state = model.new("live", "", {})
+            local state = model.new({})
             model.set_supervisor(state, true, "")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""},
                 {node_id = "display", is_local = false, addr = ""}})
@@ -122,19 +121,17 @@ local function define_tests()
             text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
             test.is_true(text:find("     left         display", 1, true) ~= nil)
         end)
-        test.it("names a fixture source on the frame and offers no control over a controlled desktop", function()
-            local state = populated("fixture")
+        test.it("offers no control over a controlled desktop", function()
+            local state = populated("live")
             model.move(state, 1)
             local frame = view.draw(120, 30, appearance.defaults(), state, 0, "")
-            local text = table.concat(frame.rows, "\n")
-            test.is_true(text:find("FIXTURE DATA, not a live Hive: review fixture", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(frame.hits) do kinds[hit.kind] = true end
             test.is_true(kinds["observe"])
             test.is_nil(kinds["control"])
         end)
         test.it("shows a unavailable supervisor and an absent membership without inventing nodes", function()
-            local state = model.new("live", "", {})
+            local state = model.new({})
             model.set_supervisor(state, false, "supervisor is not running")
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}}, "membership unavailable")
             model.apply_presence(state, "local", types.reply_error("r", types.fault("UNAVAILABLE", "no supervisor to ask")))

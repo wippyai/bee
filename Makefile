@@ -113,7 +113,7 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_manager_app.py
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py
 
 include build/native.mk
@@ -207,7 +207,7 @@ client-defaults-check:
 
 .PHONY: hive-manager-check
 hive-manager-check: pack
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hive_manager_app.py
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 
 .PHONY: identity-native-check
 identity-native-check:

@@ -1,5 +1,12 @@
 # Foundation status
 
+The current source removes Hive Manager's review-node table and fixture selector.
+Production reads the live directory. Its test data and slow-query/confirmation
+probes stay in disposable Go/Lua source and pack hosts. All 26 focused model,
+directory and view cases pass, along with six application cases and an explicit
+failing-probe check. The 15 release component packs contain 608 entries. This
+change is not installed globally.
+
 The September 12 Agent integration branch has a verified standalone component
 candidate, source `cf667d8`: retained provider homes exclude concurrent attempts,
 interactive continuation resolves committed hook observations, and application

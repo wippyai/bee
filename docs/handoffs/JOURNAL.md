@@ -6203,3 +6203,26 @@ configuration are in progress; no production subscription-login or Docker claim
 yet. Host homes must not be mounted wholesale, and credential contents must not
 enter registry entries, persisted receipts, hashes or logs. Hub continues in
 the collaborator lane; overlays remain deferred until agents work.
+
+### September 12: separate harness packs and Grok integration
+
+Claude and Codex now assemble as their own driver components, separate from the
+shared contract/kit/transport pack (`8b5ee7e`, native-pack: 17 modules, 612 entries).
+Grok's declarative component is integrated (`2b4e1b6`); its launch/configuration
+and bounded protocol/state tests pass. The combined unit suite passes all 650
+cases after removing the catalog fixture's fixed five-binding assumption.
+Grok login and live MCP token interpolation remain unverified. The Agent picker
+still needs production launch profiles; this is not a managed-agent release.
+
+The optional userspace Docker module has local terminal-create work in
+`8bd366b` and `7fd34c9`: a distinct grantable `create_terminal` method with the
+same sandbox configuration checks and `Tty=true`. The focused runtime check and
+namespace lint pass. Its full development host has existing dependency/boot
+configuration failures, so full module acceptance is not claimed. Nothing from
+that module was published or installed. The real same-container Go PTY proof
+covers input, resize, detach, reattach and cleanup.
+
+Credential file source/upgrade and retained writable login-home work continue
+in isolated lanes. Random-port MCP requires the actual owned listener endpoint;
+no port probing or reserve-close helper was added. Wolfden facts 1359 and 1361
+record the integration boundaries. Global `55b725aa` remains unchanged.

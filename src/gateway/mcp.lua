@@ -78,7 +78,12 @@ function M.tool_result(text: string, is_error: boolean): Object
 end
 -- Tool arguments are bounded before they reach an owner operation.
 function M.read_arguments(params: Object): (Object?, string?)
-    local arguments = bounds.object(params.arguments) or {}
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
     local unknown_field = bounds.fields(arguments, {"cursor", "limit"})
     if unknown_field then return nil, unknown_field end
     local cursor = 0
@@ -97,7 +102,12 @@ function M.read_arguments(params: Object): (Object?, string?)
 end
 M.TRANSPORT_BUDGET_MS = 5000
 function M.wait_arguments(params: Object): (Object?, string?)
-    local arguments = bounds.object(params.arguments) or {}
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
     local unknown_field = bounds.fields(arguments, {"after_sequence", "wait_ms"})
     if unknown_field then return nil, unknown_field end
     local after = bounds.cursor(arguments.after_sequence == nil and 0 or arguments.after_sequence)

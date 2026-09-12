@@ -18,6 +18,7 @@ local json = require("json")
 local store = require("store")
 local protocol = require("protocol")
 local homes = require("homes")
+local quote = require("quote")
 local types = require("types")
 local OWNER = "bee.test.owner"
 local DIGEST = string.rep("b", 64)
@@ -211,7 +212,7 @@ local function alive(pid: string): boolean
 end
 local function shell(command: string): string
     local executor = assert(exec.get("bee.placement.native:executor"))
-    local proc = assert(executor:exec("sh -c '" .. command .. "'"))
+    local proc = assert(executor:exec(quote.line({"sh", "-c", command})))
     local stdout = proc:stdout_stream()
     assert(proc:start())
     local output = ""
@@ -1026,22 +1027,34 @@ local function define_tests()
             attempt_of(call(OWNER, "prepare", first_request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             attempt_of(call(OWNER, "attach", {attempt_id = first_id, recipient = process.pid(), generation = 1}))
-            attempt_of(call(OWNER, "start", {attempt_id = first_id}))
+            local started = attempt_of(call(OWNER, "start", {attempt_id = first_id}))
             local child_environment = ""
-            local idle = time.after("1s")
-            while true do
-                local selected = channel.select({outputs:case_receive(), idle:case_receive()})
-                if not selected.ok or selected.channel == idle then break end
-                local data = selected.value:payload():data() :: {[string]: unknown}
-                if data.data then child_environment = child_environment .. tostring(data.data) end
-                process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = math.floor(data.sequence :: number)})
+            local ended: {[string]: boolean} = {}
+            local deadline = time.after("10s")
+            while not ended.stdout or not ended.stderr do
+                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then
+                    process.unlisten(outputs)
+                    error("did not receive the complete raw child environment")
+                end
+                local data = selected.value:payload():data() :: protocol.Output
+                if tostring(selected.value:from()) == started.runner and data.attempt_id == first_id and data.generation == 1 then
+                    test.is_false(data.truncated == true)
+                    if data.data then child_environment = child_environment .. tostring(data.data) end
+                    if data.eof then ended[data.stream] = true end
+                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence})
+                end
             end
             process.unlisten(outputs)
             if not wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).execution_state == "exited"
             end, 8000) then error("first retained login launch did not exit") end
-            test.eq((value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).exit_code, 0)
+            local first_exit = (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).exit
+            if not first_exit then error("environment probe has no exit receipt") end
+            test.eq(first_exit.code, 0)
+            test.not_nil(child_environment:find("PROBE_VALUE=probe-42\n", 1, true))
             test.is_nil(child_environment:find('{"fixture":"login"}', 1, true))
+            attempt_of(call(OWNER, "cleanup", {attempt_id = first_id}))
             local session_key = assert(homes.session_key(OWNER, session_ref))
             local session_path = assert(homes.ensure_session(session_key))
             local home = assert(homes.os_path(session_path .. "/home"))
@@ -1060,6 +1073,7 @@ local function define_tests()
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 test.is_nil(tostring(item.detail):find("refreshed", 1, true))
             end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = second_id}))
             local changed_request = retained_launch(OWNER, session_ref, "changed-login")
             local changed_id = changed_request.attempt_id :: string
             credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})

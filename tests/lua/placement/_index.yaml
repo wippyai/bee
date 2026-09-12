@@ -177,6 +177,7 @@ entries:
     store: bee.placement.native:store
     protocol: bee.placement.native:protocol
     homes: bee.placement.native:homes
+    quote: bee.driver.kit:quote
     types: bee.placement:types
 - name: provider_configuration_test
   kind: function.lua

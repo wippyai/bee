@@ -1,6 +1,7 @@
 -- MIT. Native attempt materialization shared by execution transports.
 -- Runs only inside the admitted placement owner after its starting transition.
--- Credential bytes remain in memory; the caller owns gateway retirement even
+-- File credentials go only to the selected private home; receipts retain no
+-- credential bytes. The caller owns gateway retirement even
 -- when materialization fails after minting the binding.
 local env = require("env")
 local funcs = require("funcs")
@@ -113,7 +114,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")
     end
-    -- Credential projections arrive as bytes in a reply nothing persists.
+    -- Credential replies carry bytes only to their selected destination.
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
     local file_projection = false

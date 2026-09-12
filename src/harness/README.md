@@ -70,6 +70,14 @@ policies; host binding alone is not Hub or Hive installation acceptance.
 
 ## Agent profile picker
 
+A profile describes **harness + isolation + options + MCP scope**. The shipped
+defaults are registry declarations owned by the separate driver components.
+Editable DB-backed profiles and policy-controlled exchange through `bee.sync`
+are planned, not implemented. Shared configuration must not contain host paths,
+credential bytes or live process/session handles. Launch context uses the
+existing runtime `ctx` module and is resolved for each invocation; it is not a
+static profile payload or permission grant.
+
 Opening `bee.harness.window:app` with no arguments (the `agent` command) presents
 window launch definitions marked for the Start menu whose driver is activated
 and compatible. The bounded `selection` reader uses one registry snapshot and

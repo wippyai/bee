@@ -50,8 +50,12 @@ resolver for window profiles with `previous_attempt_id` and an empty brief.
 It requires an ended predecessor and native exit plus completed cleanup.
 Ambiguous occurrences provide no candidate ID; conflicting eligible IDs or
 invalid pages refuse continuation. Structured continuation still requires a
-successful completed turn. The app's saved-state and fresh-admission wiring
-remain unimplemented, so this is not public cold-restart recovery.
+successful completed turn. Launch admission now accepts the original launch
+request ID, predecessor attempt and thread in its typed `continuation` field.
+It requires the saved plan digest, derives the original session identity from
+that request and workspace, checks existing owner state, and
+obtains fresh grants for the new attempt. The app's saved-state consumer remains
+unimplemented, so this is not public cold-restart recovery.
 
 Interactive close normally produces a cancelled/uncertain attempt, unlike a
 structured successful turn. Do not fake a successful terminal outcome to pass
@@ -67,3 +71,23 @@ close versus node shutdown, changed/revoked profile or resource, lost checkpoint
 acknowledgement, stale-hook replies, no automatic prompt replay, and two Agent
 instances retaining separate conversations. Keep the existing manual/automatic
 restart-policy distinction; no separate persistence manager is needed.
+
+Two remaining execution boundaries were inspected on runtime
+`291f5c6b708c80afe5da07f3223767573b4d183f`. `attach_terminal` consumes an
+unstarted exec process; its returned terminal session exposes only send, close,
+done and status. The consumed process no longer exposes its PID, while the
+proxy starts it asynchronously. Completion waits for the leader and PTY output;
+it does not prove that a descendant with redirected output has left the group.
+Bee's window adapter consequently has no recorded group identity for its
+existing cleanup operation. Reuse must keep refusing incomplete cleanup until
+the native terminal lifecycle provides the required identity or cleanup proof.
+
+Retained configuration is currently byte-identical replay only. Exact-runtime
+inspection confirms the Lua FS surface lacks atomic rename/replacement and
+non-following opens; remove followed by exclusive creation is not a safe refresh.
+Claude 2.1.269 offers a possible driver-owned alternative through inline
+`--mcp-config`, `--settings`, `--strict-mcp-config` and explicit settings sources.
+An offline parse check is not integrated-driver or provider acceptance. Codex
+0.154.0 offers configuration overrides but no verified alternate hook-file
+location. These are investigation results, not new runtime requirements or
+callable Bee driver options.

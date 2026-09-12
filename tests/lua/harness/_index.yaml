@@ -484,10 +484,14 @@ entries:
   meta: {type: test, suite: bee, timeout: "180s"}
   modules: [funcs, security, process, channel, registry, env, time]
   security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_store_policy]
   imports:
     test: wippy.test:test
     admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    checkpoint: bee.harness.carrier:checkpoint
+    hook_records: bee.harness.carrier:hook_records
+    placement_store: bee.placement.native:store
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua

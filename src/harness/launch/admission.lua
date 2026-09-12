@@ -18,6 +18,7 @@ local carrier = require("carrier")
 local configuration = require("configuration")
 local resolver = require("resolver")
 local placement_types = require("placement_types")
+local continuation = require("continuation")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -48,6 +49,7 @@ type Admitted = {
     session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
 }
+type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string}
 type Request = {
     request_id: string,
     definition_ref: string,
@@ -57,6 +59,7 @@ type Request = {
     workdir: string?,
     thread_id: string?,
     expected_plan_digest: string?,
+    continuation: Continuation?,
 }
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -181,7 +184,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -212,8 +215,23 @@ function M.decode_request(value: unknown): (Request?, string?)
         end
         expected_plan_digest = digest
     end
+    local previous: Continuation? = nil
+    if object.continuation ~= nil then
+        local source = bounds.object(object.continuation)
+        if not source then return nil, "continuation must be an object" end
+        local field = bounds.fields(source, {"origin_request_id", "previous_attempt_id", "thread_id"})
+        if field then return nil, "continuation: " .. field end
+        local origin = bounds.id(source.origin_request_id)
+        local attempt = bounds.id(source.previous_attempt_id)
+        local thread = bounds.id(source.thread_id)
+        if not origin or not attempt or not thread then return nil, "continuation needs bounded origin, attempt and thread identifiers" end
+        if brief ~= "" then return nil, "window continuation cannot replay a brief" end
+        if thread_id then return nil, "continuation cannot override its thread" end
+        if not expected_plan_digest then return nil, "continuation needs the saved launch plan digest" end
+        previous = {origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread}
+    end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
-        expected_plan_digest = expected_plan_digest}, nil
+        expected_plan_digest = expected_plan_digest, continuation = previous}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -269,13 +287,21 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if request.workdir and not definition.allows(launch, "workdir") then return nil, fail("FORBIDDEN", "definition does not allow a workdir override") end
     if request.thread_id and not definition.allows(launch, "thread") then return nil, fail("FORBIDDEN", "definition does not allow a thread override") end
     local ids = M.identities(request.request_id)
+    local previous = request.continuation
+    if previous and plan.mode ~= "window" then return nil, fail("INVALID", "launch continuation requires a window profile") end
     local thread_id = request.thread_id
     if launch.thread_policy.kind == "named" then thread_id = launch.thread_policy.thread_ref end
+    if previous then
+        if thread_id and thread_id ~= previous.thread_id then return nil, fail("CONFLICT", "the saved thread differs from the launch definition") end
+        thread_id = previous.thread_id
+        ids.action_id = M.identities(previous.origin_request_id).action_id
+    end
     if not thread_id and launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
     local workdir_name = request.workdir
     if launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
     if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
     local session_resource = launch.session_resource
+    if previous and not session_resource then return nil, fail("CONFLICT", "the launch definition has no retained session resource") end
     if session_resource and workdir_name == session_resource then
         return nil, fail("INVALID", "workdir resource duplicates the session resource")
     end
@@ -285,9 +311,24 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     local resources: {placement_types.ResourceGrant} = {}
     local session_ref: string? = nil
     if session_resource then
-        local session_digest, session_error = digest_of({workspace_id = request.workspace_id, request_id = request.request_id})
+        local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
+            request_id = previous and previous.origin_request_id or request.request_id})
         if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
         session_ref = "session:" .. session_digest
+        if previous then
+            -- Saved references grant nothing. Existing owner operations verify
+            -- membership, exact producer/session, driver pins and completed
+            -- cleanup before this request obtains any fresh grants.
+            local resume, resume_error = continuation.resolve_window(function(target: string, input: unknown): (unknown, string?)
+                local reply, err = funcs.call(target, input)
+                if err then return nil, tostring(err) end
+                return reply, nil
+            end, {thread_id = previous.thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id,
+                previous_attempt_id = previous.previous_attempt_id, owner_id = requester, session_ref = session_ref,
+                binding_ref = plan.binding_ref, binding_digest = plan.binding_digest,
+                profile_id = plan.profile_id, profile_digest = plan.profile_digest})
+            if not resume then return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error)) end
+        end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":session"})
         if not granted then return nil, grant_refused end
@@ -320,7 +361,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
-        working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref}
+        working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
+        previous_attempt_id = previous and previous.previous_attempt_id or nil}
     return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
 end
 -- External callers keep the operation reply; local execution paths consume

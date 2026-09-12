@@ -455,5 +455,22 @@ cleanup uncertainty, denied reads, conflicting/ambiguous IDs and invalid page
 progress. They also prove native Claude/Codex resume argv contains no prompt
 or stdin input. Both drivers reject option-like resume references, and a window
 plan rejects brief replay before dispatch. Public
-Agent checkpoint/restore admission, fresh retained configuration and actual
+Agent checkpoint/restore wiring, fresh retained configuration and actual
 provider conversation recovery after restart remain separate acceptance gates.
+
+Launch admission now accepts an optional `continuation` containing only
+`origin_request_id`, `previous_attempt_id` and `thread_id`. It requires an empty
+brief, the saved launch-plan digest and a current window definition with a
+retained session resource. The original request and requested workspace
+derive the session identity; the new request derives a fresh attempt. Owner
+reads verify the predecessor and committed provider identity before admission
+obtains new resource grants or credential projections. The carrier request keeps
+the original action and thread and names the predecessor for its existing
+prepare-attempt compare-and-swap. A retry reuses the new attempt's grant receipts.
+No caller-selected session grant, actor or provider resume ID is accepted.
+
+The launch-owner fixture proves this path against real thread and resource
+operations, including current resource refusal and foreign-actor denial. It
+constructs completed placement state explicitly and starts no native process;
+it therefore does not prove native cleanup or public app restore. The Agent
+app still has no saved-state recovery wiring or advertised resume schema.

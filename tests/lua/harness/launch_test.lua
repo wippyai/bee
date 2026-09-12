@@ -12,6 +12,10 @@ local registry = require("registry")
 local env = require("env")
 local time = require("time")
 local admission = require("admission")
+local machine = require("machine")
+local checkpoint = require("checkpoint")
+local hook_records = require("hook_records")
+local placement_store = require("placement_store")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
@@ -512,6 +516,106 @@ local function define_tests()
             local retried_list = kinds(tostring(first.thread_id))
             test.eq(count(retried_list, "attempt.started"), 1)
             test.eq(count(retried_list, "turn.request"), 1)
+        end)
+        test.it("readmits a recorded window with fresh grants and its original action and session", function()
+            -- Construct committed predecessor state through the actual owners.
+            -- No native process is started: placement completion is an explicit
+            -- store fixture, not evidence of native process cleanup.
+            local entry = registry.get(RETAINED_DEFINITION)
+            if not entry then error("retained definition") end
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.profile_id, changed.default_mode = "window", "window"
+            entry.data = changed
+            apply(entry)
+            local policy_entry = registry.get(POLICY)
+            if not policy_entry then error("fixture policy") end
+            local original_policy = policy_entry.data
+            local window_policy: {[string]: unknown} = {}
+            for key, item in pairs(original_policy :: {[string]: unknown}) do window_policy[key] = item end
+            window_policy.prepare_options = {permission_mode = "default"}
+            policy_entry.data = window_policy
+            apply(policy_entry)
+            local origin = fresh("window-origin")
+            local first = value(call("bee.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
+                workspace_id = workspace, brief = ""})) :: admission.Admitted
+            local transport: machine.IO = {
+                call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+                send = function(target: string, topic: string, input: unknown) end,
+                self_pid = function(): string return process.pid() end,
+                now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
+                key = function(): string return fresh("key") end,
+            }
+            local planned, plan_error = machine.plan(transport, first.request)
+            if not planned then error(tostring(plan_error)) end
+            local prepared, prepare_error = machine.prepare_attempt(transport, planned)
+            if not prepared then error(tostring(prepare_error)) end
+            local point = checkpoint.new({binding_ref = first.plan.binding_ref, binding_digest = first.plan.binding_digest,
+                profile_id = first.plan.profile_id, profile_digest = first.plan.profile_digest, gateway_binding = "recorded-binding"}, prepared.epoch)
+            point.retained_session_ref = first.session_ref
+            local records, records_error = hook_records.batch("recorded-binding", nil, {{event_id = "session-start", event = "SessionStart",
+                occurrence = "session:provider-session", ambiguous = false, provenance = "fixture", sequence = 1,
+                fields = {event = "SessionStart", session_id = "provider-session", source = "startup"}}})
+            if not records then error(tostring(records_error)) end
+            value(call("bee.threads.carrier:commit", {thread_id = first.thread_id, attempt_id = first.attempt_id,
+                idempotency_key = fresh("commit"), carrier_epoch = prepared.epoch, expected_revision = 0, checkpoint = point, records = records.records}))
+            local request: admission.Request = {request_id = fresh("resume"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace,
+                brief = "", expected_plan_digest = first.plan.plan_digest,
+                continuation = {origin_request_id = origin, previous_attempt_id = first.attempt_id, thread_id = first.thread_id}}
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            value(call("bee.threads.service:receipt", {thread_id = first.thread_id, action_id = first.action_id, attempt_id = first.attempt_id,
+                idempotency_key = fresh("receipt"), carrier_epoch = prepared.epoch, receipt = {scope = "attempt", outcome = "cancelled", evidence_refs = {},
+                    error = {code = "fixture_closed", message = "predecessor fixture closed", retryable = false}}}))
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local db, db_error = placement_store.open()
+            if not db then error(tostring(db_error)) end
+            test.is_true(placement_store.transition(db, first.attempt_id, {execution = "starting", evidence = {kind = "fixture", detail = "no process started"}}).ok)
+            test.is_true(placement_store.transition(db, first.attempt_id, {execution = "exited", evidence = {kind = "fixture", detail = "no process exists"}}).ok)
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            test.is_true(placement_store.transition(db, first.attempt_id, {cleanup = "complete", evidence = {kind = "fixture", detail = "no home materialized"}}).ok)
+            db:release()
+            local resumed = value(call("bee.harness.launch:admit", request)) :: admission.Admitted
+            test.eq(resumed.action_id, first.action_id)
+            test.eq(resumed.thread_id, first.thread_id)
+            test.eq(resumed.session_ref, first.session_ref)
+            test.eq(resumed.attempt_id, "attempt:" .. request.request_id)
+            test.eq(resumed.request.previous_attempt_id, first.attempt_id)
+            test.eq(resumed.request.brief, "")
+            test.eq(resumed.request.resources[1].name, first.request.resources[1].name)
+            test.is_true(resumed.request.resources[1].grant_ref ~= first.request.resources[1].grant_ref)
+            local replay = value(call("bee.harness.launch:admit", request)) :: admission.Admitted
+            test.eq(replay.request.resources[1].grant_ref, resumed.request.resources[1].grant_ref)
+            test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request.request_id})), "NOT_FOUND")
+            local resume_plan, resume_error = machine.plan(transport, resumed.request)
+            if not resume_plan then error(tostring(resume_error)) end
+            test.eq(resume_plan.resume_ref, "provider-session")
+            test.is_nil(resume_plan.launch.stdin)
+            test.eq(resume_plan.launch.argv[#resume_plan.launch.argv], "provider-session")
+            -- Mutated saved references and changed host plans cannot select
+            -- another session or silently replay under new configuration.
+            request.workspace_id = fresh("foreign-workspace")
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            request.workspace_id = workspace
+            request.expected_plan_digest = string.rep("0", 64)
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            request.expected_plan_digest = first.plan.plan_digest
+            request.brief = "repeat original prompt"
+            test.eq(code(call("bee.harness.launch:admit", request)), "INVALID")
+            request.brief = ""
+            local foreign, foreign_error = funcs.new():with_actor(security.new_actor("bee.test.foreign")):with_scope(scope()):call("bee.harness.launch:admit", request)
+            if foreign_error then error(tostring(foreign_error)) end
+            test.is_false((foreign :: admission.Reply).ok)
+            -- Current resource authority must approve again; the old grant
+            -- and committed hook do not authorize a new attempt.
+            value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "read"}))
+            request.request_id = fresh("revoked-resume")
+            test.is_false(call("bee.harness.launch:admit", request).ok)
+            value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
+            entry.data = original
+            apply(entry)
+            policy_entry.data = original_policy
+            apply(policy_entry)
         end)
         restore_host()
     end)

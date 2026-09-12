@@ -22,6 +22,7 @@ entries:
     configuration: bee.driver:configuration
     resolver: bee.driver:resolver
     placement_types: bee.placement:types
+    continuation: bee.harness.carrier:continuation
 - name: resolve
   kind: function.lua
   source: file://resolve_method.lua

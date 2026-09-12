@@ -15,6 +15,12 @@ sync-hive-check:
 governance-runtime-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/governance_runtime.py
 
+.PHONY: governance-workspace-check
+governance-workspace-check:
+	@test -n "$(GOVERNANCE_RUNTIME)" -a -x "$(GOVERNANCE_RUNTIME)" || { echo 'Set GOVERNANCE_RUNTIME to the candidate runtime.' >&2; exit 1; }
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_workspace.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_workspace.go -runtime "$(abspath $(GOVERNANCE_RUNTIME))"
+
 run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:

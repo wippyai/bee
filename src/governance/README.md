@@ -75,6 +75,15 @@ destination approval, application installation, overlays or WASM execution.
 The full 16 MiB file-tree boundary is accepted with independent base64 padding
 per file; adding another byte refuses without advancing the edit revision.
 
+`make governance-workspace-check GOVERNANCE_RUNTIME=/path/to/candidate` runs a
+bounded Go acceptance proof against two actual boots of one disposable
+`BEE_GOVERNANCE_DB`. It creates, writes and freezes binary content before a
+mutable edit; the restart proves the copied frozen bytes and create/write/freeze
+receipt replays remain intact, while a separately authorized actor is denied
+the exact owner workspace. The runner also compares the complete migration
+ledger row before and after restart. It does not establish Hive transfer,
+destination approval, application installation, overlays or WASM execution.
+
 The host adapter must supply exact artifact/entry/migration measurements,
 resolved dependencies and references, final requirement bindings, a coherent
 registry/policy snapshot, and the applied migration ledgers for updated packages.

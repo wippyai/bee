@@ -13,6 +13,14 @@ existing app resume_schema/checkpoint_result protocol. Save during operation,
 not only on close; only the broker's successful checkpoint result establishes
 that the app's resume record committed.
 
+The native placement store admits one unfinished attempt for each retained
+owner/session home. A second attempt is refused while the predecessor is
+intended, live, uncertain, or merely exited with cleanup still pending or
+uncertain. Reuse begins only after the existing cleanup path has proved the
+required scope gone and recorded cleanup complete. This prevents concurrent
+writes to retained provider files; it neither deletes them nor claims to prove
+PTY identity. Repeating an already admitted request still replays that attempt.
+
 The app checkpoint identifies its admitted thread/action/attempt and retained
 session resource. It is opaque app data, never stored authority. The owner must
 verify those references and current profile/resource grants before recovering

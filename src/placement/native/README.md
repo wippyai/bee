@@ -14,6 +14,12 @@ session directories live under a placement-owned root.
 1. `prepare` validates the request against this host's admitted roots,
    measures what the runtime can clean, refuses a launch that needs more
    than that, and records intent. Nothing external exists yet.
+   A retained session home has one holder per owner/session pair: another
+   attempt is refused until the predecessor is exited and its existing cleanup
+   operation has proved the required scope gone and recorded `complete`.
+   Repeating the same admitted idempotency key still returns its original
+   attempt. This is an admission predicate in the existing placement
+   transaction, not a home lock or a separate manager.
 2. `start` spawns the runner under the placement scope and waits for its
    startup acknowledgment within the admitted start budget.
 3. The runner records `starting` and creates the attempt home under a derived

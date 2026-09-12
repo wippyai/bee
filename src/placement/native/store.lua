@@ -107,14 +107,39 @@ function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, enco
     local tx, begin_err = db:begin()
     if not tx then return {ok = false, code = "STORAGE", message = "begin intent"} end
     local at = M.now()
-    local _, insert_err = tx:execute([[INSERT INTO bee_placement_attempts (attempt_id, owner_id, owner_incarnation, action_id, idempotency_key,
+    -- The session home is writable state, so it has one unfinished holder.
+    -- This predicate is part of the insert transaction: an observation before
+    -- the insert cannot admit a second holder. A completed cleanup is the
+    -- only release; exit alone deliberately leaves the holder in place.
+    local inserted, insert_err = tx:execute([[INSERT INTO bee_placement_attempts (attempt_id, owner_id, owner_incarnation, action_id, idempotency_key,
         request_digest, request_json, grants_json, execution_state, cleanup_state, capability, required_cleanup, exit_observation, session_ref, evidence_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'intended', 'pending', ?, ?, ?, ?, 1, ?, ?)]],
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'intended', 'pending', ?, ?, ?, ?, 1, ?, ?
+        WHERE ? IS NULL OR NOT EXISTS (
+            SELECT 1 FROM bee_placement_attempts
+            WHERE session_ref = ? AND owner_id = ?
+              AND NOT (execution_state = 'exited' AND cleanup_state = 'complete')
+        )]],
         {request.attempt_id, request.owner_id, request.owner_incarnation, request.action_id, request.idempotency_key, digest, encoded, grants_json,
-            measured.capability, request.required_cleanup, measured.exit_observation, request.session_ref, at, at})
+            measured.capability, request.required_cleanup, measured.exit_observation, request.session_ref, at, at,
+            request.session_ref, request.session_ref, request.owner_id})
     if insert_err then
         rollback(tx)
+        -- The service normally finds a replay before reaching this point.
+        -- This fallback preserves that result if two identical prepares race
+        -- between its read and this guarded insert.
+        local existing, existing_error = M.by_key(db, request.owner_id, request.idempotency_key)
+        if existing_error then return {ok = false, code = "STORAGE", message = existing_error} end
+        if existing and existing.request_digest == digest then return {ok = true, attempt = project(existing)} end
         return {ok = false, code = "CONFLICT", message = "attempt or idempotency key already recorded"}
+    end
+    if not inserted or integer(inserted.rows_affected) ~= 1 then
+        rollback(tx)
+        -- A simultaneous replay can see the already-recorded holder through
+        -- the session predicate rather than the unique-key error above.
+        local existing, existing_error = M.by_key(db, request.owner_id, request.idempotency_key)
+        if existing_error then return {ok = false, code = "STORAGE", message = existing_error} end
+        if existing and existing.request_digest == digest then return {ok = true, attempt = project(existing)} end
+        return {ok = false, code = "CONFLICT", message = "retained session is still held until predecessor cleanup is complete"}
     end
     local _, evidence_err = append(tx, request.attempt_id, 0, "intent.recorded", "capability " .. measured.capability .. " (" .. measured.exit_observation .. "), required " .. request.required_cleanup .. " (" .. request.required_exit_observation .. ")", at)
     if evidence_err then

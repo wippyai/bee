@@ -87,6 +87,16 @@ end
 local function attempt_of(reply: service.Reply): types.Attempt
     return value(reply) :: types.Attempt
 end
+local function await(future: funcs.Future): service.Reply
+    local _, open = future:response():receive()
+    if not open then error("prepare race closed without a reply") end
+    local payload, result_error = future:result()
+    if result_error then error("prepare race: " .. tostring(result_error)) end
+    if not payload then error("prepare race returned no reply") end
+    local data = payload:data()
+    if type(data) ~= "table" then error("prepare race reply returned " .. type(data)) end
+    return data :: service.Reply
+end
 local function launch(command: {string}, required: string): {[string]: unknown}
     local argv: {string} = {}
     for index = 2, #command do argv[index - 1] = command[index] end
@@ -520,14 +530,46 @@ local function define_tests()
             test.eq(refused.error and refused.error.code, "DENIED")
             test.is_true(tostring(refused.error and refused.error.message):find("requires", 1, true) ~= nil)
         end)
+        test.it("atomically admits one competing retained-session intent", function()
+            local session_ref = fresh("contended-session")
+            local first = retained_launch(OWNER, session_ref, "contender-one")
+            local second = retained_launch(OWNER, session_ref, "contender-two")
+            local a, a_error = caller(OWNER):async("bee.placement.native:prepare", first)
+            local b, b_error = caller(OWNER):async("bee.placement.native:prepare", second)
+            if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
+            local replies = {await(a), await(b)}
+            local admitted = 0
+            local refused = 0
+            for _, reply in ipairs(replies) do
+                if reply.ok then
+                    admitted = admitted + 1
+                else
+                    test.eq(reply.error and reply.error.code, "CONFLICT")
+                    refused = refused + 1
+                end
+            end
+            test.eq(admitted, 1)
+            test.eq(refused, 1)
+        end)
         test.it("retains a selected session home across attempts without adopting changed configuration", function()
             local session_ref = fresh("session")
             local first = retained_launch(OWNER, session_ref, "first")
             local first_prepared = attempt_of(call(OWNER, "prepare", first))
+            -- The same admitted request is a replay, including while it is
+            -- the retained home's only holder.
+            test.eq(attempt_of(call(OWNER, "prepare", first)).attempt_id, first_prepared.attempt_id)
+            local competing = retained_launch(OWNER, session_ref, "competing")
+            local blocked = call(OWNER, "prepare", competing)
+            test.eq(blocked.error and blocked.error.code, "CONFLICT")
+            test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
             test.eq(attempt_of(call(OWNER, "start", {attempt_id = first_prepared.attempt_id})).execution_state, "running")
             test.is_true(wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = first_prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
             end, 8000))
+            -- Exit alone is not release: cleanup has to prove its scope.
+            local exited_holder = call(OWNER, "prepare", retained_launch(OWNER, session_ref, "exited-holder"))
+            test.eq(exited_holder.error and exited_holder.error.code, "CONFLICT")
+            attempt_of(call(OWNER, "cleanup", {attempt_id = first_prepared.attempt_id}))
             local second = retained_launch(OWNER, session_ref, "second")
             local second_prepared = attempt_of(call(OWNER, "prepare", second))
             test.eq(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).execution_state, "running")
@@ -550,7 +592,6 @@ local function define_tests()
             if not first_home then error(tostring(first_home_error)) end
             local second_home, second_home_error = homes.attempt_key(OWNER, second_prepared.attempt_id)
             if not second_home then error(tostring(second_home_error)) end
-            attempt_of(call(OWNER, "cleanup", {attempt_id = first_prepared.attempt_id}))
             attempt_of(call(OWNER, "cleanup", {attempt_id = second_prepared.attempt_id}))
             test.is_false(homes.attempt_exists(first_home))
             test.is_false(homes.attempt_exists(second_home))
@@ -601,6 +642,19 @@ local function define_tests()
             local denied = call(OWNER, "prepare", missing)
             test.eq(denied.error and denied.error.code, "INVALID")
             test.eq(denied.error and denied.error.message, "launch.home_ref names no resource")
+        end)
+        test.it("keeps a retained home excluded when its placement is uncertain", function()
+            local session_ref = fresh("uncertain-session")
+            local first = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "uncertain")))
+            local db, open_error = store.open()
+            if not db then error(open_error or "open store") end
+            local uncertain = store.transition(db, first.attempt_id, {execution = "uncertain",
+                evidence = {kind = "test.uncertain", detail = "placement outcome is not proven"}})
+            db:release()
+            test.eq(uncertain.ok, true)
+            local blocked = call(OWNER, "prepare", retained_launch(OWNER, session_ref, "must-not-run"))
+            test.eq(blocked.error and blocked.error.code, "CONFLICT")
+            test.is_true(tostring(blocked.error and blocked.error.message):find("retained session is still held", 1, true) ~= nil)
         end)
         test.it("drains for a bounded time after an independently observed exit while descendants hold the pipes", function()
             local request = launch({"sh", "-c", "sleep 2 & echo hi"}, "direct_process")

@@ -11,6 +11,18 @@ entries:
   kind: library.lua
   source: file://input.lua
   modules: [tty]
+- name: hooks
+  kind: library.lua
+  source: file://hooks.lua
+  imports:
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [funcs, channel]
+  imports:
+    hooks: bee.harness.window:hooks
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -24,6 +36,9 @@ entries:
     machine: bee.harness.carrier:machine
     window: bee.placement.native:window
     picker: bee.harness.window:picker
+    hooks: bee.harness.window:hooks
+    delivery: bee.harness.window:delivery
+    records: bee.harness.carrier:hook_records
   meta:
     type: bee.application
     application:

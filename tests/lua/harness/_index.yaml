@@ -99,6 +99,15 @@ entries:
     hook_records: bee.harness.carrier:hook_records
     gateway_hooks: bee.gateway:hooks
     canonical: bee.threads.records:canonical
+- name: window_hooks_test
+  kind: function.lua
+  source: file://window_hooks_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hooks: bee.harness.window:hooks
+    checkpoint: bee.harness.carrier:checkpoint
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua

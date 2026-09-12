@@ -355,8 +355,10 @@ canonical thread observations and their acknowledgment IDs. It rejects malformed
 or sparse batches and duplicate IDs before commit, preserves the gateway's
 accepted field values and stable event keys, and omits `turn_id` when no turn
 exists. An empty decoded batch is idle; a malformed reply is a delivery error.
-The structured carrier uses this helper. Native-window delivery is still being
-integrated and does not yet have end-to-end acceptance.
+Both the structured carrier and native window use this helper. The native
+window supplies no turn ID; hook observations cannot establish a logical result.
+See [window delivery](handoffs/NATIVE_WINDOW.md#window-checkpoint-and-hook-delivery)
+for the checkpoint, asynchronous delivery and shutdown contract.
 
 ## 10. Generated configuration and stdin end of file
 

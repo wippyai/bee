@@ -125,6 +125,21 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         time.sleep("25ms")
     end
     assert(saw, "broker-mounted PTY did not receive input")
+    -- The native process is already accepting input. Recovery metadata must
+    -- exist while it runs, rather than first appearing in the close path.
+    local live_records = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+    local live_attempt: string? = nil
+    for _, record in ipairs(live_records.records :: {{[string]: unknown}}) do
+        if record.kind == "attempt.started" and type(record.attempt_id) == "string" then live_attempt = record.attempt_id end
+    end
+    assert(live_attempt, "running native window has no started attempt")
+    local saved = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = live_attempt}).value)
+    assert(type(saved.checkpoint_revision) == "number" and saved.checkpoint_revision >= 1,
+        "running native window has no committed carrier checkpoint")
+    local point = reply(saved.checkpoint)
+    assert(point.schema_revision == "bee.carrier.checkpoint@1" and point.binding_ref == "bee.managed_window_fixture:binding",
+        "native checkpoint must pin the admitted driver")
+    assert(saved.open_turn_id == nil and point.terminal == nil, "native checkpoint invented a logical turn result")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "detach", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
     local detached = false
     while not detached do

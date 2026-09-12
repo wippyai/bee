@@ -157,8 +157,7 @@ existing protected `policies` list. A reviewed execution component may instead
 receive the precise placement policies it requires. No app metadata, profile
 request or broker-specific execution flag selects this scope.
 
-All ordinary app bindings retain the subsystem-store deny. Architecture checks
-require it, and runtime tests attempt actual database opens with a broad allow
+All ordinary app bindings retain the subsystem-store deny. Runtime tests attempt actual database opens with a broad allow
 to prove the deny still wins. A component with placement permission can open
 that store only; core stores remain denied even under a broad allow. The private
 managed app is the reviewed execution component: its protected binding grants
@@ -258,3 +257,28 @@ follow-up does not explain or establish a fix for that separate rejection, and
 is not a single uninterrupted full foundation run or a global installation.
 Production process-group cleanup, authenticated provider turns and automatic
 project-node Hive joining remain separate acceptance gates.
+
+## Window checkpoint and hook delivery
+
+The window commits its pinned carrier checkpoint before opening the native child.
+This checkpoint records driver, profile, plan, carrier epoch and any retained
+session or gateway binding identity. It contains no provider credentials and
+does not create a logical turn or a successful result.
+
+While the PTY runs, the actor drives one asynchronous gateway or carrier call
+alongside terminal input, lifecycle and completion channels. It validates the
+claim's binding and epoch, decodes the bounded batch through the shared carrier
+hook helper, commits observations, then acknowledges those exact event IDs.
+A lost commit reply retains its request, key and expected revision. Missing or
+mismatched revision evidence never starts the child or acknowledges a batch.
+Permanent authority failures stop delivery with an uncertain outcome; transient
+failures back off. A hook notification never settles an agent turn.
+
+After PTY completion, the actor seals intake and resumes any pending commit or
+acknowledgment before claiming the remaining batches. A confirmed seal followed
+by an empty valid claim proves the queue drained. Deadline expiry cancels the
+outstanding future and leaves the attempt uncertain; claimed rows remain for
+reconciliation. Placement then finishes and revokes the binding. Explicit close
+can record cancellation only when this drain completed. Cold application resume,
+provider conversation restoration and public scoped MCP activation remain
+separate acceptance gates.

@@ -5971,3 +5971,29 @@ storage/restart, resources, connection UI, fresh pack, taskbar, personalization,
 titles, interactions and close passed; later desktop gates remain outstanding.
 No full-pass or conversation-recovery claim is made. Shared main, runtime and
 the global executable remain untouched.
+
+### 2026-09-12 Codex: standalone checkpoint slice verified
+
+The combined checkpoint source passes620 Lua tests, strict fresh-cache lint,
+all five managed-window cases and source/pack headless/two-host checks. The
+remaining desktop recipes also pass (session58308 exit0): window retirement,
+Terminal input/scrolling/selection, lifecycle/load, independent clients,
+launcher/recovery and Inbox/Hive Manager/Timeline. The original delivery
+diagnostic is still unresolved; its proposed supervisor guard remains isolated
+without controlled cause evidence. This is segmented acceptance, not a new
+uninterrupted full check.
+
+The standalone candidate built from source19f09c8 packages15 components and
+passes executable acceptance, including the public Agent picker. Its SHA256 is
+`8d00806c50c0e377f48b1598f534c6b361a65e42e350f99bc6dfc82a067c4669`;
+the candidate and `checkpoint-*.log` evidence are under the September12 evidence
+directory above. Checkpoint changes are pushed through53feab9. Global remains
+unchanged: runtime703/726 and builder7 remain open at unchanged heads, and the
+per-project default-state requirement still gates installation.
+
+Conversation recovery will read existing committed hook observations through
+the thread owner's read_after operation. An experiment duplicating this data
+in provider-session checkpoint fields was paused and is not integrated.
+The next isolated placement slice prevents concurrent use of one retained
+session home through the existing intent transaction. No new persistence or
+lock owner is needed. Wolfden facts1272–1274 retain the evidence and decisions.

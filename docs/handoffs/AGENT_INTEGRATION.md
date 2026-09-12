@@ -14,11 +14,13 @@ arguments, presenter rejoin and the public Agent picker. The picker still needs
 host-defined profiles; this is not an authenticated provider-turn proof.
 
 Global installation remains gated on executable-selected per-project state.
-The runtime and builder PR heads remain unchanged. Desktop continuation and the
-earlier lost control-delivery diagnostic are tracked in the shared journal;
-there is no new full-foundation pass claim. Evidence is under
+The runtime and builder PR heads remain unchanged. The remaining desktop
+recipes pass, including client lifetimes, launcher/recovery and bundled apps.
+The earlier lost control-delivery diagnostic remains unresolved, so there is
+no new full-foundation pass claim. Evidence is under
 `/home/wolfy-j/wippy/bee-evidence/0912/`, including
-`checkpoint-native-binary.log` and `checkpoint-integration-remainder.log`.
+`checkpoint-native-binary.log`, `checkpoint-integration-remainder.log` and
+`checkpoint-desktop-remainder.log`.
 
 The earlier checkpoints below describe their own source and test runs.
 

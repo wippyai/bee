@@ -123,6 +123,15 @@ entries:
     test: wippy.test:test
     hooks: bee.harness.window:hooks
     checkpoint: bee.harness.carrier:checkpoint
+- name: window_recovery_test
+  kind: function.lua
+  source: file://window_recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    recovery: bee.harness.window:recovery
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua
@@ -366,6 +375,13 @@ entries:
   storage: bee.harness.catalog:launch_sentinel_storage
   variable: BEE_LAUNCH_SENTINEL_KEY
   default: launch-sentinel-2b3c4d
+  readonly: true
+- name: alternate_setup_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:launch_sentinel_storage
+  variable: BEE_ALTERNATE_SETUP_KEY
+  default: alternate-setup-sentinel
   readonly: true
 - name: fixture_definition
   kind: registry.entry

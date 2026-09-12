@@ -17,8 +17,8 @@ the independent desktop suite. Two obsolete managed-Agent fixture assumptions
 were corrected, and all five focused cases pass. A transfer-restart fixture now
 waits for host retirement before replacement admission. The complete foundation
 gate passes in segments after these fixture corrections. Migration execution and overlay activation
-remain unfinished. Global has since advanced to the Agent title build
-`65b91124`, retaining this Hub work. See [the current global build](handoffs/GLOBAL_BUILD.md) and
+remain unfinished. Global has since advanced to the Agent recovery build
+`849166aa`, retaining this Hub work. See [the current global build](handoffs/GLOBAL_BUILD.md) and
 [Hub contract](HUB.md) for exact evidence and limits. Older checkpoints below
 retain their historical status.
 

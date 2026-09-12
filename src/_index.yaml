@@ -586,7 +586,7 @@ entries:
 - name: credential_store_policy
   kind: security.policy
   meta:
-    comment: The credential broker's store, its linked references, node identity and the admitted sources it reads at materialization
+    comment: The credential broker's store, its linked references, node identity and the admitted sources it inspects or reads
   policy:
     actions: [db.get, registry.get, system.read, env.get]
     resources: [bee.credentials:db, bee.credentials:database_ref, bee.credentials:sources_ref, bee:credential_sources, node, '*']
@@ -594,7 +594,7 @@ entries:
 - name: credential_file_policy
   kind: security.policy
   meta:
-    comment: Host-selected login roots; attached only to the credential materializer
+    comment: Host-selected login roots; attached to credential availability for stat-only checks and to the credential materializer for reads
   policy:
     actions: [fs.get, fs.read]
     resources: [bee:codex_login_source, bee:claude_login_source]

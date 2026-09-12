@@ -55,6 +55,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
     local function receive_reply()
         local deadline = time.after("5s")
         local received = channel.select({replies:case_receive(), deadline:case_receive()})
@@ -150,6 +151,25 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         time.sleep("25ms")
     end
     assert(saw, "broker-mounted PTY did not receive input")
+    -- Input worked before the owner acknowledged the application checkpoint.
+    local checkpoint_timeout = assert(time.after("5s"))
+    local incoming = channel.select({checkpoints:case_receive(), checkpoint_timeout:case_receive()})
+    assert(incoming.ok and incoming.channel == checkpoints, "Agent did not queue an application checkpoint")
+    assert(tostring(incoming.value:from()) == broker, "checkpoint did not come through the broker")
+    local application_checkpoint = reply(incoming.value:payload():data())
+    assert(application_checkpoint.resume_schema == "bee.agent.window@1", "Agent checkpoint schema")
+    local application_state = reply(json.decode(application_checkpoint.resume_state :: string))
+    local field_count = 0
+    for key in pairs(application_state) do
+        assert(key == "definition_ref" or key == "plan_digest" or key == "origin_request_id" or key == "previous_attempt_id" or key == "thread_id",
+            "Agent checkpoint carried non-identity data")
+        field_count = field_count + 1
+    end
+    assert(field_count == 5, "Agent checkpoint is incomplete")
+    assert(application_state.thread_id == THREAD, "Agent checkpoint switched threads")
+    if not selected then assert(application_state.origin_request_id == request_id, "Agent checkpoint changed origin") end
+    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = application_checkpoint.request_id,
+        error_code = natural and "persistence_refused" or "", error = natural and "Fixture refused Agent save" or ""}))
     -- The native process is already accepting input. Recovery metadata must
     -- exist while it runs, rather than first appearing in the close path.
     local live_records = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
@@ -161,6 +181,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         end
     end
     assert(live_attempt, "running native window has no started attempt")
+    assert(application_state.previous_attempt_id == live_attempt, "Agent checkpoint did not advance to its started attempt")
     local saved = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = live_attempt}).value)
     assert(type(saved.checkpoint_revision) == "number" and saved.checkpoint_revision >= 1,
         "running native window has no committed carrier checkpoint")
@@ -187,7 +208,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     while rebound == "" do
         local message = receive_reply()
         local data = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then rebound = tostring(data.mount) end
+        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then
+            assert(data.resume_state == (natural and "" or application_checkpoint.resume_state), "rebind exposed an unacknowledged Agent checkpoint")
+            rebound = tostring(data.mount)
+        end
     end
     local next_view = assert(tty.attach(rebound))
     assert(table.concat(next_view:snapshot().rows):find("MANAGED:hello", 1, true), "detach restarted the managed child")
@@ -248,7 +272,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     assert(kinds["attempt.prepared"] and kinds["attempt.started"] and kinds["receipt"], "managed attempt lifecycle was incomplete")
     next_view:close(); view:close()
     process.terminate(broker)
-    process.unlisten(catalogs); process.unlisten(replies)
+    process.unlisten(catalogs); process.unlisten(replies); process.unlisten(checkpoints)
     return session_ref
 end
 

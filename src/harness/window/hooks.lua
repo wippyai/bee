@@ -12,7 +12,7 @@ M.RETRY_MS = 1000
 M.CLAIM_LIMIT = 16
 type Object = {[string]: unknown}
 type Work = "checkpoint" | "claim" | "commit" | "ack" | "seal" | "idle" | "done"
-type Batch = {records: {{[string]: unknown}}, event_ids: {string}}
+type Batch = {records: {{[string]: unknown}}, event_ids: {string}, activity: string?}
 type Decoder = (string, string?, unknown) -> (Batch?, string?)
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
 type Intent = {target: string, request: Object}
@@ -31,6 +31,7 @@ type State = {
     batch: Batch?, checkpoint_intent: Intent?, commit: Intent?, ack: Intent?,
     closing: boolean, closed: boolean, sealed: boolean, started: boolean,
     drain_deadline: integer?, unresolved: boolean,
+    activity: string?,
 }
 local function object(value: unknown): Object
     return bounds.object(value) or {}
@@ -76,7 +77,7 @@ function M.new(config: Config): State
         work = "checkpoint", due = 0, clock = 0, inflight = nil,
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
         closing = false, closed = false, sealed = false, started = false,
-        drain_deadline = nil, unresolved = false,
+        drain_deadline = nil, unresolved = false, activity = nil,
     }
 end
 function M.decode(raw: unknown): Reply?
@@ -150,6 +151,7 @@ function M.apply(state: State, identity: string, reply: Reply): boolean
                 return true
             end
             state.ack = {target = M.ACK, request = {binding_id = binding_id, carrier_epoch = state.epoch, event_ids = batch.event_ids}}
+            state.activity = batch.activity or state.activity
             state.commit = nil
             state.work = "ack"
         end

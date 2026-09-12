@@ -28,6 +28,7 @@ M.MAX_BRIEF_BYTES = 16384
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
+    title: string,
     definition_ref: string,
     definition_digest: string,
     launch_id: string,
@@ -43,7 +44,7 @@ type Plan = {
 }
 type Admitted = {
     plan: Plan, request: carrier.Request, requester: string,
-    thread_id: string, action_id: string, attempt_id: string,
+    request_id: string, thread_id: string, action_id: string, attempt_id: string,
     session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
 }
@@ -163,7 +164,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         provider = provider_digest, mode = chosen})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
-    return {definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
+    return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest}, nil
 end
@@ -338,7 +339,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
         previous_attempt_id = previous and previous.previous_attempt_id or nil}
-    return {plan = plan, request = carrier_request, requester = requester, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
+    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
+        thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
 end
 -- External callers keep the operation reply; local execution paths consume
 -- the typed admitted request without decoding our own value a second time.

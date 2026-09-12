@@ -59,12 +59,12 @@ placement contracts remain separate execution primitives.
 After a profile has been selected, `bee.harness.launch:setup` accepts its
 workspace, definition and measured plan digest. The caller needs the scoped
 `bee.harness.setup` action; the facade remeasures the plan before it enters a
-fixed resource-management scope. That private scope can only associate or list
-resources. It reloads the selected definition under its measured definition
+fixed setup scope. That private scope can associate/list resources and
+define/list credentials. It reloads the selected definition under its measured definition
 digest, then creates its declared `project` and `session` associations with
 create-if-absent revision zero. A retry accepts only the same root, empty
 subpath and writable association, and refuses a mismatch. Definitions with no
-declared resources succeed without consulting the host setup map. The host maps
+declared resources or credentials succeed without consulting the host setup map. The host maps
 the declared names to admitted roots; driver metadata cannot choose a root or
 grant management permission. Admission subsequently uses the ordinary resource
 grant path, which verifies the root digest before issuing a grant.
@@ -82,6 +82,22 @@ The entry policies still bind `bee:carrier_policy` and
 policies; host binding alone is not Hub or Hive installation acceptance.
 
 ## Agent profile picker
+
+Agent activity belongs on the existing application title surface:
+`bee.application:client.title`. Bee-native applications use that same API.
+Committed harness hooks supply fixed activity labels such as `Working`,
+`Using tool`, `Stopped` and `Needs attention`. Ambiguous observations show
+`Activity uncertain`; hook stops never imply a successful attempt. Prompt text
+and tool arguments cannot become titles. The selected profile name stays in
+the title, bounded with the existing text sanitizer. Updates follow a confirmed
+thread commit; claims, failed commits and stale replies cannot publish activity.
+An actual native-child/gateway/broker fixture proves the resulting title update.
+This source change is not part of the installed `edf6a7c3` checkpoint.
+
+Native CLI terminal-title sequences are a separate source. Selected runtime
+`291f5c6b` does not expose VT title changes through `exec` terminal sessions;
+the proxy currently forwards mode and cursor callbacks. Forwarding those titles
+needs a runtime terminal-session capability, not a second ANSI parser in Bee.
 
 A profile describes **harness + isolation + options + MCP scope**. The shipped
 defaults are registry declarations owned by the separate driver components.
@@ -130,3 +146,14 @@ admission can obtain fresh grants for continuation. The Agent app still declares
 no recovery schema: its saved-state consumer and native process-group cleanup
 proof remain required before public cold conversation recovery. See
 [the recovery handoff](../../docs/handoffs/NATIVE_AGENT_RECOVERY.md).
+
+First-use setup also prepares definition-declared credential names from the host's
+`bee:harness_setup.data.credentials` map. Each value selects a provider and a
+`source: {kind, ref}` accepted independently by the credential broker. Setup uses
+`define(expected_revision = 0)` and accepts an existing matching definition;
+it never replaces a differing definition or reads secret bytes. The fixed setup
+scope admits only the resource and credential define/list operations it needs.
+Missing credential configuration is refused before creating resources. A later
+operation failure may leave earlier creations intact; retries reuse them.
+Production's credential map remains empty, so this does not yet discover or
+project the user's machine login automatically.

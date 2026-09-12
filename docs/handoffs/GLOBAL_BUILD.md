@@ -1,6 +1,20 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Agent activity titles plus Hub recovery
+## Current install: Agent recovery plus Hub recovery
+
+The executable and installed provenance now agree on SHA
+`849166aaffa7a12688396513f8a7be688da7d75d3b43816a150dee21f9970028`,
+source `32cd49f`. It adds retained Agent recovery and credential availability.
+Runtime `291f5c6b708c` and native `0f63d30bd718` are unchanged. Local evidence is
+`agent-recovery-global-install.json` and `agent-recovery-native-check.log`;
+the latter passes native desktop, Modules and Agent selector/cwd/private-home
+acceptance. The prior executable and sidecars are in
+`global-before-agent-recovery-65b91124`. Running nodes were not restarted.
+
+The Hub migration candidate merges this installed source with Hub commit
+`0b63194`. It has not replaced global; combined acceptance remains pending.
+
+## Previous install: Agent activity titles plus Hub recovery
 
 Global was subsequently refreshed by the Agent lane to SHA
 `65b91124c7dce25cc3b0c72ed51e31bd571bcbc15342caaf8b0c8b02d0dce7bb`,

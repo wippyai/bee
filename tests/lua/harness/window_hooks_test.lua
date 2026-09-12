@@ -9,14 +9,16 @@ local function decoder(binding_id: string, turn_id: string?, items: unknown): (h
     if type(items) ~= "table" then return nil, "claimed hooks must be a list" end
     local records: {{[string]: unknown}} = {}
     local event_ids: {string} = {}
+    local activity: string? = nil
     for index, item in ipairs(items :: {unknown}) do
         if type(item) ~= "table" then return nil, "claimed hooks[" .. tostring(index) .. "] must be an object" end
         local row = item :: Object
         local event_id = tostring(row.event_id)
         event_ids[index] = event_id
         records[index] = {binding_id = binding_id, turn_id = turn_id, event_id = event_id, event = row.event}
+        if type(row.event) == "string" then activity = row.event end
     end
-    return {records = records, event_ids = event_ids}, nil
+    return {records = records, event_ids = event_ids, activity = activity}, nil
 end
 local function open(extra: Object?): hooks.State
     local config: hooks.Config = {
@@ -86,15 +88,24 @@ local function define_tests()
             if not claim then error("claim") end
             hooks.begin(state, "claim", claim)
             hooks.apply(state, "claim", ok(claim_value({item("e1", "Stop")})))
+            test.is_nil(state.activity)
             local commit = hooks.next_intent(state, "commit", 0)
             if not commit then error("commit") end
             hooks.begin(state, "commit", commit)
             hooks.apply(state, "commit", ok({}))
             test.eq(state.work, "commit")
             test.eq(state.revision, 1)
+            test.is_nil(state.activity)
             local retry = hooks.next_intent(state, "retry", hooks.RETRY_MS)
             if not retry then error("exact retry") end
             test.eq(retry.request, commit.request)
+            hooks.begin(state, "retry", retry)
+            test.is_false(hooks.apply(state, "commit", ok({checkpoint_revision = 2})))
+            test.is_nil(state.activity)
+            hooks.apply(state, "retry", ok({checkpoint_revision = 2}))
+            test.eq(state.activity, "Stop")
+            test.is_false(hooks.apply(state, "commit", ok({checkpoint_revision = 3})))
+            test.eq(state.activity, "Stop")
         end)
 
         test.it("cannot turn a malformed claim or refused seal into a clean close", function()

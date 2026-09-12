@@ -7,6 +7,7 @@
 local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
+local json = require("json")
 local time = require("time")
 local funcs = require("funcs")
 local uuid = require("uuid")
@@ -17,7 +18,9 @@ local admission = require("admission")
 local machine = require("machine")
 local window = require("window")
 local picker = require("picker")
+local recovery = require("recovery")
 local hooks = require("hooks")
+local text = require("text")
 local delivery = require("delivery")
 local records = require("records")
 
@@ -129,38 +132,78 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local closes = assert(process.listen("bee.application.close", {message = true}))
+    local checkpoint_results = assert(process.listen("bee.application.checkpoint_result", {message = true}))
     assert(tty.start())
-    local selected = #launch.arguments == 0
+    if launch.resume_schema ~= recovery.SCHEMA then
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+        error("Managed window resume schema is unsupported")
+    end
+    local restoring = launch.resume_state ~= ""
+    local selected = not restoring and #launch.arguments == 0
+    local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil
     if selected then
         local choice, choice_error = picker.run(launch, input, lifecycle, closes)
         if not choice then
-            tty.stop(); process.unlisten(closes)
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             if choice_error then error(choice_error) end
             return
         end
         admitted = choice
+    elseif restoring then
+        local decoded, decode_error = json.decode(launch.resume_state)
+        local restored, restore_error = recovery.decode(decoded)
+        if not restored then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window restore: " .. tostring(restore_error or decode_error))
+        end
+        saved = restored
+        local request_id, request_error = uuid.v7()
+        if not request_id then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window restore request: " .. tostring(request_error))
+        end
+        local choice, admission_error = admission.admit_request({request_id = request_id,
+            definition_ref = restored.definition_ref, workspace_id = launch.workspace_id, brief = "", mode = "window",
+            expected_plan_digest = restored.plan_digest, continuation = {origin_request_id = restored.origin_request_id,
+                previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id}})
+        if not choice then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window restore admission: " .. failure(admission_error))
+        end
+        admitted = choice
     else
         local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
-        if not body then tty.stop(); error("Invalid managed window launch: " .. tostring(body_error)) end
+        if not body then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Invalid managed window launch: " .. tostring(body_error))
+        end
         local choice, admission_error = admission.admit_request(body)
-        if not choice then tty.stop(); error("Managed window admission: " .. failure(admission_error)) end
+        if not choice then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window admission: " .. failure(admission_error))
+        end
         admitted = choice
     end
-    if not admitted then tty.stop(); return end
+    if not admitted then tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results); return end
+    local origin_request_id: string
+    if saved then origin_request_id = saved.origin_request_id else origin_request_id = admitted.request_id end
+    local application_saved: recovery.Saved = {definition_ref = admitted.plan.definition_ref,
+        plan_digest = admitted.plan.plan_digest, origin_request_id = origin_request_id,
+        previous_attempt_id = admitted.attempt_id, thread_id = admitted.thread_id}
     local transport = io()
     local plan, plan_error = machine.plan(transport, admitted.request)
     if not plan then
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window plan: " .. tostring(plan_error))
     end
     if plan.profile.mode ~= "window" or plan.profile.protocol ~= "pty" then
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window requires a PTY window profile")
     end
     local prepared, preparation_error = machine.prepare_attempt(transport, plan)
     if not prepared then
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window preparation: " .. tostring(preparation_error))
     end
     local gateway = plan.gateway
@@ -183,7 +226,7 @@ local function main(value: unknown)
     local checkpointed, checkpoint_error = persist_checkpoint(state)
     if not checkpointed then
         receipt(admitted, prepared.epoch, "uncertain", "native window checkpoint did not persist: " .. tostring(checkpoint_error))
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window checkpoint: " .. tostring(checkpoint_error))
     end
     local attached, attachment_error = call(machine.PLACEMENT .. ":attach", {
@@ -192,7 +235,7 @@ local function main(value: unknown)
     if not attached then
         if prepared.gateway_binding then call(machine.GATEWAY .. ":revoke", {binding_id = prepared.gateway_binding}) end
         receipt(admitted, prepared.epoch, "uncertain", "native placement attachment was not confirmed: " .. tostring(attachment_error))
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window attachment: " .. tostring(attachment_error))
     end
     local width, height = tty.screen_size()
@@ -200,7 +243,7 @@ local function main(value: unknown)
         term = "xterm-256color", expected_binding = prepared.gateway_binding})
     if not terminal then
         receipt(admitted, prepared.epoch, "uncertain", "native window did not open: " .. tostring(terminal_error))
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window open: " .. tostring(terminal_error))
     end
     local started, started_error = call(THREADS .. ":start_attempt", {thread_id = admitted.thread_id,
@@ -214,30 +257,66 @@ local function main(value: unknown)
         drain_hooks(driver)
         terminal:finish()
         receipt(admitted, prepared.epoch, "uncertain", "native window started but thread start was refused: " .. tostring(started_error))
-        tty.stop(); process.unlisten(closes)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         error("Managed window thread start: " .. tostring(started_error))
     end
-    if not selected then
-        client.title(launch, admitted.plan.launch_id)
-        client.ready(launch, {negotiate_close = true})
+    local encoded, encode_error = recovery.encode(application_saved)
+    local checkpoint_id: string? = nil
+    local checkpoint_error: string? = encode_error
+    if encoded then checkpoint_id, checkpoint_error = client.checkpoint(launch, encoded) end
+    local checkpoint_deadline = now_ms() + 6000
+    local published_activity: string? = nil
+    local published_title: string? = nil
+    local function publish_title()
+        local suffix = published_activity and " · " .. published_activity or ""
+        if checkpoint_error then suffix = suffix .. " · Save unconfirmed" end
+        local title = text.bound(admitted.plan.title, 77 - #suffix) .. suffix
+        if title ~= published_title and client.title(launch, title) then published_title = title end
     end
+    publish_title()
+    if not selected then client.ready(launch, {negotiate_close = true}) end
 
     local done = terminal:done()
     local closing = false
     local pending = delivery.advance(driver, now_ms())
     while true do
-        local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), done:case_receive()}
+        local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), done:case_receive(), checkpoint_results:case_receive()}
         if pending then cases[#cases + 1] = pending.response:case_receive() end
         local timer: time.Timer? = nil
-        if (state.hooks_enabled and not hooks.finished(state)) or pending then
-            timer = assert(time.timer(tostring(math.max(1, delivery.due(driver) - now_ms())) .. "ms"))
+        if (state.hooks_enabled and not hooks.finished(state)) or pending or checkpoint_id then
+            local due = checkpoint_deadline
+            if (state.hooks_enabled and not hooks.finished(state)) or pending then
+                due = delivery.due(driver)
+                if checkpoint_id then due = math.min(due, checkpoint_deadline) end
+            end
+            timer = assert(time.timer(tostring(math.max(1, due - now_ms())) .. "ms"))
             cases[#cases + 1] = timer:channel():case_receive()
         end
         local selected = channel.select(cases)
         if timer then timer:stop() end
+        if checkpoint_id and now_ms() >= checkpoint_deadline then
+            checkpoint_id = nil
+            checkpoint_error = "application checkpoint acknowledgement timed out"
+            publish_title()
+        end
         if pending and selected.channel == pending.response then
             delivery.complete(driver, pending, now_ms())
+            local activity = state.activity
+            if activity then
+                published_activity = activity
+                publish_title()
+            end
             pending = delivery.advance(driver, now_ms())
+        elseif selected.channel == checkpoint_results and selected.ok then
+            if checkpoint_id then
+                local acknowledged, result_error = recovery.acknowledged(launch, tostring(selected.value:from()),
+                    selected.value:payload():data(), checkpoint_id)
+                if acknowledged or result_error then
+                    checkpoint_id = nil
+                    checkpoint_error = result_error
+                    publish_title()
+                end
+            end
         elseif not selected.ok or selected.channel == done then
             break
         elseif selected.channel == lifecycle then
@@ -283,6 +362,7 @@ local function main(value: unknown)
         reason)
     if not settled then error("Managed window receipt: " .. tostring(settlement_error)) end
     process.unlisten(closes)
+    process.unlisten(checkpoint_results)
     tty.stop()
 end
 

@@ -5,12 +5,19 @@ workspace from a source the host admits (`bee:credential_sources`: an
 `env.variable` entry, the workspace or `*`, the audience or `*`, a provider,
 the projection kinds allowed); its digest covers configuration and source
 identity, never bytes, and redefining it moves to the next revision so
-existing projections stop resolving. The allowlist is checked again at
+existing projections stop resolving. `define` accepts `expected_revision`: zero
+creates only when absent; a positive revision replaces only that exact definition.
+The revision check, write and returned view share one transaction. A mismatch
+returns `CONFLICT` without invalidating projections. Omission preserves explicit
+unconditional replacement. First-use setup must use zero and inspect a conflict
+rather than replace an existing login configuration. The allowlist is checked again at
 every `check` and `materialize`, so removing a source or an audience takes
 effect for projections already issued. A projection binds the authenticated subject, an audience, one
 attempt, the profile, binding and launch-policy digests, the provider's
 fixed destination, the materializer identity, an expiry and the workspace
 authorization epoch. `check` re-checks the bindings without bytes;
+`availability` is a manager-only metadata probe for an existing file
+definition and reports whether its provider-fixed login file is present;
 `materialize` re-checks them for an admitted materializer and returns the
 value once, in a reply nothing persists, recording the generation key, the
 generation and the materializer's actor. A generation key is accepted once
@@ -27,16 +34,18 @@ The broker projects API keys into `ANTHROPIC_API_KEY` (Claude) or
 host-selected `fs.directory` using `source.kind: fs_directory`; their filenames
 are fixed by provider: `auth.json` for Codex and `.credentials.json` for Claude.
 Callers cannot choose a path, filename or mount. The host's `bee:credential_file_policy`
-grants filesystem access separately from source metadata and is attached only
-to materialization. Registry source metadata in `bee:credential_sources` alone cannot
-grant filesystem read: if a source ref is admitted by metadata but absent from
-`bee:credential_file_policy`, materialization fails closed (`UNAVAILABLE`). Adding
-another source requires an explicit host policy grant naming the login root.
+grants filesystem access separately from source metadata and is attached to
+availability for a stat-only check and to materialization for bounded reads.
+Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
+read: if a source ref is admitted by metadata but absent from
+`bee:credential_file_policy`, availability and materialization fail closed
+(`UNAVAILABLE`). Adding another source requires an explicit host policy grant
+naming the login root.
 
 Ordinary callers (workspace managers, projection subjects, and outsiders) cannot
 directly read login files or invoke `check` or `materialize`. The broker methods
-accessible to ordinary callers (`define`, `issue_projection`, `list`, `revoke`,
-`revoke_all`, `capabilities`) and error replies carry only identifiers, digests
+accessible to ordinary callers (`define`, `issue_projection`, `list`, `availability`,
+`revoke`, `revoke_all`, `capabilities`) and error replies carry only identifiers, digests
 and status views; they never echo secret bytes. Secret file contents are strictly
 absent from persisted database state: definitions, projections, generations,
 epochs, and the schema migration ledger (`bee_credential_schema_migrations`) never
@@ -60,13 +69,19 @@ definitions, projections, consumed generations, and migration ledger records.
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
-File projection is a broker capability only. Native placement refuses a file
-projection before recording a launch intent until private-home delivery is wired;
-file contents cannot enter the environment projection route. Automatic source discovery,
-copying into a private writable session home, preserving harness token refresh
-and Docker mounting are still being integrated. No file login is enabled by
-default. `refresh` and `write_back` remain false; the broker neither refreshes
-provider tokens nor writes changes back to the user's login files.
+Native placement accepts file projections only with a selected retained session
+home. It seeds the provider-fixed destination and preserves provider-refreshed
+bytes when the recorded definition identity matches; changed identity or a
+partial seed refuses reuse. See [native placement](../placement/native/README.md)
+for the delivery and filesystem guarantees. File contents never enter the
+environment projection route.
+
+First-use harness setup can create definition-declared credential names from
+host-selected source configuration, without reading the secret. Production
+source discovery and default login selection remain unfinished; no file login
+is enabled by default. Docker delivery is unimplemented. Broker `refresh` and
+`write_back` remain false: it neither refreshes provider tokens nor copies
+session changes back to the user's original login files.
 
 Revocation stops future materialization; a live attempt is stopped by placement at its next
 reconciliation, which the placement sweeper schedules on a fixed delay and

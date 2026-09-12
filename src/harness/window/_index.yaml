@@ -11,6 +11,12 @@ entries:
   kind: library.lua
   source: file://input.lua
   modules: [tty]
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
@@ -27,15 +33,17 @@ entries:
   kind: process.lua
   source: file://app.lua
   method: main
-  modules: [tty, process, channel, time, funcs, uuid]
+  modules: [tty, process, channel, time, funcs, uuid, json]
   imports:
     client: bee.application:client
+    text: bee.application:text
     window_request: bee.harness.window:request
     input_event: bee.harness.window:input
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     window: bee.placement.native:window
     picker: bee.harness.window:picker
+    recovery: bee.harness.window:recovery
     hooks: bee.harness.window:hooks
     delivery: bee.harness.window:delivery
     records: bee.harness.carrier:hook_records
@@ -50,6 +58,8 @@ entries:
       instance_policy: multiple
       group: ''
       role: terminal
+      resume_schema: bee.agent.window@1
+      restart_policy: automatic
       commands:
       - {name: agent, fullscreen: false}
 - name: picker_view

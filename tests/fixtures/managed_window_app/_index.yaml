@@ -106,6 +106,42 @@ entries:
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
+- name: checkpoint_ack_test
+  kind: function.lua
+  source: file://main.lua
+  method: checkpoint_ack
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee.managed_window_fixture:checkpoint_admission_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: checkpoint_admission_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: [bee:application_admission]
+    effect: allow
+- name: checkpoint_app
+  kind: process.lua
+  source: file://checkpoint_app.lua
+  method: main
+  modules: [process, channel]
+  imports:
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Checkpoint fixture
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      resume_schema: checkpoint-fixture.v1
+      restart_policy: automatic
 - name: selector_definition
   kind: registry.entry
   meta: {type: bee.launch_definition, test_support: true}

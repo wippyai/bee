@@ -11,6 +11,7 @@ local registry = require("registry")
 local admission = require("admission")
 local homes = require("homes")
 local fs = require("fs")
+type Channel = channel.Channel
 
 local M = {}
 local WORKSPACE = string.rep("a", 32)
@@ -236,7 +237,143 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     return session_ref
 end
 
+-- Broker replies are the owner's recovery projection. A checkpoint belongs in
+-- that projection only after this owner acknowledges persistence. The fixture
+-- app forwards its authentic broker receipts, which makes each assertion wait
+-- for the actual acknowledgement instead of relying on channel ordering.
+local function checkpoint_ack_body(original_admission: {[string]: unknown})
+    local owner = tostring(process.pid())
+    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local receipts = assert(process.listen("bee.fixture.checkpoint.receipt", {message = true}))
+    local app_ready = assert(process.listen("bee.fixture.checkpoint.ready", {message = true}))
+    local sent = assert(process.listen("bee.fixture.checkpoint.sent", {message = true}))
+    local events = assert(process.events())
+    local broker_policy = assert(security.policy("bee:broker_policy"))
+    local boundary = assert(security.policy("bee:core_spawn_boundary"))
+    local fixture_admission = changed(original_admission)
+    local fixture_data = fixture_admission.data :: {[string]: unknown}
+    local bindings: {{[string]: unknown}} = {}
+    for _, binding in ipairs(fixture_data.bindings :: {{[string]: unknown}}) do
+        local copy: {[string]: unknown} = {}
+        for key, value in pairs(binding) do copy[key] = value end
+        bindings[#bindings + 1] = copy
+    end
+    bindings[#bindings + 1] = {definition_id = "bee.managed_window_fixture:checkpoint_app", policies = {}}
+    fixture_data.bindings = bindings
+    apply(fixture_admission)
+    local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
+        :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.applications:broker", "bee:workers", owner, appearance.defaults())))
+    local function wait_message(subscription: Channel<process.Message>, label: string, timeout: string?): process.Message
+        local deadline = time.after(timeout or "5s")
+        local selected = channel.select({subscription:case_receive(), events:case_receive(), deadline:case_receive()})
+        assert(selected.ok and selected.channel ~= deadline, label .. " timed out")
+        if selected.channel == events then error(label .. ": broker exited") end
+        return selected.value
+    end
+    local function receive_checkpoint(state: string, action: "accept" | "refuse" | "lose")
+        local message = wait_message(checkpoints, "checkpoint " .. state)
+        assert(tostring(message:from()) == broker)
+        local data: unknown = message:payload():data()
+        assert(type(data) == "table" and data.resume_state == state, "unexpected checkpoint state")
+        if action == "accept" then
+            assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id, error_code = "", error = ""}))
+        elseif action == "refuse" then
+            assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
+                error_code = "persistence_refused", error = "Fixture owner refused checkpoint"}))
+        end
+    end
+    local function receive_receipt(request_id: string, code: string, app_pid: string, timeout: string?)
+        local message = wait_message(receipts, "checkpoint receipt " .. code, timeout)
+        local data: unknown = message:payload():data()
+        assert(tostring(message:from()) == app_pid and type(data) == "table" and data.request_id == request_id and data.error_code == code, "unexpected checkpoint receipt")
+    end
+    local function receive_sent(state: string, app_pid: string): string
+        local message = wait_message(sent, "checkpoint sent " .. state)
+        local data: unknown = message:payload():data()
+        assert(tostring(message:from()) == app_pid and type(data) == "table" and data.state == state and type(data.request_id) == "string", "unexpected checkpoint request")
+        return data.request_id
+    end
+    local initial = "acknowledged-initial"
+    local refused = "refused-newer"
+    local acknowledged = "acknowledged-newer"
+    local catalog_message = wait_message(catalogs, "broker startup")
+    assert(tostring(catalog_message:from()) == broker and type(catalog_message:payload():data()) == "table", "broker did not publish catalog")
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-open", op = "open", workspace_id = WORKSPACE,
+        definition_id = "bee.managed_window_fixture:checkpoint_app", resume_schema = "checkpoint-fixture.v1", resume_state = initial}))
+    local ready_message = wait_message(app_ready, "checkpoint fixture ready")
+    local ready_data: unknown = ready_message:payload():data()
+    assert(type(ready_data) == "table" and type(ready_data.pid) == "string" and tostring(ready_message:from()) == ready_data.pid, "invalid checkpoint fixture readiness")
+    local app_pid = ready_data.pid
+    local initial_request = receive_sent(initial, app_pid)
+    receive_checkpoint(initial, "accept")
+    receive_receipt(initial_request, "", app_pid)
+    local opened: {[string]: unknown}? = nil
+    while not opened do
+        local message = wait_message(replies, "checkpoint fixture open")
+        assert(tostring(message:from()) == broker)
+        local data: unknown = message:payload():data()
+        if type(data) == "table" and data.request_id == "checkpoint-open" and data.op == "open" then
+            assert(data.error_code == "", "checkpoint fixture did not become ready")
+            opened = data :: {[string]: unknown}
+        end
+    end
+    local function attached(request_id: string, expected: string): string
+        assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "bind", workspace_id = WORKSPACE,
+            id = opened.id, instance_id = opened.instance_id, recipient = owner}))
+        while true do
+            local message = wait_message(replies, request_id)
+            assert(tostring(message:from()) == broker)
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.request_id == request_id and data.op == "attached" then
+                assert(data.error_code == "", request_id .. ": attachment failed")
+                assert(data.resume_state == expected, request_id .. ": broker exposed an unacknowledged checkpoint")
+                return data.mount :: string
+            end
+        end
+        error("unreachable attachment wait")
+    end
+    attached("checkpoint-initial", initial)
+    assert(process.send(app_pid, "bee.fixture.checkpoint.command", "refuse"))
+    local refused_request = receive_sent(refused, app_pid)
+    receive_checkpoint(refused, "refuse")
+    receive_receipt(refused_request, "persistence_refused", app_pid)
+    attached("checkpoint-refused", initial)
+    assert(process.send(app_pid, "bee.fixture.checkpoint.command", "accept"))
+    local acknowledged_request = receive_sent(acknowledged, app_pid)
+    receive_checkpoint(acknowledged, "accept")
+    receive_receipt(acknowledged_request, "", app_pid)
+    attached("checkpoint-acknowledged", acknowledged)
+    assert(process.send(app_pid, "bee.fixture.checkpoint.command", "lose"))
+    local lost_request = receive_sent("lost-newer", app_pid)
+    receive_checkpoint("lost-newer", "lose")
+    receive_receipt(lost_request, "timeout", app_pid, "7s")
+    attached("checkpoint-timeout", acknowledged)
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-close", op = "close", workspace_id = WORKSPACE,
+        id = opened.id, instance_id = opened.instance_id}))
+    while true do
+        local message = wait_message(replies, "checkpoint fixture close")
+        assert(tostring(message:from()) == broker)
+        local data: unknown = message:payload():data()
+        if type(data) == "table" and data.request_id == "checkpoint-close" and data.op == "close" then
+            assert(data.error_code == "", "checkpoint fixture close failed")
+            break
+        end
+    end
+    process.terminate(broker)
+    for _, subscription in ipairs({catalogs, replies, checkpoints, receipts, app_ready, sent}) do process.unlisten(subscription) end
+end
+
+local function checkpoint_ack()
+    local original_admission = assert(registry.get("bee:application_admission"))
+    local ok, failure = pcall(checkpoint_ack_body, original_admission)
+    apply(original_admission)
+    if not ok then error(tostring(failure)) end
+end
+
 M.run = function() run(false) end
+M.checkpoint_ack = checkpoint_ack
 M.natural = function() run(true) end
 M.select = function()
     local definition = assert(registry.get("bee.managed_window_fixture:selector_definition"))

@@ -123,7 +123,7 @@ ledger entries already reverted. The worker checks them again after rollback and
 commits root deletion with `removal.published = true` in the same registry change.
 A crash after that commit resumes inventory verification without calling deleted
 migration functions. No registry restoration follows schema changes. This rollback
-source is not installed globally yet.
+implementation is installed in global build `1da5b5c6` (source `b8dd68c`).
 
 These changes are installed in global build `f276bc2b`, preserving Agent recovery
 and optional machine login. SQLite library and

@@ -1,6 +1,32 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub operation history and recovery review
+## Current install: durable migration rollback
+
+Global Bee now has SHA
+`1da5b5c66e897413c104502b1cf96a8a1e11a7c178564d9cd15eaa2fbb3cf7ea`,
+source `b8dd68c`. Module removal can explicitly roll back migrations, including
+orphaned dependencies. Confirmation lists the affected migrations. A durable
+receipt precedes rollback; partial failure retains definitions and records
+completed work. Recovery checks root, inventory, definitions and grants, skips
+already-reverted ledger rows, and commits root deletion with its publication
+receipt. Restart after deletion verifies inventory without calling removed code.
+
+Strict lint, 69 focused Hub cases, real SQLite rollback/crash/partial-recovery
+acceptance and source/pack rollback review/confirmation pass. Native desktop,
+Modules and Agent acceptance passed on logic source `303b9e8`; `b8dd68c` changes
+only the packaged Hub README and passes native Modules again. Exact evidence:
+`hub-rollback-unit-2.log`, `hub-rollback-ui-2.log`, `hub-rollback-service-3.log`,
+`hub-rollback-native-check.log`, `hub-rollback-release-modules.log` and
+`hub-rollback-global-install.json`. Full rollback and preceding history checks
+remain active in their respective `hub-rollback-full-check.log` and
+`hub-history-release-full-check.log` files.
+
+Runtime/native pins are unchanged. Executable and five sidecars were verified
+and backed up before replacement, after rechecking global was still `2f3f8e5a`.
+Backup: `global-before-hub-rollback-2f3f8e5a`. No running node was restarted.
+Migration targets created by the same installation remain unfinished.
+
+## Previous install: Hub operation history and recovery review
 
 Global Bee now has SHA
 `2f3f8e5ab1f970c4acbe070da10530ba6ceec828b13972421052457f028001d3`,

@@ -6,8 +6,9 @@ its completion phase atomically. Real SQLite acceptance covers normal rollback,
 completed replay, crashes before/after root deletion, changed-definition refusal
 and partial failure/retry. Confirmation plans now list removed migrations.
 Strict lint, 69 focused Hub tests and source/pack rollback review/confirmation
-pass. Full combined checks remain pending; global is still the history/recovery
-build `2f3f8e5a`.
+pass. Native desktop, Modules and Agent acceptance pass. Global is updated to
+`1da5b5c6` (source `b8dd68c`), retaining running nodes. Full combined checks
+remain pending; newly installed database resources remain unfinished.
 
 The Hub history source adds caller-owned paged receipts and an explicit recovery
 review in Modules. Real service acceptance covers pagination, read-only access,

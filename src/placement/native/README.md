@@ -26,6 +26,20 @@ session directories live under a placement-owned root.
    starts the child (in its own process group when the runtime supports it),
    reads its identity, records `running`, and acknowledges.
 
+## Environment ownership
+
+Native placement owns `HOME`, selected from its attempt or retained session home.
+An admitted gateway owns its tool and hook token destinations. `prepare` refuses
+literal or referenced environment values that collide with those names, and
+refuses a shared tool/hook destination, before recording intent. Materialization
+checks those assignments again for a retained request.
+
+Credential projections cannot overwrite a policy value, another projection, the
+native home or a gateway destination. Such a conflict ends materialization before
+the child starts. Error replies and evidence name the destination and projection;
+they contain no credential bytes. Policies supply nonsecret configuration while
+the credential broker supplies secrets; precedence is not used to hide conflicts.
+
 ## Capability
 
 `capability.measure` starts a probe child with `process_group` and reads its

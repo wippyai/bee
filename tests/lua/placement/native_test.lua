@@ -190,6 +190,34 @@ local function define_tests()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)
         local observation = tostring(measured.exit_observation)
+        test.it("refuses native and gateway environment collisions before intent", function()
+            for _, kind in ipairs({"home", "home_ref", "gateway", "hook", "shared_token", "gateway_home"}) do
+                local request = launch({"sh", "-c", "true"}, "direct_process")
+                local environment = request.environment :: {[string]: string}
+                if kind == "home" then
+                    environment.HOME = "/unselected/home"
+                elseif kind == "home_ref" then
+                    request.environment_refs = {HOME = "fixture:home"}
+                else
+                    local gateway: {[string]: unknown} = {tools = {"thread_read"}, destination = "BEE_GATEWAY_TOKEN"}
+                    if kind == "gateway" then environment.BEE_GATEWAY_TOKEN = "caller-token" end
+                    if kind == "hook" then
+                        gateway.hook_destination = "BEE_HOOK_TOKEN"
+                        request.environment_refs = {BEE_HOOK_TOKEN = "fixture:token"}
+                    end
+                    if kind == "shared_token" then gateway.hook_destination = "BEE_GATEWAY_TOKEN" end
+                    if kind == "gateway_home" then gateway.destination = "HOME" end
+                    request.gateway = gateway
+                end
+                local refused = call(OWNER, "prepare", request)
+                test.is_false(refused.ok)
+                test.eq(refused.error and refused.error.code, "INVALID")
+                local detail = refused.error and refused.error.message or ""
+                test.is_true(detail:find("owned", 1, true) ~= nil or detail:find("already assigned", 1, true) ~= nil)
+                local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
+                test.eq(absent.error and absent.error.code, "NOT_FOUND")
+            end
+        end)
         test.it("records intent only for admitted, cleanable launches and replays by key", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             local first = attempt_of(call(OWNER, "prepare", request))
@@ -816,6 +844,48 @@ local function define_tests()
             end
             local sweeper = process.registry.lookup(service.SWEEPER_NAME)
             test.not_nil(sweeper)
+        end)
+        test.it("refuses colliding credential destinations without starting a child or leaking bytes", function()
+            admit_credential_source()
+            local workspace = fresh("credential-collision")
+            for _, name in ipairs({"first", "second"}) do
+                credential_call("define", {workspace_id = workspace, name = name, provider = "claude",
+                    source = {kind = "env_variable", ref = "bee.placement.native:sentinel_key"}})
+            end
+            for _, duplicate_projection in ipairs({false, true}) do
+                local request = launch({"sh", "-c", "echo child-must-not-run"}, "direct_process")
+                local attempt_id = request.attempt_id :: string
+                local projections: {string} = {}
+                for _, name in ipairs(duplicate_projection and {"first", "second"} or {"first"}) do
+                    local projection = credential_call("issue_projection", {workspace_id = workspace, name = name, audience = OWNER,
+                        attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                        launch_policy_digest = DIGEST, idempotency_key = fresh("projection")})
+                    projections[#projections + 1] = projection.projection_id :: string
+                end
+                request.projections = projections
+                if not duplicate_projection then
+                    (request.environment :: {[string]: string}).ANTHROPIC_API_KEY = "policy-value"
+                end
+                attempt_of(call(OWNER, "prepare", request))
+                local failed = call(OWNER, "start", {attempt_id = attempt_id})
+                test.is_false(failed.ok)
+                local message = tostring(failed.error and failed.error.message)
+                test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
+                test.is_nil(message:find(SENTINEL, 1, true))
+                local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
+                local refused = false
+                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                    test.is_true(item.kind ~= "child.started")
+                    test.is_nil(tostring(item.detail):find(SENTINEL, 1, true))
+                    if item.kind == "credential.refused" then refused = true end
+                end
+                test.is_true(refused)
+                local db = store.open()
+                if not db then error("placement store") end
+                local row = store.row(db, attempt_id)
+                db:release()
+                test.is_nil(tostring(row and row.request_json):find(SENTINEL, 1, true))
+            end
         end)
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
             local ids: {string} = {}

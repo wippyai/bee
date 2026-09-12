@@ -174,6 +174,7 @@ entries:
     homes: bee.placement.native:homes
     identity: bee.placement.native:identity
     protocol: bee.placement.native:protocol
+    materialization: bee.placement.native:materialization
 - name: materialization
   kind: library.lua
   source: file://materialization.lua

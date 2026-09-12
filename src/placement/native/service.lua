@@ -24,6 +24,7 @@ local registry = require("registry")
 local gateway_configuration = require("gateway_configuration")
 local resolver = require("resolver")
 local configuration_protocol = require("configuration")
+local materialization = require("materialization")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -281,6 +282,8 @@ function M.prepare(value: unknown): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if caller ~= request.owner_id then return fail("FORBIDDEN", "owner_id is not the caller") end
+    local environment_conflict = materialization.environment_conflict(request)
+    if environment_conflict then return fail("INVALID", environment_conflict) end
     local digest, digest_error = request_codec.digest(request)
     if not digest then return fail("INVALID", digest_error or "request is not measurable") end
     local resolved_grants, resources_refused = admit_resources(request)

@@ -18,6 +18,26 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     if not result.ok then return false, result.message end
     return true, nil
 end
+-- Native placement owns HOME; an admitted gateway owns its token names.
+-- Check before intent and again when materializing a retained request.
+function M.environment_conflict(request: types.LaunchRequest): string?
+    local owners: {[string]: string} = {HOME = "native placement"}
+    if request.gateway then
+        local gateway = request.gateway
+        if owners[gateway.destination] then return "gateway destination " .. gateway.destination .. " is owned by native placement" end
+        owners[gateway.destination] = "gateway"
+        if gateway.hook_destination then
+            if owners[gateway.hook_destination] then return "hook destination " .. gateway.hook_destination .. " is already assigned" end
+            owners[gateway.hook_destination] = "gateway hooks"
+        end
+    end
+    for name, owner in pairs(owners) do
+        if request.environment[name] ~= nil or request.environment_refs[name] ~= nil then
+            return "environment destination " .. name .. " is owned by " .. owner
+        end
+    end
+    return nil
+end
 local function resolve_environment(request: types.LaunchRequest, home: string): ({[string]: string}?, string?)
     local values: {[string]: string} = {}
     for name, value in pairs(request.environment) do values[name] = value end
@@ -46,6 +66,11 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local gateway_binding: string? = nil
     local function refused(reason: string): (Prepared?, string?, string?)
         return nil, reason, gateway_binding
+    end
+    local conflict = M.environment_conflict(request)
+    if conflict then
+        evidence(db, attempt_id, "environment.refused", conflict, {execution = "exited"})
+        return refused(conflict)
     end
     local home_key, key_error = homes.attempt_key(request.owner_id, attempt_id)
     if not home_key then
@@ -110,6 +135,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             return refused("projection " .. projection_id .. ": " .. code)
         end
         local projected = reply.value :: {destination: string, value: string}
+        local gateway = request.gateway
+        if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
+            local conflict = "environment destination " .. projected.destination .. " is already assigned"
+            evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
+            return refused(conflict)
+        end
         environment[projected.destination] = projected.value
         evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
     end

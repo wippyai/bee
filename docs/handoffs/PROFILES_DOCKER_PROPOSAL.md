@@ -12,8 +12,8 @@ continues to own environment, executable bindings, driver options and gateway
 configuration. Credentials remain separate broker projections. Profile selection
 will list eligible launch definitions through the existing Agent application.
 The source Agent window now contains that selector and exposes `agent` command
-metadata. Real broker/PTY acceptance passes; standalone executable command
-routing and global installation remain unverified.
+metadata. Real broker/PTY acceptance and the source-free executable `bee agent`
+route pass. Global installation and production harness activation remain open.
 
 The first prerequisites are implemented on the isolated profile branch:
 definition, catalog and policy resolve from one registry snapshot, and managed

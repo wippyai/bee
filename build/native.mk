@@ -31,6 +31,7 @@ bundle-assets-check:
 
 native-binary-check:
 	python3 tests/native_binary.py "$(BEE_BINARY)"
+	python3 tests/native_agent_selector.py "$(BEE_BINARY)"
 
 BEE_RELEASE_ARCHIVE ?= dist/release/bee-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz
 .PHONY: release
@@ -103,3 +104,7 @@ native-hive-catalog-check:
 .PHONY: native-project-nodes-check
 native-project-nodes-check:
 	python3 tests/native_project_nodes.py "$(BEE_BINARY)"
+
+.PHONY: native-agent-selector-check
+native-agent-selector-check:
+	python3 tests/native_agent_selector.py "$(BEE_BINARY)"

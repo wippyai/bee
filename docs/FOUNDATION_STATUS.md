@@ -7,8 +7,10 @@ passes empty-list recovery, changed-plan refusal before work, mouse launch and
 native terminal continuity. The selector closes its drawing surface before PTY
 attachment and reuses the input subscription. All 578 unit tests pass; the
 current narrow-window follow-up also passes its six focused selection tests.
-Native packaging covers 14 modules / 589 entries. Broader checks and executable
-command routing remain pending; this source is not installed globally. Production
+Native packaging covers 14 modules / 589 entries. The source-free executable
+`bee agent` path passes empty-catalog, F12, close-without-work and 0.120-second
+detach acceptance. Broader checks remain pending; this source is not installed
+globally. Production
 Claude/Codex profile configuration and authenticated-turn acceptance remain open.
 
 Selected launch plans can now be carried into admission with

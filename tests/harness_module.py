@@ -11,8 +11,10 @@ from workspace import ROOT, RUNTIME
 # requires review; do not let automatic traversal hide a new store/core import.
 # The window consumes application lifecycle and placement libraries in-process;
 # this host still exposes no storage resources or operation entries.
+# The picker adds only shared appearance values and control-character sanitation.
 DEPENDENCIES = {
     "bee.application:arguments", "bee.application:client", "bee.application:interaction",
+    "bee.application:text", "bee.desktop:appearance",
     "bee.driver:configuration", "bee.driver:resolver", "bee.driver.kit:framing", "bee.driver.kit:quote",
     "bee.driver.transport:stream_json", "bee.driver:profile", "bee.driver:types",
     "bee.gateway:configuration", "bee.persist:database", "bee.persist:ledger",

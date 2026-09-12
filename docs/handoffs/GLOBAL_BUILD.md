@@ -1,6 +1,32 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Agent instructions plus Hub rollback
+## Current install: Hub requirements and package databases
+
+Global SHA `7ba0b747ff45661f93be0cbcfec4bfc588b9cb17deeaf4558e0e5067e6d7ed29`
+contains production source `bd95d44`. It preserves Agent profile details and
+persistent instructions from `d05b47c`, and adds the Modules Requirements tab
+(`E`): inspect declarations, view default/selected JSON and targets, and edit
+values by exact identifier. Defaults remain implicit until changed.
+
+Hub now supports package-created SQL resources with captured database definitions,
+an empty-ledger checkpoint, crash recovery and rollback. Migration calls retain
+host grants while stripping Hub's private publication and worker permissions.
+Runtime remains `291f5c6b`; native remains `0f63d30bd718`.
+
+Strict lint, 71 focused Hub cases, source/pack requirements and recovery UI,
+Go SQLite migration/checkpoint/crash/rollback acceptance and full native binary
+acceptance passed. Acceptance source `766aa42` includes the Go test port.
+Evidence: `hub-requirements-editor-unit.log`, `hub-requirements-editor-ui.log`,
+`hub-database-go-service.log`, `hub-requirements-native-check.log`, and
+`hub-requirements-global-install.json` under local September 12 evidence.
+The full repository gate remains outstanding; these focused results do not
+establish completion of all Hub/module-management work.
+
+The installer fenced against `4a35163e`, backed up and verified the executable
+and five sidecars. Backup: `global-before-hub-requirements-4a35163e`.
+No running nodes were restarted; retained nodes continue their loaded code.
+
+## Previous install: Agent instructions plus Hub rollback
 
 Global Bee SHA `f1a29d083ff1620e8e12757d80c954017833e82dc52d8caf18d06651bcfc4577`
 contains production source from `660b769`: four-driver persistent instructions,

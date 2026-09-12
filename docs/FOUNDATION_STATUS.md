@@ -1,5 +1,12 @@
 # Foundation status
 
+Global `7ba0b747` now combines Hub requirements editing and package-created
+database migrations with the latest Agent profile details/instructions.
+Native binary acceptance, source/pack Modules UI, 71 focused Hub cases and Go
+SQLite crash/rollback service acceptance pass. Full repository acceptance remains
+outstanding. See the [current build](handoffs/GLOBAL_BUILD.md) for exact evidence.
+The paragraphs below retain earlier checkpoint context.
+
 Global `f1a29d08` now combines four-harness persistent instructions with Hub
 history and migration rollback. Strict lint, 772 units, native desktop/Modules/Agent
 acceptance and focused source/pack connection UI pass. See the

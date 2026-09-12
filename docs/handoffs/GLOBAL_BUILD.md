@@ -1,6 +1,29 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Modules layout and configuration dialog
+## Current install: managed MCP and lifecycle hooks, latest Modules UI
+
+Global `887d0769562a5f8c64362313e833ad513374b6aa41c330ddf7c1e4e89e045fc9`
+uses combined source `9da558b`. It preserves Hub requirements, package database
+migrations and the redesigned Modules UI, and enables the native loopback
+port-zero gateway. All four managed window profiles declare `thread_read` and
+`thread_wait`; Claude/Codex also declare five lifecycle hooks. Agy/Grok HTTP
+hooks remain unsupported.
+
+The native selector proves Claude/Codex fixture children use their generated
+configuration and delivered token to initialize MCP, list exactly two tools,
+read their bound thread and wait. Separate native-window acceptance proves hook
+delivery into threads. Two-runtime gateway checks and combined native binary,
+Modules and Agent acceptance pass. The earlier MCP snapshot passed 776 unit
+cases; the combined Hub slice passed 71 focused cases. Full regression remains
+running, so this is not a complete release acceptance or real-provider proof.
+Docker, writable coordination tools and editable profile memory/instruction
+builders remain unfinished.
+
+Receipt: `managed-mcp-modules-global-install.json`; all six files were fenced,
+backed up and verified. Backup: `global-before-mcp-modules-9c70d927`. Running
+nodes were retained and keep their loaded code. Use a fresh node for this build.
+
+## Previous install: Modules layout and configuration dialog
 
 Global SHA `9c70d927590a5988ad3239b378bcb10885a488770642b31254d4e85041c85ebf`
 contains source `7649cd7`. Modules separates titles, versions and descriptions,

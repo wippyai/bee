@@ -1,5 +1,11 @@
 # Foundation status
 
+Global `887d0769` combines native randomized-port MCP and Claude/Codex lifecycle
+hooks with the latest Hub/Modules UI. Actual fixture children authenticate and
+read/wait on their bound thread; native hook acceptance passes. Full regression
+is still running. See [current build](handoffs/GLOBAL_BUILD.md) for evidence and
+remaining scope. Running nodes retain their loaded code.
+
 Global `7ba0b747` now combines Hub requirements editing and package-created
 database migrations with the latest Agent profile details/instructions.
 Native binary acceptance, source/pack Modules UI, 71 focused Hub cases and Go

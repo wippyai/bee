@@ -23,6 +23,7 @@ local EMPTY_DEFINITION = "bee.harness.catalog:setup_empty_definition"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local SOURCE = "bee.harness.catalog:launch_sentinel_key"
+local ALTERNATE_SOURCE = "bee.harness.catalog:alternate_setup_key"
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -99,6 +100,7 @@ local function prepare_host(workspace: string)
     if not setup_entry then error("harness setup") end
     local setup_data = setup_entry.data :: {[string]: unknown}
     setup_data.roots = {project = ROOT, session = ROOT}
+    setup_data.credentials = {anthropic = {provider = "claude", source = {kind = "env_variable", ref = SOURCE}}}
     apply(setup_entry)
     local mode_entry = registry.get("bee.placement.native:resource_mode")
     if not mode_entry then error("resource mode") end
@@ -110,6 +112,7 @@ local function prepare_host(workspace: string)
     local sources_data = sources_entry.data :: {[string]: unknown}
     local sources = sources_data.sources :: {{[string]: unknown}}
     sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
+    sources[#sources + 1] = {ref = ALTERNATE_SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
     apply(sources_entry)
     value(call("bee.resources:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
     value(call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
@@ -183,7 +186,12 @@ local function define_tests()
             test.eq(after[1].revision, before[1].revision)
             test.eq(after[2].association_id, before[2].association_id)
             test.eq(after[2].revision, before[2].revision)
-            value(call("bee.credentials:define", {workspace_id = first_workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
+            local defined = value(call("bee.credentials:list", {workspace_id = first_workspace}))
+            local definitions = defined.definitions :: {{[string]: unknown}}
+            test.eq(#definitions, 1)
+            test.eq(definitions[1].name, "anthropic")
+            test.eq(definitions[1].revision, 1)
+            test.eq(#(first.credentials :: {unknown}), 1)
             local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
                 workspace_id = first_workspace, brief = "ping"}))
             local request = admitted.request :: {[string]: unknown}
@@ -191,6 +199,41 @@ local function define_tests()
             test.eq(#resources, 2)
             test.eq(resources[1].root_ref, ROOT)
             test.eq(resources[2].root_ref, ROOT)
+        end)
+        test.it("never replaces a different existing credential during first-use setup", function()
+            local target = fresh("setup-existing-credential")
+            local existing = value(call("bee.credentials:define", {workspace_id = target, name = "anthropic", provider = "claude",
+                source = {kind = "env_variable", ref = ALTERNATE_SOURCE}, expected_revision = 0}))
+            local reply = setup(target, RETAINED_DEFINITION)
+            test.is_false(reply.ok == true)
+            test.eq(reply.error, "existing credential anthropic differs from host setup")
+            local listed = value(call("bee.credentials:list", {workspace_id = target}))
+            local definitions = listed.definitions :: {{[string]: unknown}}
+            test.eq(#definitions, 1)
+            test.eq(definitions[1].definition_id, existing.definition_id)
+            test.eq(definitions[1].revision, 1)
+            test.eq(definitions[1].source_ref, ALTERNATE_SOURCE)
+        end)
+        test.it("refuses missing host credential setup before creating resources", function()
+            local entry = registry.get("bee:harness_setup")
+            if not entry then error("host setup") end
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.credentials = {}
+            local target = fresh("setup-no-credential")
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local reply = setup(target, RETAINED_DEFINITION)
+                test.is_false(reply.ok == true)
+                test.eq(#associations(target), 0)
+                local listed = value(call("bee.credentials:list", {workspace_id = target}))
+                test.eq(#(listed.definitions :: {unknown}), 0)
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("refuses changed or conflicting selected setup without replacing an association", function()
             local conflicting_workspace = fresh("setup-conflict")

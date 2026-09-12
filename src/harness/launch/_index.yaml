@@ -72,8 +72,8 @@ entries:
   kind: security.policy.expr
   groups: [harness_setup_execution_scope]
   policy:
-    expression: '(action == "funcs.call" && (resource == "bee.resources:associate" || resource == "bee.resources:list")) || action == "bee.resources.manage" || action == "registry.get"'
-    actions: [funcs.call, bee.resources.manage, registry.get]
+    expression: '(action == "funcs.call" && (resource == "bee.resources:associate" || resource == "bee.resources:list" || resource == "bee.credentials:define" || resource == "bee.credentials:list")) || action == "bee.resources.manage" || action == "bee.credentials.manage" || action == "registry.get"'
+    actions: [funcs.call, bee.resources.manage, bee.credentials.manage, registry.get]
     resources: '*'
     effect: allow
 - name: setup_facade_policy

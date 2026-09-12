@@ -367,6 +367,13 @@ entries:
   variable: BEE_LAUNCH_SENTINEL_KEY
   default: launch-sentinel-2b3c4d
   readonly: true
+- name: alternate_setup_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:launch_sentinel_storage
+  variable: BEE_ALTERNATE_SETUP_KEY
+  default: alternate-setup-sentinel
+  readonly: true
 - name: fixture_definition
   kind: registry.entry
   meta:

@@ -67,20 +67,38 @@ entries:
     protocol: bee.governance:workspace_protocol
     workspace: bee.governance:workspace
     bounds: bee.threads.records:bounds
-- name: authoring
-  kind: library.lua
+- name: workspace_backend_call
+  kind: function.lua
   source: file://authoring.lua
+  method: call
   modules: [security, system]
   imports:
     protocol: bee.governance:workspace_protocol
     staging: bee.governance:staging
     resources: bee.governance:staging_resources
     transaction: bee.persist:transaction
+  meta:
+    type: internal
 - name: staging_policy
   kind: security.policy
+  groups: [workspace_execution_scope]
   policy:
     actions: [db.get, registry.get, system.read]
     resources: [bee.governance:db, bee.governance:database_ref, node]
+    effect: allow
+- name: workspace_execution_policy
+  kind: security.policy
+  groups: [workspace_execution_scope]
+  policy:
+    actions: [bee.governance.workspace.execute]
+    resources: [bee.governance:workspace_backend_call]
+    effect: allow
+- name: workspace_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance:workspace_backend_call")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.governance:workspace_execution_scope, bee.governance:workspace_backend_call]
     effect: allow
 - name: workspace_contract
   kind: contract.definition
@@ -96,8 +114,9 @@ entries:
   kind: function.lua
   source: file://workspace_method.lua
   method: handle
-  imports: {authoring: bee.governance:authoring}
-  security: {policies: [bee.governance:staging_policy]}
+  modules: [funcs, security]
+  imports: {protocol: bee.governance:workspace_protocol, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
+  security: {policies: [bee.governance:workspace_facade_policy]}
   meta:
     type: tool
     title: Governance authoring workspace

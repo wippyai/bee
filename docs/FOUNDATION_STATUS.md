@@ -1,5 +1,15 @@
 # Foundation status
 
+Governed authoring now accepts an ordinary app with an explicit workspace
+operation grant, while preserving its direct database and scope-creation denials.
+The public function validates permission, then uses an existing named scope for
+one fixed private storage call with the original actor. All 626 unit cases and
+the two-boot authoring check pass; callers cannot access the private scope or
+backend after the call. No runtime change, service or migration was added.
+Hub installation and DB-backed additive overlay activation remain unfinished;
+system/Hub definitions use registry history, while app edits will use stored
+definitions projected through overlays. Global is unchanged.
+
 The combined September 12 integration checkpoint (`343eefa`) has a verified
 standalone with driver-owned configuration delivery and no Hive review fixture
 in production. Native acceptance and the combined Hive application checks pass;

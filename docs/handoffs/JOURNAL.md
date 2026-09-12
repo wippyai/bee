@@ -6151,3 +6151,29 @@ hooks through their scoped gateway and fenced carrier into committed
 records. Both real harnesses cover SessionStart, UserPromptSubmit, PreToolUse,
 PostToolUse and Stop. This is not every possible hook, synchronous approval
 interception, default production profile setup or global gateway activation.
+
+### September 12 — scoped authoring and additive overlay priority
+
+Current Wolfden coordination remains Bee Harness,
+`01a06e56-ba58-7c5a-bd69-b7feb109a05d`, graph `bee-harness`, node `root`.
+Parent cursor is `jc_H7E57Z5SJH71M`; incoming Hub collaborator is
+`jc_J1A1GNYY6D2AP`. Facts 1308–1311 record the user's first priorities and storage
+split: Hub/system definitions use durable registry history; app/component edits
+persist in Bee DB and project through additive registry overlays without history.
+The core stays small; component installation does not depend on Keeper.
+
+The authoring boundary uses two function entries and the existing named-scope
+API. Public `workspace_call` checks exact workspace operation authority;
+private `workspace_backend_call` requires its own execution permission and
+preserves the authenticated actor. Ordinary apps retain their database and
+scope-creation denials. All 626 unit cases pass. Two actual boots prove frozen
+binary files, exact retry receipts and the unchanged migration ledger, plus
+direct DB, private scope and backend denial before and after public calls.
+Evidence: `authoring-scoped-final-restart.log`, `authoring-scoped-check.log`.
+The broader foundation check is still running at this checkpoint.
+
+Native packaging passes: all 15 assembled packs load with 610 entries and no
+test/fixture registrations or embedded assets (`authoring-scoped-pack-audit.json`).
+No runtime, service, migration or core change was added. Global is unchanged.
+Hub installation, desired overlay publication/reconstruction and the native
+composed-base publication fence remain unfinished.

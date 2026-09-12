@@ -11,8 +11,24 @@ local function principal(actor: string): funcs.Executor
         assert(security.policy("bee.governance_workspace_probe:call_policy")),
         assert(security.policy("bee.governance_workspace_probe:read_policy")),
         assert(security.policy("bee.governance_workspace_probe:write_policy")),
+        assert(security.policy("bee.governance_workspace_probe:caller_boundary")),
     }
     return funcs.new():with_actor(security.new_actor(actor)):with_scope(security.new_scope(policies))
+end
+
+local function isolated(client: funcs.Executor)
+    local raw, err = client:call("bee.governance_workspace_probe:authority_probe")
+    assert(not err, tostring(err))
+    local probe = bounds.object(raw)
+    assert(probe, "missing caller authority probe")
+    assert(probe.opened == false, "caller gained direct database access")
+    assert(probe.scope_create == false, "caller gained scope creation")
+    assert(probe.scope_lookup == false, "caller gained access to the private named scope")
+    assert(probe.private_execute == false, "caller gained private execution")
+    local reply, backend_error = client:call("bee.governance:workspace_backend_call", {operation = "list", workspace_id = "demo"})
+    assert(not backend_error, tostring(backend_error))
+    local denied = bounds.object(reply)
+    assert(denied and denied.ok == false and denied.code == "DENIED", "direct backend call was admitted")
 end
 
 local function call(client: funcs.Executor, request: unknown): Object
@@ -33,6 +49,7 @@ end
 local function main(phase: string?)
     local writer = principal("author-a")
     local foreign = principal("author-b")
+    isolated(writer)
     local create = {operation = "create", workspace_id = "demo", expected_revision = 0, idempotency_key = "create"}
     local put = {operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "binary",
         path = "assets/demo.wasm", content_base64 = "AP9hc3NldA=="}
@@ -49,6 +66,7 @@ local function main(phase: string?)
         local retained = value(call(writer, {operation = "read", workspace_id = "demo", path = "assets/demo.wasm",
             snapshot_digest = frozen.digest}))
         assert(retained.content_base64 == "AP9hc3NldA==" and retained.revision == 2, "frozen binary followed a mutable edit")
+        isolated(writer)
         logger:info("GOVERNANCE_WORKSPACE_FIRST_BOOT_PASS")
         return
     end
@@ -64,6 +82,7 @@ local function main(phase: string?)
     assert(retained.content_base64 == "AP9hc3NldA==" and retained.revision == 2, "restart changed frozen binary bytes")
     local denied = call(foreign, {operation = "list", workspace_id = "demo"})
     assert(denied.ok == false and denied.code == "DENIED", "foreign author accessed exact workspace")
+    isolated(writer)
     logger:info("GOVERNANCE_WORKSPACE_SECOND_BOOT_PASS")
 end
 

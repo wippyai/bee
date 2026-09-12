@@ -193,7 +193,7 @@ func run() error {
 	if receipts != "4" {
 		return fmt.Errorf("receipt replay changed durable receipt count: %q", receipts)
 	}
-	fmt.Println("Governance authoring: two actual boots retained frozen binary bytes, exact receipts and author denial with an unchanged migration ledger")
+	fmt.Println("Governance authoring: two actual boots retained frozen binary bytes, exact receipts and author denial with an unchanged migration ledger; caller database, scope creation and private execution stayed denied")
 	return nil
 }
 

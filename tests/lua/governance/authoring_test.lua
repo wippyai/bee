@@ -14,7 +14,10 @@ type Reply = {ok: boolean, code: string?, message: string?, value: {[string]: un
 local function scope(ordinary: boolean): security.Scope
     local policies: {security.Policy} = {}
     local names = {POLICY}
-    if ordinary then names[#names + 1] = APP_BOUNDARY end
+    if ordinary then
+        names[#names + 1] = APP_BOUNDARY
+        names[#names + 1] = "bee:app_boundary_policy"
+    end
     for _, name in ipairs(names) do
         local policy, policy_error = security.policy(name)
         if not policy then error("authoring test policy " .. name .. ": " .. tostring(policy_error)) end
@@ -30,7 +33,7 @@ local function call(actor_id: string, request: unknown, ordinary: boolean): Repl
 end
 
 local function successful(actor_id: string, request: unknown): Reply
-    local reply = call(actor_id, request, false)
+    local reply = call(actor_id, request, true)
     if not reply.ok then error(tostring(reply.code) .. ": " .. tostring(reply.message)) end
     return reply
 end
@@ -43,7 +46,7 @@ local function define_tests()
                 successful(owner, {operation = "create", workspace_id = id, expected_revision = 0, idempotency_key = "create"})
             end
             local policies: {security.Policy} = {}
-            for _, name in ipairs({"bee.governance:authoring_call_only_policy", "bee.governance:authoring_exact_read_policy"}) do
+            for _, name in ipairs({"bee.governance:authoring_call_only_policy", "bee.governance:authoring_exact_read_policy", APP_BOUNDARY, "bee:app_boundary_policy"}) do
                 local policy, policy_error = security.policy(name)
                 if not policy then error("scoped authoring policy: " .. tostring(policy_error)) end
                 policies[#policies + 1] = policy
@@ -65,18 +68,16 @@ local function define_tests()
             test.eq(unchanged.value and unchanged.value.revision, 1)
         end)
 
-        test.it("keeps the ordinary-app store denial while a separately scoped actor stages binary snapshots", function()
+        test.it("lets an ordinary app stage binary snapshots while direct storage and backend execution stay denied", function()
             local workspace_id = "governance-authoring-boundary"
             local owner = "bee.test.governance.owner"
             local direct, direct_error = funcs.new():with_actor(security.new_actor(owner)):with_scope(scope(true)):call(DIRECT_STORE, {})
             if direct_error then error("direct database probe: " .. tostring(direct_error)) end
             test.is_false((direct :: {opened: boolean}).opened)
-            -- Function security policies compose with a caller denial on this
-            -- runtime. An ordinary app cannot use the store-backed facade
-            -- until it is routed through a separately scoped owner.
-            local app_refusal = call(owner, {operation = "create", workspace_id = workspace_id, expected_revision = 0, idempotency_key = "app-create"}, true)
-            test.is_false(app_refusal.ok)
-            test.eq(app_refusal.code, "UNAVAILABLE")
+            local executor = funcs.new():with_actor(security.new_actor(owner)):with_scope(scope(true))
+            local private, private_error = executor:call("bee.governance:workspace_backend_call", {operation = "list", workspace_id = workspace_id})
+            if private_error then error(tostring(private_error)) end
+            test.eq((private :: Reply).code, "DENIED")
             local created = successful(owner, {operation = "create", workspace_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
             test.eq(created.value and created.value.revision, 1)
 
@@ -96,6 +97,12 @@ local function define_tests()
             local foreign = call("bee.test.governance.other", {operation = "list", workspace_id = workspace_id}, false)
             test.is_false(foreign.ok)
             test.eq(foreign.code, "DENIED")
+            local after, after_error = executor:call(DIRECT_STORE, {})
+            if after_error then error(tostring(after_error)) end
+            test.is_false((after :: {opened: boolean}).opened)
+            local private_after, private_after_error = executor:call("bee.governance:workspace_backend_call", {operation = "list", workspace_id = workspace_id})
+            if private_after_error then error(tostring(private_after_error)) end
+            test.eq((private_after :: Reply).code, "DENIED")
         end)
 
         test.it("accepts the total byte limit when independently padded files reach it", function()

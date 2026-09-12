@@ -1,4 +1,4 @@
--- MIT. Authenticated public authoring facade. Staging is not activation.
+-- MIT. Private authenticated authoring backend. Staging is not activation.
 local security = require("security")
 local system = require("system")
 local protocol = require("protocol")
@@ -8,14 +8,13 @@ local transaction = require("transaction")
 local M = {}
 type Result = transaction.Result
 function M.call(raw: unknown): Result
+    if not security.can("bee.governance.workspace.execute", "bee.governance:workspace_backend_call") then
+        return transaction.failure("DENIED", "workspace backend is not authorized")
+    end
     local request, invalid = protocol.decode(raw)
     if not request then return transaction.failure("INVALID", invalid or "invalid workspace request") end
     local actor = security.actor()
-    local action = (request.operation == "read" or request.operation == "list")
-        and "bee.governance.workspace.read" or "bee.governance.workspace.write"
-    if not actor or not security.can(action, request.workspace_id) then
-        return transaction.failure("DENIED", "workspace operation is not authorized")
-    end
+    if not actor then return transaction.failure("DENIED", "authenticated author is required") end
     local node, node_error = system.node.id()
     if not node or node_error or node == "" then return transaction.failure("UNAVAILABLE", "native node identity unavailable") end
     local resource, resource_error = resources.database()

@@ -4,6 +4,14 @@ Status: source now includes private, host-admitted authoring workspaces. Overlay
 activation, Hub resolution or installation, approval consumption, and Hive
 replication remain unimplemented.
 
+The first delivery priorities are Hub dependency installation and durable
+component overlays. Hub-installed and system definitions use registry history.
+App/component edits are additive definitions persisted in Bee-owned SQLite and
+projected through runtime registry overlays, without adding registry history.
+Restart reconstructs those overlays from the stored definitions. Destination
+scope and approval remain explicit; distributing content does not distribute
+authority. These are implementation requirements, not available install APIs.
+
 Bee owns a small governance subsystem. It has no Keeper, Kickside, web view,
 or language-model dependency. The first publication acceptance target remains a
 headless install and update of a private Hub component, including its migrations.
@@ -18,10 +26,14 @@ measured copy and does not publish or execute it. The protected function checks
 the authenticated actor and a host-supplied read or write operation on the exact
 workspace ID. No default authoring operation policy is installed.
 The ordinary application boundary still denies direct governance-store access;
-on the current runtime that deny also applies when an ordinary app calls the
-store-backed function. The source therefore does not yet expose authoring to a
-bundled app. A host may admit a separately scoped external actor while a future
-dedicated owner/process boundary is designed and accepted.
+the public function now checks the caller's exact operation before calling one
+fixed private storage function under a host-defined named scope. The actor is
+inherited, and the private function requires its own execution permission.
+Neither the store scope nor its execution permission is returned to the caller.
+This uses existing runtime function calls and scopes, without a new process or
+service. Two-boot acceptance proves storage and scope creation stay denied to the
+caller before and after authoring, while frozen files and retry receipts survive.
+Bundled apps still need explicit authoring admission; none is granted by default.
 
 ## Decision and ownership
 

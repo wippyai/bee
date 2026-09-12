@@ -5,17 +5,19 @@ destination-host-resolved package closure. It has no publication, SQL, network,
 approval or process permissions. It is not a package resolver or an
 install/update API.
 
-The separate `workspace_call` function is a protected, SQLite-backed authoring
-owner. It stages caller-owned virtual files and frozen snapshots only. Its
-attached store policy is not an agent grant, and the default host supplies no
+The separate `workspace_call` function is a protected authoring boundary.
+It stages caller-owned virtual files and frozen snapshots only. Its
+private storage scope is not an agent grant, and the default host supplies no
 authoring operation grants, registry publication, or overlay authority.
 
-The ordinary application boundary denies direct access to this store. The
-current function-scope composition also carries that denial into
-`workspace_call`, so a bundled application cannot invoke the staging facade
-directly. A host can admit a separately scoped external actor to the exact
-workspace operations; a dedicated owner/process boundary is still needed before
-the same facade can serve ordinary applications.
+The ordinary application boundary denies direct access to this store and scope
+creation. After checking the caller's exact workspace operation, `workspace_call`
+uses the existing named scope `workspace_execution_scope` to call the fixed
+`workspace_backend_call` function. That function requires private execution
+permission and retains the authenticated actor for ownership checks. Both
+requests and replies are decoded. Callers cannot choose the target or scope;
+they receive neither storage nor scope-management authority. No new process or
+service is involved.
 
 The primary planned consumer activates internal packs/changes in service-owned
 ephemeral overlays, without durable registry publication. Agents call a scoped
@@ -69,8 +71,9 @@ plugin dispatch and application migration execution remain unimplemented.
 The focused governance Lua suite covers request decoding, bounded binary-safe
 snapshots, closed preflight diagnostics, and the protected staging function's
 CAS, replay, frozen-copy and author-ownership behavior. It also proves that the
-ordinary app store denial is retained while a separately scoped actor can use
-the function. These checks do not establish restart durability, Hive transfer,
+ordinary app store and scope-creation denials are retained while an admitted
+app can use the public function; direct private-backend calls refuse.
+These checks do not establish restart durability, Hive transfer,
 destination approval, application installation, overlays or WASM execution.
 The full 16 MiB file-tree boundary is accepted with independent base64 padding
 per file; adding another byte refuses without advancing the edit revision.
@@ -80,7 +83,9 @@ bounded Go acceptance proof against two actual boots of one disposable
 `BEE_GOVERNANCE_DB`. It creates, writes and freezes binary content before a
 mutable edit; the restart proves the copied frozen bytes and create/write/freeze
 receipt replays remain intact, while a separately authorized actor is denied
-the exact owner workspace. The runner also compares the complete migration
+the exact owner workspace. The same caller keeps its database and scope-creation
+denials and cannot invoke the private backend before or after either boot's
+public calls. The runner also compares the complete migration
 ledger row before and after restart. It does not establish Hive transfer,
 destination approval, application installation, overlays or WASM execution.
 

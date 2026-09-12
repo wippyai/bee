@@ -132,6 +132,7 @@ entries:
     policies:
     - bee:carrier_policy
     - bee:carrier_environment_policy
+    - bee:thread_create_policy
     - bee:placement_store_policy
     - bee:placement_exec_policy
     - bee:placement_runner_policy

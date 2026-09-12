@@ -16,10 +16,16 @@ picker changes here are not installed in that binary.
 The Agent selection source now keeps a valid but unavailable window profile in
 the list, shows its admission refusal and disables Open. Refresh rebuilds the
 snapshot; ready profiles still require the displayed plan digest at admission.
-All 680 unit cases pass. The actual managed-window selector passes; the same
-suite's natural-completion input-revocation assertion failed and is under
-separate baseline investigation. Production defaults are being integrated, so
-this does not yet establish first-use managed launch.
+Each driver now ships a default window profile and a host-resolved executable
+reference. All 684 unit cases and five managed-window cases pass. The retirement
+fixture now waits for the broker's exact close acknowledgment before testing
+revoked input; thread completion alone does not establish application exit.
+A source-free native candidate launches a fixture Codex CLI from the actual
+Agent picker. That probe caught the production binding's missing thread-create
+permission, now added. Admission failures stay visible in the picker, and retries
+of the same selected plan preserve the request identity. Project/session setup,
+automatic login configuration and cold conversation recovery remain incomplete;
+this candidate is not installed globally.
 
 The September 12 agent-integration branch composes Claude, Codex, Agy and Grok
 as separate driver packs under the shared driver contract. The credential broker

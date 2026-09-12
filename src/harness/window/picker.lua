@@ -29,6 +29,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     if choices then listed = choices end
     local selected: integer = #listed.items > 0 and 1 or 0
     local status = load_error or ""
+    local request_id: string? = nil
+    local request_definition, request_plan = "", ""
     local announced = false
     local dirty = true
     local frame: view.Frame = {rows = {}, first = 1, capacity = 0, hits = {}}
@@ -89,7 +91,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if activate and frame.capacity > 0 then
             local choice = listed.items[selected]
             if choice and not choice.unavailable then
-                local request_id = assert(uuid.v7())
+                if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then
+                    request_id = assert(uuid.v7())
+                    request_definition, request_plan = choice.definition_ref, choice.plan_digest
+                end
                 local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
                     expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
                 if admitted then
@@ -101,7 +106,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     status = "Profile changed. Refresh and select it again."
                     listed = {items = {}, unavailable = 0}; selected = 0; dirty = true
                 else
-                    return finish(nil, fault and (fault.code .. ": " .. fault.message) or "Agent launch was not admitted")
+                    status = fault and (fault.code .. ": " .. fault.message) or "Agent launch was not admitted"
+                    dirty = true
                 end
             end
         end

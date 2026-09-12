@@ -21,6 +21,32 @@ end
 
 local function define_tests()
     test.describe("Hub requirements", function()
+        test.it("projects selected migration database holes without changing artifact entries", function()
+            local entries: {requirements.Entry} = {
+                {id = "demo:first", kind = "function.lua", meta = {type = "migration", target_db = "demo:raw"}, data = {}},
+                {id = "demo:ordinary", kind = "library.lua", meta = {target_db = "demo:raw"}, data = {}},
+            }
+            local hole: requirements.Requirement = {id = "demo:target_db", default = "demo:default", has_default = true,
+                has_selected = false, targets = {{entry = "demo:first", path = ".meta.target_db"},
+                    {entry = "demo:ordinary", path = ".meta.target_db"}}}
+            local resolved: requirements.Result = {requirements = {hole}, missing = {}}
+            local defaults, problem = requirements.migration_targets(entries, resolved)
+            test.is_nil(problem); test.not_nil(defaults)
+            if defaults then test.eq(defaults[1].meta.target_db, "demo:default"); test.eq(defaults[2].meta.target_db, "demo:raw") end
+            hole.selected, hole.has_selected = "host:database", true
+            local chosen, chosen_problem = requirements.migration_targets(entries, resolved)
+            test.is_nil(chosen_problem); test.not_nil(chosen)
+            if chosen then test.eq(chosen[1].meta.target_db, "host:database") end
+            test.eq(entries[1].meta.target_db, "demo:raw")
+            hole.selected = false
+            test.is_nil(requirements.migration_targets(entries, resolved))
+            hole.selected = "host:database"
+            resolved.requirements[2] = {id = "demo:other", default = "host:other", has_default = true,
+                has_selected = false, targets = {{entry = "demo:first", path = "meta.target_db"}}}
+            test.is_nil(requirements.migration_targets(entries, resolved))
+            resolved.requirements[2].targets[1].path = ".data.target_db"
+            test.not_nil(requirements.migration_targets(entries, resolved))
+        end)
         test.it("keeps declared defaults apart from supplied values and lists missing requirements", function()
             local result, err = requirements.read(package_entries(), parameters({{name = "demo:selected", value = "provided"}}))
             if not result then error(tostring(err)) end

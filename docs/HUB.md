@@ -86,7 +86,11 @@ ID, owner, target database, timestamp and definition digest. Already-applied IDs
 must match their existing definitions. The dependency root and captured work are
 published in one registry change. The worker verifies the installed definitions,
 executes package functions and checks their ledger before recording completion.
-No Keeper package or migration DSL is imported by Bee.
+Selected/default `target_db` requirements are projected for migration metadata at
+`meta.target_db` or `.meta.target_db`, so the plan and receipt measure the target
+the native linker will select. The artifact entries remain unchanged. Other
+linker paths remain native-owned; conflicting database requirements refuse the
+plan. No Keeper package or migration DSL is imported by Bee.
 
 The internal binding uses the standard function contract (`database_id`,
 `direction`, `id`). Package functions own schema and ledger transactions. An
@@ -106,8 +110,8 @@ definition removal needs its own durable phase and recovery checks.
 These changes are source-only and not installed globally. SQLite library and
 real-service acceptance cover up/replay, committed-schema interruption/restart,
 partial failure/retry, changed-definition refusal after restart, removal block/leave,
-absent ledgers and denied database access. PostgreSQL/MySQL, newly installed database
-resources and requirement-linked migration targets need service acceptance.
+absent ledgers, requirement-linked targets and denied database access.
+PostgreSQL/MySQL and newly installed database resources need service acceptance.
 Execution currently requires the target database resource to exist before
 publication. Concurrent external registry writers and independent migration
 runners are not serialized by the Hub worker. The public runner's discovery path

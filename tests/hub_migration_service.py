@@ -48,6 +48,13 @@ def main():
         packages["acme/storage@1.1.0"] = packages["acme/storage@1.0.0"] + [
             entry("acme.storage", "second", "function.lua", {"source": second_source, "method": "run", "modules": ["sql"]},
                   {"type": "migration", "target_db": "probe:db", "timestamp": "2026-09-12T13:00:00Z"})]
+        packages["acme/app@1.2.0"] = [entry("acme.app", "definition", "ns.definition"),
+                                       entry("acme.app", "storage", "ns.dependency", {"component": "acme/storage", "version": "1.2.0"})]
+        packages["acme/storage@1.2.0"] = [entry("acme.storage", "definition", "ns.definition"),
+            entry("acme.storage", "target_db", "ns.requirement", {"default": "raw:default",
+                  "targets": [{"entry": "acme.storage:first", "path": ".meta.target_db"}]}),
+            entry("acme.storage", "first", "function.lua", {"source": source, "method": "run", "modules": ["sql"]},
+                  {"type": "migration", "target_db": "raw:database", "timestamp": "2026-09-12T12:00:00Z"})]
         descriptions = folder / "packages.json"
         descriptions.write_text(json.dumps(packages))
         server_log = (folder / "server.log").open("w")
@@ -57,7 +64,7 @@ def main():
             assert ready.select(15), "fixture Hub did not announce its listener"
             url = server.stdout.readline().strip()
         assert url.startswith("http://127.0.0.1:"), url
-        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper"):
+        for mode in ("absent", "applied", "denied", "crash", "partial", "tamper", "linked"):
             workspace = folder / mode
             workspace.mkdir()
             prepare_fixture(workspace)
@@ -128,7 +135,7 @@ def main():
             assert database.is_file(), "missing target database"
             with sqlite3.connect(database) as connection:
                 tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                if mode in ("applied", "crash", "tamper"):
+                if mode in ("applied", "crash", "tamper", "linked"):
                     assert tables == {"_migrations", "fixture_payload"}, tables
                     assert connection.execute("SELECT id FROM _migrations").fetchall() == [("acme.storage:first",)]
                     assert connection.execute("SELECT value FROM fixture_payload").fetchall() == [("committed",)]
@@ -149,7 +156,7 @@ def main():
         if server_log is not None:
             server_log.close()
     shutil.rmtree(folder)
-    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, orphan removal block, absent ledger and denied database grant pass")
+    print("Hub migration service: real up/replay, committed-schema SIGKILL/restart, partial failure/retry, changed-definition refusal, requirement-linked target, orphan removal block, absent ledger and denied database grant pass")
 
 
 if __name__ == "__main__":

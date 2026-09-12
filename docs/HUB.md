@@ -268,5 +268,4 @@ errors keep the editor open. This presentation update is installed in global sou
 
 Requirements also support clearing the selected override with the visible
 Clear override action or Delete. Hub then supplies the declared default again,
-or marks the requirement missing if it has no default. This source change is
-pending the next release.
+or marks the requirement missing if it has no default. This is installed in global source `491ad5b` (SHA `adeb373c`).

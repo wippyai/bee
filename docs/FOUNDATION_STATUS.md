@@ -1,5 +1,10 @@
 # Foundation status
 
+Global `adeb373c` adds Settings → About with loaded bundle identity and Modules
+Clear override, preserving the installed Modules redesign and native MCP work.
+Combined native acceptance passes. The earlier full repository run ended with
+exit 143 and is incomplete; see [current build](handoffs/GLOBAL_BUILD.md).
+
 Global `887d0769` combines native randomized-port MCP and Claude/Codex lifecycle
 hooks with the latest Hub/Modules UI. Actual fixture children authenticate and
 read/wait on their bound thread; native hook acceptance passes. Full regression

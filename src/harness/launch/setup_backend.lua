@@ -1,6 +1,7 @@
 -- MIT. Host-selected roots are associated once, after a selected definition.
 local funcs = require("funcs")
 local registry = require("registry")
+local security = require("security")
 local bounds = require("bounds")
 local definition = require("definition")
 local SETUP = "bee:harness_setup"
@@ -37,6 +38,7 @@ local function handle(raw: unknown): {[string]: unknown}
     if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest"}) then return fail("unknown field") end
     local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
+    if not security.can("bee.resources.manage", workspace) then return fail("resource management is not authorized") end
     local expected = bounds.text(request.expected_definition_digest, 64)
     if not expected or #expected ~= 64 or not expected:match("^[0-9a-f]+$") then return fail("expected_definition_digest must be a lowercase SHA-256 hex digest") end
     local launch, launch_error = definition.load(ref)

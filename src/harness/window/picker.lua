@@ -4,6 +4,8 @@ local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
 local uuid = require("uuid")
+local funcs = require("funcs")
+local bounds = require("bounds")
 local client = require("client")
 local appearance = require("appearance")
 local input_event = require("input_event")
@@ -95,19 +97,29 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     request_id = assert(uuid.v7())
                     request_definition, request_plan = choice.definition_ref, choice.plan_digest
                 end
-                local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
-                    expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
-                if admitted then
-                    client.title(launch, choice.title)
-                    return finish(admitted, nil)
-                end
-                local fault = refused and refused.error
-                if fault and fault.code == "CONFLICT" then
-                    status = "Profile changed. Refresh and select it again."
-                    listed = {items = {}, unavailable = 0}; selected = 0; dirty = true
-                else
-                    status = fault and (fault.code .. ": " .. fault.message) or "Agent launch was not admitted"
+                local setup, setup_error = funcs.call("bee.harness.launch:setup", {
+                    workspace_id = launch.workspace_id, definition_ref = choice.definition_ref,
+                    expected_plan_digest = choice.plan_digest})
+                local prepared = bounds.object(setup)
+                if setup_error or not prepared or prepared.ok ~= true then
+                    status = setup_error and tostring(setup_error) or
+                        (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")
                     dirty = true
+                else
+                    local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
+                        expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
+                    if admitted then
+                        client.title(launch, choice.title)
+                        return finish(admitted, nil)
+                    end
+                    local fault = refused and refused.error
+                    if fault and fault.code == "CONFLICT" then
+                        status = "Profile changed. Refresh and select it again."
+                        listed = {items = {}, unavailable = 0}; selected = 0; dirty = true
+                    else
+                        status = fault and (fault.code .. ": " .. fault.message) or "Agent launch was not admitted"
+                        dirty = true
+                    end
                 end
             end
         end

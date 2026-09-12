@@ -519,6 +519,13 @@ entries:
     actions: [funcs.call, bee.harness.setup]
     resources: '*'
     effect: allow
+- name: setup_call_only_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.launch:setup]
+    effect: allow
 - name: launch_test
   kind: function.lua
   source: file://launch_test.lua

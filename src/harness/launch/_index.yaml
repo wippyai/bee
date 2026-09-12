@@ -54,7 +54,7 @@ entries:
   kind: function.lua
   source: file://setup_backend.lua
   method: handle
-  modules: [funcs, registry]
+  modules: [funcs, registry, security]
   imports:
     bounds: bee.threads.records:bounds
     definition: bee.harness.launch:definitions

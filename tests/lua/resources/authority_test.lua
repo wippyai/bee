@@ -62,7 +62,7 @@ local function await(future: any): authority.Reply
     return data :: authority.Reply
 end
 local function admit_roots()
-    local entry = registry.get("bee.placement.native:admitted_roots")
+    local entry = registry.get("bee:resource_roots")
     if not entry then error("admitted roots entry") end
     local data = entry.data :: {[string]: unknown}
     local roots = data.roots :: {{[string]: unknown}}
@@ -83,7 +83,7 @@ local function define_tests()
         test.it("associates under the host ceiling for managers only and replaces at the next revision", function()
             local workspace = fresh("ws")
             test.eq(code(call(outsider, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "", allowed_access = "write"})), "DENIED")
-            test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = "bee.placement.native:root", allowed_access = "read"})), "FORBIDDEN")
+            test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = "bee.resources:unadmitted_fixture", allowed_access = "read"})), "FORBIDDEN")
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "shared", root_ref = SHARED, allowed_access = "write"})), "FORBIDDEN")
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "../up"})), "INVALID")
             local first = value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "src", allowed_access = "write"}))

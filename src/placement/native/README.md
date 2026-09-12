@@ -107,7 +107,9 @@ probe, `contained_tree` never on this runtime.
 ## Resource modes
 
 The host selects the mode in `bee.placement.native:resource_mode`; a
-request cannot. In `host_configured` mode `bee.placement.native:admitted_roots`
+request cannot. The shipped default is `granted`, so managed Agent resources
+are validated through their authority on use. In `host_configured` mode
+`bee.placement.native:admitted_roots`
 lists the `fs.directory` roots a launch may name with the widest access the
 host allows, `prepare` checks the caller, the root, the subpath and the
 access mode against that list, and a request's `grant_ref` is correlation

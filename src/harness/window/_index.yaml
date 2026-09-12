@@ -63,8 +63,9 @@ entries:
 - name: picker
   kind: library.lua
   source: file://picker.lua
-  modules: [tty, process, channel, uuid]
+  modules: [tty, process, channel, uuid, funcs]
   imports:
+    bounds: bee.threads.records:bounds
     client: bee.application:client
     appearance: bee.desktop:appearance
     input_event: bee.harness.window:input

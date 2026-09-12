@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.resources
 entries:
+- name: unadmitted_fixture
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+  meta: {type: test_support}
 - name: project_fixture
   kind: fs.directory
   meta: {type: test_support}

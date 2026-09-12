@@ -62,7 +62,7 @@ entries:
     type: bee.placement_resource_mode
     comment: host_configured or granted; selected by the host, never by a request
   data:
-    mode: host_configured
+    mode: granted
 - name: environment
   kind: env.storage.os
   lifecycle:

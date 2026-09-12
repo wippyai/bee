@@ -17,15 +17,24 @@ The Agent selection source now keeps a valid but unavailable window profile in
 the list, shows its admission refusal and disables Open. Refresh rebuilds the
 snapshot; ready profiles still require the displayed plan digest at admission.
 Each driver now ships a default window profile and a host-resolved executable
-reference. All 684 unit cases and five managed-window cases pass. The retirement
+reference. The pre-setup checkpoint passed 684 unit cases and five managed-window
+cases. The retirement
 fixture now waits for the broker's exact close acknowledgment before testing
 revoked input; thread completion alone does not establish application exit.
 A source-free native candidate launches a fixture Codex CLI from the actual
 Agent picker. That probe caught the production binding's missing thread-create
 permission, now added. Admission failures stay visible in the picker, and retries
-of the same selected plan preserve the request identity. Project/session setup,
-automatic login configuration and cold conversation recovery remain incomplete;
-this candidate is not installed globally.
+of the same selected plan preserve the request identity.
+
+First-use setup now creates project/session associations under an explicit
+operation grant and rechecks the selected plan before making changes. Placement
+uses resource-authority grants. The native candidate proves a fixture Codex CLI
+starts in the canonical project directory, uses a separate session home, and
+keeps session files after app and node exit. The project root uses the runtime's
+existing `fs.directory` with `base: project`. Full regression verification is
+still running after updating fixtures for grant mode; automatic login setup,
+cold conversation recovery, MCP activation and Docker remain incomplete. This
+candidate is not installed globally.
 
 The September 12 agent-integration branch composes Claude, Codex, Agy and Grok
 as separate driver packs under the shared driver contract. The credential broker

@@ -158,8 +158,8 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     return request
 end
 local READONLY = "bee.placement.native:readonly_fixture"
-local function admit_root()
-    local entry = registry.get("bee.placement.native:admitted_roots")
+local function admit_root(ref: string)
+    local entry = registry.get(ref)
     if not entry then error("admitted roots entry") end
     local data = entry.data :: {[string]: unknown}
     local roots = data.roots :: {{[string]: unknown}}
@@ -234,7 +234,9 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
-        admit_root()
+        resource_mode("host_configured")
+        admit_root("bee.placement.native:admitted_roots")
+        admit_root("bee:resource_roots")
         activate_fixture_binding()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)

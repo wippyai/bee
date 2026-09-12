@@ -218,14 +218,24 @@ local function define_tests()
         end)
         test.it("rejects an unauthorized caller, private backend calls and unknown definitions", function()
             local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
-            local _, no_setup_error = funcs.new():with_actor(security.new_actor("bee.test.setup.denied")):with_scope(security.new_scope({})):call("bee.harness.launch:setup",
+            local no_setup, no_setup_error = funcs.new():with_actor(security.new_actor("bee.test.setup.denied")):with_scope(security.new_scope({})):call("bee.harness.launch:setup",
                 {workspace_id = fresh("setup-denied"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
-            test.is_true(no_setup_error ~= nil)
+            test.is_true(no_setup_error ~= nil or (type(no_setup) == "table" and no_setup.ok == false))
+            local call_only = assert(security.policy("bee.harness.catalog:setup_call_only_policy"))
+            local denied_workspace = fresh("setup-operation-denied")
+            local denied, denied_error = funcs.new():with_actor(actor):with_scope(security.new_scope({call_only})):call("bee.harness.launch:setup",
+                {workspace_id = denied_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+            test.is_nil(denied_error)
+            test.is_true(type(denied) == "table")
+            if type(denied) ~= "table" then error("missing denied setup reply") end
+            test.eq(denied.ok, false)
+            test.eq(denied.error, "setup is not authorized")
+            test.eq(#associations(denied_workspace), 0)
             local policy, policy_error = security.policy("bee.harness.catalog:setup_client_policy")
             if policy_error or not policy then error(tostring(policy_error)) end
-            local _, private_error = funcs.new():with_actor(actor):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
+            local private_reply, private_error = funcs.new():with_actor(actor):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
                 {workspace_id = fresh("setup-private"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
-            test.is_true(private_error ~= nil)
+            test.is_true(private_error ~= nil or (type(private_reply) == "table" and private_reply.ok == false))
             local unknown = call("bee.harness.launch:setup", {workspace_id = fresh("setup-unknown"), definition_ref = "bee.harness.catalog:missing",
                 expected_plan_digest = plan.plan_digest})
             test.is_false((unknown :: unknown as {[string]: unknown}).ok == true)

@@ -133,6 +133,7 @@ entries:
     - bee:carrier_policy
     - bee:carrier_environment_policy
     - bee:thread_create_policy
+    - bee:harness_setup_policy
     - bee:placement_store_policy
     - bee:placement_exec_policy
     - bee:placement_runner_policy
@@ -141,6 +142,13 @@ entries:
     - bee:credential_materialize_policy
     - bee:gateway_materialize_policy
     - bee:gateway_supervision_policy
+- name: harness_setup_policy
+  kind: security.policy.expr
+  policy:
+    expression: 'action == "bee.harness.setup" || (action == "funcs.call" && resource == "bee.harness.launch:setup")'
+    actions: [bee.harness.setup, funcs.call]
+    resources: '*'
+    effect: allow
 - name: terminal
   kind: terminal.host
   hide_logs: true
@@ -271,14 +279,10 @@ entries:
   variable: BEE_WORKSPACE_DB
   default: .wippy/workspace.db
   readonly: true
-- name: project_path
-  kind: env.variable
-  storage: bee.harness.host:environment
-  variable: cwd
-  readonly: true
 - name: workspace_root
   kind: fs.directory
-  directory: ${env:bee:project_path}
+  directory: .
+  base: project
   auto_init: false
 - name: resource_roots
   kind: registry.entry
@@ -695,7 +699,7 @@ entries:
     comment: Resource root identity may resolve only the host-selected path variables
   policy:
     actions: [env.get]
-    resources: [bee.placement.native:root_path, bee:project_path]
+    resources: [bee.placement.native:root_path]
     effect: allow
 - name: resource_manage_policy
   kind: security.policy

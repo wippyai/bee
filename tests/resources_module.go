@@ -255,6 +255,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	}
 	hostEntries = append(hostEntries, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if !dropRoots {
+		hostEntries = append(hostEntries, map[string]interface{}{"name": "resource_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.resource_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}})
 		if err := resourcesModuleWrite(folder, filepath.Join("src", "placement", "_index.yaml"), resourcesModuleIndex{
 			Version: "1.0", Namespace: "bee.placement.native", Entries: []map[string]interface{}{
 				{"name": "environment", "kind": "env.storage.os", "lifecycle": map[string]interface{}{"auto_start": true}},
@@ -262,7 +263,6 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 				{"name": "unrelated_secret_path", "kind": "env.variable", "storage": "bee.placement.native:environment", "variable": "BEE_UNRELATED_SECRET_PATH", "default": ".wippy/unrelated-secret", "readonly": true},
 				{"name": "root", "kind": "fs.directory", "directory": "${env:bee.placement.native:root_path}", "auto_init": true, "mode": "0700"},
 				{"name": "unrelated_env_root", "kind": "fs.directory", "directory": "${env:bee.placement.native:unrelated_secret_path}", "auto_init": true},
-				{"name": "admitted_roots", "kind": "registry.entry", "meta": map[string]interface{}{"type": "bee.placement_roots"}, "data": map[string]interface{}{"roots": []map[string]interface{}{{"root_ref": "bee.placement.native:root", "access": "write"}, {"root_ref": "bee.placement.native:unrelated_env_root", "access": "write"}}}},
 			},
 		}); err != nil {
 			return err

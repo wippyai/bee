@@ -577,7 +577,7 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
-func managedLaunch(binary string, machineLogin bool) error {
+func managedLaunch(binary, provider string, machineLogin bool) error {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
 		return err
@@ -588,17 +588,24 @@ func managedLaunch(binary string, machineLogin bool) error {
 	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
 		return err
 	}
+	providerDirectory, loginFile := ".codex", "auth.json"
+	selection := "\x1b[B\x1b[B\r"
+	label := "Codex"
+	if provider == "claude" {
+		providerDirectory, loginFile = ".claude", ".credentials.json"
+		selection, label = "\x1b[B\r", "Claude"
+	}
 	const fixtureLogin = `{"fixture":"machine-login"}`
 	if machineLogin {
-		if err := os.MkdirAll(filepath.Join(home, ".codex"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(home, providerDirectory), 0700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(home, ".codex", "auth.json"), []byte(fixtureLogin), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(home, providerDirectory, loginFile), []byte(fixtureLogin), 0600); err != nil {
 			return err
 		}
 	}
-	cli := filepath.Join(project, "bin", "codex")
-	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) + "\nprintf 'BEE_MANAGED_CODEX_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	cli := filepath.Join(project, "bin", provider)
+	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) + "\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
 	}
@@ -612,13 +619,13 @@ func managedLaunch(binary string, machineLogin bool) error {
 		_ = retained.stop()
 		_ = stopFixtureOwners(binary, state)
 	}()
-	if err := ui.waitFor("Codex", 25*time.Second); err != nil {
+	if err := ui.waitFor(label, 25*time.Second); err != nil {
 		return err
 	}
-	if err := ui.send("\x1b[B\x1b[B\r"); err != nil {
+	if err := ui.send(selection); err != nil {
 		return err
 	}
-	if err := ui.waitFor("BEE_MANAGED_CODEX_READY", 25*time.Second); err != nil {
+	if err := ui.waitFor("BEE_MANAGED_AGENT_READY", 25*time.Second); err != nil {
 		return err
 	}
 	retained, err = ownerChild(ui.cmd.Process.Pid, binary, state, 10*time.Second)
@@ -639,16 +646,16 @@ func managedLaunch(binary string, machineLogin bool) error {
 	}
 	childCWD, err := filepath.EvalSymlinks(lines[0])
 	if err != nil || childCWD != projectPath {
-		return fmt.Errorf("managed Codex cwd = %q, want %q", lines[0], projectPath)
+		return fmt.Errorf("managed agent cwd = %q, want %q", lines[0], projectPath)
 	}
 	childHome, err := filepath.EvalSymlinks(lines[1])
 	if err != nil {
 		return fmt.Errorf("resolve managed HOME %q: %w", lines[1], err)
 	}
 	if childHome == projectPath {
-		return errors.New("managed Codex HOME was the project directory")
+		return errors.New("managed agent HOME was the project directory")
 	}
-	login, loginErr := os.ReadFile(filepath.Join(childHome, ".codex", "auth.json"))
+	login, loginErr := os.ReadFile(filepath.Join(childHome, providerDirectory, loginFile))
 	if machineLogin {
 		if loginErr != nil || string(login) != fixtureLogin {
 			return errors.New("machine login was not seeded into private home")
@@ -657,7 +664,7 @@ func managedLaunch(binary string, machineLogin bool) error {
 		if !os.IsNotExist(loginErr) {
 			return errors.New("absent machine login unexpectedly produced a login file")
 		}
-		if _, err := os.Stat(filepath.Join(home, ".codex")); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(home, providerDirectory)); !os.IsNotExist(err) {
 			return errors.New("launch created a machine credential directory")
 		}
 	}
@@ -707,10 +714,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "default Agent picker acceptance failed: %v\n", err)
 		os.Exit(1)
 	}
-	for _, present := range []bool{false, true} {
-		if err := managedLaunch(binary, present); err != nil {
-			fmt.Fprintf(os.Stderr, "managed Agent launch (machine login=%v) failed: %v\n", present, err)
-			os.Exit(1)
+	for _, provider := range []string{"codex", "claude"} {
+		for _, present := range []bool{false, true} {
+			if err := managedLaunch(binary, provider, present); err != nil {
+				fmt.Fprintf(os.Stderr, "managed %s launch (machine login=%v) failed: %v\n", provider, present, err)
+				os.Exit(1)
+			}
 		}
 	}
 	fmt.Println("Native bee agent: four default profiles, no-work picker, F12, Escape close, project cwd, separate retained HOME durable session file, and present/absent machine login")

@@ -11,6 +11,16 @@ its code exists. The cluster work proceeds in parallel; nothing below waits on
 it, because owner epochs, resumable reads and uncertain outcomes are explicit
 from step 2.
 
+Current managed-agent checkpoint (September 12): four separately packaged harness
+components have default window profiles and first-use resource setup. Claude and
+Codex additionally have optional machine-login delivery with source binding,
+private retained homes, and present/absent executable acceptance for each provider.
+The global binary includes these changes. Production MCP/hook activation, Docker
+and successful cold conversation recovery remain open; the lower-level step proofs
+below do not imply those workflows are complete. See
+[Agent integration](handoffs/AGENT_INTEGRATION.md) and
+[current global build](handoffs/GLOBAL_BUILD.md).
+
 | # | Step | Touches | Depends on | Proof |
 |---|---|---|---|---|
 | 1 | Module roots and dependency interfaces. Done 2026-09-08: `bee.threads:definition`, `target_db` linked into `bee.threads:database_ref`, `make threads-module` | `bee.threads` root (`ns.definition`, requirement targets), `tests/modules/threads` standalone app | nothing | the thread closure loads in isolation with no desktop, Kickside, model or MCP; an unlinked reference is refused at boot (the linker itself does not reject dangling targets) |

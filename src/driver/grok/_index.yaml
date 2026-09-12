@@ -8,6 +8,12 @@ entries:
   meta:
     title: Bee Grok driver
     comment: Declarative Grok CLI driver; placement owns process, credentials, and private-home materialization
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: grok
+  default: ''
+  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -151,3 +157,22 @@ entries:
           mode: none
         input_ready:
           strategy: none
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Grok window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: grok-window
+    title: Grok CLI
+    command_names: [grok]
+    binding_ref: bee.driver.grok:binding
+    profile_id: window
+    policy_ref: bee:launch_policy_grok_window
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: new}
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}

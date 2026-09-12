@@ -47,6 +47,14 @@ Everything a provider declares in `meta.driver` is decoded by
 `bee.driver:profile` with exact shapes and conservative defaults; an unknown
 field or an unsupported value rejects the binding.
 
+Each provider component also owns one `default_window` launch definition for
+its native TUI. The definition selects only that component's `window` profile
+and carries no caller-controlled launch overrides. The host supplies a separate
+per-driver launch policy whose executable value comes from the read-only
+`bee.harness.host:environment` storage. A missing executable resolves to the
+empty default, leaving the declaration visible but unavailable; component
+metadata does not grant execution, activation, or environment access.
+
 ## User-login configuration
 
 A host Codex provider may select `authentication: chatgpt`, `name: openai`

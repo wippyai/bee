@@ -17,6 +17,12 @@ entries:
     schema_revision: bee.codex-provider@1
     name: openai
     authentication: chatgpt
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: codex
+  default: ''
+  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -150,3 +156,22 @@ entries:
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-window
+    title: Codex CLI
+    command_names: [codex]
+    binding_ref: bee.driver.codex:binding
+    profile_id: window
+    policy_ref: bee:launch_policy_codex_window
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: new}
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}

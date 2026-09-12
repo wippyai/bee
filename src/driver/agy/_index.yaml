@@ -8,6 +8,12 @@ entries:
   meta:
     title: Bee Antigravity CLI driver
     comment: Declarative Agy launch, stream-json normalization, and host-selected configuration delivery
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: agy
+  default: ''
+  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -141,3 +147,22 @@ entries:
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Antigravity window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agy-window
+    title: Antigravity CLI
+    command_names: [agy]
+    binding_ref: bee.driver.agy:binding
+    profile_id: window
+    policy_ref: bee:launch_policy_agy_window
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: new}
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}

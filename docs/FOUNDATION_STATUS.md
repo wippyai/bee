@@ -1,5 +1,15 @@
 # Foundation status
 
+The September 12 Agent integration branch has a verified standalone component
+candidate, source `cf667d8`: retained provider homes exclude concurrent attempts,
+interactive continuation resolves committed hook observations, and application
+resume state becomes visible only after persistence acknowledgement. Existing
+provider fixtures and native executable checks pass. Public Agent conversation
+recovery still needs saved-state and fresh-admission wiring; the default picker
+has no production launch profiles. Global installation remains gated on
+per-project default state selection in the runtime. See
+[the current integration checkpoint](handoffs/AGENT_INTEGRATION.md).
+
 Native Agent windows now attach their placement attempt before opening the PTY
 and receive a host-selected cooperative close allowance. The actual child/HTTP
 hook test passes with a three-second claim delay: input remains responsive,

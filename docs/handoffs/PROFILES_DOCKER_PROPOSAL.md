@@ -11,7 +11,9 @@ repeating those references would duplicate ownership. The selected host policy
 continues to own environment, executable bindings, driver options and gateway
 configuration. Credentials remain separate broker projections. Profile selection
 will list eligible launch definitions through the existing Agent application.
-This selection UI and its public CLI wiring are still unimplemented.
+The source Agent window now contains that selector and exposes `agent` command
+metadata. Real broker/PTY acceptance passes; standalone executable command
+routing and global installation remain unverified.
 
 The first prerequisites are implemented on the isolated profile branch:
 definition, catalog and policy resolve from one registry snapshot, and managed
@@ -34,8 +36,8 @@ binding, profile and policy refuses with `CONFLICT` before creating a thread or
 obtaining grants and credentials. Actual broker-spawned window acceptance passes
 with a resolved digest carried through the envelope. All 572 unit tests pass, including a
 changed policy, matching selection and malformed digest.
-The selector itself remains required: it must carry the displayed plan's digest,
-retain it on retries, and require a fresh selection after conflict. Shared instructions need driver-specific measured rendering
+The source selector carries the displayed plan's digest, clears choices after
+conflict, and requires an explicit refresh and selection before another launch. Shared instructions need driver-specific measured rendering
 and real-executable checks. Docker placement and its full interactive UI retain
 the acceptance below. No `profile_ref` replacement schema or extra presentation
 decoder is needed for the existing launch definition.

@@ -124,9 +124,8 @@ entries:
     policies:
     - bee:ordinary_app_subsystem_boundary
     - bee.timeline:client_policy
-  # This private app is opened only by the future Agent launch route. It has
-  # no command metadata; the broker grants its terminal directly to the actor
-  # that admits and owns the one native child.
+  # The Agent picker and selected native harness share one broker terminal.
+  # Only this host binding grants the authority to admit and own that child.
   - definition_id: bee.harness.window:app
     scope_management: true
     policies:

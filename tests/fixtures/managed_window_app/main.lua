@@ -7,6 +7,7 @@ local tty = require("tty")
 local funcs = require("funcs")
 local json = require("json")
 local appearance = require("appearance")
+local registry = require("registry")
 local admission = require("admission")
 
 local M = {}
@@ -28,8 +29,22 @@ local function call(target: string, value: unknown): {[string]: unknown}
     return result
 end
 
-local function run(natural: boolean)
-    local THREAD = natural and "managed_window_natural" or "managed_window_thread"
+local function apply(entry: {[string]: unknown})
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    local applied, err = changes:apply()
+    if not applied then error("fixture update: " .. tostring(err)) end
+end
+local function changed(entry: {[string]: unknown}): {[string]: unknown}
+    local result: {[string]: unknown} = {}
+    for key, value in pairs(entry) do result[key] = value end
+    local data: {[string]: unknown} = {}
+    for key, value in pairs(entry.data :: {[string]: unknown}) do data[key] = value end
+    result.data = data
+    return result
+end
+local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?)
+    local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
@@ -47,7 +62,7 @@ local function run(natural: boolean)
     local request = assert(json.encode({request_id = natural and "managed-window-natural-request" or "managed-window-request", definition_ref = "bee.managed_window_fixture:definition", brief = "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", arguments = {request}}))
+        definition_id = "bee.harness.window:app", arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = assert(replies:receive())
@@ -70,11 +85,42 @@ local function run(natural: boolean)
     end
     local view = assert(tty.attach(mounted))
     assert(view:send({type = "resize", width = 30, height = 10}))
+    if selected then
+        if not original_definition or not original_policy then error("missing selector fixtures") end
+        local function wait_for(label: string)
+            for _ = 1, 100 do
+                local snapshot = view:snapshot()
+                if snapshot and table.concat(snapshot.rows):find(label, 1, true) then return end
+                time.sleep("25ms")
+            end
+            error("Agent did not show " .. label)
+        end
+        wait_for("No agent profiles")
+        -- An empty picker remains interactive and owns no attempt.
+        apply(original_definition)
+        assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
+        wait_for("Selected agent fixture")
+        local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+        assert(#(before.records :: {{[string]: unknown}}) == 0, "selector created work before selection")
+        -- Change the exact plan displayed, then prove Enter cannot use it.
+        local modified = changed(original_policy)
+        local modified_data = modified.data :: {[string]: unknown}
+        modified_data.start_ms = 11000
+        apply(modified)
+        assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+        wait_for("Profile changed")
+        local refused = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+        assert(#(refused.records :: {{[string]: unknown}}) == 0, "stale selection created work")
+        assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
+        wait_for("Selected agent fixture")
+        assert(view:send({type = "mouse", x = 3, y = 9, button = "left", action = "press"}))
+    end
     assert(view:send({type = "paste", text = "hello"}))
     assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
     local saw = false
     for _ = 1, 100 do
-        local frame = assert(view:snapshot())
+        local frame, frame_error = view:snapshot()
+        if not frame then error("snapshot after launch: " .. tostring(frame_error)) end
         if table.concat(frame.rows):find("MANAGED:hello", 1, true) then saw = true; break end
         time.sleep("25ms")
     end
@@ -145,4 +191,18 @@ end
 
 M.run = function() run(false) end
 M.natural = function() run(true) end
+M.select = function()
+    local definition = assert(registry.get("bee.managed_window_fixture:selector_definition"))
+    local policy = assert(registry.get("bee.managed_window_fixture:policy"))
+    local ok, failure = pcall(function()
+        local hidden = changed(definition)
+        local hidden_data = hidden.data :: {[string]: unknown}
+        hidden_data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
+        apply(hidden)
+        run(false, true, definition, policy)
+    end)
+    apply(definition)
+    apply(policy)
+    if not ok then error(tostring(failure)) end
+end
 return M

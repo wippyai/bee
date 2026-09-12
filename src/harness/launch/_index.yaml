@@ -41,3 +41,11 @@ entries:
     admission: bee.harness.launch:admission
   security:
     policies: [bee:launch_spawn_policy]
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  imports:
+    catalog: bee.harness.catalog:catalog
+    definitions: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    bounds: bee.threads.records:bounds

@@ -1,5 +1,16 @@
 # Foundation status
 
+The Agent window now has a profile-selection phase and `agent` command metadata.
+It lists bounded host-defined window profiles, carries the displayed plan into
+admission, and requires refresh after a changed plan. Real broker acceptance
+passes empty-list recovery, changed-plan refusal before work, mouse launch and
+native terminal continuity. The selector closes its drawing surface before PTY
+attachment and reuses the input subscription. All 578 unit tests pass; the
+current narrow-window follow-up also passes its six focused selection tests.
+Native packaging covers 14 modules / 589 entries. Broader checks and executable
+command routing remain pending; this source is not installed globally. Production
+Claude/Codex profile configuration and authenticated-turn acceptance remain open.
+
 Selected launch plans can now be carried into admission with
 `expected_plan_digest`. A changed plan refuses before thread/resource/credential
 effects; a matching plan follows normal admission. All 572 unit tests pass,

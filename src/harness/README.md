@@ -67,3 +67,25 @@ spawn policy must independently allow the carrier and selected host.
 The entry policies still bind `bee:carrier_policy` and
 `bee:launch_spawn_policy`. Independent installation must supply those reviewed
 policies; host binding alone is not Hub or Hive installation acceptance.
+
+## Agent profile picker
+
+Opening `bee.harness.window:app` with no arguments (the `agent` command) presents
+window launch definitions marked for the Start menu whose driver is activated
+and compatible. The bounded `selection` reader uses one registry snapshot and
+projects only the definition reference, title, launch ID and plan digest.
+Hidden and non-window definitions do not become choices; discovery grants no
+execution permission and does not promise resource or credential readiness.
+
+The picker supports arrows, Enter, wheel selection, mouse actions, refresh and
+Escape. It uses the display's appearance, sanitizes label controls and disables
+launch when the window cannot show a choice. Selecting a changed plan clears the
+list and requires an explicit refresh and selection; no attempt is created.
+Before native execution, it closes its drawing surface and keeps the same input
+subscription and broker terminal grant. Existing measured request envelopes
+still select a profile directly through admission.
+
+Production profile configuration and authenticated harness acceptance remain
+required before ordinary Claude/Codex aliases can use this managed route. An
+empty catalog displays an empty picker; it does not infer executable paths,
+credentials or a launch policy from registry metadata.

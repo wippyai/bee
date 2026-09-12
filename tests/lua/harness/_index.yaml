@@ -437,6 +437,19 @@ entries:
   imports:
     test: wippy.test:test
     admission: bee.harness.launch:admission
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    selection: bee.harness.launch:selection
+    view: bee.harness.window:picker_view
+    appearance: bee.desktop:appearance
 - name: profile_environment_isolation_test
   kind: function.lua
   source: file://profile_environment_isolation_test.lua

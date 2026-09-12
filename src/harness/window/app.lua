@@ -1,9 +1,8 @@
 -- MIT. One broker-granted terminal and one admitted native harness child.
 --
--- This actor intentionally has no driver selection or placement policy of its
--- own.  It consumes the broker launch envelope, admits it as its authenticated
--- actor, shares the carrier's durable preparation, and opens the PTY in this
--- process so attach_terminal consumes the broker's sole terminal grant.
+-- An empty launch opens the host-defined profile picker; a measured envelope
+-- selects one directly. Both use normal admission and carrier preparation.
+-- The picker and native PTY share this actor's one broker terminal grant.
 local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
@@ -16,6 +15,7 @@ local input_event = require("input_event")
 local admission = require("admission")
 local machine = require("machine")
 local window = require("window")
+local picker = require("picker")
 
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
@@ -77,17 +77,24 @@ local function main(value: unknown)
     local lifecycle = assert(process.events())
     local closes = assert(process.listen("bee.application.close", {message = true}))
     assert(tty.start())
-
-    local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
-    if not body then
-        tty.stop(); process.unlisten(closes)
-        error("Invalid managed window launch: " .. tostring(body_error))
+    local selected = #launch.arguments == 0
+    local admitted: admission.Admitted? = nil
+    if selected then
+        local choice, choice_error = picker.run(launch, input, lifecycle, closes)
+        if not choice then
+            tty.stop(); process.unlisten(closes)
+            if choice_error then error(choice_error) end
+            return
+        end
+        admitted = choice
+    else
+        local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
+        if not body then tty.stop(); error("Invalid managed window launch: " .. tostring(body_error)) end
+        local choice, admission_error = admission.admit_request(body)
+        if not choice then tty.stop(); error("Managed window admission: " .. failure(admission_error)) end
+        admitted = choice
     end
-    local admitted, admission_error = admission.admit_request(body)
-    if not admitted then
-        tty.stop(); process.unlisten(closes)
-        error("Managed window admission: " .. failure(admission_error))
-    end
+    if not admitted then tty.stop(); return end
     local transport = io()
     local plan, plan_error = machine.plan(transport, admitted.request)
     if not plan then
@@ -123,8 +130,10 @@ local function main(value: unknown)
         tty.stop(); process.unlisten(closes)
         error("Managed window thread start: " .. tostring(started_error))
     end
-    client.title(launch, admitted.plan.launch_id)
-    client.ready(launch, {negotiate_close = true})
+    if not selected then
+        client.title(launch, admitted.plan.launch_id)
+        client.ready(launch, {negotiate_close = true})
+    end
 
     local done = terminal:done()
     local closing = false

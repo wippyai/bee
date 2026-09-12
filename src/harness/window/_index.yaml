@@ -23,6 +23,7 @@ entries:
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     window: bee.placement.native:window
+    picker: bee.harness.window:picker
   meta:
     type: bee.application
     application:
@@ -34,3 +35,24 @@ entries:
       instance_policy: multiple
       group: ''
       role: terminal
+      commands:
+      - {name: agent, fullscreen: false}
+- name: picker_view
+  kind: library.lua
+  source: file://picker_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    text: bee.application:text
+    selection: bee.harness.launch:selection
+- name: picker
+  kind: library.lua
+  source: file://picker.lua
+  modules: [tty, process, channel, uuid]
+  imports:
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    input_event: bee.harness.window:input
+    selection: bee.harness.launch:selection
+    admission: bee.harness.launch:admission
+    view: bee.harness.window:picker_view

@@ -85,7 +85,7 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: run
-  modules: [process, channel, time, security, tty, funcs, json]
+  modules: [process, channel, time, security, tty, funcs, json, registry]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
@@ -97,10 +97,45 @@ entries:
   kind: function.lua
   source: file://main.lua
   method: natural
-  modules: [process, channel, time, security, tty, funcs, json]
+  modules: [process, channel, time, security, tty, funcs, json, registry]
   imports:
     appearance: bee.desktop:appearance
     admission: bee.harness.launch:admission
   security:
     policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
+- name: selector_definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: selected-window-fixture
+    title: Selected agent fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: named, thread_ref: managed_window_selector}
+    credentials: []
+    presentation: {start_menu: true, fullscreen: false, reuse: never}
+- name: selector_test
+  kind: function.lua
+  source: file://main.lua
+  method: select
+  modules: [process, channel, time, security, tty, funcs, json, registry]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: selection_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow

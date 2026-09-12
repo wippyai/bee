@@ -71,7 +71,7 @@ harness-module:
 resources-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources_module.py
 gateway-check:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
+	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
 pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp

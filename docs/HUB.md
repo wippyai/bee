@@ -132,11 +132,30 @@ partial failure/retry, changed-definition refusal after restart, removal block/l
 absent ledgers, requirement-linked targets and denied database access.
 SQLite acceptance also covers rollback/replay, SIGKILL after schema rollback
 and after root deletion, refusal after a changed rollback definition, and partial
-rollback/retry with only the remaining function executed. PostgreSQL/MySQL and
-newly installed database resources need service acceptance.
-Execution currently requires the target database resource to exist before
-publication. Concurrent external registry writers and independent migration
-runners are not serialized by the Hub worker. The public runner's discovery path
+rollback/retry with only the remaining function executed. PostgreSQL/MySQL
+migration execution still needs real-service acceptance.
+
+The source supports a migration database first supplied by the same dependency
+plan. Missing targets must be declared SQL resource entries in the selected
+packages; exact database/function grants are still required before publication.
+The receipt captures their owner, kind and definition digest. After publication,
+these definitions are verified and the selected migration IDs must be absent
+from their ledgers. That empty-ledger checkpoint is saved before the first up
+function executes. A crash before the checkpoint repeats only the reads; after
+the checkpoint, committed IDs become recovery skips. A pre-existing matching ID
+remains `recovery_required`, including on retry. Changed database definitions
+also refuse recovery before any migration executes.
+
+Selected/default top-level SQL resource fields (for example `.file` or `.dsn`)
+are projected alongside migration database references and checked against the
+native linked result. This is not a general linker; unsupported nested paths
+remain native-owned and a changed measured database definition refuses execution.
+Real SQLite checks cover new targets, default/selected file paths, missing grants,
+ledger collisions, crashes before/after the checkpoint and after schema commit,
+changed database refusal, and rollback removing the database resource. This new
+database support is not installed globally yet.
+
+Concurrent external registry writers and independent migration runners are not serialized by the Hub worker. The public runner's discovery path
 can initialize the ledger, so it must not be reused for read-only preview.
 
 Owner serialization does not exclude unrelated registry writers. Automatic
@@ -229,3 +248,10 @@ prototypes were withdrawn. Declarative module packaging remains in Bee's explici
 build composition. Hub installations use durable registry history. Authored
 component overlays, application start confirmation and destination sharing
 admission belong to their respective owners and are not granted by inspection.
+
+Migration calls strip Bee's private publication, receipt, worker and scope-editing
+policies before invoking package functions. Host-supplied policies (including
+denials) and registry read access are retained; exact database/function grants
+are still required. The real-service fixture checks that package functions cannot
+use those private capabilities while SQL up/down and recovery continue to work.
+This scope attenuation is source-only until the next standalone release.

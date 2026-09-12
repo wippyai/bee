@@ -196,3 +196,11 @@ entries:
     actions: [process.send]
     resources: '*'
     effect: allow
+- name: migration_context_policy
+  kind: security.policy.expr
+  groups: [execution_scope]
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.scope.create" && resource == "without")'
+    actions: [funcs.security, security.scope.create]
+    resources: [security, without]
+    effect: allow

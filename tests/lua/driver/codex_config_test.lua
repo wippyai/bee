@@ -90,6 +90,19 @@ local function define_tests()
             data.authentication = "api_key"
             test.is_nil(configuration.decode("host:provider", provider(data)))
         end)
+        test.it("lets builtin account login use Codex's model default without relaxing custom providers", function()
+            local data: {[string]: unknown} = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt"}
+            local decoded, err = configuration.decode("host:provider", provider(data))
+            if not decoded then error(tostring(err)) end
+            local projected = assert(configuration.projection(decoded))
+            test.is_nil(projected.content:find("model =", 1, true))
+            test.is_true(projected.content:find('forced_login_method = "chatgpt"', 1, true) ~= nil)
+            test.is_nil(projected.content:find("base_url", 1, true))
+            data.model = ""
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+            data.model = nil; data.authentication = "api_key"; data.base_url = "https://gateway.example/v1"
+            test.is_nil(configuration.decode("host:provider", provider(data)))
+        end)
         test.it("renders gateway and path-bound hook trust without token bytes", function()
             local gateway: configuration.Gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
             local section = configuration.gateway_section(gateway)

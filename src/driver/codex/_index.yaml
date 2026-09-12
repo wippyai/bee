@@ -8,6 +8,15 @@ entries:
   meta:
     title: Bee Codex driver
     comment: Optional harness binding; host activation and launch policies authorize its use
+- name: default_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    comment: Built-in account login with Codex's default model; host policy selects this configuration
+  data:
+    schema_revision: bee.codex-provider@1
+    name: openai
+    authentication: chatgpt
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

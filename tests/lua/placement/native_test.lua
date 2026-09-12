@@ -801,6 +801,36 @@ local function define_tests()
                 {provider = "claude", definition_id = "bee.test.claude_login", definition_revision = 1}, "claude-login-bytes"))
             test.is_true(claude:find("/.claude/.credentials.json", 1, true) ~= nil)
         end)
+        test.it("retains optional login absence and preserves later private sign-in and sign-out", function()
+            local session_key = assert(homes.session_key(OWNER, fresh("optional-login")))
+            local session_path = assert(homes.ensure_session(session_key))
+            local source = {provider = "codex", definition_id = "bee.test.optional_login", definition_revision = 1, optional = true}
+            local created: {[string]: boolean} = {}
+            local target, seed_error = homes.retain_login(session_path, source, nil, created)
+            test.not_nil(target)
+            test.is_nil(seed_error)
+            local home = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("test ! -e " .. home .. "/.codex/auth.json && printf absent"), "absent")
+            -- The immutable driver config can follow the intentionally empty login.
+            test.not_nil(homes.write_protected(session_path, ".codex/config.toml", "approved", created, true))
+            test.eq(shell("printf private-sign-in > " .. home .. "/.codex/auth.json"), "")
+            local _, replay_error, replayed = homes.retain_login(session_path, source, "machine-login")
+            test.is_nil(replay_error)
+            test.is_true(replayed == true)
+            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "private-sign-in")
+            test.eq(shell("rm " .. home .. "/.codex/auth.json"), "")
+            local _, logout_error = homes.retain_login(session_path, source, "machine-login")
+            test.is_nil(logout_error)
+            test.eq(shell("test ! -e " .. home .. "/.codex/auth.json && printf absent"), "absent")
+            local _, changed_error = homes.retain_login(session_path,
+                {provider = "codex", definition_id = "bee.test.optional_login", definition_revision = 1}, "machine-login")
+            test.eq(changed_error, "retained login source changed")
+            local _, empty_error = homes.retain_login(session_path, source, "")
+            test.eq(empty_error, "login bytes exceed bound")
+            local _, required_error = homes.retain_login(session_path,
+                {provider = "codex", definition_id = "bee.test.required_login", definition_revision = 1}, nil)
+            test.eq(required_error, "required login bytes missing")
+        end)
         test.it("refuses changed or incomplete retained login state without exposing bytes", function()
             local session_key = assert(homes.session_key(OWNER, fresh("login-reject-session")))
             local session_path = assert(homes.ensure_session(session_key))
@@ -1006,6 +1036,36 @@ local function define_tests()
             local absent = call(OWNER, "status", {attempt_id = attempt_id})
             test.is_false(absent.ok)
             test.eq(absent.error.code, "NOT_FOUND")
+        end)
+        test.it("starts with an absent optional machine login and permits private CLI sign-in", function()
+            local source = "bee.credentials:codex_login_fixture"
+            admit_login_source(source)
+            test.eq(shell("mkdir -p .wippy/codex-login-fixture && rm -f .wippy/codex-login-fixture/auth.json"), "")
+            local workspace = fresh("optional-login-workspace")
+            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex",
+                source = {kind = "fs_directory", ref = source}, optional = true})
+            local session_ref = fresh("optional-login-session")
+            local request = retained_launch(OWNER, session_ref, "optional-login")
+            local attempt_id = request.attempt_id :: string
+            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
+                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("optional-login-key")})
+            request.projections = {projection.projection_id}
+            local launch_value = request.launch :: {[string]: unknown}
+            launch_value.argv = {"-c", 'test ! -e "$HOME/.codex/auth.json" && printf private-login > "$HOME/.codex/auth.json"'}
+            attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
+            if not wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000) then error("optional login probe did not exit") end
+            local exited = (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt :: types.Attempt).exit
+            if not exited then error("optional login probe has no exit receipt") end
+            test.eq(exited.code, 0)
+            local session_key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(session_key))
+            local home = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("cat " .. home .. "/.codex/auth.json"), "private-login")
+            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
         end)
         test.it("delivers one retained Codex login before provider configuration and preserves a refreshed login", function()
             local source = "bee.credentials:codex_login_fixture"

@@ -29,6 +29,14 @@ refused without being echoed. Materializer authentication is entry-scoped:
 the materialize action is attached to the placement service and runner
 entries and to no caller-selectable scope.
 
+`define` accepts `optional: true` for file sources only. A missing provider
+login file then consumes the generation and returns its definition metadata
+with `present: false` and no `value`; the next generation can try again.
+Populated files return `present: true` and the optional flag alongside their
+bounded bytes. Missing required files, permission failures, invalid JSON and
+other source failures remain errors. Environment definitions always have
+`optional: false`.
+
 The broker projects API keys into `ANTHROPIC_API_KEY` (Claude) or
 `OPENAI_API_KEY` (Codex), or reads an admitted login file. File sources name a
 host-selected `fs.directory` using `source.kind: fs_directory`; their filenames
@@ -66,6 +74,10 @@ CHECK constraints (`provider IN ('claude', 'codex')`, `source_kind IN ('env_vari
 `projection_kind IN ('environment', 'file')`), while preserving all existing populated
 definitions, projections, consumed generations, and migration ledger records.
 
+Migration 3 (`optional_files`) adds the constrained `optional` flag to
+definitions with a default of false; it is additive and preserves existing
+definitions, projections and the applied migration ledger.
+
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
@@ -77,9 +89,16 @@ for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 
 First-use harness setup can create definition-declared credential names from
-host-selected source configuration, without reading the secret. Production
-source discovery and default login selection remain unfinished; no file login
-is enabled by default. Docker delivery is unimplemented. Broker `refresh` and
+host-selected source configuration, without reading the secret. Default Claude
+and Codex window definitions select optional machine-login files under the
+host's existing home directory. An absent provider directory/file permits normal
+CLI sign-in in the private retained home; host credential directories are never
+created. The host allowlist owns the relative source path; callers cannot supply
+it. Source metadata and path are bound in the definition digest and rechecked
+before availability or projection use. A changed source requires explicit
+redefinition. Existing definitions with an older digest are refused rather than
+silently retargeted. Source-free executable acceptance proves both present and absent machine login using disposable host homes.
+Docker delivery is unimplemented. Broker `refresh` and
 `write_back` remain false: it neither refreshes provider tokens nor copies
 session changes back to the user's original login files.
 

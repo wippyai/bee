@@ -65,6 +65,18 @@ write plus successful close is the ready-marker precondition. It has no fsync
 operation: ready-marker ordering refuses interrupted process writes, but is not
 a machine-power-loss durability claim.
 
+An optional source can seed no bytes while recording the same source binding
+with `optional=true`. A matching retained home then preserves either an absent
+file or a file created by interactive sign-in; later machine credentials never
+replace either choice. Required sources still refuse a missing login file.
+Changing optional policy also changes the binding and refuses reuse. Empty
+provided bytes remain an error. Native materialization requires explicit `present` and `optional` flags from
+the broker; absent bytes are accepted only for an optional absent reply. This
+records an unseeded home without placing file credentials in the environment.
+First-use setup preserves the host-selected optional policy and refuses a
+conflicting existing definition. Default Claude/Codex window profiles select optional machine-login sources.
+Source-free executable acceptance proves both present and absent machine login.
+
 ## Capability
 
 `capability.measure` starts a probe child with `process_group` and reads its

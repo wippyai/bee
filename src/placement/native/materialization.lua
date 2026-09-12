@@ -121,24 +121,26 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     for index, projection_id in ipairs(request.projections) do
         local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
-        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string, projection_kind: string}?} or nil
+        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string?, projection_kind: string}?} or nil
         if call_error or not reply or not reply.ok or not reply.value then
             local code = reply and reply.error and reply.error.code or "UNAVAILABLE"
             evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {execution = "exited"})
             return refused("projection " .. projection_id .. ": " .. code)
         end
-        local projected = reply.value :: {destination: string, value: string, projection_kind: string}
+        local projected = reply.value :: {destination: string, value: string?, projection_kind: string}
         if projected.projection_kind == "file" then
             if not retained_home or file_projection then
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
             end
-            local login = reply.value :: {destination: string, value: string, projection_kind: string,
-                provider: unknown, definition_id: unknown, definition_revision: unknown}
+            local login = reply.value :: {destination: string, value: string?, projection_kind: string,
+                provider: unknown, definition_id: unknown, definition_revision: unknown, optional: unknown, present: unknown}
             local source = homes.decode_login_source({provider = login.provider,
-                definition_id = login.definition_id, definition_revision = login.definition_revision})
+                definition_id = login.definition_id, definition_revision = login.definition_revision, optional = login.optional})
             if not source or projected.destination ~= (source.path:match("[^/]+$") :: string)
-                or type(projected.value) ~= "string" then
+                or type(login.optional) ~= "boolean" or type(login.present) ~= "boolean"
+                or (login.present == true and type(projected.value) ~= "string")
+                or (login.present == false and (login.optional ~= true or projected.value ~= nil)) then
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
             end
@@ -148,12 +150,17 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 return refused("file login projection refused")
             end
             file_projection = true
-            evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "replayed" or "seeded"))
+            evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "retained" or (login.present == true and "seeded" or "unseeded")))
         else
+            local secret = projected.value
+            if secret == nil then
+                evidence(db, attempt_id, "credential.refused", "missing environment value", {execution = "exited"})
+                return refused("missing environment value")
+            end
             if projected.projection_kind ~= "environment" or type(projected.destination) ~= "string"
             or #projected.destination > 128 or not projected.destination:match("^[A-Z_][A-Z0-9_]*$")
-            or type(projected.value) ~= "string" or #projected.value == 0 or #projected.value > 8192
-            or projected.value:find("[%z\r\n]") then
+            or type(secret) ~= "string" or #secret == 0 or #secret > 8192
+            or secret:find("[%z\r\n]") then
                 evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
                 return refused("invalid environment projection")
             end
@@ -163,7 +170,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
                 return refused(conflict)
             end
-            environment[projected.destination] = projected.value
+            environment[projected.destination] = secret
             evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
         end
     end

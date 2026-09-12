@@ -89,6 +89,13 @@ idempotent skip. A contradictory or unreadable ledger returns partial evidence
 with an error; it never records the unverified migration as completed. This
 adapter follow-up is not yet in global build `237d76a8`.
 
+Production migration integration still requires a host-bound runner and exact
+database grants, migration IDs and results in the durable operation receipt,
+and restart reconciliation of that ledger evidence. Registry restoration alone
+cannot undo schema effects. The public runner's `run_next` and `rollback`
+support exact allowed IDs; its general `run` does not. Its discovery path can
+initialize the ledger, so it must not be reused as a read-only preview.
+
 Owner serialization does not exclude unrelated registry writers. Automatic
 baseline restoration is attempted only while the observed registry revision
 still equals this operation's publication revision; this is not atomic compare

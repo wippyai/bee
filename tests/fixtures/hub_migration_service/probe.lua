@@ -103,6 +103,69 @@ local function linked()
     assert(result.value.migration_work.entries[1].target_db == "probe:db", "receipt did not capture selected database")
     logger:info("HUB_MIGRATION_SERVICE_PASS linked")
 end
+local function rollback()
+    complete(apply({action = "install", component = "acme/app", version = "1.0.0", migration_policy = "up"}))
+    local request = {action = "uninstall", component = "acme/app", migration_policy = "down"}
+    local planned = call("plan", request)
+    assert(planned.ok and #planned.value.migrations == 1 and planned.value.migrations[1].component == "acme/storage", "removal review omitted orphan migration")
+    local digest = planned.value.digest
+    local result = call("apply", request, digest)
+    complete(result)
+    assert(result.value.removal.published and result.value.migration_work.rows[1].status == "reverted", "rollback was not verified")
+    assert(#call("installed").value.modules == 0, "orphaned dependency remains installed")
+    local revision = assert(registry.snapshot()):version():id()
+    complete(call("apply", request, digest))
+    assert(assert(registry.snapshot()):version():id() == revision, "completed rollback replay wrote registry")
+    logger:info("HUB_MIGRATION_SERVICE_PASS rollback")
+end
+local function rollback_partial()
+    complete(apply({action = "install", component = "acme/app", version = "1.3.0", migration_policy = "up"}))
+    local request = {action = "uninstall", component = "acme/app", migration_policy = "down"}
+    local result, digest = apply(request)
+    assert(result.ok and result.value.state == "recovery_required" and not result.value.removal.published, "partial rollback lost recovery phase")
+    local rows = result.value.migration_work.rows
+    assert(#rows == 1 and rows[1].id == "acme.storage:second" and rows[1].status == "reverted", "rollback order or partial result is wrong")
+    assert(#call("installed").value.modules == 2, "partial rollback removed definitions")
+    local status = call("status", nil, digest)
+    assert(status.value.migration_work.rows[1].id == "acme.storage:second", "partial rollback receipt was not durable")
+    local db = assert(sql.get("probe:db"))
+    assert(db:execute("CREATE TABLE fixture_rollback_gate (ready INTEGER)"))
+    db:release()
+    local resumed = call("apply", request, digest)
+    complete(resumed)
+    assert(resumed.replayed and #resumed.value.migration_work.rows == 2, "partial rollback did not recover")
+    for _, row in ipairs(resumed.value.migration_work.rows) do
+        if row.id == "acme.storage:second" then assert(row.reason == "not_applied", "recovery reran reverted migration")
+        else assert(row.status == "reverted", "recovery did not revert remaining migration") end
+    end
+    assert(#call("installed").value.modules == 0, "recovered rollback did not remove orphans")
+    logger:info("HUB_MIGRATION_SERVICE_PASS rollback_partial")
+end
+local function rollback_recover(published, tamper)
+    local listing = call("status", {page = 1})
+    assert(listing.ok and #listing.value.operations == 2, "missing interrupted removal receipt")
+    local receipt = listing.value.operations[1]
+    assert(receipt.action == "uninstall" and receipt.removal.published == published, "wrong removal phase after restart")
+    if tamper then
+        local snapshot = assert(registry.snapshot())
+        local stored = assert(snapshot:get("acme.storage:first"))
+        stored.data.source = stored.data.source .. "\n-- changed after rollback interruption\n"
+        local changes = assert(snapshot:changes())
+        assert(changes:update({id = stored.id, kind = stored.kind, meta = stored.meta, data = stored.data}))
+        assert(changes:apply())
+    end
+    local result = call("apply", receipt.request, receipt.digest)
+    if tamper then
+        assert(result.ok and result.value.state == "recovery_required" and result.value.message:find("definition digest differs", 1, true), "changed rollback definition accepted")
+        assert(#call("installed").value.modules == 2, "refused rollback removed definitions")
+        logger:info("HUB_MIGRATION_SERVICE_PASS rollback_tamper")
+        return
+    end
+    complete(result)
+    assert(result.replayed and #call("installed").value.modules == 0, "interrupted rollback did not finish removal")
+    if not published then assert(result.value.migration_work.rows[1].reason == "not_applied", "restart reran reverted migration") end
+    logger:info("HUB_MIGRATION_SERVICE_PASS " .. (published and "rollback_published" or "rollback_crash"))
+end
 local function history()
     for _ = 1, 13 do
         complete(apply({action = "install", component = "acme/app", version = "1.0.0"}))
@@ -138,4 +201,8 @@ local function other_actor()
     end
     error("no foreign operation available for actor test")
 end
-return {history = history, other_actor = other_actor, linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}
+return {rollback_partial = rollback_partial, rollback = rollback, rollback_crash = rollback, rollback_published = rollback, rollback_tamper = rollback,
+    rollback_recover = function() rollback_recover(false, false) end,
+    rollback_finish = function() rollback_recover(true, false) end,
+    rollback_changed = function() rollback_recover(false, true) end,
+    history = history, other_actor = other_actor, linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}

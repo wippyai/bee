@@ -124,6 +124,18 @@ local function define_tests()
             local extra = {entries = work.entries, rows = {}, receipt = "forged"}
             test.is_nil(migration_work.decode(extra))
         end)
+        test.it("captures removed owners from installed definitions and rejects edited recovery", function()
+            local entry = package_entry({source = "return 1"})
+            local state = runtime(entry)
+            local work, problem = migration_work.capture_removed(state, {[COMPONENT] = true})
+            test.is_nil(problem)
+            test.not_nil(work)
+            if not work then return end
+            test.eq(work.entries[1].component, COMPONENT)
+            test.is_true(migration_work.verify(work, state))
+            test.is_false(migration_work.verify(work, runtime(package_entry({source = "return 2"}))))
+            test.is_nil(migration_work.capture_removed(state, {["other/module"] = true}))
+        end)
     end)
 end
 

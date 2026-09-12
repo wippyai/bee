@@ -17,9 +17,10 @@ local migration_work = require("migration_work")
 local M = {}
 type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
+type Removal = {root_digest: string, before_modules: {ExpectedModule}, published: boolean}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
     baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?,
-    migration_work: migration_work.Work?, request: {[string]: unknown}?}
+    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -99,8 +100,19 @@ local function decode_receipt(raw: unknown): Receipt?
         if not encoded or hash.sha256(encoded) ~= request_digest then return nil end
         request = request_value(decoded)
     end
+    local removal: Removal? = nil
+    if value.removal ~= nil then
+        local supplied = bounds.object(value.removal)
+        if not supplied or bounds.fields(supplied, {"root_digest", "before_modules", "published"}) then return nil end
+        local root_digest = digest(supplied.root_digest)
+        local before = expected_modules(supplied.before_modules)
+        if not root_digest or not before or type(supplied.published) ~= "boolean" or not work
+            or not request or request.action ~= "uninstall" or request.migration_policy ~= "down" then return nil end
+        for _, item in ipairs(before) do if item.change ~= "keep" or item.version == "" then return nil end end
+        removal = {root_digest = root_digest, before_modules = before, published = supplied.published}
+    end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work, request = request}
+        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work, request = request, removal = removal}
 end
 
 function M.status(raw: unknown, options: unknown?): Result
@@ -182,6 +194,86 @@ local function verify(expected: {ExpectedModule}, actual: inventory.Result): str
     end
     if next(selected) then return "runtime installed modules outside the displayed plan" end
     return nil
+end
+
+local function root_digest(raw: unknown): string?
+    local entry = bounds.object(raw)
+    if not entry or entry.kind ~= "ns.dependency" then return nil end
+    local encoded = canonical.encode({id = entry.id, kind = entry.kind, data = entry.data})
+    return encoded and hash.sha256(encoded) or nil
+end
+
+local function incomplete_removal(receipt: Receipt, message: string): Result
+    receipt.state, receipt.message = "recovery_required", message
+    return save(receipt)
+end
+
+-- The receipt exists before any down function executes. Root removal and its
+-- published flag commit together, so restart never reruns functions whose
+-- definitions or database resource have already been removed.
+local function remove_with_migrations(receipt: Receipt): Result
+    local removal, work, expected = receipt.removal, receipt.migration_work, receipt.expected_modules
+    if not removal or not work or not expected then return transaction.failure("INTERNAL", "missing removal recovery evidence") end
+    local root_id, root_error = plan.root_id(receipt.component)
+    if not root_id then return incomplete_removal(receipt, tostring(root_error)) end
+    local snapshot, snapshot_error = registry.snapshot()
+    if not snapshot then return transaction.failure("UNAVAILABLE", tostring(snapshot_error)) end
+    local state, state_error = snapshot:state()
+    if not state then return incomplete_removal(receipt, tostring(state_error)) end
+    local actual, inventory_error = inventory.decode(state, snapshot:version():id())
+    if not actual then return incomplete_removal(receipt, tostring(inventory_error)) end
+    if removal.published then
+        local mismatch = snapshot:get(root_id) and "removed dependency root is present" or verify(expected, actual)
+        if mismatch then return incomplete_removal(receipt, mismatch) end
+        receipt.state, receipt.message = "complete", "Migration rollback and dependency removal completed"
+        return save(receipt)
+    end
+    if root_digest(snapshot:get(root_id)) ~= removal.root_digest then return incomplete_removal(receipt, "dependency root changed before removal") end
+    local mismatch = verify(removal.before_modules, actual)
+    if mismatch then return incomplete_removal(receipt, "installed inventory changed before removal: " .. mismatch) end
+    local unchanged, definition_error = migration_work.verify(work, state)
+    if not unchanged then return incomplete_removal(receipt, tostring(definition_error)) end
+    local entries = migration_work.entries(work)
+    local allowed, grant_error = migration_runner.allowed(entries)
+    if not allowed then return incomplete_removal(receipt, grant_error or "migration permissions changed") end
+    local ids: {string}, components: {string} = {}, {}
+    local seen: {[string]: boolean} = {}
+    for _, entry in ipairs(work.entries) do
+        ids[#ids + 1] = entry.id
+        if not seen[entry.component] then components[#components + 1] = entry.component; seen[entry.component] = true end
+    end
+    local source = migration_runner.source(entries)
+    local result, migration_error = migrations.execute(source, {operation = "down", entry_ids = ids, components = components})
+    if result then receipt.migration_work = {entries = work.entries, rows = result.rows} end
+    if migration_error then return incomplete_removal(receipt, migration_error) end
+    -- Recheck after package functions have run, before deleting definitions.
+    local current, current_error = registry.snapshot()
+    if not current then return incomplete_removal(receipt, tostring(current_error)) end
+    local observed, observed_error = current:state()
+    if not observed then return incomplete_removal(receipt, tostring(observed_error)) end
+    local inventory_now, read_error = inventory.decode(observed, current:version():id())
+    if not inventory_now then return incomplete_removal(receipt, tostring(read_error)) end
+    if root_digest(current:get(root_id)) ~= removal.root_digest then return incomplete_removal(receipt, "dependency root changed during rollback") end
+    mismatch = verify(removal.before_modules, inventory_now)
+    if mismatch then return incomplete_removal(receipt, "installed inventory changed during rollback: " .. mismatch) end
+    unchanged, definition_error = migration_work.verify(work, observed)
+    if not unchanged then return incomplete_removal(receipt, tostring(definition_error)) end
+    for _, entry in ipairs(work.entries) do
+        local applied, ledger_error = source.is_applied(entry.target_db, entry.id)
+        if applied == nil then return incomplete_removal(receipt, ledger_error or "cannot verify rollback ledger") end
+        if applied then return incomplete_removal(receipt, "migration remains applied: " .. entry.id) end
+    end
+    local changes, change_error = current:changes()
+    if not changes then return incomplete_removal(receipt, tostring(change_error)) end
+    local removed, remove_error = changes:delete(root_id)
+    if not removed then return incomplete_removal(receipt, tostring(remove_error)) end
+    removal.published, receipt.state, receipt.message = true, "published", "Migration rollback completed; dependency removal published"
+    local recorded, record_error = changes:update({id = receipt_id(receipt.digest), kind = "registry.entry", data = receipt})
+    if not recorded then removal.published = false; return incomplete_removal(receipt, tostring(record_error)) end
+    local published, publish_error = changes:apply()
+    if not published then return transaction.failure("UNCERTAIN", tostring(publish_error)) end
+    -- Schema has changed: never restore an earlier registry version here.
+    return remove_with_migrations(receipt)
 end
 
 -- Work is captured in the publication receipt before any package function
@@ -281,6 +373,11 @@ function M.apply(raw: unknown, expected: unknown): Result
         if not receipt or receipt.request_digest ~= request_digest then
             return transaction.failure("STALE", "request differs from the recorded operation; refresh its plan")
         end
+        if receipt.removal and (receipt.state == "published" or receipt.state == "recovery_required") then
+            local resumed = remove_with_migrations(receipt)
+            resumed.replayed = true
+            return resumed
+        end
         if receipt.state == "published" or (receipt.state == "recovery_required" and receipt.migration_work ~= nil) then
             return reconcile(receipt, decoded)
         end
@@ -336,7 +433,25 @@ function M.apply(raw: unknown, expected: unknown): Result
             end
         end
         if #selected > 0 and request.migration_policy == "down" then
-            return transaction.failure("UNAVAILABLE", "reverting package migrations needs durable migration execution")
+            local captured, capture_error = migration_work.capture_removed(state, removed)
+            if not captured then return transaction.failure("INVALID", capture_error or "missing removal migrations") end
+            local allowed, grant_error = migration_runner.allowed(migration_work.entries(captured))
+            if not allowed then return transaction.failure("DENIED", grant_error or "host migration grants required") end
+            local measured_root = root_digest(baseline:get(displayed.root_id))
+            if not measured_root then return transaction.failure("STALE", "dependency root is unavailable") end
+            local before, inventory_error = inventory.decode(state, baseline:version():id())
+            if not before then return transaction.failure("UNAVAILABLE", tostring(inventory_error)) end
+            local before_modules: {ExpectedModule}, expected: {ExpectedModule} = {}, {}
+            for _, item in ipairs(before.modules) do before_modules[#before_modules + 1] = {component = item.component, version = item.version, change = "keep"} end
+            for _, item in ipairs(displayed.modules) do expected[#expected + 1] = {component = item.component, version = item.version, change = item.change} end
+            local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest,
+                component = request.component, action = request.action, baseline_revision = displayed.base_revision,
+                state = "recovery_required", message = "Rollback prepared; dependency root remains installed",
+                expected_modules = expected, migration_work = captured, request = request_value(request),
+                removal = {root_digest = measured_root, before_modules = before_modules, published = false}}
+            local recorded = save(receipt)
+            if not recorded.ok then return recorded end
+            return remove_with_migrations(receipt)
         end
         local readable = migration_runner.source(selected)
         for _, entry in ipairs(selected) do

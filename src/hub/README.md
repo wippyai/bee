@@ -21,15 +21,23 @@ Management operations are `plan`, `apply` and `status`. Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. Exact dependency pins do not list release history; ranges page lazily.
 Apply replans in a private worker before publishing the dependency-root change
-and an operation receipt to durable registry history. The worker serializes Bee
+and an operation receipt to durable registry history. Status reads one receipt
+by digest or pages through the caller's operation history with `{page = 1}`.
+Modules opens that history with Operations (O); recovery reviews the stored
+request and digest before a separate confirmation. The worker serializes Bee
 Hub operations, not all registry writers.
 
 Real install/update/uninstall, receipt persistence across restart and uninstalled
 resource filesystem reads pass on the existing runtime. Modules confirmation,
 input, F12 and resize have source/pack and executable acceptance. Publication
-recovery verifies the original root and inventory. Source-only migration `up`
-now captures exact definitions and verifies SQL ledger evidence across restart;
-removal checks all departing owners. Migration `down` and complete migration
-failure recovery acceptance remain unfinished.
-Authored component
-overlays and application launch/sharing admission remain separate responsibilities.
+recovery verifies the original root and inventory. Migration `up` captures exact
+definitions and verifies SQL ledger evidence across restart. Removal checks all
+departing owners, including orphaned dependencies. Explicit `down` records its
+work before reverting migrations, retains the root on partial failure, and
+commits root removal with its receipt. Recovery checks the original definitions
+and skips ledger work already committed. Database and function access require
+exact host-selected grants. Targets must currently exist before installation;
+newly installed database resources remain unfinished. SQLite acceptance covers
+partial failure, retry and crashes before and after root removal.
+
+Authored component overlays and application launch/sharing admission remain separate responsibilities.

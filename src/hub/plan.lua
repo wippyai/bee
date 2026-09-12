@@ -152,6 +152,21 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
                 digest = "", change = remove and "remove" or "keep", entries = item.entries, requirements = {requirements = {}, missing = {}}}
         end
     end
+    if request.action == "uninstall" then
+        local removed: {[string]: boolean} = {}
+        for _, item in ipairs(modules) do if item.change == "remove" then removed[item.component] = true end end
+        for _, raw_entry in ipairs(raw_state.entries) do
+            local entry = bounds.object(raw_entry)
+            local meta = entry and bounds.object(entry.meta) or nil
+            local id = entry and bounds.id(entry.id) or nil
+            local owner = id and owners[id] or nil
+            if entry and id and meta and meta.type == "migration" and owner and removed[owner] then
+                local target, timestamp = bounds.id(meta.target_db), bounds.line(meta.timestamp, 160)
+                if not target or not timestamp then return nil, "removed migration has unresolved target or timestamp: " .. tostring(entry.id) end
+                migrations[#migrations + 1] = {id = id, component = owner, target_db = target, timestamp = timestamp}
+            end
+        end
+    end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(migrations, function(a: Migration, b: Migration): boolean return a.id < b.id end)
     table.sort(starts); table.sort(capabilities)

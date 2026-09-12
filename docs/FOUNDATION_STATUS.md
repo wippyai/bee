@@ -6,10 +6,21 @@ Claude, Codex, Grok and Agy map them through their existing configuration method
 plan digests fence changed guidance, and no caller override grants authority.
 Strict lint and all 766 unit cases pass, including instruction delivery and
 stale-policy refusal before placement intent. Hive Manager source/pack acceptance
-also passes after correcting its isolated HOME fixture. The full repository gate
-remains pending, and this source is not installed globally. An editable
+also passes after correcting its isolated HOME fixture. The combined history recheck passes all 771 unit cases. The frozen full
+repository gate stopped at a 1.052-second exit against its one-second limit;
+this source is not installed globally. An editable
 instructions field, Docker profile execution and authenticated provider behavior
 remain unverified; see [driver instructions](../src/driver/README.md#instructions-and-turn-prompts).
+
+The rollback source keeps a durable removal receipt before calling down
+migrations, retains the root on partial failure, and publishes root deletion with
+its completion phase atomically. Real SQLite acceptance covers normal rollback,
+completed replay, crashes before/after root deletion, changed-definition refusal
+and partial failure/retry. Confirmation plans now list removed migrations.
+Strict lint, 69 focused Hub tests and source/pack rollback review/confirmation
+pass. Native desktop, Modules and Agent acceptance pass. Global is updated to
+`1da5b5c6` (source `b8dd68c`), retaining running nodes. Full combined checks
+remain pending; newly installed database resources remain unfinished.
 
 The Hub history source adds caller-owned paged receipts and an explicit recovery
 review in Modules. Real service acceptance covers pagination, read-only access,
@@ -17,8 +28,9 @@ actor isolation and replay using the persisted request. Source/pack application
 acceptance covers cold recovery without a local plan, cancellation, confirmation,
 status refresh, F12 and compact layouts. Strict lint and 68 focused Hub tests
 pass. The original migration source full regression also passes; the combined
-history source regression remains pending. The Hub history UI is installed as global `2f3f8e5a`; the instruction additions
-above are newer source and have not been installed.
+history source regression remains pending. The UI is installed globally as
+`2f3f8e5a`, preserving Agent recovery and optional machine login. Native desktop,
+Modules, Agent and real empty-history/F12 checks pass. Running nodes were retained.
 
 Installed Hub build `f276bc2b` adds host-granted migration `up`, captured definition
 receipts, post-commit ledger verification and explicit recovery. A disposable

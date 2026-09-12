@@ -54,7 +54,7 @@ def configure_managed_gateway(folder, address=None):
 def database_environment(directory, **overrides):
     """Keep every booted subsystem store inside the fixture's disposable root."""
     root = Path(directory)
-    names = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node")
+    names = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance")
     return {**os.environ, **{f"BEE_{name.upper()}_DB": str(root / f"{name}.db") for name in names}, **overrides}
 
 

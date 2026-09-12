@@ -1,20 +1,63 @@
 # Global Bee build — September 12, 2026
 
-## Current install: Hub history
+## Current install: durable migration rollback
 
-Global `/home/wolfy-j/.local/bin/bee` has SHA
+Global Bee now has SHA
+`1da5b5c66e897413c104502b1cf96a8a1e11a7c178564d9cd15eaa2fbb3cf7ea`,
+source `b8dd68c`. Module removal can explicitly roll back migrations, including
+orphaned dependencies. Confirmation lists the affected migrations. A durable
+receipt precedes rollback; partial failure retains definitions and records
+completed work. Recovery checks root, inventory, definitions and grants, skips
+already-reverted ledger rows, and commits root deletion with its publication
+receipt. Restart after deletion verifies inventory without calling removed code.
+
+Strict lint, 69 focused Hub cases, real SQLite rollback/crash/partial-recovery
+acceptance and source/pack rollback review/confirmation pass. Native desktop,
+Modules and Agent acceptance passed on logic source `303b9e8`; `b8dd68c` changes
+only the packaged Hub README and passes native Modules again. Exact evidence:
+`hub-rollback-unit-2.log`, `hub-rollback-ui-2.log`, `hub-rollback-service-3.log`,
+`hub-rollback-native-check.log`, `hub-rollback-release-modules.log` and
+`hub-rollback-global-install.json`. Full rollback and preceding history checks
+remain active in their respective `hub-rollback-full-check.log` and
+`hub-history-release-full-check.log` files.
+
+Runtime/native pins are unchanged. Executable and five sidecars were verified
+and backed up before replacement, after rechecking global was still `2f3f8e5a`.
+Backup: `global-before-hub-rollback-2f3f8e5a`. No running node was restarted.
+Migration targets created by the same installation remain unfinished.
+
+The separate Agent integration adds persistent instructions for all four harnesses.
+Its combined history run passes 771 unit cases; the frozen full gate stopped
+at a 1.052-second exit against the one-second limit. Instructions are not yet
+installed. The built instructions/history candidate omits this rollback update
+and must not replace the newer global executable.
+
+## Previous install: Hub operation history and recovery review
+
+Global Bee now has SHA
 `2f3f8e5ab1f970c4acbe070da10530ba6ceec828b13972421052457f028001d3`,
-source `efa29db`. The Hub lane installed this successor with paged operation
-history and recovery review, preserving the Agent and machine-login work below.
-Its receipt is `hub-history-global-install.json`, with focused Hub, source/pack
-history, real service and native evidence. Running nodes were not restarted.
+source `efa29db`. Modules adds Operations (O), paged caller-owned receipts,
+scrollable stored requests and migration results, and separate explicit recovery
+confirmation. Status access remains read-only; retries use the original request
+and digest. Older receipts without a stored request remain view-only.
 
-The Agent source adds profile instructions after this install. Its four-harness
-configuration checks and all 766 unit tests passed before merging Hub history;
-the frozen full gate and combined-source checks are tracked separately. Those
-instruction additions are not yet in global. The integration retains the newer
-Hub history acceptance in Go, including a second actor denied access to the
-first actor's receipts (`hub-history-go-check.log`).
+The build passes 68 focused Hub tests, real history/privacy/migration acceptance,
+source/pack cold recovery review/cancel/confirm/status and native desktop,
+Modules and Agent checks. A source-free probe also opens the real empty history
+and retains it across F12. The first history build and full regression exposed
+a page-number inference error in a different lint composition; explicit integer
+decoding fixes it. Strict release lint and service checks pass. The corrected
+full run remains active in `hub-history-release-full-check.log`; the earlier
+migration source full run passed in `hub-migration-full-check.log`.
+
+Runtime and native pins are unchanged. Executable and five sidecar hashes were
+verified before and after replacement, with a final check that global was still
+`f276bc2b`. Evidence: `hub-history-global-install.json`,
+`hub-history-native-check.log`, `hub-history-native-history.log`,
+`hub-history-release-service.log`, `hub-history-ui-app-3.log` and
+`hub-history-ui-unit-3.log`. Backup: `global-before-hub-history-f276bc2b`.
+No running node was restarted. Migration rollback and databases first created by
+the same installation remain unfinished.
 
 ## Previous install: Hub migrations plus default machine login
 

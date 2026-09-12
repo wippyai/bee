@@ -132,7 +132,11 @@ function M.source(entries: {migrations.Entry}): migrations.Source
                         return a.id > b.id
                     end)
                     local results: {unknown} = {}
-                    for _, item in ipairs(applied) do results[#results + 1] = execute(target, item.id, "down") end
+                    for _, item in ipairs(applied) do
+                        local ok, value = pcall(function() return execute(target, item.id, "down") end)
+                        if not ok then return {migrations = results, error = "rollback migration " .. item.id .. ": " .. tostring(value)} end
+                        results[#results + 1] = value
+                    end
                     return {migrations = results}
                 end,
             }, nil

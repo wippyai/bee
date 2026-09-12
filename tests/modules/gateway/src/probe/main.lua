@@ -457,7 +457,9 @@ local function main()
     -- admissions are refused, and a bounded read still finishes before the
     -- host's deadline.
     local before_drain = ok(call("bee.threads.service:get", {thread_id = THREAD}), "read head before drain")
-    local drain_cursor = tonumber(before_drain.head_sequence)
+    local drain_summary = before_drain.summary
+    assert(type(drain_summary) == "table", "read the thread summary before the drain wait")
+    local drain_cursor = tonumber((drain_summary :: Object).head_sequence)
     assert(drain_cursor and drain_cursor >= 4, "read the current head before the drain wait")
     assert(process.spawn("bee.gateway_probe:drainer", "bee:workers", "400ms"), "spawn drainer")
     local drain_started = time.now()

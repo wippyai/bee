@@ -67,7 +67,7 @@ threads-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_module.py
 .PHONY: harness-module
 harness-module:
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/harness_module.py
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/harness_module.go -root .. -runtime "$(abspath $(WIPPY))"
 resources-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources_module.py
 gateway-check:

@@ -311,7 +311,11 @@ function M.admit(value: unknown): Reply
         if not binding then return fail("STORAGE", "binding is corrupt") end
         return succeed({binding = view(binding), replayed = true})
     end
-    local _, reject_superseded = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding superseded', updated_at = ? WHERE status = 'queued' AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL)", {stamp(created), attempt_id, carrier_epoch})
+    -- A claimed row may already be in the thread even though its later
+    -- acknowledgement was lost. Supersession fences future intake, but it
+    -- cannot truthfully reject that durable uncertainty; a replacement can
+    -- reclaim the row under its newer carrier epoch.
+    local _, reject_superseded = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding superseded', updated_at = ? WHERE status = 'queued' AND claimed_epoch = 0 AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL)", {stamp(created), attempt_id, carrier_epoch})
     if reject_superseded then tx:rollback(); db:release(); return fail("STORAGE", "reject superseded hooks") end
     local _, supersede_error = tx:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL", {stamp(created), attempt_id, carrier_epoch})
     if supersede_error then tx:rollback(); db:release(); return fail("STORAGE", "supersede earlier bindings") end
@@ -535,13 +539,13 @@ function M.revoke(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller may not revoke bindings for action " .. binding.action_id)
     end
-    -- Revocation invalidates the credentials and terminally rejects what
-    -- was still queued or claimed: nothing will commit it. A carrier that
-    -- wants its accepted rows committed seals first, drains, then revokes.
+    -- Revocation invalidates credentials and rejects rows no carrier began.
+    -- A claimed row can be the thread commit whose acknowledgement was lost,
+    -- so it remains queued for a current or replacement carrier to reconcile.
     local at = stamp(now_ms())
     local _, write_error = db:execute("UPDATE bee_gateway_bindings SET revoked_at = COALESCE(revoked_at, ?), sealed_at = COALESCE(sealed_at, ?) WHERE binding_id = ?", {at, at, binding_id})
     if write_error then db:release(); return fail("STORAGE", "revoke binding") end
-    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE binding_id = ? AND status = 'queued'", {at, binding_id})
+    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {at, binding_id})
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
     binding.revoked = true
@@ -595,7 +599,7 @@ function M.revoke_attempt(value: unknown): Reply
     local at = stamp(now_ms())
     local result, write_error = db:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch <= ? AND revoked_at IS NULL", {at, attempt_id, carrier_epoch})
     if write_error then db:release(); return fail("STORAGE", "revoke attempt bindings") end
-    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE status = 'queued' AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND revoked_at = ?)", {at, attempt_id, at})
+    local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = 'binding revoked', updated_at = ? WHERE status = 'queued' AND claimed_epoch = 0 AND binding_id IN (SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND revoked_at = ?)", {at, attempt_id, at})
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
     return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, revoked = result and (integer(result.rows_affected) or 0) or 0})
@@ -881,13 +885,34 @@ function M.hook_queue(binding: Binding): Reply
     end
     return succeed({hooks = list})
 end
--- The highest carrier epoch ever admitted for an attempt: the fence every
--- intake operation applies, so a lost carrier's late claim or
--- acknowledgment changes nothing once a replacement was admitted.
-local function highest_epoch(db: sql.DB, attempt_id: string): (integer?, Reply?)
-    local rows, err = db:query("SELECT MAX(carrier_epoch) AS highest FROM bee_gateway_bindings WHERE attempt_id = ?", {attempt_id})
-    if err or not rows or #rows ~= 1 then return nil, fail("STORAGE", "read bindings") end
-    return integer((rows[1] :: Row).highest) or 0, nil
+-- The binding admission and every hook mutation serialize this comparison in
+-- one gateway-store transaction. The thread carrier epoch still fences the
+-- record commit; this only prevents a preflight read from letting an old
+-- gateway claim or acknowledgment race a later admission.
+local function intake_epoch(tx: sql.Transaction, attempt_id: string, carrier_epoch: integer): Reply?
+    local rows, err = tx:query("SELECT MAX(carrier_epoch) AS highest FROM bee_gateway_bindings WHERE attempt_id = ?", {attempt_id})
+    if err or not rows or #rows ~= 1 then return fail("STORAGE", "read bindings") end
+    local highest = integer((rows[1] :: Row).highest) or 0
+    if carrier_epoch < highest then
+        return fail("CONFLICT", "carrier epoch " .. tostring(carrier_epoch) .. " is below the highest epoch " .. tostring(highest) .. " admitted for attempt " .. attempt_id)
+    end
+    return nil
+end
+local function intake_binding(tx: sql.Transaction, binding_id: string): (Binding?, Reply?)
+    local rows, err = tx:query("SELECT * FROM bee_gateway_bindings WHERE binding_id = ?", {binding_id})
+    if err or not rows then return nil, fail("STORAGE", "read binding") end
+    if #rows == 0 then return nil, fail("NOT_FOUND", "binding does not exist") end
+    local binding, decode_error = binding_of(rows[1] :: Row)
+    if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
+    return binding, nil
+end
+local function intake_generation(tx: sql.Transaction): (Generation?, Reply?)
+    local rows, err = tx:query("SELECT epoch FROM bee_gateway_listener WHERE singleton = 1")
+    if err or not rows then return nil, fail("STORAGE", "read listener") end
+    if #rows == 0 then return nil, fail("UNAVAILABLE", "the gateway listener has not been opened") end
+    local count, count_error = restarts()
+    if not count then return nil, fail("UNAVAILABLE", count_error or "listener restarts unknown") end
+    return {epoch = integer((rows[1] :: Row).epoch) or 0, restarts = count}, nil
 end
 local function intake_caller(binding: Binding): Reply?
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
@@ -911,18 +936,14 @@ local function intake_request(value: unknown, extra: {string}): (Object?, Bindin
     if not binding then db:release(); return nil, nil, nil, nil, missing end
     local refusal = intake_caller(binding)
     if refusal then db:release(); return nil, nil, nil, nil, refusal end
-    local highest, highest_failure = highest_epoch(db, binding.attempt_id)
-    if not highest then db:release(); return nil, nil, nil, nil, highest_failure end
-    if carrier_epoch < highest then
-        db:release()
-        return nil, nil, nil, nil, fail("CONFLICT", "carrier epoch " .. tostring(carrier_epoch) .. " is below the highest epoch " .. tostring(highest) .. " admitted for attempt " .. binding.attempt_id)
-    end
     return object, binding, db, carrier_epoch, nil
 end
 -- hook_claim: the carrier takes the next queued submissions of its binding
 -- under its epoch; rows a lower epoch claimed are taken over, rows a higher
--- epoch claimed are never touched. A binding no longer valid has its queue
--- rejected instead, with the reason.
+-- epoch claimed are never touched. An invalid binding rejects only work no
+-- carrier claimed. It still lets a current or replacement carrier reclaim
+-- claimed rows, because their thread commit may have succeeded before the
+-- acknowledgement was lost.
 function M.hook_claim(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"limit"})
     if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
@@ -932,39 +953,46 @@ function M.hook_claim(value: unknown): Reply
         if not declared or declared < 1 or declared > M.MAX_HOOK_CLAIM then db:release(); return fail("INVALID", "limit must be between 1 and " .. tostring(M.MAX_HOOK_CLAIM)) end
         limit = declared
     end
-    local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return generation_failure :: Reply end
+    local tx, begin_error = db:begin()
+    if not tx then db:release(); return fail("STORAGE", "begin hook claim") end
+    local current_binding, binding_failure = intake_binding(tx, binding.binding_id)
+    if not current_binding then tx:rollback(); db:release(); return binding_failure :: Reply end
+    local generation, generation_failure = intake_generation(tx)
+    if not generation then tx:rollback(); db:release(); return generation_failure :: Reply end
+    local epoch_refusal = intake_epoch(tx, current_binding.attempt_id, carrier_epoch)
+    if epoch_refusal then tx:rollback(); db:release(); return epoch_refusal end
     local at = stamp(now_ms())
-    -- A revoked binding's queue is still the carrier's to drain; an expired
-    -- one or one from an earlier listener epoch has nothing left to commit,
-    -- and its queue is rejected with that reason.
-    local unrevoked: Binding = {binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, thread_id = binding.thread_id,
-        owner_incarnation = binding.owner_incarnation, carrier_epoch = binding.carrier_epoch, tools = binding.tools, hooks = binding.hooks, epoch = binding.epoch,
-        credential_generation = binding.credential_generation, expires_at = binding.expires_at, revoked = false, sealed = binding.sealed}
-    local ok, reason = M.valid(unrevoked, generation)
+    local ok, reason = M.valid(current_binding, generation)
+    local recovery_only = false
     if not ok then
-        local _, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued'", {reason, at, binding.binding_id})
-        db:release()
-        if reject_error then return fail("STORAGE", "reject queued hooks") end
-        return fail("DENIED", reason)
+        -- A credential can no longer submit after revocation, expiry or a
+        -- listener-epoch change. This internal operation is independently
+        -- authorized and carrier-epoch fenced, so it may recover only rows
+        -- whose delivery already began; unclaimed rows are terminally refused.
+        local _, reject_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, at, current_binding.binding_id})
+        if reject_error then tx:rollback(); db:release(); return fail("STORAGE", "reject unclaimed hooks") end
+        recovery_only = true
     end
-    local rows, err = db:query("SELECT event_id FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued' AND claimed_epoch < ? ORDER BY sequence LIMIT ?", {binding.binding_id, carrier_epoch, limit})
-    if err or not rows then db:release(); return fail("STORAGE", "read queued hooks") end
+    local claimed_filter = recovery_only and " AND claimed_epoch > 0" or ""
+    local rows, err = tx:query("SELECT event_id FROM bee_gateway_hooks WHERE binding_id = ? AND status = 'queued' AND claimed_epoch < ?" .. claimed_filter .. " ORDER BY sequence LIMIT ?", {current_binding.binding_id, carrier_epoch, limit})
+    if err or not rows then tx:rollback(); db:release(); return fail("STORAGE", "read queued hooks") end
     local claimed: {Object} = {}
     for _, row in ipairs(rows) do
         local event_id = tostring((row :: Row).event_id)
-        local result, claim_error = db:execute("UPDATE bee_gateway_hooks SET claimed_epoch = ?, claimed_at = ?, updated_at = ? WHERE event_id = ? AND status = 'queued' AND claimed_epoch < ?", {carrier_epoch, at, at, event_id, carrier_epoch})
-        if claim_error then db:release(); return fail("STORAGE", "claim hook") end
+        local result, claim_error = tx:execute("UPDATE bee_gateway_hooks SET claimed_epoch = ?, claimed_at = ?, updated_at = ? WHERE event_id = ? AND status = 'queued' AND claimed_epoch < ?", {carrier_epoch, at, at, event_id, carrier_epoch})
+        if claim_error then tx:rollback(); db:release(); return fail("STORAGE", "claim hook") end
         if result and (integer(result.rows_affected) or 0) == 1 then
-            local detail, detail_error = db:query("SELECT event_id, event, occurrence, ambiguous, digest, fields_json, provenance, sequence, created_at FROM bee_gateway_hooks WHERE event_id = ?", {event_id})
-            if detail_error or not detail or #detail ~= 1 then db:release(); return fail("STORAGE", "read claimed hook") end
+            local detail, detail_error = tx:query("SELECT event_id, event, occurrence, ambiguous, digest, fields_json, provenance, sequence, created_at FROM bee_gateway_hooks WHERE event_id = ?", {event_id})
+            if detail_error or not detail or #detail ~= 1 then tx:rollback(); db:release(); return fail("STORAGE", "read claimed hook") end
             local item = detail[1] :: Row
             local fields: unknown = json.decode(tostring(item.fields_json))
             claimed[#claimed + 1] = {event_id = event_id, event = tostring(item.event), occurrence = tostring(item.occurrence), ambiguous = integer(item.ambiguous) == 1, digest = tostring(item.digest),
                 fields = fields, provenance = tostring(item.provenance), sequence = integer(item.sequence) or 0, created_at = tostring(item.created_at)}
         end
     end
+    local _, commit_error = tx:commit()
     db:release()
+    if commit_error then return fail("STORAGE", "commit hook claim") end
     return succeed({binding_id = binding.binding_id, carrier_epoch = carrier_epoch, hooks = claimed})
 end
 -- Keeps the retained rows of a binding within the bounds by dropping the
@@ -992,30 +1020,43 @@ function M.hook_ack(value: unknown): Reply
     local event_ids, ids_error = bounds.ids(object.event_ids, true)
     if not event_ids then db:release(); return fail("INVALID", "event_ids: " .. tostring(ids_error)) end
     if #event_ids > M.MAX_HOOK_CLAIM then db:release(); return fail("INVALID", "event_ids exceeds " .. tostring(M.MAX_HOOK_CLAIM)) end
+    local tx, begin_error = db:begin()
+    if not tx then db:release(); return fail("STORAGE", "begin hook acknowledgment") end
+    local epoch_refusal = intake_epoch(tx, binding.attempt_id, carrier_epoch)
+    if epoch_refusal then tx:rollback(); db:release(); return epoch_refusal end
     local at = stamp(now_ms())
     local acknowledged = 0
     for _, event_id in ipairs(event_ids) do
         -- Only the epoch that claimed a row may acknowledge it: a replacement
         -- takes the row over first, then commits it, then acknowledges.
-        local result, ack_error = db:execute("UPDATE bee_gateway_hooks SET status = 'committed', updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = ?", {at, event_id, binding.binding_id, carrier_epoch})
-        if ack_error then db:release(); return fail("STORAGE", "acknowledge hook") end
+        local result, ack_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'committed', updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = ?", {at, event_id, binding.binding_id, carrier_epoch})
+        if ack_error then tx:rollback(); db:release(); return fail("STORAGE", "acknowledge hook") end
         if result and (integer(result.rows_affected) or 0) == 1 then acknowledged = acknowledged + 1 end
     end
+    local _, commit_error = tx:commit()
+    if commit_error then db:release(); return fail("STORAGE", "commit hook acknowledgment") end
     local prune_error = prune(db, binding.binding_id)
     db:release()
     if prune_error then return fail("STORAGE", prune_error) end
     return succeed({binding_id = binding.binding_id, acknowledged = acknowledged})
 end
--- hook_reject: the carrier ends intake for its binding; whatever is still
--- queued is rejected with the reason, never committed.
+-- hook_reject: the carrier ends intake for its binding. Only unclaimed rows
+-- are proved never to have reached a thread commit; claimed rows stay for
+-- reconciliation rather than being falsely called rejected.
 function M.hook_reject(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"reason"})
     if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
     local reason = bounds.line(object.reason, 120)
     if not reason or reason == "" then db:release(); return fail("INVALID", "reason is required") end
-    local result, reject_error = db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch <= ?", {reason, stamp(now_ms()), binding.binding_id, carrier_epoch})
+    local tx, begin_error = db:begin()
+    if not tx then db:release(); return fail("STORAGE", "begin hook rejection") end
+    local epoch_refusal = intake_epoch(tx, binding.attempt_id, carrier_epoch)
+    if epoch_refusal then tx:rollback(); db:release(); return epoch_refusal end
+    local result, reject_error = tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, stamp(now_ms()), binding.binding_id})
+    if reject_error then tx:rollback(); db:release(); return fail("STORAGE", "reject queued hooks") end
+    local _, commit_error = tx:commit()
     db:release()
-    if reject_error then return fail("STORAGE", "reject queued hooks") end
+    if commit_error then return fail("STORAGE", "commit hook rejection") end
     return succeed({binding_id = binding.binding_id, rejected = result and (integer(result.rows_affected) or 0) or 0})
 end
 return M

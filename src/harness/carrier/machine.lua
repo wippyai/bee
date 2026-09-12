@@ -475,8 +475,9 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
         if not reply then return drained, "hook claim: " .. tostring(reply_error) end
         if not reply.ok then
             local fault = reply.error or {code = "UNAVAILABLE", message = "hook claim failed"}
-            -- A binding no longer valid has nothing left to drain; the
-            -- gateway rejected its queue with the reason.
+            -- An invalid binding may have rejected only unclaimed rows. A
+            -- successful empty claim means no retained claim is recoverable
+            -- by this carrier; a conflict leaves takeover to its successor.
             if fault.code == "DENIED" or fault.code == "CONFLICT" then return drained, nil end
             return drained, "hook claim: " .. fault.code .. ": " .. fault.message
         end

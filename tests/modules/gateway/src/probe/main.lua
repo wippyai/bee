@@ -355,13 +355,22 @@ local function main()
     assert(unclaimed_ack.acknowledged == 0, "an epoch that did not claim a row cannot acknowledge it")
     local admitted_higher = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 4, tools = {"thread_read"}, hooks = {"Stop", "PreToolUse"}, ttl_ms = 60000}), "admit act-k under epoch 4")
     assert(code(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 3})) == "CONFLICT", "a claim below the highest admitted epoch is refused")
+    assert(code(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(taken_over.hooks :: {Object})[1].event_id}})) == "CONFLICT",
+        "an old claim cannot acknowledge after the replacement admission")
     local superseded_queue = ok(call("bee.gateway:hook_queue", {binding_id = binding_k}), "superseded queue")
-    local rejected_count, committed_count = 0, 0
+    local rejected_count, committed_count, retained_claimed = 0, 0, 0
     for _, item in ipairs(superseded_queue.hooks :: {Object}) do
         if item.status == "rejected" then rejected_count = rejected_count + 1; assert(item.rejected_reason == "binding superseded", "rejection names its reason") end
         if item.status == "committed" then committed_count = committed_count + 1 end
+        if item.status == "queued" and (tonumber(item.claimed_epoch) or 0) > 0 then retained_claimed = retained_claimed + 1 end
     end
-    assert(committed_count == 1 and rejected_count > 0, "supersession rejects the queued rows and keeps the committed one: " .. tostring(committed_count) .. " " .. tostring(rejected_count))
+    assert(committed_count == 1 and rejected_count > 0 and retained_claimed > 0,
+        "supersession rejects unclaimed rows, keeps committed rows and retains claimed uncertainty: " .. tostring(committed_count) .. " " .. tostring(rejected_count) .. " " .. tostring(retained_claimed))
+    local recovered_after_supersession = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 4, limit = 3}), "reclaim superseded claims")
+    assert(#(recovered_after_supersession.hooks :: {Object}) > 0, "the current carrier reclaims a superseded claimed row")
+    local recovered_id = tostring((recovered_after_supersession.hooks :: {Object})[1].event_id)
+    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 4, event_ids = {recovered_id}}), "ack reclaimed superseded row").acknowledged == 1,
+        "a replacement can acknowledge the commit whose earlier acknowledgment was lost")
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 401, "the superseded binding's hook credential is refused")
     local binding_k4 = tostring((admitted_higher.binding :: Object).binding_id)
     local minted_k4 = ok(materialize("act-k-attempt", 4, binding_k4), "materialize under epoch 4")
@@ -377,14 +386,40 @@ local function main()
     ok(call("bee.gateway:hook_reject", {binding_id = binding_k4, carrier_epoch = 4, reason = "attempt settled"}), "reject again")
     local replay_gone_status, replay_gone_body = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_gone", tool_name = "Bash"})
     assert(replay_gone_status == 410 and replay_gone_body:find("rejected: attempt settled", 1, true), "a replay of a rejected occurrence answers 410 with plain text: " .. tostring(replay_gone_status) .. " " .. replay_gone_body)
+    local claimed_before_revoke, _, claimed_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_claimed_revoke", tool_name = "Bash"})
     local queued_before_revoke, _, revoke_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_revoked", tool_name = "Bash"})
-    assert(queued_before_revoke == 202, "queued before the revocation")
+    assert(claimed_before_revoke == 202 and queued_before_revoke == 202, "claimed and unclaimed rows queue before the revocation")
+    local claimed_for_commit = ok(call("bee.gateway:hook_claim", {binding_id = binding_k4, carrier_epoch = 4, limit = 1}), "claim before lost acknowledgment")
+    local claimed_for_commit_id = tostring((claimed_for_commit.hooks :: {Object})[1].event_id)
+    assert(claimed_for_commit_id == tostring(header_of(claimed_headers, "X-Bee-Event")), "the row held across revoke was claimed first")
     ok(call("bee.gateway:revoke", {binding_id = binding_k4}), "revoke the hook binding")
     assert(select(1, hook_post("act-k", hook_k4, first_payload)) == 401, "a revoked binding's hook credential is refused")
     local after_revoke = ok(call("bee.gateway:hook_queue", {binding_id = binding_k4}), "queue after revoke")
     for _, item in ipairs(after_revoke.hooks :: {Object}) do
-        if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects the queued row terminally") end
+        if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects an unclaimed row terminally") end
+        if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains a claimed row whose thread commit may have succeeded") end
     end
+    assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k4, carrier_epoch = 4, event_ids = {claimed_for_commit_id}}), "ack after revoke").acknowledged == 1,
+        "a lost acknowledgment can be recovered after revocation")
+    -- Expiry has the same distinction: the token is refused, unclaimed rows
+    -- are rejected, and the internally authorized carrier path reclaims work
+    -- that was already claimed before expiry.
+    local expiring = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-expiring-hooks", attempt_id = "act-expiring-hooks-attempt", thread_id = THREAD,
+        owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"PreToolUse"}, ttl_ms = 250}), "admit expiring hooks")
+    local expiring_binding = tostring((expiring.binding :: Object).binding_id)
+    local expiring_tokens = ok(materialize("act-expiring-hooks-attempt", 1, expiring_binding), "materialize expiring hooks")
+    local expiring_hook = tostring(expiring_tokens.hook_token)
+    local expiring_status, _, expiring_headers = hook_post("act-expiring-hooks", expiring_hook, {hook_event_name = "PreToolUse", session_id = "expiry", tool_use_id = "toolu_expiry", tool_name = "Bash"})
+    assert(expiring_status == 202, "hook queues before expiry")
+    local expiring_claim = ok(call("bee.gateway:hook_claim", {binding_id = expiring_binding, carrier_epoch = 1, limit = 1}), "claim before expiry")
+    local expiring_id = tostring((expiring_claim.hooks :: {Object})[1].event_id)
+    assert(expiring_id == tostring(header_of(expiring_headers, "X-Bee-Event")), "the expiring row was claimed")
+    time.sleep("300ms")
+    local expired_recovery = ok(call("bee.gateway:hook_claim", {binding_id = expiring_binding, carrier_epoch = 2, limit = 1}), "reclaim after expiry")
+    assert(#(expired_recovery.hooks :: {Object}) == 1 and tostring((expired_recovery.hooks :: {Object})[1].event_id) == expiring_id,
+        "expiry retains and reclaims a claimed row")
+    assert(ok(call("bee.gateway:hook_ack", {binding_id = expiring_binding, carrier_epoch = 2, event_ids = {expiring_id}}), "ack after expiry").acknowledged == 1,
+        "the reclaimed expired row acknowledges normally")
     -- Drain during a wait: a helper drains while this wait is in flight; the
     -- wait returns a released outcome well before its own deadline, new
     -- admissions are refused, and a bounded read still finishes before the

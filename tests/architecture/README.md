@@ -22,7 +22,10 @@ cover value-library, driver, process, storage, terminal, and service
 constraints. `CheckLoadedInventories` runs `registry list --json` against both
 source and `dist/bee.wapp` and requires exact declared identity sets.
 
-The Python checker in `tests/architecture.py` remains the parity reference.
-The current Go port additionally requires `bee.governance:db` in the SQLite
-inventory and denies it to ordinary apps; the Python reference currently has
-the older nine-entry inventory and does not assert that denial.
+This replaces the previous Python checker. The admitted inventory now includes
+`bee.governance:db`, and ordinary applications must retain its store denial.
+The Makefile gate runs vet and regression tests before inspecting actual source
+and pack inventories. YAML mutation tests prove that extra exact-policy fields,
+an explicit terminal `command: null`, and scalar launcher resources are refused.
+Other resource-containment checks accept either runtime-supported resource
+shape; exact policy comparisons preserve their required scalar or list shape.

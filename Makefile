@@ -73,6 +73,8 @@ pack: lint
 
 .PHONY: architecture-check
 architecture-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture vet ./...
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture test ./...
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture run . "$(abspath .)" "$(abspath $(WIPPY))"
 
 check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check

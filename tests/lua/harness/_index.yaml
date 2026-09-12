@@ -863,10 +863,17 @@ entries:
   source: file://continuation_test.lua
   method: run
   meta: {type: test, suite: bee}
+  security:
+    policies: [bee:carrier_policy]
   imports:
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
+    hook_records: bee.harness.carrier:hook_records
+    codex: bee.driver.codex:launch
+    claude: bee.driver.claude:launch
+    machine: bee.harness.carrier:machine
+    catalog: bee.harness.catalog:catalog
 - name: scope_probe_allow
   kind: security.policy
   meta: {type: test_support}

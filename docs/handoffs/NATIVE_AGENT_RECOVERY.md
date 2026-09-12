@@ -45,7 +45,13 @@ An eventual resume consumer must check the exact predecessor attempt and its
 recorded gateway binding, decode the `bee.harness.hook` payload, and reject
 ambiguous or conflicting session IDs. Current thread membership still governs
 the read. Resolving an old binding's observations grants no use of that binding;
-the new attempt needs fresh admission. This resolver is not yet implemented.
+the new attempt needs fresh admission. The carrier plan now implements this
+resolver for window profiles with `previous_attempt_id` and an empty brief.
+It requires an ended predecessor and native exit plus completed cleanup.
+Ambiguous occurrences provide no candidate ID; conflicting eligible IDs or
+invalid pages refuse continuation. Structured continuation still requires a
+successful completed turn. The app's saved-state and fresh-admission wiring
+remain unimplemented, so this is not public cold-restart recovery.
 
 Interactive close normally produces a cancelled/uncertain attempt, unlike a
 structured successful turn. Do not fake a successful terminal outcome to pass

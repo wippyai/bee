@@ -27,9 +27,12 @@ entries:
 - name: continuation
   kind: library.lua
   source: file://continuation.lua
+  modules: [json]
   imports:
     bounds: bee.threads.records:bounds
     checkpoint: bee.harness.carrier:checkpoint
+    record: bee.threads.records:record
+    hooks: bee.gateway:hooks
 - name: hook_records
   kind: library.lua
   source: file://hook_records.lua

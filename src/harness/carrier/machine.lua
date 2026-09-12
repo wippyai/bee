@@ -256,7 +256,9 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local resume_ref: string? = nil
     if request.previous_attempt_id then
         if not request.session_ref then return nil, "continuation needs a retained session" end
-        local resumed, resume_error = continuation.resolve(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
+        if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
+        local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
+        local resumed, resume_error = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
             owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
             binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry})
         if not resumed then return nil, resume_error end

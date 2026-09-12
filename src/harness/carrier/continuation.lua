@@ -1,6 +1,9 @@
 -- MIT. Resolve native harness continuation from committed owner state.
 local bounds = require("bounds")
 local checkpoint = require("checkpoint")
+local record = require("record")
+local hooks = require("hooks")
+local json = require("json")
 local M = {}
 type Request = {thread_id: string, action_id: string, attempt_id: string, owner_id: string, previous_attempt_id: string, session_ref: string,
     binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string}
@@ -40,5 +43,93 @@ function M.resolve(call: Call, request: Request): (string?, string?)
     end
     if attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
     return resume_ref, nil
+end
+-- Explicit interactive resume is not another successful structured turn.
+-- The old process must be gone; its committed observations identify the
+-- conversation, while the new attempt supplies fresh admission and grants.
+function M.resolve_window(call: Call, request: Request): (string?, string?)
+    if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
+    if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
+    local stored, stored_error = value(call, "bee.threads.carrier:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    if not stored then return nil, stored_error end
+    if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
+    if stored.attempt_state ~= "ended" or stored.open_turn_id ~= nil then return nil, "previous window attempt has not ended" end
+    local point, point_error = checkpoint.decode(stored.checkpoint)
+    if not point then return nil, "previous checkpoint: " .. tostring(point_error) end
+    if point.binding_ref ~= request.binding_ref or point.binding_digest ~= request.binding_digest or point.profile_id ~= request.profile_id or point.profile_digest ~= request.profile_digest then
+        return nil, "previous attempt used another driver or profile"
+    end
+    if point.retained_session_ref ~= request.session_ref then return nil, "previous attempt did not use this retained session" end
+    local binding = point.gateway_binding
+    if not binding then return nil, "previous window has no recorded hook binding" end
+    local status, status_error = value(call, "bee.placement.native:status", {attempt_id = request.previous_attempt_id})
+    if not status then return nil, status_error end
+    local attempt = bounds.object(status.attempt)
+    if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
+        return nil, "previous native process has another owner or session"
+    end
+    if attempt.execution_state ~= "exited" or attempt.cleanup_state ~= "complete" then return nil, "previous native process cleanup is not complete" end
+
+    local cursor = 0
+    local session_id: string? = nil
+    -- A full page advances by at least MAX_PAGE_RECORDS; a sparse page
+    -- advances the owner's scan window. The thread itself has a fixed bound.
+    local pages = math.ceil(bounds.MAX_THREAD_RECORDS / bounds.MAX_PAGE_RECORDS) + 1
+    for _ = 1, pages do
+        local page, page_error = value(call, "bee.threads.service:read_after", {thread_id = request.thread_id, cursor = cursor,
+            limit = bounds.MAX_PAGE_RECORDS, filter = {kinds = {"observation"}, action_id = request.action_id}})
+        if not page then return nil, page_error end
+        local through = bounds.cursor(page.scanned_through)
+        if not through or through < cursor or type(page.has_more) ~= "boolean" or (page.has_more and through == cursor) then
+            return nil, "invalid continuation page cursor"
+        end
+        if type(page.records) ~= "table" then return nil, "continuation records must be a list" end
+        local rows = page.records :: {unknown}
+        local count = 0
+        for key in pairs(rows) do
+            if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "continuation records must be a dense list" end
+            count = count + 1
+        end
+        if count ~= #rows or count > bounds.MAX_PAGE_RECORDS then return nil, "continuation page exceeds its record bound" end
+        local sequence = cursor
+        for _, row in ipairs(rows) do
+            local item, item_error = record.decode(row)
+            if not item then return nil, "continuation record: " .. tostring(item_error) end
+            if item.thread_id ~= request.thread_id or item.action_id ~= request.action_id or item.kind ~= "observation"
+                or item.sequence <= sequence or item.sequence > through then return nil, "continuation record does not match its page" end
+            sequence = item.sequence
+            if item.attempt_id == request.previous_attempt_id and item.source == "bee" then
+                local body = bounds.object(item.body)
+                local extension = body and bounds.object(body.data) or nil
+                if extension and extension.type == "extension" and extension.event_name == "bee.harness.hook" then
+                    if extension.event_revision ~= "1" then return nil, "unsupported hook observation revision" end
+                    local encoded = bounds.text(extension.payload_json, bounds.MAX_RECORD_BYTES)
+                    if not encoded then return nil, "invalid hook observation payload" end
+                    local raw, decode_error = json.decode(encoded)
+                    local payload = not decode_error and bounds.object(raw) or nil
+                    if not payload or payload.binding_id ~= binding or type(payload.ambiguous) ~= "boolean" then
+                        return nil, "hook observation does not match the previous binding"
+                    end
+                    local fields, fields_error = hooks.stored_fields(payload.fields)
+                    if not fields or fields.event ~= payload.event then return nil, "invalid hook observation fields: " .. tostring(fields_error) end
+                    -- Ambiguous occurrences (including ordinary Stop hooks)
+                    -- add no resume evidence and cannot replace a known ID.
+                    if not payload.ambiguous then
+                        local candidate = bounds.id(fields.session_id)
+                        if candidate then
+                            if session_id and session_id ~= candidate then return nil, "conflicting provider conversation references" end
+                            session_id = candidate
+                        end
+                    end
+                end
+            end
+        end
+        cursor = through
+        if not page.has_more then
+            if not session_id then return nil, "previous window recorded no unambiguous provider conversation" end
+            return session_id, nil
+        end
+    end
+    return nil, "continuation scan exceeds the thread bound"
 end
 return M

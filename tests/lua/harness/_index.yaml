@@ -342,6 +342,82 @@ entries:
     thread_policy: {kind: new}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: profile_alpha_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Profile-environment fixture policy selected by the alpha named definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {BEE_PROFILE_PROBE_NAME: alpha, BEE_PROFILE_PROBE_ALPHA_ONLY: alpha-selected, BEE_PROFILE_PROBE_HOLD: "1"}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: profile_beta_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Profile-environment fixture policy selected by the beta named definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {BEE_PROFILE_PROBE_NAME: beta, BEE_PROFILE_PROBE_BETA_ONLY: beta-selected, BEE_PROFILE_PROBE_HOLD: "1"}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: profile_alpha_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Named alpha definition sharing Claude's batch profile with its selected policy
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: profile-alpha-fixture
+    title: Profile alpha fixture
+    command_names: [profile-alpha-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:profile_alpha_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: profile_beta_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Named beta definition sharing Claude's batch profile with its selected policy
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: profile-beta-fixture
+    title: Profile beta fixture
+    command_names: [profile-beta-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:profile_beta_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: launch_client_policy
   kind: security.policy
   meta: {type: test_support}
@@ -356,6 +432,17 @@ entries:
   method: run
   meta: {type: test, suite: bee, timeout: "180s"}
   modules: [funcs, security, process, channel, registry, env, time]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    test: wippy.test:test
+    admission: bee.harness.launch:admission
+- name: profile_environment_isolation_test
+  kind: function.lua
+  source: file://profile_environment_isolation_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "180s"}
+  modules: [funcs, security, registry, env, time, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:

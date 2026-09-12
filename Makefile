@@ -1,6 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test threads threads-module resources-module gateway-check pack check
+.PHONY: setup run lint test threads threads-module resources-module gateway-check pack check architecture-check
 setup: native-tools
 .PHONY: sync-check
 sync-check:
@@ -71,8 +71,12 @@ pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp
 
+.PHONY: architecture-check
+architecture-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C tests/architecture run . "$(abspath .)" "$(abspath $(WIPPY))"
+
 check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check threads threads-module harness-module resources-module gateway-check pack headless-check workspace-hosts-check
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/architecture.py
+	$(MAKE) architecture-check WIPPY="$(abspath $(WIPPY))"
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py

@@ -106,6 +106,14 @@ entries:
     hook_records: bee.harness.carrier:hook_records
     gateway_hooks: bee.gateway:hooks
     canonical: bee.threads.records:canonical
+- name: policy_test
+  kind: function.lua
+  source: file://policy_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    policy: bee.harness.carrier:policy
 - name: window_hooks_test
   kind: function.lua
   source: file://window_hooks_test.lua

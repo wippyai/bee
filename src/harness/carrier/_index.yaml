@@ -19,7 +19,7 @@ entries:
 - name: policy
   kind: library.lua
   source: file://policy.lua
-  modules: [hash, registry]
+  modules: [hash, registry, env]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -73,7 +73,7 @@ entries:
     machine: bee.harness.carrier:machine
     placement_protocol: bee.placement.native:protocol
   security:
-    policies: [bee:carrier_policy]
+    policies: [bee:carrier_policy, bee:carrier_environment_policy]
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

@@ -3,6 +3,7 @@
 -- The caller and the driver never choose it; the owner pins its digest.
 local hash = require("hash")
 local registry = require("registry")
+local env = require("env")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local placement_types = require("placement_types")
@@ -13,6 +14,7 @@ M.TYPE = placement_types.LAUNCH_POLICY_TYPE
 -- acceptance record and the proven fixture digest here; a production
 -- policy may only name the adapter the profile itself pins.
 type PermissionExchange = {adapter_ref: string, acceptance_ref: string, fixture_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
+type EnvironmentResolver = (string) -> (string?, string?)
 type Policy = {
     ref: string,
     digest: string,
@@ -49,12 +51,33 @@ local function decode_map(value: unknown, name: string): ({[string]: string}?, s
     end
     return result, nil
 end
-function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
+-- executable_env resolves only named env.variable entries. It is deliberately
+-- separate from registry interpolation: plain registry.entry data is opaque,
+-- and an absent optional component must make its policy unavailable rather
+-- than fail registry boot. The resolved value is included in the policy digest.
+local function decode_executable_env(value: unknown, executables: {[string]: string}, resolve: EnvironmentResolver): string?
+    if value == nil then return nil end
+    local object = bounds.object(value)
+    if not object then return "executable_env must be an object" end
+    for executable, variable in pairs(object) do
+        if not bounds.id(executable) then return "executable_env names a non-identifier" end
+        if executables[executable] ~= nil then return "executable_env." .. executable .. " overlaps executables" end
+        local variable_ref = bounds.id(variable)
+        if not variable_ref then return "executable_env." .. executable .. " is not an env.variable identifier" end
+        local resolved, resolve_error = resolve(variable_ref)
+        if type(resolved) ~= "string" or resolve_error then
+            return "executable_env." .. executable .. " is unavailable from " .. variable_ref
+        end
+        executables[executable] = resolved
+    end
+    return nil
+end
+function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "environment", "fixture", "permission_exchange", "provider_ref", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -73,6 +96,9 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
     if not runner_drain_ms or runner_drain_ms < 100 then return nil, ref .. ": runner_drain_ms must be at least 100" end
     local executables, executables_error = decode_map(data.executables, "executables")
     if not executables then return nil, ref .. ": " .. tostring(executables_error) end
+    local resolve = resolver or function(variable_ref: string): (string?, string?) return env.get(variable_ref) end
+    local executable_env_error = decode_executable_env(data.executable_env, executables, resolve)
+    if executable_env_error then return nil, ref .. ": " .. executable_env_error end
     local environment, environment_error = decode_map(data.environment, "environment")
     if not environment then return nil, ref .. ": " .. tostring(environment_error) end
     local fixture = data.fixture == true
@@ -93,7 +119,10 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Policy?, string?)
         if not poll_ms or poll_ms < 50 or not ttl_ms or ttl_ms < 1000 then return nil, ref .. ": permission_exchange poll_ms and ttl_ms are out of range" end
         exchange = {adapter_ref = adapter_ref, acceptance_ref = acceptance_ref, fixture_digest = fixture_digest, approver_policy = approver, poll_ms = poll_ms, ttl_ms = ttl_ms}
     end
-    local encoded, encode_error = canonical.encode(data)
+    local digest_input: {[string]: unknown} = {}
+    for key, value in pairs(data) do digest_input[key] = value end
+    digest_input.executables = executables
+    local encoded, encode_error = canonical.encode(digest_input)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end

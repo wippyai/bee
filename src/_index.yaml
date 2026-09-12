@@ -131,6 +131,7 @@ entries:
     close_grace_ms: 60000
     policies:
     - bee:carrier_policy
+    - bee:carrier_environment_policy
     - bee:placement_store_policy
     - bee:placement_exec_policy
     - bee:placement_runner_policy
@@ -468,7 +469,8 @@ entries:
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
-    executables: {claude: '${env:bee.driver.claude:executable}'}
+    executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
     environment: {}
     prepare_options: {}
 - name: launch_policy_codex_window
@@ -484,8 +486,10 @@ entries:
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
-    executables: {codex: '${env:bee.driver.codex:executable}'}
+    executables: {}
+    executable_env: {codex: bee.driver.codex:executable}
     environment: {}
+    provider_ref: bee.driver.codex:default_provider
     prepare_options: {}
 - name: launch_policy_agy_window
   kind: registry.entry
@@ -500,7 +504,8 @@ entries:
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
-    executables: {agy: '${env:bee.driver.agy:executable}'}
+    executables: {}
+    executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     prepare_options: {}
 - name: launch_policy_grok_window
@@ -516,7 +521,8 @@ entries:
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
-    executables: {grok: '${env:bee.driver.grok:executable}'}
+    executables: {}
+    executable_env: {grok: bee.driver.grok:executable}
     environment: {}
     prepare_options: {}
 - name: carrier_policy
@@ -526,6 +532,14 @@ entries:
   policy:
     actions: [funcs.call, registry.get, process.send, bee.threads.lifecycle, bee.threads.carrier, bee.threads.observe, bee.gateway.admit, security.scope.create, funcs.security]
     resources: ['*', custom, security]
+    effect: allow
+- name: carrier_environment_policy
+  kind: security.policy
+  meta:
+    comment: The managed harness boundary may read only its four declared nonsecret executable variables while resolving host launch policy
+  policy:
+    actions: [env.get]
+    resources: [bee.driver.claude:executable, bee.driver.codex:executable, bee.driver.agy:executable, bee.driver.grok:executable]
     effect: allow
 - name: credential_sources
   kind: registry.entry

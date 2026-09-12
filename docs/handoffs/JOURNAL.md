@@ -6313,3 +6313,17 @@ replacement checks one IPv4 loopback listener and rejects anonymous MCP tools;
 desktop regression is running. Do not report full acceptance as green.
 Docker, writable coordination tools, editable profile instructions/memory and
 native-style instruction builders remain unfinished.
+
+### 2026-09-12 — Docker process mount runtime PR
+
+Runtime [PR #739](https://github.com/wippyai/runtime/pull/739), commit
+`01d6bfb4`, adds authorized per-process Docker bind mounts from current main.
+It is assigned to Rodrigo (`skhaz`), not merged or installed. The exec API,
+native/Docker services and Lua exec race suites pass, including real Alpine
+PTY processes with separate homes; scoped lint reports zero issues.
+Source authorization checks a clean absolute path and does not claim symlink
+confinement. Sources refer to the Docker daemon's host.
+
+Bee's managed Docker launch/recovery integration remains unfinished. Global
+`887d0769` is unchanged by this work. Desktop regression continues through
+source/pack command handlers; full acceptance is not yet proven.

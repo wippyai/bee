@@ -22,6 +22,7 @@ import (
 	"github.com/wippyai/runtime/boot/components/core"
 	"github.com/wippyai/runtime/boot/components/dispatchers"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
+	bootsystem "github.com/wippyai/runtime/boot/components/system"
 	app "github.com/wippyai/runtime/cmd/app"
 )
 
@@ -83,7 +84,7 @@ func Component() *Host {
 
 func (*Host) Name() string { return "bee.native" }
 func (*Host) DependsOn() []string {
-	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName}
+	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName, bootsystem.EnvironmentName}
 }
 
 // Launch is the cmd/app entry selected by Bee's executable. It is deliberately

@@ -32,8 +32,8 @@ func systemResolver() Resolver {
 	return Resolver{LookPath: exec.LookPath, HomeDir: os.UserHomeDir, Getwd: os.Getwd}
 }
 
-// Storage is a fixed snapshot of nonsecret host paths. It never reads files or
-// changes the process environment.
+// Storage snapshots nonsecret home and working-directory facts. Executable
+// lookup is live and never reads files or changes the process environment.
 type Storage struct {
 	resolver Resolver
 	facts    map[string]string

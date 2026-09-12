@@ -3,8 +3,8 @@
 Bee has an optional Hub component with a scoped public API and a Modules TUI
 in development. Real install, update, uninstall and durable receipt restart
 checks pass on the existing runtime. This backend milestone is installed globally.
-The following explicit interruption-recovery API is source-verified but not yet
-in the global executable. Migration execution remains unfinished.
+The explicit interruption-recovery API and scrollable plan review are included
+in global build `237d76a8`. Migration execution remains unfinished.
 
 `bee.hub:call({operation, request?, expected_digest?})` returns
 `{ok, value?, code?, message?, replayed}`. The facade checks the authenticated

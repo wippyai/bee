@@ -1,11 +1,11 @@
 # Native Agent conversation recovery — next integration unit
 
-Proposal, not a shipped recovery contract. The existing app checkpoint/restore
-protocol remains the shell boundary; the structured carrier already retains
-provider resume references. Launch definitions can now name one host-selected
-`session_resource`; the Agent binding allows obtaining its own grant for that
-resource. The interactive Agent app still declares no resume schema and does
-not recover provider conversations.
+The source Agent app now declares a resume schema and consumes the existing app
+checkpoint/restore protocol. It persists exactly the five continuation identity
+fields, authenticates the broker's checkpoint acknowledgement, and constructs a
+fresh continuation request on restore. Successful cold recovery remains blocked
+by native process-group cleanup proof, so this is an app wiring slice rather
+than a completed recovery contract.
 
 An interactive Agent must retain both the provider conversation ID and its
 session files. Use the existing placement session_ref/home resource and the
@@ -54,8 +54,10 @@ successful completed turn. Launch admission now accepts the original launch
 request ID, predecessor attempt and thread in its typed `continuation` field.
 It requires the saved plan digest, derives the original session identity from
 that request and workspace, checks existing owner state, and
-obtains fresh grants for the new attempt. The app's saved-state consumer remains
-unimplemented, so this is not public cold-restart recovery.
+obtains fresh grants for the new attempt. The app's saved-state consumer now
+constructs the fresh restore request and fails before readiness when admission
+refuses it. Successful cold-restart recovery remains unavailable until native
+cleanup can prove the predecessor's required process group is gone.
 
 Interactive close normally produces a cancelled/uncertain attempt, unlike a
 structured successful turn. Do not fake a successful terminal outcome to pass
@@ -89,5 +91,15 @@ so a new attempt can select fresh endpoint data without replacing conversation
 files. Codex still uses protected provider/hook/trust files and refuses changed
 content in a retained home. The selected Lua FS surface lacks atomic replacement
 and non-following opens; no remove-and-recreate workaround is introduced.
-This configuration slice does not establish native process-group cleanup or
-activate the app's cold-restart consumer.
+This configuration slice does not establish native process-group cleanup.
+The app's cold-restart consumer is wired, but recovery remains fail-closed until
+the native lifecycle provides the required process-group identity and cleanup
+proof.
+
+The app queues its new checkpoint only after native startup and the thread's
+start receipt succeed. A plan, preparation or startup refusal therefore does not
+replace the previous checkpoint. It consumes the authenticated result in its
+normal input/hook loop; no checkpoint wait blocks terminal input or close.
+A refused or unconfirmed save adds “Save unconfirmed” to the title while the
+running Agent remains usable. The broker continues owning the last acknowledged
+resume record. The app rejects an unsupported resume schema before admission.

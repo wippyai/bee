@@ -123,6 +123,15 @@ entries:
     test: wippy.test:test
     hooks: bee.harness.window:hooks
     checkpoint: bee.harness.carrier:checkpoint
+- name: window_recovery_test
+  kind: function.lua
+  source: file://window_recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    recovery: bee.harness.window:recovery
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua

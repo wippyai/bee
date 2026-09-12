@@ -1,0 +1,6 @@
+version: '1.0'
+namespace: bee.threads.records
+entries:
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua

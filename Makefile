@@ -7,6 +7,10 @@ setup: native-tools
 hub-inspect-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/hub_inspect.go -runtime "$(abspath $(WIPPY))"
+.PHONY: hub-preview-check
+hub-preview-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_preview.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/hub_preview.go -runtime "$(abspath $(WIPPY))"
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py

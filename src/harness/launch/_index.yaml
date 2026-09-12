@@ -50,3 +50,34 @@ entries:
     definitions: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
+- name: setup_backend
+  kind: function.lua
+  source: file://setup_backend.lua
+  method: handle
+  modules: [funcs, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    definition: bee.harness.launch:definitions
+- name: setup
+  kind: function.lua
+  source: file://setup_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.harness.launch:setup_facade_policy]
+- name: setup_execution_policy
+  kind: security.policy
+  groups: [harness_setup_execution_scope]
+  policy:
+    actions: [funcs.call, bee.resources.manage, registry.get]
+    resources: [bee.resources:associate, bee.resources:list, bee:harness_setup, bee.harness.launch:definitions, '*']
+    effect: allow
+- name: setup_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.harness.launch:harness_setup_execution_scope, bee.harness.launch:setup_backend]
+    effect: allow

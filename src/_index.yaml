@@ -271,6 +271,31 @@ entries:
   variable: BEE_WORKSPACE_DB
   default: .wippy/workspace.db
   readonly: true
+- name: project_path
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: cwd
+  readonly: true
+- name: workspace_root
+  kind: fs.directory
+  directory: ${env:bee:project_path}
+  auto_init: false
+- name: resource_roots
+  kind: registry.entry
+  meta:
+    type: bee.resource_roots
+    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource names
+  data:
+    roots:
+    - {root_ref: bee:workspace_root, access: write}
+    - {root_ref: bee.placement.native:root, access: write}
+- name: harness_setup
+  kind: registry.entry
+  meta:
+    type: bee.harness_setup
+    comment: Host-selected first-use roots keyed by definition-declared resource names
+  data:
+    roots: {project: bee:workspace_root, session: bee.placement.native:root}
 - name: workspace_db
   kind: db.sql.sqlite
   file: ${env:bee:workspace_db_path}

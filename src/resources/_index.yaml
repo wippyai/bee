@@ -20,7 +20,7 @@ entries:
   kind: ns.requirement
   meta:
     comment: The host's admitted root list, the ceiling every association stays under
-  default: bee.placement.native:admitted_roots
+  default: bee:resource_roots
   targets:
   - entry: bee.resources:roots_ref
     path: .resource_ref

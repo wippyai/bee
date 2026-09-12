@@ -172,7 +172,8 @@ entries:
     policy_ref: bee:launch_policy_grok_window
     default_mode: window
     allowed_overrides: []
-    workdir_policy: {kind: caller_workspace}
+    workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
+    session_resource: session
     credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}

@@ -1,5 +1,20 @@
 # Agent integration checkpoint — September 12
 
+Combined source `343eefa` includes driver configuration delivery and the Hive
+fixture cleanup. Its standalone `bee-config-hive-reviewed` passes embedded boot,
+Settings recovery, terminal input/scrolling/selection/copy, presenter rejoin and
+the public empty Agent picker (detach 67 ms). SHA-256:
+`a45e650d05e4ef9cc3bd4002bb0bc34de49ff1ec0a72c2b3e586284c6653abf8`.
+All six combined Hive source/pack application cases and the failed-probe check
+pass. Loading the 15 assembled release packs confirms 608 entries without test
+or fixture registrations/references and without embedded assets. Evidence:
+`config-hive-combined-{build,native,app}.log` and
+`config-hive-combined-pack-audit.json` in the September 12 evidence directory.
+The separate full configuration check remains live; it has passed terminal and
+scrolling checks and reached lifecycle/client recovery. These executable checks
+do not establish an authenticated provider turn or cold conversation recovery.
+Global remains unchanged pending the executable-selected project state directory.
+
 Driver configuration delivery is being verified in a separate worktree. Each
 driver owns its configuration format; placement validates and freezes that
 delivery in its existing intent, and both terminal and headless launches consume

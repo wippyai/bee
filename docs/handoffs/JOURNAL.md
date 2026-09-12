@@ -6092,3 +6092,17 @@ loading of all 15 resulting release packs found 608 entries with no fixture/test
 registrations, test-library references or embedded filesystem assets. Wolfden
 fact 1288 records the cleanup evidence. Combined acceptance remains pending;
 global is unchanged. No new Python files or Python edits are included.
+
+### 2026-09-12 Codex: combined configuration and release-pack checkpoint
+
+Integration `343eefa` combines configuration `6ac9f01` and Hive cleanup
+`ff90c03` without conflicts. The combined build, native executable acceptance
+and Hive source/pack application acceptance all pass (sessions 96129, 10805,
+37658). Candidate `bee-config-hive-reviewed` has SHA-256
+`a45e650d05e4ef9cc3bd4002bb0bc34de49ff1ec0a72c2b3e586284c6653abf8`.
+Loading every assembled pack confirms 608 entries in 15 packs without test or
+fixture registrations/references and no embedded assets. Full configuration
+check 15767 is still live, through terminal/scroll and into lifecycle/recovery.
+Runtime PR 726 and builder PR 7 remain open on the same pinned heads; obsolete
+remote-monitor PR 716 is already closed. No runtime changes were made. Global
+SHA remains `5c604fa7ab5f3c7eaa903c7ed2a79c8eb8b467fa6c0ee738b1c016471c9e026a`.

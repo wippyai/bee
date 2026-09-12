@@ -321,11 +321,10 @@ local function main()
     end
     assert(overflowed > 0, "the queue bound is enforced")
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 202, "a replay of a queued event still answers past the bound")
-    -- Intake: a carrier claims queued submissions under its epoch, commits
-    -- them as records, and acknowledges; only then is a submission
-    -- committed, and a replay then answers 200 with an empty body. A claim
-    -- or acknowledgment from an epoch below the highest admitted for the
-    -- attempt changes nothing.
+    -- Intake: a carrier claims queued submissions under its epoch and
+    -- acknowledges only a claimed row. The carrier record path is exercised
+    -- with the retained claim below. A claim or acknowledgment from an epoch
+    -- below the highest admitted for the attempt changes nothing.
     local claimed = ok(call("bee.gateway:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim")
     local claimed_list = claimed.hooks :: {Object}
     assert(#claimed_list == 3 and claimed_list[1].event_id == event_1, "the first three queued submissions are claimed in order")
@@ -370,7 +369,7 @@ local function main()
     assert(#(recovered_after_supersession.hooks :: {Object}) > 0, "the current carrier reclaims a superseded claimed row")
     local recovered_id = tostring((recovered_after_supersession.hooks :: {Object})[1].event_id)
     assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k, carrier_epoch = 4, event_ids = {recovered_id}}), "ack reclaimed superseded row").acknowledged == 1,
-        "a replacement can acknowledge the commit whose earlier acknowledgment was lost")
+        "a replacement can acknowledge a retained claim")
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 401, "the superseded binding's hook credential is refused")
     local binding_k4 = tostring((admitted_higher.binding :: Object).binding_id)
     local minted_k4 = ok(materialize("act-k-attempt", 4, binding_k4), "materialize under epoch 4")
@@ -390,17 +389,50 @@ local function main()
     local queued_before_revoke, _, revoke_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_revoked", tool_name = "Bash"})
     assert(claimed_before_revoke == 202 and queued_before_revoke == 202, "claimed and unclaimed rows queue before the revocation")
     local claimed_for_commit = ok(call("bee.gateway:hook_claim", {binding_id = binding_k4, carrier_epoch = 4, limit = 1}), "claim before lost acknowledgment")
-    local claimed_for_commit_id = tostring((claimed_for_commit.hooks :: {Object})[1].event_id)
+    local claimed_item = (claimed_for_commit.hooks :: {Object})[1]
+    local claimed_for_commit_id = tostring(claimed_item.event_id)
     assert(claimed_for_commit_id == tostring(header_of(claimed_headers, "X-Bee-Event")), "the row held across revoke was claimed first")
+    -- Commit the claimed hook through the actual fenced carrier API, then
+    -- deliberately omit its gateway acknowledgment. This is the durable
+    -- uncertainty retention must preserve across revocation.
+    ok(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k",
+        admitted = {request_id = "act-k-request", principal_id = ACTOR, binding_ref = "act-k-binding", binding_digest = "act-k-digest", grant_refs = {}, budget_ref = "act-k-budget", input = {text = "hook recovery"}}}), "admit hook action")
+    ok(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
+        prepared = {binding_ref = "act-k-binding", binding_digest = "act-k-digest", profile_id = "act-k-profile", profile_digest = "act-k-profile-digest", placement_binding = "act-k-placement", placement_attempt_id = "act-k-placement-attempt", plan_digest = "act-k-plan"}}), "prepare hook attempt")
+    ok(call("bee.threads.service:start_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "act-k", attempt_id = "act-k-attempt",
+        started = {execution_kind = "process", execution_ref = "act-k-execution", owner_epoch = 1}}), "start hook attempt")
+    -- The binding is at gateway epoch 4, so bring the thread carrier to the
+    -- same fenced epoch before recording its hook.
+    for epoch = 1, 4 do
+        local carrier = ok(call("bee.threads.carrier:claim", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt"}), "claim hook carrier")
+        assert(carrier.carrier_epoch == epoch, "hook carrier epoch " .. tostring(epoch))
+    end
+    local event_key = "hook:" .. binding_k4 .. ":" .. tostring(claimed_item.event) .. ":" .. tostring(claimed_item.occurrence)
+    local payload = json.encode({event_id = claimed_item.event_id, event = claimed_item.event, occurrence = claimed_item.occurrence, ambiguous = claimed_item.ambiguous == true,
+        provenance = claimed_item.provenance, sequence = claimed_item.sequence, fields = claimed_item.fields, binding_id = binding_k4}) or "{}"
+    local hook_record = {source = "bee", body = {type = "extension", event_key = event_key,
+        data = {type = "extension", event_name = "bee.harness.hook", event_revision = "1", payload_json = payload}}}
+    local first_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 0,
+        checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-committed-before-ack"}, records = {hook_record}}), "commit claimed hook")
+    assert(#(first_commit.records :: {Object}) == 1 and (first_commit.records :: {Object})[1].replayed == false, "the claimed hook committed once")
     ok(call("bee.gateway:revoke", {binding_id = binding_k4}), "revoke the hook binding")
     assert(select(1, hook_post("act-k", hook_k4, first_payload)) == 401, "a revoked binding's hook credential is refused")
     local after_revoke = ok(call("bee.gateway:hook_queue", {binding_id = binding_k4}), "queue after revoke")
     for _, item in ipairs(after_revoke.hooks :: {Object}) do
         if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects an unclaimed row terminally") end
-        if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains a claimed row whose thread commit may have succeeded") end
+        if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains the claimed row after its thread commit") end
     end
+    local retry_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 1,
+        checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-recovered-before-ack"}, records = {hook_record}}), "retry committed hook")
+    assert(#(retry_commit.records :: {Object}) == 1 and (retry_commit.records :: {Object})[1].replayed == true, "retry replays the retained hook record")
+    local committed_records = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}), "read retained hook record")
+    local retained_records = 0
+    for _, item in ipairs(committed_records.records :: {Object}) do
+        if item.kind == "observation" and type(item.body) == "table" and (item.body :: Object).event_key == event_key then retained_records = retained_records + 1 end
+    end
+    assert(retained_records == 1, "the replay did not duplicate the committed hook record")
     assert(ok(call("bee.gateway:hook_ack", {binding_id = binding_k4, carrier_epoch = 4, event_ids = {claimed_for_commit_id}}), "ack after revoke").acknowledged == 1,
-        "a lost acknowledgment can be recovered after revocation")
+        "the internally authorized carrier acknowledges the committed row after revocation")
     -- Expiry has the same distinction: the token is refused, unclaimed rows
     -- are rejected, and the internally authorized carrier path reclaims work
     -- that was already claimed before expiry.

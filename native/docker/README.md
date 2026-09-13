@@ -15,6 +15,15 @@ labels. The operation returns the existing runtime `exec.Process` handle without
 daemon I/O. Its `attach_terminal()` must run in the actor holding the terminal
 grant; the normal runtime method owns the resulting terminal session.
 
+`Component(daemonRef, client)` installs that module through normal Wippy boot. It
+depends on `lua.engine` and `lua.exec`, and requires the boot context's real Lua
+code manager during `Load`. Construction and `Load` perform no Docker I/O,
+environment lookup, default socket discovery, download, or permission-scope
+grant. The host owns the supplied client and its lifetime. Repeated loading of
+the same component preserves its existing module definition; a different
+`docker_pty` definition is rejected rather than replaced. The component remains
+an opt-in host composition and is not added to the default desktop launcher.
+
 `New` accepts the caller-owned Docker client and an admitted full container ID,
 actual image ID, execution start timestamp and expected labels. It copies the
 labels and performs no daemon I/O. `Start` verifies those facts, attaches to the

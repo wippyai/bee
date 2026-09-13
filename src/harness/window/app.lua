@@ -172,6 +172,7 @@ local function main(value: unknown)
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
         local preferences: appearance.Preferences = appearance.defaults()
+        local states = assert(process.listen("bee.appearance.state", {message = true}))
         local dirty = true
         local dismissed = false
         local settlement = settle and channel.new(1) or nil
@@ -193,9 +194,10 @@ local function main(value: unknown)
             client.ready(launch, {negotiate_close = true})
             ready_announced = true
         end
+        process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
         while not dismissed do
             render()
-            local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive()}
+            local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), states:case_receive()}
             if settlement and not settlement_done then cases[#cases + 1] = settlement:case_receive() end
             local event = channel.select(cases)
             if not event.ok then
@@ -207,6 +209,15 @@ local function main(value: unknown)
                 if close then
                     client.close_reply(launch, close.request_id, {action = "accept"})
                     dismissed = true
+                end
+            elseif event.channel == states then
+                if event.value:from() == launch.broker_pid then
+                    local payload: unknown = event.value:payload():data()
+                    local decoded = appearance.decode(payload)
+                    if decoded and type(payload) == "table" and payload.version == 1 then
+                        preferences = decoded
+                        dirty = true
+                    end
                 end
             elseif settlement and not settlement_done and event.channel == settlement then
                 status = tostring(event.value)
@@ -227,6 +238,7 @@ local function main(value: unknown)
                 end
             end
         end
+        process.unlisten(states)
         output:close()
     end
     if selected then

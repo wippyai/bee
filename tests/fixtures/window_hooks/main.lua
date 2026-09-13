@@ -45,6 +45,15 @@ local function execute()
     local opened_gateway = call("bee.gateway:open", {address = address})
     assert(opened_gateway.value ~= nil, "failed to open gateway listener")
 
+    -- The host explicitly admits a session root in this disposable fixture.
+    local roots = assert(registry.get("bee:resource_roots"))
+    roots.data = {roots = {{root_ref = "bee.window_hooks_fixture:session_root", access = "write"}}}
+    local changes = registry.snapshot():changes()
+    changes:update(roots)
+    assert(changes:apply())
+    call("bee.resources:associate", {workspace_id = WORKSPACE, name = "retained",
+        root_ref = "bee.window_hooks_fixture:session_root", subpath = "", allowed_access = "write"})
+
     -- 2. Create the target thread
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "window-hooks-create", title = "Window hooks fixture"})
 
@@ -52,6 +61,7 @@ local function execute()
     local owner = tostring(process.pid())
     local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
+    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
     local broker_policy, broker_error = security.policy("bee:broker_policy")
     if not broker_policy then error(tostring(broker_error)) end
     local boundary, boundary_error = security.policy("bee:core_spawn_boundary")
@@ -108,6 +118,20 @@ local function execute()
         error("managed window app failed (" .. tostring(opened.error_code) .. "): " .. tostring(opened.error) .. (last_receipt ~= "" and (": " .. last_receipt) or ""))
     end
     assert(opened.error_code == "", "managed window app did not become ready: " .. tostring(opened.error))
+
+    local checkpoint_deadline = time.after("3s")
+    local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
+    assert(checkpoint_event.channel ~= checkpoint_deadline and checkpoint_event.ok, "window checkpoint was not delivered")
+    local checkpoint_message = checkpoint_event.value
+    assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
+    local checkpoint_data = checkpoint_message:payload():data()
+    assert(type(checkpoint_data) == "table" and checkpoint_data.version == 1
+        and checkpoint_data.resume_schema == "bee.agent.window@1" and type(checkpoint_data.resume_state) == "string",
+        "window checkpoint has an invalid persisted state")
+    local saved_state = checkpoint_data.resume_state :: string
+    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = checkpoint_data.request_id,
+        error_code = "", error = ""}))
+
 
     -- 5. Bind PTY viewport
     assert(process.send(broker, "bee.app.request", {
@@ -251,6 +275,7 @@ local function execute()
     end
     assert(pty_functional_after, "terminal input did not remain functional after hook commit")
 
+
     -- 11. Close application and verify clean shutdown
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
     local closed = false
@@ -285,11 +310,151 @@ local function execute()
     end
     assert(hook_count == 1, "replayed child submissions must leave exactly one hook observation")
 
-    -- 13. Teardown
+    -- 13. Gracefully continue the closed window through the broker's real
+    -- checkpoint restore path, using the application's acknowledged checkpoint.
     view:close()
+    local previous_attempt_id = admission.identities("window-hooks-req").attempt_id
+    assert(process.send(broker, "bee.app.request", {
+        version = 1,
+        request_id = "continuation-open",
+        op = "open",
+        workspace_id = WORKSPACE,
+        definition_id = "bee.harness.window:app",
+        restore_instance_id = opened.instance_id,
+        restore_view_id = opened.id,
+        resume_schema = "bee.agent.window@1",
+        resume_state = saved_state,
+        arguments = {},
+    }))
+
+    local continued: {[string]: unknown}? = nil
+    while not continued do
+        local message = assert(replies:receive())
+        if tostring(message:from()) == broker then
+            local data = message:payload():data()
+            if type(data) == "table" and data.request_id == "continuation-open" and data.op == "open" then
+                continued = data :: {[string]: unknown}
+            end
+        end
+    end
+    assert(continued.error_code == "", "window continuation did not become ready: " .. tostring(continued.error))
+    assert(continued.id == opened.id and continued.instance_id == opened.instance_id, "continuation did not restore the application identity")
+
+    assert(process.send(broker, "bee.app.request", {
+        version = 1,
+        request_id = "bind-two",
+        op = "bind",
+        workspace_id = WORKSPACE,
+        id = continued.id,
+        instance_id = continued.instance_id,
+        recipient = owner,
+    }))
+    local mounted_two = ""
+    while mounted_two == "" do
+        local message = assert(replies:receive())
+        local data = message:payload():data()
+        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then
+            assert(data.error_code == "")
+            mounted_two = tostring(data.mount)
+        end
+    end
+    local view_two = assert(tty.attach(mounted_two))
+    assert(view_two:send({type = "resize", width = 80, height = 24}))
+
+    local retained_home = false
+    local continued_hook_submitted = false
+    for _ = 1, 200 do
+        local frame = view_two:snapshot()
+        local screen = frame and table.concat(frame.rows) or ""
+        if screen:find("HOOK_HOME_SENTINEL:retained", 1, true) then retained_home = true end
+        if screen:find("HOOK_HTTP_CODE:202", 1, true) then continued_hook_submitted = true end
+        if retained_home and continued_hook_submitted then break end
+        time.sleep("50ms")
+    end
+    assert(retained_home, "continuation did not retain the session HOME sentinel")
+    assert(continued_hook_submitted, "continuation hook was not accepted by real gateway")
+
+    local total_hooks = 0
+    local continuation_attempt_id: string? = nil
+    local continuation_binding_id: string? = nil
+    local continuation_session_id: string? = nil
+    for _ = 1, 200 do
+        local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
+        local value = reply(records.value)
+        total_hooks = 0
+        continuation_attempt_id, continuation_binding_id, continuation_session_id = nil, nil, nil
+        for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+            if item.kind == "observation" and item.action_id == admission.identities("window-hooks-req").action_id and type(item.body) == "table" then
+                local body = item.body :: {[string]: unknown}
+                if tostring(body.event_key or ""):find("^hook:") and type(body.data) == "table" then
+                    local data = body.data :: {[string]: unknown}
+                    local decoded = data.payload_json and json.decode(tostring(data.payload_json)) or nil
+                    if type(decoded) == "table" then
+                        local payload = decoded :: {[string]: unknown}
+                        local fields = type(payload.fields) == "table" and payload.fields :: {[string]: unknown} or {}
+                        total_hooks = total_hooks + 1
+                        assert(payload.ambiguous == false, "fixture hook must remain unambiguous")
+                        assert(fields.session_id == "s1", "hook provider conversation changed across continuation")
+                        if item.attempt_id == previous_attempt_id then
+                            assert(payload.binding_id == committed_binding_id, "initial hook binding changed in its own record")
+                        else
+                            continuation_attempt_id = tostring(item.attempt_id or "")
+                            continuation_binding_id = tostring(payload.binding_id or "")
+                            continuation_session_id = tostring(fields.session_id or "")
+                        end
+                    end
+                end
+            end
+        end
+        if total_hooks == 2 and continuation_attempt_id and continuation_attempt_id ~= ""
+            and continuation_binding_id and continuation_binding_id ~= "" and continuation_session_id == "s1" then
+            break
+        end
+        time.sleep("50ms")
+    end
+    assert(total_hooks == 2, "continuation did not preserve the original hook and commit a second hook")
+    assert(continuation_attempt_id and continuation_attempt_id ~= previous_attempt_id, "continuation did not receive a fresh native attempt")
+    assert(continuation_binding_id and continuation_binding_id ~= committed_binding_id, "continuation did not receive a fresh gateway binding")
+    assert(continuation_session_id == "s1", "continuation did not preserve the provider conversation")
+    local old_status = reply(call("bee.placement.native:status", {attempt_id = previous_attempt_id}).value)
+    local old_attempt = reply(old_status.attempt)
+    local new_status = reply(call("bee.placement.native:status", {attempt_id = continuation_attempt_id}).value)
+    local new_attempt = reply(new_status.attempt)
+    assert(old_attempt.execution_state == "exited" and old_attempt.cleanup_state == "complete",
+        "continuation did not complete cleanup of the previous execution")
+    assert(type(old_attempt.session_ref) == "string" and old_attempt.session_ref == new_attempt.session_ref,
+        "continuation changed the retained session identity")
+    assert(old_attempt.action_id == new_attempt.action_id and old_attempt.owner_id == new_attempt.owner_id,
+        "continuation changed the action or owner")
+
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close-two", op = "close", workspace_id = WORKSPACE, id = continued.id}))
+    local closed_two = false
+    while not closed_two do
+        local message = assert(replies:receive())
+        local data = message:payload():data()
+        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close-two" and data.op == "close" then
+            assert(data.error_code == "", "window continuation close failed: " .. tostring(data.error))
+            closed_two = true
+        end
+    end
+    assert(closed_two, "window continuation close failed")
+    local continued_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
+    local continued_receipts = 0
+    for _, item in ipairs(continued_page.records :: {{[string]: unknown}}) do
+        if item.kind == "receipt" then
+            continued_receipts = continued_receipts + 1
+            local body = reply(item.body)
+            assert(body.scope == "attempt" and body.outcome == "cancelled", "expected cancelled continuation receipt")
+        end
+    end
+    assert(continued_receipts == 2, "expected one cancelled receipt per window attempt")
+
+    -- 14. Teardown
+    view_two:close()
     process.terminate(broker)
     process.unlisten(catalogs)
     process.unlisten(replies)
+    process.unlisten(checkpoints)
     io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
 end
 

@@ -136,8 +136,8 @@ Continuation source now verifies the ended attempt, ownership and unambiguous
 conversation observations before requesting any outstanding cleanup through
 `bee.placement.native:cleanup`. It accepts only a completed cleanup reply for the
 same attempt, owner, action and session. Refusal or uncertainty cannot admit a
-replacement. This does not establish cold-window recovery: the terminal-identity
-runtime requirement and interrupted-turn settlement remain separate gates.
+replacement. Interrupted-turn settlement after a process or runtime crash
+remains a separate gate.
 
 The next native-window candidate captures the terminal's optional PID through
 runtime PR #743, then records the Linux process group, start ticks and boot ID
@@ -150,6 +150,20 @@ cleanup by themselves.
 The real PTY fixture verifies persisted identity values, input/resize, observed
 completion and ownership denial. A process-group fixture also proves live
 cleanup refusal and cleanup after observed completion and independent group
-absence. Full conversation recovery remains unproved; this candidate is not
-installed globally yet. Retained
-session directories remain separate from disposable attempt directories.
+absence. Retained session directories remain separate from disposable attempt
+directories. This candidate is not installed globally yet.
+
+Graceful continuation now passes the real managed-window hook acceptance. The
+fixture admits a host-selected session root, acknowledges the application's
+checkpoint, closes the first process, and restores through the broker using that
+checkpoint. The driver receives the recorded provider conversation `s1` and an
+empty brief. Its child reads the exact sentinel written to retained HOME by the
+first child. The new attempt keeps owner/action/session identity, obtains a fresh
+gateway binding, and commits its own authenticated hook. The previous attempt
+is independently observed exited with cleanup complete. No logical turns or
+provider success results are invented.
+
+Evidence: `make window-hooks-check` on the typed runtime,
+`bee-evidence/0912/window-continuation-session-proof.log` (exit 0). This uses a
+fixture harness and the same live runtime/broker. It does not prove provider CLI
+behavior, runtime restart, abrupt crash settlement, or Agy/Grok hook support.

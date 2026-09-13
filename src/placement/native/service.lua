@@ -530,6 +530,20 @@ function M.stop(value: unknown): Reply
 end
 -- stop_attempt is the owner-independent core shared with supervision.
 function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
+    if attempt.execution_state == "intended" then
+        -- Both runners must claim starting before materializing files or
+        -- creating a child. Winning that same claim proves there is nothing
+        -- to signal or remove and releases the retained session atomically.
+        local stopped = transition(attempt.attempt_id, {expected_execution = "intended",
+            execution = "exited", cleanup = "complete", evidence = {
+                kind = "stop.before_start", detail = "stopped before runner claim; no child or attempt home was created"}})
+        if stopped.ok or not stopped.error or stopped.error.code ~= "CONFLICT" then return stopped end
+        -- Startup may have won. Use its recorded identity and normal stop
+        -- path; never infer that the now-starting child is absent.
+        local current, denied = load(attempt.attempt_id)
+        if not current then return denied :: Reply end
+        attempt = current
+    end
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
     local recorded, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil

@@ -24,7 +24,16 @@ unverified and no Bee-specific cause is established. See
 recovery across all harnesses, surviving orphan cleanup, and policy-controlled
 sharing. Some post-picker launch failures still close the window instead of
 leaving a readable failure surface. Native Docker module composition is present
-in the candidate; it does not make Docker selectable or usable in the Agent UI.
+in the installed build; it does not make Docker selectable or usable in the Agent UI.
+
+The next source change corrects `stop` before placement startup: it atomically
+retires the unstarted attempt and releases its retained session. Both runners
+must claim startup before creating files or a child, so a delayed start is fenced
+without deleting the retained home. No new abort operation or migration is added.
+The baseline regression fails and all 865 fixed unit tests pass, including
+concurrent start/stop in both request orders. Managed-window checks pass too;
+the next full release gate remains pending.
+This change is not in global `c8537ef7`.
 
 Previous global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor

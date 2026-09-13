@@ -257,6 +257,60 @@ local function define_tests()
         local measured = value(service.capabilities())
         local capability = tostring(measured.capability)
         local observation = tostring(measured.exit_observation)
+        test.it("stops an unstarted retained attempt without holding its session or creating a child", function()
+            for _, required in ipairs({"direct_process", "process_group"}) do
+                if types.satisfies(capability :: types.Capability, required :: types.Capability) then
+                    local session_ref = fresh("stopped-before-start")
+                    local request = retained_launch(OWNER, session_ref, "must-not-run")
+                    request.required_cleanup = required
+                    local prepared = attempt_of(call(OWNER, "prepare", request))
+                    local foreign = call("bee.test.other", "stop", {attempt_id = prepared.attempt_id})
+                    test.is_false(foreign.ok)
+                    local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+                    test.eq(stopped.execution_state, "exited")
+                    test.eq(stopped.cleanup_state, "complete")
+                    test.eq(stopped.runner, nil)
+                    local replay = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+                    test.eq(replay.evidence_count, stopped.evidence_count)
+                    local delayed = attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                    test.eq(delayed.execution_state, "exited")
+                    test.eq(delayed.evidence_count, stopped.evidence_count)
+                    local db = assert(store.open())
+                    local row = assert(store.row(db, prepared.attempt_id))
+                    test.eq(row.home_key, nil)
+                    test.eq(row.pid, nil)
+                    db:release()
+                    local successor = retained_launch(OWNER, session_ref, "successor")
+                    successor.required_cleanup = required
+                    local admitted = attempt_of(call(OWNER, "prepare", successor))
+                    test.eq(admitted.execution_state, "intended")
+                    test.eq(attempt_of(call(OWNER, "stop", {attempt_id = admitted.attempt_id})).cleanup_state, "complete")
+                end
+            end
+        end)
+        test.it("fences concurrent start and stop without retaining an unstarted session", function()
+            for index = 1, 4 do
+                local session_ref = fresh("start-stop-race")
+                local request = retained_launch(OWNER, session_ref, "race")
+                request.required_cleanup = capability
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                local first = index % 2 == 0 and "stop" or "start"
+                local second = first == "stop" and "start" or "stop"
+                local a, a_error = caller(OWNER):async("bee.placement.native:" .. first, {attempt_id = prepared.attempt_id})
+                local b, b_error = caller(OWNER):async("bee.placement.native:" .. second, {attempt_id = prepared.attempt_id})
+                if a_error or not a or b_error or not b then error("start/stop race: " .. tostring(a_error or b_error)) end
+                local first_reply, second_reply = await(a), await(b)
+                local stop_reply = first == "stop" and first_reply or second_reply
+                test.is_true(stop_reply.ok)
+                test.is_true(wait_for(function()
+                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt
+                    return current.execution_state == "exited"
+                end, 8000))
+                test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
+                local successor = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "after-race")))
+                test.eq(attempt_of(call(OWNER, "stop", {attempt_id = successor.attempt_id})).cleanup_state, "complete")
+            end
+        end)
         test.it("refuses native and gateway environment collisions before intent", function()
             for _, kind in ipairs({"home", "home_ref", "gateway", "hook", "shared_token", "gateway_home"}) do
                 local request = launch({"sh", "-c", "true"}, "direct_process")

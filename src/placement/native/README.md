@@ -22,6 +22,12 @@ session directories live under a placement-owned root.
    transaction, not a home lock or a separate manager.
 2. `start` spawns the runner under the placement scope and waits for its
    startup acknowledgment within the admitted start budget.
+   `stop` before the runner claims startup atomically records exit and complete
+   cleanup, releasing the retained session without touching its existing files.
+   A delayed start cannot claim that stopped attempt; repeated stops return its
+   recorded state. If startup wins the claim, normal runner stop and cleanup
+   proof still apply. Thread receipts and gateway revocation retain their own
+   owners; placement completion does not settle either operation.
 3. Both structured and window runners atomically claim `intended` as `starting`
    before creating files. A duplicate runner refuses without replacing the
    recorded runner identity or materializing the attempt home. A launch that

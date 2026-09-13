@@ -15,7 +15,7 @@ local function request(attempt_id: string): {[string]: unknown}
     return {idempotency_key = "window-key-" .. attempt_id, owner_id = OWNER, owner_incarnation = 1,
         action_id = "window-action-" .. attempt_id, attempt_id = attempt_id, binding_ref = "bee.window_native:binding",
         policy_ref = POLICY, profile_id = "window", binding_digest = string.rep("a", 64), profile_digest = string.rep("b", 64),
-        launch = {executable = "sh", argv = {"-c", "IFS= read -r line; printf 'WINDOW:%s\\n' \"$line\"; stty size; sleep 1"}, environment = {}, working_directory_ref = nil, readiness = "none"},
+        launch = {executable = "sh", argv = {"-c", "IFS= read -r line; printf 'WINDOW:%s\\n' \"$line\"; stty size; sleep 30"}, environment = {}, working_directory_ref = nil, readiness = "none"},
         resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
         required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
 end
@@ -83,6 +83,15 @@ local function run()
         if type(data) == "table" and tostring(message:from()) == owner_child then
             if data.phase == "open" then
                 saw_open = data.ok == true and data.duplicate_ok == false
+                -- A raw process message cannot authorize stopping the child.
+                process.send(owner_child, "bee.placement.control", {command = "stop", mode = "forced", grace_ms = 0})
+                time.sleep("100ms")
+                local reconciled, reconcile_error = caller():call("bee.placement.native:reconcile", {attempt_id = prepared})
+                local reply = type(reconciled) == "table" and reconciled :: {[string]: unknown} or nil
+                local attempt = reply and type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+                test.is_nil(reconcile_error)
+                test.eq(reply and reply.ok, true)
+                test.eq(attempt and attempt.execution_state, "running", "live terminal retains supervised running state")
                 if foreign_child == "" then
                     foreign_child = assert(process.with_options({}):with_actor(security.new_actor(FOREIGN)):with_scope(child_scope())
                         :spawn_monitored("bee.window_native:child", "bee:workers", parent, prepared, "foreign"))
@@ -90,10 +99,14 @@ local function run()
             elseif data.phase == "io" then
                 saw_io = data.sent == true and data.resized == true
                 if saw_io and wait_for(view, "WINDOW:hello from window", 3000) and wait_for(view, "10 30", 3000) then
+                    local stopped, stop_error = caller():call("bee.placement.native:stop", {attempt_id = prepared})
+                    local stop_reply = type(stopped) == "table" and stopped :: {[string]: unknown} or nil
+                    test.is_nil(stop_error)
+                    test.eq(stop_reply and stop_reply.ok, true)
                     process.send(tostring(owner_child), "bee.window.native.close." .. parent, {})
                 end
             elseif data.phase == "close" then
-                saw_io = saw_io and data.closed == true and data.timed_out ~= true
+                saw_io = saw_io and data.closed == true and data.timed_out ~= true and data.stop_seen == true
             elseif data.phase == "finish" then
                 saw_finish = data.finished == true
             end

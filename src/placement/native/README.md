@@ -223,3 +223,18 @@ including file digests, paths and argument bounds, before creating a home or
 starting a child. Malformed stored content is a storage failure. Its retry
 digest still identifies the original caller request; resolved resource grants
 in the stored request do not redefine that identity.
+
+## Managed terminal supervision
+
+The process-local window owns its PTY and answers the existing placement status
+probe without consuming the application's terminal completion channel. The
+periodic sweep therefore rechecks grants without marking a live Agent uncertain
+merely because a PTY exposes no host execution identity. This reply proves live
+supervision, not post-crash execution absence or cleanup.
+
+Stop notifications are acted on only after the placement store records `stopping`
+for the exact attempt, owner and runner. An arbitrary process message cannot
+stop the window. The window retires its listener when finalization commits.
+Native PTY acceptance proves live reconciliation, raw-stop denial, admitted stop,
+input, resize, finalization and duplicate/foreign-owner refusal. A native Agent
+fixture also keeps its MCP binding live across the real 30-second sweep.

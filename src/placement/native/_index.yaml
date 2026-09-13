@@ -211,6 +211,7 @@ entries:
   source: file://window.lua
   modules: [process, exec, tty, security, funcs]
   imports:
+    protocol: bee.placement.native:protocol
     store: bee.placement.native:store
     resources: bee.placement.native:resources
     materialization: bee.placement.native:materialization

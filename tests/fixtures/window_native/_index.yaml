@@ -31,7 +31,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.placement.native:prepare, bee.placement.native:status, bee.placement.native:cleanup]
+    resources: [bee.placement.native:prepare, bee.placement.native:status, bee.placement.native:cleanup, bee.placement.native:reconcile, bee.placement.native:stop]
     effect: allow
 - name: child_policy
   kind: security.policy

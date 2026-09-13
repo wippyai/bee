@@ -962,8 +962,10 @@ func savedProfileLaunch(binary string) error {
 	if resolved, helperErr := filepath.EvalSymlinks(os.Args[0]); helperErr == nil {
 		helper = resolved
 	}
+	// Keep the child alive beyond placement's 30-second sweep before MCP I/O.
+	// A missing PTY supervision reply used to revoke this live binding.
 	const guidance = "Saved launch guidance."
-	script := "#!/bin/sh\nset -eu\ncase \" $* \" in *\" --effort high \"*) ;; *) exit 1 ;; esac\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " --subset \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
+	script := "#!/bin/sh\nset -eu\ncase \" $* \" in *\" --effort high \"*) ;; *) exit 1 ;; esac\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nsleep 35\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " --subset \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
 	if err := os.WriteFile(filepath.Join(project, "bin", "agy"), []byte(script), 0700); err != nil {
 		return err
 	}
@@ -1008,7 +1010,7 @@ func savedProfileLaunch(binary string) error {
 	if err := ui.send("\r"); err != nil {
 		return err
 	}
-	if err := ui.waitFor("BEE_SAVED_PROFILE_GUIDANCE", 25*time.Second); err != nil {
+	if err := ui.waitFor("BEE_SAVED_PROFILE_GUIDANCE", 65*time.Second); err != nil {
 		return fmt.Errorf("saved profile launch did not deliver guidance: %w", err)
 	}
 	data, err := os.ReadFile(marker)

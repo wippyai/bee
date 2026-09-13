@@ -29,11 +29,14 @@ local function main(parent: string, attempt_id: string, mode: string)
     local timeout = time.after("5s")
     local selected = channel.select({closes:case_receive(), timeout:case_receive()})
     process.unlisten(closes)
+    local stopped = channel.select({facade:done():case_receive(), time.after("2s"):case_receive()})
+    local state = facade:status()
+    local stop_seen = stopped.ok and state == "done"
     local closed, close_error = facade:close()
-    process.send(parent, "bee.window.native.result", {phase = "close", closed = closed, timed_out = selected.channel == timeout,
+    process.send(parent, "bee.window.native.result", {phase = "close", closed = closed, stop_seen = stop_seen, timed_out = selected.channel == timeout,
         error = close_error or ""})
     local done = facade:done()
-    done:receive()
+    if not stop_seen then done:receive() end
     local finished, finish_error = facade:finish()
     process.send(parent, "bee.window.native.result", {phase = "finish", finished = finished, error = finish_error or ""})
 end

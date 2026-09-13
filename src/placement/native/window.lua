@@ -17,6 +17,7 @@ local executable = require("executable")
 local quote = require("quote")
 local funcs = require("funcs")
 local service = require("service")
+local protocol = require("protocol")
 
 type Options = {width: integer, height: integer, term: string, expected_binding: string?}
 type Window = {
@@ -175,6 +176,41 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
 
     local closed = false
     local finished = false
+    local controls = process.listen(protocol.TOPIC_CONTROL, {message = true})
+    if not controls then
+        terminal:close()
+        executor:release()
+        return fail(db, "window control listener unavailable", gateway_binding, attempt_id)
+    end
+    -- The PTY owner is the recorded runner. Answer the same supervision probe
+    -- as a streamed runner, without consuming the application's done channel.
+    -- A stop message alone carries no authority: the placement service must
+    -- have committed stopping for this exact attempt first.
+    coroutine.spawn(function()
+        while not finished do
+            local message, ok = controls:receive()
+            if not ok or finished then return end
+            local raw: unknown = message:payload():data()
+            if type(raw) == "table" then
+                local data = raw :: {[string]: unknown}
+                if data.command == "status" and data.attempt_id == attempt_id and bounds.id(data.probe) then
+                    local state = terminal:status()
+                    process.send(tostring(message:from()), protocol.TOPIC_STATUS, {
+                        attempt_id = attempt_id, generation = generation, probe = data.probe,
+                        execution = state == "done" and "exited" or (closed and "stopping" or "running"),
+                        eof_seen = 0, pending_outputs = 0, remembered_writes = 0, truncated = false,
+                    })
+                elseif data.command == "stop" then
+                    local current = store.row(db, attempt_id)
+                    if current and current.owner_id == owner and current.runner_pid == process.pid()
+                        and current.execution_state == "stopping" then
+                        local stopped = terminal:close()
+                        if stopped then closed = true end
+                    end
+                end
+            end
+        end
+    end)
     local function retire_gateway(why: string)
         if not gateway_binding then return end
         local binding = gateway_binding
@@ -199,6 +235,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             finished = false
             return false, ended.message or "record terminal exit"
         end
+        process.unlisten(controls)
         retire_gateway("terminal session completed")
         executor:release()
         db:release()

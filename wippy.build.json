@@ -25,6 +25,10 @@
       {
         "path": "build/patches/runtime-application-artifact-cache.patch",
         "sha256": "60d546ab0425c41f2bfae5a9ded6261af327c42eddada53de0ee4618baff5081"
+      },
+      {
+        "path": "build/patches/runtime-terminal-session-identity.patch",
+        "sha256": "e2e9db6733aea25f9ec3e19c7749b074cde51b7b85b25692a5cd7325e50c4d33"
       }
     ]
   },

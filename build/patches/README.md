@@ -29,3 +29,13 @@ stacked on PR #726. It uses the existing registry vendor configuration to retain
 exact installed artifacts across embedded bundle changes. Atomic publication
 checks copied bytes and preserves existing artifacts and registry history.
 The PR is open and assigned to Rodrigo. Its upstream MPL license is preserved.
+
+`runtime-terminal-session-identity.patch` composes runtime PR
+[#743](https://github.com/wippyai/runtime/pull/743), through commit
+`42732c141922c4a28531f7eddb953750090dc465`, onto the same pin. It preserves the
+optional host process identity after PTY ownership transfers to a terminal
+session. `TerminalSession:pid()` returns an optional integer and an optional
+error; startup remains asynchronous, with a retryable unavailable result until
+it completes. A PID is not proof of process-group absence. The PR is open,
+assigned to Rodrigo (`skhaz`), and unmerged. Upstream MPL licenses are preserved.
+Affected race suites, vet, repository-pinned lint and Bee toolchain assembly pass.

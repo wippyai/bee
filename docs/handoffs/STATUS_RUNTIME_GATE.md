@@ -318,3 +318,18 @@ The live-window supervision issue is fixed in Bee itself: the owner answers the
 existing status probe and honors only committed stop intent. It does not solve
 post-crash identity, turn settlement or provider-session recovery. Evidence and
 global provenance are recorded in [GLOBAL_BUILD.md](GLOBAL_BUILD.md).
+
+## Terminal identity candidate — September 13
+
+Runtime PR #743 (assigned `skhaz`, unmerged) preserves optional process identity
+across `attach_terminal()` and exposes typed `TerminalSession:pid()`. It does
+not change asynchronous attachment or add a remote-monitor protocol. Pending
+startup yields a retryable unavailable error; unsupported identity is explicit.
+The Bee build manifest composes the checked patch on its existing runtime pin.
+
+The affected exec/proxy race suites, vet and golangci-lint v2.13.2 pass. Candidate
+`bee-evidence/0912/bee-terminal-identity-typed-runtime` builds via `make native-tools`.
+Native-window identity capture and cold conversation recovery acceptance remain
+in progress. Neither PID availability nor terminal completion proves process-group
+absence; existing cleanup must still establish that independently. The global
+Bee binary remains unchanged by this candidate.

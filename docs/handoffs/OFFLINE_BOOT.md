@@ -5,6 +5,34 @@ local artifacts without reaching the Hub. Dependency downloads belong to explici
 installation and update operations. Missing local content must produce a local
 error; startup must not silently resolve a different version or discard overlays.
 
+## Reusable repository acceptance
+
+`make offline-boot-check BEE_BINARY=/absolute/path/to/bee` runs the public
+source-free acceptance in a disposable Linux network namespace. The target first
+requires Linux, `unshare`, and `ip`; it fails when unprivileged namespace
+isolation cannot be created or when any interface other than `lo` is present.
+It enables only loopback for the local Bee owner/client path. The test process
+receives an empty environment apart from temporary `HOME`, terminal settings,
+locale, `PATH` and the resolved Python helper site, so it cannot use the
+caller's database paths or credentials.
+
+The target composes the existing `tests/native_binary.py` helper and the
+`run` helper from `tests/native_client.py` (selected through the shell target's
+inline dispatch). Together they prove fresh source-free boot, second boot
+against the same disposable state, a public cold owner launch, frame-bearing
+Terminal interaction, client detach, retained shell state and warm public
+reconnect with F12 rejoin. The helpers remove their temporary fixtures on
+success and preserve their normal failure diagnostics. Process survival
+without a frame is not sufficient for either launch.
+
+This target does not copy a user's registry or deployment vendors and does not
+claim restored-install startup. The external restored-install proof remains a
+separate evidence exercise until a safe, reproducible fixture is available.
+
+The target passes against installed global `aa22527c` on September 13, including
+Settings recovery, native terminal interaction and retained-client reconnect
+(0.106 s warm). Evidence: `bee-evidence/0912/offline-repository-global.log`.
+
 The September 12 reported failures reproduced against a private copy of the
 registry with networking disabled. Changing the embedded bundle selects a new
 deployment directory, while the registry retains installed dependency identities.

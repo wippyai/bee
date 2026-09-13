@@ -64,6 +64,14 @@ native-upgrade-check:
 native-client-check:
 	python3 tests/native_client.py "$(BEE_BINARY)"
 
+# Reusable release acceptance: Linux network namespace, disposable state and
+# frame-bearing public desktop/reconnect checks. Restored-install fixtures stay
+# outside the repository target because they require an independently reviewed
+# registry backup and artifact set.
+.PHONY: offline-boot-check
+offline-boot-check:
+	tests/offline_boot.sh "$(abspath $(BEE_BINARY))"
+
 # Longer diagnostic gate for repeated departures; no user's Bee is touched.
 .PHONY: native-client-retention-check
 native-client-retention-check:

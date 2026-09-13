@@ -4,6 +4,25 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+The integration audit confirms that the current application scope is selected
+by the broker before spawning the managed window (`core/applications/broker.lua`).
+The window later claims its attempt and materializes configuration in
+`placement/native/window.lua`. A container ID discovered at that point is not
+already an exact permission in the application's spawn scope. Runtime
+`funcs.new():with_scope(...)` changes the called task's context, not the caller's
+frame. The native Docker frame test also proves that a child frame cannot use
+the parent's terminal grant. Moving attachment into a privileged function is
+therefore not a demonstrated solution. Do not grant the app scope-management
+authority or unrestricted daemon access to bridge this gap. Exact attachment
+admission remains an integration requirement, not a new runtime API requirement.
+
+The other required seam is container gateway delivery: the current endpoint
+decoder accepts only `127.0.0.1`, and the narrow Docker configuration permits only
+HOME/TMPDIR environment entries. That combination cannot deliver the existing
+container hooks/MCP workflow. Resolve endpoint reachability and admitted token
+delivery together before enabling a Docker profile; do not label a terminal-only
+container as a completed managed Agent.
+
 `bee.placement.docker:configuration` now supplies an internal pure projection
 from explicit image, sandbox limits, admitted mount paths and attempt labels to
 the existing narrow Docker create config. It preserves argument boundaries and

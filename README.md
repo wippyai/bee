@@ -26,8 +26,10 @@ bee agy
 ```
 
 Agent commands open fullscreen and receive the arguments you pass after their
-name. They must already be installed on PATH. These are native terminal sessions;
-Bee-specific agent hooks and MCP integration are not implemented yet.
+name. They must already be installed on PATH. These commands run native terminal
+sessions. Managed Agent profiles additionally provide scoped MCP and
+driver-specific thread hooks; see [saved profiles](docs/handoffs/SAVED_AGENT_PROFILES.md)
+for setup and verified harness support. Managed Docker launch remains unfinished.
 
 Run `bee observe` in another terminal to view the running Bee read-only. It shares
 the retained desktop; typing cannot control its apps. Ctrl+Q or Ctrl+] detaches

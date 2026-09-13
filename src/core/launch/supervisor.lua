@@ -27,11 +27,38 @@ local function run_supervisor(client: string, database_resource: string?, retain
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
     local host = ""
+    local workspace_id = ""
+    local exit_ready: Channel<process.Message>? = nil
+    local failure_notified = false
     local function listen(topic: string): Channel<process.Message>
         local value, err = process.listen(topic, {message = true})
         if not value then error(tostring(err)) end
         subscriptions[#subscriptions + 1] = value
         return value
+    end
+    local function notify_client_failure(failure: string)
+        local recipient = client
+        local workspace = workspace_id
+        local acknowledgements = exit_ready
+        if failure_notified or recipient == "" or workspace == "" or not acknowledgements then return end
+        failure_notified = true
+        -- Failure reporting is best effort. Never let a dead client, closed
+        -- channel, or malformed queued message replace the original failure or
+        -- prevent the cleanup below from running.
+        pcall(function()
+            local request_id = uuid.v7()
+            local sent = process.send(recipient, "bee.client.control", {version = 1, workspace_id = workspace,
+                request_id = request_id, op = "exit", error = #failure <= 4096 and failure or failure:sub(1, 4096)})
+            if not sent then return end
+            local deadline = time.after("1s")
+            while true do
+                local selected = channel.select({acknowledgements:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then return end
+                local message = selected.value
+                if tostring(message:from()) == recipient
+                    and protocol.request(message:payload():data(), workspace) == request_id then return end
+            end
+        end)
     end
     local function run()
         -- This owner monitors remote physical recipients as well as local
@@ -51,7 +78,8 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local renderers, results = listen("bee.client.renderer"), listen("bee.host.client_result")
         local quits, answers = listen("bee.client.quit"), listen("bee.client.shutdown_answer")
         local questions, replies = listen("bee.interaction.state"), listen("bee.app.reply")
-        local saved, finished = listen("bee.client.saved"), listen("bee.client.exit_ready")
+        local saved = listen("bee.client.saved")
+        exit_ready = listen("bee.client.exit_ready")
         local events, event_error = process.events()
         if not events then error(tostring(event_error)) end
         assert(process.monitor(retained_owner or client))
@@ -64,7 +92,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
         local self = tostring(process.pid())
         host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = self})
             :with_scope(security.new_scope(policies)):spawn_monitored("bee.host:main", "bee:workers", self, database_resource)))
-        local workspace_id, connection_id = "", ""
+        local connection_id = ""
         local phase: Phase = "booting"
         local pending = ""
         local quit_pending = false
@@ -141,7 +169,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
             local current_storage = storage_pending
             local cases = {hosts:case_receive(), ready:case_receive(), results:case_receive(),
                 answers:case_receive(), questions:case_receive(), replies:case_receive(),
-                saved:case_receive(), finished:case_receive(), events:case_receive(), copy_results:case_receive(), catalog_readers:case_receive(), launch_results:case_receive()}
+                saved:case_receive(), exit_ready:case_receive(), events:case_receive(), copy_results:case_receive(), catalog_readers:case_receive(), launch_results:case_receive()}
             if phase == "running" or retained_displays then
                 cases[#cases + 1] = renderers:case_receive()
                 cases[#cases + 1] = quits:case_receive()
@@ -218,7 +246,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 local data: unknown = message:payload():data()
                 local topic = selected.channel == ready and "ready" or selected.channel == results and "result"
                     or selected.channel == renderers and "renderer" or selected.channel == quits and "quit"
-                    or selected.channel == saved and "saved" or selected.channel == finished and "finished" or ""
+                    or selected.channel == saved and "saved" or selected.channel == exit_ready and "finished" or ""
                 if retained_displays and topic ~= "" and desktop_lifecycle.receive(retained_displays, topic, sender, data) then
                     -- This retained display owns its lifecycle message.
                 elseif selected.channel == activations and sender == retained_owner and retained_displays and announced then
@@ -441,13 +469,14 @@ local function run_supervisor(client: string, database_resource: string?, retain
                 elseif selected.channel == saved and sender == client and phase == "saving" and protocol.request(data, workspace_id) == pending then
                     pending = uuid.v7(); advance("stopping")
                     send(host, "bee.app.request", {version = 1, workspace_id = workspace_id, request_id = pending, op = "shutdown"})
-                elseif selected.channel == finished and sender == client and phase == "finishing" and protocol.request(data, workspace_id) == pending then
+                elseif selected.channel == exit_ready and sender == client and phase == "finishing" and protocol.request(data, workspace_id) == pending then
                     return
                 end
             end
         end
     end
     local ok, err = pcall(run)
+    if not ok then notify_client_failure(tostring(err)) end
     if storage_pending then desktop_storage.cancel(storage_pending) end
     if retained_displays then desktop_lifecycle.close(retained_displays) end
     if retained_owner and client ~= "" then process.terminate(client) end

@@ -36,7 +36,18 @@ local function define_tests()
             test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = 7}))
         end)
         test.it("refuses foreign workspace and ambiguous shutdown control", function()
-            local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit"}
+            local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit", error = "Supervisor failed"}
+            local fatal = lifecycle.control(value, workspace)
+            if not fatal then error("Missing fatal exit control") end
+            test.eq(fatal.error, "Supervisor failed")
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = true}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = string.rep("x", 4097)}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = "Must not save", shutdown = {version = 1, request_id = "q", id = "application", instance_id = "instance",
+                    kind = "confirm", title = "Stop?", message = "", accept = "Stop"}}, workspace))
+            value.error = nil
             test.not_nil(lifecycle.control(value, workspace))
             value.op = "save"
             test.not_nil(lifecycle.control(value, workspace))

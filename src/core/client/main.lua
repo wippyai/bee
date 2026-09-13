@@ -630,6 +630,13 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 if not saved_for_exit then save_before_exit(); saved_for_exit = true end
                                 send(owner, "bee.client.saved", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
                             elseif control.op == "exit" then
+                                if control.error then
+                                    -- The fatal control is authoritative even if
+                                    -- its best-effort acknowledgement cannot be
+                                    -- delivered to an owner already unwinding.
+                                    process.send(owner, "bee.client.exit_ready", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
+                                    error(control.error)
+                                end
                                 if not saved_for_exit then save_before_exit() end
                                 send(owner, "bee.client.exit_ready", {version = 1, workspace_id = workspace_id, request_id = control.request_id})
                                 break

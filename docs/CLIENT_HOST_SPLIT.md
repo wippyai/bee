@@ -166,11 +166,19 @@ Trusted bootstrap may instead select `quit_mode = "supervisor"` in its final
 version-1 options record. Keyboard and menu quit then send `bee.client.quit` to
 the bootstrapped owner and keep the client alive. Only that owner can send
 workspace-qualified `bee.client.control` messages: `state` supplies or clears a
-validated global shutdown confirmation, while `exit` saves the committed client
-projection and begins cleanup. `bee.client.shutdown_answer` returns the exact
+validated global shutdown confirmation, while a normal `exit` saves the committed
+client projection and begins cleanup. A fatal `exit` may carry bounded diagnostic
+text; the client acknowledges it without saving an incomplete projection, then
+raises that original error. `bee.client.shutdown_answer` returns the exact
 question identity and decision to the owner. `bee.client.exit_ready` acknowledges
-the final save; actual process EXIT establishes termination. Ordinary client
-admission does not grant host shutdown authority.
+the final save or fatal handoff; actual process EXIT establishes termination.
+Ordinary client admission does not grant host shutdown authority.
+
+On supervisor failure, the existing control route carries the diagnostic before
+dependency teardown. The supervisor waits at most one second for the exact
+client/workspace/request acknowledgement; notification failure does not prevent
+cleanup or replace the original error. A forced teardown-ordering probe passes
+from source and pack, preserving the diagnostic and the saved application state.
 
 For local runtime exit, `save` first commits the final projection and responds
 with `bee.client.saved`. The client retains its display while consuming only

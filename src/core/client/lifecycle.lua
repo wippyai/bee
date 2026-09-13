@@ -41,10 +41,15 @@ function M.control(value: unknown, workspace_id: string): Control?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
     local request_id = contract.text(value.request_id, 80)
     if not request_id or request_id == "" then return nil end
-    if value.op ~= "state" and value.error ~= nil then return nil end
+    if value.op ~= "state" and value.op ~= "exit" and value.error ~= nil then return nil end
     if value.op == "exit" then
         if value.shutdown ~= nil then return nil end
-        return {op = "exit", request_id = request_id, shutdown = nil, error = nil}
+        local failure: string? = nil
+        if value.error ~= nil then
+            if type(value.error) ~= "string" or #value.error > 4096 then return nil end
+            failure = value.error
+        end
+        return {op = "exit", request_id = request_id, shutdown = nil, error = failure}
     end
     if value.op == "save" then
         if value.shutdown ~= nil then return nil end

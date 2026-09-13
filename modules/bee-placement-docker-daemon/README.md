@@ -75,8 +75,23 @@ stop/cleanup confirms removal. Foreign ownership and ordinary-caller access to
 internal reconciliation are refused. Failure cleanup only targets the fixture's
 unpredictable attempt label.
 
-This fixture deliberately supplies host authority to its test command. It does
-not prove the Agent app's production permission composition, Docker PTY menu
-launch, credential/MCP delivery or retained conversation recovery. Those remain
-required before public managed Docker activation. Its identity-preserving home
-mount also does not prove configuration delivery under translated home paths.
+Fixture setup has host authority, but every lifecycle operation runs through a
+caller scope containing only the public function targets. The caller cannot read
+the placement database directly. Service entries supply their own store,
+configuration, credential and daemon permissions. The default socket policy
+refuses access; the fixture host selects its exact socket before starting.
+
+The lightweight Docker placement component ships the Agent's native attachment
+policy. It permits only the canonical native daemon reference
+`bee.placement.docker.daemon:daemon_ref` and a matching authenticated owner label.
+The native module still verifies the actual container image, labels and start
+identity on attachment. The host must configure `bee.docker.reference` to that
+reference, `bee.docker.host` to the same Unix socket selected by the daemon
+adapter, and the optional component's `socket_policy` to allow only that socket.
+The service scope contains no `exec.run` permission.
+
+The native boot acceptance uses the production attachment policy and proves
+foreign-owner rejection before daemon I/O. Agent menu/PTY launch,
+credential/MCP delivery and retained conversation recovery remain unverified.
+The lifecycle fixture's identity-preserving home mount also does not prove
+configuration delivery under translated home paths.

@@ -25,3 +25,12 @@ entries:
   modules: [funcs, process, docker_pty, exec, tty]
   imports:
     bounds: bee.threads.records:bounds
+- name: attachment_policy
+  kind: security.policy.expr
+  meta:
+    comment: The Agent may attach only its own container on the host-selected Bee Docker daemon
+  policy:
+    actions: [docker.attach]
+    resources: '*'
+    effect: allow
+    expression: 'resource matches "^bee[.]placement[.]docker[.]daemon:daemon_ref/[0-9a-f]{64}$" && meta.labels["bee.actor_ref"] == actor.id'

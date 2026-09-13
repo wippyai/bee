@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -39,6 +38,24 @@ func run() error {
 	if err := os.Mkdir(filepath.Join(root, "src"), 0700); err != nil {
 		return err
 	}
+	// Load the actual lightweight placement component, including its attachment
+	// policy, so this proves the shipped authority rule rather than a fixture copy.
+	if err := os.CopyFS(filepath.Join(root, "src/placement"), os.DirFS("src/placement/docker")); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(root, "src/bounds"), 0700); err != nil {
+		return err
+	}
+	bounds, err := os.ReadFile("src/threads/records/bounds.lua")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "src/bounds/bounds.lua"), bounds, 0600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(root, "src/bounds/_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n"), 0600); err != nil {
+		return err
+	}
 	socket := filepath.Join(root, "daemon.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -54,7 +71,7 @@ func run() error {
 	host, _ := json.Marshal("unix://" + socket)
 	files := map[string]string{
 		"wippy.lock":  "directories:\n  src: src\n  modules: .wippy\n",
-		".wippy.yaml": "version: '1.0'\nbee:\n  docker:\n    reference: fixture:docker\n    host: " + string(host) + "\n",
+		".wippy.yaml": "version: '1.0'\nbee:\n  docker:\n    reference: bee.placement.docker.daemon:daemon_ref\n    host: " + string(host) + "\n",
 		"src/_index.yaml": `version: '1.0'
 namespace: app
 entries:
@@ -72,23 +89,17 @@ entries:
       name: check
       security:
         actor: {id: fixture}
-        policies: [app:attach]
-- name: attach
-  kind: security.policy
-  policy:
-    actions: [docker.attach]
-    resources: ['fixture:docker/` + strings.Repeat("a", 64) + `']
-    effect: allow
+        policies: [bee.placement.docker:attachment_policy]
 `,
 		"src/check.lua": `local docker = require("docker_pty")
 local function main()
     local child, err = docker.attach({container_id=string.rep("a",64),
-        image_id="sha256:"..string.rep("b",64), started_at="2026-09-13T10:00:00.123456789Z", labels={attempt="fixture"}})
+        image_id="sha256:"..string.rep("b",64), started_at="2026-09-13T10:00:00.123456789Z", labels={["bee.actor_ref"]="fixture"}})
     if not child then error(tostring(err)) end
     child:close(true)
     local denied, denial = docker.attach({container_id=string.rep("c",64),
-        image_id="sha256:"..string.rep("b",64), started_at="2026-09-13T10:00:00.123456789Z", labels={attempt="fixture"}})
-    if denied or not denial then error("unapproved container was accepted") end
+        image_id="sha256:"..string.rep("b",64), started_at="2026-09-13T10:00:00.123456789Z", labels={["bee.actor_ref"]="foreign"}})
+    if denied or not denial then error("foreign container was accepted") end
     return true
 end
 return {main=main}
@@ -137,6 +148,6 @@ return {main=main}
 	if count := requests.Load(); count != 0 {
 		return fmt.Errorf("boot/constructor/refusal contacted daemon %d times", count)
 	}
-	fmt.Println("PASS: configured/unconfigured Docker module boot, strict types, authorized handle and denied container; no daemon I/O")
+	fmt.Println("PASS: configured/unconfigured Docker module boot, strict types, production owner policy and denied foreign container; no daemon I/O")
 	return nil
 }

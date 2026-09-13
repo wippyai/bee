@@ -111,6 +111,17 @@ entries:
 - name: allow
   kind: security.policy
   policy: {actions: '*', resources: '*', effect: allow}
+- name: caller
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: ['bee.placement.docker:*', 'bee.docker_acceptance:probe']
+    effect: allow
+- name: probe
+  kind: function.lua
+  source: file://probe.lua
+  method: handle
+  modules: [security]
 - name: driver
   kind: contract.binding
   meta: {type: harness.driver, driver_id: docker_acceptance}
@@ -144,7 +155,11 @@ entries:
   data: {socket_path: ` + string(socketJSON) + `}
 `
 	script := strings.ReplaceAll(lifecycleLua, "ATTEMPT", attempt)
-	for path, contents := range map[string]string{"src/docker_acceptance/_index.yaml": manifest, "src/docker_acceptance/check.lua": script, "src/docker_acceptance/configure.lua": `return {handle=function(_:unknown): {[string]:unknown} return {ok=true, delivery={arguments={},files={}}} end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n  src: src\n  modules: .wippy\n"} {
+	socketExpression, _ := json.Marshal("resource == " + string(socketJSON))
+	script = strings.ReplaceAll(script, "SOCKET_EXPRESSION", string(socketExpression))
+	for path, contents := range map[string]string{"src/docker_acceptance/_index.yaml": manifest, "src/docker_acceptance/check.lua": script, "src/docker_acceptance/probe.lua": `local security=require("security")
+return {handle=function():boolean return security.can("db.get","bee.placement.native:db") end}`,
+		"src/docker_acceptance/configure.lua": `return {handle=function(_:unknown): {[string]:unknown} return {ok=true, delivery={arguments={},files={}}} end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n  src: src\n  modules: .wippy\n"} {
 		full := filepath.Join(root, path)
 		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
 			return err
@@ -185,8 +200,9 @@ local bounds=require("bounds")
 local fs=require("fs")
 local process=require("process")
 local function call(method:string,request:unknown,foreign:boolean?): {[string]:unknown}
- local runner=funcs.new()
- if foreign then runner=runner:with_actor(security.new_actor("foreign")):with_scope(security.new_scope({assert(security.policy("bee.docker_acceptance:allow"))})) end
+ local scope=security.new_scope({assert(security.policy("bee.docker_acceptance:caller"))})
+ local runner=funcs.new():with_scope(scope)
+ if foreign then runner=runner:with_actor(security.new_actor("foreign")) end
  local raw,err=runner:call("bee.placement.docker:"..method,request)
  if err then error(method..": "..tostring(err)) end
  local reply=bounds.object(raw)
@@ -200,6 +216,14 @@ local function value(method:string,request:unknown): {[string]:unknown}
  return result
 end
 local function main()
+ local narrow=funcs.new():with_scope(security.new_scope({assert(security.policy("bee.docker_acceptance:caller"))}))
+ local can_read,probe_error=narrow:call("bee.docker_acceptance:probe",{})
+ assert(not probe_error and can_read==false,"caller directly obtained placement database authority")
+ local unconfigured=call("capabilities",{})
+ assert(unconfigured.ok==false,"unconfigured socket policy granted daemon access")
+ local socket=assert(registry.get("bee.placement.docker.daemon:socket_policy"))
+ socket.data.policy.expression=SOCKET_EXPRESSION
+ local socket_changes=registry.snapshot():changes();socket_changes:update(socket);assert(socket_changes:apply())
  local activation=assert(registry.get("bee:harness_activation"))
  activation.data.bindings={"bee.docker_acceptance:driver"}
  local changes=registry.snapshot():changes();changes:update(activation);assert(changes:apply())

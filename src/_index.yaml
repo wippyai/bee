@@ -141,6 +141,7 @@ entries:
     - bee:profile_context_boundary
     - bee:thread_create_policy
     - bee:harness_setup_policy
+    - bee.placement.docker:attachment_policy
     - bee:placement_store_policy
     - bee:placement_exec_policy
     - bee:placement_runner_policy

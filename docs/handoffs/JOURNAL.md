@@ -6577,3 +6577,18 @@ or credentials were used; all probe containers were removed. Wolfden 1638–1639
 preserve the evidence. The default-profile choice is pending user input; current
 strict-profile requirements remain in place. No managed Docker launch, native
 host composition or global update is claimed.
+
+### September 13 — Direct Docker regression complete; normal component composition
+
+Full `make check` for frozen production `42e26fc` passed (session 80687,
+exit 0; `bee-evidence/0912/bee-docker-direct-check.log`, Wolfden 1642).
+The later environment/inspection source `d1159c4` still has its separate full
+check running as session 75095. Neither result establishes managed Docker launch.
+
+The native candidate adds a builder-callable Docker factory using explicit boot
+host configuration and owning its client lifetime. Its module loads with an
+absent socket and ignores ambient Docker settings; daemon access is deferred to
+use. Integration/race/vet pass. The small builder fix permits multiple unique
+factories from the same pinned Go module; its offline generated compile proof
+is under review. Native factory review and managed Agent wiring remain pending.
+No runtime semantic change or global installation was made. Wolfden 1641–1642.

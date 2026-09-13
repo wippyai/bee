@@ -14,6 +14,7 @@ type Object = {[string]: unknown}
 type Labels = {[string]: string}
 type Config = Object
 type Client = {
+    system_info: (Client) -> (Object?, string?),
     create_container: (Client, Config, {name: string}) -> (Object?, string?),
     start_container: (Client, string) -> (boolean?, string?),
     inspect_container: (Client, string) -> (Object?, string?, integer?),
@@ -179,6 +180,41 @@ local function connect(): (Client?, Failure?)
     local client, connect_error = client_module.new(socket :: string)
     if not client then return nil, failure("unavailable", "Docker daemon connection failed: " .. tostring(connect_error)) end
     return client :: Client, nil
+end
+
+-- Report the selected daemon's own support. This does not prove that a
+-- particular container was configured correctly; creation and inspection still
+-- enforce the admitted specification and exact execution identity.
+type Capabilities = {linux: boolean, seccomp: boolean, apparmor: boolean,
+    memory_limit: boolean, pids_limit: boolean, cpu_quota: boolean}
+function M.capabilities(): (Capabilities?, Failure?)
+    local client, connection_error = connect()
+    if not client then return nil, connection_error end
+    local raw, info_error = client:system_info()
+    if not raw then return nil, failure("unavailable", "Docker capability query failed: " .. tostring(info_error)) end
+    if type(raw.SecurityOptions) ~= "table" then return nil, failure("unavailable", "Docker security options are unavailable") end
+    local options = raw.SecurityOptions :: {unknown}
+    local seccomp, apparmor = false, false
+    local count = 0
+    for key, value in pairs(options) do
+        count = count + 1
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or key > 32 or count > 32
+            or type(value) ~= "string" or #value > 512 then
+            return nil, failure("unavailable", "Docker security options are malformed")
+        end
+        -- /info reports comma-separated properties such as
+        -- name=seccomp,profile=builtin. Match a whole property, not a substring.
+        for property in value:gmatch("[^,]+") do
+            if property == "name=seccomp" then seccomp = true end
+            if property == "name=apparmor" then apparmor = true end
+        end
+    end
+    for index = 1, count do
+        if options[index] == nil then return nil, failure("unavailable", "Docker security options are sparse") end
+    end
+    return {linux = raw.OSType == "linux", seccomp = seccomp, apparmor = apparmor,
+        memory_limit = raw.MemoryLimit == true, pids_limit = raw.PidsLimit == true,
+        cpu_quota = raw.CpuCfsQuota == true and raw.CpuCfsPeriod == true}, nil
 end
 
 local function inspect_raw(client: Client, container_id: string): (Object?, Failure?)

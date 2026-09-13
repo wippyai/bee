@@ -61,6 +61,7 @@ func run() error {
 		"bee/placement/docker/_index.yaml":              filepath.Join(componentSource, "_index.yaml"),
 		"bee/placement/docker/daemon.lua":               filepath.Join(componentSource, "daemon.lua"),
 		"bee/placement/docker-helper/_index.yaml":       filepath.Join("src", "placement", "docker", "_index.yaml"),
+		"bee/placement/docker-helper/window.lua":        filepath.Join("src", "placement", "docker", "window.lua"),
 		"bee/placement/docker-helper/configuration.lua": filepath.Join("src", "placement", "docker", "configuration.lua"),
 		"bee/placement/docker-helper/inspection.lua":    filepath.Join("src", "placement", "docker", "inspection.lua"),
 		"bee/placement/docker-helper/README.md":         filepath.Join("src", "placement", "docker", "README.md"),
@@ -91,6 +92,7 @@ func run() error {
 	startedAt := "0001-01-01T00:00:00Z"
 	removed := false
 	startCalls := 0
+	infoCalls := 0
 	containerName := ""
 	inspectName := ""
 	selectedAppArmor := ""
@@ -104,6 +106,20 @@ func run() error {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/_ping" {
 			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		if r.URL.Path == "/info" {
+			infoCalls++
+			switch infoCalls {
+			case 1:
+				_, _ = w.Write([]byte(`{"OSType":"linux","SecurityOptions":["name=seccomp,profile=builtin","name=apparmor","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CpuCfsQuota":true,"CpuCfsPeriod":true}`))
+			case 2:
+				_, _ = w.Write([]byte(`{"OSType":"linux","SecurityOptions":["name=seccomp-disabled","profile=name=apparmor"],"MemoryLimit":"true","PidsLimit":false,"CpuCfsQuota":true}`))
+			case 3:
+				_, _ = w.Write([]byte(`{"OSType":"linux","SecurityOptions":{"bad":"name=seccomp"}}`))
+			default:
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			}
 			return
 		}
 		if r.URL.Path == "/containers/create" && r.Method == http.MethodPost {
@@ -245,6 +261,15 @@ entries:
 `, socketJSON)
 	check := fmt.Sprintf(`local daemon = require("daemon")
 local function main()
+local supported, supported_error = daemon.capabilities()
+if not supported or supported_error or not supported.linux or not supported.seccomp or not supported.apparmor
+    or not supported.memory_limit or not supported.pids_limit or not supported.cpu_quota then error("daemon support was not reported: " .. tostring(supported_error and supported_error.message) .. " linux=" .. tostring(supported and supported.linux) .. " seccomp=" .. tostring(supported and supported.seccomp) .. " apparmor=" .. tostring(supported and supported.apparmor) .. " memory=" .. tostring(supported and supported.memory_limit) .. " pids=" .. tostring(supported and supported.pids_limit) .. " cpu=" .. tostring(supported and supported.cpu_quota)) end
+local limited, limited_error = daemon.capabilities()
+if not limited or limited_error or limited.seccomp or limited.apparmor or limited.memory_limit or limited.pids_limit or limited.cpu_quota then error("unsupported daemon features were fabricated") end
+local malformed_info, malformed_info_error = daemon.capabilities()
+if malformed_info or not malformed_info_error then error("malformed daemon info was accepted") end
+local unavailable_info, unavailable_info_error = daemon.capabilities()
+if unavailable_info or not unavailable_info_error then error("unavailable daemon reported capabilities") end
 local labels = { ["bee.attempt_id"] = "attempt-daemon", ["bee.request_digest"] = string.rep("b", 64) }
 local image = %q
 local id = %q

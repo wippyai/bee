@@ -20,6 +20,12 @@ is kept out of Bee's default pack. The repository fixture composes this source
 with the reviewed local userspace client at commit `9d3c310` and the existing
 pure placement inspection decoder.
 
+`capabilities()` reads `/info` through the same selected daemon connection. It
+reports Linux, seccomp, AppArmor and memory/PID/CPU quota support separately;
+missing or non-boolean limit fields never report support. Security option names
+match whole properties, and malformed or unavailable responses fail. These are
+daemon support facts, not proof that any container has the admitted sandbox.
+
 Recovery bounds the listing to 64 candidates and establishes one exact name
 before inspecting it. Malformed candidates and duplicate exact names retain
 uncertainty even if another candidate has valid labels.

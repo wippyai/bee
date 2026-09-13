@@ -369,6 +369,16 @@ local function define_tests()
                 test.eq(absent.error and absent.error.code, "NOT_FOUND")
             end
         end)
+        test.it("refuses native admission when the host policy selects another placement", function()
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = "bee.placement.native:test_non_native_launch_policy"
+            -- Omit any caller placement hint: the host policy still controls
+            -- selection, even for a direct call to native prepare.
+            local refused = call(OWNER, "prepare", request)
+            test.eq(refused.error and refused.error.code, "DENIED")
+            local absent = call(OWNER, "status", {attempt_id = request.attempt_id})
+            test.eq(absent.error and absent.error.code, "NOT_FOUND")
+        end)
         test.it("records intent only for admitted, cleanable launches and replays by key", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             local first = attempt_of(call(OWNER, "prepare", request))

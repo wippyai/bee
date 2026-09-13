@@ -269,6 +269,12 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
         if not effective then return nil, nil, preference_error end
         data = effective
     end
+    -- The operation target cannot override the host's selected placement.
+    -- A caller omitting its placement hint still cannot dispatch a Docker
+    -- policy through native execution.
+    if data.placement_binding ~= nil and data.placement_binding ~= "bee.placement.native:binding" then
+        return nil, nil, "launch policy does not select native placement"
+    end
     local instructions, instructions_error = configuration_protocol.instructions(data.instructions)
     if instructions_error then return nil, nil, instructions_error end
     local instruction_builder, builder_error = configuration_protocol.instruction_builder(data.instruction_builder)
@@ -343,6 +349,15 @@ function M.prepare(value: unknown): Reply
             file_projection = true
         end
     end
+    local prepare_pinned, prepare_pin_error = resolver.pin()
+    if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
+    local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)
+    if not selected_placement then return fail("DENIED", placement_error or "native placement binding is unavailable") end
+    if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
+        return fail("CONFLICT", "native placement binding changed since admission")
+    end
+    local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
+    if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local measured = capability.measure()
     if not types.satisfies(measured.capability, request.required_cleanup) then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime offers " .. measured.capability .. " (" .. measured.detail .. "); the launch requires " .. request.required_cleanup)
@@ -353,15 +368,6 @@ function M.prepare(value: unknown): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    local prepare_pinned, prepare_pin_error = resolver.pin()
-    if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
-    local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)
-    if not selected_placement then return fail("DENIED", placement_error or "native placement binding is unavailable") end
-    if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
-        return fail("CONFLICT", "native placement binding changed since admission")
-    end
-    local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
-    if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target)
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then

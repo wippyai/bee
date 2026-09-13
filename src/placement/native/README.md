@@ -14,6 +14,9 @@ session directories live under a placement-owned root.
 1. `prepare` validates the request against this host's admitted roots,
    measures what the runtime can clean, refuses a launch that needs more
    than that, and records intent. Nothing external exists yet.
+   A host policy selecting another placement is refused before the native
+   capability probe or intent, even when a direct caller omits its placement
+   hint. Calling the native operation does not override host selection.
    A retained session home has one holder per owner/session pair: another
    attempt is refused until the predecessor is exited and its existing cleanup
    operation has proved the required scope gone and recorded `complete`.

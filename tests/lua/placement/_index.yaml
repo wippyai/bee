@@ -194,6 +194,17 @@ entries:
     fixture: true
     executables: {}
     environment: {}
+- name: test_non_native_launch_policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@2
+    placement_binding: bee.placement.fixture_container:binding
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    fixture: true
+    executables: {}
+    environment: {}
 - name: native_test
   kind: function.lua
   source: file://native_test.lua

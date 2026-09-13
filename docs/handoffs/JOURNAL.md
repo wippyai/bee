@@ -6414,3 +6414,14 @@ existing narrow checks and real Lua HTTP-client/fake-daemon requests pass.
 Tests remain outside the component pack. Local Docker lacks advertised AppArmor,
 which this contract requires; full hardened-container and managed Bee acceptance
 remain unverified. No component publication, runtime install or global refresh.
+
+### 2026-09-13 — existing exec handle bridge verified externally
+
+Wolfden fact 1617 records an external-package proof using the runtime's public
+Lua `exec.NewProcess` constructor to expose a supplied PTY as `exec.Process`.
+Its existing methods work; hostless attachment refuses before consuming the
+handle. The race proof passes at Bee's exact runtime pin without runtime edits.
+This is an extension-point proof, not actual container authorization or terminal
+grant acceptance. Evidence is archived as `external-exec-process-proof` under
+`bee-evidence/0912`. A native component can reuse that handle boundary; no new
+generic runtime reference API is justified. Global Bee remains unchanged.

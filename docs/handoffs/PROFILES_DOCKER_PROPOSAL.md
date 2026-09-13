@@ -82,6 +82,20 @@ asynchronous callers use the existing `RequestClose`. The PR remains unmerged
 and uninstalled. Global `7d9182cb` was rechecked unchanged. This does not supply
 the managed-container admission or container gateway integration.
 
+An external-package Go proof at the runtime pin also supplies an existing
+`exec.PTYProcess` through the public Lua `exec.NewProcess` constructor and
+`value.PushTypedUserData(..., "exec.Process")`. The normal resize/start/close
+and `attach_terminal` methods are available without private runtime helpers.
+The focused race test passes. Hostless attachment is refused before starting or
+consuming the supplied handle; that refusal occurs at the missing runtime
+context/relay check, so it does not establish actual terminal-grant admission.
+Evidence: `bee-evidence/0912/external-exec-process-proof{.log,_test.go}`.
+This identifies a native component extension point, not a shipped Docker module:
+the component must authorize the exact container before constructing the handle,
+and real application-actor/terminal-grant acceptance remains required. Do not add
+a second Lua exec handle or reopen the generic reference/inspection experiment
+merely to return a PTY from a native component.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

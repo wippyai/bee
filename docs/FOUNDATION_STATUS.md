@@ -2,6 +2,15 @@
 
 ## Current checkpoint — September 13
 
+**New source, not installed:** `78b534f` includes the shared process-local
+managed-window lifecycle and a correction to native group signalling. A rejected
+OS signal command now returns failure, so the placement owner records an
+unproven stop instead of successful signal evidence. The signal slice passed full
+regression (866 units plus source/pack storage, desktop, client, recovery and app
+checks). The lifecycle extraction preserves the native app identity and admission
+policy; its module, native-window, managed-window and failure-settlement checks
+pass. These are separate slice results, not a combined release gate.
+
 **Installed globally:** production `1a0ae17`, binary `c78b764d`.
 Agent launch failures remain visible and responsive. Stopping an unstarted
 placement atomically retires the attempt and releases its retained session;

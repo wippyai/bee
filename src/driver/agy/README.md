@@ -28,3 +28,7 @@ The native executable fixture proves present/absent login projection and scoped
 MCP requests from the generated configuration. It uses a fixture CLI; an actual
 authenticated Agy turn remains unverified. The host selects the executable and
 grants; the component declaration alone gives no execution authority.
+
+Separate live Agy 1.2.2 probes verify empty-output command hooks for read-only
+tool and stop observations. Managed hook delivery is still unimplemented; see
+[the hook integration evidence](../../../docs/handoffs/AGY_HOOKS.md).

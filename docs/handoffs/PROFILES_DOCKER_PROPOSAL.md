@@ -27,8 +27,11 @@ and zero effective capabilities; the AppArmor-specific proc read failed.
 Thus successful creation/start does not establish AppArmor enforcement. The
 strict profile must check support before exposing a credential-bearing child,
 and corroborate the actual profile after start. Wolfden 1638–1639 preserve the
-probes; no mounted user data or credentials were involved. The default choice
-between portable Docker isolation and mandatory AppArmor is awaiting user input.
+probes; no mounted user data or credentials were involved. The user selected
+portable Docker isolation: AppArmor is not a prerequisite for Docker agents.
+The current configuration and lifecycle accept an omitted AppArmor setting;
+the real-container lifecycle checks run without it. An explicitly selected
+named profile must still be enforced rather than silently ignored.
 
 The local Docker path can preserve the existing materializer's absolute HOME
 and resource paths by mounting them at identical targets. The compiled default

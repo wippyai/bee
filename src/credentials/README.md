@@ -107,7 +107,7 @@ Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 
 Native placement accepts file projections only with a selected retained session
-home. It seeds the provider-fixed destination and preserves provider-refreshed
+home. It seeds the frozen declared destination and preserves provider-refreshed
 bytes when the recorded definition identity matches; changed identity or a
 partial seed refuses reuse. See [native placement](../placement/native/README.md)
 for the delivery and filesystem guarantees. File contents never enter the
@@ -122,8 +122,9 @@ created. The host allowlist owns the relative source path; callers cannot supply
 it. Source metadata and path are bound in the definition digest and rechecked
 before availability or projection use. A changed source requires explicit
 redefinition. Existing definitions with an older digest are refused rather than
-silently retargeted. Earlier source-free acceptance proves Claude/Codex present and absent login;
-Agy executable acceptance is pending on this branch and uses disposable host homes.
+silently retargeted. Source-free executable acceptance proves Claude/Codex/Agy present and absent
+login with disposable host homes and fixture CLIs. Real authenticated provider
+turns remain unverified.
 Docker delivery is unimplemented. Broker `refresh` and
 `write_back` remain false: it neither refreshes provider tokens nor copies
 session changes back to the user's original login files.

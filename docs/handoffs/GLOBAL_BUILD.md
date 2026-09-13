@@ -1,6 +1,39 @@
 # Global Bee build — September 12, 2026
 
-## Current install: profile instruction functions
+## Current install: declared login formats and Agy private login
+
+Global SHA `a940f36556930166d4666259d67e981c90f1ef45dca708e1f783dfa1104b5f72`
+contains source `4b4562d`. Credential layouts are declared by harness components
+and selected by the host. Definitions and projections freeze the layout; source
+or layout changes require explicit redefinition. Native delivery creates the
+private login file and declared initialization files without provider branches.
+The Agy window now selects its optional machine login file, preserving refreshed
+private state and copying no other machine files. Instructions and offline fixes
+from the preceding build remain included.
+
+Strict lint and all 801 unit cases pass on the final source, including populated
+schema upgrade/reopen, same-basename layout-change refusal and opaque file
+materialization. The standalone credentials module passes without driver or
+desktop dependencies. Complete native executable acceptance passes, including
+Claude/Codex/Agy present and absent machine login, private regular-file copies,
+unrelated machine-state exclusion and fixture MCP calls. These use fixture CLIs;
+real-provider authenticated model turns remain unverified.
+
+Loopback-only network acceptance passes: fresh desktop 1.542 s, restart 1.030 s,
+copied installed-module registry restore 3.452 s, restored restart 1.221 s and
+warm public client reconnect 0.105 s. Retained artifacts were unchanged.
+The broader repository `make check` remains running (session 18461,
+`declared-login-full-check.log`); its final-source unit stage passed.
+
+Installation fenced against `1b56f795`, backed up and verified all six files,
+and did not restart running nodes or reset databases. Runtime/native pins and
+patches are unchanged. Evidence in `bee-evidence/0912`:
+`declared-login-global-install.json`, `declared-login-native.log`,
+`declared-login-offline.log`, `credential-declared-module.log` and the full check.
+Profile editing UI, managed Docker and authenticated provider orchestration
+remain unfinished.
+
+## Previous install: profile instruction functions
 
 Global SHA `1b56f795acb6cd7673ac4cbcbd3bf581abfd177f8a3bd46e0713d9148f9d9ff0`
 contains source `9e43f0d`, including the preceding offline startup fixes. Host

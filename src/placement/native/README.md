@@ -92,8 +92,9 @@ the broker; absent bytes are accepted only for an optional absent reply. This
 records an unseeded home without placing file credentials in the environment.
 First-use setup preserves the host-selected optional policy and refuses a
 conflicting existing definition. Default Claude/Codex/Agy window profiles select optional machine-login sources.
-Earlier source-free acceptance covers Claude/Codex present and absent login;
-Agy admission and executable acceptance are still being validated on this branch.
+Source-free acceptance covers Claude/Codex/Agy present and absent login,
+independent regular-file copies and exclusion of unrelated machine state, using
+fixture CLIs. Real authenticated provider turns remain unverified.
 
 ## Capability
 

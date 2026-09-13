@@ -24,5 +24,7 @@ HTTP hooks are refused. The component declares its opaque login file at
 `.gemini/antigravity-cli/antigravity-oauth-token`. The default host admits only
 that machine file for an optional private copy, preserving private refreshes;
 it does not link the machine directory or copy conversations and settings.
-End-to-end automatic login and a live managed MCP turn remain unverified. Driver activation does not supply a production launch profile,
-credentials or execution permissions.
+The native executable fixture proves present/absent login projection and scoped
+MCP requests from the generated configuration. It uses a fixture CLI; an actual
+authenticated Agy turn remains unverified. The host selects the executable and
+grants; the component declaration alone gives no execution authority.

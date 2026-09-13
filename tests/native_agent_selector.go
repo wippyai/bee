@@ -817,6 +817,93 @@ func defaultPicker(binary string) error {
 			return fmt.Errorf("picker omitted default profile %q\n%s", profile, latest)
 		}
 	}
+	// Exercise the complete saved-profile form before launching anything.
+	// New duplicates the selected reviewed default, so this also proves the
+	// form starts from the current title rather than an empty caller payload.
+	if err := countThreadWork(state); err != nil {
+		return fmt.Errorf("picker created thread work before profile editing: %w", err)
+	}
+	if err := ui.send("n"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("NEW AGENT PROFILE", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Name: Antigravity", 5*time.Second); err != nil {
+		return fmt.Errorf("new profile did not start with selected title: %w", err)
+	}
+	if err := ui.send("\x15Aardvark\tUse saved guidance.\nSecond line."); err != nil {
+		return err
+	}
+	_, before, _ := ui.snapshot()
+	if err := ui.send("\x13"); err != nil {
+		return err
+	}
+	if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+		return fmt.Errorf("new profile did not return to picker: %w", err)
+	}
+	if err := ui.waitForAfter("Aardvark", before, 5*time.Second); err != nil {
+		return fmt.Errorf("saved profile did not appear in picker: %w", err)
+	}
+	if err := countThreadWork(state); err != nil {
+		return fmt.Errorf("saving profile created thread work before launch: %w", err)
+	}
+
+	// The refreshed list is sorted by title, putting Aardvark first. Edit that
+	// selected row and replace both text fields, then prove the committed row.
+	if err := ui.send("e"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("EDIT AGENT PROFILE", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Name: Aardvark", 5*time.Second); err != nil {
+		return fmt.Errorf("edit did not load the saved title: %w", err)
+	}
+	if err := ui.send("\x15Aardvark Edited\t\x15Edited guidance."); err != nil {
+		return err
+	}
+	_, before, _ = ui.snapshot()
+	if err := ui.send("\x13"); err != nil {
+		return err
+	}
+	if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+		return fmt.Errorf("edited profile did not return to picker: %w", err)
+	}
+	if err := ui.waitForAfter("Aardvark Edited", before, 5*time.Second); err != nil {
+		return fmt.Errorf("edited profile did not appear in picker: %w", err)
+	}
+	if err := countThreadWork(state); err != nil {
+		return fmt.Errorf("editing profile created thread work before launch: %w", err)
+	}
+
+	// Remove the selected saved row, requiring the form's explicit confirmation,
+	// and prove the row disappears after the committed tombstone refresh.
+	if err := ui.send("e"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("EDIT AGENT PROFILE", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.send("\x04"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Remove this profile?", 5*time.Second); err != nil {
+		return err
+	}
+	_, before, _ = ui.snapshot()
+	if err := ui.send("\r"); err != nil {
+		return err
+	}
+	if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+		return fmt.Errorf("removed profile did not return to picker: %w", err)
+	}
+	if err := ui.waitAbsent("Aardvark Edited", before, 5*time.Second); err != nil {
+		return err
+	}
+	if err := countThreadWork(state); err != nil {
+		return fmt.Errorf("removing profile created thread work before launch: %w", err)
+	}
 	if err := ui.send("\r"); err != nil {
 		return err
 	}
@@ -833,7 +920,7 @@ func defaultPicker(binary string) error {
 	if err := ui.waitFor("Choose a profile", 5*time.Second); err != nil {
 		return err
 	}
-	_, before, _ := ui.snapshot()
+	_, before, _ = ui.snapshot()
 	if err := ui.send("\x1b[24~"); err != nil {
 		return err
 	}
@@ -854,6 +941,94 @@ func defaultPicker(binary string) error {
 	}
 	retained = nil
 	return countThreadWork(state)
+}
+
+// savedProfileLaunch proves that a profile edited through the native picker
+// survives admission into a real managed window. The executable is a fixture
+// script: it checks the Agy instruction file and then uses the existing MCP
+// probe, so this acceptance never contacts a paid provider.
+func savedProfileLaunch(binary string) error {
+	root, err := os.MkdirTemp("", "bee-native-saved-profile-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
+	marker, mcpReport := filepath.Join(root, "guidance-proof"), filepath.Join(root, "mcp-report")
+	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
+		return err
+	}
+	helper := filepath.Join(filepath.Dir(os.Args[0]), filepath.Base(os.Args[0]))
+	if resolved, helperErr := filepath.EvalSymlinks(os.Args[0]); helperErr == nil {
+		helper = resolved
+	}
+	const guidance = "Saved launch guidance."
+	script := "#!/bin/sh\nset -eu\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
+	if err := os.WriteFile(filepath.Join(project, "bin", "agy"), []byte(script), 0700); err != nil {
+		return err
+	}
+	ui, err := newDesktop(binary, project, state, home)
+	if err != nil {
+		return err
+	}
+	defer ui.close()
+	if err := ui.waitFor("Choose a profile", 25*time.Second); err != nil {
+		return err
+	}
+	if err := ui.send("n"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("NEW AGENT PROFILE", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.waitFor("Name: Antigravity", 5*time.Second); err != nil {
+		return err
+	}
+	if err := ui.send("\x15Saved Launch\t\x15" + guidance); err != nil {
+		return err
+	}
+	_, before, _ := ui.snapshot()
+	if err := ui.send("\x13"); err != nil {
+		return err
+	}
+	if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+		return fmt.Errorf("saved launch profile did not return to picker: %w", err)
+	}
+	if err := ui.waitForAfter("Saved Launch", before, 5*time.Second); err != nil {
+		return fmt.Errorf("saved launch profile did not appear in picker: %w", err)
+	}
+	// The picker refreshes with the first default selected; move to the saved
+	// row (after the four built-in profiles) before opening it.
+	if err := ui.send("\x1b[B\x1b[B\x1b[B\x1b[B"); err != nil {
+		return err
+	}
+	if err := ui.send("\r"); err != nil {
+		return err
+	}
+	if err := ui.waitFor("BEE_SAVED_PROFILE_GUIDANCE", 25*time.Second); err != nil {
+		return fmt.Errorf("saved profile launch did not deliver guidance: %w", err)
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil || string(data) != guidance {
+		return fmt.Errorf("saved profile guidance proof = %q, err=%v", string(data), err)
+	}
+	mcpData, err := os.ReadFile(mcpReport)
+	if err != nil {
+		return fmt.Errorf("read saved profile MCP report: %w", err)
+	}
+	var mcpResult mcpProbeReport
+	if err := json.Unmarshal(mcpData, &mcpResult); err != nil || mcpResult.Provider != "agy" ||
+		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
+		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
+		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageOK || !mcpResult.MessageReplayOK ||
+		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.MessageWriteOK ||
+		strings.Join(mcpResult.Tools, ",") != "thread_message,thread_read,thread_wait" {
+		return fmt.Errorf("saved profile MCP report did not prove gateway access: %q", string(mcpData))
+	}
+	if err := ui.quit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func shellQuote(value string) string {
@@ -1347,6 +1522,10 @@ func main() {
 	}
 	if err := defaultPicker(binary); err != nil {
 		fmt.Fprintf(os.Stderr, "default Agent picker acceptance failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := savedProfileLaunch(binary); err != nil {
+		fmt.Fprintf(os.Stderr, "saved profile launch acceptance failed: %v\n", err)
 		os.Exit(1)
 	}
 	for _, provider := range []string{"codex", "claude", "agy"} {

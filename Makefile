@@ -71,6 +71,11 @@ run:
 	BEE_RUNTIME="$(abspath $(WIPPY))" bash ./run.sh
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
+.PHONY: docker-configuration-check
+docker-configuration-check:
+	test -n "$(DOCKER_COMPONENT)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_configuration.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_configuration.go -runtime "$(abspath $(WIPPY))" -docker-source "$(abspath $(DOCKER_COMPONENT))"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client

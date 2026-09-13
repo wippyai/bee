@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.placement.native
 entries:
+- name: docker_test
+  kind: function.lua
+  source: file://docker_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    configuration: bee.placement.docker:configuration
 - name: project_fixture
   kind: fs.directory
   meta: {type: test_support}

@@ -4,6 +4,32 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+`bee.placement.docker:configuration` now supplies an internal pure projection
+from explicit image, sandbox limits, admitted mount paths and attempt labels to
+the existing narrow Docker create config. It preserves argument boundaries and
+project access, generates container-visible HOME/TMPDIR, and refuses unknown
+options, mutable images, host network sharing, mount traversal/overlap and a
+project source containing the private home. Supplied paths/labels grant nothing.
+The optional module has no placement binding, Docker runtime dependency or Agent menu
+entry. The owner has not yet connected it to durable admission/materialization.
+
+All 854 Lua tests pass. `make docker-configuration-check` loads this projection,
+the reviewed userspace narrow runtime and the actual Lua Docker HTTP client in
+an isolated host. A private fake daemon checks the create payload and exactly one
+inspection; no container starts. The check is Go, outside the production pack.
+This is not actual sandbox or managed Agent acceptance. Full `make check`
+passes on the selected atomic-publication runtime, including source/pack desktop,
+storage, recovery and application acceptance. Existing Lua fixpoint warnings
+remain. No global update is claimed.
+
+The path review confirms driver configuration must render against the selected
+container-visible HOME **before** its delivery is frozen at placement intent:
+Codex embeds absolute hook paths. The existing materializer must retain all host
+credential/file publication ownership and expose those same files through the
+admitted mount. Bind the path projection into the attempt before creation;
+do not rewrite already-frozen configuration at start. A project directory that
+contains private session homes cannot be mounted wholesale into the container.
+
 The current integration review found that narrow inspection discarded Docker's
 `State.StartedAt`. PR #67 now preserves it as optional `started_at` (head
 `a37e91a`), so an admitting component can distinguish executions of the same

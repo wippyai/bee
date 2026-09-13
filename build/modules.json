@@ -139,6 +139,11 @@
       ]
     },
     {
+      "module": "bee/placement-docker",
+      "root": "bee.placement.docker",
+      "namespaces": ["bee.placement.docker"]
+    },
+    {
       "module": "bee/placement-native",
       "root": "bee.placement.native",
       "namespaces": [

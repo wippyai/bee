@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.placement.docker
+entries:
+- name: definition
+  kind: ns.definition
+  module: placement_docker
+  readme: file://README.md
+  meta:
+    title: Bee Docker placement preparation
+    comment: Internal container configuration projection; managed Docker admission and execution are not implemented
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  imports:
+    bounds: bee.threads.records:bounds

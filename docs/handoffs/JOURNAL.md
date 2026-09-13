@@ -6469,3 +6469,26 @@ merged or published. Luna's review identifies the existing window child
 construction as the shared terminal seam. Durable attempt-derived Docker
 admission, container configuration projection and gateway delivery remain open;
 the descriptor must not become caller-selected window authority. Global unchanged.
+
+### 2026-09-13 — Docker configuration projection passes the full gate
+
+The optional `bee.placement.docker:configuration` library now projects explicit
+host-admitted image, sandbox, command, home/project paths, access and labels into
+the existing narrow create config. It grants nothing and exposes no placement
+binding or Agent selector. Refusals cover unknown options/environment, mutable
+images, host sharing, mount traversal/overlap and private-home exposure.
+
+All 854 Lua tests and full `make check` pass (session 32725, exit 0); existing
+fixpoint warnings remain. `make docker-configuration-check` also passes through
+the actual userspace narrow runtime and Lua HTTP client with a private fake
+daemon, exactly one create/inspection and no start. The repeatable boundary
+fixture is Go and stays outside production. Evidence is archived under
+`bee-evidence/0912/bee-docker-projection-{lint,unit,check}.log`.
+
+Wolfden facts 1622–1623 record implementation and integration findings. Keep the
+existing saved-profile schema: its reviewed definition already selects a host
+policy. Docker paths must be bound before driver configuration is frozen; host
+credential/file publication stays with the existing materializer. Codex/Agy
+hook token environment delivery is a remaining contract gap, not something this
+constructor silently omits. Actual admission, sandbox execution, gateway and
+managed Agent acceptance remain incomplete. Global Bee is unchanged.

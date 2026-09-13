@@ -112,3 +112,15 @@ instructions are transient until saved; closing the form discards the draft.
 Thirty focused model, profile store, selection and recovery cases pass with the
 form/editor source. Actual native keyboard form acceptance now passes and the global build is
 updated. Native launch with an edited profile remains unverified.
+
+Follow-up source adds low/medium/high effort choices to the four default window
+policies. Claude, Agy and Grok already translate effort to native flags; Codex
+now emits a bounded model_reasoning_effort configuration override before any
+subcommand or prompt delimiter. An omitted selection preserves harness defaults.
+Strict lint and 23 focused profile/launch cases pass. These option defaults are
+not yet in the installed d18de64 binary.
+
+The installed candidate additionally passes a real saved-profile fixture launch:
+Agy receives the saved appended guidance in its private GEMINI.md and the scoped
+gateway exposes the declared thread tools. This uses a fixture executable; no
+authenticated provider model turn is claimed.

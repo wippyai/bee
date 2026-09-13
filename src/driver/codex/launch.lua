@@ -8,12 +8,13 @@ local M = {}
 -- authenticate the pinned executable. Until that configuration projection
 -- ships, the gate stays open.
 M.CODEX_AUTHENTICATION = "unproven"
+M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.SANDBOXES = {"read-only", "workspace-write"}
-type Request = {profile_id: string, brief: string, sandbox: string, resume_ref: string?, gateway_hooks: boolean?}
+type Request = {profile_id: string, brief: string, sandbox: string, resume_ref: string?, gateway_hooks: boolean?, effort: string?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "sandbox", "resume_ref", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "sandbox", "resume_ref", "gateway_tools", "gateway_hooks", "effort"})
     if unknown_field then return nil, unknown_field end
     -- Gateway tools reach Codex through the provider configuration's
     -- mcp_servers section; the launch line carries nothing for them, and
@@ -40,13 +41,18 @@ function M.decode(value: unknown): (Request?, string?)
         if not declared then return nil, "sandbox is not one Bee admits" end
         sandbox = declared
     end
+    local effort: string? = nil
+    if object.effort ~= nil then
+        effort = bounds.member(object.effort, M.EFFORTS)
+        if not effort then return nil, "effort is not one Bee admits" end
+    end
     local resume: string? = nil
     if object.resume_ref ~= nil then
         resume = bounds.id(object.resume_ref)
         if not resume then return nil, "resume_ref is not an identifier" end
         if resume:sub(1, 1) == "-" then return nil, "resume_ref must not be a command-line option" end
     end
-    return {profile_id = profile_id, brief = brief, sandbox = sandbox, resume_ref = resume, gateway_hooks = hooks}, nil
+    return {profile_id = profile_id, brief = brief, sandbox = sandbox, resume_ref = resume, gateway_hooks = hooks, effort = effort}, nil
 end
 function M.specification(request: Request): types.Launch
     local argv: {string}
@@ -70,6 +76,11 @@ function M.specification(request: Request): types.Launch
         -- writes under the private home; without it no hook runs.
         table.insert(argv, 1, "bee")
         table.insert(argv, 1, "--profile")
+    end
+    if request.effort then
+        -- Keep options before any resume subcommand or prompt delimiter.
+        table.insert(argv, 1, 'model_reasoning_effort="' .. request.effort .. '"')
+        table.insert(argv, 1, "--config")
     end
     local environment: {string} = {}
     if request.profile_id == "window" then

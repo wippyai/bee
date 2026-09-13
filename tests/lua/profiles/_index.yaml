@@ -89,3 +89,11 @@ entries:
     view: bee.harness.window:profile_view
     editor: bee.harness.window:profile_editor
     appearance: bee.desktop:appearance
+- name: codex_effort_test
+  kind: function.lua
+  source: file://codex_effort_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.codex:launch

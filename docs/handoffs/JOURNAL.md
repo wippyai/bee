@@ -6447,3 +6447,14 @@ viewport grant; an authorized actor renders, inputs, resizes and closes, while
 a child lacking the non-inherited terminal port is refused. Native race tests
 and vet pass. This is not Bee broker/placement acceptance. Public registration,
 admitted-record policy and Docker profile/gateway integration remain open.
+
+### 2026-09-13 — real Docker restart admission proof
+
+Wolfden fact 1620 records pushed native candidate `ecbe700`. A real restart
+preserves the container ID but changes its execution timestamp. Old attachment
+signal/resize and old admission are refused; fresh admission attaches and resizes.
+The Docker integration race/vet target passes (6.590s), without pulls. This
+proves completed-restart fencing, not atomic daemon control or managed Bee
+Docker integration. Global is unchanged. Placement still combines common
+admission with native process creation/identity; the gateway is loopback-only.
+Both seams need implementation before a usable Docker profile can be offered.

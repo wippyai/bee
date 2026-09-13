@@ -1,5 +1,33 @@
 # Global Bee build — September 12, 2026
 
+## Current install: offline startup and retained harness configuration
+
+Global SHA `230816bd1110f6595ebf7eed1f3a48db007f8e950524b825a6fa158e7546dd95`
+contains source `d88cbd6`. It preserves the preceding application-admission
+refresh, initializes imported Claude onboarding without granting project trust,
+and creates nested Agy configuration directories before writing their files.
+Automatic Agy sign-in and managed Docker remain unfinished.
+
+Runtime PRs #740, #741 and #742 are composed as checked, license-preserving
+patches on pin `291f5c6`; native pin `0f63d30bd718` is unchanged. These PRs remain
+open and assigned to Rodrigo, not merged. Startup uses only verified local
+artifacts. A stable application cache retains installed dependencies across
+embedded executable updates; Bee explicitly selects its terminal host even
+when an installed module supplies another. See [offline acceptance](OFFLINE_BOOT.md).
+
+All 789 Bee unit tests, strict lint after resetting the reproduced stale type
+cache, affected runtime race/lint checks, and full native executable acceptance
+pass. Network-isolated fresh/restored startup and restart pass, as does public
+retained-client rejoin. Native Agent checks use fixture CLIs and verify scoped
+MCP integration; they do not establish authenticated provider orchestration.
+The full repository `make check` remains outstanding.
+
+Installation fenced against `dac1ba49`, backed up and verified all six files,
+and did not restart running nodes or reset databases. Evidence:
+`offline-global-install.json`, `offline-final-desktop-proof.log`,
+`offline-final-native.log`, `offline-bee-unit-check.log`, and
+`offline-final-app-{race,lint}.log` in `bee-evidence/0912`.
+
 ## Current install: reconcile protected application admission
 
 Global SHA `dac1ba49436ddb79672f6ab5a9cddc39a49d8acf55d7f992ad7e46f0e682786a`

@@ -1,6 +1,30 @@
 # Global Bee build — September 13, 2026
 
-## Current install: native window identity and cleanup
+## Current install: interrupted Agent recovery
+
+Global SHA `aa22527c876d6b374b40c8dd655fed66d9bbf257ab8adb025b3e5d44f47f221b`
+contains production source `b883ae8`. Interrupted native Agent windows restore
+through a responsive view, reconcile recoverable hooks and admit a replacement
+only after independent process-group cleanup proof. Cancelling recovery prevents
+late completion from starting a new native process. No successful turn or input
+replay is invented.
+
+Full `make check` passed at `62186b5` (session `48027`, exit 0), including 838
+units and source/pack desktop acceptance. The final production difference is
+receipt wording/comments; final-candidate native acceptance, pending-hook policy,
+loopback-only fresh/restored/restart/reconnect and fixture-provider node restart
+and controlled SIGKILL continuation also pass. The SIGKILL proof requires the old
+native process to be independently absent; it does not prove surviving-orphan or
+real-provider recovery. Docker and policy-controlled sharing remain unfinished.
+
+Evidence: `bee-evidence/0912/window-recovery-{full-check,final-native,final-offline}.log`,
+`native-agent-{cold,sigkill}-recovery-final.log` and
+`window-recovery-global-install.json`. All six artifacts were verified and backed
+up before replacing `b40aa0a5`. Runtime/native pins are unchanged; runtime PRs
+#740–743 remain unmerged. No running nodes were restarted or databases changed.
+Newly started nodes load the update; existing nodes retain their loaded code.
+
+## Previous install: native window identity and cleanup
 
 Global SHA `b40aa0a5e4d63d7924cc2284763f0598e98a0622c768c74bb1a76d1b875d4028`
 contains production source `3f3a8bc`. Managed native windows capture the terminal's

@@ -1,8 +1,8 @@
 # Native Agent conversation recovery
 
 The source Agent app now declares a resume schema and consumes the existing app
-checkpoint/restore protocol. It persists exactly the five continuation identity
-fields, authenticates the broker's checkpoint acknowledgement, and constructs a
+checkpoint/restore protocol. It persists the five continuation identity fields
+and optional saved-profile identity/revision, authenticates the broker's checkpoint acknowledgement, and constructs a
 fresh continuation request on restore. Source acceptance now proves graceful
 continuation, interrupted-window recovery, cancellation during recovery, and
 whole-node restart with a fixture Claude executable. Controlled node SIGKILL

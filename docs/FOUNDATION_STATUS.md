@@ -2,7 +2,17 @@
 
 ## Current checkpoint — September 13
 
-Global `b40aa0a5` contains production `3f3a8bc`: offline embedded/local startup,
+Global `aa22527c` contains production `b883ae8`: interrupted Agent recovery with
+responsive cancellation, offline embedded/local startup and the managed profile,
+MCP, hook and native identity work below. Full `make check` at `62186b5` passed
+(session `48027`, exit 0; 838 units). The final production difference is receipt
+wording/comments; exact final native and offline checks pass, alongside fixture
+whole-node restart and controlled SIGKILL continuation. Installation verified and
+backed up all six artifacts without changing databases or restarting nodes.
+Real-provider recovery, surviving orphan trees, Docker and policy-controlled
+sharing remain incomplete. See [global build](handoffs/GLOBAL_BUILD.md).
+
+The preceding global `b40aa0a5` contains production `3f3a8bc`: offline embedded/local startup,
 saved Agent profiles, appended guidance, effort choices, scoped MCP, corrected
 live PTY supervision and native window process identity. All 836 units, full
 native executable acceptance, network-disabled fresh/restored/reconnect checks,
@@ -18,8 +28,8 @@ continuation through the broker using an acknowledged checkpoint and retained se
 fixture-harness proofs within a running runtime, not real-provider cold recovery.
 Follow-up source passes interrupted-window restore and responsive cancellation
 through the real broker/native terminal fixture. The recovery view stays responsive
-while admission drains hooks. Its combined full regression remains outstanding;
-these changes are not in the installed global build.
+while admission drains hooks. Its combined full regression passed and these
+changes are now in the installed global build.
 The follow-up native executable also passes restoration across a whole-node
 stop/restart from the actual persisted workspace checkpoint: same app/view and
 conversation identity, retained HOME, fresh attempt and gateway binding. This is

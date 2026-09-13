@@ -6,6 +6,14 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local M = {}
+function M.overlaps(files: {types.Configuration}, protected: {string}): boolean
+    for _, file in ipairs(files) do
+        for _, path in ipairs(protected) do
+            if file.path == path or file.path:sub(1, #path + 1) == path .. "/" or path:sub(1, #file.path + 1) == file.path .. "/" then return true end
+        end
+    end
+    return false
+end
 function M.render(file: types.Configuration, environment: {[string]: string}, gateway: types.Gateway?): (string?, string?)
     if not file.secret_fields then return file.content, nil end
     if not gateway or file.provider_ref ~= "bee:gateway_endpoint" then return nil, "configuration secret fields require the admitted gateway" end

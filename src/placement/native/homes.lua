@@ -180,6 +180,42 @@ function M.write_protected(home_path: string, relative: string, content: string,
     if not written then return nil, "write configuration: " .. tostring(write_error) end
     return target, nil, false
 end
+-- Only materialization's persisted delivery files use this operation. Login
+-- and provider conversation files retain their separate ownership. The runtime
+-- verifies/pins existing parents; missing parents can only be created through
+-- directories this materialization itself created.
+function M.publish_configuration(home_path: string, relative: string, content: string, created: {[string]: boolean}?): (string?, string?, boolean?)
+    if relative == "" or relative:find("^/") or relative:find("%.%.") then return nil, "configuration path escapes the home", false end
+    if #content > M.MAX_REPLAY_BYTES then return nil, "configuration exceeds publication bound", false end
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error, false end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error, false end
+    local root = home_path .. "/home"
+    local target = root .. "/" .. relative
+    local directories = relative:match("^(.*)/[^/]+$") or ""
+    local final_parent = directories == "" and root or root .. "/" .. directories
+    if not vol:exists(final_parent) then
+        local parent = root
+        for segment in directories:gmatch("[^/]+") do
+            parent = parent .. "/" .. segment
+            if vol:exists(parent) then
+                if not created or not created[parent] then return nil, "configuration parent already exists", false end
+            else
+                local made, mkdir_error = vol:mkdir(parent)
+                if not made then return nil, "create configuration parent: " .. tostring(mkdir_error), false end
+                if created then created[parent] = true end
+            end
+        end
+    end
+    local written, write_error = vol:writefile_atomic(target, content)
+    if not written then
+        local details: unknown = write_error and write_error:details() or nil
+        local published = type(details) == "table" and details.published == true
+        return nil, published and "configuration published; durability requires inspection" or "configuration publication refused", published
+    end
+    return target, nil, false
+end
 -- The authorized broker supplies the frozen layout. Definition identity binds
 -- that layout while preserving the existing retained-home identity encoding.
 function M.decode_login_source(value: unknown): (LoginDestination?, string?)

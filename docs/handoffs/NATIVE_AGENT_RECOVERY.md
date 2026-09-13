@@ -97,12 +97,13 @@ Driver configuration delivery now separates fresh argument literals from protect
 files. Placement measures the host inputs, renders using its actual home path
 and freezes the output with the attempt. Claude uses inline MCP/settings JSON,
 so a new attempt can select fresh endpoint data without replacing conversation
-files. Codex still uses protected provider/hook/trust files and refuses changed
-content in a retained home. The selected Lua FS surface lacks atomic replacement
-and non-following opens; no remove-and-recreate workaround is introduced.
+files. Codex/Agy host-generated provider/hook/trust files now use atomic publication
+in a retained home through the runtime PR #744 patch. Placement rechecks its
+starting runner before each file and refuses configuration overlapping login
+state. Publication uncertainty retains the session holder and predecessor
+checkpoint. See [the filesystem contract](RETAINED_CONFIGURATION_FS.md).
 Configuration delivery does not establish native process-group cleanup. The
-fixture Claude continuation proof does not establish Codex retained-file
-replacement or real-provider recovery.
+fixture Claude continuation proof does not establish real-provider recovery.
 
 The app queues its new checkpoint only after native startup and the thread's
 start receipt succeed. A plan, preparation or startup refusal therefore does not
@@ -127,12 +128,12 @@ and absence of fabricated success or prompt replay.
 
 Agy's corrected MCP delivery declares private JSON credential fields. Placement
 fills those after minting the admitted binding; the persisted template retains
-only field paths and environment names. Retained content still requires exact
-replay, so changed binding credentials do not authorize overwriting a retained
-configuration. Agy cold recovery remains unavailable until safe configuration
-replacement is implemented and verified.
+only field paths and environment names. Source now republishes these admitted
+configuration files with fresh binding credentials in the retained home; login
+and conversation bytes are not configuration targets. Real Agy cold recovery
+still needs an actual provider continuation proof.
 
-See [the verified filesystem boundary](RETAINED_CONFIGURATION_FS.md) before
-implementing retained configuration replacement. Lua already exposes file sync;
+See [the verified filesystem boundary](RETAINED_CONFIGURATION_FS.md).
+Lua already exposes file sync;
 `os.Root` follows in-root symlinks, and `lstat` followed by rename is not enough
 to guarantee session-parent identity across the operation.

@@ -6,6 +6,7 @@
 local env = require("env")
 local funcs = require("funcs")
 local sql = require("sql")
+local process = require("process")
 local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
@@ -68,6 +69,17 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local function refused(reason: string): (Prepared?, string?, string?)
         return nil, reason, gateway_binding
     end
+    local function owns_attempt(): boolean
+        local current = store.row(db, attempt_id)
+        return current ~= nil and current.execution_state == "starting" and current.runner_pid == process.pid()
+    end
+    if not owns_attempt() then return refused("attempt no longer owns configuration materialization") end
+    local delivery = request.delivery
+    if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
+    if configuration.overlaps(delivery.files, {".bee-retained-login-ready.json"}) then
+        evidence(db, attempt_id, "configuration.refused", "configuration overlaps retained login identity", {execution = "exited"})
+        return refused("configuration overlaps retained login identity")
+    end
     local conflict = M.environment_conflict(request)
     if conflict then
         evidence(db, attempt_id, "environment.refused", conflict, {execution = "exited"})
@@ -87,7 +99,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- A retained session is an explicit writable session resource. Select its
     -- private /home before any provider, gateway, hook or trust file is
     -- materialized; the attempt directory remains separate for evidence and
-    -- cleanup. A retained file can only replay exact host-approved content.
+    -- cleanup. Only the persisted host-generated delivery files are replaced.
     local selected_home_path = home_path
     local retained_home = false
     if request.session_ref then
@@ -145,6 +157,16 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
             end
+            local login_path = source.path
+            if not login_path then return refused("file login path unavailable") end
+            local protected: {string} = {login_path}
+            local login_file = source.format.file
+            if not login_file then return refused("file login format unavailable") end
+            for _, item in ipairs(login_file.initialize) do protected[#protected + 1] = item.path end
+            if configuration.overlaps(delivery.files, protected) then
+                evidence(db, attempt_id, "configuration.refused", "configuration overlaps provider login state", {execution = "exited"})
+                return refused("configuration overlaps provider login state")
+            end
             local _, login_error, replayed = homes.retain_login(selected_home_path, {provider = source.source.provider, definition_id = source.source.definition_id,
                 definition_revision = source.source.definition_revision, optional = source.source.optional, format = source.format}, projected.value, created_parents)
             if login_error then
@@ -176,8 +198,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
         end
     end
-    local delivery = request.delivery
-    if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
     local arguments: {string} = {}
     for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
@@ -214,12 +234,26 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local privacy_error = homes.check_private_root()
             if privacy_error then return refused(privacy_error) end
         end
-        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, content, created_parents, retained_home)
+        -- A session intent excludes other attempts; the runner's starting claim
+        -- excludes duplicate starts of this attempt. Recheck after asynchronous
+        -- credential/gateway calls and before each publication.
+        if not owns_attempt() then
+            return refused("attempt no longer owns configuration materialization")
+        end
+        local written: string? = nil
+        local write_error: string? = nil
+        local published_uncertain: boolean? = nil
+        if retained_home then
+            written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents)
+        else
+            written, write_error = homes.write_protected(selected_home_path, file.path, content, created_parents)
+        end
         if not written then
-            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
+            evidence(db, attempt_id, published_uncertain and "configuration.uncertain" or "configuration.refused", tostring(write_error),
+                {execution = published_uncertain and "uncertain" or "exited"})
             return refused(write_error or "configuration")
         end
-        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
+        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (retained_home and " published" or " created"))
     end
     local work_dir, work_dir_error = resolve_work_dir(request, home_os)
     if not work_dir then

@@ -28,13 +28,28 @@ session directories live under a placement-owned root.
    names both a retained session and its writable session
    home selects that session's derived `/home` before materializing provider,
    gateway, hook or trust configuration; the attempt home still owns attempt
-   evidence and cleanup. Protected files in a retained home permit only exact
-   replay; argument-based configuration needs no replacement write. It resolves
+   evidence and cleanup. Persisted host-generated configuration files in a
+   retained home use atomic publication; login and provider conversation files
+   remain separately owned. Argument-based configuration needs no replacement write. It resolves
    environment and working directory from the request and the admitted roots,
    starts the child (in its own process group when the runtime supports it),
    reads its identity, records `running`, and acknowledges.
 
 ## Environment ownership
+
+Before each configuration publication, materialization rechecks that the attempt
+is still `starting` and that the current process owns its runner identity. The
+private filesystem root and the native provider's verified parent handles protect
+the file boundary. Configuration cannot overlap the retained login marker, the
+projected login file or provider initialization files. Existing immutable
+`write_protected` callers still permit only byte-identical replay.
+
+Publication is per file. A later failure does not roll back earlier files, and
+startup refuses if any file fails. If the native error reports that rename
+succeeded but directory sync failed, placement records `configuration.uncertain`
+and keeps execution uncertain; a successor cannot take that retained session.
+The predecessor checkpoint remains unchanged. This outcome requires inspection;
+there is no automatic retry or replay of the user's prompt.
 
 Native placement owns `HOME`, selected from its attempt or retained session home.
 An admitted gateway owns its tool and hook token destinations. `prepare` refuses

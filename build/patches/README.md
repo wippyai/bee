@@ -39,3 +39,15 @@ error; startup remains asynchronous, with a retryable unavailable result until
 it completes. A PID is not proof of process-group absence. The PR is open,
 assigned to Rodrigo (`skhaz`), and unmerged. Upstream MPL licenses are preserved.
 Affected race suites, vet, repository-pinned lint and Bee toolchain assembly pass.
+
+`runtime-fs-atomic-publication.patch` composes runtime PR
+[#744](https://github.com/wippyai/runtime/pull/744), through `5e76e3c4e1`,
+onto the same pin. It adds optional `AtomicWriteFS` and Lua `writefile_atomic`.
+The Linux/macOS directory provider verifies and pins parent handles, refuses
+symlink parents and nonregular targets, and publishes a synced temporary file
+by rename. A directory-sync failure returns `err:details().published == true`;
+unsupported providers refuse explicitly. This does not change existing writes
+or provide compare-and-swap. The PR is open, assigned to Rodrigo (`skhaz`), and
+unmerged. Upstream MPL licenses are preserved. Filesystem API/directory/Lua race
+suites, pinned lint, toolchain assembly and strict Bee lint pass. macOS is
+cross-compiled only; the Windows provider explicitly returns unsupported.

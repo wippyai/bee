@@ -1,0 +1,35 @@
+version: '1.0'
+namespace: bee.placement.publication_test
+entries:
+- name: homes
+  kind: library.lua
+  source: file://homes.lua
+  meta: {type: test_support}
+  imports:
+    real: bee.placement.native:homes
+- name: materialization
+  kind: library.lua
+  source: file://../../placement/native/materialization.lua
+  meta: {type: test_support}
+  modules: [env, funcs, sql, process]
+  imports:
+    store: bee.placement.native:store
+    resources: bee.placement.native:resources
+    homes: bee.placement.publication_test:homes
+    configuration: bee.placement.native:configuration
+    types: bee.placement:types
+- name: publication_test
+  kind: function.lua
+  source: file://publication_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '30s'}
+  modules: [process, time, json]
+  security:
+    policies: [bee:placement_store_policy]
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native:store
+    request: bee.placement:request
+    types: bee.placement:types
+    materialization: bee.placement.publication_test:materialization
+    homes: bee.placement.publication_test:homes

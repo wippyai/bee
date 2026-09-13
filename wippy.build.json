@@ -29,6 +29,10 @@
       {
         "path": "build/patches/runtime-terminal-session-identity.patch",
         "sha256": "e2e9db6733aea25f9ec3e19c7749b074cde51b7b85b25692a5cd7325e50c4d33"
+      },
+      {
+        "path": "build/patches/runtime-fs-atomic-publication.patch",
+        "sha256": "ac300d9830e2ed88d4a95e263b0fb8b1c45e7469410fbf00326c4780e62eb9c4"
       }
     ]
   },

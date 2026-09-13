@@ -142,6 +142,17 @@ local function provider_configuration(): {[string]: unknown}
     return {revision = rendered.revision, path = rendered.path, content = rendered.content,
         digest = rendered.digest, provider_ref = rendered.provider_ref}
 end
+local function update_codex_provider(base_url: string, model: string)
+    local provider = registry.get("bee.placement.native:codex_test_provider")
+    if not provider then error("provider entry") end
+    local data = provider.data :: {[string]: unknown}
+    data.base_url = base_url
+    data.model = model
+    local changes = registry.snapshot():changes()
+    changes:update(provider)
+    local applied, err = changes:apply()
+    if not applied then error("update codex provider: " .. tostring(err)) end
+end
 local function provider_configuration_digest(): string
     local provider = registry.get("bee.placement.native:codex_test_provider")
     if not provider then error("provider entry") end
@@ -651,6 +662,30 @@ local function define_tests()
             if not restored then error(restored_error or "restored request") end
             test.eq(restored.delivery and restored.delivery.files[1].digest, file.digest)
         end)
+        test.it("rejects a persisted delivery that overlaps retained login identity", function()
+            local request = retained_launch(OWNER, fresh("persisted-login-overlap"), "overlap")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local db, open_error = store.open()
+            if not db then error(open_error or "store") end
+            local row, row_error = store.row(db, prepared.attempt_id)
+            if not row then db:release(); error(row_error or "stored request") end
+            local decoded = assert(json.decode(row.request_json :: string)) :: {[string]: unknown}
+            local delivery = decoded.delivery :: {[string]: unknown}
+            local file = (delivery.files :: {{[string]: unknown}})[1]
+            file.path = ".bee-retained-login-ready.json"
+            local encoded = assert(json.encode(decoded))
+            local _, write_error = db:execute("UPDATE bee_placement_attempts SET request_json = ? WHERE attempt_id = ?", {encoded, prepared.attempt_id})
+            db:release()
+            if write_error then error("corrupt overlap fixture: " .. tostring(write_error)) end
+
+            local started = call(OWNER, "start", {attempt_id = prepared.attempt_id})
+            test.is_false(started.ok)
+            test.eq(started.error and started.error.code, "UNAVAILABLE")
+            test.eq(started.error and started.error.message, "configuration overlaps retained login identity")
+            test.is_true(has(kinds(prepared.attempt_id), "configuration.refused"))
+            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
+            test.is_false(homes.attempt_exists(home_key))
+        end)
         test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
             local request = launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = POLICY
@@ -719,9 +754,10 @@ local function define_tests()
             test.eq(#receipt, 1)
             test.eq(receipt[1], "intent.recorded")
         end)
-        test.it("retains a selected session home across attempts without adopting changed configuration", function()
+        test.it("retains a selected session home and publishes changed configuration", function()
             local session_ref = fresh("session")
             local first = retained_launch(OWNER, session_ref, "first")
+            local first_configuration = provider_configuration().content :: string
             local first_prepared = attempt_of(call(OWNER, "prepare", first))
             -- The same admitted request is a replay, including while it is
             -- the retained home's only holder.
@@ -738,12 +774,17 @@ local function define_tests()
             local exited_holder = call(OWNER, "prepare", retained_launch(OWNER, session_ref, "exited-holder"))
             test.eq(exited_holder.error and exited_holder.error.code, "CONFLICT")
             attempt_of(call(OWNER, "cleanup", {attempt_id = first_prepared.attempt_id}))
+            update_codex_provider("https://gateway.example.net/v2", "gpt-5-refresh")
+            local second_configuration = provider_configuration().content :: string
             local second = retained_launch(OWNER, session_ref, "second")
             local second_prepared = attempt_of(call(OWNER, "prepare", second))
             test.eq(attempt_of(call(OWNER, "start", {attempt_id = second_prepared.attempt_id})).execution_state, "running")
             test.is_true(wait_for(function()
                 return (value(call(OWNER, "status", {attempt_id = second_prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
             end, 8000))
+            -- Restore the fixture provider after the changed retained launch
+            -- has started; later tests must see the original host selection.
+            update_codex_provider("https://gateway.example.net/v1", "gpt-5")
             local key, key_error = homes.session_key(OWNER, session_ref)
             if not key then error(tostring(key_error)) end
             local session_path, session_error = homes.ensure_session(key)
@@ -751,9 +792,8 @@ local function define_tests()
             local home_path, home_error = homes.os_path(session_path .. "/home")
             if not home_path then error(tostring(home_error)) end
             test.eq(shell("cat " .. home_path .. "/marker"), "first\nsecond\n")
-            local expected = provider_configuration()
             local sum = shell("sha256sum " .. home_path .. "/.codex/config.toml"):match("^([0-9a-f]+)")
-            test.eq(sum, expected.digest)
+            test.eq(sum, assert(hash.sha256(second_configuration)))
             local second_evidence = kinds(second_prepared.attempt_id)
             test.is_true(has(second_evidence, "configuration.materialized"))
             local first_home, first_home_error = homes.attempt_key(OWNER, first_prepared.attempt_id)
@@ -780,6 +820,9 @@ local function define_tests()
             local other_home, other_home_error = homes.os_path(other_path .. "/home")
             if not other_home then error(tostring(other_home_error)) end
             test.eq(shell("cat " .. other_home .. "/marker"), "other\n")
+
+            test.neq(second_configuration, first_configuration)
+            test.eq(shell("cat " .. home_path .. "/.codex/config.toml"), second_configuration)
 
             local direct_key, direct_key_error = homes.session_key(OWNER, fresh("session"))
             if not direct_key then error(tostring(direct_key_error)) end
@@ -830,6 +873,121 @@ local function define_tests()
             local refused, refused_error = homes.write_protected(path, ".gemini/new/config.json", "unapproved", {}, true)
             test.is_nil(refused)
             test.eq(refused_error, "configuration parent already exists")
+        end)
+        test.it("publishes bounded host configuration while preserving retained provider files", function()
+            local key = assert(homes.session_key(OWNER, fresh("published-config")))
+            local session = assert(homes.ensure_session(key))
+            local home = assert(homes.os_path(session .. "/home"))
+            local login = '{"access_token":"provider-refresh"}'
+            local conversation = "conversation-state\nuser-owned\n"
+            test.eq(shell("mkdir -p " .. quote.posix(home .. "/.codex/conversations")), "")
+            test.eq(shell("printf %s " .. quote.posix(login) .. " > " .. quote.posix(home .. "/.codex/auth.json")), "")
+            test.eq(shell("printf %s " .. quote.posix(conversation) .. " > " .. quote.posix(home .. "/.codex/conversations/thread.json")), "")
+
+            local first = "[gateway]\nendpoint = \"https://gateway.example/v1\"\n"
+            local published, publish_error, uncertain = homes.publish_configuration(session, ".codex/config.toml", first, {})
+            if not published then error(tostring(publish_error)) end
+            test.is_nil(publish_error)
+            test.is_false(uncertain == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/config.toml")), first)
+            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(first)))
+
+            -- A host refresh replaces a regular file atomically, while the
+            -- provider login and conversation remain harness-owned bytes.
+            local replacement = "[gateway]\nendpoint = \"https://gateway.example/v2\"\nheader = \"x-bee: refreshed\"\n"
+            local replaced, replace_error, replace_uncertain = homes.publish_configuration(session, ".codex/config.toml", replacement, {})
+            if not replaced then error(tostring(replace_error)) end
+            test.is_nil(replace_error)
+            test.is_false(replace_uncertain == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/config.toml")), replacement)
+            test.eq(shell("sha256sum " .. quote.posix(home .. "/.codex/config.toml")):match("^([0-9a-f]+)"), assert(hash.sha256(replacement)))
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/auth.json")), login)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/conversations/thread.json")), conversation)
+
+            -- A missing target is publishable when its already-existing
+            -- parent is a regular directory under the selected home.
+            local missing = "[limits]\nmax_retries = 3\n"
+            local missing_path, missing_error, missing_uncertain = homes.publish_configuration(session, ".codex/missing.toml", missing, {})
+            if not missing_path then error(tostring(missing_error)) end
+            test.is_nil(missing_error)
+            test.is_false(missing_uncertain == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/missing.toml")), missing)
+
+            local created: {[string]: boolean} = {}
+            local deep = "[agent]\nmode = \"retained\"\n"
+            local deep_path, deep_error, deep_uncertain = homes.publish_configuration(session, ".bee/config/nested.toml", deep, created)
+            if not deep_path then error(tostring(deep_error)) end
+            test.is_nil(deep_error)
+            test.is_false(deep_uncertain == true)
+            test.is_true(created[session .. "/home/.bee"] == true)
+            test.is_true(created[session .. "/home/.bee/config"] == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.bee/config/nested.toml")), deep)
+
+            -- Existing nested parents may be reused safely; the target is
+            -- still a newly published regular file.
+            test.eq(shell("mkdir -p " .. quote.posix(home .. "/.gemini/config")), "")
+            local nested = "{\"mcp\":{\"enabled\":true}}\n"
+            local nested_path, nested_error, nested_uncertain = homes.publish_configuration(session, ".gemini/config/settings.json", nested, {})
+            if not nested_path then error(tostring(nested_error)) end
+            test.is_nil(nested_error)
+            test.is_false(nested_uncertain == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.gemini/config/settings.json")), nested)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/auth.json")), login)
+            test.eq(shell("cat " .. quote.posix(home .. "/.codex/conversations/thread.json")), conversation)
+        end)
+        test.it("refuses unsafe retained configuration targets and preserves existing bytes", function()
+            local function new_session(label: string): (string, string)
+                local key = assert(homes.session_key(OWNER, fresh(label)))
+                local session = assert(homes.ensure_session(key))
+                local home = assert(homes.os_path(session .. "/home"))
+                return session, home
+            end
+            local function refused(session: string, relative: string, content: string): string
+                local published, publish_error, uncertain = homes.publish_configuration(session, relative, content, {})
+                test.is_nil(published)
+                test.not_nil(publish_error)
+                test.is_false(uncertain == true)
+                return tostring(publish_error)
+            end
+
+            local escaped, escaped_home = new_session("published-escape")
+            test.eq(refused(escaped, "../escape.toml", "escape"), "configuration path escapes the home")
+            test.eq(shell("test ! -e " .. quote.posix(escaped_home .. "/../escape.toml") .. " && printf absent"), "absent")
+
+            local linked_parent, linked_parent_home = new_session("published-link-parent")
+            test.eq(shell("mkdir -p " .. quote.posix(linked_parent_home .. "/.real-parent") .. " && ln -s .real-parent " .. quote.posix(linked_parent_home .. "/.linked-parent")), "")
+            refused(linked_parent, ".linked-parent/config.toml", "must-not-follow")
+            test.eq(shell("test ! -e " .. quote.posix(linked_parent_home .. "/.real-parent/config.toml") .. " && printf absent"), "absent")
+
+            local linked_target, linked_target_home = new_session("published-link-target")
+            test.eq(shell("mkdir -p " .. quote.posix(linked_target_home .. "/.codex") .. " && printf protected > " .. quote.posix(linked_target_home .. "/.codex/actual.toml") .. " && ln -s actual.toml " .. quote.posix(linked_target_home .. "/.codex/config.toml")), "")
+            refused(linked_target, ".codex/config.toml", "must-not-replace-link")
+            test.eq(shell("cat " .. quote.posix(linked_target_home .. "/.codex/actual.toml")), "protected")
+
+            local nonregular, nonregular_home = new_session("published-nonregular")
+            test.eq(shell("mkdir -p " .. quote.posix(nonregular_home .. "/.codex/config.toml")), "")
+            refused(nonregular, ".codex/config.toml", "must-not-replace-directory")
+            test.eq(shell("test -d " .. quote.posix(nonregular_home .. "/.codex/config.toml") .. " && printf directory"), "directory")
+
+            local oversized, oversized_home = new_session("published-oversized")
+            test.eq(shell("mkdir -p " .. quote.posix(oversized_home .. "/.codex") .. " && printf keep > " .. quote.posix(oversized_home .. "/.codex/config.toml")), "")
+            refused(oversized, ".codex/config.toml", string.rep("x", 16 * 1024 + 1))
+            test.eq(shell("cat " .. quote.posix(oversized_home .. "/.codex/config.toml")), "keep")
+
+            -- Exercise the operation's boundary check against the actual
+            -- placement root mode, restoring the fixture before assertions.
+            local private, private_home = new_session("published-private-root")
+            local root = assert(homes.os_path("/"))
+            local original_mode = shell("stat -c %a " .. quote.posix(root)):match("^([0-7]+)")
+            if not original_mode then error("read placement root mode") end
+            test.eq(shell("chmod 0755 " .. quote.posix(root)), "")
+            local ok, published, publish_error, uncertain = pcall(homes.publish_configuration, private, ".codex/config.toml", "private-check", {})
+            test.eq(shell("chmod " .. original_mode .. " " .. quote.posix(root)), "")
+            test.is_true(ok)
+            test.is_nil(published)
+            test.not_nil(publish_error)
+            test.is_false(uncertain == true)
+            test.eq(shell("test ! -e " .. quote.posix(private_home .. "/.codex/config.toml") .. " && printf absent"), "absent")
         end)
         test.it("seeds fixed private login destinations and preserves harness-refreshed bytes", function()
             local session_key = assert(homes.session_key(OWNER, fresh("login-session")))

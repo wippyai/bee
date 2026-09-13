@@ -1,11 +1,13 @@
 # Retained Agent configuration: verified filesystem boundary
 
-The next recovery gap is replacing host-generated configuration for a new attempt
-while keeping its provider conversation files. Current Bee admits replacement
-only after the previous native process group is independently absent and cleanup
-is complete. `homes.write_protected` then permits only byte-identical replay;
-Codex/Agy changes to endpoints, tokens or hook configuration therefore refuse
-recovery instead of overwriting the retained files.
+Source now replaces host-generated configuration for a new attempt while keeping
+provider conversation files. A new retained-session attempt is admitted only
+after the previous native process group is independently absent and cleanup is
+complete. `homes.publish_configuration` uses the optional native atomic operation
+for the persisted delivery files; `homes.write_protected` keeps its immutable
+replay contract for other callers. The global installation checkpoint remains in
+[GLOBAL_BUILD.md](GLOBAL_BUILD.md); source implementation is not proof that a
+real provider conversation has resumed after restart.
 
 ## Current runtime surface
 
@@ -64,7 +66,8 @@ no duplicate native process or prompt replay.
 
 [Runtime PR #744](https://github.com/wippyai/runtime/pull/744), assigned to Rodrigo
 (`skhaz`), adds optional `AtomicWriteFS` and Lua `fs:writefile_atomic(path, content)`.
-It is not merged or present in Bee's installed runtime. The isolated runtime
+It is not merged. The source manifest includes its checksum-pinned patch; the
+installed runtime is tracked separately in GLOBAL_BUILD.md. The isolated runtime
 head is `5e76e3c4e1`; the shared runtime checkout was not modified.
 
 The Linux/macOS directory implementation holds verified parent handles, publishes
@@ -80,9 +83,9 @@ replacement, concurrent readers/writers and injected publication failures.
 Darwin arm64 and Windows amd64 directory packages cross-compile; macOS has not
 been executed and Windows explicitly returns unsupported.
 
-Bee's consumer is still pending. Existing retained configuration remains
-byte-identical replay only. Real-provider recovery, crash/restart behavior and
-preservation of provider conversation files still require Bee acceptance.
+Bee's source consumer now replaces retained host configuration. Real-provider
+recovery and crash/restart acceptance remain separate from the filesystem and
+placement tests.
 
 ## Consumer review
 
@@ -92,16 +95,35 @@ materialization; a duplicate cannot replace `runner_pid` or create files. The
 regression fails on the old runner (it starts the duplicate) and passes on the
 corrected runner alongside all 845 unit tests.
 
-The next consumer should replace only the persisted, host-rendered
-`delivery.files` paths in a retained home. Login bytes, login source markers,
-provider initialization files and conversation files remain separately owned.
-Immediately before publication, verify the attempt is still `starting` and its
-recorded runner is the current process. Keep the existing session admission and
-cleanup rules; the filesystem operation itself grants no session authority.
+The consumer replaces only persisted, host-rendered `delivery.files` paths in a
+retained home. It rejects overlap with login bytes, the login source marker and
+provider initialization files. Conversation files remain separately owned.
+Before materialization and each publication it checks that the attempt is still
+`starting` and its recorded runner is the current process. The existing session
+admission and cleanup rules remain; the filesystem operation grants no session
+authority.
 
 Publication is atomic per file, not across the delivery list. A later failure
-must refuse startup without claiming that earlier files were rolled back. A
-published-but-unsynced result requires an explicit uncertain outcome and
-inspection before any further attempt; preserve the predecessor checkpoint and
-never replay its prompt. These are consumer requirements, not implemented Bee
-replacement behavior yet.
+refuses startup without claiming that earlier files were rolled back. A
+published-but-unsynced result records `configuration.uncertain` and leaves
+execution uncertain, retaining the session holder. It requires inspection before
+any further attempt. Startup failure does not replace the predecessor checkpoint
+or replay its prompt.
+
+## Consumer evidence
+
+The source candidate passes all 850 unit cases, including actual publication of
+changed host configuration across two native attempts, missing targets, nested
+parents, path/link/nonregular/root-mode refusals and unchanged login/conversation
+sentinels. A fault-injected instance of the actual materialization library uses
+the real placement store to prove post-publication uncertainty holds the session
+and a stale runner creates or publishes nothing. An earlier test wrapper did not
+execute those two cases; only the corrected 850-case run is evidence for them.
+
+The standalone candidate passes loopback-only offline boot/restart/reconnect
+(warm reconnect 0.216s) and the existing Claude fixture restart gate. These do not
+prove actual Codex/Agy conversation recovery. The prior source branch's full
+`make check` failed in `control_delivery.py`: injected structural failure reached
+the terminal as `Desktop dependency exited` instead of the required original
+delivery reason. A focused repeat fails the same way; that separate desktop gate
+is still unresolved. No claim of a fully green release is made here.

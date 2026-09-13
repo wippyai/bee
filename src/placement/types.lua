@@ -23,7 +23,8 @@ type ResourceGrant = {name: string, grant_ref: string, root_ref: string, subpath
 -- streams ended; expiry is recorded as output.lost.
 type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, retain_ms: integer}
 -- A generated configuration file for the private home: reviewed content
--- rendered by the driver at admission, written with protected creation.
+-- rendered by the driver at admission, created in an attempt home or atomically
+-- published in a retained session home. Provider state has separate ownership.
 type SecretField = {path: {string}, environment: string, prefix: string}
 type Configuration = {secret_fields: {SecretField}?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type ConfigurationDelivery = {arguments: {string}, files: {Configuration}}

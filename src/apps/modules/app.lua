@@ -92,7 +92,10 @@ local function main(value: unknown)
     local function fold_read(operation: string, value: Reply)
         if operation == "state" or operation == "files" or operation == "read_file" then contents.apply(content, operation, value)
         elseif operation == "catalog" then model.apply_catalog(state, value)
-        elseif operation == "installed" then model.apply_installed(state, value)
+        elseif operation == "installed" then
+            status = ""
+            model.apply_installed(state, value)
+            if state.action == "update" and state.installed_read == "ready" then state.notice = "Installed settings loaded" end
         elseif operation == "details" then model.apply_details(state, value)
         elseif operation == "inspect" then model.apply_inspect(state, value)
         elseif operation == "plan" then model.apply_plan(state, value)

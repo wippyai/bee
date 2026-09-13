@@ -109,7 +109,7 @@ def exercise(project, packed, pack):
             ui.key(b"u")
             ui.key(b"p")
             ui.wait("installed settings are still loading")
-            ui.pump(0.8)
+            ui.wait("Installed settings loaded")
             ui.key(b"e")
             ui.wait("example:enabled")
             # Delete clears the saved boolean override and re-inspects.

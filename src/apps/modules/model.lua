@@ -445,7 +445,7 @@ function M.hydrate_update_parameters(state: State): boolean
 end
 
 function M.begin_update_hydration(state: State)
-    if state.action == "update" then state.installed_read = "pending" end
+    if state.action == "update" then state.installed_read, state.notice = "pending", "Loading installed settings…" end
 end
 
 function M.set_policy(state: State, policy: string)

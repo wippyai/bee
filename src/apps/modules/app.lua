@@ -10,6 +10,7 @@ local client = require("client")
 local appearance = require("appearance")
 local model = require("model")
 local view = require("view")
+local contents = require("contents")
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
@@ -63,6 +64,7 @@ local function main(value: unknown)
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
     local state: model.State = model.new()
+    local content = contents.new()
     local offset = 0
     local reading_readme = false
     local visible_rows = 1
@@ -88,8 +90,12 @@ local function main(value: unknown)
         return intent.operation == "status" and intent.expected_digest == nil and "history" or intent.operation
     end
     local function fold_read(operation: string, value: Reply)
-        if operation == "catalog" then model.apply_catalog(state, value)
-        elseif operation == "installed" then model.apply_installed(state, value)
+        if operation == "state" or operation == "files" or operation == "read_file" then contents.apply(content, operation, value)
+        elseif operation == "catalog" then model.apply_catalog(state, value)
+        elseif operation == "installed" then
+            status = ""
+            model.apply_installed(state, value)
+            if state.action == "update" and state.installed_read == "ready" then state.notice = "Installed settings loaded" end
         elseif operation == "details" then model.apply_details(state, value)
         elseif operation == "inspect" then model.apply_inspect(state, value)
         elseif operation == "plan" then model.apply_plan(state, value)
@@ -124,7 +130,12 @@ local function main(value: unknown)
             generation = generation + 1
             requested = {intent = intent, generation = generation}
             if reading then
-                if not reading.retired then reading.retired = true; reading.future:cancel() end
+                -- Keep the stale read alive until its response is consumed. A
+                -- future cancellation is delivered as this app's lifecycle
+                -- cancellation, which would terminate the UI before a queued
+                -- retry can start. The generation fence below still prevents
+                -- the stale response from changing model state.
+                if not reading.retired then reading.retired = true end
             else start_read() end
             return true
         end
@@ -161,6 +172,7 @@ local function main(value: unknown)
     end
 
     local function details()
+        content.open = false
         local intent = model.details_intent(state)
         if not intent then status = "Select a package first"; changed(); return end
         model.show(state, "details")
@@ -171,10 +183,13 @@ local function main(value: unknown)
     end
 
     local function requirements()
+        content.open = false
         model.show_requirements(state, true)
         reading_readme, offset = false, 0
         local intent = model.inspect_intent(state)
-        if intent then begin(intent) else status = "Choose a version first" end
+        if intent then begin(intent)
+        elseif state.action == "update" then status = "Read installed settings before inspecting this update"
+        else status = "Choose a version first" end
         changed()
     end
 
@@ -316,7 +331,22 @@ local function main(value: unknown)
 
     local function handle_hit(kind: string, key: string)
         status = ""
-        if kind == "save_editor" then finish_editor()
+        if kind == "contents" then
+            if state.selected and state.selected_version then
+                model.show_requirements(state, false); reading_readme = false; offset = 0
+                begin(contents.start(content, state.selected, state.selected_version)); changed()
+            end
+        elseif kind == "content_row" or kind == "content_back" or kind == "content_next" or kind == "content_previous" then
+            local intent: contents.Intent? = nil
+            if kind == "content_back" and content.mode == "entries" then
+                content.open = false; reading_readme = true; invalidate()
+            elseif kind == "content_back" then intent = contents.back(content)
+            elseif kind == "content_next" then intent = contents.next(content)
+            elseif kind == "content_previous" then intent = contents.previous(content)
+            else intent = contents.activate(content, key ~= "" and key or nil) end
+            if intent then begin(intent) end
+            offset = 0; changed()
+        elseif kind == "save_editor" then finish_editor()
         elseif kind == "cancel_editor" then editor = nil; status = "Cancelled"; changed()
         elseif kind == "missing" then
             local measured = state.plan
@@ -360,16 +390,22 @@ local function main(value: unknown)
         elseif kind == "requirement" then
             for index, row in ipairs(state.requirements) do if row.id == key then model.select_requirement(state, index); break end end
             edit_requirement()
-        elseif kind == "readme" then model.show_requirements(state, false); reading_readme = true; offset = 0; changed()
-        elseif kind == "versions" then model.show_requirements(state, false); reading_readme = false; offset = 0; changed()
+        elseif kind == "readme" then content.open = false; invalidate(); model.show_requirements(state, false); reading_readme = true; offset = 0; changed()
+        elseif kind == "versions" then content.open = false; invalidate(); model.show_requirements(state, false); reading_readme = false; offset = 0; changed()
         elseif kind == "details" then details()
         elseif kind == "plan" then plan()
         elseif kind == "component" then choose(key, true)
-        elseif kind == "version" then model.select_version(state, key); invalidate(); changed()
+        elseif kind == "version" then content.open = false; model.select_version(state, key); invalidate(); changed()
         elseif kind == "previous" then model.set_page(state, state.page - 1); invalidate(); catalog()
         elseif kind == "next" then model.set_page(state, state.page + 1); invalidate(); catalog()
         elseif kind == "refresh" then invalidate(); installed()
-        elseif kind == "install" or kind == "update" or kind == "uninstall" then model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate(); changed()
+        elseif kind == "install" or kind == "update" or kind == "uninstall" then
+            content.open = false; model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate()
+            -- Updating an existing root must use its current typed values. Read
+            -- the authoritative inventory on demand; the normal read generation
+            -- fence prevents a late snapshot from replacing newer user edits.
+            if kind == "update" then model.begin_update_hydration(state); begin(model.installed_intent(state)) end
+            changed()
         elseif kind == "plan" or kind == "refresh_plan" then plan()
         elseif kind == "parameter" then begin_editor("parameter_name")
         elseif kind == "policy_none" then model.set_policy(state, "none"); invalidate(); changed()
@@ -388,7 +424,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local display_status = editor and status or (status ~= "" and status or state.notice)
-            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor)
+            local frame = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor, content)
             hits, offset = frame.hits, frame.offset
             model.set_operation_detail_offset(state, frame.operation_detail_offset)
             visible_rows = math.floor(math.max(1, frame.capacity))
@@ -446,7 +482,16 @@ local function main(value: unknown)
                         elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
                     else
                         status = ""
-                        if key == "up" or letter == "k" then
+                        if state.phase == "details" and content.open and (key == "up" or key == "down" or key == "pgup" or key == "pgdown") then
+                            local delta = (key == "up" or key == "pgup") and -1 or 1
+                            if #content.rows > 0 then contents.move(content, delta)
+                            else offset = math.floor(math.max(0, offset + delta * ((key == "pgup" or key == "pgdown") and 5 or 1))) end
+                            changed()
+                        elseif state.phase == "details" and content.open and key == "enter" then handle_hit("content_row", "")
+                        elseif state.phase == "details" and content.open and (key == "backspace" or key == "esc" or key == "escape") then handle_hit("content_back", "")
+                        elseif state.phase == "details" and content.open and letter == "n" then handle_hit("content_next", "")
+                        elseif letter == "c" and state.phase == "details" then handle_hit("contents", "")
+                        elseif key == "up" or letter == "k" then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
                             elseif state.phase == "operations" then operation_relative(-1)
                             elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement - 1); changed()
@@ -495,7 +540,11 @@ local function main(value: unknown)
                     local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                     if hit then handle_hit(hit.kind, hit.key) end
                 elseif data.type == "mouse" and data.action == "wheel" then
-                    if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
+                    if state.phase == "details" and content.open then
+                        local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                        if #content.rows > 0 then contents.move(content, delta) else offset = math.floor(math.max(0, offset + delta * 3)) end
+                        changed()
+                    elseif (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
                     elseif state.phase == "operations" then operation_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
                     elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)); changed()
                     elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)

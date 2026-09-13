@@ -1,5 +1,157 @@
 # Global Bee build — September 12, 2026
 
+## Current install: offline startup and retained harness configuration
+
+Global SHA `230816bd1110f6595ebf7eed1f3a48db007f8e950524b825a6fa158e7546dd95`
+contains source `d88cbd6`. It preserves the preceding application-admission
+refresh, initializes imported Claude onboarding without granting project trust,
+and creates nested Agy configuration directories before writing their files.
+Automatic Agy sign-in and managed Docker remain unfinished.
+
+Runtime PRs #740, #741 and #742 are composed as checked, license-preserving
+patches on pin `291f5c6`; native pin `0f63d30bd718` is unchanged. These PRs remain
+open and assigned to Rodrigo, not merged. Startup uses only verified local
+artifacts. A stable application cache retains installed dependencies across
+embedded executable updates; Bee explicitly selects its terminal host even
+when an installed module supplies another. See [offline acceptance](OFFLINE_BOOT.md).
+
+All 789 Bee unit tests, strict lint after resetting the reproduced stale type
+cache, affected runtime race/lint checks, and full native executable acceptance
+pass. Network-isolated fresh/restored startup and restart pass, as does public
+retained-client rejoin. Native Agent checks use fixture CLIs and verify scoped
+MCP integration; they do not establish authenticated provider orchestration.
+The full repository `make check` remains outstanding.
+
+Installation fenced against `dac1ba49`, backed up and verified all six files,
+and did not restart running nodes or reset databases. Evidence:
+`offline-global-install.json`, `offline-final-desktop-proof.log`,
+`offline-final-native.log`, `offline-bee-unit-check.log`, and
+`offline-final-app-{race,lint}.log` in `bee-evidence/0912`.
+
+## Current install: reconcile protected application admission
+
+Global SHA `dac1ba49436ddb79672f6ab5a9cddc39a49d8acf55d7f992ad7e46f0e682786a`
+contains source `7b7f4af`. The broker reloads protected bindings, descriptors and
+host-selected scopes by registry revision and before new opens. Revoked bindings
+prevent new launches; invalid replacements clear future admission while existing
+producers retain their bindings and viewports. A valid replacement recovers the
+catalog and launch path together. This grants no new publication authority and
+does not yet expose an approval-backed install-to-Tools workflow.
+
+The source/pack admission fixture and existing detached Terminal/client/renderer
+attachment gate pass. All 787 unit cases pass in the running full regression.
+Strict lint and pack pass after resetting a reproduced stale cache; the existing
+lifecycle fixpoint warning remains. Complete native acceptance passes, including
+Modules, About, terminal behavior and Agent launch. A real native Modules
+install/update/uninstall cycle preserves all Bee base artifacts. Evidence:
+`hub-admission-check.log`, `hub-admission-attachments.log`,
+`hub-admission-pack-reset.log`, `hub-admission-native-comparison-candidate.log`,
+`hub-admission-native-modules.log`, `hub-admission-full-check.log`, and
+`hub-admission-global-install.json`.
+
+Two initial native smoke runs missed the four-second startup wait with no output.
+Fresh candidate and prior-global startup probes then passed around 1.4 seconds,
+and the complete native target passed sequentially on both builds. The initial
+cause is unproven; see `hub-admission-native.log`,
+`hub-admission-native-recheck.log`, `hub-admission-startup-probe.json`, and
+`hub-admission-native-comparison.json`. Do not describe these initial runs as
+passing or the full repository gate as completed.
+
+The installer verified and backed up all six global files, fenced against
+`b92317be`, and preserved the existing runtime/native/patch identity. No running
+Bee owner was restarted. The Bee mark, desktop hint/Run queue cleanup, current
+Hub UI and Agent work are included. Existing sessions keep their loaded source.
+
+
+## Previous install: remove desktop hints and Run queue
+
+Global SHA `b92317bec5fbc70a4e100aa6a5870ac645356c42cc40dff42c804358af553cbf`
+contains source `b59d2cc`. The user-requested cleanup removes empty-desktop
+instructional text at every size and removes Process Manager's Run queue display,
+including its compact variant. The Bee mark remains; Heap and Scheduler share
+the chart area. Hub Contents, saved update settings and Agent thread messaging
+are preserved.
+
+Strict lint, source/pack Process Manager checks, full native binary acceptance
+and real native absence/mark checks pass. Evidence: `desktop-cleanup-check.log`,
+`desktop-cleanup-native.log`, `desktop-cleanup-preview.log`, rendered
+`desktop-cleanup-*.png`, and `desktop-cleanup-global-install.json`.
+The installer fenced against `6cfa0071`, backed up and verified all six files,
+and retained identical runtime/native/patch identity. No owners were restarted.
+Backup: `global-before-desktop-cleanup-6cfa0071`.
+
+The preceding Hub source passed all 787 units on recheck in
+`hub-contents-unit-recheck.log`; this does not establish a full repository pass.
+
+## Current install: Contents and preserved update settings
+
+Global SHA `6cfa007158d0891f8ec3413edda2c70ca3df0e00c6ff7e41b2e6b7ade1a293ff`
+contains source `ef94c84`; acceptance-only follow-up is `aa45f5c`. Modules adds
+Contents (C) for exact-version entry definitions and packaged files, including
+paging, parent navigation and compact views. Updating a Bee-managed root loads
+its saved typed values, preserves individual edits/clears and blocks planning
+until inventory is available. Stale reads retire without cancelling the Modules
+process, and the completed read has a visible readiness state.
+
+This source merges global Agent thread messaging `5156fb0`, preserving About,
+the Bee mark, existing migration management and gateway scope restrictions.
+Strict lint, 79 focused Hub/Modules cases, source/pack Modules/update/Contents
+workflows, complete native binary acceptance and live public exact-version entry
+preview pass. The live preview proves no installation and unchanged bundled
+artifacts; packaged filesystem behavior has source/pack UI and separate native
+Hub API acceptance. Evidence: `hub-contents-final-check.log` (lint/unit/general
+Modules slice), `hub-contents-workflow-check.log`, `hub-contents-update-native.log`,
+`hub-contents-global-install.json`, and rendered `modules-contents-*.png`.
+
+The installer fenced against `64610df9`, verified all six files, and preserved
+runtime/native/patch identity. Backup: `global-before-contents-64610df9`. No owners
+were restarted; retained sessions continue running their loaded UI. Settings →
+About on a fresh owner reports `ef94c84`.
+
+Full acceptance on this combined source ended with `context canceled` during
+approvals unit cases in `hub-contents-full-check.log` (exit 2, no failed-case
+assertion). The focused unit recheck runs in `hub-contents-unit-recheck.log`;
+full acceptance is incomplete. The older full run ended in the shared-desktop shutdown case;
+that exact source/pack case passed alone. See the [completion audit](HUB_COMPLETION.md)
+for remaining update discovery, optional plugin and installed-app admission work.
+
+## Current install: Modules presentation follow-up
+
+Global SHA `668d2e9078bcbd53935ebb1e5840ee000faae26ea036cdce52e0b6b75fdf8b21`
+contains source `bf41d0a`. Installed packages now separate names and versions from
+installation/dependency details, active choices are highlighted, and README code
+examples retain indentation. Compact rows and scrolling remain supported.
+About, the Bee mark, existing Hub behavior and Agent/MCP features are preserved.
+
+Strict lint, 73 focused tests, source/pack Modules interaction and complete native
+binary acceptance pass. Evidence: `modules-polish-check.log`,
+`modules-polish-native.log`, `modules-polish-installed.png`, and
+`modules-polish-global-install.json` in September 12 local evidence. The installer
+fenced against `4f93cc36`, verified all six files and preserved runtime/native/patch
+identity. Backup: `global-before-modules-polish-4f93cc36`.
+
+No running owners were restarted. Read-only process identity inspection found
+retained global executables including `acb59231` and `7ba0b747`; reconnecting them
+does not load this UI. Settings → About on a fresh owner reports `bf41d0a`.
+The full repository gate on the earlier combined source remains running in
+`hub-current-full-check.log`. Saved update-parameter hydration is being developed
+separately and is not included here.
+
+## Current install: configure missing dependency parameters
+
+Global SHA `4f93cc36b6bb3e2b95fc81908f78c2344a9836de5feba63f64bf1843670d6b64`
+contains source `c5f636e`. Missing dependency parameters can be edited directly
+from plan rows or Configure required (E). Saving invalidates the old plan;
+publication still requires a new measured plan and confirmation.
+Strict lint, source/pack editing/replan/recovery checks and full native binary
+acceptance pass. About, Modules redesign and global MCP are preserved.
+Evidence: `hub-missing-configuration-check.log`, `hub-plan-config-native-check.log`,
+`hub-plan-config-global-install.json`. The combined full repository gate runs
+separately in `hub-current-full-check.log`; completion is not yet established.
+The installer fenced against `adeb373c`, backed up/hash-verified the executable
+and five sidecars, and checked matching runtime/native/patch identity. No nodes
+were restarted. Earlier checkpoint sections follow.
+
 ## Current install: About and Modules override reset
 
 Global SHA `adeb373c181a5f0f3e4de67aa570c3d215951622111f04ed8ea25ac6ac90dbe6`

@@ -21,3 +21,13 @@ entries:
     model: bee.modules:model
     view: bee.modules:view
     appearance: bee.desktop:appearance
+    contents: bee.modules:contents
+- name: contents_test
+  kind: function.lua
+  source: file://contents_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [base64]
+  imports:
+    test: wippy.test:test
+    contents: bee.modules:contents

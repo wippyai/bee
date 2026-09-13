@@ -598,7 +598,7 @@ local function main(mode: string?)
     if not other_store then error("Cannot open other client store") end
     local other_before = assert(store.read(other_store))
     key(resumed_screen, "f1")
-    -- The empty-desktop guide also says Tools; wait for the actual menu.
+    -- Wait for the actual menu before selecting its Tools group.
     wait_text(resumed_screen, "Exit")
     wait_text(resumed_screen, "Tools")
     click_text(resumed_screen, "Tools")

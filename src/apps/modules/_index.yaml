@@ -11,6 +11,7 @@ entries:
     appearance: bee.desktop:appearance
     model: bee.modules:model
     view: bee.modules:view
+    contents: bee.modules:contents
   meta:
     type: bee.application
     application:
@@ -26,7 +27,7 @@ entries:
 - name: model
   kind: library.lua
   source: file://model.lua
-  modules: [json]
+  modules: [json, hash]
   imports:
     text: bee.application:text
     canonical: bee.sync:canonical
@@ -37,6 +38,13 @@ entries:
   imports:
     appearance: bee.desktop:appearance
     model: bee.modules:model
+    contents: bee.modules:contents
+- name: contents
+  kind: library.lua
+  source: file://contents.lua
+  modules: [json, base64]
+  imports:
+    text: bee.application:text
 - name: client_policy
   kind: security.policy
   meta:

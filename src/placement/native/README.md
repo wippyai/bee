@@ -46,12 +46,25 @@ the child starts. Error replies and evidence name the destination and projection
 they contain no credential bytes. Policies supply nonsecret configuration while
 the credential broker supplies secrets; precedence is not used to hide conflicts.
 
+Nested configuration paths create each missing parent in order. Every existing
+ancestor must belong to the current materialization's created-parent set;
+retained byte-identical file replay remains unchanged. This permits Agy's
+`.gemini/config/mcp_config.json` in a fresh home without adopting unrelated
+pre-existing directories.
+
 ## Retained provider login destinations
 
 `homes.retain_login` receives broker file projections during runtime materialization
 only after a launch selects its retained session home. It accepts bounded opaque bytes and
 only two fixed home-relative targets: Codex `.codex/auth.json` and Claude
-`.claude/.credentials.json`. The first seed records a separate nonsecret
+`.claude/.credentials.json`. Claude imports also initialize `.claude.json` with only
+`hasCompletedOnboarding: true`: the real CLI otherwise asks for a login method
+despite recognizing the imported subscription. This does not trust any project,
+import machine settings or change later harness-owned preferences. An absent
+optional login does not initialize onboarding. Existing retained homes are not
+rewritten.
+
+The first seed records a separate nonsecret
 provider/definition-id/definition-revision identity only after the opaque file
 has been completely written. A matching resume leaves the login file untouched,
 so bytes refreshed by the harness persist. A changed provider, definition or

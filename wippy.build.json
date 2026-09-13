@@ -17,6 +17,14 @@
       {
         "path": "build/patches/runtime-http-port0.patch",
         "sha256": "e6903cb4b71912d5f3cb96b18e281f964fd6d2bc523740b20f5c882ac24ca033"
+      },
+      {
+        "path": "build/patches/runtime-offline-restore-host.patch",
+        "sha256": "c74aa0e4dcbb5ca651b68c96a02613424362053f3d16427e66a5b71bd47880a2"
+      },
+      {
+        "path": "build/patches/runtime-application-artifact-cache.patch",
+        "sha256": "60d546ab0425c41f2bfae5a9ded6261af327c42eddada53de0ee4618baff5081"
       }
     ]
   },

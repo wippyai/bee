@@ -3,12 +3,14 @@
 -- transaction replies back here.
 local json = require("json")
 local canonical = require("canonical")
+local hash = require("hash")
 local text = require("text")
 local M = {}
 
 M.MAX_TEXT = 512
 M.MAX_PARAMETERS = 128
 M.MAX_ITEMS = 100
+M.MAX_ROOTS = 16384
 M.HUB = "bee.hub:call"
 
 type Object = {[string]: unknown}
@@ -20,6 +22,7 @@ type Version = {version: string, yanked: boolean}
 type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
 type Module = {component: string, version: string, source: string, direct: boolean, used_by: {string}}
 type Parameter = {name: string, value: unknown, json: string}
+type Root = {id: string, component: string, version: string, parameters: {Parameter}}
 type Requirement = {id: string, json: string, origin: string, targets: {string}}
 type Plan = {digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
@@ -27,9 +30,9 @@ type Operation = {digest: string, component: string, action: string, state: stri
 type Recovery = {digest: string, request: Object, operation: Operation}
 type State = {
     phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, total: integer,
-    installed: {Module}, selected: string?, detail: Detail?, selected_version: string?,
+    installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error", selected: string?, detail: Detail?, selected_version: string?,
     requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
-    action: string, policy: string, parameters: {Parameter}, plan: Plan?, result: Result?, notice: string,
+    action: string, policy: string, parameters: {Parameter}, parameter_touched: {[string]: boolean}, plan: Plan?, result: Result?, notice: string,
     operation_page: integer, operation_total: integer, operation_page_size: integer, operation_detail_offset: integer, operations: {Operation}, selected_operation: Operation?, recovery: Recovery?,
 }
 
@@ -111,6 +114,75 @@ local function operation_request(raw: unknown, action: string, owner: string): O
     return result
 end
 
+local function parameter_rows(raw: unknown): ({Parameter}?, string?)
+    if type(raw) ~= "table" then return nil, "installed root parameters must be a list" end
+    local count = 0
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return nil, "installed root parameters must be a dense list" end
+        count = math.max(count, key)
+    end
+    if count > M.MAX_PARAMETERS then return nil, "installed root has too many parameters" end
+    local parameters: {Parameter} = {}
+    local seen: {[string]: boolean} = {}
+    for index = 1, count do
+        local parameter = object((raw :: {[number]: unknown})[index])
+        local name = parameter.name
+        if type(name) ~= "string" or #name == 0 or #name > 256 or not name:match("^[^:%s]+:[^:%s]+$") or seen[name] then
+            return nil, "installed root has an invalid parameter name"
+        end
+        if parameter.value == nil then return nil, "installed root parameter has no value" end
+        local encoded, encoding_error = json.encode(parameter.value)
+        if not encoded or encoding_error or #encoded > 8192 then return nil, "installed root parameter value is invalid" end
+        parameters[index] = {name = name, value = clone(parameter.value), json = encoded}
+        seen[name] = true
+    end
+    return parameters, nil
+end
+
+local function root_rows(raw: unknown): ({Root}?, string?)
+    if raw == nil then return nil, "installed inventory did not include roots" end
+    if type(raw) ~= "table" then return nil, "installed inventory roots must be a list" end
+    local count = 0
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return nil, "installed inventory roots must be a dense list" end
+        count = math.max(count, key)
+    end
+    if count > M.MAX_ROOTS then return nil, "installed inventory has too many roots" end
+    local roots: {Root} = {}
+    local seen: {[string]: boolean} = {}
+    for index = 1, count do
+        local item = object((raw :: {[number]: unknown})[index])
+        local id = item.id
+        local name = component(item.component)
+        local selected = version(item.version)
+        if type(id) ~= "string" or #id == 0 or #id > 256 or id:find("%c") or not name or not selected then
+            return nil, "installed inventory contains an invalid root"
+        end
+        if seen[id] then return nil, "installed inventory contains duplicate roots" end
+        local parameters, parameter_error = parameter_rows(item.parameters)
+        if not parameters then return nil, parameter_error end
+        seen[id] = true
+        roots[index] = {id = id, component = name, version = selected, parameters = parameters}
+    end
+    table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
+    return roots, nil
+end
+
+local function copy_parameter(parameter: Parameter): Parameter
+    return {name = parameter.name, value = clone(parameter.value), json = parameter.json}
+end
+
+local function copy_parameters(parameters: {Parameter}): {Parameter}
+    local copied: {Parameter} = {}
+    for index, parameter in ipairs(parameters) do copied[index] = copy_parameter(parameter) end
+    return copied
+end
+
+local function managed_root(root: Root): boolean
+    local measured = hash.sha256(root.component)
+    return measured ~= nil and root.id == "bee.hub.deps:" .. measured
+end
+
 local function migration_rows(raw: unknown): {Object}
     local work = object(raw)
     local rows: {Object} = {}
@@ -135,9 +207,9 @@ end
 
 function M.new(): State
     return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, total = 0,
-        installed = {}, selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
+        installed = {}, installed_roots = {}, installed_read = "unknown", selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
         requirements_open = false, requirements = {}, requirements_digest = nil, selected_requirement = 1,
-        parameters = {}, plan = nil, result = nil, notice = "", operation_page = 1, operation_total = 0,
+        parameters = {}, parameter_touched = {}, plan = nil, result = nil, notice = "", operation_page = 1, operation_total = 0,
         operation_page_size = 25, operation_detail_offset = 0, operations = {}, selected_operation = nil, recovery = nil}
 end
 
@@ -249,6 +321,7 @@ end
 
 function M.inspect_intent(state: State): Intent?
     if not state.selected or not state.selected_version then return nil end
+    if state.action == "update" and state.installed_read ~= "ready" then return nil end
     local parameters: {Object} = {}
     for index, parameter in ipairs(state.parameters) do parameters[index] = {name = parameter.name, value = parameter.value} end
     return {operation = "inspect", request = {component = state.selected, version = state.selected_version, parameters = parameters}}
@@ -257,6 +330,11 @@ end
 function M.plan_intent(state: State): (Intent?, string?)
     if not state.selected then return nil, "select a package first" end
     if state.action ~= "uninstall" and not state.selected_version then return nil, "select an exact package version" end
+    if state.action == "update" then
+        if state.installed_read ~= "ready" then return nil, state.installed_read == "error"
+            and "installed settings could not be read; retry the inventory read before updating"
+            or "installed settings are still loading; retry after the inventory read completes" end
+    end
     local parameters: {Object} = {}
     if state.action ~= "uninstall" then
         for index, parameter in ipairs(state.parameters) do parameters[index] = {name = parameter.name, value = parameter.value} end
@@ -310,6 +388,7 @@ end
 function M.select(state: State, name: string?)
     if name ~= state.selected then
         state.selected, state.detail, state.selected_version, state.parameters = name, nil, nil, {}
+        state.parameter_touched = {}
         state.requirements, state.requirements_digest, state.selected_requirement = {}, nil, 1
         state.action, state.policy = "install", "none"
         reset_plan(state)
@@ -337,8 +416,36 @@ function M.set_action(state: State, action: string)
     if action ~= state.action then
         state.action = action
         state.policy = action == "uninstall" and "block" or "none"
+        if action == "update" then M.hydrate_update_parameters(state) end
         reset_plan(state)
     end
+end
+
+function M.hydrate_update_parameters(state: State): boolean
+    if state.action ~= "update" then return false end
+    local saved: {[string]: Parameter} = {}
+    if state.selected then
+        for _, root in ipairs(state.installed_roots) do
+            if root.component == state.selected and managed_root(root) then
+                for _, parameter in ipairs(root.parameters) do saved[parameter.name] = parameter end
+                break
+            end
+        end
+    end
+    local hydrated: {Parameter} = {}
+    for name, parameter in pairs(saved) do
+        if not state.parameter_touched[name] then hydrated[#hydrated + 1] = copy_parameter(parameter) end
+    end
+    for _, parameter in ipairs(state.parameters) do
+        if state.parameter_touched[parameter.name] then hydrated[#hydrated + 1] = parameter end
+    end
+    table.sort(hydrated, function(a: Parameter, b: Parameter): boolean return a.name < b.name end)
+    state.parameters = hydrated
+    return true
+end
+
+function M.begin_update_hydration(state: State)
+    if state.action == "update" then state.installed_read, state.notice = "pending", "Loading installed settings…" end
 end
 
 function M.set_policy(state: State, policy: string)
@@ -360,6 +467,7 @@ function M.set_parameter(state: State, name: unknown, encoded: unknown): string?
     for _, parameter in ipairs(state.parameters) do
         if parameter.name == id then
             parameter.value, parameter.json = value, normalized
+            state.parameter_touched[id] = true
             reset_plan(state)
             return nil
         end
@@ -367,13 +475,14 @@ function M.set_parameter(state: State, name: unknown, encoded: unknown): string?
     if #state.parameters >= M.MAX_PARAMETERS then return "too many parameters" end
     state.parameters[#state.parameters + 1] = {name = id, value = value, json = normalized}
     table.sort(state.parameters, function(a: Parameter, b: Parameter): boolean return a.name < b.name end)
+    state.parameter_touched[id] = true
     reset_plan(state)
     return nil
 end
 
 function M.remove_parameter(state: State, name: string)
     for index, parameter in ipairs(state.parameters) do
-        if parameter.name == name then table.remove(state.parameters, index); reset_plan(state); return end
+        if parameter.name == name then table.remove(state.parameters, index); state.parameter_touched[name] = true; reset_plan(state); return end
     end
 end
 
@@ -456,8 +565,16 @@ function M.apply_catalog(state: State, reply: Reply)
 end
 
 function M.apply_installed(state: State, reply: Reply)
-    if not reply.ok or type(reply.value) ~= "table" then state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "installed modules unavailable")); return end
+    if not reply.ok or type(reply.value) ~= "table" then
+        state.installed_read = "error"
+        state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "installed modules unavailable")); return
+    end
     local value, rows = object(reply.value), {}
+    local roots, root_error = root_rows(value.roots)
+    if not roots then
+        state.installed_read = "error"
+        state.notice = "Invalid installed inventory: " .. (root_error or "invalid roots"); return
+    end
     if type(value.modules) == "table" then
         for _, raw in ipairs(value.modules :: {unknown}) do
             local item = object(raw)
@@ -469,7 +586,11 @@ function M.apply_installed(state: State, reply: Reply)
             end
         end
     end
-    state.installed, state.phase, state.notice = rows, "installed", ""
+    state.installed, state.installed_roots = rows, roots
+    state.installed_read = "ready"
+    M.hydrate_update_parameters(state)
+    if state.phase == "catalog" or state.phase == "installed" then state.phase = "installed" end
+    state.notice = ""
 end
 
 function M.apply_details(state: State, reply: Reply)

@@ -30,7 +30,11 @@ native-modules-lifecycle-check:
 .PHONY: modules-app-check
 modules-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_app.py
+.PHONY: modules-update-check
+modules-update-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_update.py
 check: modules-app-check
+check: modules-update-check
 .PHONY: hub-manage-check
 hub-manage-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go
@@ -260,3 +264,18 @@ hive-manager-check: pack
 .PHONY: identity-native-check
 identity-native-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/identity_native.py
+
+.PHONY: modules-contents-check
+modules-contents-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_contents.py
+check: modules-contents-check
+
+.PHONY: native-contents-check
+# Explicit live Hub probe, like native-modules-lifecycle-check.
+native-contents-check:
+	python3 tests/native_contents.py "$(BEE_BINARY)"
+
+check: app-admission-check
+.PHONY: app-admission-check
+app-admission-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py

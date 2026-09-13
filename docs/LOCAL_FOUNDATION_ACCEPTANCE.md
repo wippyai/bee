@@ -129,8 +129,9 @@ bee codex
 ```
 
 An ordinary `bee` opens the Bee desktop without starting an application. The
-empty desktop keeps the Bee mark and shows `F1`/the `BEE` menu as the way to
-open one; `Tools → Modules` is the component-management surface.
+empty desktop keeps the Bee mark without instructional text. Applications open
+through `F1` or the `BEE` menu; Modules is under Tools. Process Manager displays
+Heap and Scheduler charts, without a Run queue metric.
 
 Run from the desired project directory. The native program must be installed on
 PATH. The current candidate selects embedded code by default while preserving shared

@@ -54,7 +54,7 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     if width >= 38 then put(width - 10, 1, paused and " Resume " or " Pause ", 9, theme.accent) end
     local first = 4
     if width >= 48 and height >= 13 then
-        local col = math.floor((width - 4) / 3)
+        local col = math.floor((width - 3) / 2)
         local function metric(index: integer, title: string, value: string, values: {number})
             local x = 2 + (index - 1) * (col + 1)
             put(x, 3, title, col, theme.muted)
@@ -64,13 +64,11 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
         metric(1, "Heap", snapshot.heap and string.format("%.1f MiB", snapshot.heap / 1048576) or "—", history.heap)
         local last = history.rate[#history.rate]
         metric(2, "Scheduler", number(last) .. " steps/s", history.rate)
-        metric(3, "Run queue", number(snapshot.queue), history.queue)
         put(2, 7, number(snapshot.goroutines) .. " goroutines · " .. number(snapshot.gc_cycles) .. " GC · "
             .. (snapshot.reserved and string.format("%.1f MiB reserved", snapshot.reserved / 1048576) or "—"), width - 2, theme.muted)
         first = 10
     else
-        put(2, 2, "Heap " .. (snapshot.heap and string.format("%.1fM", snapshot.heap / 1048576) or "—")
-            .. "  Queue " .. number(snapshot.queue), width - 2, theme.muted)
+        put(2, 2, "Heap " .. (snapshot.heap and string.format("%.1fM", snapshot.heap / 1048576) or "—"), width - 2, theme.muted)
     end
     local capacity = math.floor(math.max(0, height - first - 2))
     local next_offset = math.floor(math.max(0, math.min(offset, #rows - capacity)))

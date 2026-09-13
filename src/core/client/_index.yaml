@@ -89,6 +89,7 @@ entries:
   meta:
     command:
       name: bee
+      host: bee:terminal
       short: Open the Bee workspace desktop
       security: &local_security
         actor:
@@ -107,6 +108,7 @@ entries:
   meta:
     command:
       name: bee-app
+      host: bee:terminal
       short: Open an application with explicit arguments
       security: *local_security
 - name: store

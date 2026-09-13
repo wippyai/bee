@@ -265,3 +265,8 @@ identity-native-check:
 modules-contents-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_contents.py
 check: modules-contents-check
+
+.PHONY: native-contents-check
+# Explicit live Hub probe, like native-modules-lifecycle-check.
+native-contents-check:
+	python3 tests/native_contents.py "$(BEE_BINARY)"

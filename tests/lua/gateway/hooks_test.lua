@@ -10,6 +10,15 @@ local codex_configuration = require("codex_configuration")
 type Object = {[string]: unknown}
 local function define_tests()
     test.describe("Gateway hooks", function()
+        test.it("allows hook reporting without granting MCP tools", function()
+            local gateway = {endpoint = "127.0.0.1:18790", action_id = "act-hooks-only", tools = {}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
+            local decoded, err = configuration.decode_request({gateway = gateway, fixture = false})
+            if not decoded or not decoded.gateway then error(tostring(err)) end
+            test.eq(#decoded.gateway.tools, 0)
+            test.eq(decoded.gateway.hooks[1], "SessionStart")
+            local empty = configuration.decode_request({gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = {}, hooks = {}, token_environment = gateway.token_environment}, fixture = false})
+            test.is_nil(empty)
+        end)
         test.it("derives occurrence identity from the identifier each event carries and marks the rest ambiguous", function()
             local tool, tool_ambiguous = hooks.occurrence("PreToolUse", {session_id = "s1", tool_use_id = "toolu_1"})
             test.eq(tool, "tool:toolu_1")

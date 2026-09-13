@@ -24,10 +24,15 @@ permissions to the picker.
 
 Six decoder cases pass. Three real-facade cases pass workspace authorization and
 cross-workspace denial, reuse by different actors, mutation replay/conflict/removal
-and snapshot invalidation. Each call reopens the store. Separate process restart
-persistence is still unverified. The full unit run passed 806 cases and failed the
-existing harness crash-recovery assertion (`clean child read evidence`); this is
-not a passing whole-repository gate.
+and snapshot invalidation. `make saved-profiles-check` additionally boots two real
+runtime processes against the same disposable database: native node identity,
+value/revision and the tombstone survive; a different authenticated reader sees
+the saved value; historical receipt replay does not resurrect a removed profile.
+The restart gate is included in `make check` and uses no desktop/driver closure.
+The current full unit run passes all 813 cases. An earlier run hit the recurring
+harness crash-recovery assertion (`clean child read evidence`); the passing rerun
+does not establish its cause or a fix. Full repository acceptance of this source
+is still pending.
 
 Each workspace feed retains 128 change events and up to 1024 mutation receipts.
 Receipt exhaustion refuses new edits instead of silently forgetting retry
@@ -42,3 +47,12 @@ Saving preferences must never launch a process as a side effect.
 
 No profile replication or cross-node human identity is claimed. Hive distribution
 and governed registry overlays remain separate work.
+
+The gateway source now admits hook reporting with an empty MCP tool set. Driver
+configuration, carrier planning and native placement preserve the independent
+hook selection; a binding with neither hooks nor tools is refused. The native
+admission fixture proves the persisted binding has zero tools and its selected
+hook. Gateway checks (13 cases) and focused policy/placement checks (11 cases)
+pass. A real managed agent running with this selection is not yet verified.
+This removes a dependency for profiles that restrict MCP without disabling
+thread/title reporting. No production profile or global executable changed.

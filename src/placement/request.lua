@@ -228,12 +228,13 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         if not endpoint or endpoint == "" or endpoint:find("%c") then return nil, "gateway.endpoint must be bounded text" end
         local tools, tools_error = bounds.ids(declared.tools, true)
         if not tools then return nil, "gateway.tools: " .. tostring(tools_error) end
-        if #tools == 0 or #tools > M.MAX_PROJECTIONS then return nil, "gateway.tools must name 1 to " .. tostring(M.MAX_PROJECTIONS) .. " tools" end
+        if #tools > M.MAX_PROJECTIONS then return nil, "gateway.tools exceeds " .. tostring(M.MAX_PROJECTIONS) .. " tools" end
         local destination = bounds.id(declared.destination)
         if not destination or not destination:match("^[A-Z][A-Z0-9_]*$") then return nil, "gateway.destination must be an environment name" end
         local hook_events, hook_events_error = bounds.ids(declared.hooks == nil and {} or declared.hooks, true)
         if not hook_events then return nil, "gateway.hooks: " .. tostring(hook_events_error) end
         if #hook_events > M.MAX_PROJECTIONS then return nil, "gateway.hooks exceeds " .. tostring(M.MAX_PROJECTIONS) .. " items" end
+        if #tools == 0 and #hook_events == 0 then return nil, "gateway needs tools or hooks" end
         local hook_destination: string? = nil
         if declared.hook_destination ~= nil then
             hook_destination = bounds.id(declared.hook_destination)

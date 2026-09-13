@@ -23,6 +23,17 @@ local function rejects(mutate: ({[string]: unknown}) -> (), message: string)
 end
 local function define_tests()
     test.describe("Placement requests", function()
+        test.it("retains hooks when the admitted MCP tool set is empty", function()
+            local raw = launch()
+            raw.gateway = {endpoint = "127.0.0.1:4312", tools = {}, destination = "BEE_GATEWAY_TOKEN", hooks = {"SessionStart"}, hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}
+            local decoded, err = request.decode(raw)
+            if not decoded or not decoded.gateway then error(tostring(err)) end
+            test.eq(#decoded.gateway.tools, 0)
+            test.eq(decoded.gateway.hooks[1], "SessionStart")
+            raw.gateway = {endpoint = "127.0.0.1:4312", tools = {}, destination = "BEE_GATEWAY_TOKEN", hooks = {}}
+            local empty = request.decode(raw)
+            test.is_nil(empty)
+        end)
         test.it("decodes a complete request with defaults and a stable digest", function()
             local decoded, err = request.decode(launch())
             if not decoded then error(tostring(err)) end
@@ -54,7 +65,7 @@ local function define_tests()
             test.eq(gateway.hook_destination, "BEE_GATEWAY_HOOK_TOKEN")
             local plain = request.digest(request.decode(launch()) :: types.LaunchRequest)
             test.neq(request.digest(decoded), plain)
-            rejects(function(item) item.gateway = {endpoint = "127.0.0.1:4312", tools = {}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"} end, "gateway.tools must name 1 to " .. tostring(request.MAX_PROJECTIONS) .. " tools")
+            rejects(function(item) item.gateway = {endpoint = "127.0.0.1:4312", tools = {}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"} end, "gateway needs tools or hooks")
             local sectioned = launch()
             sectioned.gateway = {endpoint = "127.0.0.1:4312", tools = {"thread_read"}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"}
             local without_file = request.decode(sectioned)

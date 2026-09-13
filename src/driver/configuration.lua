@@ -67,11 +67,12 @@ local function decode_gateway(value: unknown): (GatewayInput?, string?)
     local action_id = bounds.id(item.action_id)
     if not action_id or action_id:find("[/?#%s]") then return nil, "configuration request.gateway.action_id is not a path segment" end
     local declared_tools = bounds.ids(item.tools, true)
-    if not declared_tools or #declared_tools == 0 or #declared_tools > M.MAX_GATEWAY_TOOLS then return nil, "configuration request.gateway.tools must name 1 to " .. tostring(M.MAX_GATEWAY_TOOLS) .. " tools" end
+    if not declared_tools or #declared_tools > M.MAX_GATEWAY_TOOLS then return nil, "configuration request.gateway.tools exceeds " .. tostring(M.MAX_GATEWAY_TOOLS) .. " tools or is invalid" end
     local tools: {string} = {}
     for index, tool in ipairs(declared_tools) do tools[index] = tool end
     local declared_hooks = bounds.ids(item.hooks, true)
     if not declared_hooks or #declared_hooks > M.MAX_GATEWAY_HOOKS then return nil, "configuration request.gateway.hooks exceeds " .. tostring(M.MAX_GATEWAY_HOOKS) .. " items" end
+    if #declared_tools == 0 and #declared_hooks == 0 then return nil, "configuration request.gateway needs tools or hooks" end
     local hooks: {string} = {}
     for index, hook in ipairs(declared_hooks) do hooks[index] = hook end
     local token, token_error = environment_name(item.token_environment, "configuration request.gateway.token_environment")

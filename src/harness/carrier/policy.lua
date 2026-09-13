@@ -160,7 +160,6 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if data.gateway_tools ~= nil then
         local declared, tools_error = bounds.ids(data.gateway_tools, true)
         if not declared then return nil, ref .. ": gateway_tools: " .. tostring(tools_error) end
-        if #declared == 0 then return nil, ref .. ": gateway_tools must name at least one tool when present" end
         table.sort(declared)
         gateway_tools = declared
     end
@@ -168,7 +167,6 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if data.gateway_hooks ~= nil then
         local declared, hooks_error = bounds.ids(data.gateway_hooks, true)
         if not declared then return nil, ref .. ": gateway_hooks: " .. tostring(hooks_error) end
-        if #gateway_tools == 0 then return nil, ref .. ": gateway_hooks needs gateway_tools" end
         -- Events a harness emits only while shutting down are not reliably
         -- captured, so no generated configuration admits them.
         for _, event in ipairs(declared) do

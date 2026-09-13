@@ -28,6 +28,20 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("measures hooks independently from the MCP tool grant", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = raw.data :: Entry
+            data.gateway_tools = {}
+            data.gateway_hooks = {"SessionStart"}
+            local decoded, err = policy.decode("test:policy", raw)
+            if not decoded then error(tostring(err)) end
+            test.eq(#decoded.gateway_tools, 0)
+            test.eq(decoded.gateway_hooks[1], "SessionStart")
+            data.gateway_hooks = {}
+            local disabled, disabled_error = policy.decode("test:policy", raw)
+            if not disabled then error(tostring(disabled_error)) end
+            test.neq(decoded.digest, disabled.digest)
+        end)
         test.it("pins the resolved executable value in the policy digest", function()
             local first, first_error = policy.decode("test:policy", entry({}, {claude = "test:claude"}), resolve({["test:claude"] = "/opt/one/claude"}))
             if not first then error(tostring(first_error)) end

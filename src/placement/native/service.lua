@@ -281,13 +281,13 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not hooks then return nil, nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
     table.sort(tools); table.sort(hooks)
     local gateway: configuration_protocol.GatewayInput? = nil
-    if #tools > 0 then
+    if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()
         if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end
         gateway = {endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
-    elseif #hooks > 0 then return nil, nil, "launch policy gateway_hooks requires gateway_tools" end
+    end
     return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)

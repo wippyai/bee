@@ -148,6 +148,24 @@ local function define_tests()
                 test.eq(first.native_key, selected.native_key)
                 test.eq(first.drained, 0)
 
+                local hook_request = admit_request("hooks-only")
+                hook_request.tools = {}
+                hook_request.hooks = {"SessionStart"}
+                local hook_admitted = raw_call(caller(true, false), "bee.gateway:admit", hook_request)
+                if not hook_admitted.ok then error("hook-only admission: " .. tostring(hook_admitted.error and hook_admitted.error.message)) end
+                local stored_hooks, stored_error = db:query("SELECT tools_json, hooks_json FROM bee_gateway_bindings WHERE action_id = ?", {"native-action-hooks-only"})
+                if not stored_hooks or stored_error or #stored_hooks ~= 1 then error("missing hook-only binding") end
+                local binding = stored_hooks[1] :: Object
+                local tool_names = json.decode(tostring(binding.tools_json))
+                local hook_names = json.decode(tostring(binding.hooks_json))
+                if type(tool_names) ~= "table" or type(hook_names) ~= "table" then error("invalid stored gateway catalog") end
+                test.eq(#tool_names, 0)
+                test.eq(hook_names[1], "SessionStart")
+                local empty_request = admit_request("empty")
+                empty_request.tools = {}
+                local empty = raw_call(caller(true, false), "bee.gateway:admit", empty_request)
+                test.eq(empty.error and empty.error.code, "INVALID")
+
                 local before_epoch = first.epoch
                 local before_secret = first.secret
                 local before_key = first.native_key

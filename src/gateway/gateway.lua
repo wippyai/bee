@@ -256,7 +256,7 @@ function M.admit(value: unknown): Reply
     if not carrier_epoch or carrier_epoch < 1 then return fail("INVALID", "carrier_epoch must be a positive integer") end
     local tools, tools_error = bounds.ids(object.tools, true)
     if not tools then return fail("INVALID", "tools: " .. tostring(tools_error)) end
-    if #tools == 0 or #tools > M.MAX_TOOLS then return fail("INVALID", "tools must name 1 to " .. tostring(M.MAX_TOOLS) .. " tools") end
+    if #tools > M.MAX_TOOLS then return fail("INVALID", "tools exceeds " .. tostring(M.MAX_TOOLS) .. " tools") end
     local known: {[string]: boolean} = {}
     for _, name in ipairs(M.TOOL_NAMES) do known[name] = true end
     for _, name in ipairs(tools) do
@@ -276,6 +276,7 @@ function M.admit(value: unknown): Reply
         table.sort(declared)
         admitted_hooks = declared
     end
+    if #tools == 0 and #admitted_hooks == 0 then return fail("INVALID", "binding needs tools or hooks") end
     local ttl = M.DEFAULT_TTL_MS
     if object.ttl_ms ~= nil then
         local declared = bounds.integer(object.ttl_ms)

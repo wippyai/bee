@@ -22,8 +22,9 @@ real-provider authenticated model turns remain unverified.
 Loopback-only network acceptance passes: fresh desktop 1.542 s, restart 1.030 s,
 copied installed-module registry restore 3.452 s, restored restart 1.221 s and
 warm public client reconnect 0.105 s. Retained artifacts were unchanged.
-The broader repository `make check` remains running (session 18461,
-`declared-login-full-check.log`); its final-source unit stage passed.
+The broader repository `make check` completed successfully (session 18461,
+`declared-login-full-check.log`), including final-source units, storage,
+source/pack desktop lifecycle and recovery, and the bundled application gates.
 
 Installation fenced against `1b56f795`, backed up and verified all six files,
 and did not restart running nodes or reset databases. Runtime/native pins and

@@ -199,7 +199,7 @@ local function measure(request: Request): (Measured?, string?)
     -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
     local gateway_input: configuration_protocol.GatewayInput? = nil
-    if #launch_policy.gateway_tools > 0 then
+    if #launch_policy.gateway_tools > 0 or #launch_policy.gateway_hooks > 0 then
         local address, endpoint_error = gateway_configuration.endpoint()
         if not address then return nil, "gateway: " .. tostring(endpoint_error) end
         local hook_destination: string? = nil

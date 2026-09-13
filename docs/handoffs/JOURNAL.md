@@ -6365,3 +6365,18 @@ assigned to `skhaz`, fixes this by preserving HTTP status and requiring confirme
 404. Five regression cases, existing narrow checks, isolated lint and an actual
 Lua HTTP-client/private Unix-socket daemon fixture pass. Full component-host and
 managed Docker acceptance remain open. Global `7d9182cb` is unchanged.
+
+### 2026-09-13 — existing-container native terminal proof
+
+Wolfden fact 1613 records a test-only Docker SDK implementation of the existing
+`exec.PTYProcess` interface, driving unchanged `proxy.New`/`Run` at Bee's runtime
+pin. Structured input, rendering, resize and exact-container close pass, including
+the focused race test. No Docker CLI attachment process or image download was
+used. This is not a production attachment API, its admission, cold rejoin or
+managed Agent-window proof. The general reference/inspection experiment remains
+paused. See the Docker handoff for archived source and evidence.
+
+Draft userspace PR #67 now also preserves actual daemon state/image identity and
+requires a terminal observation for stop success (`8488864`). Baseline failures,
+corrected regressions, existing narrow checks and isolated lint pass. Full module
+acceptance and publication remain outstanding; global Bee is unchanged.

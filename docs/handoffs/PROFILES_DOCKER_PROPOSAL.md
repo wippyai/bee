@@ -25,8 +25,24 @@ preserves the actual HTTP status and requires confirmed 404 for that reconciliat
 Five regression cases, the existing narrow checks and an actual Lua HTTP-client
 proof against a private Unix-socket fake daemon pass. The PR is draft, assigned
 to `skhaz`; full component-host and managed Docker acceptance remain outstanding.
-Paused/restarting state interpretation and caller-qualified identity still need
-review before Bee treats the component's observations as cleanup evidence.
+The follow-up in the same draft preserves paused/restarting/removing/dead states,
+uses the daemon's actual image ID rather than a label, and requires a terminal
+observation before reporting successful stop. Baseline failures and positive
+regressions pass, alongside existing narrow checks and isolated lint.
+Caller-qualified identity and full component-host acceptance still need review
+before Bee treats these observations as cleanup evidence.
+
+An isolated Go proof at the exact runtime pin now attaches an independently
+started Docker container to unchanged `proxy.New`/`Run`, using a test-only
+`exec.PTYProcess` implementation and the Docker SDK. Structured paste/Enter and
+resize render correctly; proxy close exits the exact original container. The
+focused race test passes with a local immutable image, no download, and no
+Docker CLI attachment process. Evidence lives in
+`bee-evidence/0912/docker-existing-container-proxy-{race.log,proof_test.go}`.
+This proves the existing native terminal interface is sufficient. It does not
+provide a callable production attachment operation, its permissions, cold
+reattachment, safe write cancellation or managed Agent-window acceptance.
+The test wrapper is not production code and must not be copied in as a driver.
 
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and

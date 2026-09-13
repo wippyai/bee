@@ -290,7 +290,11 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()
         if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end
-        gateway = {endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
+        local command_ref = data.hook_command_ref == nil and nil or bounds.id(data.hook_command_ref)
+        if data.hook_command_ref ~= nil and (not command_ref or #hooks == 0) then return nil, nil, "hook_command_ref requires hooks and an env.variable identifier" end
+        local hook_command, command_error = gateway_configuration.hook_command(command_ref)
+        if command_error then return nil, nil, command_error end
+        gateway = {hook_command = hook_command, endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end

@@ -1,10 +1,11 @@
 -- MIT. Typed Antigravity CLI (agy) configuration delivery under an empty callee scope.
 -- Agy accepts no host provider configuration. Gateway tools are rendered as
--- safe-relative .gemini/config/mcp_config.json files. Unproven gateway HTTP hooks
--- are accurately rejected.
+-- safe-relative configuration files. Command hooks use the host-selected Bee
+-- executable and report observations without emitting permission decisions.
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local quote = require("quote")
 local configure_protocol = require("configure_protocol")
 
 local M = {}
@@ -56,5 +57,32 @@ function M.instructions_file(text: string): (configure_protocol.Configuration?, 
     if not digest then return nil, tostring(digest_error or "instructions digest failed") end
     return {revision = "bee.agy-instructions@1", path = ".gemini/GEMINI.md", content = content,
         digest = digest, provider_ref = configure_protocol.INSTRUCTIONS_PROVIDER_REF}, nil
+end
+-- Agy uses matcher groups for tool events and flat entries for Stop.
+function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
+    local executable = gateway.hook_command
+    if not executable then return nil, "agy hooks require the host-selected hook command" end
+    local hook_token = gateway.hook_token_environment
+    if not hook_token then return nil, "agy hooks require a separate hook credential environment" end
+    local selected: {[string]: unknown} = {}
+    for _, event in ipairs(gateway.hooks) do
+        if event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" then
+            return nil, "agy does not support gateway hook event " .. event
+        end
+        local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, hook_token, event})
+        local handler = {type = "command", command = command, timeout = 3}
+        if event == "Stop" then
+            selected[event] = {handler}
+        else
+            selected[event] = {{matcher = "", hooks = {handler}}}
+        end
+    end
+    local content, content_error = canonical.encode({bee = selected})
+    if not content then return nil, content_error end
+    content = content .. "\n"
+    local digest, digest_error = hash.sha256(content)
+    if not digest then return nil, "hook configuration digest failed" end
+    return {revision = "bee.agy-hooks@1", path = ".gemini/config/hooks.json", content = content,
+        digest = digest, provider_ref = configure_protocol.GATEWAY_PROVIDER_REF}, nil
 end
 return M

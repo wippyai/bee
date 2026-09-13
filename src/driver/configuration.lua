@@ -19,7 +19,7 @@ M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
-type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?}
+type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
 type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
 
@@ -60,7 +60,7 @@ end
 local function decode_gateway(value: unknown): (GatewayInput?, string?)
     local item = bounds.object(value)
     if not item then return nil, "configuration request.gateway must be an object" end
-    local unexpected = bounds.fields(item, {"endpoint", "action_id", "tools", "hooks", "token_environment", "hook_token_environment"})
+    local unexpected = bounds.fields(item, {"endpoint", "action_id", "tools", "hooks", "token_environment", "hook_token_environment", "hook_command"})
     if unexpected then return nil, "configuration request.gateway: " .. unexpected end
     local endpoint = bounds.text(item.endpoint, 512)
     if not endpoint or not endpoint:match("^127%.0%.0%.1:%d+$") then return nil, "configuration request.gateway.endpoint must be a loopback host and port" end
@@ -83,7 +83,14 @@ local function decode_gateway(value: unknown): (GatewayInput?, string?)
         if not hook_token then return nil, token_error end
         if hook_token == token then return nil, "configuration request.gateway hook and tool environments must differ" end
     elseif item.hook_token_environment ~= nil then return nil, "configuration request.gateway.hook_token_environment needs hooks" end
-    local result: GatewayInput = {endpoint = endpoint, action_id = action_id, tools = tools, hooks = hooks, token_environment = token, hook_token_environment = hook_token}
+    local hook_command: string? = nil
+    if item.hook_command ~= nil then
+        hook_command = bounds.text(item.hook_command, M.MAX_HOME_DIRECTORY_BYTES)
+        if #hooks == 0 or not hook_command or hook_command:sub(1, 1) ~= "/" or hook_command:find("%c") then
+            return nil, "configuration request.gateway.hook_command requires hooks and an absolute bounded path"
+        end
+    end
+    local result: GatewayInput = {endpoint = endpoint, action_id = action_id, tools = tools, hooks = hooks, token_environment = token, hook_token_environment = hook_token, hook_command = hook_command}
     return result, nil
 end
 function M.decode_request(value: unknown): (Request?, string?)

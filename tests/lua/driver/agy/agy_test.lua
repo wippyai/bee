@@ -721,7 +721,7 @@ local function define_tests()
     end)
 
     test.describe("Antigravity CLI configuration and verified MCP delivery", function()
-        test.it("refuses provider configurations and gateway HTTP hooks", function()
+        test.it("refuses provider configurations and hooks without a host command", function()
             local reply1, err1 = funcs.call("bee.driver.agy:configure", {
                 provider_ref = "bee:provider_custom",
                 provider = {model = "custom"},
@@ -744,7 +744,7 @@ local function define_tests()
             })
             if err2 then error(tostring(err2)) end
             test.is_false(reply2.ok)
-            test.eq(reply2.error, "agy does not support gateway HTTP hooks")
+            test.eq(reply2.error, "agy hooks require the host-selected hook command")
         end)
 
         test.it("renders verified gateway MCP configuration file path and environment expansion", function()

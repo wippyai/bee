@@ -1,7 +1,9 @@
 # Agy command hooks — integration evidence
 
-Managed Agy currently delivers scoped MCP and appended profile guidance, but
-refuses hook configuration. No command-hook sender is installed in Bee yet.
+Installed Agy delivers scoped MCP and appended profile guidance, but refuses
+hook configuration. Follow-up source now renders its window command hooks and
+decodes their wire fields; the native sender and executable acceptance remain
+under integration. No command-hook sender is installed globally yet.
 The existing carrier commits observations and publishes fixed activity labels;
 it does not need an Agy-specific title process.
 
@@ -35,15 +37,30 @@ Evidence outside the repository:
 `agy-command-tool-hook-live-probe.log`. These are actual provider probes,
 separate from the existing fixture-based managed-Agent acceptance.
 
-## Remaining implementation
+## Source integration and remaining acceptance
 
-The first supported set should be `PreToolUse`, `PostToolUse` and `Stop`, which
+The host policy selects `hook_command_ref`, an env.variable reference. The
+carrier and placement independently resolve it and include the absolute path in
+the measured driver configuration as `gateway.hook_command`. Agy receives no
+authority to select its own executable. The declared variable uses the native
+host's `self` fact so the helper matches the running Bee binary, even while a
+different global executable is installed. Policies without a command helper keep
+their previous configuration measurements.
+
+Source tests verify command-file shape, separate token environment, host-command
+measurement, missing helper refusal, malformed and mixed wire-schema refusal,
+content hashing and ambiguous occurrence handling. All 841 Lua tests pass. The
+native selector fixture now invokes the rendered command and checks committed
+observations and their conservative `Activity uncertain` title, but has not yet
+run against an assembled executable with the new native helper.
+
+The selected window set is `PreToolUse`, `PostToolUse` and `Stop`, which
 already exist in the gateway event catalog. Invocation events must not be renamed
 to prompt submission or successful completion. Driver decoding must preserve
 missing occurrence identity as ambiguous; `stepIdx` alone is not a proven stable
 tool-use identity. Hook observation never establishes a logical successful turn.
 
-A command sender must use the existing authenticated hook endpoint with bounded
+A command sender uses the existing authenticated hook endpoint with bounded
 stdin, request lifetime and response handling. It must emit no gateway response
 body as a harness decision, keep credentials out of argv and diagnostics, and
 avoid starting a desktop or opening workspace databases for each hook. Executable

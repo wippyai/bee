@@ -10,6 +10,38 @@ local codex_configuration = require("codex_configuration")
 type Object = {[string]: unknown}
 local function define_tests()
     test.describe("Gateway hooks", function()
+        test.it("decodes command-hook claims without retaining content or inventing tool identities", function()
+            local input: Object = {conversationId = "conversation-1", transcriptPath = "/private/conversation.db",
+                toolCall = {name = "view_file", args = {path = "/private/file", secret = "never-store-this"}},
+                error = "secret error text", stepIdx = 12, decision = "allow"}
+            local value, err = hooks.normalize("PostToolUse", hooks.control_free(input))
+            if not value then error(tostring(err)) end
+            test.eq(value.fields.session_id, "conversation-1")
+            test.eq(value.fields.tool_name, "view_file")
+            test.is_true(value.ambiguous)
+            test.is_nil(value.fields.tool_use_id)
+            test.is_nil(value.fields.error)
+            local encoded = json.encode(value.fields) or ""
+            for _, private in ipairs({"never-store-this", "/private", "secret error", "decision", "stepIdx"}) do
+                test.is_nil(encoded:find(private, 1, true))
+            end
+            input.toolCall = {name = "view_file", args = {path = "changed"}}
+            local changed, changed_error = hooks.normalize("PostToolUse", input)
+            if not changed then error(tostring(changed_error)) end
+            test.neq(value.digest, changed.digest)
+            local stopped, stop_error = hooks.normalize("Stop", {conversationId = "conversation-1", fullyIdle = true, executionNum = 1})
+            if not stopped then error(tostring(stop_error)) end
+            test.is_true(stopped.ambiguous)
+        end)
+        test.it("refuses mixed and malformed command-hook schemas", function()
+            local invalid: {Object} = {
+                {conversationId = "s", session_id = "other"}, {conversationId = {}},
+                {conversationId = "s", toolCall = "bad"}, {conversationId = "s", toolCall = {name = "bad name"}},
+                {conversationId = "s", transcriptPath = {}}, {conversationId = "s", error = {}},
+                {conversationId = "s", error = "bad", error_details = "other"},
+            }
+            for _, input in ipairs(invalid) do test.is_nil(hooks.normalize("PreToolUse", input)) end
+        end)
         test.it("allows hook reporting without granting MCP tools", function()
             local gateway = {endpoint = "127.0.0.1:18790", action_id = "act-hooks-only", tools = {}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
             local decoded, err = configuration.decode_request({gateway = gateway, fixture = false})

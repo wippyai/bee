@@ -11,11 +11,15 @@ local function handle(value: unknown): {[string]: unknown}
     local files = {}
     if request.gateway ~= nil then
         if #request.gateway.hooks > 0 then
-            return {ok = false, error = "agy does not support gateway HTTP hooks"}
+            local hook_file, hook_error = configuration.hooks_file(request.gateway)
+            if not hook_file then return {ok = false, error = tostring(hook_error)} end
+            files[#files + 1] = hook_file
         end
-        local mcp_file, mcp_error = configuration.mcp_file(request.gateway)
-        if not mcp_file then return {ok = false, error = tostring(mcp_error)} end
-        files[#files + 1] = mcp_file
+        if #request.gateway.tools > 0 then
+            local mcp_file, mcp_error = configuration.mcp_file(request.gateway)
+            if not mcp_file then return {ok = false, error = tostring(mcp_error)} end
+            files[#files + 1] = mcp_file
+        end
     end
     if request.instructions then
         local file, file_error = configuration.instructions_file(request.instructions)

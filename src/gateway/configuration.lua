@@ -2,6 +2,7 @@
 -- Driver components render their own native harness configuration.
 local registry = require("registry")
 local funcs = require("funcs")
+local env = require("env")
 local M = {}
 M.DESTINATION = "BEE_GATEWAY_TOKEN"
 M.HOOK_DESTINATION = "BEE_GATEWAY_HOOK_TOKEN"
@@ -39,6 +40,16 @@ function M.endpoint(): (string?, string?)
     local listener, err = M.current()
     if not listener then return nil, err end
     return listener.address, nil
+end
+-- The host names the executable variable; drivers receive only its resolved
+-- absolute path. No command is discovered from a harness payload.
+function M.hook_command(reference: string?): (string?, string?)
+    if reference == nil then return nil, nil end
+    local value, err = env.get(reference)
+    if not value or #value == 0 or #value > 4096 or value:sub(1, 1) ~= "/" or value:find("%c") then
+        return nil, "hook command is unavailable from the host-selected variable"
+    end
+    return value, nil
 end
 function M.url(address: string, action_id: string): string
     return "http://" .. address .. "/mcp/" .. action_id

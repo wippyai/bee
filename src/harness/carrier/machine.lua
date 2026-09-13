@@ -207,7 +207,9 @@ local function measure(request: Request): (Measured?, string?)
         if #launch_policy.gateway_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
         gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
             hooks = launch_policy.gateway_hooks, hook_destination = hook_destination}
-        gateway_input = {endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
+        local hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref)
+        if command_error then return nil, command_error end
+        gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
     end
     local configure_target = binding.methods.configure

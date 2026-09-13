@@ -70,7 +70,13 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [registry, funcs]
+  modules: [registry, funcs, env]
+- name: hook_executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: self
+  default: ''
+  readonly: true
 - name: hooks
   kind: library.lua
   source: file://hooks.lua

@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -2085,6 +2086,127 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	return 0
 }
 
+// runAgyHookProbe executes the delivered command, exactly as Agy's command hook
+// does. It does not substitute a direct HTTP client for Bee's native helper.
+func runAgyHookProbe(event string) int {
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "hooks.json"))
+	if err != nil {
+		return 1
+	}
+	type handler struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	type entry struct {
+		Type    string    `json:"type"`
+		Command string    `json:"command"`
+		Hooks   []handler `json:"hooks"`
+	}
+	var config struct {
+		Bee map[string][]entry `json:"bee"`
+	}
+	if json.Unmarshal(data, &config) != nil || len(config.Bee[event]) != 1 {
+		return 1
+	}
+	selected := config.Bee[event][0]
+	command := selected.Command
+	if event == "PreToolUse" {
+		if len(selected.Hooks) != 1 || selected.Hooks[0].Type != "command" {
+			return 1
+		}
+		command = selected.Hooks[0].Command
+	} else if event != "Stop" || selected.Type != "command" || len(selected.Hooks) != 0 {
+		return 1
+	}
+	if command == "" {
+		return 1
+	}
+	payload := map[string]any{"conversationId": "native-agy-hook-session", "transcriptPath": "/private/hook-transcript"}
+	if event == "PreToolUse" {
+		payload["toolCall"] = map[string]any{"name": "view_file", "args": map[string]any{"private": "BEE_PRIVATE_HOOK_CONTENT"}}
+		payload["stepIdx"] = 12
+	} else {
+		payload["fullyIdle"] = true
+		payload["executionNum"] = 1
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	child := exec.CommandContext(ctx, "/bin/sh", "-c", command)
+	child.Stdin = bytes.NewReader(body)
+	var stdout bytes.Buffer
+	child.Stdout = &stdout
+	// Do not copy response bodies or credential-bearing diagnostics into a report.
+	child.Stderr = io.Discard
+	if err := child.Run(); err != nil || stdout.Len() != 0 {
+		return 1
+	}
+	return 0
+}
+
+func waitAgyHook(state, event string) error {
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+		if err != nil {
+			return err
+		}
+		rows, err := db.Query(`SELECT record_json FROM bee_thread_records WHERE kind = 'observation' AND source = 'bee' ORDER BY sequence`)
+		if err != nil {
+			db.Close()
+			return err
+		}
+		found := false
+		for rows.Next() {
+			var text string
+			if err := rows.Scan(&text); err != nil {
+				rows.Close()
+				db.Close()
+				return err
+			}
+			var record struct {
+				Body struct {
+					Data struct {
+						Name    string `json:"event_name"`
+						Payload string `json:"payload_json"`
+					} `json:"data"`
+				} `json:"body"`
+			}
+			if json.Unmarshal([]byte(text), &record) != nil || record.Body.Data.Name != "bee.harness.hook" {
+				continue
+			}
+			var payload struct {
+				Event     string         `json:"event"`
+				Ambiguous bool           `json:"ambiguous"`
+				Fields    map[string]any `json:"fields"`
+			}
+			if json.Unmarshal([]byte(record.Body.Data.Payload), &payload) != nil || payload.Event != event || payload.Fields["session_id"] != "native-agy-hook-session" {
+				continue
+			}
+			if !payload.Ambiguous || payload.Fields["tool_use_id"] != nil || strings.Contains(text, "BEE_PRIVATE_HOOK_CONTENT") || strings.Contains(text, "/private/hook-transcript") {
+				rows.Close()
+				db.Close()
+				return errors.New("Agy hook invented occurrence identity or retained private content")
+			}
+			found = true
+		}
+		err = rows.Err()
+		rows.Close()
+		db.Close()
+		if err != nil {
+			return err
+		}
+		if found {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("Agy %s observation was not committed", event)
+}
+
 // runHookProbe submits one Claude PreToolUse event using the URL and token
 // environment named by the host-delivered --settings argument. The helper is
 // invoked by the disposable Claude executable, so the token never crosses the
@@ -2215,6 +2337,10 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	}
 	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) +
 		"\nif ! " + shellQuote(helper) + " mcp-probe " + shellQuote(provider) + " " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	if provider == "agy" {
+		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", shellQuote(helper)+" agy-hook-probe PreToolUse || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
+		script += shellQuote(helper) + " agy-hook-probe Stop || exit 1\n"
+	}
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
 	}
@@ -2313,8 +2439,21 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	if err != nil || string(data) != "retained" {
 		return fmt.Errorf("managed session marker = %q, err=%v", string(data), err)
 	}
+	if provider == "agy" {
+		if err := waitAgyHook(state, "PreToolUse"); err != nil {
+			return err
+		}
+		if err := ui.waitFor("Activity uncertain", 5*time.Second); err != nil {
+			return fmt.Errorf("committed Agy hook title: %w", err)
+		}
+	}
 	if err := ui.send("finish\r"); err != nil {
 		return err
+	}
+	if provider == "agy" {
+		if err := waitAgyHook(state, "Stop"); err != nil {
+			return err
+		}
 	}
 	// Allow the selected app to finish before detaching the client.
 	time.Sleep(300 * time.Millisecond)
@@ -2333,6 +2472,9 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "agy-hook-probe" {
+		os.Exit(runAgyHookProbe(os.Args[2]))
+	}
 	if len(os.Args) >= 4 && os.Args[1] == "mcp-probe" {
 		os.Exit(runMCPProbe(os.Args[2], os.Args[3], os.Args[4:]))
 	}

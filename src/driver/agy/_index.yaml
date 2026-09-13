@@ -37,6 +37,7 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
+    quote: bee.driver.kit:quote
 - name: prepare
   kind: function.lua
   source: file://prepare_method.lua
@@ -139,6 +140,7 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
+        hooks: {transports: [command], events: [PreToolUse, PostToolUse, Stop]}
         answer_path: {strategy: none}
         resume: {strategy: none, portable: false}
         isolation_env:

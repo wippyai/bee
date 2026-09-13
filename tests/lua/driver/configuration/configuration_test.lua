@@ -1,6 +1,7 @@
 -- MIT. Provider-independent configuration delivery boundaries.
 local test = require("test")
 local hash = require("hash")
+local json = require("json")
 local configuration = require("configuration")
 local claude = require("claude")
 local codex = require("codex")
@@ -28,6 +29,39 @@ local function gateway(action: string): configuration.GatewayInput
 end
 local function define_tests()
     test.describe("Driver configuration delivery boundary", function()
+        test.it("renders observation-only Agy command hooks with quoted host inputs", function()
+            local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
+                hooks = {"PreToolUse", "PostToolUse", "Stop"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",
+                hook_command = "/private/Bee's bin/bee"}
+            local reply = agy.handle({fixture = false, gateway = selected})
+            local output, err = configuration.decode_reply(reply, nil, selected)
+            if not output then error(tostring(err)) end
+            test.eq(#output.files, 1)
+            test.eq(output.files[1].path, ".gemini/config/hooks.json")
+            local raw, decode_error = json.decode(output.files[1].content)
+            if decode_error then error(tostring(decode_error)) end
+            local doc = raw :: {bee: {PreToolUse: {{matcher: string, hooks: {{type: string, command: string}}}},
+                PostToolUse: {{hooks: {{type: string}}}}, Stop: {{type: string, command: string, hooks: unknown}}}}
+            test.eq(doc.bee.PreToolUse[1].matcher, "")
+            test.eq(doc.bee.PreToolUse[1].hooks[1].type, "command")
+            test.eq(doc.bee.PostToolUse[1].hooks[1].type, "command")
+            test.eq(doc.bee.Stop[1].type, "command")
+            test.is_nil(doc.bee.Stop[1].hooks)
+            test.is_true(doc.bee.Stop[1].command:find("hook-post 127.0.0.1:4312 action-a HOOK_TOKEN Stop", 1, true) ~= nil)
+            test.is_true(doc.bee.Stop[1].command:find("MCP_TOKEN", 1, true) == nil)
+            local original = measured_digest({fixture = false, gateway = selected}, "bee.driver.agy:configure")
+            selected.hook_command = "/other/bee"
+            test.neq(original, measured_digest({fixture = false, gateway = selected}, "bee.driver.agy:configure"))
+            selected.hook_command = nil
+            test.eq(agy.handle({fixture = false, gateway = selected}).ok, false)
+            selected.hook_command = "/bee"
+            selected.hooks = {"SessionStart"}
+            test.eq(agy.handle({fixture = false, gateway = selected}).ok, false)
+            for _, path in ipairs({"bee", "", "/bad\npath"}) do
+                selected.hook_command = path
+                test.is_nil(configuration.decode_request({fixture = false, gateway = selected}))
+            end
+        end)
         test.it("keeps profile instructions separate from turn prompts and measures changes", function()
             local text = 'Review carefully.\nKeep "quoted" text and `literal` $(words).'
             local input = {fixture = false, instructions = text}

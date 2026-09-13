@@ -85,9 +85,47 @@ function M.occurrence(event: string, payload: Object): (string, boolean)
     if session ~= "" then return "session:" .. session, false end
     return "session:", true
 end
+-- The command-hook wire shape reports claims in camelCase. Decode it before
+-- applying the same privacy and occurrence rules as the HTTP/MCP shape. These
+-- values describe the sender's own activity; they establish no authority.
+local function wire_fields(payload: Object): (Object?, string?)
+    if payload.conversationId == nil and payload.toolCall == nil and payload.transcriptPath == nil then return payload, nil end
+    local session = bounds.id(payload.conversationId)
+    if not session then return nil, "conversationId must be an identifier" end
+    if payload.session_id ~= nil or payload.tool_use_id ~= nil or payload.turn_id ~= nil or payload.prompt_id ~= nil or payload.agent_id ~= nil or payload.tool_name ~= nil or payload.tool_input ~= nil or payload.transcript_path ~= nil then
+        return nil, "mixed hook field schemas are not accepted"
+    end
+    local result: Object = {}
+    for name, value in pairs(payload) do result[name] = value end
+    result.session_id = session
+    if payload.transcriptPath ~= nil then
+        if type(payload.transcriptPath) ~= "string" then return nil, "transcriptPath must be a string" end
+        result.transcript_path = payload.transcriptPath
+    end
+    if payload.toolCall ~= nil then
+        local tool = bounds.object(payload.toolCall)
+        if not tool then return nil, "toolCall must be an object" end
+        local name = bounds.text(tool.name, 128)
+        if not name or not name:match("^[A-Za-z0-9_.:/%-]+$") then return nil, "toolCall.name must be a tool identifier" end
+        result.tool_name = name
+        result.tool_input = tool.args
+    end
+    if payload.error ~= nil then
+        if type(payload.error) ~= "string" then return nil, "command hook error must be a string" end
+        if payload.error_details ~= nil then return nil, "mixed hook error fields are not accepted" end
+        result.error_details = payload.error
+        result.error = nil
+    end
+    -- A step index is not a documented stable tool occurrence ID. Ignore it,
+    -- retaining the existing ambiguous-delivery semantics.
+    return result, nil
+end
 -- normalize: what a record keeps of a payload, and nothing else.
 function M.normalize(event: string, payload: Object): (Submission?, string?)
     if not M.known(event) then return nil, "event " .. event .. " is not in the hook catalog" end
+    local decoded, decode_error = wire_fields(payload)
+    if not decoded then return nil, decode_error end
+    payload = decoded
     local fields: Object = {event = event}
     for _, name in ipairs(M.CLAIM_FIELDS) do
         local value = payload[name]

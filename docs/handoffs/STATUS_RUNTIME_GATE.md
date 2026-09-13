@@ -292,3 +292,29 @@ fixed-port named hosts preserve their configured address. Native HTTP tests,
 vet and focused race coverage pass, including real requests, cancellation and
 sequential restart with the old port reserved. No new discovery API was added.
 The PR is unmerged; Bee's runtime pin and global executable remain unchanged.
+
+## September 13: retained PTY identity needed for cold Agent continuation
+
+Bee's native streamed runner records the existing process PID, group ID, start
+ticks and boot ID. The interactive route consumes that process through
+`attach_terminal`; the returned `exec.TerminalSession` exposes send/close/done/status
+but does not preserve the optional `exec.ProcessIdentity` capability or startup
+readiness. The default Agent policies require process-group cleanup. Consequently
+an ended window cannot prove the previous group's absence and release the retained
+session home for another attempt. `continuation.resolve_window` correctly refuses
+until cleanup is complete. The real `window-native-check` explicitly proves this
+cleanup refusal; the model continuation tests do not prove cold provider recovery.
+
+Required runtime behavior: preserve access to the started process's optional
+identity through the existing terminal lifecycle, distinguishing not-started,
+unsupported and failed states. Bee can then reuse its existing PID/start-time/boot
+identity and process-group absence checks. Terminal disconnection alone must not
+become process exit or cleanup evidence. This is a requirement under review, not
+a new callable API or an excuse to relax the session-home guard. No runtime code
+or pin changed for this finding. Docker additionally needs its own durable
+container identity; a host PID cannot stand in for that.
+
+The live-window supervision issue is fixed in Bee itself: the owner answers the
+existing status probe and honors only committed stop intent. It does not solve
+post-crash identity, turn settlement or provider-session recovery. Evidence and
+global provenance are recorded in [GLOBAL_BUILD.md](GLOBAL_BUILD.md).

@@ -167,13 +167,6 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         return fail(db, "attach terminal: " .. tostring(attach_error), gateway_binding, attempt_id)
     end
 
-    local running = store.transition(db, attempt_id, {execution = "running", evidence = {kind = "child.attached", detail = "managed PTY attached to the broker terminal grant"}})
-    if not running.ok then
-        terminal:close()
-        executor:release()
-        return fail(db, running.message or "record PTY start", gateway_binding, attempt_id)
-    end
-
     local closed = false
     local finished = false
     local controls = process.listen(protocol.TOPIC_CONTROL, {message = true})
@@ -211,6 +204,16 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             end
         end
     end)
+    -- Publish readiness only after the owner can answer supervision.
+    local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", evidence = {kind = "child.attached", detail = "managed PTY attached to the broker terminal grant"}})
+    if not running.ok then
+        finished = true
+        process.unlisten(controls)
+        terminal:close()
+        executor:release()
+        return fail(db, running.message or "record PTY start", gateway_binding, attempt_id)
+    end
+
     local function retire_gateway(why: string)
         if not gateway_binding then return end
         local binding = gateway_binding

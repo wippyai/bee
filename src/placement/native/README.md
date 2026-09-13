@@ -234,7 +234,9 @@ supervision, not post-crash execution absence or cleanup.
 
 Stop notifications are acted on only after the placement store records `stopping`
 for the exact attempt, owner and runner. An arbitrary process message cannot
-stop the window. The window retires its listener when finalization commits.
+stop the window. The listener is installed before publishing `running`; publication compares the
+recorded state with `starting`, so a concurrent stop cannot be overwritten. The
+window retires its listener when finalization commits.
 Native PTY acceptance proves live reconciliation, raw-stop denial, admitted stop,
 input, resize, finalization and duplicate/foreign-owner refusal. A native Agent
 fixture also keeps its MCP binding live across the real 30-second sweep.

@@ -15,9 +15,12 @@ Current managed-agent checkpoint (September 12): four separately packaged harnes
 components have default window profiles and first-use resource setup. Claude and
 Codex additionally have optional machine-login delivery with source binding,
 private retained homes, and present/absent executable acceptance for each provider.
-The global binary includes these changes. Production MCP/hook activation, Docker
+The global binary includes these changes and scoped MCP/hook activation, verified
+through fixture harness executables. Authenticated provider orchestration, Docker
 and successful cold conversation recovery remain open; the lower-level step proofs
-below do not imply those workflows are complete. See
+below do not imply those workflows are complete. Source also supports a
+host-selected instruction function with inherited actor/context and frozen
+launch delivery; the picker does not yet edit that policy field. See
 [Agent integration](handoffs/AGENT_INTEGRATION.md) and
 [current global build](handoffs/GLOBAL_BUILD.md).
 

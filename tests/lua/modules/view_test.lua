@@ -4,6 +4,7 @@ local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
 local view = require("view")
+local contents = require("contents")
 local function define_tests()
     test.describe("Modules frame", function()
         test.it("keeps configuration dialogs inside the canvas and captures clicks", function()
@@ -39,6 +40,23 @@ local function define_tests()
                     local rendered = table.concat(frame.rows, "\n")
                     test.is_true(rendered:find("Dependency", 1, true) ~= nil)
                     test.is_true(rendered:find("Required by", 1, true) ~= nil)
+                end
+            end
+        end)
+        test.it("keeps package browsing within narrow and short canvases", function()
+            local state, content = model.new(), contents.new()
+            model.select(state, "bee/example")
+            model.apply_details(state, {ok = true, replayed = false, value = {component = "bee/example", title = "Example", description = "Package",
+                readme = "Guide", versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1}})
+            contents.start(content, "bee/example", "1.0.0")
+            contents.apply(content, "state", {ok = true, replayed = false, value = {component = "bee/example", version = "1.0.0", digest = string.rep("a", 64),
+                entries = {{id = "example:main", kind = "function.lua"}}, resources = {}}})
+            for _, width in ipairs({1, 12, 40, 100}) do
+                for _, height in ipairs({1, 8, 18}) do
+                    local frame = view.draw(width, height, appearance.defaults(), state, 0, "", false, nil, content)
+                    test.eq(#frame.rows, height)
+                    for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), width) end
+                    for _, hit in ipairs(frame.hits) do test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= width and hit.y + hit.height - 1 <= height) end
                 end
             end
         end)

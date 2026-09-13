@@ -260,3 +260,8 @@ hive-manager-check: pack
 .PHONY: identity-native-check
 identity-native-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/identity_native.py
+
+.PHONY: modules-contents-check
+modules-contents-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_contents.py
+check: modules-contents-check

@@ -291,3 +291,26 @@ Retained Bee owners keep the UI loaded when they started. Replacing the global
 executable or reconnecting a presenter does not upgrade those running applications.
 Settings → About reports the loaded bundle; use a fresh owner to inspect a newly
 installed build without interrupting existing terminals.
+
+The [completion audit](handoffs/HUB_COMPLETION.md) maps the requested Kickside-like
+workflow to current APIs, UI acceptance and remaining application-admission work.
+
+### Read-only Contents browser
+
+Modules package details expose Contents (C), alongside README, Versions and
+Requirements. Resources open their packaged filesystem; entries open an indented
+JSON preview. Directory and file pages support Previous/Next, while Back returns
+to the parent directory or package list. At the package list, Back returns to
+README. F12 preserves the browser state; compact windows shorten tab labels.
+
+The browser uses only the existing `state`, `files` and `read_file` operations.
+After opening state, all reads carry the exact artifact digest. Replies must
+match the selected component/version/digest, and filenames cannot escape the
+packaged resource. File reads are 32 KiB pages; entry previews explicitly report
+truncation beyond 32 KiB. Terminal controls are removed from displayed file text;
+NUL-containing binary content reports that text preview is unavailable. Browsing
+never installs a package, grants permissions or starts application code.
+
+`make modules-contents-check` exercises real Modules actors from source and pack
+with deterministic facade replies; the separate live `hub-preview-check` proves
+native artifact filesystem reads and unchanged registry history.

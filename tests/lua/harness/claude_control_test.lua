@@ -22,6 +22,7 @@ local catalog = require("catalog")
 local adapter = require("adapter")
 local approvals = require("approvals")
 local launch = require("launch")
+local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.claude_control"
 local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:claude_control_fixture_policy"
@@ -208,9 +209,11 @@ local function thread(): string
     return created.thread_id :: string
 end
 local function request(thread_id: string, attempt_id: string, workspace: string): Object
+    local placement = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "leave a marker", policy_ref = POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PATH = "/usr/bin:/bin", ANTHROPIC_API_KEY = SENTINEL}, working_directory = "project", workspace_id = workspace}
+        environment = {PATH = "/usr/bin:/bin", ANTHROPIC_API_KEY = SENTINEL}, working_directory = "project", workspace_id = workspace,
+        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn_carrier(request_value: Object): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope(carrier_scope))

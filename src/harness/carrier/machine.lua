@@ -60,9 +60,8 @@ type Request = {
     profile_id: string,
     brief: string,
     policy_ref: string,
-    placement_binding_ref: string,
-    placement_binding_digest: string,
-    placement_methods: {[string]: string},
+    placement_binding_ref: string?,
+    placement_binding_digest: string?,
     resources: {placement_types.ResourceGrant},
     environment: {[string]: string},
     session_ref: string?,
@@ -179,7 +178,8 @@ local function measure(request: Request): (Measured?, string?)
     -- carrier received the same measured choice from admission.
     local selected_placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
     if not selected_placement then return nil, placement_error end
-    if request.placement_binding_ref ~= selected_placement.binding_id or request.placement_binding_digest ~= selected_placement.binding_digest then
+    if (request.placement_binding_ref and request.placement_binding_ref ~= selected_placement.binding_id)
+        or (request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest) then
         return nil, "placement binding changed since admission"
     end
     local exchange: Exchange? = nil
@@ -517,7 +517,8 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     step(io, "admitted")
     local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
-        placement_binding = plan.placement_binding.binding_id, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
+        placement_binding = plan.placement_binding.binding_id, placement_binding_digest = plan.placement_binding.binding_digest,
+        placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
     if prepare_error then
         if not action_admitted then return nil, prepare_error, nil end
         return nil, prepare_error, {epoch = nil, gateway_binding = nil, attempt = false}
@@ -598,13 +599,14 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local request = plan.request
     local stored, stored_error = must(io, M.CARRIER_OPS .. ":checkpoint", {thread_id = request.thread_id, attempt_id = request.attempt_id})
     if stored_error then return nil, stored_error end
-    local view = stored :: {carrier_epoch: integer, checkpoint_revision: integer, checkpoint: unknown, attempt_state: string, open_turn_id: string?}
+    local view = stored :: {carrier_epoch: integer, checkpoint_revision: integer, checkpoint: unknown, attempt_state: string, open_turn_id: string?, placement_binding: string?, placement_binding_digest: string?}
     if view.attempt_state == "ended" then return nil, "attempt has ended" end
     if view.checkpoint == nil then return nil, "no checkpoint to resume from" end
     local point, point_error = checkpoint.decode(view.checkpoint)
     if not point then return nil, "stored checkpoint: " .. tostring(point_error) end
     if point.binding_digest ~= plan.binding.binding_digest.entry or point.profile_digest ~= plan.binding.profile_digest.entry then return nil, "pinned measurements changed since the checkpoint" end
     if view.placement_binding ~= plan.placement_binding.binding_id then return nil, "placement binding changed since the checkpoint" end
+    if view.placement_binding_digest ~= plan.placement_binding.binding_digest then return nil, "placement binding digest missing or changed since the checkpoint" end
 
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = io.key(), attempt_id = request.attempt_id})
     if claim_error then return nil, claim_error end

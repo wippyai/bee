@@ -11,6 +11,7 @@ local registry = require("registry")
 local env = require("env")
 local time = require("time")
 local channel = require("channel")
+local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.carrier"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
@@ -85,9 +86,11 @@ local function thread(): string
     return created.thread_id :: string
 end
 local function request(thread_id: string, attempt_id: string, environment: {[string]: string}): {[string]: unknown}
+    local placement = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "ping", policy_ref = POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = environment, working_directory = "project"}
+        environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id,
+        placement_binding_digest = placement.binding_digest}
 end
 type Outcome = {value: {[string]: unknown}?, error: string?}
 local function spawn_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?): string

@@ -18,6 +18,7 @@ local hash = require("hash")
 local catalog = require("catalog")
 local adapter = require("adapter")
 local approvals = require("approvals")
+local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.carrier"
 local APPROVER = "bee.test.approver"
 local POLICY = "bee.harness.catalog:permission_fixture_policy"
@@ -221,9 +222,11 @@ local function thread(): string
     return created.thread_id :: string
 end
 local function request(thread_id: string, attempt_id: string, workspace: string, stream: string, timeout: string): Object
+    local placement = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "read the notes", policy_ref = POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID, BEE_FIXTURE_PERMISSION_TIMEOUT = timeout}, working_directory = "project", workspace_id = workspace}
+        environment = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID, BEE_FIXTURE_PERMISSION_TIMEOUT = timeout}, working_directory = "project", workspace_id = workspace,
+        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn_carrier(entry: string, request_value: Object, mode: string, crash_after: string?, pause_after: string?): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope(carrier_scope))

@@ -20,6 +20,7 @@ local catalog = require("catalog")
 local policy = require("policy")
 local launch = require("launch")
 local placement = require("placement")
+local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.codex_carrier"
 local POLICY = "bee.harness.catalog:codex_fixture_policy"
 local BARE_POLICY = "bee.harness.catalog:codex_fixture_policy_bare"
@@ -174,9 +175,11 @@ local function projection_for(workspace: string, attempt_id: string): string
     return issued.projection_id :: string
 end
 local function request(thread_id: string, attempt_id: string, policy_ref: string, projections: {string}): Object
+    local selected = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "say hi", policy_ref = policy_ref, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PATH = "/usr/bin:/bin"}, working_directory = "project", projections = projections}
+        environment = {PATH = "/usr/bin:/bin"}, working_directory = "project", projections = projections, placement_binding_ref = selected.binding_id,
+        placement_binding_digest = selected.binding_digest}
 end
 local function spawn_carrier(entry: string, request_value: Object, mode: string, crash_after: string?): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope())

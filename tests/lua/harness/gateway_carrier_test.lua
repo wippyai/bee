@@ -13,6 +13,7 @@ local env = require("env")
 local time = require("time")
 local channel = require("channel")
 local json = require("json")
+local placement_fixture = require("placement_fixture")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
 local EXPIRING_POLICY = "bee.harness.catalog:gateway_expiring_policy"
@@ -110,11 +111,13 @@ local function thread(): string
     return created.thread_id :: string
 end
 local function request(thread_id: string, attempt_id: string, environment: {[string]: string}, subpath: string?, policy_ref: string?): Object
+    local placement = placement_fixture.resolve()
     environment.BEE_FIXTURE_GATEWAY = "1"
     if environment.BEE_FIXTURE_STREAM == nil then environment.BEE_FIXTURE_STREAM = stream("plain.jsonl") end
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "ping", policy_ref = policy_ref or POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = subpath or "", access = "write", purpose = "project"}},
-        environment = environment, working_directory = "project"}
+        environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id,
+        placement_binding_digest = placement.binding_digest}
 end
 type Outcome = {value: Object?, error: string?}
 local function spawn_carrier(request_value: Object, mode: string, crash_after: string?, pause_after: string?): string

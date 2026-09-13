@@ -26,6 +26,7 @@ local claude_launch = require("claude_launch")
 local codex_launch = require("codex_launch")
 local codex_configuration = require("codex_configuration")
 local configuration = require("configuration")
+local placement_fixture = require("placement_fixture")
 local quote = require("quote")
 local ACTOR = "bee.test.gateway_harness"
 local CLAUDE_POLICY = "bee.harness.catalog:claude_gateway_policy"
@@ -194,9 +195,11 @@ local function projection_for(workspace: string, attempt_id: string, name: strin
     return issued.projection_id :: string
 end
 local function request(thread_id: string, attempt_id: string, binding_ref: string, policy_ref: string, projections: {string}): Object
+    local placement = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = binding_ref,
         profile_id = "batch", brief = "read the thread", policy_ref = policy_ref, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PATH = "/usr/bin:/bin"}, working_directory = "project", projections = projections}
+        environment = {PATH = "/usr/bin:/bin"}, working_directory = "project", projections = projections, placement_binding_ref = placement.binding_id,
+        placement_binding_digest = placement.binding_digest}
 end
 local function spawn_carrier(request_value: Object): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope())

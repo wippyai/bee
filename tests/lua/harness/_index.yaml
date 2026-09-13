@@ -147,6 +147,13 @@ entries:
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
     classify: bee.harness.catalog:classify
+- name: placement_fixture
+  kind: library.lua
+  source: file://placement_fixture.lua
+  meta: {type: test_support}
+  modules: [registry]
+  imports:
+    resolver: bee.placement:resolver
 - name: fixture_policy
   kind: registry.entry
   meta:
@@ -279,6 +286,7 @@ entries:
     claude_launch: bee.driver.claude:launch
     codex_launch: bee.driver.codex:launch
     codex_configuration: bee.driver.codex:configuration
+    placement_fixture: bee.harness.catalog:placement_fixture
     configuration: bee.driver:configuration
     quote: bee.driver.kit:quote
 - name: gateway_client_policy
@@ -298,6 +306,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
     test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: project_fixture
   kind: fs.directory
   meta: {type: test_support}
@@ -364,6 +373,7 @@ entries:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
     test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: launch_sentinel_storage
   kind: env.storage.memory
   meta: {type: test_support}
@@ -718,6 +728,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     approvals: bee.approvals:service
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: codex_auth_test
   kind: function.lua
   source: file://codex_auth_test.lua
@@ -836,6 +847,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: claude_adapter_test
   kind: function.lua
   source: file://claude_adapter_test.lua
@@ -892,6 +904,7 @@ entries:
     approvals: bee.approvals:service
     policy: bee.harness.carrier:policy
     launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: claude_acceptance_test
   kind: function.lua
   source: file://claude_acceptance_test.lua
@@ -927,6 +940,7 @@ entries:
     policy: bee.harness.carrier:policy
     launch: bee.driver.codex:launch
     placement: bee.placement.native:service
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: continuation_test
   kind: function.lua
   source: file://continuation_test.lua
@@ -938,6 +952,7 @@ entries:
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
+    placement_fixture: bee.harness.catalog:placement_fixture
     hook_records: bee.harness.carrier:hook_records
     codex: bee.driver.codex:launch
     claude: bee.driver.claude:launch

@@ -7,10 +7,9 @@ local codex = require("codex")
 local claude = require("claude")
 local machine = require("machine")
 local catalog = require("catalog")
-local PLACEMENT_METHODS = {prepare = "bee.placement.native:prepare", start = "bee.placement.native:start", status = "bee.placement.native:status",
-    stop = "bee.placement.native:stop", reconcile = "bee.placement.native:reconcile", cleanup = "bee.placement.native:cleanup",
-    evidence = "bee.placement.native:evidence", attach = "bee.placement.native:attach", capabilities = "bee.placement.native:capabilities",
-    measure_executable = "bee.placement.native:measure_executable", close_stdin = "bee.placement.native:close_stdin"}
+local placement_fixture = require("placement_fixture")
+local PLACEMENT = placement_fixture.resolve()
+local PLACEMENT_METHODS = PLACEMENT.methods
 local function observation(sequence: integer, session: string, binding: string, ambiguous: boolean, attempt: string): {[string]: unknown}
     local batch, err = hook_records.batch(binding, nil, {{event_id = "event:" .. tostring(sequence), event = "SessionStart",
         occurrence = "session:" .. session, ambiguous = ambiguous, provenance = "fixture", sequence = sequence,
@@ -27,26 +26,30 @@ local function define_tests()
             point.retained_session_ref = "session"
             point.output = "complete"
             point.terminal = {outcome = "succeeded", resume_ref = "native-session"}
-            local stored: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "succeeded", placement_binding = "bee.placement.native:binding", checkpoint = point}
+            local stored: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "succeeded", placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}
             local attempt: {[string]: unknown} = {attempt_id = "previous", action_id = "action", owner_id = "alice", session_ref = "session", execution_state = "exited"}
             local placement_calls = 0
             local function call(target: string, input: unknown): (unknown, string?)
                 if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
-                test.eq(target, "bee.placement.native:status")
+                test.eq(target, PLACEMENT_METHODS.status)
                 placement_calls = placement_calls + 1
                 return {ok = true, value = {attempt = attempt}}, nil
             end
             local request: continuation.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", previous_attempt_id = "previous", session_ref = "session",
                 binding_ref = "driver:binding", binding_digest = "binding-digest", profile_id = "batch", profile_digest = "profile-digest",
-                placement_binding_ref = "bee.placement.native:binding", placement_binding_digest = string.rep("a", 64), placement_methods = PLACEMENT_METHODS}
+                placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS}
             local resumed, err = continuation.resolve(call, request)
             test.is_nil(err)
             test.eq(resumed, "native-session")
             test.eq(placement_calls, 1)
+            stored.placement_binding_digest = nil
+            test.is_nil(continuation.resolve(call, request))
+            test.eq(placement_calls, 1, "missing historical placement digest is rejected before status")
+            stored.placement_binding_digest = PLACEMENT.binding_digest
             stored.placement_binding = "example.placement:binding"
             test.is_nil(continuation.resolve(call, request))
             test.eq(placement_calls, 1, "placement mismatch is rejected before status")
-            stored.placement_binding = "bee.placement.native:binding"
+            stored.placement_binding = PLACEMENT.binding_id
             for _, state in ipairs({"prepared", "running"}) do
                 stored.attempt_state = state
                 test.is_nil(continuation.resolve(call, request))
@@ -83,7 +86,7 @@ local function define_tests()
             local point = checkpoint.new({binding_ref = "driver:binding", binding_digest = "binding-digest", profile_id = "window",
                 profile_digest = "profile-digest", gateway_binding = "old-binding"}, 1)
             point.retained_session_ref = "session"
-            local stored: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = "bee.placement.native:binding", checkpoint = point}
+            local stored: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}
             local attempt: {[string]: unknown} = {attempt_id = "previous", action_id = "action", owner_id = "alice", session_ref = "session",
                 execution_state = "exited", cleanup_state = "complete"}
             local rows: {unknown} = {observation(1025, "provider-session", "old-binding", false, "previous"),
@@ -100,8 +103,8 @@ local function define_tests()
             local cleanup_reply: unknown = {ok = false, error = {code = "CONFLICT"}}
             local function call(target: string, input: unknown): (unknown, string?)
                 if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
-                if target == "bee.placement.native:status" then return {ok = true, value = {attempt = attempt}}, nil end
-                if target == "bee.placement.native:cleanup" then
+                if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt}}, nil end
+                if target == PLACEMENT_METHODS.cleanup then
                     test.eq((input :: {[string]: unknown}).attempt_id, "previous")
                     cleanup_calls = cleanup_calls + 1
                     return cleanup_reply, nil
@@ -120,8 +123,8 @@ local function define_tests()
             end
             local request: continuation.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice",
                 previous_attempt_id = "previous", session_ref = "session", binding_ref = "driver:binding", binding_digest = "binding-digest",
-                profile_id = "window", profile_digest = "profile-digest", placement_binding_ref = "bee.placement.native:binding",
-                placement_binding_digest = string.rep("a", 64), placement_methods = PLACEMENT_METHODS}
+                profile_id = "window", profile_digest = "profile-digest", placement_binding_ref = PLACEMENT.binding_id,
+                placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS}
             stored.attempt_state = "running"
             attempt.execution_state = "running"
             local inspected = continuation.inspect_window(call, request, false)
@@ -254,8 +257,8 @@ local function define_tests()
                 call = function(target: string, input: unknown): (unknown, string?)
                     calls = calls + 1
                     if target == "bee.threads.carrier:checkpoint" then
-                        return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = "bee.placement.native:binding", checkpoint = point}}, nil
-                    elseif target == "bee.placement.native:status" then
+                        return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}}, nil
+                    elseif target == PLACEMENT_METHODS.status then
                         return {ok = true, value = {attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
                             session_ref = "session", execution_state = "exited", cleanup_state = "complete"}}}, nil
                     elseif target == "bee.threads.service:read_after" then
@@ -276,7 +279,7 @@ local function define_tests()
             }
             local request: machine.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
                 binding_ref = "bee.driver.claude:binding", profile_id = "window", brief = "", policy_ref = "bee.harness.catalog:fixture_policy",
-                placement_binding_ref = "bee.placement.native:binding", placement_binding_digest = string.rep("a", 64), placement_methods = PLACEMENT_METHODS,
+                placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS,
                 resources = {}, environment = {}, previous_attempt_id = "previous", session_ref = "session"}
             local planned, err = machine.plan(io, request)
             test.is_nil(planned)

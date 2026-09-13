@@ -75,6 +75,14 @@ local function image(value: unknown): (string?, Failure?)
     return text, nil
 end
 
+local function container_name(value: unknown, field: string): (string?, Failure?)
+    local text = bounds.text(value, 128)
+    if not text or #text ~= 68 or not text:match("^bee%-[0-9a-f]+$") then
+        return nil, failure("invalid", field .. " must be bee- followed by a full lowercase digest")
+    end
+    return text, nil
+end
+
 local function apparmor(value: unknown): (string?, Failure?)
     local text = bounds.text(value, 128)
     if not text or not text:match("^[A-Za-z0-9_.-]+$") or text == "unconfined" then
@@ -223,6 +231,71 @@ local function config_matches(config: Config, identity: CreateExpected): Failure
     return nil
 end
 
+local function exact_list_name(candidate: Object, expected_name: string): boolean
+    local names = candidate.Names
+    if type(names) ~= "table" then return false end
+    for _, value in ipairs(names :: {unknown}) do
+        if value == expected_name or value == "/" .. expected_name then return true end
+    end
+    return false
+end
+
+local function exact_inspect_name(raw: Object, expected_name: string): boolean
+    return raw.Name == expected_name or raw.Name == "/" .. expected_name
+end
+
+function M.recover_create(value: unknown): (Observation?, Failure?)
+    local raw, request_error = object(value, "recover_create")
+    if not raw then return nil, request_error end
+    local unknown = bounds.fields(raw, {"name", "expected"})
+    if unknown then return nil, failure("invalid", "recover_create: " .. unknown) end
+    local expected_name, name_error = container_name(raw.name, "recover_create.name")
+    if not expected_name then return nil, name_error end
+    local identity, identity_error = create_expected(raw.expected)
+    if not identity then return nil, identity_error end
+    local client, client_error = connect()
+    if not client then return nil, client_error end
+    local listed, list_error = (client :: Client):list_containers({name = {expected_name :: string}})
+    if not listed then return nil, failure("unavailable", "Docker create recovery listing failed: " .. tostring(list_error)) end
+    if type(listed) ~= "table" then return nil, failure("unavailable", "Docker create recovery returned an invalid listing") end
+    local candidates = listed :: {unknown}
+    local candidate_count = 0
+    for key in pairs(candidates) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then
+            return nil, failure("unavailable", "Docker create recovery returned a non-array listing")
+        end
+        candidate_count = candidate_count + 1
+    end
+    local matches = 0
+    local recovered: Observation? = nil
+    for index = 1, candidate_count do
+        local candidate = bounds.object(candidates[index])
+        if not candidate then return nil, failure("unavailable", "Docker create recovery returned a malformed candidate") end
+        if exact_list_name(candidate :: Object, expected_name :: string) then
+            local candidate_id = bounds.text(candidate.Id, 64)
+            if candidate_id and #candidate_id == 64 and candidate_id:match("^[0-9a-f]+$") then
+                local expected_identity: Expected = {container_id = candidate_id, image_id = identity.image_id,
+                    apparmor = identity.apparmor, started_at = nil, labels = identity.labels}
+                local inspected, inspect_error = inspect_raw(client :: Client, candidate_id)
+                if inspect_error and inspect_error.kind == "unavailable" then return nil, inspect_error end
+                if inspected and exact_inspect_name(inspected, expected_name :: string) then
+                    local observation, decode_error = decode(inspected, expected_identity)
+                    if observation then
+                        matches = matches + 1
+                        recovered = observation
+                    elseif decode_error and decode_error.kind == "unavailable" then
+                        return nil, decode_error
+                    end
+                end
+            end
+        end
+    end
+    if matches ~= 1 then
+        return nil, failure("unavailable", "Docker create recovery did not find exactly one matching container")
+    end
+    return recovered, nil
+end
+
 function M.inspect(value: unknown): (Observation?, Failure?)
     local request, request_error = ref(value, "inspect")
     if not request then return nil, request_error end
@@ -236,8 +309,8 @@ function M.create(value: unknown): (Observation?, Failure?)
     if not raw then return nil, request_error end
     local unknown = bounds.fields(raw, {"name", "config", "expected"})
     if unknown then return nil, failure("invalid", "create: " .. unknown) end
-    local name = bounds.text(raw.name, 128)
-    if not name or not name:match("^bee%-[0-9a-f]+$") then return nil, failure("invalid", "create.name is not a deterministic Bee name") end
+    local name, name_error = container_name(raw.name, "create.name")
+    if not name then return nil, name_error end
     local identity, identity_error = create_expected(raw.expected)
     if not identity then return nil, identity_error end
     local config = raw.config

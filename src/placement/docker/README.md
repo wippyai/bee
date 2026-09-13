@@ -47,7 +47,10 @@ It stays outside this namespace's default index because its
 link `bee.placement.docker.daemon:daemon_ref` to one registry entry containing an
 absolute Unix `socket_path`; the adapter passes that selected socket to the
 existing `userspace.docker:docker_client` and never discovers another daemon.
-It exposes only typed create, start, inspect, stop and remove calls. It checks
+It exposes only typed create, lost-create-reply recovery, start, inspect, stop
+and remove calls. Recovery finds exactly one existing container by its
+deterministic name and expected image and labels; it never creates or restarts.
+It checks
 the full container and image IDs, expected labels and AppArmor profile before
 mutating an existing container, and confirms absence after removal. A
 transport failure remains unknown. It owns no placement database, state

@@ -1,14 +1,6 @@
 directories:
   modules: .wippy
   src: ./src
-modules:
-  # These are dependency declarations, intentionally unresolved until the
-  # component packages are published with real artifact digests.
-  - name: bee/placement-docker
-    version: '*'
-  - name: bee/threads
-    version: '*'
-  - name: userspace/docker-client
-    version: '*'
-    # This dependency is unpublished at this revision; the local fixture
-    # links the reviewed userspace source at commit 9d3c310 instead.
+# No dependency artifacts are locked yet. The source manifest declares the
+# Bee helper/thread and userspace client imports; publication must resolve and
+# record their real artifact digests first.

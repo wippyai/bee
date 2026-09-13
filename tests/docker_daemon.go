@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
-// Focused proof for the optional Docker daemon adapter. The fixture composes
-// the reviewed local userspace/docker-client package and a private Unix HTTP
-// daemon; it never needs Docker credentials or a real daemon.
+// Focused dependency-slice protocol proof for the optional Docker daemon
+// adapter. The fixture composes the reviewed local userspace/docker-client
+// package, the adapter package and the narrow Bee helper slice it imports,
+// plus a private Unix HTTP daemon. It never needs Docker credentials or a real
+// daemon and does not claim standalone package publication.
 package main
 
 import (
@@ -62,7 +64,6 @@ func run() error {
 		"bee/placement/docker-helper/configuration.lua": filepath.Join("src", "placement", "docker", "configuration.lua"),
 		"bee/placement/docker-helper/inspection.lua":    filepath.Join("src", "placement", "docker", "inspection.lua"),
 		"bee/placement/docker-helper/README.md":         filepath.Join("src", "placement", "docker", "README.md"),
-		"bee/threads/records/_index.yaml":               filepath.Join("src", "threads", "records", "_index.yaml"),
 		"bee/threads/records/bounds.lua":                filepath.Join("src", "threads", "records", "bounds.lua"),
 		"userspace/docker/client.lua":                   filepath.Join(*dockerSource, "client.lua"),
 	}
@@ -90,6 +91,8 @@ func run() error {
 	startedAt := "0001-01-01T00:00:00Z"
 	removed := false
 	startCalls := 0
+	containerName := ""
+	inspectName := ""
 	labels := map[string]string{
 		"bee.attempt_id":     "attempt-daemon",
 		"bee.request_digest": strings.Repeat("b", 64),
@@ -105,8 +108,26 @@ func run() error {
 		if r.URL.Path == "/containers/create" && r.Method == http.MethodPost {
 			status = "created"
 			removed = false
+			containerName = r.URL.Query().Get("name")
+			inspectName = containerName
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]string{"Id": containerID})
+			return
+		}
+		if r.URL.Path == "/containers/json" && r.Method == http.MethodGet {
+			filters := r.URL.Query().Get("filters")
+			multipleName := "bee-" + strings.Repeat("e", 64)
+			zeroName := "bee-" + strings.Repeat("f", 64)
+			switch {
+			case strings.Contains(filters, multipleName):
+				inspectName = multipleName
+				_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": containerID, "Names": []string{"/" + multipleName}}, {"Id": containerID, "Names": []string{"/" + multipleName}}})
+			case strings.Contains(filters, zeroName):
+				_ = json.NewEncoder(w).Encode([]map[string]any{})
+			default:
+				inspectName = containerName
+				_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": containerID, "Names": []string{"/" + containerName}}})
+			}
 			return
 		}
 		if r.URL.Path == "/containers/"+containerID+"/json" && r.Method == http.MethodGet {
@@ -116,7 +137,7 @@ func run() error {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"Id": containerID, "Image": imageID, "AppArmorProfile": "docker-default",
+				"Id": containerID, "Name": "/" + inspectName, "Image": imageID, "AppArmorProfile": "docker-default",
 				"Config": map[string]any{"Labels": labels},
 				"State":  map[string]any{"Status": status, "StartedAt": startedAt, "ExitCode": 0},
 			})
@@ -156,7 +177,9 @@ func run() error {
 	go func() { _ = server.Serve(listener) }()
 	defer server.Close()
 	socketJSON, _ := json.Marshal(socket)
-	recordsIndex := `version: '1.0'
+	// Only bounds is imported by the adapter; this is an explicit dependency
+	// slice rather than a standalone bee/threads package acceptance.
+	recordsSliceIndex := `version: '1.0'
 namespace: bee.threads.records
 entries:
 - name: bounds
@@ -206,10 +229,15 @@ local function main()
 local labels = { ["bee.attempt_id"] = "attempt-daemon", ["bee.request_digest"] = string.rep("b", 64) }
 local image = %q
 local id = %q
+local create_name = "bee-"..string.rep("d", 64)
 local expected = {container_id=id, image_id=image, apparmor="docker-default", labels=labels}
 local config = {Image=image, User="1000:1000", Labels=labels, HostConfig={SecurityOpt={"apparmor=docker-default"}}}
-local created, create_error = daemon.create({name="bee-"..string.rep("d", 64), config=config, expected={image_id=image, apparmor="docker-default", labels=labels}})
+local created, create_error = daemon.create({name=create_name, config=config, expected={image_id=image, apparmor="docker-default", labels=labels}})
 if not created or create_error or created.state ~= "created" then error((create_error and create_error.message) or "create did not confirm created state") end
+local recovered, recovery_error = daemon.recover_create({name=create_name, expected={image_id=image, apparmor="docker-default", labels=labels}})
+if not recovered or recovery_error or recovered.container_id ~= id or recovered.state ~= "created" then error((recovery_error and recovery_error.message) or "lost create reply was not recovered") end
+local multiple, multiple_error = daemon.recover_create({name="bee-"..string.rep("e", 64), expected={image_id=image, apparmor="docker-default", labels=labels}})
+if multiple ~= nil or not multiple_error or multiple_error.kind ~= "unavailable" then error("multiple create recovery matches were accepted") end
 local running, start_error = daemon.start({container_id=id, expected=expected})
 if not running or start_error or running.state ~= "running" or not running.started_at then error((start_error and start_error.message) or "start did not confirm running state") end
 expected.started_at = running.started_at
@@ -223,6 +251,8 @@ local deleted, remove_error = daemon.remove({container_id=id, expected=expected}
 if deleted ~= true or remove_error then error((remove_error and remove_error.message) or "remove did not confirm absence") end
 local absent, absent_error = daemon.inspect({container_id=id, expected=expected})
 if absent ~= nil or not absent_error or absent_error.kind ~= "absent" or absent_error.status ~= 404 then error("confirmed Docker absence was not preserved") end
+local zero, zero_error = daemon.recover_create({name="bee-"..string.rep("f", 64), expected={image_id=image, apparmor="docker-default", labels=labels}})
+if zero ~= nil or not zero_error or zero_error.kind ~= "unavailable" then error("zero create recovery matches were accepted") end
 local transport, transport_error = daemon.inspect({container_id="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", expected={container_id="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", image_id=image, apparmor="docker-default", labels=labels}})
 if transport ~= nil or not transport_error or transport_error.kind ~= "unavailable" or transport_error.status ~= nil then error("transport failure was treated as a lifecycle fact") end
 return true
@@ -233,7 +263,7 @@ return {main=main}
 		"wippy.lock":      "directories:\n  src: src\n  modules: .wippy\n",
 		"src/_index.yaml": manifest,
 		"src/bee/placement/docker-host/_index.yaml": hostIndex,
-		"src/bee/threads/records/_index.yaml":       recordsIndex,
+		"src/bee/threads/records/_index.yaml":       recordsSliceIndex,
 		"src/check.lua":                             check,
 	} {
 		if mkdirErr := os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0700); mkdirErr != nil {
@@ -267,6 +297,6 @@ return {main=main}
 	if startCalls != 1 {
 		return fmt.Errorf("identity mismatch caused %d Docker start calls; want one", startCalls)
 	}
-	fmt.Println("PASS: optional Docker daemon adapter validates identity, lifecycle and confirmed absence over a host-bound Unix client")
+	fmt.Println("PASS: optional Docker daemon adapter validates identity, lost-create recovery, lifecycle and confirmed absence over a host-bound Unix client")
 	return nil
 }

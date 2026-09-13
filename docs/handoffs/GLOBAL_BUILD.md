@@ -1,6 +1,28 @@
 # Global Bee build — September 12, 2026
 
-## Current install: offline startup and retained harness configuration
+## Current install: profile instruction functions
+
+Global SHA `1b56f795acb6cd7673ac4cbcbd3bf581abfd177f8a3bd46e0713d9148f9d9ff0`
+contains source `9e43f0d`, including the preceding offline startup fixes. Host
+policies can select a function and JSON arguments to append profile guidance.
+Actual actor/context and declared resource permissions apply; committed launch
+replay reuses the saved instructions. See [the contract](PROFILE_INSTRUCTIONS.md).
+
+Strict lint, 796 unit cases, and complete native executable acceptance pass.
+The candidate additionally passed the loopback-only network namespace proof:
+fresh desktop 1.429 s, restart 1.228 s, installed-module registry restore 3.889 s,
+restored restart 1.228 s, and warm public client reconnect 0.106 s. Retained
+artifacts were unchanged. The broader repository regression remains live on
+the preceding offline source; this is not a full-suite completion claim.
+
+Installation fenced against `230816bd`, backed up and verified all six files,
+and did not restart running nodes or reset databases. Runtime/native pins and
+checked patches are unchanged. Evidence: `instruction-builders-global-install.json`,
+`instruction-builders-integrated-check.log`, `instruction-builders-native.log`
+and `instruction-builders-offline.log` in `bee-evidence/0912`.
+Picker editing, automatic Agy login and managed Docker remain unfinished.
+
+## Previous install: offline startup and retained harness configuration
 
 Global SHA `230816bd1110f6595ebf7eed1f3a48db007f8e950524b825a6fa158e7546dd95`
 contains source `d88cbd6`. It preserves the preceding application-admission

@@ -207,6 +207,7 @@ entries:
     configuration_protocol: bee.driver:configuration
     test: wippy.test:test
     service: bee.placement.native:service
+    identity: bee.placement.native:identity
     store: bee.placement.native:store
     protocol: bee.placement.native:protocol
     homes: bee.placement.native:homes

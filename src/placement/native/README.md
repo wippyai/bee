@@ -233,7 +233,10 @@ own generation.
 Signal evidence is not exit evidence; the runner records exit only from
 `wait`. Without a live runner, `stop` signals the group only after the
 leader is identified alive by pid, start ticks and boot id; otherwise the
-attempt becomes `uncertain`. `reconcile` proves absence the same way and
+attempt becomes `uncertain`. A group signal succeeds only when the OS command
+exits with status zero. Command refusal leaves stop unproven and records
+`stop.unproven`, rather than claiming `signal.group` evidence.
+`reconcile` proves absence the same way and
 keeps uncertainty where identity is missing. `cleanup` removes the home
 only from `exited`.
 

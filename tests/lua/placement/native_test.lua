@@ -11,6 +11,7 @@ local time = require("time")
 local registry = require("registry")
 local exec = require("exec")
 local service = require("service")
+local identity = require("identity")
 local configuration = require("configuration")
 local configuration_protocol = require("configuration_protocol")
 local hash = require("hash")
@@ -250,6 +251,34 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
+        test.it("reports a rejected OS group signal instead of claiming success", function()
+            local executor, executor_error = exec.get("bee.placement.native:executor")
+            if not executor then error(tostring(executor_error)) end
+            local child, child_error = executor:exec("sh -c 'echo $$; exec sleep 30'", {process_group = true})
+            if not child then executor:release(); error(tostring(child_error)) end
+            local output = child:stdout_stream()
+            local ok, failure = pcall(function()
+                local started, start_error = child:start()
+                if not started then error(tostring(start_error)) end
+                local pid = tonumber(tostring(output:read(64) or ""))
+                if not pid then error("child did not report its PID") end
+                local recorded, read_error = identity.read(executor, math.floor(pid))
+                if not recorded then error(tostring(read_error)) end
+                test.eq(recorded.pgid, math.floor(pid))
+                local probed, probe_error = identity.signal_group(recorded, 0)
+                test.eq(probed, true, tostring(probe_error))
+                -- The kernel/shell rejects this signal. The child stays alive,
+                -- so this exercises command refusal after identity validation.
+                local signalled, signal_error = identity.signal_group(recorded, 9999)
+                test.eq(signalled, false)
+                test.is_true(type(signal_error) == "string" and signal_error:find("exit", 1, true) ~= nil)
+                test.eq(identity.observe(recorded).alive, true)
+            end)
+            output:close()
+            child:close(true)
+            executor:release()
+            if not ok then error(tostring(failure)) end
+        end)
         resource_mode("host_configured")
         admit_root("bee.placement.native:admitted_roots")
         admit_root("bee:resource_roots")

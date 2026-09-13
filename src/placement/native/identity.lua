@@ -101,9 +101,10 @@ function M.signal_group(recorded: Identity, signal: integer): (boolean, string?)
     if not recorded.pgid then return false, "no process group recorded" end
     local executor, executor_error = exec.get(resources.EXECUTOR)
     if not executor then return false, "executor unavailable: " .. tostring(executor_error) end
-    local _, err = capture(executor, "kill -s " .. tostring(signal) .. " -- -" .. tostring(recorded.pgid))
+    local _, err, code = capture(executor, "kill -s " .. tostring(signal) .. " -- -" .. tostring(recorded.pgid))
     executor:release()
     if err then return false, err end
+    if code ~= 0 then return false, "group signal failed with exit " .. tostring(code) end
     return true, nil
 end
 return M

@@ -87,6 +87,14 @@ CREATE INDEX bee_placement_attempts_action ON bee_placement_attempts (owner_id, 
 local list: {Migration} = {
     {id = 1, name = "placement_attempts", sql = ATTEMPTS_SQL, rebuild = false},
     {id = 2, name = "terminal_exit_source", sql = TERMINAL_EXIT_SQL, rebuild = true},
+    -- Placement implementations share one receipt store.  These nullable
+    -- columns keep the native schema byte compatible while allowing a Docker
+    -- owner to freeze its durable specification and observed identity.
+    {id = 3, name = "placement_execution", sql = [[
+ALTER TABLE bee_placement_attempts ADD COLUMN placement_kind TEXT CHECK (placement_kind IN ('native', 'docker'));
+ALTER TABLE bee_placement_attempts ADD COLUMN placement_spec_json TEXT;
+ALTER TABLE bee_placement_attempts ADD COLUMN placement_identity_json TEXT;
+]], rebuild = false},
 }
 function M.all(): {Migration}
     return list

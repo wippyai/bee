@@ -50,9 +50,17 @@ and TMPDIR if absent, refusing values that disagree with the selected home or
 only in the create request, never in durable configuration or diagnostics.
 The owner must perform the existing policy/credential/gateway admission before
 supplying these values. This pure builder does not authorize variable names.
-Broader profile
-configuration, credential delivery, container-reachable MCP/hooks, durable
-admission, reconciliation and full Agent terminal integration remain unfinished.
+The lifecycle owner is in \`service.lua\` and uses the shared placement receipts
+store. It freezes the host-selected specification before intent, materializes
+credentials only through the existing placement materializer, and uses the
+daemon adapter for create, deterministic-name lost-reply recovery, start,
+inspection, stop and confirmed removal. Docker rows carry their kind, frozen
+specification and exact container identity in the shared store; the native
+owner refuses those rows. The \`container_identity\` seam returns only the
+validated container ID, image ID, start time and admission labels to a terminal
+owner after it proves the owner and attachment generation. The lifecycle
+entries are packaged with the optional daemon component because the default
+Bee pack must remain independent of the unpublished Docker client.
 No container creation, driver startup, downloads or global installation occurs
 through this library.
 

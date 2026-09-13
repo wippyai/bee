@@ -381,8 +381,8 @@ entries:
 - name: placement_sweeper_policy
   kind: security.policy
   policy:
-    actions: [process.registry.register]
-    resources: '*'
+    actions: [process.registry.register, funcs.call]
+    resources: ['*', bee.placement.docker:reconcile_internal]
     effect: allow
 - name: placement_runner_policy
   kind: security.policy

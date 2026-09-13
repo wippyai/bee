@@ -26,6 +26,7 @@ type Update = {
 }
 type Result = {ok: boolean, code: string?, message: string?, attempt: types.Attempt?}
 type Measured = {capability: types.Capability, exit_observation: types.ExitObservation}
+type Placement = {kind: string, spec_json: string?, identity_json: string?}
 function M.now(): string
     return time.now():utc():format("2006-01-02T15:04:05.000Z07:00")
 end
@@ -123,7 +124,7 @@ local function append(tx: sql.Transaction, attempt_id: string, count: integer, k
     return sequence, nil
 end
 -- Records intent: the attempt exists before anything external does.
-function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, encoded: string, measured: Measured, grants_json: string?): Result
+function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, encoded: string, measured: Measured, grants_json: string?, placement: Placement?): Result
     local tx, begin_err = db:begin()
     if not tx then return {ok = false, code = "STORAGE", message = "begin intent"} end
     local at = M.now()
@@ -132,14 +133,16 @@ function M.intend(db: sql.DB, request: types.LaunchRequest, digest: string, enco
     -- the insert cannot admit a second holder. A completed cleanup is the
     -- only release; exit alone deliberately leaves the holder in place.
     local inserted, insert_err = tx:execute([[INSERT INTO bee_placement_attempts (attempt_id, owner_id, owner_incarnation, action_id, idempotency_key,
-        request_digest, request_json, grants_json, execution_state, cleanup_state, capability, required_cleanup, exit_observation, session_ref, evidence_count, created_at, updated_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'intended', 'pending', ?, ?, ?, ?, 1, ?, ?
+        request_digest, request_json, grants_json, placement_kind, placement_spec_json, placement_identity_json,
+        execution_state, cleanup_state, capability, required_cleanup, exit_observation, session_ref, evidence_count, created_at, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'intended', 'pending', ?, ?, ?, ?, 1, ?, ?
         WHERE ? IS NULL OR NOT EXISTS (
             SELECT 1 FROM bee_placement_attempts
             WHERE session_ref = ? AND owner_id = ?
               AND NOT (execution_state = 'exited' AND cleanup_state = 'complete')
         )]],
         {request.attempt_id, request.owner_id, request.owner_incarnation, request.action_id, request.idempotency_key, digest, encoded, grants_json,
+            placement and placement.kind or nil, placement and placement.spec_json or nil, placement and placement.identity_json or nil,
             measured.capability, request.required_cleanup, measured.exit_observation, request.session_ref, at, at,
             request.session_ref, request.session_ref, request.owner_id})
     if insert_err then

@@ -65,11 +65,12 @@ no duplicate native process or prompt replay.
 [Runtime PR #744](https://github.com/wippyai/runtime/pull/744), assigned to Rodrigo
 (`skhaz`), adds optional `AtomicWriteFS` and Lua `fs:writefile_atomic(path, content)`.
 It is not merged or present in Bee's installed runtime. The isolated runtime
-commit is `a30ad98673`; the shared runtime checkout was not modified.
+head is `5e76e3c4e1`; the shared runtime checkout was not modified.
 
 The Linux/macOS directory implementation holds verified parent handles, publishes
 through an exclusive temporary file and reports post-publication directory-sync
-failure separately. Lua accepts strings up to 8 MiB, requests mode `0600`, and
+failure separately, with `err:details().published == true` so the caller does not
+parse error text. Lua accepts strings up to 8 MiB, requests mode `0600`, and
 uses fixed provider-error messages. Unsupported providers refuse explicitly.
 This is whole-file publication, not compare-and-swap or a session authority grant.
 
@@ -82,3 +83,25 @@ been executed and Windows explicitly returns unsupported.
 Bee's consumer is still pending. Existing retained configuration remains
 byte-identical replay only. Real-provider recovery, crash/restart behavior and
 preservation of provider conversation files still require Bee acceptance.
+
+## Consumer review
+
+Placement already admits one unfinished attempt per owner/session. The structured
+runner now joins the window runner in claiming `intended` as `starting` before
+materialization; a duplicate cannot replace `runner_pid` or create files. The
+regression fails on the old runner (it starts the duplicate) and passes on the
+corrected runner alongside all 845 unit tests.
+
+The next consumer should replace only the persisted, host-rendered
+`delivery.files` paths in a retained home. Login bytes, login source markers,
+provider initialization files and conversation files remain separately owned.
+Immediately before publication, verify the attempt is still `starting` and its
+recorded runner is the current process. Keep the existing session admission and
+cleanup rules; the filesystem operation itself grants no session authority.
+
+Publication is atomic per file, not across the delivery list. A later failure
+must refuse startup without claiming that earlier files were rolled back. A
+published-but-unsynced result requires an explicit uncertain outcome and
+inspection before any further attempt; preserve the predecessor checkpoint and
+never replay its prompt. These are consumer requirements, not implemented Bee
+replacement behavior yet.

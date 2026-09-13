@@ -206,6 +206,40 @@ local function run()
     end
     test.ok(group_cleanup_ok, "process-group cleanup follows proven group absence")
 
+    -- Kill the owning actor without its finish() path. Reconciliation must
+    -- establish leader absence; actor death alone cannot authorize cleanup.
+    local lost_attempt = prepare("window-lost-" .. tostring(time.now():unix_nano()), "process_group")
+    local lost_view = assert(tty.viewport({width = 32, height = 10}))
+    local lost_child = assert(process.with_options({terminal = assert(lost_view:grant())}):with_actor(security.new_actor(OWNER)):with_scope(child_scope())
+        :spawn_monitored("bee.window_native:child", "bee:workers", parent, lost_attempt, "lost"))
+    local lost_open = false
+    local lost_deadline = time.after("10s")
+    while not lost_open do
+        local selected = channel.select({results:case_receive(), lost_deadline:case_receive()})
+        if not selected.ok or selected.channel == lost_deadline then break end
+        local message = selected.value
+        local data = message:payload():data()
+        if tostring(message:from()) == lost_child and type(data) == "table" and data.phase == "open" then
+            lost_open = data.ok == true and process_group_recorded(lost_attempt)
+        end
+    end
+    test.ok(lost_open, "crash fixture captured a real process-group identity")
+    assert(process.terminate(lost_child))
+    local lost_cleaned = false
+    for _ = 1, 50 do
+        local raw = caller():call("bee.placement.native:reconcile", {attempt_id = lost_attempt})
+        local result = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local attempt = result and type(result.value) == "table" and result.value :: {[string]: unknown} or nil
+        if attempt and attempt.execution_state == "exited" then
+            local cleaned = caller():call("bee.placement.native:cleanup", {attempt_id = lost_attempt})
+            local cleanup = type(cleaned) == "table" and cleaned :: {[string]: unknown} or nil
+            if cleanup and cleanup.ok == true then lost_cleaned = true; break end
+        end
+        time.sleep("100ms")
+    end
+    test.ok(lost_cleaned, "owner death reconciles actual child exit and group absence")
+    lost_view:close()
+
     local race_attempt = prepare("window-race-" .. tostring(time.now():unix_nano()))
     local race_view_a = assert(tty.viewport({width = 24, height = 8}))
     local race_view_b = assert(tty.viewport({width = 24, height = 8}))

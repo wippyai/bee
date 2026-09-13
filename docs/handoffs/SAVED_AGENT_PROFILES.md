@@ -167,3 +167,11 @@ Evidence: `make window-hooks-check` on the typed runtime,
 `bee-evidence/0912/window-continuation-session-proof.log` (exit 0). This uses a
 fixture harness and the same live runtime/broker. It does not prove provider CLI
 behavior, runtime restart, abrupt crash settlement, or Agy/Grok hook support.
+
+The native placement fixture also terminates the owning actor without calling
+its window `finish()` path. Existing runtime cleanup plus placement reconciliation
+proves the child exited and the process group is absent, permitting cleanup.
+`window-owner-exit-proof.log` records the passing real PTY test. This covers an
+actor exit within a live runtime, not an OS kill of the entire runtime. Automatic
+Agent restoration still needs to fence and settle its interrupted thread attempt
+and account for pending hooks before admitting a replacement.

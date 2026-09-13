@@ -35,6 +35,16 @@ concurrent start/stop in both request orders. Managed-window checks pass too;
 the next full release gate remains pending.
 This change is not in global `c8537ef7`.
 
+The following source integration keeps Agent launch failures visible and
+responsive instead of closing their window. Planning failures write no receipt;
+confirmed action/attempt failures settle asynchronously, and confirmed placement
+intents use the existing stop/cleanup operations. Closing during settlement can
+cancel it and leaves the result unconfirmed, as the view states. All 865 unit
+tests and the Go failure acceptance pass for planning, post-admission preparation,
+and post-placement checkpoint failures, including resize, explicit close and
+release of an unstarted placement. These changes await full release and native
+executable acceptance; they are not installed globally.
+
 Previous global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor
 failure diagnostics and consistent hook conversation identity. Full `make check`

@@ -117,9 +117,12 @@ managed-provider-window-check:
 managed-window-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_window_app.py
 .PHONY: managed-window-failure-check
+check: managed-window-failure-check
 managed-window-failure-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/managed_window_failure.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage plan
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage placement
 window-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))"

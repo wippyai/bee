@@ -27,6 +27,7 @@ local funcs = require("funcs")
 local appearance = require("appearance")
 local admission = require("admission")
 local registry = require("registry")
+local fs = require("fs")
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
@@ -56,6 +57,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
     return result
 end
 local WORKSPACE = string.rep("a", 32)
+local STAGE = "admitted"
 
 local function run()
     local thread = "managed_window_selector"
@@ -156,15 +158,16 @@ local function run()
 			local text = table.concat(frame.rows)
 			if text:find("Agent launch failed", 1, true) then
 				if not failure then failure = frame end
-				if text:find("settling", 1, true) then pending = frame; break end
+                if STAGE == "plan" and appearance_replies > 0 then break end
+				if text:find("settlement pending", 1, true) then pending = frame; break end
 			end
 		end
 		time.sleep("25ms")
 	end
 	assert(failure, "failure surface did not remain visible")
-    assert(pending, "failure surface did not show pending settlement")
+    assert((pending ~= nil) == (STAGE ~= "plan"), "incorrect settlement scope")
     local failure_text = table.concat(failure.rows)
-	assert(failure_text:find("Managed window", 1, true), "failure reason missing")
+	assert(failure_text:find("injected", 1, true), "failure reason missing")
     assert(appearance_replies > 0, "broker did not receive authenticated appearance state response")
     assert(view:send({type = "resize", width = 70, height = 14}))
     local resized = false
@@ -175,12 +178,29 @@ local function run()
     end
     assert(resized, "failure surface did not resize while settling")
     local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32}).value.records
-    local admitted = 0
+    local admitted, prepared = 0, 0
+    local attempt_id = ""
     for _, record in ipairs(records :: {{[string]: unknown}}) do
         if record.kind == "action.admitted" then admitted = admitted + 1 end
-        assert(record.kind ~= "attempt.prepared" and record.kind ~= "attempt.started", "preparation failure created an attempt")
+        if record.kind == "attempt.prepared" then prepared = prepared + 1; attempt_id = tostring(record.attempt_id) end
+        assert(record.kind ~= "attempt.started", "failed launch started a thread attempt")
+        if STAGE == "plan" then assert(record.kind ~= "receipt", "planning failure wrote a receipt") end
     end
-    assert(admitted == 1, "preparation failure did not retain its admitted action")
+    assert(admitted == (STAGE == "plan" and 0 or 1), "incorrect action admission count")
+    assert(prepared == (STAGE == "placement" and 1 or 0), "incorrect attempt preparation count")
+    if STAGE == "placement" then
+        local cleaned = false
+        for _ = 1, 80 do
+            local status = call("bee.placement.native:status", {attempt_id = attempt_id}).value
+            local attempt = (status :: {[string]: unknown}).attempt :: {[string]: unknown}
+            if attempt.execution_state == "exited" and attempt.cleanup_state == "complete" then
+                assert(attempt.runner == nil, "checkpoint failure created a runner")
+                cleaned = true; break
+            end
+            time.sleep("25ms")
+        end
+        assert(cleaned, "checkpoint failure retained the unstarted placement")
+    end
     time.sleep("250ms")
     assert(view:snapshot(), "failure surface auto-dismissed before explicit close")
     assert(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
@@ -189,6 +209,10 @@ local function run()
     view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies); process.unlisten(appearance_requests)
+    local evidence = assert(fs.get("bee.managed_window_fixture:failure_evidence"))
+    local proof = assert(evidence:open("/complete", "w"))
+    assert(proof:write("MANAGED_WINDOW_FAILURE_COMPLETE"))
+    proof:close()
 end
 return {run = run}
 `
@@ -213,7 +237,7 @@ func copyTree(dst, src string) error { return os.CopyFS(dst, os.DirFS(src)) }
 
 func runCommand(ctx context.Context, dir, runtime string, env []string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, runtime, args...)
-	cmd.Dir, cmd.Env = dir, append(env, os.Environ()...)
+	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
@@ -237,7 +261,11 @@ func envFor(dir string) []string {
 func run() error {
 	runtime := flag.String("runtime", ".wippy/bin/bee-wippy", "Bee runtime executable")
 	root := flag.String("root", ".", "Bee repository root")
+	stage := flag.String("stage", "admitted", "failure stage: plan, admitted or placement")
 	flag.Parse()
+	if *stage != "plan" && *stage != "admitted" && *stage != "placement" {
+		return fmt.Errorf("unknown failure stage %q", *stage)
+	}
 	repo, err := filepath.Abs(*root)
 	if err != nil {
 		return err
@@ -264,7 +292,7 @@ func run() error {
 	if err := os.WriteFile(filepath.Join(fixture, "driver.lua"), []byte(failureDriverLua), 0600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(fixture, "failure.lua"), []byte(failureLua), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(fixture, "failure.lua"), []byte(strings.Replace(failureLua, `local STAGE = "admitted"`, `local STAGE = "`+*stage+`"`, 1)), 0600); err != nil {
 		return err
 	}
 	indexPath := filepath.Join(fixture, "_index.yaml")
@@ -284,10 +312,14 @@ func run() error {
 		}
 		if name == "test" {
 			entry["source"], entry["method"] = "file://failure.lua", "run"
+			entry["security"].(map[string]interface{})["policies"] = append(entry["security"].(map[string]interface{})["policies"].([]interface{}), "bee.managed_window_fixture:failure_evidence_policy")
 		}
 		kept = append(kept, entry)
 	}
-	index.Entries = kept
+	index.Entries = append(kept,
+		map[string]interface{}{"name": "failure_evidence", "kind": "fs.directory", "directory": "evidence", "auto_init": true},
+		map[string]interface{}{"name": "failure_evidence_policy", "kind": "security.policy", "policy": map[string]interface{}{"actions": []string{"fs.get", "funcs.call"}, "resources": []string{"bee.managed_window_fixture:failure_evidence", "bee.placement.native:status"}, "effect": "allow"}},
+	)
 	indexData, err = yaml.Marshal(&index)
 	if err != nil {
 		return err
@@ -348,7 +380,24 @@ func run() error {
 		return err
 	}
 	machineText := strings.Replace(string(machine), "    step(io, \"admitted\")\n", "    step(io, \"admitted\")\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected post-admission preparation failure\", {epoch = nil, gateway_binding = nil, attempt = false} end\n", 1)
-	if machineText == string(machine) {
+	if *stage == "plan" {
+		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
+	} else if *stage == "placement" {
+		appPath := filepath.Join(dir, "src", "harness", "window", "app.lua")
+		app, readError := os.ReadFile(appPath)
+		if readError != nil {
+			return readError
+		}
+		changed := strings.Replace(string(app), "local checkpointed, checkpoint_error = persist_checkpoint(state)", "local checkpointed, checkpoint_error = false, \"injected checkpoint failure\"", 1)
+		if changed == string(app) {
+			return fmt.Errorf("checkpoint injection anchor missing")
+		}
+		if err := os.WriteFile(appPath, []byte(changed), 0600); err != nil {
+			return err
+		}
+		machineText = string(machine)
+	}
+	if *stage != "placement" && machineText == string(machine) {
 		return fmt.Errorf("machine admission anchor missing")
 	}
 	if err := os.WriteFile(machinePath, []byte(machineText), 0600); err != nil {
@@ -391,10 +440,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failure acceptance failed: %w\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "5 tests") && !strings.Contains(string(out), "1 tests") {
+	proof, proofError := os.ReadFile(filepath.Join(dir, "evidence", "complete"))
+	if proofError != nil || string(proof) != "MANAGED_WINDOW_FAILURE_COMPLETE" {
 		return fmt.Errorf("failure acceptance omitted test output\n%s", out)
 	}
-	fmt.Println("Managed window failure: visible delayed settlement, authenticated appearance state, resize, explicit Escape close and no pre-attempt lifecycle work passed")
+	fmt.Printf("Managed window failure %s: visible reason, correct lifecycle scope, authenticated appearance, resize, explicit close and completion proof passed\n", *stage)
 	return nil
 }
 

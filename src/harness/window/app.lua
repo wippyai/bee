@@ -100,8 +100,14 @@ end
 -- claimed attempt uses an attempt receipt; an earlier failure settles the
 -- admitted action when no attempt record was created. Gateway retirement and
 -- receipts use the same owner paths as normal window shutdown.
-local function settle_failure(admitted: admission.Admitted, epoch: integer?, reason: string, gateway_binding: string?, attempt_receipt: boolean): string
+local function settle_failure(admitted: admission.Admitted, epoch: integer?, reason: string, gateway_binding: string?, attempt_receipt: boolean, placement_attempt: boolean?): string
     local details: {string} = {}
+    if placement_attempt then
+        local stopped, stop_error = call(machine.PLACEMENT .. ":stop", {attempt_id = admitted.attempt_id})
+        if not stopped then details[#details + 1] = "placement stop: " .. tostring(stop_error) end
+        local cleaned, cleanup_error = call(machine.PLACEMENT .. ":cleanup", {attempt_id = admitted.attempt_id})
+        if not cleaned then details[#details + 1] = "placement cleanup: " .. tostring(cleanup_error) end
+    end
     if gateway_binding then
         local revoked, revoke_error = call("bee.gateway:revoke", {binding_id = gateway_binding})
         if not revoked then details[#details + 1] = "gateway revoke: " .. tostring(revoke_error) end
@@ -182,11 +188,12 @@ local function main(value: unknown)
             coroutine.spawn(function()
                 pending:send(settle())
             end)
-            status = status .. " · settling"
+            status = status .. " · settlement pending; closing leaves its result unconfirmed"
         end
         local function render()
             if not dirty then return end
-            local frame = restore_view.draw(width, height, preferences, status, "Agent launch failed", "Esc or Ctrl+Q closes")
+            local hint = settlement and not settlement_done and "Cleanup pending; Esc closes without waiting" or "Esc or Ctrl+Q closes"
+            local frame = restore_view.draw(width, height, preferences, status, "Agent launch failed", hint)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -395,7 +402,7 @@ local function main(value: unknown)
     end
     if plan.profile.mode ~= "window" or plan.profile.protocol ~= "pty" then
         local reason = "Managed window requires a PTY window profile"
-        show_failure(reason, function(): string return settle_failure(admitted :: admission.Admitted, nil, reason, nil, false) end)
+        show_failure(reason)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
@@ -406,9 +413,13 @@ local function main(value: unknown)
         local binding = failed_preparation and failed_preparation.gateway_binding
         local attempt = false
         if failed_preparation then attempt = failed_preparation.attempt end
-        show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, epoch, reason, binding, attempt)
-        end)
+        if failed_preparation then
+            show_failure(reason, function(): string
+                return settle_failure(admitted :: admission.Admitted, epoch, reason, binding, attempt)
+            end)
+        else
+            show_failure(reason)
+        end
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
@@ -433,7 +444,7 @@ local function main(value: unknown)
     if not checkpointed then
         local reason = "native window checkpoint did not persist: " .. tostring(checkpoint_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -444,7 +455,7 @@ local function main(value: unknown)
     if not attached then
         local reason = "native placement attachment was not confirmed: " .. tostring(attachment_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -455,7 +466,7 @@ local function main(value: unknown)
     if not terminal then
         local reason = "native window did not open: " .. tostring(terminal_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -472,7 +483,7 @@ local function main(value: unknown)
         terminal:finish()
         local reason = "native window started but thread start was refused: " .. tostring(started_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return

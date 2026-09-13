@@ -466,6 +466,7 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
     local request = plan.request
     local attempt_prepared = false
+    local action_admitted = false
     local epoch: integer? = nil
     local gateway_binding: string? = nil
     local grant_refs: {string} = {}
@@ -477,13 +478,17 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
         if action_input == "" and plan.profile.mode == "window" then action_input = "Open " .. plan.binding.title .. " window" end
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
             binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}}, "admit")
-        if admit_error then return nil, admit_error, {epoch = nil, gateway_binding = nil, attempt = false} end
+        if admit_error then return nil, admit_error, nil end
+        action_admitted = true
     end
     step(io, "admitted")
     local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
         placement_binding = M.PLACEMENT_BINDING, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
-    if prepare_error then return nil, prepare_error, {epoch = nil, gateway_binding = nil, attempt = attempt_prepared} end
+    if prepare_error then
+        if not action_admitted then return nil, prepare_error, nil end
+        return nil, prepare_error, {epoch = nil, gateway_binding = nil, attempt = false}
+    end
     attempt_prepared = true
     step(io, "prepared")
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = "launch:" .. request.attempt_id .. ":claim", attempt_id = request.attempt_id})
@@ -494,7 +499,7 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     if gateway_error then return nil, gateway_error, {epoch = epoch, gateway_binding = nil, attempt = attempt_prepared} end
     local function abandon(err: string): (PreparedAttempt?, string?, FailedPreparation?)
         gateway_revoke(io, gateway_binding)
-        return nil, err, {epoch = epoch, gateway_binding = nil, attempt = attempt_prepared}
+        return nil, err, {epoch = epoch, gateway_binding = gateway_binding, attempt = attempt_prepared}
     end
     local _, intent_error = must(io, M.PLACEMENT .. ":prepare", plan.placement_request)
     if intent_error then return abandon(intent_error) end

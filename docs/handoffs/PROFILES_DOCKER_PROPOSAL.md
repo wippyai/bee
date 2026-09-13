@@ -4,6 +4,30 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+**Correction after the component-source review:** lack of container inspection
+in `exec.docker` does not establish a need for a new runtime inspection API.
+Published `userspace/docker` 0.5.12 already exposes narrow create, find by labels,
+inspect, start, stop and remove operations. Its source is in the userspace
+repository; it is not an implemented Bee dependency. The separate interactive
+worker uses an executor-created process, while narrow creation manages a Docker
+API container. Those paths do not yet prove native terminal attachment to the
+same managed container. Earlier local `create_terminal` work is recorded in
+the September 12 journal; it and direct Go PTY proofs are not a shipped Bee path.
+
+The proposed runtime `reference`/`inspect`/signal-by-reference experiment was
+paused after the user's scope objection. It is uncommitted, unvalidated and not
+a runtime requirement or PR. Resolve the existing component/terminal seam before
+resuming any such API proposal.
+
+Component review reproduced a false cleanup receipt: failed removal followed by
+failed inspection was reported as `destroyed`. [Userspace PR #67](https://github.com/wippyai/userspace/pull/67)
+preserves the actual HTTP status and requires confirmed 404 for that reconciliation.
+Five regression cases, the existing narrow checks and an actual Lua HTTP-client
+proof against a private Unix-socket fake daemon pass. The PR is draft, assigned
+to `skhaz`; full component-host and managed Docker acceptance remain outstanding.
+Paused/restarting state interpretation and caller-qualified identity still need
+review before Bee treats the component's observations as cleanup evidence.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

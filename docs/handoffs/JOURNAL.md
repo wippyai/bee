@@ -6350,3 +6350,18 @@ All six artifacts were backed up and verified; databases and running nodes were
 preserved. Actual Codex recovery is gated by a reproduced provider usage limit,
 not a proven Bee defect. See GLOBAL_BUILD.md and the shared journal for the
 installation receipt and remaining scope.
+
+### 2026-09-13 — Docker component review and runtime-scope correction
+
+Wolfden fact 1612 records the user's objection to premature runtime APIs.
+The reference/inspection experiment is paused and uncommitted; no new runtime PR
+or global artifact came from it. `userspace/docker` already has narrow lifecycle
+operations. Exact managed-container terminal attachment, observation state and
+ownership checks remain to be established for Bee.
+
+The component's removal reconciliation falsely reported destruction when both
+delete and later inspection failed. Draft [userspace PR #67](https://github.com/wippyai/userspace/pull/67),
+assigned to `skhaz`, fixes this by preserving HTTP status and requiring confirmed
+404. Five regression cases, existing narrow checks, isolated lint and an actual
+Lua HTTP-client/private Unix-socket daemon fixture pass. Full component-host and
+managed Docker acceptance remain open. Global `7d9182cb` is unchanged.

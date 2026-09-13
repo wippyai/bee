@@ -7,8 +7,9 @@ adds Grok login/hooks and imports existing Agy onboarding state when creating a
 private harness HOME. All four managed harness fixtures pass through the actual
 picker, login delivery and scoped MCP. Real Grok startup commits SessionStart to
 its bound thread without a model prompt. Offline fresh/restart/reconnect and
-Claude fixture cold recovery pass. Full repository regression and the exact
-candidate's real Agy interactive check are pending. See
+Claude fixture cold recovery pass. The exact candidate also launches real Agy
+1.2.2 to its normal interactive prompt after the ordinary trust confirmation;
+no model prompt was submitted. Full repository regression is pending. See
 [global build](handoffs/GLOBAL_BUILD.md) for release evidence.
 
 **Remaining agent workflow work:** managed Docker execution, real-provider cold

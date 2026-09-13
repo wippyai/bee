@@ -15,8 +15,12 @@ including login present/absent and scoped MCP. Grok's PreToolUse/Stop observatio
 commit to its thread, and the tool hook updates the title to "Using tool".
 Offline fresh/restart/reconnect and Claude fixture cold recovery also pass.
 All artifact hashes and six archived runtime patches match provenance. Full
-`make check` is running as session `52992`; real Agy interactive acceptance is
-being checked separately. These are not real-provider model-turn or Docker
+`make check` is running as session `52992`. Real Agy 1.2.2 interactive startup
+passes on this exact binary: the picker launches it, production delivery imports
+matching existing login/onboarding files, and the normal prompt appears after
+the ordinary disposable-project trust confirmation. No settings or trust state
+was imported. Evidence: `agy-managed-tui-login-hooks-probe.log` (11.273 seconds,
+exit 0). These are not real-provider model-turn or Docker
 execution claims. Managed Docker remains unfinished.
 
 Real Grok managed startup also passes through the picker and generated command

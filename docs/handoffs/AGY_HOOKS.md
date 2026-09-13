@@ -170,3 +170,23 @@ pass all 31 cases. The broad unit run passed 843 cases and failed only the old
 passing run. Native fixture Go tests/vet pass. A fresh full check and assembled
 candidate are next. The earlier hook-only source full `make check` also completed
 successfully (session `75977`, exit 0).
+
+Corrected candidate `9b499f4e` (production `01ed3e3`, native `fe8cb0d`) passes
+native executable acceptance and offline boot/restart/reconnect (0.105 s warm).
+The native Agy fixture now sends the literal materialized header, authenticates
+MCP and verifies its token is absent from recorded placement requests/evidence.
+All 844 unit cases pass in the new full regression; later gates are still running.
+
+Actual Agy 1.2.2 also completes the corrected managed MCP task. Default print mode
+could not execute the tools; the follow-up disposable session explicitly allowed
+only `mcp(bee/thread_read)` and `mcp(bee/thread_message)` using Agy's documented
+permissions file. No bypass flag or wildcard permission was used. The provider
+returned `SUCCESS` and the exact requested completion text; independent read-only
+inspection found exactly one expected message in the bound thread and a committed
+Stop observation. The fixture homes and copied login were removed. This proves
+actual scoped MCP delivery with those explicit permission choices, not automatic
+approval in production or real-provider recovery. Production retains Agy's normal
+permission prompts. Evidence: `agy-live-managed-mcp-allowed.log` (session `22796`,
+exit 0), `agy-mcp-native-check.log` (`43706`, exit 0),
+`agy-mcp-offline-check.log` (`88196`, exit 0), and `agy-mcp-full-check.log`
+(still running as `94825`). The candidate is not installed yet.

@@ -99,6 +99,12 @@ docker-start-stop-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race create
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race start
+.PHONY: docker-agent-picker-check
+docker-agent-picker-check:
+	test -n "$(DOCKER_COMPONENT)"
+	test -n "$(DOCKER_IMAGE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
 .PHONY: docker-sandbox-check
 docker-sandbox-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go

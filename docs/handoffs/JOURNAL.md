@@ -6391,3 +6391,15 @@ and log are archived under `bee-evidence/0912/docker-blocked-input-proof_test.go
 and `docker-native-blocked-input-cancel.log`. No production runtime changes or
 global installation occurred. Check current runtime/patch overlap before fixing
 the existing cancellation path. The broad runtime API experiment remains paused.
+
+### 2026-09-13 — runtime terminal cancellation correction proposed
+
+Wolfden fact 1615 records [runtime PR #745](https://github.com/wippyai/runtime/pull/745)
+at `9444ddb1db`, assigned to `skhaz`, unmerged and uninstalled. Current-main
+regressions reproduce blocked cancellation and blocked TERM-to-KILL escalation.
+The fix moves existing shutdown supervision out of the input loop and joins it
+on return; public APIs remain unchanged. Deterministic tests, real Docker input
+cancellation, terminal/native/Docker/Lua exec race suites and scoped lint pass.
+Evidence is archived under `bee-evidence/0912/bee-terminal-cancel-*.log`.
+Global SHA `7d9182cb` is unchanged. Production Docker attachment admission and
+container-reachable scoped gateway remain unfinished; no managed Docker claim.

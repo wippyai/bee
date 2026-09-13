@@ -58,6 +58,18 @@ for overlap before requesting a correction to this existing path. This result
 does not justify a new reference/inspection API and is not yet evidence against
 the installed runtime combination. Managed Docker remains unimplemented.
 
+The same source gap exists on fetched runtime main `da80fddea4`.
+[Runtime PR #745](https://github.com/wippyai/runtime/pull/745), assigned to
+`skhaz`, fixes cancellation and direct close by moving existing shutdown
+escalation into a joined watcher, independent of blocked input. No public APIs
+or input queues are added. Deterministic main regressions fail before the fix;
+the candidate passes terminal/native/Docker/Lua exec race suites, the opt-in
+real Docker regression and scoped lint. Signal failures and forced-shutdown
+errors remain observable. An event-channel close still follows earlier input;
+asynchronous callers use the existing `RequestClose`. The PR remains unmerged
+and uninstalled. Global `7d9182cb` was rechecked unchanged. This does not supply
+the managed-container admission or container gateway integration.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

@@ -91,6 +91,7 @@ docker-lifecycle-check:
 	test -n "$(DOCKER_IMAGE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -inspect-failure
 .PHONY: docker-start-stop-check
 docker-start-stop-check:
 	test -n "$(DOCKER_COMPONENT)"

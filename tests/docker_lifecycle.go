@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -33,6 +34,7 @@ func run() error {
 	dockerSource := flag.String("docker-source", "", "userspace Docker client package")
 	image := flag.String("image", "", "already-local immutable image with /bin/sh and sleep")
 	socket := flag.String("socket", "/var/run/docker.sock", "local daemon socket")
+	inspectFailure := flag.Bool("inspect-failure", false, "inject one transient Docker inspection failure")
 	racePhase := flag.String("race", "", "pause a committed Docker create or start response")
 	flag.Parse()
 	if *racePhase != "" && *racePhase != "create" && *racePhase != "start" {
@@ -105,9 +107,10 @@ func run() error {
 			}
 		}
 	}()
+	var inspectionFailures atomic.Int32
 	var startCalls atomic.Int32
 	selectedSocket := *socket
-	if *racePhase != "" {
+	if *racePhase != "" || *inspectFailure {
 		selectedSocket = filepath.Join(root, "proxy.sock")
 		listener, err := net.Listen("unix", selectedSocket)
 		if err != nil {
@@ -117,6 +120,18 @@ func run() error {
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		proxy.Transport = transport
 		proxy.ModifyResponse = func(response *http.Response) error {
+			if *inspectFailure && response.Request.Method == "GET" && strings.HasSuffix(response.Request.URL.Path, "/json") {
+				if _, err := os.Stat(filepath.Join(root, "evidence", "reject_inspection")); err == nil && inspectionFailures.CompareAndSwap(0, 1) {
+					response.Body.Close()
+					body := `{"message":"fixture transient inspection failure"}`
+					response.StatusCode = http.StatusServiceUnavailable
+					response.Status = "503 Service Unavailable"
+					response.Body = io.NopCloser(strings.NewReader(body))
+					response.ContentLength = int64(len(body))
+					response.Header.Set("Content-Length", fmt.Sprint(len(body)))
+					return nil
+				}
+			}
 			if response.Request.Method == "POST" && strings.HasSuffix(response.Request.URL.Path, "/start") {
 				startCalls.Add(1)
 			}
@@ -210,6 +225,7 @@ entries:
 	script = strings.ReplaceAll(script, "SOCKET_EXPRESSION", string(socketExpression))
 	script = strings.ReplaceAll(script, "RACE_CREATE", fmt.Sprint(*racePhase == "create"))
 	script = strings.ReplaceAll(script, "RACE_START", fmt.Sprint(*racePhase == "start"))
+	script = strings.ReplaceAll(script, "INSPECT_FAILURE", fmt.Sprint(*inspectFailure))
 	for path, contents := range map[string]string{"src/docker_acceptance/_index.yaml": manifest, "src/docker_acceptance/check.lua": script, "src/docker_acceptance/probe.lua": `local security=require("security")
 return {handle=function():boolean return security.can("db.get","bee.placement.native:db") end}`,
 		"src/docker_acceptance/configure.lua": `return {handle=function(value:unknown): {[string]:unknown}
@@ -255,6 +271,9 @@ end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n 
 				return fmt.Errorf("container did not confirm translated HOME and working directory")
 			}
 		}
+	}
+	if *inspectFailure && inspectionFailures.Load() != 1 {
+		return fmt.Errorf("transient inspection failure was not exercised")
 	}
 	proof, err := os.ReadFile(filepath.Join(root, "evidence", "complete"))
 	if err != nil || string(proof) != "DOCKER_LIFECYCLE_COMPLETE" {
@@ -336,6 +355,7 @@ local function main()
   if not committed then error("Docker operation never reached controlled barrier") end
   local stopped=call("stop",{attempt_id="ATTEMPT",mode="cooperative"})
   local rechecked=call("reconcile",{attempt_id="ATTEMPT"})
+  local before_release=bounds.object(value("status",{attempt_id="ATTEMPT"}).attempt)
   -- Always release the HTTP reply before assertions so a regression cannot
   -- strand the function at the barrier or hide the actual final lifecycle.
   assert(output:writefile_atomic("/release_operation","release"))
@@ -343,8 +363,9 @@ local function main()
   local payload,pending_error=pending:result();assert(payload and not pending_error,"start result missing")
   local stop_value=bounds.object(stopped.value)
   assert(stopped.ok==true and stop_value and stop_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"in-flight operation stop intent was not retained")
-  local rechecked_value=bounds.object(rechecked.value)
-  assert(rechecked.ok==true and rechecked_value and rechecked_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"reconciliation erased the stop intent")
+  local rechecked_value=before_release
+  assert(rechecked.ok==(not RACE_CREATE),"reconciliation reported an unobserved create as confirmed")
+  assert(rechecked_value and rechecked_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"reconciliation erased the stop intent")
   local ended=bounds.object(payload:data());local final=ended and bounds.object(ended.value)
   assert(ended and ended.ok==true and final and final.execution_state=="exited" and final.cleanup_state=="complete","late operation escaped stop cleanup")
   assert(output:writefile_atomic("/complete","DOCKER_LIFECYCLE_COMPLETE"))
@@ -356,6 +377,13 @@ local function main()
  local stale=call("container_identity",{attempt_id="ATTEMPT",recipient=process.pid(),generation=generation+1});assert(stale.ok==false,"stale attachment admitted")
  local identity=value("container_identity",{attempt_id="ATTEMPT",recipient=process.pid(),generation=generation});assert(type(identity.container_id)=="string")
  if not resuming then
+  if INSPECT_FAILURE then
+   assert(output:writefile_atomic("/reject_inspection","reject one response"))
+   local rechecked=call("reconcile",{attempt_id="ATTEMPT"})
+   assert(rechecked.ok==false,"failed inspection was reported as a successful reconciliation")
+   local current=bounds.object(value("status",{attempt_id="ATTEMPT"}).attempt)
+   assert(current and current.execution_state=="running","failed inspection retired a live attempt from supervision")
+  end
   local saved=assert(json.encode({container_id=identity.container_id,started_at=identity.started_at,recipient=process.pid()}))
   assert(output:writefile_atomic("/started",saved))
   return true

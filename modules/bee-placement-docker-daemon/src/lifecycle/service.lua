@@ -472,15 +472,24 @@ function M.reconcile(value: unknown): Reply
     if not attempt then return denied :: Reply end
     return M.reconcile_attempt(attempt, row :: Row)
 end
+-- An unavailable observation is evidence, not proof that execution changed.
+-- Keep live/stopping attempts eligible for supervision and an explicit stop.
+local function unobserved(attempt: types.Attempt, kind: string, detail: string): Reply
+    local recorded = transition(attempt.attempt_id, {expected_execution = attempt.execution_state,
+        evidence = {kind = kind, detail = detail}})
+    if not recorded.ok then return recorded end
+    return fail("UNCERTAIN", detail)
+end
+
 function M.reconcile_attempt(attempt: types.Attempt, row: Row): Reply
     if attempt.execution_state == "intended" or attempt.execution_state == "exited" then return succeed(attempt) end
     local saved, identity_error = identity(row)
     if identity_error then return identity_error :: Reply end
-    if not saved then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.unidentified", detail = "no Docker identity recorded; a recorded stop remains pending"}}) end
+    if not saved then return unobserved(attempt, "docker.reconcile.unidentified", "no Docker identity recorded; execution and stop intent remain unconfirmed") end
     local observed, daemon_error = daemon.inspect({container_id = saved.container_id, expected = expected(saved)})
     if not observed then
-        if daemon_error and daemon_error.kind == "absent" then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.absent", detail = "container absence cannot prove prior exit"}}) end
-        return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.uncertain", detail = daemon_error and daemon_error.message or "Docker inspection failed"}})
+        if daemon_error and daemon_error.kind == "absent" then return unobserved(attempt, "docker.reconcile.absent", "container absence cannot prove prior exit") end
+        return unobserved(attempt, "docker.reconcile.uncertain", daemon_error and daemon_error.message or "Docker inspection failed")
     end
     local updated = observed_identity(observed :: Observation, saved)
     local encoded, encode_error = encode(updated, "Docker identity")

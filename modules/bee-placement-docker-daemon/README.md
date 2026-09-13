@@ -119,3 +119,10 @@ their disposable workspace is removed.
 These checks do not establish recovery from a Bee crash between Docker create
 and identity persistence, or from replacement of the selected daemon. Those
 remain release gaps alongside the Agent window acceptance above.
+
+Failed reconciliation records uncertain observation evidence and returns
+`UNCERTAIN`. It preserves the last recorded execution state, including a pending
+stop, so the existing sweeper continues visiting the attempt and the owner can
+still stop it. A recorded `running` state is not a fresh liveness confirmation.
+The lifecycle check injects a Docker inspection failure, verifies the refusal
+and preserved state, then restarts Bee and confirms stop and cleanup.

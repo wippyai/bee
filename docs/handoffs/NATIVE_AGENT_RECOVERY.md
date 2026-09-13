@@ -1,11 +1,14 @@
-# Native Agent conversation recovery — next integration unit
+# Native Agent conversation recovery
 
 The source Agent app now declares a resume schema and consumes the existing app
 checkpoint/restore protocol. It persists exactly the five continuation identity
 fields, authenticates the broker's checkpoint acknowledgement, and constructs a
-fresh continuation request on restore. Successful cold recovery remains blocked
-by native process-group cleanup proof, so this is an app wiring slice rather
-than a completed recovery contract.
+fresh continuation request on restore. Source acceptance now proves graceful
+continuation, interrupted-window recovery, cancellation during recovery, and
+whole-node restart with a fixture Claude executable. Controlled node SIGKILL
+also passes when the independently inspected native process is gone. Real-provider
+cold recovery and surviving orphan process trees remain unverified. The installed
+revision is tracked separately in [global build](GLOBAL_BUILD.md).
 
 An interactive Agent must retain both the provider conversation ID and its
 session files. Use the existing placement session_ref/home resource and the
@@ -54,10 +57,18 @@ successful completed turn. Launch admission now accepts the original launch
 request ID, predecessor attempt and thread in its typed `continuation` field.
 It requires the saved plan digest, derives the original session identity from
 that request and workspace, checks existing owner state, and
-obtains fresh grants for the new attempt. The app's saved-state consumer now
-constructs the fresh restore request and fails before readiness when admission
-refuses it. Successful cold-restart recovery remains unavailable until native
-cleanup can prove the predecessor's required process group is gone.
+obtains fresh grants for the new attempt. The app presents a responsive
+“Restoring Agent” view before asynchronous recovery. Close, resize and appearance
+remain usable; cancellation prevents a later recovery result from starting a
+native process. Admission refusal never launches a replacement.
+
+An interrupted attempt first requires observed native exit. Recovery advances
+the carrier epoch, commits the rebound checkpoint, seals gateway intake and
+reconciles recoverable hook deliveries before settling the old attempt as
+uncertain. It creates no successful turn and replays no task prompt. Gateway
+HTTP 202 means durable intake, not thread commitment: revocation terminally
+rejects unclaimed rows with a durable reason; already-claimed rows remain
+recoverable under epoch fences. An unresolved drain refuses replacement.
 
 Interactive close normally produces a cancelled/uncertain attempt, unlike a
 structured successful turn. Do not fake a successful terminal outcome to pass
@@ -74,15 +85,13 @@ acknowledgement, stale-hook replies, no automatic prompt replay, and two Agent
 instances retaining separate conversations. Keep the existing manual/automatic
 restart-policy distinction; no separate persistence manager is needed.
 
-Two remaining execution boundaries were inspected on runtime
-`291f5c6b708c80afe5da07f3223767573b4d183f`. `attach_terminal` consumes an
-unstarted exec process; its returned terminal session exposes only send, close,
-done and status. The consumed process no longer exposes its PID, while the
-proxy starts it asynchronously. Completion waits for the leader and PTY output;
-it does not prove that a descendant with redirected output has left the group.
-Bee's window adapter consequently has no recorded group identity for its
-existing cleanup operation. Reuse must keep refusing incomplete cleanup until
-the native terminal lifecycle provides the required identity or cleanup proof.
+The checked runtime PR #743 patch adds optional typed `TerminalSession:pid()`
+over runtime `291f5c6b708c80afe5da07f3223767573b4d183f`. Startup is asynchronous;
+the window waits within its admitted start budget and records Linux process-group
+identity, start ticks and boot ID before publishing running. The PR remains
+unmerged. Terminal completion alone does not prove that descendants with redirected
+output have left the group. Placement independently proves the required group
+absent before recording cleanup complete; missing or uncertain proof refuses reuse.
 
 Driver configuration delivery now separates fresh argument literals from protected
 files. Placement measures the host inputs, renders using its actual home path
@@ -91,10 +100,9 @@ so a new attempt can select fresh endpoint data without replacing conversation
 files. Codex still uses protected provider/hook/trust files and refuses changed
 content in a retained home. The selected Lua FS surface lacks atomic replacement
 and non-following opens; no remove-and-recreate workaround is introduced.
-This configuration slice does not establish native process-group cleanup.
-The app's cold-restart consumer is wired, but recovery remains fail-closed until
-the native lifecycle provides the required process-group identity and cleanup
-proof.
+Configuration delivery does not establish native process-group cleanup. The
+fixture Claude continuation proof does not establish Codex retained-file
+replacement or real-provider recovery.
 
 The app queues its new checkpoint only after native startup and the thread's
 start receipt succeed. A plan, preparation or startup refusal therefore does not
@@ -103,3 +111,16 @@ normal input/hook loop; no checkpoint wait blocks terminal input or close.
 A refused or unconfirmed save adds “Save unconfirmed” to the title while the
 running Agent remains usable. The broker continues owning the last acknowledged
 resume record. The app rejects an unsupported resume schema before admission.
+
+## Acceptance
+
+`make window-recovery-check` covers actor interruption, responsive cancellation
+and durable rejection of an unclaimed accepted hook. `make native-agent-recovery-check
+BEE_BINARY=...` uses the public Agent picker and the actual saved workspace
+checkpoint across node restart. `make native-agent-crash-recovery-check
+BEE_BINARY=...` sends SIGKILL through the captured node pidfd, inspects the old
+native identity before restart and requires continuation; safe refusal does not
+count as a passing continuation. Neither test deletes databases or cleans up an
+orphan before observing the recovery outcome. Both use fixture providers and
+verify retained HOME, conversation/app/view identity, fresh attempt and binding,
+and absence of fabricated success or prompt replay.

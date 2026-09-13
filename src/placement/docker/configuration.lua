@@ -57,8 +57,8 @@ function M.build(value: unknown, delivered_environment: unknown?): (Config?, str
     local network = bounds.text(raw.network, 128)
     if not network then return nil, "Docker network is required" end
     if not network:match("^[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil, "Docker network name is invalid" end
-    if network == "host" or network == "default" or network == "bridge" then
-        return nil, "Docker network must be explicitly selected without host or default sharing"
+    if network == "host" or network == "default" then
+        return nil, "Docker network must be explicitly selected without host sharing or an implicit default"
     end
     local apparmor: string? = nil
     if raw.apparmor ~= nil then

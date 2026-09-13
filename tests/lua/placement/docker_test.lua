@@ -17,6 +17,7 @@ local function define_tests()
         test.it("keeps baseline isolation when no AppArmor profile is selected", function()
             local raw = input()
             raw.apparmor = nil
+            raw.network = "bridge"
             local config, err = configuration.build(raw)
             if not config then error(tostring(err)) end
             test.eq(#config.HostConfig.SecurityOpt, 1)
@@ -25,6 +26,7 @@ local function define_tests()
             test.is_true(config.HostConfig.ReadonlyRootfs)
             test.is_false(config.HostConfig.Privileged)
             test.eq(config.HostConfig.PidsLimit, raw.pids_limit)
+            test.eq(config.HostConfig.NetworkMode, "bridge")
         end)
     end)
     test.describe("Docker preparation", function()
@@ -149,7 +151,7 @@ local function define_tests()
             local cases: {{field: string, value: unknown}} = {
                 {field = "image", value = "alpine:latest"}, {field = "user", value = "0:0"},
                 {field = "apparmor", value = "unconfined"}, {field = "network", value = "host"},
-                {field = "network", value = "bridge"}, {field = "network", value = "container:other"},
+                {field = "network", value = "default"}, {field = "network", value = "container:other"},
                 {field = "memory", value = 0}, {field = "nano_cpus", value = 0.5},
                 {field = "pids_limit", value = -1},
                 {field = "mounts", value = {{source = "/projects/one", target = "/workspace", access = "owner"}}},

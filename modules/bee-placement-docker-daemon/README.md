@@ -23,6 +23,11 @@ harness includes these component-owned options in the policy digest; Docker
 placement validates their exact fields before recording an intent. Options
 require an explicit placement binding. Native placement refuses these options
 instead of silently ignoring them. AppArmor is not required.
+The network remains an explicit host choice: `none`, `bridge` or a named Docker
+network. Selecting `bridge` uses the ordinary daemon bridge without provisioning
+another network. Host networking, container namespace sharing and the implicit
+`default` selector are refused. Gateway reachability still requires an admitted
+listener address; network selection does not change endpoint authorization.
 
 The source manifest imports `bee.placement.docker:inspection`,
 `bee.threads.records:bounds` and `userspace.docker:docker_client`. These

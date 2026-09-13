@@ -1,7 +1,8 @@
 # Saved agent profiles
 
-Source work in progress; saved-profile resolution/admission is implemented, but
-not installed. The picker and profile form are wired in source; native UI acceptance is pending.
+Installed in global Bee at production source `d18de64`. Saved-profile resolution,
+admission and the picker/form workflow have native acceptance; remaining limits
+are listed below.
 
 A saved profile selects a reviewed launch definition and stores a title, scalar
 options, MCP tool identifiers and appended instructions. The definition selects
@@ -109,5 +110,5 @@ Successful saves return to the picker without launching. Form values and draft
 instructions are transient until saved; closing the form discards the draft.
 
 Thirty focused model, profile store, selection and recovery cases pass with the
-form/editor source. Actual keyboard/mouse form acceptance and native launch with
-an edited profile remain required before a global refresh.
+form/editor source. Actual native keyboard form acceptance now passes and the global build is
+updated. Native launch with an edited profile remains unverified.

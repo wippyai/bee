@@ -1,6 +1,38 @@
 # Global Bee build — September 12, 2026
 
-## Current install: declared login formats and Agy private login
+## Current install: saved Agent profiles
+
+Global SHA `88372d5b549a39e6c3ede269fcff5a2c57090562ac7c54a65a9c7dee25cf7ac3`
+contains production source `d18de64`. Agent now offers New/Edit profiles for
+workspace-local names, appended instructions, host-allowed options and MCP tool
+selection. Saved selection and revision survive application checkpoints. Profile
+access is tied to the host-inherited workspace; native context substitution is
+denied. Saving creates no thread work; removal requires confirmation.
+
+The final native terminal gate proves creating, editing and removing a saved
+profile through the actual UI, plus existing fixture Claude/Codex/Agy login and
+MCP delivery. It exposed a native Space-key decoding bug, fixed in this build.
+Strict lint, packaged desktop/Modules/About and loopback-only network acceptance
+pass. Fresh offline startup took 1.685 s, restored-module startup 3.471 s and
+warm reconnect 0.212 s; retained artifacts were unchanged. The preceding UI
+revision `017e55d` passes all 834 unit cases; the final input correction has native
+acceptance and a regression case. Full immutable source/pack checks on `638d4eb`
+and `017e55d` are still running.
+
+Installation verified and backed up all six files, fenced against `a940f365`,
+and preserved databases and running nodes. Existing nodes retain loaded code
+until restarted. Runtime/native pins are unchanged; runtime PRs remain unmerged.
+Evidence: `bee-evidence/0912/profile-ui-global-install.json`,
+`profile-ui-space-{build,native,binary,modules,about,offline}.log` and
+`profile-ui-full-check.log`.
+
+The form currently uses append/backspace text input with paste and Ctrl+U clear;
+it is not a full cursor-based text editor. Default policies enable appended
+instructions but do not yet enumerate editable option values. Actual edited
+profile launch into an authenticated provider, managed Docker, profile sharing,
+and wider automation remain unfinished.
+
+## Previous install: declared login formats and Agy private login
 
 Global SHA `a940f36556930166d4666259d67e981c90f1ef45dca708e1f783dfa1104b5f72`
 contains source `4b4562d`. Credential layouts are declared by harness components

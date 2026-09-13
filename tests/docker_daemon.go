@@ -117,8 +117,12 @@ func run() error {
 		if r.URL.Path == "/containers/json" && r.Method == http.MethodGet {
 			filters := r.URL.Query().Get("filters")
 			multipleName := "bee-" + strings.Repeat("e", 64)
+			malformedName := "bee-" + strings.Repeat("a", 64)
 			zeroName := "bee-" + strings.Repeat("f", 64)
 			switch {
+			case strings.Contains(filters, malformedName):
+				inspectName = malformedName
+				_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": containerID, "Names": []string{"/" + malformedName}}, {"Id": "invalid", "Names": []string{"/" + malformedName}}})
 			case strings.Contains(filters, multipleName):
 				inspectName = multipleName
 				_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": containerID, "Names": []string{"/" + multipleName}}, {"Id": containerID, "Names": []string{"/" + multipleName}}})
@@ -238,6 +242,8 @@ local recovered, recovery_error = daemon.recover_create({name=create_name, expec
 if not recovered or recovery_error or recovered.container_id ~= id or recovered.state ~= "created" then error((recovery_error and recovery_error.message) or "lost create reply was not recovered") end
 local multiple, multiple_error = daemon.recover_create({name="bee-"..string.rep("e", 64), expected={image_id=image, apparmor="docker-default", labels=labels}})
 if multiple ~= nil or not multiple_error or multiple_error.kind ~= "unavailable" then error("multiple create recovery matches were accepted") end
+local malformed, malformed_error = daemon.recover_create({name="bee-"..string.rep("a", 64), expected={image_id=image, apparmor="docker-default", labels=labels}})
+if malformed ~= nil or not malformed_error or malformed_error.kind ~= "unavailable" then error("malformed duplicate create candidate was ignored") end
 local running, start_error = daemon.start({container_id=id, expected=expected})
 if not running or start_error or running.state ~= "running" or not running.started_at then error((start_error and start_error.message) or "start did not confirm running state") end
 expected.started_at = running.started_at

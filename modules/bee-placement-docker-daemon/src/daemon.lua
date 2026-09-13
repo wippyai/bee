@@ -231,10 +231,8 @@ local function config_matches(config: Config, identity: CreateExpected): Failure
     return nil
 end
 
-local function exact_list_name(candidate: Object, expected_name: string): boolean
-    local names = candidate.Names
-    if type(names) ~= "table" then return false end
-    for _, value in ipairs(names :: {unknown}) do
+local function exact_list_name(names: {string}, expected_name: string): boolean
+    for _, value in ipairs(names) do
         if value == expected_name or value == "/" .. expected_name then return true end
     end
     return false
@@ -265,34 +263,36 @@ function M.recover_create(value: unknown): (Observation?, Failure?)
             return nil, failure("unavailable", "Docker create recovery returned a non-array listing")
         end
         candidate_count = candidate_count + 1
+        if candidate_count > 64 then return nil, failure("unavailable", "Docker create recovery listing exceeds its bound") end
     end
-    local matches = 0
-    local recovered: Observation? = nil
+    local selected_id: string? = nil
     for index = 1, candidate_count do
         local candidate = bounds.object(candidates[index])
         if not candidate then return nil, failure("unavailable", "Docker create recovery returned a malformed candidate") end
-        if exact_list_name(candidate :: Object, expected_name :: string) then
-            local candidate_id = bounds.text(candidate.Id, 64)
-            if candidate_id and #candidate_id == 64 and candidate_id:match("^[0-9a-f]+$") then
-                local expected_identity: Expected = {container_id = candidate_id, image_id = identity.image_id,
-                    apparmor = identity.apparmor, started_at = nil, labels = identity.labels}
-                local inspected, inspect_error = inspect_raw(client :: Client, candidate_id)
-                if inspect_error and inspect_error.kind == "unavailable" then return nil, inspect_error end
-                if inspected and exact_inspect_name(inspected, expected_name :: string) then
-                    local observation, decode_error = decode(inspected, expected_identity)
-                    if observation then
-                        matches = matches + 1
-                        recovered = observation
-                    elseif decode_error and decode_error.kind == "unavailable" then
-                        return nil, decode_error
-                    end
-                end
-            end
+        local names = bounds.ids(candidate.Names, true)
+        local candidate_id = bounds.text(candidate.Id, 64)
+        if not names or not candidate_id or #candidate_id ~= 64 or not candidate_id:match("^[0-9a-f]+$") then
+            return nil, failure("unavailable", "Docker create recovery returned a malformed candidate")
+        end
+        if exact_list_name(names, expected_name :: string) then
+            if selected_id then return nil, failure("unavailable", "Docker create recovery found multiple exact names") end
+            selected_id = candidate_id
         end
     end
-    if matches ~= 1 then
-        return nil, failure("unavailable", "Docker create recovery did not find exactly one matching container")
+    if not selected_id then return nil, failure("unavailable", "Docker create recovery found no exact name") end
+    -- Establish uniqueness before inspecting. A malformed or conflicting
+    -- candidate must not disappear merely because another one validates.
+    local inspected, inspect_error = inspect_raw(client :: Client, selected_id)
+    if not inspected then
+        return nil, failure("unavailable", "Docker create recovery could not confirm the selected container", inspect_error and inspect_error.status or nil)
     end
+    if not exact_inspect_name(inspected, expected_name :: string) then
+        return nil, failure("unavailable", "Docker create recovery name changed before inspection")
+    end
+    local expected_identity: Expected = {container_id = selected_id, image_id = identity.image_id,
+        apparmor = identity.apparmor, started_at = nil, labels = identity.labels}
+    local recovered, decode_error = decode(inspected, expected_identity)
+    if not recovered then return nil, failure("unavailable", "Docker create recovery identity was not confirmed: " .. tostring(decode_error and decode_error.message)) end
     return recovered, nil
 end
 

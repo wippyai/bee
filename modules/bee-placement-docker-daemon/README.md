@@ -20,6 +20,10 @@ is kept out of Bee's default pack. The repository fixture composes this source
 with the reviewed local userspace client at commit `9d3c310` and the existing
 pure placement inspection decoder.
 
+Recovery bounds the listing to 64 candidates and establishes one exact name
+before inspecting it. Malformed candidates and duplicate exact names retain
+uncertainty even if another candidate has valid labels.
+
 Create, start, inspect, stop and remove validate full IDs, expected labels and
 the selected AppArmor profile. `recover_create` is a read-only lost-reply
 recovery: it lists the exact deterministic name, re-inspects candidates and

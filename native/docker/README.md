@@ -49,3 +49,7 @@ make -C native docker-attachment-check DOCKER_RUNTIME=/path/to/reviewed/runtime 
 The integration case requires Docker and an already-local `alpine:latest`; it
 never pulls. It creates and cleans up only its own fixture. It proves attachment,
 input, resize and exact-container exit, not the complete hardened Bee profile.
+A real restart case also keeps the same container ID while changing its execution:
+the old handle cannot signal or resize it, old admission cannot reattach, and a
+freshly observed execution can attach and resize. This tests completed restart
+fencing; it does not eliminate Docker's inspect/control race described above.

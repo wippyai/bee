@@ -59,6 +59,57 @@ func newContainerFixture(t *testing.T) (context.Context, *client.Client, Identit
 
 // Requires a local daemon and already-local alpine:latest. The fixture uses
 // Docker directly; it does not establish Bee's full sandbox/profile admission.
+func TestRestartedContainerRejectsOldAttachment(t *testing.T) {
+	ctx, cli, expected, _ := newContainerFixture(t)
+	old, err := New(ctx, cli, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Stop()
+	if err := old.Start(); err != nil {
+		t.Fatal(err)
+	}
+	zero := 0
+	if _, err := cli.ContainerRestart(ctx, expected.ContainerID, client.ContainerRestartOptions{Timeout: &zero}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := cli.ContainerInspect(ctx, expected.ContainerID, client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Container.State.StartedAt == expected.StartedAt {
+		t.Fatal("restart did not replace execution identity")
+	}
+	if err := old.Signal(int(syscall.SIGKILL)); err == nil {
+		t.Fatal("old attachment signaled replacement execution")
+	}
+	if err := old.Resize(80, 24); err == nil {
+		t.Fatal("old attachment resized replacement execution")
+	}
+	stale, err := New(ctx, cli, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stale.Stop()
+	if err := stale.Start(); err == nil {
+		t.Fatal("old admission attached to replacement execution")
+	}
+	// A fresh observed identity can attach; refusing stale controls must not
+	// kill the replacement or permanently prevent its legitimate admission.
+	expected.StartedAt = after.Container.State.StartedAt
+	fresh, err := New(ctx, cli, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Stop()
+	if err := fresh.Start(); err != nil {
+		t.Fatal("fresh execution attachment:", err)
+	}
+	if err := fresh.Resize(100, 30); err != nil {
+		t.Fatal("fresh execution resize:", err)
+	}
+}
+
 func TestExistingContainerPTYIntegration(t *testing.T) {
 	ctx, cli, expected, name := newContainerFixture(t)
 	handle, err := New(ctx, cli, expected)

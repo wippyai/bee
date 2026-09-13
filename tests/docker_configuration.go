@@ -43,6 +43,7 @@ func run() error {
 	}
 	for target, origin := range map[string]string{
 		"configuration.lua": "src/placement/docker/configuration.lua",
+		"inspection.lua":    "src/placement/docker/inspection.lua",
 		"bounds.lua":        "src/threads/records/bounds.lua",
 		"client.lua":        filepath.Join(*dockerSource, "client.lua"),
 	} {
@@ -62,6 +63,7 @@ func run() error {
 	var mu sync.Mutex
 	calls := []string{}
 	problems := []string{}
+	var createdLabels map[string]any
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -102,10 +104,15 @@ func run() error {
 			if host["Privileged"] != false || host["ReadonlyRootfs"] != true || host["AutoRemove"] != false {
 				problems = append(problems, "incorrect lifecycle/isolation flags")
 			}
+			createdLabels, _ = body["Labels"].(map[string]any)
 			w.WriteHeader(201)
 			_ = json.NewEncoder(w).Encode(map[string]string{"Id": strings.Repeat("c", 64)})
 		case r.Method == "GET" && r.URL.Path == "/containers/"+strings.Repeat("c", 64)+"/json":
-			_ = json.NewEncoder(w).Encode(map[string]any{"Id": strings.Repeat("c", 64), "Image": "sha256:" + strings.Repeat("a", 64), "State": map[string]string{"Status": "created"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Id": strings.Repeat("c", 64), "Image": "sha256:" + strings.Repeat("a", 64),
+				"Config": map[string]any{"Labels": createdLabels},
+				"State":  map[string]any{"Status": "created", "StartedAt": "0001-01-01T00:00:00Z", "ExitCode": 0},
+			})
 		default:
 			problems = append(problems, "unexpected daemon operation "+r.Method+" "+r.URL.Path)
 			http.Error(w, "unexpected operation", 400)
@@ -129,6 +136,11 @@ entries:
   kind: library.lua
   source: file://configuration.lua
   imports: {bounds: 'app:bounds'}
+- name: inspection
+  kind: library.lua
+  source: file://inspection.lua
+  modules: [time]
+  imports: {bounds: 'app:bounds'}
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -137,7 +149,7 @@ entries:
   kind: process.lua
   source: file://check.lua
   method: main
-  imports: {configuration: 'app:configuration', client: 'app:client'}
+  imports: {configuration: 'app:configuration', inspection: 'app:inspection', client: 'app:client'}
   meta:
     command:
       name: check
@@ -152,6 +164,7 @@ entries:
   policy: {actions: [http_client.request], resources: ['http://docker/*'], effect: allow}
 `, "SOCKET", string(socketJSON))
 	script := strings.ReplaceAll(`local configuration = require("configuration")
+local inspection = require("inspection")
 local client = require("client")
 local function main()
     local image = "sha256:" .. string.rep("a",64)
@@ -172,6 +185,11 @@ local function main()
     local observed, inspect_error, status = docker:inspect_container(result.Id)
     if not observed or inspect_error or status ~= 200 or observed.Image ~= image or observed.State.Status ~= "created" then
         error(tostring(inspect_error or "inspection differs"))
+    end
+    local decoded, decode_error = inspection.decode(observed, {
+        container_id=result.Id, image_id=image, apparmor="docker-default", labels=config.Labels})
+    if not decoded or decode_error or decoded.state ~= "created" or decoded.started_at ~= nil or decoded.exit_code ~= nil then
+        error(tostring(decode_error or "created container became an execution"))
     end
     return true
 end

@@ -40,6 +40,22 @@ admission, reconciliation and full Agent terminal integration remain unfinished.
 No container creation, driver startup, downloads or global installation occurs
 through this library.
 
+`inspection.decode` is the corresponding pure boundary decoder for a Docker
+inspect object and a host-admitted expected identity. It requires the full
+container ID, full image ID, `Config.Labels`, `State.Status`, `State.StartedAt`
+and `State.ExitCode`; unrelated fields from Docker's larger inspect response are
+ignored. Every expected label must still match, while extra daemon labels are
+ignored and the returned map contains only expected labels. `created` requires
+Docker's zero start timestamp and returns no `started_at`; `running` and
+`exited` require a nonzero parseable RFC3339 timestamp and preserve its exact
+text. An optional previously recorded `started_at` must match exactly, fencing
+a same-ID replacement. The expected AppArmor profile must match Docker's
+post-start `AppArmorProfile` for running and exited containers; this
+corroborates the selected profile but does not authorize creation or start.
+Only `exited` returns `exit_code`. Unsupported states are rejected, and
+transport failures must be handled by the caller rather than passed to this
+decoder as lifecycle observations.
+
 The input is a strict object with `image` (local `sha256` image ID), `user`
 (`uid:gid`), `network`, `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
 `command`, `home_source`, `home_target`, `mounts`, `working_directory`, optional

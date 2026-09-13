@@ -6553,3 +6553,27 @@ unit session 44429 passed all 855 cases, and full integration acceptance is stil
 Wolfden 1636 records the decision and evidence. There is no selectable Docker
 Agent or global update. Optional Docker module composition, durable lifecycle
 and reachable scoped gateway remain the implementation work.
+
+### September 13 — Docker inspection and actual sandbox observation
+
+The Docker inspection boundary now preserves exact daemon container/image/start
+identity, requires expected labels to match, and fences a previously recorded
+start time. Created containers have no execution or exit result; transitional
+states and transport errors cannot become terminal observations. Running and
+exited containers must report the selected AppArmor profile. The code uses the
+runtime timestamp parser and returns the original string unchanged.
+
+Luna implemented the boundary; main reviewed it and extended the real Lua HTTP
+fixture to decode the daemon's created response. The focused suite passes 4/4,
+strict lint passes with the existing warning, and the HTTP fixture plus Go vet
+pass. Combined full `make check` is running as session 75095, log
+`bee-evidence/0912/bee-docker-inspection-check.log`; it includes the preceding
+environment change. The older direct-client gate 80687 remains separately live.
+
+Actual disposable Docker probes found that this daemon accepts a requested
+AppArmor setting but reports an empty actual profile. Its processes did report
+seccomp mode 2, no-new-privileges and zero effective capabilities. No user mounts
+or credentials were used; all probe containers were removed. Wolfden 1638–1639
+preserve the evidence. The default-profile choice is pending user input; current
+strict-profile requirements remain in place. No managed Docker launch, native
+host composition or global update is claimed.

@@ -9,6 +9,15 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.placement.docker:configuration
+- name: inspection_test
+  kind: function.lua
+  source: file://inspection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [time]
+  imports:
+    test: wippy.test:test
+    inspection: bee.placement.docker:inspection
 - name: project_fixture
   kind: fs.directory
   meta: {type: test_support}

@@ -4,6 +4,18 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+Host evidence now distinguishes requested and enforced sandbox settings. This
+daemon advertises built-in seccomp and cgroup namespaces but no AppArmor. A
+disposable bounded, non-root container started with `apparmor=docker-default`,
+yet inspect reported an empty `AppArmorProfile` while retaining the requested
+`HostConfig.SecurityOpt`. The process reported seccomp mode 2, no-new-privileges
+and zero effective capabilities; the AppArmor-specific proc read failed.
+Thus successful creation/start does not establish AppArmor enforcement. The
+strict profile must check support before exposing a credential-bearing child,
+and corroborate the actual profile after start. Wolfden 1638–1639 preserve the
+probes; no mounted user data or credentials were involved. The default choice
+between portable Docker isolation and mandatory AppArmor is awaiting user input.
+
 The local Docker path can preserve the existing materializer's absolute HOME
 and resource paths by mounting them at identical targets. The compiled default
 binds the placement root under application state; it is normally outside the

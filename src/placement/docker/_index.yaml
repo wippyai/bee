@@ -13,3 +13,9 @@ entries:
   source: file://configuration.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: inspection
+  kind: library.lua
+  source: file://inspection.lua
+  modules: [time]
+  imports:
+    bounds: bee.threads.records:bounds

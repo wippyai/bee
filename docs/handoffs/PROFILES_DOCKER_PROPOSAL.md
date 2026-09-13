@@ -4,6 +4,22 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+The local Docker path can preserve the existing materializer's absolute HOME
+and resource paths by mounting them at identical targets. The compiled default
+binds the placement root under application state; it is normally outside the
+project. No separate host/container path model is required for this local case.
+The private-home overlap checks remain mandatory, including explicit state/root
+overrides. A remote daemon or unshared Docker Desktop path is not covered.
+
+The configuration builder now accepts the materializer's admitted environment,
+including separate gateway and hook credentials. It performs no environment
+discovery or authorization, preserves values, refuses HOME/TMPDIR disagreement,
+and bounds the final map to 64 entries and 65536 bytes. The direct Lua HTTP
+fixture verifies both credentials reach the create request; strict lint,
+Go vet and all 855 units pass. Full integration acceptance is still required.
+This does not connect the gateway to a container
+or enable a managed Docker profile.
+
 The next integration source emits Docker daemon configuration directly and
 uses the existing userspace `client:create_container` / `inspect_container`
 methods in its real HTTP boundary check. The intermediate narrow creation
@@ -69,9 +85,10 @@ its own read/write mode, and the working directory may lie under any admitted
 mount. Sparse arrays, unknown mount fields, overlaps with the private home or
 other targets, and excess mounts are refused. The real HTTP-client fixture checks
 a read-only project and a writable output mount in the same create request.
-All 854 Lua tests, strict lint, and that fixture pass; the full repository gate
-for this mount change is running. The preceding full gate below applies to the
-earlier single-project implementation.
+All 854 Lua tests, strict lint, and that fixture pass. The mount checkpoint
+`1bc02d4` passed its full repository gate (session 60330, exit 0). Direct-client
+checkpoint `42e26fc` has a separate full gate running as session 80687. Neither
+gate includes the subsequent environment-input change described above.
 
 All 854 Lua tests pass. `make docker-configuration-check` loads this projection,
 the reviewed userspace narrow runtime and the actual Lua Docker HTTP client in

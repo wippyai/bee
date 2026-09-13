@@ -85,7 +85,7 @@ func run() error {
 			}
 			expected := map[string]any{
 				"Cmd": []any{"/usr/bin/codex", "a task with spaces"},
-				"Env": []any{"HOME=/home/bee", "TMPDIR=/tmp"}, "Tty": true,
+				"Env": []any{"BEE_GATEWAY_HOOK_TOKEN=fixture-hook", "BEE_GATEWAY_TOKEN=fixture-mcp", "HOME=/home/bee", "TMPDIR=/tmp"}, "Tty": true,
 				"WorkingDir": "/workspace/src", "User": "1000:1000",
 			}
 			for key, want := range expected {
@@ -157,7 +157,8 @@ local function main()
     local image = "sha256:" .. string.rep("a",64)
     local config, err = configuration.build({image=image,user="1000:1000",network="bee-agents",apparmor="docker-default",
         memory=536870912,nano_cpus=1000000000,pids_limit=128,command={"/usr/bin/codex","a task with spaces"},
-        home_source="/private/session/home",home_target="/home/bee",mounts={
+        home_source="/private/session/home",home_target="/home/bee",
+        environment={HOME="/home/bee",BEE_GATEWAY_TOKEN="fixture-mcp",BEE_GATEWAY_HOOK_TOKEN="fixture-hook"},mounts={
             {source="/projects/demo",target="/workspace",access="read"},
             {source="/projects/output",target="/output",access="write"}},
         working_directory="/workspace/src",labels={

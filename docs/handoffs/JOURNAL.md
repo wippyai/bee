@@ -6532,3 +6532,24 @@ The admitted attempt must retain the path mapping and exact container execution;
 window options cannot select them. Container-reachable scoped MCP/hooks and
 durable container reconciliation are still required before a Docker Agent is
 selectable. No new runtime API requirement is established by this review.
+
+### September 13 — Local Docker materializer reuse and environment delivery
+
+Wolfden 1635 records the completed mount full gate: `1bc02d4`, session 60330,
+exit 0. Direct-client `42e26fc` remains under full verification in the frozen
+`bee-docker-managed-launch-20260913` checkout, session 80687.
+
+Active implementation is back in `bee-materialization-fence-20260913` on branch
+`feat/docker-launch-wiring-20260913`, based on `42e26fc`. Local Docker can use
+identical host/container mount paths and retain existing frozen driver paths.
+Compiled state normally keeps private homes outside the project; explicit
+overrides must still pass overlap checks. No remote-filesystem equivalence is
+assumed. This removes the need for a separate local path translation model.
+
+The builder accepts the existing materializer's admitted environment with
+bounded values and reserved-path agreement. The HTTP fixture passes with MCP
+and hook tokens, without logging their values. Strict lint and Go vet pass;
+unit session 44429 passed all 855 cases, and full integration acceptance is still required.
+Wolfden 1636 records the decision and evidence. There is no selectable Docker
+Agent or global update. Optional Docker module composition, durable lifecycle
+and reachable scoped gateway remain the implementation work.

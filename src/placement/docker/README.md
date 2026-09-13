@@ -26,8 +26,15 @@ Admission must verify that the daemon actually enforces the required sandbox;
 config generation alone does not prove that. There is no intermediate policy
 selector or second configuration translation.
 
-Only HOME and TMPDIR are currently generated.
-Arbitrary environment fields are refused, not discarded. Broader profile
+The builder accepts the existing materializer's admitted `environment` map;
+it does not read the host environment. It preserves values and generates HOME
+and TMPDIR if absent, refusing values that disagree with the selected home or
+`/tmp`. The final environment is bounded to 64 entries and 65536 bytes, with
+16384 bytes per value, and sorted by name. Credential and gateway values belong
+only in the create request, never in durable configuration or diagnostics.
+The owner must perform the existing policy/credential/gateway admission before
+supplying these values. This pure builder does not authorize variable names.
+Broader profile
 configuration, credential delivery, container-reachable MCP/hooks, durable
 admission, reconciliation and full Agent terminal integration remain unfinished.
 No container creation, driver startup, downloads or global installation occurs
@@ -35,7 +42,8 @@ through this library.
 
 The input is a strict object with `image` (local `sha256` image ID), `user`
 (`uid:gid`), `network`, `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
-`command`, `home_source`, `home_target`, `mounts`, `working_directory`, and the
+`command`, `home_source`, `home_target`, `mounts`, `working_directory`, optional
+`environment`, and the
 six attempt `labels`. `mounts` is a dense array of one to fifteen
 objects, each containing only `source`, `target`, and `access` (`read` or
 `write`). Bee bounds the home plus these mounts to 16 binds.
@@ -43,6 +51,14 @@ Legacy `workspace_source`, `workspace_target`, and
 `workspace_access` fields are refused as unknown input.
 The returned config uses the existing Docker field names. Unknown input is
 refused; this is not a pass-through for arbitrary Docker options.
+
+For a local daemon with access to Bee's host paths, sources and targets may use
+the same absolute paths. The existing materializer and frozen driver paths can
+then be reused unchanged. The compiled default keeps private homes under the
+application state directory. Source overrides or a project containing that
+state must still satisfy the private-home overlap checks. A remote daemon or
+unshared Docker Desktop path needs explicit resource materialization; matching
+strings alone do not establish that the daemon can access the same files.
 
 Lua tests exercise command/mount projection and refusals. The component-boundary
 check uses the reviewed userspace source with its real Lua HTTP client and a

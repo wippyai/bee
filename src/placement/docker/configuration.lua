@@ -45,7 +45,7 @@ function M.build(value: unknown): (Config?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "Docker preparation must be an object" end
     local extra = bounds.fields(raw, {"image", "user", "network", "apparmor", "memory", "nano_cpus", "pids_limit",
-        "command", "home_source", "home_target", "mounts", "working_directory", "labels"})
+        "command", "home_source", "home_target", "mounts", "working_directory", "labels", "environment"})
     if extra then return nil, extra end
     local selected_image = image(raw.image)
     if not selected_image then return nil, "Docker preparation needs the exact local image ID" end
@@ -130,12 +130,36 @@ function M.build(value: unknown): (Config?, string?)
         if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > #command then return nil, "Docker command must be dense" end
     end
     if #command == 0 or not path(command[1]) then return nil, "Docker executable must be absolute" end
+    -- Values come from the existing materializer after policy, credential and
+    -- gateway admission. Do not discover host environment or log these bytes.
+    local environment: {[string]: string} = {HOME = home_target, TMPDIR = "/tmp"}
+    if raw.environment ~= nil then
+        local supplied = bounds.object(raw.environment)
+        if not supplied then return nil, "Docker environment must be an object" end
+        local count, size = 2, #home_target + #"HOME=" + #"TMPDIR=/tmp"
+        for name, value in pairs(supplied) do
+            local text = bounds.text(value, 16384)
+            if #name > 128 or not name:match("^[A-Za-z_][A-Za-z0-9_]*$")
+                or not text or text:find("%z") then return nil, "invalid Docker environment entry" end
+            if environment[name] == nil then count = count + 1; size = size + #name + #text + 1 end
+            if count > 64 or size > 65536 then return nil, "Docker environment exceeds its budget" end
+            if (name == "HOME" and text ~= home_target) or (name == "TMPDIR" and text ~= "/tmp") then
+                return nil, "Docker environment differs from the admitted home or temporary directory"
+            end
+            environment[name] = text
+        end
+    end
+    local names: {string} = {}
+    for name in pairs(environment) do names[#names + 1] = name end
+    table.sort(names)
+    local encoded_environment: {string} = {}
+    for _, name in ipairs(names) do encoded_environment[#encoded_environment + 1] = name .. "=" .. environment[name] end
     local binds: {string} = {home_source .. ":" .. home_target .. ":rw"}
     for _, mount in ipairs(mounts) do
         binds[#binds + 1] = mount.source .. ":" .. mount.target .. (mount.access == "read" and ":ro" or ":rw")
     end
     return {Image = selected_image, User = user, Cmd = command, WorkingDir = workdir,
-        Env = {"HOME=" .. home_target, "TMPDIR=/tmp"}, Tty = true, OpenStdin = true,
+        Env = encoded_environment, Tty = true, OpenStdin = true,
         AttachStdin = true, AttachStdout = true, AttachStderr = true, Labels = labels,
         HostConfig = {ReadonlyRootfs = true, Privileged = false, AutoRemove = false,
             -- Docker selects its default seccomp profile when no override is

@@ -30,3 +30,15 @@ registry ownership and existing host admission instead.
 Completion requires a passing combined regression on the final source and a
 native workflow proving the requested module-management behavior. Narrow model
 or fixture checks do not establish application activation or Hive replication.
+
+## Regression checkpoint
+
+The baseline combined run on `c5f636e`/docs `c88ddf0` passed 780 unit cases and
+continued through storage, managed windows, threads, terminal navigation and
+lifecycle. It ended with exit 2 in the shared-store desktop case: the expected
+completion marker was missing, followed by a workspace-database shutdown timeout.
+The exact shared-store source/pack case then passed alone. Evidence is
+`hub-current-full-check.log` and `hub-shared-desktop-focused.log` in September 12
+local evidence. This is a failed full run with a passing focused reproduction,
+not a passing final regression. The final Contents/update source still needs its
+own combined gate.

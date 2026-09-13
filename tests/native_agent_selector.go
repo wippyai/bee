@@ -2555,10 +2555,12 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		if err := waitCommandHook(state, provider, "PreToolUse"); err != nil {
 			return err
 		}
+		activity := "Using tool"
 		if provider == "agy" {
-			if err := ui.waitFor("Activity uncertain", 5*time.Second); err != nil {
-				return fmt.Errorf("committed Agy hook title: %w", err)
-			}
+			activity = "Activity uncertain"
+		}
+		if err := ui.waitFor(activity, 5*time.Second); err != nil {
+			return fmt.Errorf("committed %s hook title: %w", provider, err)
 		}
 	}
 	if err := ui.send("finish\r"); err != nil {

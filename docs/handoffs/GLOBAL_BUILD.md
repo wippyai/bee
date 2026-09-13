@@ -1,5 +1,28 @@
 # Global Bee build — September 13, 2026
 
+## Candidate under verification: Agy setup and Grok integration
+
+Candidate SHA `c8537ef7bc83048ea7a052b449f56e8fc27713b67b49999e828d5cff8d86a486`
+contains production `f36e488` and native `79a1cd9`. Global remains `7d9182cb`.
+Agy imports the host-admitted existing onboarding JSON only when initializing
+a new private HOME. Credential identity and already-initialized homes remain
+unchanged. Grok has optional machine login delivery and five admitted window
+hooks through the existing helper; matching wire aliases are accepted and
+conflicting claims are refused.
+
+Exact native executable acceptance passes for all four harness fixtures,
+including login present/absent and scoped MCP. Grok's PreToolUse/Stop observations
+commit to its thread, and the tool hook updates the title to "Using tool".
+Offline fresh/restart/reconnect and Claude fixture cold recovery also pass.
+All artifact hashes and six archived runtime patches match provenance. Full
+`make check` is running as session `52992`; real Agy interactive acceptance is
+being checked separately. These are not real-provider model-turn or Docker
+execution claims. Managed Docker remains unfinished.
+
+Evidence in `bee-evidence/0912/`: `agent-login-hooks-{build,native,offline,recovery,check}.log`
+and `agent-login-hooks-grok-title.log`. The runtime pin is unchanged; builder
+PR 8 and runtime PR 745 remain unmerged. No global installation has occurred.
+
 ## Current install: retained configuration and Agy cold recovery
 
 Global SHA `7d9182cb40ddb5d60a2666c2e034ef3c601c51017d6e6742ebfea8bd8f172642`

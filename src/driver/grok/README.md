@@ -41,10 +41,12 @@ that helper to a private loopback fixture, with no user prompt or model turn.
 Its payload carries both camelCase and snake_case aliases. The gateway accepts
 matching aliases, rejects conflicts, preserves bounded session/turn/tool claims,
 and hashes content instead of retaining it. Unit checks cover the captured
-SessionStart shape and documented tool shape. Actual managed Grok tool/Stop
-delivery, title updates and cold window recovery remain unverified.
+SessionStart shape and documented tool shape. The assembled executable's
+Grok fixture now passes picker launch, present/absent machine login, scoped MCP,
+committed PreToolUse/Stop delivery and the resulting "Using tool" window title.
+This fixture does not prove real Grok model turns or cold window recovery.
 Evidence: `bee-evidence/0912/grok-session-hook-live.log` and
-`grok-window-hooks-focused.log`. This source is not installed globally.
+`agent-login-hooks-grok-title.log`. This source is not installed globally.
 
 The installed CLI advertises stdio, Streamable HTTP and SSE MCP
 transports. A September 13 loopback probe of the actual `grok mcp doctor`

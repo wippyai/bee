@@ -2,8 +2,8 @@
 
 Installed Agy delivers scoped MCP and appended profile guidance, but refuses
 hook configuration. Follow-up source now renders its window command hooks and
-decodes their wire fields; the native sender and executable acceptance remain
-under integration. No command-hook sender is installed globally yet.
+decodes their wire fields; the native sender passes its focused race tests and vet, while executable
+acceptance remains under integration. No command-hook sender is installed globally yet.
 The existing carrier commits observations and publishes fixed activity labels;
 it does not need an Agy-specific title process.
 
@@ -72,3 +72,11 @@ through Bee, malformed/oversize payload refusal, revoked credentials, unavailabl
 gateway and cancellation, followed by committed thread observations and native
 title updates. The empty-output probe is a prerequisite, not completed managed
 Agy hook integration.
+
+Native `938192c` supplies the command and `self` fact, based on the previously
+pinned native `0f63d30`. Its hook, host-environment and desktop-routing race tests
+and vet pass against the reviewed runtime. Source pins that native revision; no
+runtime PR or runtime semantic change was needed. Evidence is
+`bee-evidence/0912/native-hook-post-check.log`. The first stalled-peer test hung
+in HTTP test-server teardown, independently of the sender deadline; teardown now
+has its own release path, and a real OS-pipe cancellation case also passes.

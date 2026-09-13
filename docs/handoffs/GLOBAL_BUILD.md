@@ -1,6 +1,26 @@
 # Global Bee build — September 13, 2026
 
-## Current install: supervision listener before readiness
+## Current install: native window identity and cleanup
+
+Global SHA `b40aa0a5e4d63d7924cc2284763f0598e98a0622c768c74bb1a76d1b875d4028`
+contains production source `3f3a8bc`. Managed native windows capture the terminal's
+optional process identity before publishing running, so placement can independently
+prove process-group cleanup. The build includes the checked runtime #743 patch;
+the PR remains unmerged, assigned to `skhaz`. Runtime/native pins are unchanged.
+
+Full `make check` completed in the immutable source checkout (session `60245`,
+exit 0). The 836-unit gate, native executable acceptance, and loopback-only fresh,
+restored, restart and reconnect checks also pass. Evidence is
+`bee-evidence/0912/window-identity-{build,units,native,offline,full-check}.log` and
+`window-identity-global-install.json`. Installation verified all six artifacts,
+backed up the preceding `1d7bad28` installation, and preserved databases and
+running nodes. Subsequent launches use this executable.
+
+Interrupted-window recovery remains under development and is not in this build.
+Real-provider cold recovery, managed Docker and policy-controlled profile sharing
+remain unfinished.
+
+## Previous install: supervision listener before readiness
 
 Global SHA `1d7bad288c200f62452185f8e3c26562efbf8beac0e1c96788f02fd0b551850f`
 contains production source `337ff81`. The window registers its control listener

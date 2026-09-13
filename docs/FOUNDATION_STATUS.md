@@ -2,24 +2,22 @@
 
 ## Current checkpoint — September 13
 
-Global `1d7bad28` contains production `337ff81`: offline embedded/local startup,
-saved Agent profiles, appended guidance, effort choices, scoped MCP and corrected
-live PTY supervision. New/Edit/Remove and native saved-profile launch pass with
-fixture harnesses. The long-lived MCP test fails on the previous binary and passes
-after the supervision fix. All 836 units, full native executable acceptance and
-network-disabled fresh/restored/reconnect checks pass. Full `make check` for the
-preceding profile UI revision `017e55d` and window-supervision revision `4b43cf1`
-passed. The latter completed in its immutable checkout (session `51472`, exit 0).
-
-The installed `1de5bc0` follow-up installs the window's control listener before
-publishing `running`, with a compare-and-set against `starting`. Its native PTY
-check and the final candidate native/offline gates pass. See
+Global `b40aa0a5` contains production `3f3a8bc`: offline embedded/local startup,
+saved Agent profiles, appended guidance, effort choices, scoped MCP, corrected
+live PTY supervision and native window process identity. All 836 units, full
+native executable acceptance, network-disabled fresh/restored/reconnect checks,
+and the exact-source full `make check` pass. The full check completed in its
+immutable checkout (session `60245`, exit 0). Installation verified and backed up
+all six artifacts without restarting nodes or changing databases. See
 [global build](handoffs/GLOBAL_BUILD.md) for exact artifacts and preserved state.
 
 Cold Agent recovery remains incomplete. Runtime PR #743 preserves optional
-terminal process identity; the checked Bee candidate builds, but managed-window
-identity capture and process-group cleanup acceptance remain in progress. Recovery
-must also settle interrupted work and establish a provider conversation reference.
+terminal process identity. The installed build proves managed-window identity capture,
+and independent process-group cleanup. Follow-up source proves graceful conversation
+continuation through the broker using an acknowledged checkpoint and retained session home. These are
+fixture-harness proofs within a running runtime, not real-provider cold recovery.
+Interrupted-window recovery is under development: its current acceptance exposes
+the need for a responsive recovery view before the broker startup deadline.
 Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),

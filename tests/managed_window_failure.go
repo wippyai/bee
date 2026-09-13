@@ -383,16 +383,16 @@ func run() error {
 	if *stage == "plan" {
 		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed_window_fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
 	} else if *stage == "placement" {
-		appPath := filepath.Join(dir, "src", "harness", "window", "app.lua")
-		app, readError := os.ReadFile(appPath)
+		runtimePath := filepath.Join(dir, "src", "harness", "window", "runtime.lua")
+		runtimeSource, readError := os.ReadFile(runtimePath)
 		if readError != nil {
 			return readError
 		}
-		changed := strings.Replace(string(app), "local checkpointed, checkpoint_error = persist_checkpoint(state)", "local checkpointed, checkpoint_error = false, \"injected checkpoint failure\"", 1)
-		if changed == string(app) {
+		changed := strings.Replace(string(runtimeSource), "local checkpointed, checkpoint_error = persist_checkpoint(state)", "local checkpointed, checkpoint_error = false, \"injected checkpoint failure\"", 1)
+		if changed == string(runtimeSource) {
 			return fmt.Errorf("checkpoint injection anchor missing")
 		}
-		if err := os.WriteFile(appPath, []byte(changed), 0600); err != nil {
+		if err := os.WriteFile(runtimePath, []byte(changed), 0600); err != nil {
 			return err
 		}
 		machineText = string(machine)

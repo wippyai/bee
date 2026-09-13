@@ -4,7 +4,7 @@ entries:
 - name: service
   kind: library.lua
   source: file://service.lua
-  modules: [security, json, process, registry, hash]
+  modules: [security, json, process, registry, hash, canonical]
   imports:
     bounds: bee.threads.records:bounds
     resolver: bee.driver:resolver

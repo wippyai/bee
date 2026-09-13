@@ -172,8 +172,8 @@ end
 local function container_name(attempt: types.Attempt, row: Row): (string?, Reply?)
     local encoded, encode_error = canonical.encode({owner_id = attempt.owner_id, attempt_id = attempt.attempt_id, request_digest = row.request_digest})
     if not encoded then return nil, fail("INVALID", encode_error or "container name input") end
-    local digest, digest_error = hash.sha256(encoded)
-    if not digest then return nil, fail("INTERNAL", digest_error or "container name digest") end
+    local digest, digest_error = hash.sha256(encoded :: string)
+    if not digest then return nil, fail("INTERNAL", tostring(digest_error or "container name digest")) end
     return "bee-" .. digest, nil
 end
 

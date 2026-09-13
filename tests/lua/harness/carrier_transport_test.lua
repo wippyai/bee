@@ -18,7 +18,11 @@ local function plan(mode: string, protocol: string): machine.Plan
     local profile_value: classify.Profile = {id = "window", mode = mode, protocol = protocol, protocol_revision = "1", supported = true,
             permission = {mode = "none", eligible = false}}
     local request_value: machine.Request = {thread_id = "thread", action_id = "action", attempt_id = "attempt", owner_id = "actor", owner_incarnation = 1,
-            binding_ref = "binding", profile_id = "window", brief = "", policy_ref = "policy", resources = {}, environment = {}}
+            binding_ref = "binding", profile_id = "window", brief = "", policy_ref = "policy", placement_binding_ref = "bee.placement.native:binding",
+            placement_binding_digest = string.rep("a", 64), placement_methods = {prepare = "bee.placement.native:prepare", start = "bee.placement.native:start",
+                status = "bee.placement.native:status", stop = "bee.placement.native:stop", reconcile = "bee.placement.native:reconcile", cleanup = "bee.placement.native:cleanup",
+                evidence = "bee.placement.native:evidence", attach = "bee.placement.native:attach", capabilities = "bee.placement.native:capabilities",
+                measure_executable = "bee.placement.native:measure_executable", close_stdin = "bee.placement.native:close_stdin"}, resources = {}, environment = {}}
     return {
         request = request_value,
         binding = {binding_id = "binding", driver_id = "codex", title = "Codex", implementation_version = "1", profiles_ref = "profiles",
@@ -99,7 +103,7 @@ local function define_tests()
             test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native:prepare")
         end)
         test.it("dispatches preparation through the selected placement binding", function()
-            local selected = plan("window", "pty")
+            local selected: machine.Plan = plan("window", "pty")
             selected.placement_binding = {binding_id = "example.placement:binding", binding_digest = string.rep("b", 64), placement_kind = "native", methods = {
                 prepare = "example.placement:prepare", start = "example.placement:start", status = "example.placement:status",
                 stop = "example.placement:stop", reconcile = "example.placement:reconcile", cleanup = "example.placement:cleanup",

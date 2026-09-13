@@ -28,9 +28,7 @@ local restore_view = require("restore_view")
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
 local function placement_target(admitted: admission.Admitted, method: string): string?
-    if admitted.request.placement_methods then return admitted.request.placement_methods[method] end
-    if admitted.request.placement_binding_ref == nil then return "bee.placement.native:" .. method end
-    return nil
+    return admitted.request.placement_methods[method]
 end
 
 local function io(): machine.IO

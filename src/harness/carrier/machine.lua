@@ -60,9 +60,9 @@ type Request = {
     profile_id: string,
     brief: string,
     policy_ref: string,
-    placement_binding_ref: string?,
-    placement_binding_digest: string?,
-    placement_methods: {[string]: string}?,
+    placement_binding_ref: string,
+    placement_binding_digest: string,
+    placement_methods: {[string]: string},
     resources: {placement_types.ResourceGrant},
     environment: {[string]: string},
     session_ref: string?,
@@ -160,11 +160,6 @@ local function measure(request: Request): (Measured?, string?)
     if not snapshot then return nil, snapshot_error end
     local usable, usable_error = catalog.usable(snapshot)
     if not usable then return nil, usable_error end
-    local selected_placement, placement_error = placement_resolver.resolve(pinned, request.placement_binding_ref)
-    if not selected_placement then return nil, placement_error end
-    if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
-        return nil, "placement binding changed since admission"
-    end
     local binding: classify.Binding? = nil
     for _, candidate in ipairs(usable) do
         if candidate.binding_id == request.binding_ref then binding = candidate end
@@ -179,6 +174,14 @@ local function measure(request: Request): (Measured?, string?)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
     local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences)
     if not launch_policy then return nil, policy_error end
+    -- The policy is host-owned and decoded from this pinned snapshot. It is
+    -- the source of placement selection; request fields only prove that the
+    -- carrier received the same measured choice from admission.
+    local selected_placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
+    if not selected_placement then return nil, placement_error end
+    if request.placement_binding_ref ~= selected_placement.binding_id or request.placement_binding_digest ~= selected_placement.binding_digest then
+        return nil, "placement binding changed since admission"
+    end
     local exchange: Exchange? = nil
     local declared = launch_policy.permission_exchange
     if declared then
@@ -249,7 +252,8 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
         local resumed, resume_error = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
             owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
-            binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry})
+            binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry,
+            placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods})
         if not resumed then return nil, resume_error end
         resume_ref = resumed
         local dispatch = binding.methods.dispatch

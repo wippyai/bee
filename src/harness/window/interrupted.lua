@@ -12,9 +12,7 @@ local time = require("time")
 local uuid = require("uuid")
 local M = {}
 local function placement_target(request: continuation.Request, method: string): string?
-    if request.placement_methods then return request.placement_methods[method] end
-    if request.placement_binding_ref == nil then return "bee.placement.native:" .. method end
-    return nil
+    return request.placement_methods[method]
 end
 local BUDGET_MS = 5000
 local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end

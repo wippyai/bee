@@ -2,6 +2,7 @@
 local configure_protocol = require("configure_protocol")
 local canonical = require("canonical")
 local function gateway_delivery(gateway)
+    if not gateway then return {arguments = {}, files = {}}, nil end
     local mcp_document = {mcpServers = {}}
     if gateway then
         local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
@@ -18,7 +19,7 @@ local function gateway_delivery(gateway)
     end
     local settings, settings_error = canonical.encode(hooks)
     if not settings then return nil, settings_error end
-    return {arguments = {"--mcp-config", mcp, "--settings", settings, "--strict-mcp-config", "--setting-sources", ""}, files = {}}, nil
+    return {arguments = {"--mcp-config", mcp, "--settings", settings}, files = {}}, nil
 end
 local function handle(value: unknown): {[string]: unknown}
     local request, request_error = configure_protocol.decode_request(value)

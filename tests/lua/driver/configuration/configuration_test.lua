@@ -240,6 +240,12 @@ local function define_tests()
                 test.is_nil(configuration.decode_request({fixture = false, instruction_builder = invalid}))
             end
         end)
+        test.it("leaves ordinary Claude settings enabled when no Bee configuration is needed", function()
+            local ordinary, err = configuration.call("bee.driver.claude:configure", {fixture = false})
+            if not ordinary then error(tostring(err)) end
+            test.eq(#ordinary.arguments, 0)
+            test.eq(#ordinary.files, 0)
+        end)
         test.it("accepts an empty memory result without adding or replacing guidance", function()
             local builder = {func_id = "bee.driver:fixture_builder_empty", args = {}}
             local empty, empty_error = configuration.call("bee.driver.agy:configure", {fixture = false, instruction_builder = builder})

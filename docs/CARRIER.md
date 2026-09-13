@@ -409,10 +409,12 @@ with no registry, executor, placement or nested-call permissions. Actor and
 context inheritance are unchanged by scope selection. Constructing the empty
 scope is a protected host-selected capability; metadata grants none of it.
 
-Claude receives MCP and hook JSON through `--mcp-config` and `--settings`, with
-`--strict-mcp-config` and `--setting-sources ""`. Even an unconfigured launch
-supplies explicit empty settings. A fresh attempt can select current endpoints
-without replacing files in its retained conversation home.
+Claude receives Bee MCP and hook JSON through additive `--mcp-config` and
+`--settings` arguments. It no longer disables the harness's normal settings or
+other MCP sources. An unconfigured launch supplies no configuration arguments.
+A fresh attempt can select current endpoints without replacing settings files.
+Placement still selects a private home in this checkpoint; automatic global
+home/configuration inheritance remains unfinished.
 
 Codex renders `.codex/config.toml` from the selected `bee.codex_provider`
 (name, base URL, model, and optional bounded `developer_instructions`; plain

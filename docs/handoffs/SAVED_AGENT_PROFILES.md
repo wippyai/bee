@@ -195,3 +195,20 @@ not yet claimed when its producer exits. Per [the gateway contract](../GATEWAY_H
 revocation terminally rejects that row and retains its reason. Recovery preserves
 that rejection and does not invent a thread commit. Previously claimed deliveries
 remain recoverable; “drained” must not be read as every accepted hook committing.
+
+## Native node restart acceptance
+
+`make native-agent-recovery-check BEE_BINARY=/path/to/bee` now launches a fixture
+Claude from the public Agent picker, submits a real HTTP PreToolUse hook using
+the delivered settings, and waits for the actual thread record and workspace
+checkpoint. It stops the identity-checked node process, then opens the same
+project and state through the public executable. The second native launch must
+receive the exact saved conversation reference, read the unchanged retained HOME
+sentinel, keep the application/view and thread identities, and use a fresh native
+attempt and gateway binding. No successful logical turn may be invented.
+
+The final `b883ae8` candidate passes this fixture; evidence is
+`bee-evidence/0912/native-agent-cold-recovery-final.log`. The command uses the
+fixture's normal TERM-first node shutdown with forced cleanup if necessary.
+It is not a controlled abrupt-SIGKILL test, and the executable standing in for
+Claude is a fixture, so real-provider conversation recovery remains unverified.

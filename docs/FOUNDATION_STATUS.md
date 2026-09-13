@@ -11,7 +11,7 @@ immutable checkout (session `60245`, exit 0). Installation verified and backed u
 all six artifacts without restarting nodes or changing databases. See
 [global build](handoffs/GLOBAL_BUILD.md) for exact artifacts and preserved state.
 
-Cold Agent recovery remains incomplete. Runtime PR #743 preserves optional
+Real-provider Agent recovery remains incomplete. Runtime PR #743 preserves optional
 terminal process identity. The installed build proves managed-window identity capture,
 and independent process-group cleanup. Follow-up source proves graceful conversation
 continuation through the broker using an acknowledged checkpoint and retained session home. These are
@@ -20,6 +20,10 @@ Follow-up source passes interrupted-window restore and responsive cancellation
 through the real broker/native terminal fixture. The recovery view stays responsive
 while admission drains hooks. Its combined full regression remains outstanding;
 these changes are not in the installed global build.
+The follow-up native executable also passes restoration across a whole-node
+stop/restart from the actual persisted workspace checkpoint: same app/view and
+conversation identity, retained HOME, fresh attempt and gateway binding. This is
+a fixture Claude proof; abrupt runtime SIGKILL remains unverified.
 Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),

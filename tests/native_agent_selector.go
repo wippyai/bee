@@ -729,22 +729,27 @@ func (o *owner) stop() error {
 	if o == nil {
 		return nil
 	}
-	defer unix.Close(o.fd)
+	fd := o.fd
+	o.fd = -1
+	if fd < 0 {
+		return nil
+	}
+	defer unix.Close(fd)
 	wait := func(timeout time.Duration) bool {
-		poll := []unix.PollFd{{Fd: int32(o.fd), Events: unix.POLLIN}}
+		poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
 		_, err := unix.Poll(poll, int(timeout/time.Millisecond))
 		return err == nil && poll[0].Revents != 0
 	}
 	if wait(0) {
 		return nil
 	}
-	if err := unix.PidfdSendSignal(o.fd, unix.SIGTERM, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
+	if err := unix.PidfdSendSignal(fd, unix.SIGTERM, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
 		return err
 	}
 	if wait(10 * time.Second) {
 		return nil
 	}
-	if err := unix.PidfdSendSignal(o.fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
+	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
 		return err
 	}
 	if !wait(5 * time.Second) {
@@ -1038,6 +1043,443 @@ func savedProfileLaunch(binary string) error {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+type recoveryApplication struct {
+	ID            string `json:"id"`
+	InstanceID    string `json:"instance_id"`
+	DefinitionID  string `json:"definition_id"`
+	ThreadID      string `json:"thread_id"`
+	ResumeState   string `json:"resume_state"`
+	RestartPolicy string `json:"restart_policy"`
+}
+
+type recoveryWorkspace struct {
+	Applications []recoveryApplication `json:"applications"`
+}
+
+type recoverySaved struct {
+	PreviousAttemptID string `json:"previous_attempt_id"`
+	ThreadID          string `json:"thread_id"`
+}
+
+type recoveryPlacement struct {
+	AttemptID  string
+	ActionID   string
+	Execution  string
+	Cleanup    string
+	ExitSource sql.NullString
+	PID        sql.NullInt64
+	PGID       sql.NullInt64
+	StartTicks sql.NullInt64
+	BootID     sql.NullString
+}
+
+func openRecoveryDB(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", "file:"+path+"?mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 2000"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+func readRecoveryWorkspace(state string) (recoveryWorkspace, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "workspace.db"))
+	if err != nil {
+		return recoveryWorkspace{}, err
+	}
+	defer db.Close()
+	var encoded string
+	if err := db.QueryRow("SELECT value FROM workspace_state WHERE singleton = 1").Scan(&encoded); err != nil {
+		return recoveryWorkspace{}, err
+	}
+	var snapshot recoveryWorkspace
+	if err := json.Unmarshal([]byte(encoded), &snapshot); err != nil {
+		return recoveryWorkspace{}, err
+	}
+	return snapshot, nil
+}
+
+func readRecoveryPlacement(state string) ([]recoveryPlacement, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "placement.db"))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT attempt_id, action_id, execution_state, cleanup_state,
+        exit_source, pid, pgid, start_ticks, boot_id
+        FROM bee_placement_attempts ORDER BY created_at, attempt_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []recoveryPlacement
+	for rows.Next() {
+		var item recoveryPlacement
+		if err := rows.Scan(&item.AttemptID, &item.ActionID, &item.Execution, &item.Cleanup,
+			&item.ExitSource, &item.PID, &item.PGID, &item.StartTicks, &item.BootID); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func readRecoveryBinding(state, attemptID string) (string, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	var encoded string
+	err = db.QueryRow("SELECT checkpoint_json FROM bee_thread_carriers WHERE attempt_id = ? ORDER BY carrier_epoch DESC LIMIT 1", attemptID).Scan(&encoded)
+	if err != nil {
+		return "", err
+	}
+	var checkpoint map[string]any
+	if err := json.Unmarshal([]byte(encoded), &checkpoint); err != nil {
+		return "", err
+	}
+	binding, ok := checkpoint["gateway_binding"].(string)
+	if !ok || binding == "" {
+		return "", errors.New("carrier checkpoint has no gateway binding")
+	}
+	return binding, nil
+}
+
+func recoveryHookCommitted(state, threadID, sessionID string) (bool, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT record_json FROM bee_thread_records
+        WHERE thread_id = ? AND kind = 'observation' AND source = 'bee' ORDER BY sequence`, threadID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var encoded string
+		if err := rows.Scan(&encoded); err != nil {
+			return false, err
+		}
+		var record map[string]any
+		if json.Unmarshal([]byte(encoded), &record) != nil {
+			continue
+		}
+		body, ok := record["body"].(map[string]any)
+		if !ok {
+			continue
+		}
+		data, ok := body["data"].(map[string]any)
+		if !ok || data["event_name"] != "bee.harness.hook" {
+			continue
+		}
+		payloadText, ok := data["payload_json"].(string)
+		if !ok {
+			continue
+		}
+		var payload map[string]any
+		if json.Unmarshal([]byte(payloadText), &payload) != nil {
+			continue
+		}
+		fields, ok := payload["fields"].(map[string]any)
+		if ok && fields["session_id"] == sessionID && fields["tool_use_id"] == "native-recovery-tool" {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func recoveryThreadFacts(state, threadID, actionID string) (int, int, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+	if err != nil {
+		return 0, 0, err
+	}
+	defer db.Close()
+	var turns, successes int
+	if err := db.QueryRow("SELECT COUNT(*) FROM bee_thread_records WHERE thread_id = ? AND kind = 'turn.request'", threadID).Scan(&turns); err != nil {
+		return 0, 0, err
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM bee_thread_settlements WHERE thread_id = ? AND action_id = ? AND outcome = 'succeeded'", threadID, actionID).Scan(&successes); err != nil {
+		return 0, 0, err
+	}
+	return turns, successes, nil
+}
+
+func waitRecoveryWorkspace(state string, predicate func(recoveryWorkspace) (recoveryApplication, recoverySaved, bool), timeout time.Duration) (recoveryApplication, recoverySaved, error) {
+	deadline := time.Now().Add(timeout)
+	var last error
+	for time.Now().Before(deadline) {
+		snapshot, err := readRecoveryWorkspace(state)
+		if err == nil {
+			if app, saved, ok := predicate(snapshot); ok {
+				return app, saved, nil
+			}
+		} else {
+			last = err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if last != nil {
+		return recoveryApplication{}, recoverySaved{}, fmt.Errorf("workspace checkpoint: %w", last)
+	}
+	return recoveryApplication{}, recoverySaved{}, errors.New("workspace checkpoint did not reach the expected state")
+}
+
+func recoveryArgs(path string) ([]string, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) < 3 || lines[0] == "" || lines[1] == "" {
+		return nil, "", fmt.Errorf("malformed launch report %q", string(data))
+	}
+	return lines[2:], lines[1], nil
+}
+
+func hasRecoveryResume(args []string, expected string) bool {
+	for index, arg := range args {
+		if arg == "-r" && index+1 < len(args) && args[index+1] == expected {
+			return true
+		}
+	}
+	return false
+}
+
+// nativeAgentRecovery proves a graceful cold restart through the public
+// picker. The first child writes an acknowledged PreToolUse hook and a HOME
+// marker, the retained owner is stopped via pidfd, and a second Bee boots the
+// same state directory and launches the restored application.
+func nativeAgentRecovery(binary string) (result error) {
+	root, err := os.MkdirTemp("", "bee-native-agent-recovery-")
+	if err != nil {
+		return err
+	}
+	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
+	for _, dir := range []string{filepath.Join(project, "bin"), state, home} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+	}
+	helper, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		return err
+	}
+	firstReport, secondReport := filepath.Join(root, "first-launch"), filepath.Join(root, "second-launch")
+	script := "#!/bin/sh\nset -eu\nphase=first\nif [ -f \"$HOME/bee-session-proof\" ]; then phase=second; fi\nif [ \"$phase\" = second ]; then [ \"$(cat \"$HOME/bee-session-proof\")\" = retained ]; fi\nreport=" + shellQuote(firstReport) + "\nif [ \"$phase\" = second ]; then report=" + shellQuote(secondReport) + "; fi\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > \"$report\"\nprintf '%s\\n' \"$@\" >> \"$report\"\nif [ \"$phase\" = first ]; then " + shellQuote(helper) + " hook-probe \"$@\"; fi\nprintf 'BEE_RECOVERY_AGENT_READY_%s\\n' \"$phase\"\nprintf retained > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	if err := os.WriteFile(filepath.Join(project, "bin", "claude"), []byte(script), 0700); err != nil {
+		return err
+	}
+	var first *desktop
+	var second *desktop
+	var retained *owner
+	defer func() {
+		if retained != nil {
+			_ = retained.stop()
+		}
+		if first != nil {
+			first.close()
+		}
+		if second != nil {
+			second.close()
+		}
+		_ = stopFixtureOwners(binary, state)
+		if result != nil {
+			diagnostic := filepath.Join(root, "recovery-diagnosis.txt")
+			_ = os.WriteFile(diagnostic, []byte(result.Error()), 0600)
+			fmt.Fprintf(os.Stderr, "native Agent recovery fixture retained at %s: %v\\n", root, result)
+		} else {
+			_ = os.RemoveAll(root)
+		}
+	}()
+	first, err = newDesktop(binary, project, state, home)
+	if err != nil {
+		return err
+	}
+	if err = first.waitFor("Claude", 25*time.Second); err != nil {
+		return err
+	}
+	if err = first.send("\x1b[B"); err != nil {
+		return err
+	}
+	if err = first.send("\r"); err != nil {
+		return err
+	}
+	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
+		if err = first.waitFor(detail, 5*time.Second); err != nil {
+			return fmt.Errorf("recovery profile summary: %w", err)
+		}
+	}
+	if err = first.send("\r"); err != nil {
+		return err
+	}
+	if err = first.waitFor("BEE_RECOVERY_AGENT_READY_first", 25*time.Second); err != nil {
+		return err
+	}
+	args, childHome, err := recoveryArgs(firstReport)
+	if err != nil {
+		return err
+	}
+	if hasRecoveryResume(args, "native-recovery-session") {
+		return errors.New("first Claude launch unexpectedly carried a resume reference")
+	}
+	if childHome == "" {
+		return errors.New("first recovery child has no HOME")
+	}
+	app, saved, err := waitRecoveryWorkspace(state, func(snapshot recoveryWorkspace) (recoveryApplication, recoverySaved, bool) {
+		for _, candidate := range snapshot.Applications {
+			var decoded recoverySaved
+			if candidate.DefinitionID != "bee.harness.window:app" || candidate.ResumeState == "" || json.Unmarshal([]byte(candidate.ResumeState), &decoded) != nil {
+				continue
+			}
+			if decoded.PreviousAttemptID != "" && decoded.ThreadID != "" {
+				return candidate, decoded, true
+			}
+		}
+		return recoveryApplication{}, recoverySaved{}, false
+	}, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	if saved.PreviousAttemptID == "" || saved.ThreadID == "" {
+		return errors.New("checkpoint omitted native attempt identity")
+	}
+	hookDeadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(hookDeadline) {
+		committed, hookErr := recoveryHookCommitted(state, saved.ThreadID, "native-recovery-session")
+		if hookErr == nil && committed {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	committed, err := recoveryHookCommitted(state, saved.ThreadID, "native-recovery-session")
+	if err != nil || !committed {
+		return fmt.Errorf("native recovery PreToolUse was not committed: %v", err)
+	}
+	placements, err := readRecoveryPlacement(state)
+	if err != nil {
+		return err
+	}
+	var old recoveryPlacement
+	for _, candidate := range placements {
+		if candidate.AttemptID == saved.PreviousAttemptID {
+			old = candidate
+		}
+	}
+	if old.AttemptID == "" {
+		return errors.New("checkpoint attempt is absent from placement state")
+	}
+	turns, successes, err := recoveryThreadFacts(state, saved.ThreadID, old.ActionID)
+	if err != nil {
+		return err
+	}
+	if turns != 0 || successes != 0 {
+		return fmt.Errorf("fixture invented turn facts: turns=%d successes=%d", turns, successes)
+	}
+	oldBinding, err := readRecoveryBinding(state, old.AttemptID)
+	if err != nil {
+		return err
+	}
+	retained, err = ownerChild(first.cmd.Process.Pid, binary, state, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	if err = retained.stop(); err != nil {
+		return fmt.Errorf("stop retained owner: %w", err)
+	}
+	retained = nil
+	first.close()
+	second, err = newDesktop(binary, project, state, home)
+	if err != nil {
+		return err
+	}
+	if err = second.waitFor("BEE_RECOVERY_AGENT_READY_second", 45*time.Second); err != nil {
+		return err
+	}
+	secondArgs, secondHome, err := recoveryArgs(secondReport)
+	if err != nil {
+		return err
+	}
+	if secondHome != childHome {
+		return fmt.Errorf("restored HOME changed from %q to %q", childHome, secondHome)
+	}
+	if !hasRecoveryResume(secondArgs, "native-recovery-session") {
+		return errors.New("restored Claude launch omitted its expected resume reference")
+	}
+	marker, err := os.ReadFile(filepath.Join(secondHome, "bee-session-proof"))
+	if err != nil || string(marker) != "retained" {
+		return fmt.Errorf("restored HOME sentinel = %q, err=%v", string(marker), err)
+	}
+	newApp, newSaved, err := waitRecoveryWorkspace(state, func(snapshot recoveryWorkspace) (recoveryApplication, recoverySaved, bool) {
+		for _, candidate := range snapshot.Applications {
+			var decoded recoverySaved
+			if candidate.ID != app.ID || candidate.InstanceID != app.InstanceID || candidate.ResumeState == "" || json.Unmarshal([]byte(candidate.ResumeState), &decoded) != nil {
+				continue
+			}
+			if decoded.PreviousAttemptID != "" && decoded.PreviousAttemptID != old.AttemptID {
+				return candidate, decoded, true
+			}
+		}
+		return recoveryApplication{}, recoverySaved{}, false
+	}, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	if newApp.ID != app.ID || newApp.InstanceID != app.InstanceID || newSaved.ThreadID != saved.ThreadID {
+		return errors.New("restored application identity or thread changed")
+	}
+	newRows, err := readRecoveryPlacement(state)
+	if err != nil {
+		return err
+	}
+	if len(newRows) != 2 {
+		return fmt.Errorf("expected one old and one new placement attempt, got %d", len(newRows))
+	}
+	var fresh recoveryPlacement
+	var retired recoveryPlacement
+	for _, item := range newRows {
+		if item.AttemptID == newSaved.PreviousAttemptID {
+			fresh = item
+		}
+		if item.AttemptID == old.AttemptID {
+			retired = item
+		}
+	}
+	if retired.Execution != "exited" || retired.Cleanup != "complete" {
+		return fmt.Errorf("old native attempt was not reconciled after restart: execution=%s cleanup=%s", retired.Execution, retired.Cleanup)
+	}
+	if fresh.AttemptID == "" || fresh.ActionID != old.ActionID || fresh.AttemptID == old.AttemptID {
+		return errors.New("restored application did not create a fresh attempt")
+	}
+	newBinding, err := readRecoveryBinding(state, fresh.AttemptID)
+	if err != nil {
+		return err
+	}
+	if newBinding == oldBinding {
+		return errors.New("restored attempt reused the old gateway binding")
+	}
+	turns, successes, err = recoveryThreadFacts(state, saved.ThreadID, old.ActionID)
+	if err != nil {
+		return err
+	}
+	if turns != 0 || successes != 0 {
+		return fmt.Errorf("recovery invented turn facts: turns=%d successes=%d", turns, successes)
+	}
+	return nil
 }
 
 type mcpReply struct {
@@ -1455,6 +1897,93 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	return 0
 }
 
+// runHookProbe submits one Claude PreToolUse event using the URL and token
+// environment named by the host-delivered --settings argument. The helper is
+// invoked by the disposable Claude executable, so the token never crosses the
+// test process's diagnostic or report paths.
+func runHookProbe(args []string) int {
+	var settingsLiteral string
+	for index, arg := range args {
+		if arg == "--settings" && index+1 < len(args) {
+			settingsLiteral = args[index+1]
+			break
+		}
+	}
+	if settingsLiteral == "" {
+		return 1
+	}
+	var settings map[string]any
+	if json.Unmarshal([]byte(settingsLiteral), &settings) != nil {
+		return 1
+	}
+	hooks, ok := settings["hooks"].(map[string]any)
+	if !ok {
+		return 1
+	}
+	entries, ok := hooks["PreToolUse"].([]any)
+	if !ok || len(entries) == 0 {
+		return 1
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		return 1
+	}
+	handlers, ok := entry["hooks"].([]any)
+	if !ok || len(handlers) == 0 {
+		return 1
+	}
+	handler, ok := handlers[0].(map[string]any)
+	if !ok {
+		return 1
+	}
+	url, ok := handler["url"].(string)
+	if !ok || !strings.HasPrefix(url, "http://127.0.0.1:") || !strings.Contains(url, "/hook/") {
+		return 1
+	}
+	headers, ok := handler["headers"].(map[string]any)
+	if !ok {
+		return 1
+	}
+	authorization, ok := headers["Authorization"].(string)
+	if !ok || !strings.HasPrefix(authorization, "Bearer ${") || !strings.HasSuffix(authorization, "}") {
+		return 1
+	}
+	environment := strings.TrimSuffix(strings.TrimPrefix(authorization, "Bearer ${"), "}")
+	token := os.Getenv(environment)
+	if token == "" {
+		return 1
+	}
+	payload := map[string]any{
+		"hook_event_name": "PreToolUse",
+		"session_id":      "native-recovery-session",
+		"prompt_id":       "native-recovery-prompt",
+		"tool_use_id":     "native-recovery-tool",
+		"tool_name":       "Bash",
+		"tool_input":      map[string]any{"command": "true"},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 1
+	}
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return 1
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return 1
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		return 1
+	}
+	return 0
+}
+
 func managedLaunch(binary, provider string, machineLogin bool) error {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
@@ -1618,6 +2147,27 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 func main() {
 	if len(os.Args) >= 4 && os.Args[1] == "mcp-probe" {
 		os.Exit(runMCPProbe(os.Args[2], os.Args[3], os.Args[4:]))
+	}
+	if len(os.Args) >= 3 && os.Args[1] == "hook-probe" {
+		os.Exit(runHookProbe(os.Args[2:]))
+	}
+	if len(os.Args) == 3 && os.Args[1] == "recovery" {
+		binary, resolveError := filepath.Abs(os.Args[2])
+		if resolveError != nil {
+			fmt.Fprintln(os.Stderr, resolveError)
+			os.Exit(1)
+		}
+		binary, resolveError = filepath.EvalSymlinks(binary)
+		if resolveError != nil {
+			fmt.Fprintln(os.Stderr, resolveError)
+			os.Exit(1)
+		}
+		if recoveryError := nativeAgentRecovery(binary); recoveryError != nil {
+			fmt.Fprintf(os.Stderr, "native Agent recovery acceptance failed: %v\n", recoveryError)
+			os.Exit(1)
+		}
+		fmt.Println("Native Agent recovery: acknowledged Claude hook, retained HOME, stable application identity, fresh resumed attempt and fresh gateway binding across owner restart")
+		return
 	}
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: native_agent_selector BEE_BINARY")

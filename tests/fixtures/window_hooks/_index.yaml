@@ -132,6 +132,23 @@ entries:
       short: Prove native-window hook acceptance
       security:
         actor: {id: bee.test.gateway}
+- name: pending_hook
+  kind: process.lua
+  source: file://main.lua
+  method: pending_hook
+  modules: [process, channel, time, security, tty, funcs, json, registry, io]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    store: bee.placement.native:store
+  security:
+    policies: [bee:placement_store_policy, bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_lifecycle_policy, bee:thread_observe_policy, bee:thread_carrier_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee.window_hooks_fixture:fixture_policy]
+  meta:
+    command:
+      name: window-hooks-pending-acceptance
+      short: Prove native-window hook acceptance
+      security:
+        actor: {id: bee.test.gateway}
 - name: cancel_recovery
   kind: process.lua
   source: file://main.lua

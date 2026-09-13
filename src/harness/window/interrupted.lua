@@ -1,5 +1,5 @@
 -- MIT. Settle an interrupted window only after native exit is observed and
--- its accepted hooks have drained under a fresh carrier epoch.
+-- recoverable hook deliveries have drained under a fresh carrier epoch.
 local continuation = require("continuation")
 local checkpoint = require("checkpoint")
 local bounds = require("bounds")
@@ -93,7 +93,7 @@ function M.recover(request: continuation.Request): (boolean, string?)
         idempotency_key = "launch:" .. request.previous_attempt_id .. ":window:recovered:" .. tostring(epoch),
         action_id = request.action_id, attempt_id = request.previous_attempt_id, carrier_epoch = epoch,
         receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {},
-            error = {code = "native_window_interrupted", message = "native process exited without its window owner; accepted hooks drained", retryable = false}}})
+            error = {code = "native_window_interrupted", message = "native process exited without its window owner; recoverable hook deliveries reconciled", retryable = false}}})
     if not settled then return false, settle_error end
     return true, nil
 end

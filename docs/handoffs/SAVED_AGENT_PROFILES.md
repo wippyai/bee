@@ -177,7 +177,7 @@ actor exit within a live runtime, not an OS kill of the entire runtime.
 Interrupted-window source now restores through a responsive Agent view. Admission
 runs in a coroutine owned by that application actor; the same typed result reaches
 native preparation only while the view is active. Recovery fences the old carrier,
-requires native exit, drains accepted hooks, settles the old attempt as uncertain,
+requires native exit, reconciles recoverable hook deliveries, settles the old attempt as uncertain,
 and retains the existing conversation and session home. `make window-recovery-check`
 exercises actor termination followed by checkpoint restore and closing the recovery
 view during delayed hook admission. The cancellation fixture checks that no later
@@ -189,3 +189,9 @@ Current evidence: `window-interrupted-units-typed.log` records 838 passing tests
 `window-recovery-ui-final.log` records passing crash and cancellation fixtures
 against the typed runtime. The existing graceful continuation fixture also passes
 with the responsive restore UI. Recovery checks are included in `make check`.
+
+The pending-intake fixture also covers a hook durably accepted with HTTP 202 but
+not yet claimed when its producer exits. Per [the gateway contract](../GATEWAY_HOOKS.md),
+revocation terminally rejects that row and retains its reason. Recovery preserves
+that rejection and does not invent a thread commit. Previously claimed deliveries
+remain recoverable; “drained” must not be read as every accepted hook committing.

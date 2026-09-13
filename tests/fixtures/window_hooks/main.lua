@@ -40,7 +40,7 @@ local function endpoint(): string
     return address :: string
 end
 
-local function execute(crashed: boolean, cancel_recovery: boolean)
+local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook: boolean)
     -- 1. Open gateway listener under configured loopback endpoint
     local address = endpoint()
     local opened_gateway = call("bee.gateway:open", {address = address})
@@ -277,6 +277,27 @@ local function execute(crashed: boolean, cancel_recovery: boolean)
     assert(pty_functional_after, "terminal input did not remain functional after hook commit")
 
 
+    if pending_hook then
+        assert(view:send({type = "paste", text = "pending-hook"}))
+        assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+        local accepted = false
+        for _ = 1, 60 do
+            local frame = view:snapshot()
+            if frame and table.concat(frame.rows):find("HOOK_PENDING_CODE:202", 1, true) then accepted = true; break end
+            time.sleep("10ms")
+        end
+        assert(accepted, "additional hook was not accepted before the crash")
+        local queue = reply(call("bee.gateway:hook_queue", {binding_id = committed_binding_id}).value)
+        local unclaimed = false
+        for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
+            local fields = reply(hook.fields)
+            if fields.tool_use_id == "toolu_pending" then
+                unclaimed = hook.status == "queued" and hook.claimed_epoch == 0
+            end
+        end
+        assert(unclaimed, "crash fixture must interrupt an accepted, unclaimed hook")
+    end
+
     -- 11. Close application and verify clean shutdown
     if crashed then
         local db = assert(store.open())
@@ -471,7 +492,20 @@ local function execute(crashed: boolean, cancel_recovery: boolean)
         end
         time.sleep("50ms")
     end
-    assert(total_hooks == 2, "continuation did not preserve the original hook and commit a second hook")
+    assert(total_hooks == 2, "continuation must preserve the committed hook and add only the new attempt hook")
+    if pending_hook then
+        -- The existing gateway contract rejects unclaimed rows on revocation.
+        -- They remain durable rejections, never fabricated thread commits.
+        local queue = reply(call("bee.gateway:hook_queue", {binding_id = committed_binding_id}).value)
+        local rejected = false
+        for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
+            local fields = reply(hook.fields)
+            if fields.tool_use_id == "toolu_pending" then
+                rejected = hook.status == "rejected" and type(hook.rejected_reason) == "string" and hook.rejected_reason ~= ""
+            end
+        end
+        assert(rejected, "revoked unclaimed hook lost its durable rejection")
+    end
     assert(continuation_attempt_id and continuation_attempt_id ~= previous_attempt_id, "continuation did not receive a fresh native attempt")
     assert(continuation_binding_id and continuation_binding_id ~= committed_binding_id, "continuation did not receive a fresh gateway binding")
     assert(continuation_session_id == "s1", "continuation did not preserve the provider conversation")
@@ -518,9 +552,10 @@ local function execute(crashed: boolean, cancel_recovery: boolean)
     io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
 end
 
-M.main = function() execute(false, false) end
+M.main = function() execute(false, false, false) end
 M.run = M.main
-M.crash = function() execute(true, false) end
-M.cancel_recovery = function() execute(true, true) end
+M.crash = function() execute(true, false, false) end
+M.cancel_recovery = function() execute(true, true, false) end
+M.pending_hook = function() execute(true, false, true) end
 
 return M

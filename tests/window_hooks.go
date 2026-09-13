@@ -200,6 +200,7 @@ func runHarness() error {
 	srcFlag := flag.String("src", "", "source directory to stage (defaults to repository root)")
 	keepTemp := flag.Bool("keep-temp", false, "do not delete temporary directory after run")
 	crash := flag.Bool("crash", false, "terminate the window actor before checkpoint restore")
+	pendingHook := flag.Bool("pending-hook", false, "crash after an accepted hook before its first claim")
 	cancelRecovery := flag.Bool("cancel-recovery", false, "close the recovery view before delayed admission finishes")
 	flag.Parse()
 
@@ -260,7 +261,9 @@ func runHarness() error {
 
 	// 2. Run acceptance command process fixture on bee:terminal host
 	command := "window-hooks-acceptance"
-	if *cancelRecovery {
+	if *pendingHook {
+		command = "window-hooks-pending-acceptance"
+	} else if *cancelRecovery {
 		command = "window-hooks-cancel-recovery-acceptance"
 	} else if *crash {
 		command = "window-hooks-crash-acceptance"

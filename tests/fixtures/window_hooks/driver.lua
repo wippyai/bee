@@ -42,6 +42,12 @@ fi
 
 while IFS= read -r line; do
     printf 'HOOK_CHILD_INPUT:%s\n' "$line"
+    if [ "$line" = "pending-hook" ]; then
+        pending_payload='{"hook_event_name":"PreToolUse","session_id":"s1","prompt_id":"pending","tool_use_id":"toolu_pending","tool_name":"Bash","tool_input":{"command":"echo accepted"}}'
+        pending_code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $BEE_GATEWAY_HOOK_TOKEN" -H "Content-Type: application/json" -d "$pending_payload")
+        printf 'HOOK_PENDING_CODE:%s\n' "$pending_code"
+    fi
     if [ "$line" = "exit" ] || [ "$line" = "quit" ]; then
         break
     fi

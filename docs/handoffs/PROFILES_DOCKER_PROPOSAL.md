@@ -2,6 +2,42 @@
 
 Written 2026-09-10 for Astra's review after the user's direction the same day: "we should also be able to add agent profiles like additional kits or anything like that, maybe different environment variables as well; make sure that we can easily run that in Docker and so on, Docker with proper full UI", and "is there a way to set the system prompt or something like that for all the agents when you run them". Astra (round 64): carry it forward at full scope, separate the acceptance cases, keep nonsecret profile environment apart from broker-projected secrets, and never let container logs stand for the full UI.
 
+## September 13 implementation boundary
+
+Saved profile data, the Agent picker and appended instructions are implemented;
+see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
+instruction-entry scheme below remain historical proposals.
+
+Docker placement is still unimplemented. The current integration direction is
+native `exec.docker` with the existing `exec.PTYProcess` and `attach_terminal`
+path. Bee's exact runtime pin `291f5c6b708c80afe5da07f3223767573b4d183f` already
+supports Docker PTY input and resize. Its real `TestDockerPTYResize` passed against
+the local daemon, including initial size, input and changed size; it was not
+skipped. Evidence: `bee-evidence/0912/docker-pinned-pty.log`. This is runtime
+capability evidence, not a managed Bee Docker window or cold recovery proof.
+
+[Runtime PR #739](https://github.com/wippyai/runtime/pull/739), assigned to
+`skhaz`, proposes per-process admitted bind mounts and remains unmerged. Bee
+must select only the attempt's private HOME and authorized project roots.
+Container paths, image/executable selection and daemon locality must be resolved
+by the placement component; saved profiles cannot supply arbitrary host mounts.
+Credentials use the existing broker projection into that private HOME.
+
+Durable Docker execution identity and reconciliation remain an unresolved seam:
+the current Lua exec API exposes a host PID when supported, but no durable Docker
+container identity or owner-qualified container lookup. A lost terminal handle
+cannot prove that a container exited, and therefore cannot authorize deleting its
+private HOME. Resolve this using the runtime/container component's lifecycle
+before advertising managed Docker recovery; do not infer exit from disconnect.
+The gateway also needs a container-reachable, authorized address: a loopback URL
+inside a container does not address the Bee host. This must preserve the current
+binding token and MCP/hook scopes.
+
+The historical dependency on `userspace/docker` below is not an implemented Bee
+requirement. No second container or Docker CLI attachment loop is needed for PTY
+support. Full Agent-window acceptance must still prove input, resize, detach and
+rejoin, retained conversation data, credential isolation and crash cleanup.
+
 ## September 11 implementation direction
 
 The extra `bee.agent_profile` composition proposed below is superseded. A named

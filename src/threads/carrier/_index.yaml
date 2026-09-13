@@ -10,6 +10,7 @@ entries:
     canonical: bee.threads.records:canonical
     observation: bee.threads.records:observation
     types: bee.threads.records:types
+    record: bee.threads.records:record
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority

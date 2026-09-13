@@ -199,6 +199,16 @@ function M.attempt_outcome(tx: sql.Transaction, thread_id: string, attempt_id: s
     if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "attempt outcome row is corrupt" end
     return outcome, nil
 end
+-- Placement selection belongs to the original prepared record, not to a
+-- later carrier checkpoint or the host's current launch policy.
+function M.attempt_prepared(tx: sql.Transaction, thread_id: string, attempt_id: string): (Stored?, string?)
+    local row, err = single(tx, [[SELECT r.record_id, r.sequence, r.kind, r.record_json
+        FROM bee_thread_attempts a JOIN bee_thread_records r ON r.record_id = a.prepared_record_id
+        WHERE a.thread_id = ? AND a.attempt_id = ?]], {thread_id, attempt_id}, "prepared attempt record")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    return stored_row(row)
+end
 function M.settled(tx: sql.Transaction, thread_id: string, scope: string, action_id: string, attempt_id: string?): (Stored?, string?)
     local select = "SELECT r.record_id, r.sequence, r.kind, r.record_json FROM bee_thread_settlements s JOIN bee_thread_records r ON r.record_id = s.record_id "
     local row: {[string]: unknown}?, err: string?

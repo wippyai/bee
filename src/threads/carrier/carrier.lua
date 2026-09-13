@@ -4,6 +4,7 @@
 -- carrier keeps nothing the checkpoint does not hold.
 local sql = require("sql")
 local json = require("json")
+local record = require("record")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local observation = require("observation")
@@ -261,6 +262,19 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
             if outcome_err then return storage(outcome_err) end
             if not outcome then return storage("ended attempt has no receipt") end
             value.attempt_outcome = outcome
+        end
+        local prepared, prepared_error = reader.attempt_prepared(tx, head.thread_id, attempt_id)
+        if prepared_error then return storage(prepared_error) end
+        if prepared then
+            local decoded, decode_error = record.decode_json(prepared.record_json)
+            if not decoded or decode_error or decoded.kind ~= "attempt.prepared"
+                or decoded.thread_id ~= head.thread_id or decoded.attempt_id ~= attempt_id
+                or decoded.action_id ~= attempt.action_id or decoded.record_id ~= prepared.record_id then
+                return storage("prepared attempt record is corrupt")
+            end
+            local plan = decoded.body :: record_types.Prepared
+            value.placement_binding = plan.placement_binding
+            value.placement_attempt_id = plan.placement_attempt_id
         end
         local open, open_err = reader.open_turn(tx, head.thread_id, attempt_id)
         if open_err then return storage(open_err) end

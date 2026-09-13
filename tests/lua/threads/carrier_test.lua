@@ -31,6 +31,28 @@ local function define_tests()
             harness.value(carrier:call("prepare_attempt", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", attempt_id = "t1", prepared = harness.prepared()}))
             return thread_id
         end
+        test.it("reads placement from preparation even before a checkpoint and ignores checkpoint replacement", function()
+            local thread_id = harness.thread(carrier, "Recorded placement")
+            harness.value(carrier:call("admit_action", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", admitted = harness.admitted()}))
+            local plan = harness.prepared()
+            plan.placement_binding = "fixture.docker:binding"
+            plan.placement_attempt_id = "container-attempt"
+            harness.value(carrier:call("prepare_attempt", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", attempt_id = "t1", prepared = plan}))
+            local before = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
+            test.is_nil(before.checkpoint)
+            test.eq(before.placement_binding, "fixture.docker:binding")
+            test.eq(before.placement_attempt_id, "container-attempt")
+            harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
+            local point = checkpoint(1)
+            point.placement_binding = "bee.placement.native:binding"
+            point.placement_attempt_id = "another-attempt"
+            harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = point, records = {}}))
+            local after = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
+            test.eq(after.placement_binding, before.placement_binding)
+            test.eq(after.placement_attempt_id, before.placement_attempt_id)
+            test.eq(after.checkpoint.placement_binding, "bee.placement.native:binding")
+            test.eq(harness.code(runner:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"})), "DENIED")
+        end)
         test.it("fences earlier carriers by epoch and advances revisions only from the expected one", function()
             local thread_id = prepared_attempt()
             local key = harness.key()

@@ -190,3 +190,10 @@ permission prompts. Evidence: `agy-live-managed-mcp-allowed.log` (session `22796
 exit 0), `agy-mcp-native-check.log` (`43706`, exit 0),
 `agy-mcp-offline-check.log` (`88196`, exit 0), and `agy-mcp-full-check.log`
 (still running as `94825`). The candidate is not installed yet.
+
+The exact `9b499f4e` candidate additionally passes native fixture-provider restart
+and controlled SIGKILL continuation (session `95331`, exit 0;
+`agy-mcp-native-recovery-check.log`). The old process was independently absent;
+this retains the earlier limits on surviving orphan processes and real-provider
+cold recovery. Independent read-only review of `01ed3e3` found no actionable
+authority, token leakage or correctness issue in the credential-field change.

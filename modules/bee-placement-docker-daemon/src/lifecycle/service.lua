@@ -146,10 +146,26 @@ local function spec_from(policy: Object, request: types.LaunchRequest, digest: s
     local command: {string} = {request.launch.executable}
     for _, item in ipairs(delivery.arguments) do command[#command + 1] = item end
     for _, item in ipairs(request.launch.argv) do command[#command + 1] = item end
+    local home_target = policy.home_target or "/home/bee"
+    local container_work = work == home and home_target or nil
+    local mounts = type(policy.mounts) == "table" and policy.mounts :: {unknown} or {}
+    local function under(child: string, parent: string): boolean return child == parent or child:sub(1, #parent + 1) == parent .. "/" end
+    if not container_work then
+        for _, item in ipairs(mounts) do
+            local mount = bounds.object(item)
+            local source = mount and bounds.text(mount.source, 4096)
+            local target = mount and bounds.text(mount.target, 4096)
+            if source and target and under(work, source) then
+                container_work = target .. work:sub(#source + 1)
+                break
+            end
+        end
+    end
+    if not container_work then return nil, fail("DENIED", "working directory is outside Docker mount targets") end
     local spec: Spec = {image = image, user = policy.user, network = policy.network, apparmor = policy.apparmor,
         memory = policy.memory, nano_cpus = policy.nano_cpus, pids_limit = policy.pids_limit, command = command,
-        home_source = home, home_target = policy.home_target or "/home/bee", mounts = policy.mounts,
-        working_directory = work, labels = labels(request, digest, tostring(image))}
+        home_source = home, home_target = home_target, mounts = policy.mounts,
+        working_directory = container_work, labels = labels(request, digest, tostring(image))}
     local checked, check_error = docker_configuration.build(spec)
     if not checked then return nil, fail("DENIED", check_error or "Docker specification is not admitted") end
     return spec, nil
@@ -220,6 +236,15 @@ function M.prepare(value: unknown): Reply
     if not policy then return policy_error :: Reply end
     local spec, spec_error = spec_from(policy, request, digest, home :: string, work :: string, delivery :: types.ConfigurationDelivery)
     if not spec then return spec_error :: Reply end
+    local capabilities, capability_error = daemon.capabilities()
+    if not capabilities then return daemon_failure(capability_error, "Docker host capabilities are unavailable") end
+    if not capabilities.linux or not capabilities.seccomp or not capabilities.memory_limit
+        or not capabilities.pids_limit or not capabilities.cpu_quota then
+        return fail("UNAVAILABLE", "Docker host does not support the required sandbox limits")
+    end
+    if spec.apparmor ~= nil and not capabilities.apparmor then
+        return fail("UNAVAILABLE", "Docker host does not support the required AppArmor profile")
+    end
     local spec_json, spec_encode_error = encode(spec, "Docker specification")
     if not spec_json then return spec_encode_error :: Reply end
     local stored: Object = {}
@@ -440,10 +465,9 @@ function M.attach(value: unknown): Reply
     return transition(attempt.attempt_id, {fields = {recipient = recipient, attachment_generation = generation}, evidence = {kind = "docker.attach", detail = "generation " .. tostring(generation)}})
 end
 function M.capabilities(): Reply
-    -- The daemon adapter deliberately has no sandbox probe. Advertising a
-    -- contained-tree guarantee before the host verifies seccomp, NNP,
-    -- capabilities and read-only mounts would authorize an unsafe launch.
-    return fail("UNAVAILABLE", "Docker host sandbox capabilities have not been measured")
+    local capabilities, capability_error = daemon.capabilities()
+    if not capabilities then return daemon_failure(capability_error, "Docker host capabilities are unavailable") end
+    return succeed(capabilities)
 end
 function M.measure_executable(value: unknown): Reply return fail("UNSUPPORTED", "Docker measures executables inside the selected image") end
 function M.close_stdin(value: unknown): Reply return fail("UNSUPPORTED", "Docker stdin closure requires the Docker terminal owner") end

@@ -1,10 +1,16 @@
 # wolfy-j/bee-placement-docker-daemon
 
 This optional component provides `bee.placement.docker.daemon:daemon`, a thin typed
-lifecycle adapter over the existing `userspace.docker:docker_client`. It has no
+daemon adapter, and the `bee.placement.docker` placement lifecycle over the
+existing `userspace.docker:docker_client`. It has no
 placement database, attempt state, cleanup worker, process execution or native
 fallback. The admitting placement owner remains responsible for intent,
 transitions, reconciliation and cleanup.
+
+The placement binding is `bee.placement.docker:binding`; its public methods are
+registered in the component's `lifecycle` namespace and use the shared native
+placement receipt store. The daemon namespace owns only the typed Docker socket
+adapter.
 
 The host selects `bee.placement.docker.daemon:daemon_ref`, which must link to one
 registry resource containing an absolute Unix `socket_path`. The adapter never

@@ -16,6 +16,7 @@ import (
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/harnesshost"
 	"github.com/wippyai/bee/native/hive/localowner"
+	"github.com/wippyai/bee/native/hookpost"
 	"github.com/wippyai/bee/native/ioevents"
 	"github.com/wippyai/bee/native/launch"
 	"github.com/wippyai/runtime/api/boot"
@@ -93,6 +94,14 @@ func (*Host) DependsOn() []string {
 func (h *Host) Launch(ctx context.Context, request app.LaunchRequest, runOwner func(app.OwnerOptions) error) error {
 	if h.initErr != nil {
 		return h.initErr
+	}
+	// Hook processes carry a token which the gateway must authorize. They
+	// never enter owner startup, project canonicalization, or application state.
+	if request.Command == "bee" && len(request.Arguments) > 0 && request.Arguments[0] == "hook-post" {
+		if len(request.Arguments) != 5 {
+			return errors.New("hook-post: expected ENDPOINT ACTION_ID TOKEN_ENV EVENT")
+		}
+		return hookpost.Run(ctx, os.Stdin, request.Arguments[1], request.Arguments[2], request.Arguments[3], request.Arguments[4])
 	}
 	selected, err := launch.CanonicalProject(request)
 	if err != nil {

@@ -92,3 +92,13 @@ client-launch-check:
 .PHONY: local-owner-selection-check
 local-owner-selection-check:
 	$(MAKE) local-owner-check LOCAL_OWNER_TEST_RUN=TestNativeClientSelectionComposition
+
+# One-shot command hooks never enter runtime owner startup.
+.PHONY: hook-post-check
+hook-post-check:
+	@test -n "$(MESH_RUNTIME)" || { echo "MESH_RUNTIME must name the reviewed runtime checkout" >&2; exit 1; }
+	@set -eu; testmod=$$(mktemp -d); trap 'rm -rf "$$testmod"' EXIT; \
+	cp go.mod go.sum "$$testmod/"; \
+	go mod edit -modfile="$$testmod/go.mod" -replace="github.com/wippyai/runtime=$(abspath $(MESH_RUNTIME))"; \
+	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=30s -tags "$(TAGS) meshclient physicalclient" ./hookpost ./harnesshost ./desktop; \
+	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) meshclient physicalclient" ./hookpost ./harnesshost ./desktop

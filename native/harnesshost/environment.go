@@ -23,13 +23,14 @@ const (
 )
 
 type Resolver struct {
-	LookPath func(string) (string, error)
-	HomeDir  func() (string, error)
-	Getwd    func() (string, error)
+	LookPath   func(string) (string, error)
+	HomeDir    func() (string, error)
+	Getwd      func() (string, error)
+	Executable func() (string, error)
 }
 
 func systemResolver() Resolver {
-	return Resolver{LookPath: exec.LookPath, HomeDir: os.UserHomeDir, Getwd: os.Getwd}
+	return Resolver{LookPath: exec.LookPath, HomeDir: os.UserHomeDir, Getwd: os.Getwd, Executable: os.Executable}
 }
 
 // Storage snapshots nonsecret home and working-directory facts. Executable
@@ -40,7 +41,7 @@ type Storage struct {
 }
 
 func NewStorage(resolver Resolver) (*Storage, error) {
-	if resolver.LookPath == nil || resolver.HomeDir == nil || resolver.Getwd == nil {
+	if resolver.LookPath == nil || resolver.HomeDir == nil || resolver.Getwd == nil || resolver.Executable == nil {
 		return nil, errors.New("host path resolver is incomplete")
 	}
 	home, err := resolver.HomeDir()
@@ -51,10 +52,14 @@ func NewStorage(resolver Resolver) (*Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !filepath.IsAbs(home) || !filepath.IsAbs(cwd) {
+	executable, err := resolver.Executable()
+	if err != nil {
+		return nil, err
+	}
+	if !filepath.IsAbs(home) || !filepath.IsAbs(cwd) || !filepath.IsAbs(executable) {
 		return nil, errors.New("host facts must be absolute paths")
 	}
-	return &Storage{resolver: resolver, facts: map[string]string{"home": home, "cwd": cwd}}, nil
+	return &Storage{resolver: resolver, facts: map[string]string{"home": home, "cwd": cwd, "self": executable}}, nil
 }
 
 func bare(name string) bool {

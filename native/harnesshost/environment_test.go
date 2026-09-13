@@ -26,6 +26,7 @@ func resolver(root string, paths map[string]string) Resolver {
 			return "", errors.New("not found")
 		},
 		HomeDir: func() (string, error) { return filepath.Join(root, "home", "test"), nil }, Getwd: func() (string, error) { return filepath.Join(root, "work", "test"), nil },
+		Executable: func() (string, error) { return filepath.Join(root, "bin", "bee"), nil },
 	}
 }
 func TestStorageExposesOnlyNonsecretHostPaths(t *testing.T) {
@@ -35,7 +36,7 @@ func TestStorageExposesOnlyNonsecretHostPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, want := range map[string]string{"home": filepath.Join(root, "home", "test"), "cwd": filepath.Join(root, "work", "test"), "claude": claude} {
+	for name, want := range map[string]string{"home": filepath.Join(root, "home", "test"), "cwd": filepath.Join(root, "work", "test"), "self": filepath.Join(root, "bin", "bee"), "claude": claude} {
 		got, err := s.Get(context.Background(), name)
 		if err != nil || got != want {
 			t.Fatalf("Get(%q) = %q, %v", name, got, err)
@@ -53,7 +54,7 @@ func TestStorageExposesOnlyNonsecretHostPaths(t *testing.T) {
 		t.Fatal("Delete succeeded")
 	}
 	all, err := s.List(context.Background())
-	if err != nil || len(all) != 2 || all["home"] != filepath.Join(root, "home", "test") || all["cwd"] != filepath.Join(root, "work", "test") {
+	if err != nil || len(all) != 3 || all["home"] != filepath.Join(root, "home", "test") || all["cwd"] != filepath.Join(root, "work", "test") || all["self"] != filepath.Join(root, "bin", "bee") {
 		t.Fatalf("List() = %#v, %v", all, err)
 	}
 }
@@ -105,5 +106,10 @@ func TestStorageRefusesIncompleteOrRelativeHostFacts(t *testing.T) {
 	r.HomeDir = func() (string, error) { return "relative", nil }
 	if _, err := NewStorage(r); err == nil {
 		t.Fatal("relative home succeeded")
+	}
+	r = resolver(t.TempDir(), nil)
+	r.Executable = func() (string, error) { return "relative", nil }
+	if _, err := NewStorage(r); err == nil {
+		t.Fatal("relative executable succeeded")
 	}
 }

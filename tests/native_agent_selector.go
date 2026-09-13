@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -758,6 +759,33 @@ func (o *owner) stop() error {
 	return nil
 }
 
+func (o *owner) kill() error {
+	if o == nil {
+		return nil
+	}
+	fd := o.fd
+	o.fd = -1
+	if fd < 0 {
+		return nil
+	}
+	defer unix.Close(fd)
+	wait := func(timeout time.Duration) bool {
+		poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		_, err := unix.Poll(poll, int(timeout/time.Millisecond))
+		return err == nil && poll[0].Revents != 0
+	}
+	if wait(0) {
+		return nil
+	}
+	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
+		return err
+	}
+	if !wait(5 * time.Second) {
+		return errors.New("fixture owner did not exit after SIGKILL")
+	}
+	return nil
+}
+
 func stopFixtureOwners(binary, state string) error {
 	for _, pid := range ownerPids(binary, state) {
 		candidate, err := ownerPidfd(pid, binary, state)
@@ -1133,6 +1161,78 @@ func readRecoveryPlacement(state string) ([]recoveryPlacement, error) {
 	return result, nil
 }
 
+func recoveryIdentityValid(item recoveryPlacement) bool {
+	return item.PID.Valid && item.PGID.Valid && item.StartTicks.Valid && item.BootID.Valid &&
+		item.PID.Int64 > 1 && item.PGID.Int64 > 1 && item.StartTicks.Int64 > 0 && item.BootID.String != ""
+}
+
+// recoveryIdentityAlive compares the recorded native identity with /proc.
+// A PID match by itself is insufficient because Linux can reuse a PID.
+func recoveryIdentityAlive(item recoveryPlacement) (bool, error) {
+	if !recoveryIdentityValid(item) {
+		return false, errors.New("old native attempt has an incomplete process identity")
+	}
+	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", item.PID.Int64))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	close := bytes.LastIndex(stat, []byte(") "))
+	if close < 0 || close+2 >= len(stat) {
+		return false, errors.New("native process stat is malformed")
+	}
+	fields := strings.Fields(string(stat[close+2:]))
+	if len(fields) <= 19 {
+		return false, errors.New("native process stat omitted start ticks")
+	}
+	pgid, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return false, err
+	}
+	ticks, err := strconv.ParseInt(fields[19], 10, 64)
+	if err != nil {
+		return false, err
+	}
+	boot, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return false, err
+	}
+	return pgid == item.PGID.Int64 && ticks == item.StartTicks.Int64 &&
+		strings.TrimSpace(string(boot)) == item.BootID.String, nil
+}
+
+func killRecoveryProcess(item recoveryPlacement) error {
+	if !recoveryIdentityValid(item) {
+		return errors.New("refusing cleanup of native process without a complete identity")
+	}
+	fd, err := unix.PidfdOpen(int(item.PID.Int64), 0)
+	if err != nil {
+		if errors.Is(err, unix.ESRCH) {
+			return nil
+		}
+		return err
+	}
+	defer unix.Close(fd)
+	alive, err := recoveryIdentityAlive(item)
+	if err != nil || !alive {
+		return err
+	}
+	if err := unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
+		return err
+	}
+	poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+	_, err = unix.Poll(poll, 5000)
+	if err != nil {
+		return err
+	}
+	if poll[0].Revents == 0 {
+		return errors.New("identity-proven native process did not exit after cleanup")
+	}
+	return nil
+}
+
 func readRecoveryBinding(state, attemptID string) (string, error) {
 	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
 	if err != nil {
@@ -1264,7 +1364,15 @@ func hasRecoveryResume(args []string, expected string) bool {
 // picker. The first child writes an acknowledged PreToolUse hook and a HOME
 // marker, the retained owner is stopped via pidfd, and a second Bee boots the
 // same state directory and launches the restored application.
-func nativeAgentRecovery(binary string) (result error) {
+func nativeAgentRecovery(binary string) error {
+	return nativeAgentRecoveryMode(binary, false)
+}
+
+func nativeAgentRecoveryCrash(binary string) error {
+	return nativeAgentRecoveryMode(binary, true)
+}
+
+func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	root, err := os.MkdirTemp("", "bee-native-agent-recovery-")
 	if err != nil {
 		return err
@@ -1287,6 +1395,8 @@ func nativeAgentRecovery(binary string) (result error) {
 	var first *desktop
 	var second *desktop
 	var retained *owner
+	var oldAttemptID string
+	crashOutcome := ""
 	defer func() {
 		if retained != nil {
 			_ = retained.stop()
@@ -1298,6 +1408,15 @@ func nativeAgentRecovery(binary string) (result error) {
 			second.close()
 		}
 		_ = stopFixtureOwners(binary, state)
+		if crash {
+			if rows, readErr := readRecoveryPlacement(state); readErr == nil {
+				for _, item := range rows {
+					if item.AttemptID == oldAttemptID {
+						_ = killRecoveryProcess(item)
+					}
+				}
+			}
+		}
 		if result != nil {
 			diagnostic := filepath.Join(root, "recovery-diagnosis.txt")
 			_ = os.WriteFile(diagnostic, []byte(result.Error()), 0600)
@@ -1383,6 +1502,7 @@ func nativeAgentRecovery(binary string) (result error) {
 	if old.AttemptID == "" {
 		return errors.New("checkpoint attempt is absent from placement state")
 	}
+	oldAttemptID = old.AttemptID
 	turns, successes, err := recoveryThreadFacts(state, saved.ThreadID, old.ActionID)
 	if err != nil {
 		return err
@@ -1398,14 +1518,78 @@ func nativeAgentRecovery(binary string) (result error) {
 	if err != nil {
 		return err
 	}
-	if err = retained.stop(); err != nil {
+	if !recoveryIdentityValid(old) {
+		return errors.New("old native attempt has no complete identity before owner restart")
+	}
+	if crash {
+		if err = retained.kill(); err != nil {
+			return fmt.Errorf("kill retained owner: %w", err)
+		}
+	} else if err = retained.stop(); err != nil {
 		return fmt.Errorf("stop retained owner: %w", err)
 	}
 	retained = nil
 	first.close()
+	if crash {
+		afterKill, readErr := readRecoveryPlacement(state)
+		if readErr != nil {
+			return fmt.Errorf("inspect native identity after owner SIGKILL: %w", readErr)
+		}
+		var observed recoveryPlacement
+		for _, item := range afterKill {
+			if item.AttemptID == old.AttemptID {
+				observed = item
+			}
+		}
+		if !recoveryIdentityValid(observed) || observed.PID != old.PID || observed.PGID != old.PGID ||
+			observed.StartTicks != old.StartTicks || observed.BootID != old.BootID {
+			return errors.New("native identity changed while inspecting the SIGKILL outcome")
+		}
+		alive, identityErr := recoveryIdentityAlive(observed)
+		if identityErr != nil {
+			return fmt.Errorf("inspect native identity after owner SIGKILL: %w", identityErr)
+		}
+		fmt.Fprintf(os.Stderr, "native Agent process alive after owner SIGKILL: %t\n", alive)
+	}
 	second, err = newDesktop(binary, project, state, home)
 	if err != nil {
 		return err
+	}
+	if crash {
+		deadline := time.Now().Add(30 * time.Second)
+		ready, refused := false, false
+		for time.Now().Before(deadline) {
+			ready = second.observed("BEE_RECOVERY_AGENT_READY_second", 0)
+			refused = second.observed("Recovery admission refused", 0)
+			if ready || refused {
+				break
+			}
+			select {
+			case <-second.done:
+				return errors.New("restarted desktop exited before Agent recovery")
+			default:
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if refused && !ready {
+			rows, readErr := readRecoveryPlacement(state)
+			if readErr != nil {
+				return fmt.Errorf("read refusal placement state: %w", readErr)
+			}
+			if len(rows) != 1 || rows[0].AttemptID != old.AttemptID {
+				return fmt.Errorf("refused recovery created another placement attempt: %d rows", len(rows))
+			}
+			alive, identityErr := recoveryIdentityAlive(rows[0])
+			if identityErr != nil || !alive {
+				return fmt.Errorf("recovery refused without a live old native process: %v", identityErr)
+			}
+			crashOutcome = "refused while the old native process remained alive"
+			fmt.Fprintln(os.Stderr, "native Agent crash recovery outcome: "+crashOutcome)
+			return errors.New("recovery safely refused a live prior process but did not restore the Agent")
+		}
+		if !ready {
+			return errors.New("SIGKILL recovery neither restored nor reported an exit-unproven refusal")
+		}
 	}
 	if err = second.waitFor("BEE_RECOVERY_AGENT_READY_second", 45*time.Second); err != nil {
 		return err
@@ -1478,6 +1662,10 @@ func nativeAgentRecovery(binary string) (result error) {
 	}
 	if turns != 0 || successes != 0 {
 		return fmt.Errorf("recovery invented turn facts: turns=%d successes=%d", turns, successes)
+	}
+	if crash {
+		crashOutcome = "continued after owner SIGKILL because the old native process was gone"
+		fmt.Fprintln(os.Stderr, "native Agent crash recovery outcome: "+crashOutcome)
 	}
 	return nil
 }
@@ -2167,6 +2355,24 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Native Agent recovery: acknowledged Claude hook, retained HOME, stable application identity, fresh resumed attempt and fresh gateway binding across owner restart")
+		return
+	}
+	if len(os.Args) == 3 && os.Args[1] == "recovery-crash" {
+		binary, resolveError := filepath.Abs(os.Args[2])
+		if resolveError != nil {
+			fmt.Fprintln(os.Stderr, resolveError)
+			os.Exit(1)
+		}
+		binary, resolveError = filepath.EvalSymlinks(binary)
+		if resolveError != nil {
+			fmt.Fprintln(os.Stderr, resolveError)
+			os.Exit(1)
+		}
+		if recoveryError := nativeAgentRecoveryCrash(binary); recoveryError != nil {
+			fmt.Fprintf(os.Stderr, "native Agent crash recovery acceptance failed: %v\n", recoveryError)
+			os.Exit(1)
+		}
+		fmt.Println("Native Agent crash recovery: exact owner SIGKILL, native identity inspection and saved Agent continuation")
 		return
 	}
 	if len(os.Args) != 2 {

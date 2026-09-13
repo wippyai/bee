@@ -121,6 +121,10 @@ window-recovery-check:
 native-agent-recovery-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go recovery "$(abspath $(BEE_BINARY))"
+.PHONY: native-agent-crash-recovery-check
+native-agent-crash-recovery-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go recovery-crash "$(abspath $(BEE_BINARY))"
 .PHONY: layout-ack-check
 layout-ack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import personalization; personalization.acknowledged_layout()'

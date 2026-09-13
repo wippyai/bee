@@ -23,7 +23,9 @@ these changes are not in the installed global build.
 The follow-up native executable also passes restoration across a whole-node
 stop/restart from the actual persisted workspace checkpoint: same app/view and
 conversation identity, retained HOME, fresh attempt and gateway binding. This is
-a fixture Claude proof; abrupt runtime SIGKILL remains unverified.
+a fixture Claude proof. Controlled SIGKILL of that node also passes when its
+recorded native child is gone; surviving orphan trees and real providers remain
+unverified.
 Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),

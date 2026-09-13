@@ -212,3 +212,18 @@ The final `b883ae8` candidate passes this fixture; evidence is
 fixture's normal TERM-first node shutdown with forced cleanup if necessary.
 It is not a controlled abrupt-SIGKILL test, and the executable standing in for
 Claude is a fixture, so real-provider conversation recovery remains unverified.
+
+## Controlled runtime crash acceptance
+
+`make native-agent-crash-recovery-check BEE_BINARY=/path/to/bee` kills the exact
+fixture node through its captured pidfd with SIGKILL, without a preceding TERM.
+It inspects the persisted native identity before restarting; it does not clean up
+the child to manufacture recovery. On the final `b883ae8` candidate the old native
+process was absent, and the restored Agent passed the same conversation, HOME,
+application identity, fresh-attempt and fresh-binding assertions. Evidence:
+`bee-evidence/0912/native-agent-sigkill-recovery-final.log`.
+
+A refusal while the original process remains alive is recorded as safe refusal,
+but fails this continuation acceptance. The fixture proves the observed native
+shell lifecycle; it does not establish recovery of a surviving orphan tree or
+real-provider behavior. No runtime change was needed for the passing case.

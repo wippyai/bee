@@ -26,12 +26,23 @@ type Request = {
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "reasoning_effort", "resume_ref", "gateway_tools"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "reasoning_effort", "resume_ref", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, "launch request: " .. unknown_field end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
     if not (profile_id == "session" or profile_id == "batch" or profile_id == "window") then
         return nil, "profile_id is not one Bee admits"
+    end
+    if object.gateway_hooks ~= nil then
+        local declared, hooks_error = bounds.ids(object.gateway_hooks, true)
+        if not declared then return nil, "gateway_hooks: " .. tostring(hooks_error) end
+        if #declared > 0 and profile_id ~= "window" then return nil, "gateway hooks require the window profile" end
+        for _, event in ipairs(declared) do
+            if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse"
+                and event ~= "PostToolUse" and event ~= "Stop" then return nil, "unsupported gateway hook " .. event end
+        end
+        -- Grok discovers the admitted hooks file from its private HOME.
+        -- No additional launch flag is needed.
     end
     local brief = bounds.text(object.brief)
     if not brief or (#brief == 0 and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end

@@ -7,6 +7,18 @@ local dispatch = require("dispatch")
 
 local function define_tests()
     test.describe("Grok launch", function()
+        test.it("accepts the carrier's admitted window hooks without extra argv", function()
+            local input = {profile_id = "window", brief = "", gateway_tools = {"thread_read"},
+                gateway_hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}}
+            local decoded, err = launch.decode(input)
+            if not decoded then error(tostring(err)) end
+            local spec = launch.specification(decoded)
+            test.eq(#spec.argv, 2)
+            test.eq(spec.argv[1], "--allow")
+            test.is_nil(launch.decode({profile_id = "window", brief = "", gateway_hooks = {"Unknown"}}))
+            test.is_nil(launch.decode({profile_id = "batch", brief = "task", gateway_hooks = {"Stop"}}))
+            test.is_nil(launch.decode({profile_id = "window", brief = "", gateway_hooks = "Stop"}))
+        end)
         test.it("decodes minimal session and batch requests", function()
             local decoded, err = launch.decode({profile_id = "session", brief = "hello grok"})
             if not decoded then error(tostring(err)) end

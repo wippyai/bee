@@ -2356,6 +2356,7 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		selection, label = "\x1b[B\r", "Claude"
 	}
 	fixtureLogin := `{"fixture":"machine-login"}`
+	fixtureOnboarding := `{"consumerOnboardingComplete":true,"onboardingComplete":true,"fixture":"machine-setup"}`
 	if provider == "agy" {
 		providerDirectory, loginFile = filepath.Join(".gemini", "antigravity-cli"), "antigravity-oauth-token"
 		selection, label = "\r", "Antigravity"
@@ -2374,6 +2375,15 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		}
 		if err := os.WriteFile(filepath.Join(home, providerDirectory, "machine-only-state"), []byte("not projected"), 0600); err != nil {
 			return err
+		}
+		if provider == "agy" {
+			cache := filepath.Join(home, providerDirectory, "cache")
+			if err := os.MkdirAll(cache, 0700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(cache, "onboarding.json"), []byte(fixtureOnboarding), 0600); err != nil {
+				return err
+			}
 		}
 	}
 	cli := filepath.Join(project, "bin", provider)
@@ -2404,8 +2414,14 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	if err := ui.waitFor(label, 25*time.Second); err != nil {
 		return err
 	}
-	if err := ui.send(strings.TrimSuffix(selection, "\r")); err != nil {
-		return err
+	for step := 0; step < strings.Count(selection, "\x1b[B"); step++ {
+		_, before, _ := ui.snapshot()
+		if err := ui.send("\x1b[B"); err != nil {
+			return err
+		}
+		if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+			return fmt.Errorf("select profile step %d: %w", step+1, err)
+		}
 	}
 	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
 		if err := ui.waitFor(detail, 5*time.Second); err != nil {
@@ -2498,6 +2514,16 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		}
 	}
 	login, loginErr := os.ReadFile(filepath.Join(childHome, providerDirectory, loginFile))
+	if provider == "agy" {
+		setup, setupErr := os.ReadFile(filepath.Join(childHome, providerDirectory, "cache", "onboarding.json"))
+		if machineLogin {
+			if setupErr != nil || string(setup) != fixtureOnboarding {
+				return errors.New("machine onboarding state was not projected exactly")
+			}
+		} else if !os.IsNotExist(setupErr) {
+			return errors.New("absent machine onboarding state was fabricated")
+		}
+	}
 	if machineLogin {
 		if loginErr != nil || string(login) != fixtureLogin {
 			return errors.New("machine login was not seeded into private home")

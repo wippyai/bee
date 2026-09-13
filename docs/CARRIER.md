@@ -464,8 +464,8 @@ previous attempt and retained session; owner lookups check the action, actor,
 driver/profile measurements and session. Native exit and completed cleanup
 are required before a bounded, member-authorized thread scan. Only eligible
 observations committed by that actor under the predecessor's recorded gateway
-binding supply a session ID; ambiguous occurrences supply none and conflicting
-IDs refuse. The plan
+binding supply a session ID; occurrence ambiguity affects event identity but
+does not erase a validated provider session claim. Conflicting IDs refuse. The plan
 calls the driver's existing resume method with an empty brief. It never
 replays the original prompt or changes a cancelled/uncertain attempt into
 a successful one. Structured continuation retains its successful-turn rule.

@@ -45,13 +45,15 @@ The existing `bee.threads.service:read_after` operation can recover that ID
 from committed observations; no second provider-session store is required.
 Use its action filter and bounded pages, advancing by `scanned_through`.
 An eventual resume consumer must check the exact predecessor attempt and its
-recorded gateway binding, decode the `bee.harness.hook` payload, and reject
-ambiguous or conflicting session IDs. Current thread membership still governs
+recorded gateway binding, decode the `bee.harness.hook` payload, and refuse
+recovery when no session ID is found or claims conflict. Occurrence ambiguity
+remains relevant to event identity, but does not erase a validated provider
+session claim. Current thread membership still governs
 the read. Resolving an old binding's observations grants no use of that binding;
 the new attempt needs fresh admission. The carrier plan now implements this
 resolver for window profiles with `previous_attempt_id` and an empty brief.
 It requires an ended predecessor and native exit plus completed cleanup.
-Ambiguous occurrences provide no candidate ID; conflicting eligible IDs or
+Missing provider IDs across all eligible observations, conflicting claims or
 invalid pages refuse continuation. Structured continuation still requires a
 successful completed turn. Launch admission now accepts the original launch
 request ID, predecessor attempt and thread in its typed `continuation` field.

@@ -79,7 +79,7 @@ local function define_tests()
                 execution_state = "exited", cleanup_state = "complete"}
             local rows: {unknown} = {observation(1025, "provider-session", "old-binding", false, "previous"),
                 observation(1026, "unrelated-session", "other-binding", false, "other-attempt"),
-                observation(1027, "ambiguous-session", "old-binding", true, "previous")}
+                observation(1027, "provider-session", "old-binding", true, "previous")}
             local foreign = observation(1028, "forged-session", "old-binding", false, "previous")
             foreign.producer_id = "another-member"
             rows[#rows + 1] = foreign
@@ -135,6 +135,11 @@ local function define_tests()
             stored.attempt_outcome = "uncertain"
             test.eq(continuation.resolve_window(call, request), "provider-session")
             test.eq(stored.attempt_outcome, "uncertain")
+            rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
+                observation(1026, "different-session", "old-binding", true, "previous")}
+            test.is_nil(continuation.resolve_window(call, request))
+            rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
+                observation(1027, "provider-session", "old-binding", true, "previous")}
             denied = true
             test.is_nil(continuation.resolve_window(call, request))
             denied = false
@@ -190,7 +195,7 @@ local function define_tests()
             rows = {observation(1025, "provider-session", "new-binding", false, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
             rows = {observation(1025, "provider-session", "old-binding", true, "previous")}
-            test.is_nil(continuation.resolve_window(call, request))
+            test.eq(continuation.resolve_window(call, request), "provider-session")
             rows = {foreign}
             test.is_nil(continuation.resolve_window(call, request))
             rows = {}

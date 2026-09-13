@@ -81,7 +81,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
     if not previous then return nil, inspect_error end
     local attempt, binding = previous.attempt, previous.binding
     local cursor = 0
-    local session_id: string? = nil
+    local conversation_session_id: string? = nil
     -- A full page advances by at least MAX_PAGE_RECORDS; a sparse page
     -- advances the owner's scan window. The thread itself has a fixed bound.
     local pages = math.ceil(bounds.MAX_THREAD_RECORDS / bounds.MAX_PAGE_RECORDS) + 1
@@ -122,21 +122,23 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
                     end
                     local fields, fields_error = hooks.stored_fields(payload.fields)
                     if not fields or fields.event ~= payload.event then return nil, "invalid hook observation fields: " .. tostring(fields_error) end
-                    -- Ambiguous occurrences (including ordinary Stop hooks)
-                    -- add no resume evidence and cannot replace a known ID.
-                    if not payload.ambiguous then
-                        local candidate = bounds.id(fields.session_id)
-                        if candidate then
-                            if session_id and session_id ~= candidate then return nil, "conflicting provider conversation references" end
-                            session_id = candidate
-                        end
+                    -- Occurrence ambiguity says that this delivery cannot
+                    -- identify one unique event. It does not erase the
+                    -- provider conversation claim carried by the validated
+                    -- fields. Keep that claim separate from occurrence
+                    -- deduplication, and require all eligible claims to
+                    -- agree before resuming.
+                    local candidate = bounds.id(fields.session_id)
+                    if candidate then
+                        if conversation_session_id and conversation_session_id ~= candidate then return nil, "conflicting provider conversation references" end
+                        conversation_session_id = candidate
                     end
                 end
             end
         end
         cursor = through
         if not page.has_more then
-            if not session_id then return nil, "previous window recorded no unambiguous provider conversation" end
+            if not conversation_session_id then return nil, "previous window recorded no provider conversation" end
             -- Only an owned, ended attempt with a verified conversation can
             -- request cleanup. Placement still proves group absence and keeps
             -- the retained session home; a refused or uncertain cleanup does
@@ -152,7 +154,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
                     return nil, "previous native process cleanup is not complete"
                 end
             end
-            return session_id, nil
+            return conversation_session_id, nil
         end
     end
     return nil, "continuation scan exceeds the thread bound"

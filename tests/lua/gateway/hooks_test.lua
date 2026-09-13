@@ -32,6 +32,7 @@ local function define_tests()
             local stopped, stop_error = hooks.normalize("Stop", {conversationId = "conversation-1", fullyIdle = true, executionNum = 1})
             if not stopped then error(tostring(stop_error)) end
             test.is_true(stopped.ambiguous)
+            test.eq(stopped.fields.session_id, "conversation-1")
         end)
         test.it("refuses mixed and malformed command-hook schemas", function()
             local invalid: {Object} = {

@@ -152,9 +152,11 @@ does not mean the harness has started or recovered successfully.
 An interrupted attempt is recoverable only after placement observes the recorded
 native process exit. Recovery obtains a fresh carrier epoch, commits the rebound
 checkpoint, seals intake and reconciles recoverable hook deliveries, then records an uncertain attempt
-outcome. Continuation still requires an unambiguous committed provider conversation
-reference and independently proven process-group cleanup. It retains the session
-home and obtains fresh admission for the replacement attempt. Failure or incomplete
+outcome. Continuation still requires a consistent committed provider conversation
+reference and independently proven process-group cleanup. Occurrence ambiguity
+does not erase a validated session claim, while conflicting claims refuse
+continuation. It retains the session home and obtains fresh admission for the
+replacement attempt. Failure or incomplete
 hook draining refuses replacement; a copied checkpoint grants no authority.
 The gateway retains terminal rejection of unclaimed hooks on revocation; accepted
 intake is not a guarantee of thread commitment. Already-claimed rows remain

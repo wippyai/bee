@@ -49,9 +49,11 @@ async function rpc({token=input.token, host, origin, action='container-action', 
 (async()=>{
  const hook = options=>rpc({endpoint:'hook',token:input.hook_token,
   payload:{hook_event_name:'SessionStart',session_id:'container-session',source:'startup'},...options});
+ const hookMcp = options=>rpc({endpoint:'hook',action:'container-action/mcp',token:input.hook_token,...options});
  if (input.phase==='revoked') {
   check((await rpc()).status===401,'revoked tool token accepted');
   check((await hook()).status===401,'revoked hook token accepted');
+  check((await hookMcp()).status===401,'revoked MCP hook token accepted');
   return;
  }
  check((await rpc()).body.result?.protocolVersion,'initialize failed');
@@ -75,6 +77,20 @@ async function rpc({token=input.token, host, origin, action='container-action', 
  const first=await hook(), replay=await hook();
  check(first.status===202 && first.body==='' && first.headers['x-bee-event'],'hook was not queued with an empty response');
  check(replay.status===202 && replay.body==='' && replay.headers['x-bee-event']===first.headers['x-bee-event'],'hook replay duplicated its occurrence');
+ const hookTools=(await hookMcp({method:'tools/list'})).body.result?.tools?.map(t=>t.name);
+ check(JSON.stringify(hookTools)===JSON.stringify(['hook']),'MCP hook endpoint exposes the wrong tool set');
+ check((await hookMcp({token:input.token})).status===401,'tool credential accepted for MCP hooks');
+ check((await hookMcp({token:''})).status===401,'missing MCP hook credential accepted');
+ check((await hookMcp({action:'other-action/mcp'})).status===403,'cross-action MCP hook accepted');
+ check((await hookMcp({host:'127.0.0.1:1'})).status===403,'foreign MCP hook Host accepted');
+ check((await hookMcp({host:input.address.replace(/:\d+$/,':1')})).status===403,'wrong MCP hook port accepted');
+ check((await hookMcp({origin:'http://example.invalid'})).status===403,'MCP hook browser origin accepted');
+ const event={method:'tools/call',params:{name:'hook',arguments:{event:'SessionStart',session_id:'container-mcp-session',source:'startup'},
+  _meta:{threadId:'container-mcp-session',progressToken:1}}};
+ const mcpFirst=await hookMcp(event),mcpReplay=await hookMcp(event);
+ const receipt=mcpFirst.body.result?.content?.[0]?.text;
+ check(mcpFirst.status===200 && receipt?.startsWith('queued '),'MCP hook was not queued');
+ check(mcpReplay.status===200 && mcpReplay.body.result?.content?.[0]?.text===receipt,'MCP hook replay duplicated its occurrence');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});
 `
 
@@ -269,7 +285,7 @@ func run() error {
 		}
 		return fmt.Errorf("gateway container proof: runtime=%v phases=%v problems=%v\n%s", runError, phases, problems, detail)
 	}
-	fmt.Println("Container gateway: native random port, scoped MCP read, separate hook credentials, hook replay, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
+	fmt.Println("Container gateway: native random port, scoped MCP read, separate HTTP/MCP hook credentials, hook replay, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
 	return nil
 }
 func main() {

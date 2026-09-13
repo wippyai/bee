@@ -50,10 +50,11 @@ already installed immutable Node image: initialization, exact read/wait tool
 scope, thread read, absent/cross-action/revoked credential refusal, and wrong
 Host/port/Origin refusal. The broader regression for this interface change is
 still running; it is not installed in global Bee.
-The container gate also submits and replays `SessionStart` with a separate hook
-credential, verifies the same occurrence ID and empty response, rejects use of
-either credential on the other endpoint, and checks hook action/Host/port/Origin
-and revocation boundaries. This proves hook admission and queueing, not carrier
+The container gate also submits and replays `SessionStart` through both HTTP and
+MCP hooks with a separate hook credential. HTTP returns the same occurrence ID
+and empty response; MCP exposes only the hook tool and returns the same queued
+receipt. Both reject tool credentials and check missing credentials, action,
+Host, port, Origin and revocation boundaries. This proves hook admission and queueing, not carrier
 commit to a thread or a real harness's delivery behavior.
 
 | Boundary | Rule |

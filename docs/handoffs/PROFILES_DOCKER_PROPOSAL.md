@@ -4,6 +4,20 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+Global `c8537ef7` now includes native `79a1cd9` and the optional configured
+Docker attachment component. Full Bee regression and the compiled component
+boot/admission checks pass. This supplies `docker_pty.attach` in the host;
+it does not provide a managed Docker launch profile or container lifecycle owner.
+The current local Agent profiles continue to use native placement.
+
+Draft [userspace PR #69](https://github.com/wippyai/userspace/pull/69), assigned
+to Rodrigo and stacked on #68, extracts the existing HTTP client into
+`userspace/docker-client@0.1.0` while preserving
+`userspace.docker:docker_client`. Its standalone lint and real Lua HTTP fixture
+pass. It remains unmerged and unpublished; Bee does not yet depend on it.
+Publish the client before a Docker package version that declares it as a dependency.
+This avoids installing Docker service/database machinery merely to call its API.
+
 Host evidence now distinguishes requested and enforced sandbox settings. This
 daemon advertises built-in seccomp and cgroup namespaces but no AppArmor. A
 disposable bounded, non-root container started with `apparmor=docker-default`,
@@ -58,7 +72,8 @@ are ignored. Offline lifecycle/refusal tests and the native integration/race/vet
 gate pass. Builder PR [#8](https://github.com/wippyai/builder/pull/8), assigned to
 Rodrigo and unmerged, permits multiple unique factories from the same pinned
 module. Its offline generated-program proof covers distinct and shared packages.
-Neither change has been installed globally or wired into the Agent picker.
+The subsequent `79a1cd9` composition is installed globally as noted above;
+Docker is not yet wired into the Agent picker.
 
 The integration audit confirms that the current application scope is selected
 by the broker before spawning the managed window (`core/applications/broker.lua`).
@@ -86,11 +101,11 @@ spawn ordering solely to obtain a static container grant. No production policy
 or Docker profile has been activated by this proof.
 
 The other required seam is container gateway delivery: the current endpoint
-decoder accepts only `127.0.0.1`, and the narrow Docker configuration permits only
-HOME/TMPDIR environment entries. That combination cannot deliver the existing
-container hooks/MCP workflow. Resolve endpoint reachability and admitted token
-delivery together before enabling a Docker profile; do not label a terminal-only
-container as a completed managed Agent.
+decoder and HTTP Host checks accept only host loopback. The Docker configuration
+now accepts bounded, owner-admitted environment values, including the existing
+separate hook and MCP tokens. Endpoint reachability and matching HTTP admission
+still need integration before enabling a Docker profile; a terminal-only
+container does not complete the managed Agent workflow.
 
 `bee.placement.docker:configuration` now supplies an internal pure projection
 from explicit image, sandbox limits, admitted mount paths and attempt labels to

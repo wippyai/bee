@@ -12,10 +12,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,7 +33,11 @@ func run() error {
 	dockerSource := flag.String("docker-source", "", "userspace Docker client package")
 	image := flag.String("image", "", "already-local immutable image with /bin/sh and sleep")
 	socket := flag.String("socket", "/var/run/docker.sock", "local daemon socket")
+	racePhase := flag.String("race", "", "pause a committed Docker create or start response")
 	flag.Parse()
+	if *racePhase != "" && *racePhase != "create" && *racePhase != "start" {
+		return fmt.Errorf("race must be create or start")
+	}
 	if *runtime == "" || *dockerSource == "" || !strings.HasPrefix(*image, "sha256:") || len(*image) != 71 || os.Getuid() == 0 || os.Getgid() == 0 {
 		return fmt.Errorf("runtime, Docker client, immutable image and non-root user required")
 	}
@@ -98,9 +105,53 @@ func run() error {
 			}
 		}
 	}()
+	var startCalls atomic.Int32
+	selectedSocket := *socket
+	if *racePhase != "" {
+		selectedSocket = filepath.Join(root, "proxy.sock")
+		listener, err := net.Listen("unix", selectedSocket)
+		if err != nil {
+			return err
+		}
+		target, _ := url.Parse("http://docker")
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = transport
+		proxy.ModifyResponse = func(response *http.Response) error {
+			if response.Request.Method == "POST" && strings.HasSuffix(response.Request.URL.Path, "/start") {
+				startCalls.Add(1)
+			}
+			matchCreate := *racePhase == "create" && response.Request.URL.Path == "/containers/create" && response.StatusCode == http.StatusCreated
+			matchStart := *racePhase == "start" && strings.HasSuffix(response.Request.URL.Path, "/start") && response.StatusCode == http.StatusNoContent
+			if response.Request.Method != "POST" || (!matchCreate && !matchStart) {
+				return nil
+			}
+			if err := os.WriteFile(filepath.Join(root, "evidence", "operation_committed"), []byte("ready"), 0600); err != nil {
+				return err
+			}
+			deadline := time.NewTimer(20 * time.Second)
+			defer deadline.Stop()
+			ticker := time.NewTicker(10 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				if _, err := os.Stat(filepath.Join(root, "evidence", "release_operation")); err == nil {
+					return nil
+				}
+				select {
+				case <-deadline.C:
+					return fmt.Errorf("Docker operation barrier timed out")
+				case <-response.Request.Context().Done():
+					return response.Request.Context().Err()
+				case <-ticker.C:
+				}
+			}
+		}
+		server := &http.Server{Handler: proxy, ReadHeaderTimeout: 5 * time.Second}
+		defer server.Close()
+		go func() { _ = server.Serve(listener) }()
+	}
 	policy := map[string]any{"schema_revision": "bee.launch-policy@2", "placement_binding": "bee.placement.docker:binding", "required_cleanup": "contained_tree", "required_exit_observation": "independent", "start_ms": 10000, "stop_grace_ms": 500, "drain_ms": 1000, "runner_drain_ms": 500, "fixture": true, "executables": map[string]string{}, "environment": map[string]string{}, "docker": map[string]any{"image": *image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "network": "none", "memory": 134217728, "nano_cpus": 1000000000, "pids_limit": 32, "home_target": home, "mounts": []map[string]string{{"source": project, "target": project, "access": "read"}}}}
 	policyJSON, _ := json.Marshal(policy)
-	socketJSON, _ := json.Marshal(*socket)
+	socketJSON, _ := json.Marshal(selectedSocket)
 	manifest := `version: '1.0'
 namespace: bee.docker_acceptance
 entries:
@@ -139,7 +190,7 @@ entries:
   kind: process.lua
   source: file://check.lua
   method: main
-  modules: [funcs, security, registry, fs, process, json]
+  modules: [funcs, security, registry, fs, process, json, time]
   imports: {resolver: 'bee.placement:resolver', bounds: 'bee.threads.records:bounds'}
   meta: {command: {name: docker-lifecycle-check, security: {actor: {id: bee.docker_acceptance}, policies: [bee.docker_acceptance:allow]}}}
 `
@@ -157,6 +208,8 @@ entries:
 	script := strings.ReplaceAll(lifecycleLua, "ATTEMPT", attempt)
 	socketExpression, _ := json.Marshal("resource == " + string(socketJSON))
 	script = strings.ReplaceAll(script, "SOCKET_EXPRESSION", string(socketExpression))
+	script = strings.ReplaceAll(script, "RACE_CREATE", fmt.Sprint(*racePhase == "create"))
+	script = strings.ReplaceAll(script, "RACE_START", fmt.Sprint(*racePhase == "start"))
 	for path, contents := range map[string]string{"src/docker_acceptance/_index.yaml": manifest, "src/docker_acceptance/check.lua": script, "src/docker_acceptance/probe.lua": `local security=require("security")
 return {handle=function():boolean return security.can("db.get","bee.placement.native:db") end}`,
 		"src/docker_acceptance/configure.lua": `return {handle=function(_:unknown): {[string]:unknown} return {ok=true, delivery={arguments={},files={}}} end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n  src: src\n  modules: .wippy\n"} {
@@ -172,7 +225,11 @@ return {handle=function():boolean return security.can("db.get","bee.placement.na
 	for _, name := range []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance"} {
 		env = append(env, "BEE_"+strings.ToUpper(name)+"_DB="+filepath.Join(root, name+".db"))
 	}
-	for _, args := range [][]string{{"lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}, {"run", "docker-lifecycle-check"}, {"run", "docker-lifecycle-check"}} {
+	commands := [][]string{{"lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}, {"run", "docker-lifecycle-check"}}
+	if *racePhase == "" {
+		commands = append(commands, []string{"run", "docker-lifecycle-check"})
+	}
+	for _, args := range commands {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		cmd := exec.CommandContext(ctx, *runtime, args...)
 		cmd.Dir = root
@@ -187,11 +244,26 @@ return {handle=function():boolean return security.can("db.get","bee.placement.na
 	if err != nil || string(proof) != "DOCKER_LIFECYCLE_COMPLETE" {
 		return fmt.Errorf("missing lifecycle completion proof: %v", err)
 	}
-	fmt.Println("PASS: real registered Docker lifecycle survives Bee restart with the same container; foreign/old attachments refused and cleanup confirmed")
+	if _, err := os.Stat(filepath.Dir(home)); !os.IsNotExist(err) {
+		return fmt.Errorf("cleanup complete retained attempt home: %v", err)
+	}
+	if *racePhase != "" {
+		wantStarts := int32(0)
+		if *racePhase == "start" {
+			wantStarts = 1
+		}
+		if startCalls.Load() != wantStarts {
+			return fmt.Errorf("%s race sent %d Docker start calls; want %d", *racePhase, startCalls.Load(), wantStarts)
+		}
+		fmt.Printf("PASS: stop during committed Docker %s is retained; late result is cleaned; start calls=%d\n", *racePhase, startCalls.Load())
+	} else {
+		fmt.Println("PASS: real registered Docker lifecycle survives Bee restart with the same container; foreign/old attachments refused and cleanup confirmed")
+	}
 	return nil
 }
 
-const lifecycleLua = `local json=require("json")
+const lifecycleLua = `local time=require("time")
+local json=require("json")
 local funcs=require("funcs")
 local security=require("security")
 local registry=require("registry")
@@ -240,6 +312,28 @@ local function main()
  local replay=value("prepare",request);assert(replay.attempt_id==prepared.attempt_id,"prepare replay changed identity")
  local generation=resuming and 2 or 1
  value("attach",{attempt_id="ATTEMPT",recipient=process.pid(),generation=generation})
+ if RACE_CREATE or RACE_START then
+  local runner=funcs.new():with_scope(security.new_scope({assert(security.policy("bee.docker_acceptance:caller"))}))
+  local pending=assert(runner:async("bee.placement.docker:start",{attempt_id="ATTEMPT"}))
+  local committed=false
+  for _=1,400 do if output:exists("/operation_committed") then committed=true;break end;time.sleep("25ms") end
+  if not committed then error("Docker operation never reached controlled barrier") end
+  local stopped=call("stop",{attempt_id="ATTEMPT",mode="cooperative"})
+  local rechecked=call("reconcile",{attempt_id="ATTEMPT"})
+  -- Always release the HTTP reply before assertions so a regression cannot
+  -- strand the function at the barrier or hide the actual final lifecycle.
+  assert(output:writefile_atomic("/release_operation","release"))
+  local _,open=pending:response():receive();assert(open,"start reply disappeared")
+  local payload,pending_error=pending:result();assert(payload and not pending_error,"start result missing")
+  local stop_value=bounds.object(stopped.value)
+  assert(stopped.ok==true and stop_value and stop_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"in-flight operation stop intent was not retained")
+  local rechecked_value=bounds.object(rechecked.value)
+  assert(rechecked.ok==true and rechecked_value and rechecked_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"reconciliation erased the stop intent")
+  local ended=bounds.object(payload:data());local final=ended and bounds.object(ended.value)
+  assert(ended and ended.ok==true and final and final.execution_state=="exited" and final.cleanup_state=="complete","late operation escaped stop cleanup")
+  assert(output:writefile_atomic("/complete","DOCKER_LIFECYCLE_COMPLETE"))
+  return true
+ end
  if not resuming then local started=value("start",{attempt_id="ATTEMPT"});assert(started.execution_state=="running") end
  local foreign=call("status",{attempt_id="ATTEMPT"},true);assert(foreign.ok==false,"foreign inspection admitted")
  local internal=call("reconcile_internal",{attempt_id="ATTEMPT"});assert(internal.ok==false,"ordinary caller reconciled as sweeper")

@@ -13,6 +13,7 @@ entries:
     request: bee.placement:request
     types: bee.placement:types
     store: bee.placement.native:store
+    homes: bee.placement.native:homes
     native_service: bee.placement.native:service
     materialization: bee.placement.native:materialization
     configuration_protocol: bee.driver:configuration

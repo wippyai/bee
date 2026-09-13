@@ -13,6 +13,7 @@ local placement_resolver = require("placement_resolver")
 local request_codec = require("request")
 local types = require("types")
 local store = require("store")
+local homes = require("homes")
 local native = require("native_service")
 local materialization = require("materialization")
 local configuration_protocol = require("configuration_protocol")
@@ -192,34 +193,56 @@ local function container_name(attempt: types.Attempt, row: Row): (string?, Reply
     if not digest then return nil, fail("INTERNAL", tostring(digest_error or "container name digest")) end
     return "bee-" .. digest, nil
 end
+-- A cleanup receipt covers the temporary materialization as well as Docker.
+-- Session homes are distinct and remain under the shared session claim.
+local function complete_cleanup(attempt_id: string, detail: string): Reply
+    local attempt, row, denied = load(attempt_id)
+    if not attempt or not row then return denied :: Reply end
+    if attempt.execution_state ~= "exited" then return fail("CONFLICT", "cleanup requires confirmed execution completion") end
+    if row.home_key ~= nil and row.home_key ~= "" then
+        local key = bounds.text(row.home_key, 32)
+        if type(key) ~= "string" then return fail("STORAGE", "attempt home identity is malformed") end
+        if #key ~= 32 or not key:match("^[0-9a-f]+$") then return fail("STORAGE", "attempt home identity is malformed") end
+        local removal_error = homes.remove_attempt(key)
+        if removal_error then
+            return transition(attempt_id, {cleanup = "uncertain", evidence = {kind = "docker.cleanup.home_failed", detail = removal_error}})
+        end
+    end
+    return transition(attempt_id, {expected_execution = "exited", cleanup = "complete",
+        evidence = {kind = "docker.cleanup.complete", detail = detail .. "; temporary attempt home removed"}})
+end
 local function cancel_without_container(attempt_id: string): Reply
     local attempt, _, denied = load(attempt_id)
     if not attempt then return denied :: Reply end
     if attempt.execution_state == "stopping" then
-        return transition(attempt_id, {expected_execution = "stopping", execution = "exited", cleanup = "complete",
+        local stopped = transition(attempt_id, {expected_execution = "stopping", execution = "exited",
             evidence = {kind = "docker.stop.before_create", detail = "stop intent won before Docker container creation"}})
+        if not stopped.ok then return stopped end
+        return complete_cleanup(attempt_id, "stop confirmed before container creation")
     end
     return succeed(attempt)
 end
 local function cancel_container(attempt_id: string, saved: Identity): Reply
     local stopped, stop_error = daemon.stop({container_id = saved.container_id, expected = expected(saved), timeout_seconds = 10})
     if not stopped and (not stop_error or stop_error.kind ~= "absent") then
-        transition(attempt_id, {execution = "uncertain", evidence = {kind = "docker.cancel.stop_uncertain", detail = stop_error and stop_error.message or "Docker stop was not confirmed"}})
+        transition(attempt_id, {evidence = {kind = "docker.cancel.stop_uncertain", detail = stop_error and stop_error.message or "Docker stop was not confirmed"}})
         return fail("UNCERTAIN", stop_error and stop_error.message or "Docker stop was not confirmed")
     end
     local removed, remove_error = daemon.remove({container_id = saved.container_id, expected = expected(saved)})
     if not removed then
-        transition(attempt_id, {execution = "uncertain", evidence = {kind = "docker.cancel.remove_uncertain", detail = remove_error and remove_error.message or "Docker removal was not confirmed"}})
+        transition(attempt_id, {evidence = {kind = "docker.cancel.remove_uncertain", detail = remove_error and remove_error.message or "Docker removal was not confirmed"}})
         return fail("UNCERTAIN", remove_error and remove_error.message or "Docker removal was not confirmed")
     end
     local current, _, denied = load(attempt_id)
     if not current then return denied :: Reply end
     if current.execution_state == "stopping" then
-        return transition(attempt_id, {expected_execution = "stopping", execution = "exited", cleanup = "complete",
+        local stopped = transition(attempt_id, {expected_execution = "stopping", execution = "exited",
             evidence = {kind = "docker.stop.canceled_start", detail = "container stopped and removed after stop intent"}})
+        if not stopped.ok then return stopped end
+        return complete_cleanup(attempt_id, "canceled container absence confirmed")
     end
     if current.execution_state == "exited" and current.cleanup_state ~= "complete" then
-        return transition(attempt_id, {cleanup = "complete", evidence = {kind = "docker.cleanup.canceled_start", detail = "container stopped and removed after start fence"}})
+        return complete_cleanup(attempt_id, "canceled container absence confirmed")
     end
     return succeed(current)
 end
@@ -343,7 +366,7 @@ function M.start(value: unknown): Reply
         observed, daemon_error = daemon.recover_create({name = name, expected = create_expected})
     end
     if not observed then
-        transition(attempt.attempt_id, {execution = "uncertain", fields = {runner_pid = ""}, evidence = {kind = "docker.create_uncertain", detail = daemon_error and daemon_error.message or "Docker create was not confirmed"}})
+        transition(attempt.attempt_id, {fields = {runner_pid = ""}, evidence = {kind = "docker.create_uncertain", detail = daemon_error and daemon_error.message or "Docker create was not confirmed"}})
         return fail("UNCERTAIN", daemon_error and daemon_error.message or "Docker create was not confirmed")
     end
     local first_identity = observed_identity(observed :: Observation, nil, bounds.text(spec.apparmor, 128))
@@ -355,15 +378,15 @@ function M.start(value: unknown): Reply
     local before_start, _, before_start_denied = load(attempt.attempt_id)
     if not before_start then return before_start_denied :: Reply end
     if before_start.execution_state ~= "starting" then return cancel_container(attempt.attempt_id, first_identity) end
-    local start_fence = transition(attempt.attempt_id, {expected_execution = "starting",
-        evidence = {kind = "docker.start.claimed", detail = "Docker start fence acquired after identity confirmation"}})
-    if not start_fence.ok then return cancel_container(attempt.attempt_id, first_identity) end
+    local start_check = transition(attempt.attempt_id, {expected_execution = "starting",
+        evidence = {kind = "docker.start.checked", detail = "start remains admitted; a concurrent stop requires confirmed compensation"}})
+    if not start_check.ok then return cancel_container(attempt.attempt_id, first_identity) end
     local started, start_error = daemon.start({container_id = first_identity.container_id, expected = expected(first_identity)})
     if not started then
         local latest, _, latest_denied = load(attempt.attempt_id)
         if latest and (latest.execution_state == "stopping" or latest.execution_state == "exited") then return cancel_container(attempt.attempt_id, first_identity) end
         if latest_denied then return latest_denied end
-        transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.start_uncertain", detail = start_error and start_error.message or "Docker start was not confirmed"}})
+        transition(attempt.attempt_id, {evidence = {kind = "docker.start_uncertain", detail = start_error and start_error.message or "Docker start was not confirmed"}})
         return fail("UNCERTAIN", start_error and start_error.message or "Docker start was not confirmed")
     end
     local final_identity = observed_identity(started :: Observation, first_identity)
@@ -395,7 +418,7 @@ function M.stop(value: unknown): Reply
     if request.mode ~= nil and request.mode ~= "cooperative" and request.mode ~= "forced" then return fail("INVALID", "mode must be cooperative or forced") end
     local attempt, row, denied = load(request.attempt_id)
     if not attempt then return denied :: Reply end
-    if attempt.execution_state == "intended" then return transition(attempt.attempt_id, {execution = "exited", cleanup = "complete", evidence = {kind = "docker.stop.before_start", detail = "no container was created"}}) end
+    if attempt.execution_state == "intended" then return transition(attempt.attempt_id, {expected_execution = "intended", execution = "exited", cleanup = "complete", evidence = {kind = "docker.stop.before_start", detail = "no container was created"}}) end
     if attempt.execution_state == "exited" then return succeed(attempt) end
     local saved, identity_error = identity(row :: Row)
     if identity_error then return identity_error :: Reply end
@@ -404,7 +427,7 @@ function M.stop(value: unknown): Reply
             return transition(attempt.attempt_id, {expected_execution = "starting", execution = "stopping", evidence = {kind = "docker.stop.requested", detail = "stop intent recorded while Docker creation is in progress"}})
         end
         if attempt.execution_state == "stopping" then return succeed(attempt) end
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.stop.unproven", detail = "no container identity recorded"}})
+        return transition(attempt.attempt_id, {execution = "stopping", evidence = {kind = "docker.stop.unproven", detail = "no container identity recorded"}})
     end
     if attempt.execution_state ~= "stopping" then
         local requested = transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = "stopping", evidence = {kind = "docker.stop.requested", detail = "daemon stop requires confirmed observation"}})
@@ -413,16 +436,18 @@ function M.stop(value: unknown): Reply
     local was_starting = attempt.execution_state == "starting"
     local stopped, stop_error = daemon.stop({container_id = saved.container_id, expected = expected(saved), timeout_seconds = 10})
     if not stopped then
-        transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.stop.uncertain", detail = stop_error and stop_error.message or "Docker stop was not confirmed"}})
+        transition(attempt.attempt_id, {execution = "stopping", evidence = {kind = "docker.stop.uncertain", detail = stop_error and stop_error.message or "Docker stop was not confirmed"}})
         return fail("UNCERTAIN", stop_error and stop_error.message or "Docker stop was not confirmed")
     end
     if was_starting and stopped.state == "created" then
         local removed, remove_error = daemon.remove({container_id = saved.container_id, expected = expected(saved)})
         if not removed then
-            transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.stop.remove_uncertain", detail = remove_error and remove_error.message or "Docker removal was not confirmed"}})
+            transition(attempt.attempt_id, {execution = "stopping", evidence = {kind = "docker.stop.remove_uncertain", detail = remove_error and remove_error.message or "Docker removal was not confirmed"}})
             return fail("UNCERTAIN", remove_error and remove_error.message or "Docker removal was not confirmed")
         end
-        return transition(attempt.attempt_id, {execution = "exited", cleanup = "complete", evidence = {kind = "docker.stop.before_start", detail = "created container removed before Docker start"}})
+        local stopped = transition(attempt.attempt_id, {execution = "exited", evidence = {kind = "docker.stop.before_start", detail = "created container removed before Docker start"}})
+        if not stopped.ok then return stopped end
+        return complete_cleanup(attempt.attempt_id, "created container removal confirmed")
     end
     local final = observed_identity(stopped :: Observation, saved)
     local encoded, encode_error = encode(final, "Docker identity")
@@ -441,21 +466,20 @@ function M.reconcile_attempt(attempt: types.Attempt, row: Row): Reply
     if attempt.execution_state == "intended" or attempt.execution_state == "exited" then return succeed(attempt) end
     local saved, identity_error = identity(row)
     if identity_error then return identity_error :: Reply end
-    if not saved then return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.reconcile.unidentified", detail = "no Docker identity recorded"}}) end
+    if not saved then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.unidentified", detail = "no Docker identity recorded; a recorded stop remains pending"}}) end
     local observed, daemon_error = daemon.inspect({container_id = saved.container_id, expected = expected(saved)})
     if not observed then
-        if daemon_error and daemon_error.kind == "absent" then return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.reconcile.absent", detail = "container absence cannot prove prior exit"}}) end
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.reconcile.uncertain", detail = daemon_error and daemon_error.message or "Docker inspection failed"}})
+        if daemon_error and daemon_error.kind == "absent" then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.absent", detail = "container absence cannot prove prior exit"}}) end
+        return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.uncertain", detail = daemon_error and daemon_error.message or "Docker inspection failed"}})
     end
     local updated = observed_identity(observed :: Observation, saved)
     local encoded, encode_error = encode(updated, "Docker identity")
     if not encoded then return encode_error :: Reply end
     if observed.state == "running" then
-        if attempt.execution_state == "stopping" then return transition(attempt.attempt_id, {execution = "running", fields = {placement_identity_json = encoded}, evidence = {kind = "docker.reconcile.alive", detail = "container remains running"}}) end
-        return transition(attempt.attempt_id, {fields = {placement_identity_json = encoded}, evidence = {kind = "docker.reconcile.alive", detail = "container running identity confirmed"}})
+        return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, fields = {placement_identity_json = encoded}, evidence = {kind = "docker.reconcile.alive", detail = "container running identity confirmed"}})
     end
-    if observed.state == "exited" then return transition(attempt.attempt_id, {execution = "exited", fields = {placement_identity_json = encoded}, evidence = {kind = "docker.reconcile.exited", detail = "daemon confirmed container exit"}}) end
-    return transition(attempt.attempt_id, {evidence = {kind = "docker.reconcile.created", detail = "container exists but has not started"}})
+    if observed.state == "exited" then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = "exited", fields = {placement_identity_json = encoded}, evidence = {kind = "docker.reconcile.exited", detail = "daemon confirmed container exit"}}) end
+    return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, evidence = {kind = "docker.reconcile.created", detail = "container exists but has not started"}})
 end
 
 function M.cleanup(value: unknown): Reply
@@ -471,7 +495,7 @@ function M.cleanup(value: unknown): Reply
         local removed, remove_error = daemon.remove({container_id = saved.container_id, expected = expected(saved)})
         if not removed then return fail("UNCERTAIN", remove_error and remove_error.message or "Docker absence was not confirmed") end
     end
-    return transition(attempt.attempt_id, {cleanup = "complete", evidence = {kind = "docker.cleanup.complete", detail = saved and "daemon confirmed container absence" or "no container was created"}})
+    return complete_cleanup(attempt.attempt_id, saved and "daemon confirmed container absence" or "no container was created")
 end
 
 function M.container_identity(value: unknown): Reply

@@ -91,6 +91,13 @@ docker-lifecycle-check:
 	test -n "$(DOCKER_IMAGE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
+.PHONY: docker-start-stop-check
+docker-start-stop-check:
+	test -n "$(DOCKER_COMPONENT)"
+	test -n "$(DOCKER_IMAGE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_lifecycle.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race create
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_lifecycle.go -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)" -race start
 .PHONY: docker-sandbox-check
 docker-sandbox-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go

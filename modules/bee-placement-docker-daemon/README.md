@@ -95,3 +95,21 @@ foreign-owner rejection before daemon I/O. Agent menu/PTY launch,
 credential/MCP delivery and retained conversation recovery remain unverified.
 The lifecycle fixture's identity-preserving home mount also does not prove
 configuration delivery under translated home paths.
+
+`make docker-start-stop-check` accepts the same runtime, component and image
+arguments. It holds real Docker responses after create or start has committed,
+requests stop through the public lifecycle, and reconciles before releasing the
+response. The create case performs no start; the start case compensates by
+stopping and removing the container. Reconciliation preserves the recorded stop
+request, and stale observations cannot overwrite a changed execution state.
+The state check before Docker start is not an atomic transaction with Docker;
+the late response must still complete compensation.
+
+Cleanup is complete only after confirmed container removal and removal of the
+temporary attempt home. Retained session homes are separate and preserved.
+The restart and concurrent-stop checks verify temporary-home absence before
+their disposable workspace is removed.
+
+These checks do not establish recovery from a Bee crash between Docker create
+and identity persistence, or from replacement of the selected daemon. Those
+remain release gaps alongside the Agent window acceptance above.

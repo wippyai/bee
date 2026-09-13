@@ -22,7 +22,7 @@ Driver checks cover empty results, static/dynamic append, errors and bounds.
 Luna's independent review found no concrete authority or replay defect.
 
 This is launch-time host configuration. The picker does not yet edit this field,
-and active CLI sessions do not refresh it per turn. The installed global remains
-the offline build described in `GLOBAL_BUILD.md`; this source is not claimed as
-installed. Managed Docker, automatic Agy login and authenticated provider
+and active CLI sessions do not refresh it per turn. Global SHA `1b56f795`
+includes this feature, with native launch and offline restart/reconnect checks;
+see `GLOBAL_BUILD.md`. Managed Docker, automatic Agy login and authenticated provider
 orchestration remain separate work.

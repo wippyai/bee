@@ -38,6 +38,42 @@ requirement. No second container or Docker CLI attachment loop is needed for PTY
 support. Full Agent-window acceptance must still prove input, resize, detach and
 rejoin, retained conversation data, credential isolation and crash cleanup.
 
+### September 13 source review: integration boundaries
+
+The installed native window cannot become Docker placement just by changing its
+executor reference. The source review identifies these concrete dependencies:
+
+- `src/placement/native/materialization.lua` resolves host paths for both HOME
+  and the working directory. Docker must distinguish where the host writes
+  retained configuration from the paths the harness sees inside its container.
+  Keep credential projection and the existing cancellation/publication fences.
+- `src/placement/native/window.lua` measures a host executable and reads host
+  PID/PGID/start ticks/boot identity. Docker needs the admitted image identity
+  and evidence from the container executor. A missing host PID is not exit
+  evidence. The broker terminal grant and `attach_terminal()` remain applicable;
+  no separate Docker terminal transport is required.
+- `src/gateway/configuration.lua`, `address_method.lua` and
+  `hook_http_method.lua` enforce loopback destinations or Host headers. The
+  native `hookpost` command also validates loopback. Changing only the listener
+  bind or generated URL cannot enable container hooks. A container endpoint must
+  be host-selected and checked consistently through delivery and HTTP admission,
+  retaining binding-specific tokens, scopes and revocation. Broader network
+  exposure and its transport protection remain design/acceptance work.
+
+The runtime comparison must use the manifest pin, not the unrelated revision
+currently checked out in the main runtime directory. At pin
+`291f5c6b708c80afe5da07f3223767573b4d183f`, `api/service/exec/api.go` exposes
+`PTYProcess`, optional host `ProcessIdentity` and `WaitCanceler`.
+The Docker implementation keeps its container ID privately; those APIs do not
+provide a durable, owner-qualified container reconciliation contract. PR #739
+was rechecked OPEN at `69a6e6e8597a02a586fccc884a23db46d2b516ff`, assigned
+to `skhaz`; its mount work does not by itself resolve that lifecycle boundary.
+
+These are integration findings, not newly callable APIs or Docker acceptance.
+Reuse common lifecycle behavior only with a concrete Docker consumer and its
+failure tests; do not copy the native runner or add a speculative backend layer.
+The installed offline native build remains unchanged by this review.
+
 ## September 11 implementation direction
 
 The extra `bee.agent_profile` composition proposed below is superseded. A named

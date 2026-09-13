@@ -16,6 +16,19 @@ therefore not a demonstrated solution. Do not grant the app scope-management
 authority or unrestricted daemon access to bridge this gap. Exact attachment
 admission remains an integration requirement, not a new runtime API requirement.
 
+**Correction to the initial pre-spawn conclusion:** an exact static container
+permission is sufficient, but not the only existing policy mechanism. A fixed
+runtime expression can constrain the daemon and authenticated principal's owner
+label. The native module verifies the expected labels against Docker before
+attaching. Its new Lua/actual-expression/fake-daemon test proves that a forged
+owner label never reaches attach; an unrelated principal or daemon causes no
+I/O. The full native Docker race/integration and vet gate passes. This provides
+principal-level authorization without changing the app scope, not sibling-app
+isolation or a durable-record check. Keep the existing trusted attempt owner
+responsible for selecting/validating the attempt. Do not restructure broker
+spawn ordering solely to obtain a static container grant. No production policy
+or Docker profile has been activated by this proof.
+
 The other required seam is container gateway delivery: the current endpoint
 decoder accepts only `127.0.0.1`, and the narrow Docker configuration permits only
 HOME/TMPDIR environment entries. That combination cannot deliver the existing

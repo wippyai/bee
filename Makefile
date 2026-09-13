@@ -72,6 +72,11 @@ run:
 lint:
 	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: docker-configuration-check
+.PHONY: docker-daemon-check
+docker-daemon-check:
+	test -n "$(DOCKER_COMPONENT)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_daemon.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_daemon.go -runtime "$(abspath $(WIPPY))" -docker-source "$(abspath $(DOCKER_COMPONENT))"
 .PHONY: docker-boot-check
 docker-boot-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_boot.go

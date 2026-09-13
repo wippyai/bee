@@ -40,6 +40,22 @@ admission, reconciliation and full Agent terminal integration remain unfinished.
 No container creation, driver startup, downloads or global installation occurs
 through this library.
 
+The optional daemon lifecycle adapter is separately owned by the
+[`bee-placement-docker-daemon` component](../../../modules/bee-placement-docker-daemon/README.md).
+It stays outside this namespace's default index because its
+`userspace/docker-client` dependency is unpublished. A host composition may
+link `bee.placement.docker.daemon:daemon_ref` to one registry entry containing an
+absolute Unix `socket_path`; the adapter passes that selected socket to the
+existing `userspace.docker:docker_client` and never discovers another daemon.
+It exposes only typed create, start, inspect, stop and remove calls. It checks
+the full container and image IDs, expected labels and AppArmor profile before
+mutating an existing container, and confirms absence after removal. A
+transport failure remains unknown. It owns no placement database, state
+transitions, cleanup or process execution. The local fixture composition is
+the only current installation proof; production wiring remains pending the
+published userspace dependency. Run it with
+`make docker-daemon-check WIPPY=/path/to/runtime DOCKER_COMPONENT=/path/to/userspace/docker-client`.
+
 `inspection.decode` is the corresponding pure boundary decoder for a Docker
 inspect object and a host-admitted expected identity. It requires the full
 container ID, full image ID, `Config.Labels`, `State.Status`, `State.StartedAt`

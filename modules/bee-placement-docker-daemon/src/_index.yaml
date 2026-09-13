@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.placement.docker.daemon
+entries:
+- name: definition
+  kind: ns.definition
+  module: placement-docker-daemon
+  readme: |
+    Optional Bee Docker daemon lifecycle adapter. The host selects the daemon
+    socket and placement owns state, reconciliation and cleanup.
+  meta:
+    title: Bee Docker daemon adapter
+    comment: Optional lifecycle adapter over a host-selected Docker daemon; placement owns state and cleanup
+- name: daemon
+  kind: library.lua
+  source: file://daemon.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    inspection: bee.placement.docker:inspection
+    docker_client: userspace.docker:docker_client

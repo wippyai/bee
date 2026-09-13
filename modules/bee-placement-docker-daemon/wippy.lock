@@ -1,0 +1,16 @@
+directories:
+  modules: .wippy
+  src: ./src
+modules:
+  - name: bee/placement-docker
+    version: 0.1.0
+    hash: 0000000000000000000000000000000000000000000000000000000000000000
+  - name: bee/threads
+    version: 0.1.0
+    hash: 0000000000000000000000000000000000000000000000000000000000000000
+  - name: userspace/docker-client
+    version: 0.1.0
+    # The dependency is unpublished at this revision. This zero digest is a
+    # deliberate publication fence; the local fixture links the reviewed
+    # userspace source at commit 9d3c310 instead.
+    hash: 0000000000000000000000000000000000000000000000000000000000000000

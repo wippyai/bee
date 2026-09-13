@@ -1,0 +1,12 @@
+organization: wolfy-j
+module: bee-placement-docker-daemon
+type: library
+version: 0.1.0
+description: Optional Bee Docker daemon lifecycle adapter
+license: MIT
+exclude:
+  - "test/**"
+  - "test:**"
+  - "test.**:"
+  - ".wippy/**"
+  - ".wippy:**"

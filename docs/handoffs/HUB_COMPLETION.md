@@ -16,7 +16,7 @@ Sources reviewed: Kickside `platform/hub/src/README.md`,
 | Install/update/remove with transitive requirements and typed values | `src/hub/plan.lua`, `requirements.lua`, `service.lua`; live Hub lifecycle acceptance | Saved values are preserved with source/pack acceptance; discover available updates from Installed |
 | Migration choices and restart recovery | `migrations.lua`, `migration_work.lua`, `migration_runner.lua`; real SQLite service checks | Real PostgreSQL/MySQL service acceptance remains unproven |
 | Declarative Hub component and later scanner/plugin installation | `build/modules.json`, `src/hub/_index.yaml` declare the module and scoped facade | No reviewed scanner binding contract yet; package metadata must not authorize plugins |
-| Installed apps appear under Tools and request admission before starting | Website promise; `src/core/applications/catalog.lua` reads protected admission; broker loads bindings at startup | Hub installation alone does not grant admission or refresh the broker's bindings. Need an owner-authorized, reviewed integration and actual installed-app proof |
+| Installed apps appear under Tools and request admission before starting | Website promise; `src/core/applications/catalog.lua` reads protected admission; broker reconciles protected bindings by registry revision | Hub installation alone does not grant admission. Need an owner-authorized, reviewed integration and actual installed-app proof |
 | Per-component overlays and approved sharing | Owned by governed authoring/activation and Hive destination admission, not by Hub artifact inspection | Not proven by successful Hub publication; coordinate with those lanes without adding parallel owners |
 | Visible version/build details and preserved Bee mark | Settings About native acceptance; global `6cfa0071` | Retained owners keep the old loaded UI until owner replacement |
 | No Keeper dependency, lock editing or runtime changes in this lane | Hub calls native public APIs and Bee-owned services; installer compares existing runtime/native/patch identity | Continue enforcing these constraints for every integration/build |
@@ -53,7 +53,7 @@ without a failed-case assertion. The focused unit recheck passed all 787 cases i
 
 The existing protected `bee:application_admission` entry selects each definition's
 policies. `src/core/applications/catalog.lua` validates those bindings, and the
-broker snapshots them at startup. Hub publication writes dependency roots and
+broker now reconciles them at registry revision changes and before new opens, preserving existing instances. Hub publication writes dependency roots and
 operation receipts only. The governed workspace API stages candidates; it does
 not approve or activate them. The approvals service can bind a durable decision
 to an exact proposal/effect, but no admission effect owner consumes that decision.
@@ -65,3 +65,26 @@ Acceptance must show unauthorized decision/consumption denial, digest/revision
 revalidation, limited execution after explicit approval and revocation of future
 opens. Do not give Hub or ordinary apps direct registry publication authority,
 or treat package metadata as an authorization source.
+
+## Broker reconciliation checkpoint
+
+The next source reconciles protected application bindings and scopes by registry
+revision, using one snapshot and a shared admission record. The real source/pack
+broker fixture passes unbound denial, host-selected grant and grant reduction,
+revocation before a fresh open, missing-policy refusal, recovery after a valid
+replacement, malformed-binding refusal and retained producers. Existing
+source/pack detached Terminal, observer isolation, host restore, client inventory
+and renderer replacement checks also pass. Evidence is
+`hub-admission-check.log` and `hub-admission-attachments.log` in September 12
+local evidence. Strict lint and pack pass after resetting a reproduced stale
+linter cache (`hub-admission-pack-reset.log`); the pre-existing lifecycle fixpoint
+warning remains. Full regression and native installation of this source are
+pending. The global executable still contains the desktop cleanup checkpoint.
+
+This fixture grants registry publication only to its disposable test owner. It
+does not prove Hub install-to-Tools, approval consumption, atomic publication
+against competing writers, or pinning an executable to an approved artifact.
+The source continues to expose no application-admission writer to Hub or apps.
+The default `bee.approvals:approver_policies` is empty; the next integration also
+needs explicit host-selected approvers, in addition to an effect owner. Merely
+holding `bee.approvals.decide` does not authorize an inbox decision.

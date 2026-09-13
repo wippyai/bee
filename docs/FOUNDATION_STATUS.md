@@ -1,5 +1,10 @@
 # Foundation status
 
+The next Hub lane source refreshes protected application admission and scopes
+without replacing existing producers. Its source/pack broker and detached
+Terminal/client-attachment checks pass. Approval-backed publication and native
+installation remain pending; see [Hub completion](handoffs/HUB_COMPLETION.md).
+
 Global `b92317be` removes the requested desktop hint text and Run queue display,
 preserving the Bee mark and current Hub/Agent work. Source/pack Process Manager
 and native acceptance pass. The preceding Hub source passed all 787 unit cases

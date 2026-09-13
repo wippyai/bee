@@ -27,8 +27,10 @@ an opt-in host composition and is not added to the default desktop launcher.
 `ConfiguredComponent()` is the zero-argument factory for builder composition.
 It reads explicit boot configuration `bee.docker.reference` and
 `bee.docker.host` (an absolute `unix:///path/to/docker.sock` URL), creates and owns
-the client, and closes it during component shutdown. Missing or invalid host
-configuration refuses loading; an absent Docker socket does not. Construction,
+the client, and closes it during component shutdown. With neither setting, the
+typed module still loads and attachment reports that Docker is unconfigured, so
+other applications can boot. Partial or invalid explicit host configuration
+refuses loading; an absent configured Docker socket does not. Construction,
 loading and shutdown perform no daemon request. Docker environment variables
 are not consulted. This factory currently supports a local Unix socket; hosts
 using other transports can supply their configured client through `Component`.

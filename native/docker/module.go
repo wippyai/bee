@@ -22,6 +22,12 @@ func NewModule(daemonRef string, cli *client.Client) (*luaapi.ModuleDef, error) 
 	if daemonRef == "" || len(daemonRef) > 256 || strings.ContainsAny(daemonRef, "/\x00\r\n") || cli == nil {
 		return nil, errors.New("Docker module requires a host-selected daemon reference and client")
 	}
+	return moduleDefinition(daemonRef, cli), nil
+}
+
+// A nil client registers the same typed API in an unconfigured host without
+// introducing implicit daemon discovery or authority.
+func moduleDefinition(daemonRef string, cli *client.Client) *luaapi.ModuleDef {
 	return &luaapi.ModuleDef{
 		Name: "docker_pty", Description: "Authorized attachment to an existing Docker PTY",
 		Class: []string{luaapi.ClassIO, luaapi.ClassProcess, luaapi.ClassNondeterministic},
@@ -32,6 +38,9 @@ func NewModule(daemonRef string, cli *client.Client) (*luaapi.ModuleDef, error) 
 				expected, err := decodeIdentity(l.Get(1))
 				if err != nil {
 					return moduleError(l, err.Error())
+				}
+				if cli == nil {
+					return moduleError(l, "Docker is not configured by the host")
 				}
 				ctx := l.Context()
 				if ctx == nil {
@@ -58,7 +67,7 @@ func NewModule(daemonRef string, cli *client.Client) (*luaapi.ModuleDef, error) 
 			module.Immutable = true
 			return module, nil
 		},
-	}, nil
+	}
 }
 
 func moduleError(l *lua.LState, message string) int {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/moby/moby/client"
 	"github.com/wippyai/runtime/api/boot"
+	luaapi "github.com/wippyai/runtime/api/runtime/lua"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
 )
 
@@ -22,7 +23,10 @@ func Component(daemonRef string, cli *client.Client) (boot.Component, error) {
 	if err != nil {
 		return nil, err
 	}
+	return componentWithModule(module), nil
+}
 
+func componentWithModule(module *luaapi.ModuleDef) boot.Component {
 	return boot.New(boot.P{
 		Name:      componentName,
 		DependsOn: []boot.Name{luaboot.EngineName, luaboot.ExecName},
@@ -47,5 +51,5 @@ func Component(daemonRef string, cli *client.Client) (boot.Component, error) {
 			}
 			return ctx, nil
 		},
-	}), nil
+	})
 }

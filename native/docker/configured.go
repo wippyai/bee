@@ -17,6 +17,7 @@ import (
 // Unix socket URL). It owns the resulting client until component shutdown.
 // Loading registers the module without connecting to Docker, even if the
 // configured socket does not exist. This factory grants no application access.
+// Without either setting the API loads but refuses attachment as unconfigured.
 func ConfiguredComponent() boot.Component {
 	var cli *client.Client
 	var loaded boot.Component
@@ -33,9 +34,19 @@ func ConfiguredComponent() boot.Component {
 			}
 			cfg := boot.GetConfig(ctx)
 			if cfg == nil {
-				return ctx, errors.New("Docker component requires host configuration")
+				cfg = boot.NewConfig()
 			}
 			sub := cfg.Sub("bee").Sub("docker")
+			_, hostSet := sub.Get("host")
+			_, referenceSet := sub.Get("reference")
+			if !hostSet && !referenceSet {
+				component := componentWithModule(moduleDefinition("", nil))
+				next, err := component.Load(ctx)
+				if err == nil {
+					loaded = component
+				}
+				return next, err
+			}
 			host := sub.GetString("host", "")
 			if !strings.HasPrefix(host, "unix:///") || len(host) <= len("unix:///") || strings.ContainsAny(host, "\x00\r\n?#") {
 				return ctx, errors.New("Docker component requires an absolute Unix socket URL")

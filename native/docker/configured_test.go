@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	lua "github.com/wippyai/go-lua"
 	"github.com/wippyai/runtime/api/boot"
 	bootpkg "github.com/wippyai/runtime/boot"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
@@ -51,9 +52,40 @@ func TestConfiguredComponentOfflineLifecycle(t *testing.T) {
 	}
 }
 
+func TestUnconfiguredComponentKeepsBootAvailable(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///ambient.sock")
+	ctx, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := code.NewCodeManager(zap.NewNop(), nil, code.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx = luaboot.SetCodeManager(ctx, manager)
+	component := ConfiguredComponent()
+	if _, err := component.Load(ctx); err != nil {
+		t.Fatalf("unconfigured Docker prevented boot: %v", err)
+	}
+	defer component.(boot.Stopper).Stop(ctx)
+	defs := manager.GetModuleDefs()
+	if len(defs) != 1 || defs[0].Name != "docker_pty" {
+		t.Fatalf("unconfigured module definitions = %v", defs)
+	}
+	table, _ := defs[0].Build()
+	l := lua.NewState()
+	defer l.Close()
+	l.SetContext(ctx)
+	l.SetGlobal("docker", table)
+	if err := l.DoString(`local child, err = docker.attach({container_id=string.rep("a",64),
+image_id="sha256:"..string.rep("b",64), started_at="2026-09-13T10:00:00Z", labels={attempt="fixture"}})
+assert(child == nil and err ~= nil and string.find(tostring(err), "not configured", 1, true))`); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestConfiguredComponentRequiresExplicitLocalBinding(t *testing.T) {
 	for name, section := range map[string]map[string]any{
-		"missing":                      {},
 		"ambient host is insufficient": {"docker.reference": "local:docker"},
 		"relative socket":              {"docker.reference": "local:docker", "docker.host": "unix://relative.sock"},
 		"remote daemon":                {"docker.reference": "local:docker", "docker.host": "tcp://example.com:2375"},

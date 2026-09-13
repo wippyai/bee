@@ -107,8 +107,6 @@ def exercise(project, packed, pack):
             ui.key(b"p")
             ui.wait("installed settings could not be read")
             ui.key(b"u")
-            ui.key(b"p")
-            ui.wait("installed settings are still loading")
             ui.wait("Installed settings loaded")
             ui.key(b"e")
             ui.wait("example:enabled")

@@ -1,12 +1,11 @@
 # Agy command hooks — integration evidence
 
-The installed build has appended profile guidance but its Agy MCP token header
-is incompatible with the real CLI, and it refuses hook configuration. The
-corrected candidate fixes private MCP credential delivery, renders window hooks and
-decodes their wire fields. Focused native race tests/vet, packaged acceptance,
-offline boot and actual managed-provider gateway delivery now pass. No command-hook sender is installed globally yet.
-The existing carrier commits observations and publishes fixed activity labels;
-it does not need an Agy-specific title process.
+Global `9b499f4e` now installs the corrected Agy private MCP credentials and
+window command hooks. Full regression, packaged acceptance, offline boot,
+fixture recovery and actual managed-provider gateway checks pass. The carrier
+commits observations and publishes activity labels; no Agy-specific title process
+was added. Installation preserved databases and running nodes. Earlier paragraphs
+below retain the failed experiments and source checkpoints that led to this build.
 
 ## Live CLI acceptance
 
@@ -198,3 +197,11 @@ and controlled SIGKILL continuation (session `95331`, exit 0;
 this retains the earlier limits on surviving orphan processes and real-provider
 cold recovery. Independent read-only review of `01ed3e3` found no actionable
 authority, token leakage or correctness issue in the credential-field change.
+
+## Installed checkpoint
+
+`make check` completed successfully for `01ed3e3` (session `94825`, exit 0).
+Global `9b499f4e` was installed with all six artifacts verified and backed up;
+`agy-mcp-global-install.json` records the preceding hash and exact evidence.
+No database or running node was changed. Real-provider cold recovery, orphan-tree
+reconciliation and Docker remain unfinished.

@@ -2,6 +2,19 @@
 
 ## Current checkpoint — September 13
 
+Global `9b499f4e` contains production `01ed3e3` and native `fe8cb0d`: Agy
+command-hook delivery and corrected literal MCP credentials in private configuration.
+Full `make check` passes (844 units, source/pack acceptance), as do exact native,
+offline and fixture restart/crash recovery checks. Actual managed Agy delivers
+tool/Stop observations and, with explicit fixture tool permissions, commits a
+message through scoped MCP. Six artifacts were backed up and verified; databases,
+running nodes and runtime revision/patches were preserved. Real-provider cold
+recovery, surviving orphan trees, Docker and policy-controlled sharing remain
+incomplete. See [global build](handoffs/GLOBAL_BUILD.md) and
+[Agy acceptance](handoffs/AGY_HOOKS.md).
+
+### Preceding recovery checkpoint
+
 Global `aa22527c` contains production `b883ae8`: interrupted Agent recovery with
 responsive cancellation, offline embedded/local startup and the managed profile,
 MCP, hook and native identity work below. Full `make check` at `62186b5` passed
@@ -36,7 +49,8 @@ conversation identity, retained HOME, fresh attempt and gateway binding. This is
 a fixture Claude proof. Controlled SIGKILL of that node also passes when its
 recorded native child is gone; surviving orphan trees and real providers remain
 unverified.
-Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
+Grok window hooks remain unimplemented; Agy now has the separate command-hook
+path described in the current checkpoint. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),
 [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) and [Hub completion](handoffs/HUB_COMPLETION.md).

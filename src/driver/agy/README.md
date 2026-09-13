@@ -38,6 +38,6 @@ conversation recovery. The host selects the executable and
 grants; the component declaration alone gives no execution authority.
 
 Packaged native acceptance, live command-hook delivery and loopback-only boot
-checks pass for the corrected candidate. Installation remains gated by the full
-source/pack regression; see
+checks pass for the corrected candidate. The full source/pack regression passes, and global `9b499f4e` includes this
+implementation; see
 [the hook integration evidence](../../../docs/handoffs/AGY_HOOKS.md).

@@ -1,6 +1,31 @@
 # Global Bee build — September 13, 2026
 
-## Current install: interrupted Agent recovery
+## Current install: Agy hooks and authenticated MCP
+
+Global SHA `9b499f4e4f7983c61de54a56f455ef2434c23297f3828e636cc5010a1804b81a`
+contains production source `01ed3e3`, native `fe8cb0d`. Agy command hooks deliver
+observations through the packaged Bee helper. Its MCP credential is filled into
+private configuration during admitted placement; tokens remain absent from stored
+templates, argv and receipts. The old Agy placeholder header did not authenticate
+with the actual CLI; this build corrects it.
+
+Full `make check` passed (session `94825`, exit 0; 844 units and source/pack
+acceptance). Exact packaged Agent, offline fresh/restart/reconnect and fixture
+restart/crash recovery gates pass. Actual managed Agy completed a read task with
+three committed hook events, and a separate MCP task committed one bound-thread
+message with two explicitly permitted fixture tools. Production retains normal
+harness permission prompts. Real-provider cold recovery, surviving orphan trees,
+Docker and policy-controlled sharing remain unfinished.
+
+Installation verified and backed up all six artifacts, fencing the preceding
+`aa22527c`. Runtime revision and all four patches are unchanged; no runtime PR
+was merged. Databases and running nodes were preserved. Newly started nodes load
+this build; existing nodes retain their loaded code. Evidence:
+`bee-evidence/0912/agy-mcp-{full-check,native-check,offline-check,native-recovery-check}.log`,
+`agy-live-managed-mcp-allowed.log` and `agy-mcp-global-install.json`.
+See [Agy acceptance](AGY_HOOKS.md) for exact provider and permission scope.
+
+## Previous install: interrupted Agent recovery
 
 Global SHA `aa22527c876d6b374b40c8dd655fed66d9bbf257ab8adb025b3e5d44f47f221b`
 contains production source `b883ae8`. Interrupted native Agent windows restore

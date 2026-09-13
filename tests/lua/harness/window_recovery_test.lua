@@ -26,6 +26,29 @@ local function define_tests()
             end
         end)
 
+        test.it("preserves a selected profile revision and refuses partial selection", function()
+            local selected: {[string]: unknown} = {}
+            for key, value in pairs(SAVED :: {[string]: unknown}) do selected[key] = value end
+            selected.saved_profile_id = "profile:work"
+            test.is_nil(recovery.decode(selected))
+            selected.saved_profile_revision = 3
+            local saved, err = recovery.decode(selected)
+            if not saved then error(tostring(err)) end
+            local encoded, encode_error = recovery.encode(saved)
+            if not encoded then error(tostring(encode_error)) end
+            local restored, restore_error = recovery.decode(json.decode(encoded))
+            if not restored then error(tostring(restore_error)) end
+            test.eq(restored.saved_profile_id, "profile:work")
+            test.eq(restored.saved_profile_revision, 3)
+            selected.saved_profile_revision = 0
+            test.is_nil(recovery.decode(selected))
+            selected.saved_profile_revision = 1.5
+            test.is_nil(recovery.decode(selected))
+            selected.saved_profile_revision = 3
+            selected.saved_profile_id = nil
+            test.is_nil(recovery.decode(selected))
+        end)
+
         test.it("refuses malformed or authority bearing checkpoint data", function()
             local malformed: {[string]: unknown} = {}
             for key, value in pairs(SAVED :: {[string]: unknown}) do malformed[key] = value end

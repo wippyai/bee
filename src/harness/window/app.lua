@@ -165,6 +165,7 @@ local function main(value: unknown)
         end
         local choice, admission_error = admission.admit_request({request_id = request_id,
             definition_ref = restored.definition_ref, workspace_id = launch.workspace_id, brief = "", mode = "window",
+            saved_profile_id = restored.saved_profile_id, saved_profile_revision = restored.saved_profile_revision,
             expected_plan_digest = restored.plan_digest, continuation = {origin_request_id = restored.origin_request_id,
                 previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id}})
         if not choice then
@@ -189,6 +190,7 @@ local function main(value: unknown)
     local origin_request_id: string
     if saved then origin_request_id = saved.origin_request_id else origin_request_id = admitted.request_id end
     local application_saved: recovery.Saved = {definition_ref = admitted.plan.definition_ref,
+        saved_profile_id = admitted.plan.saved_profile_id, saved_profile_revision = admitted.plan.saved_profile_revision,
         plan_digest = admitted.plan.plan_digest, origin_request_id = origin_request_id,
         previous_attempt_id = admitted.attempt_id, thread_id = admitted.thread_id}
     local transport = io()

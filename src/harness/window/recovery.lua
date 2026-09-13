@@ -6,7 +6,7 @@ local bounds = require("bounds")
 local json = require("json")
 local M = {}
 M.SCHEMA = "bee.agent.window@1"
-type Saved = {definition_ref: string, plan_digest: string, origin_request_id: string, previous_attempt_id: string, thread_id: string}
+type Saved = {definition_ref: string, plan_digest: string, origin_request_id: string, previous_attempt_id: string, thread_id: string, saved_profile_id: string?, saved_profile_revision: integer?}
 type Launch = {broker_pid: string}
 
 local function digest(value: string): boolean
@@ -16,8 +16,12 @@ end
 function M.decode(value: unknown): (Saved?, string?)
     local object = bounds.object(value)
     if not object then return nil, "Agent checkpoint must be an object" end
-    local unknown = bounds.fields(object, {"definition_ref", "plan_digest", "origin_request_id", "previous_attempt_id", "thread_id"})
+    local unknown = bounds.fields(object, {"definition_ref", "plan_digest", "origin_request_id", "previous_attempt_id", "thread_id", "saved_profile_id", "saved_profile_revision"})
     if unknown then return nil, "Agent checkpoint: " .. unknown end
+    local saved_id, saved_revision = bounds.id(object.saved_profile_id), bounds.count(object.saved_profile_revision)
+    if object.saved_profile_id ~= nil or object.saved_profile_revision ~= nil then
+        if not saved_id or not saved_revision or saved_revision < 1 then return nil, "Agent checkpoint needs profile identity and positive revision" end
+    end
     local definition_ref = bounds.id(object.definition_ref)
     local plan_digest = bounds.text(object.plan_digest, 64)
     local origin = bounds.id(object.origin_request_id)
@@ -29,12 +33,13 @@ function M.decode(value: unknown): (Saved?, string?)
     if not previous then return nil, "Agent checkpoint has invalid identity fields" end
     if not thread then return nil, "Agent checkpoint has invalid identity fields" end
     return {definition_ref = definition_ref, plan_digest = plan_digest, origin_request_id = origin,
-        previous_attempt_id = previous, thread_id = thread}, nil
+        previous_attempt_id = previous, thread_id = thread, saved_profile_id = saved_id, saved_profile_revision = saved_revision}, nil
 end
 
 function M.encode(saved: Saved): (string?, string?)
     local encoded, encode_error = json.encode({definition_ref = saved.definition_ref, plan_digest = saved.plan_digest,
-        origin_request_id = saved.origin_request_id, previous_attempt_id = saved.previous_attempt_id, thread_id = saved.thread_id})
+        origin_request_id = saved.origin_request_id, previous_attempt_id = saved.previous_attempt_id, thread_id = saved.thread_id,
+        saved_profile_id = saved.saved_profile_id, saved_profile_revision = saved.saved_profile_revision})
     if not encoded then return nil, tostring(encode_error or "encode checkpoint") end
     return encoded, nil
 end

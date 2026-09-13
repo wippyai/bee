@@ -78,3 +78,10 @@ hook. Gateway checks (13 cases) and focused policy/placement checks (11 cases)
 pass. A real managed agent running with this selection is not yet verified.
 This removes a dependency for profiles that restrict MCP without disabling
 thread/title reporting. No production profile or global executable changed.
+
+The managed-window envelope and checkpoint now preserve the selected profile ID
+and revision alongside the measured plan. Cold recovery resubmits that selection
+through the same admission checks; it cannot silently recover using default
+preferences. Partial or invalid profile identities are refused. A changed or
+removed saved profile therefore requires a fresh selection rather than silently
+changing a recovered conversation's configuration. UI wiring remains pending.

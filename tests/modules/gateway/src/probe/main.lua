@@ -101,7 +101,25 @@ local function prove_configuration_scope(address: string)
     assert(type(projection.content) == "string" and (projection.content :: string):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
     assert((projection.content :: string):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
 end
+local function prove_endpoint_call_scope()
+    local policies: {security.Policy} = {}
+    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy"}) do
+        local selected, err = security.policy(name)
+        assert(selected ~= nil and err == nil, "endpoint policy unavailable")
+        policies[#policies + 1] = selected
+    end
+    local scope = security.new_scope(policies)
+    local actor = security.actor()
+    assert(actor ~= nil, "probe actor missing")
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record"}) do
+        assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
+    end
+    for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do
+        assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
+    end
+end
 local function main()
+    prove_endpoint_call_scope()
     ADDRESS = endpoint()
     prove_configuration_scope(ADDRESS)
     local opened = ok(call("bee.gateway:open", {address = ADDRESS}), "open")

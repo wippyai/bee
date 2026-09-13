@@ -6592,3 +6592,13 @@ use. Integration/race/vet pass. The small builder fix permits multiple unique
 factories from the same pinned Go module; its offline generated compile proof
 is under review. Native factory review and managed Agent wiring remain pending.
 No runtime semantic change or global installation was made. Wolfden 1641–1642.
+
+### September 13 — Docker boot composition reviewed and pushed
+
+Native `cdee84e` adds the explicit-config builder factory and passed the final
+native Docker integration/race/vet gate (7.458s). Luna high reviewed the factory,
+lifetime, offline behavior and tests without finding a concrete issue. Builder
+`0ecb7d3` is PR #8, verified open and assigned to Rodrigo (`skhaz`), not merged.
+Its full check and offline four-factory compile/run proof pass. Wolfden 1643
+records the exact commits and scope. Global remains unchanged; managed Docker
+launch and the container gateway remain unfinished.

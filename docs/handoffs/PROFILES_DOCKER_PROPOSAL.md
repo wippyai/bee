@@ -50,6 +50,16 @@ Docker module binding. The real code-manager/Lua refusal tests, native Docker
 race/integration suite and vet pass. Default desktop composition still does not
 register it; this is an available host composition seam, not a Docker Agent.
 
+Native candidate `cdee84e` adds the zero-argument `ConfiguredComponent()` factory
+for normal builder composition. Explicit boot `bee.docker.host` (a local Unix
+socket URL) and `bee.docker.reference` select the client; this factory owns its
+shutdown. An absent socket does not prevent loading, and ambient Docker settings
+are ignored. Offline lifecycle/refusal tests and the native integration/race/vet
+gate pass. Builder PR [#8](https://github.com/wippyai/builder/pull/8), assigned to
+Rodrigo and unmerged, permits multiple unique factories from the same pinned
+module. Its offline generated-program proof covers distinct and shared packages.
+Neither change has been installed globally or wired into the Agent picker.
+
 The integration audit confirms that the current application scope is selected
 by the broker before spawning the managed window (`core/applications/broker.lua`).
 The window later claims its attempt and materializes configuration in

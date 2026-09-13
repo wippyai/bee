@@ -30,7 +30,11 @@ native-modules-lifecycle-check:
 .PHONY: modules-app-check
 modules-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_app.py
+.PHONY: modules-update-check
+modules-update-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_update.py
 check: modules-app-check
+check: modules-update-check
 .PHONY: hub-manage-check
 hub-manage-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go

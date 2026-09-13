@@ -140,7 +140,7 @@ local function parameter_rows(raw: unknown): ({Parameter}?, string?)
 end
 
 local function root_rows(raw: unknown): ({Root}?, string?)
-    if raw == nil then return {}, nil end
+    if raw == nil then return nil, "installed inventory did not include roots" end
     if type(raw) ~= "table" then return nil, "installed inventory roots must be a list" end
     local count = 0
     for key in pairs(raw) do

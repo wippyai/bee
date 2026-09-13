@@ -127,7 +127,12 @@ local function main(value: unknown)
             generation = generation + 1
             requested = {intent = intent, generation = generation}
             if reading then
-                if not reading.retired then reading.retired = true; reading.future:cancel() end
+                -- Keep the stale read alive until its response is consumed. A
+                -- future cancellation is delivered as this app's lifecycle
+                -- cancellation, which would terminate the UI before a queued
+                -- retry can start. The generation fence below still prevents
+                -- the stale response from changing model state.
+                if not reading.retired then reading.retired = true end
             else start_read() end
             return true
         end

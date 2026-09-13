@@ -15,13 +15,23 @@ including login present/absent and scoped MCP. Grok's PreToolUse/Stop observatio
 commit to its thread, and the tool hook updates the title to "Using tool".
 Offline fresh/restart/reconnect and Claude fixture cold recovery also pass.
 All artifact hashes and six archived runtime patches match provenance. Full
-`make check` is running as session `52992`. Real Agy 1.2.2 interactive startup
+`make check` session `52992` exited 2 at `tests/drag_failure.py`: the fresh
+runtime emitted no terminal bytes within its readiness deadline. Earlier
+control-delivery source/pack checks passed. The failure is being reproduced
+separately; the full gate has not passed. Real Agy 1.2.2 interactive startup
 passes on this exact binary: the picker launches it, production delivery imports
 matching existing login/onboarding files, and the normal prompt appears after
 the ordinary disposable-project trust confirmation. No settings or trust state
 was imported. Evidence: `agy-managed-tui-login-hooks-probe.log` (11.273 seconds,
 exit 0). These are not real-provider model-turn or Docker
 execution claims. Managed Docker remains unfinished.
+
+Real Claude interactive acceptance is also open. After explicit trust of its
+disposable project, the managed child displays "Not logged in". Removing the
+probe's ambient API key did not change that result. A diagnostic wrapper adding
+existing account metadata also did not resolve it; that wrapper is external
+evidence only and is not a proposed production fix. File delivery and child
+authentication are being checked separately.
 
 Real Grok managed startup also passes through the picker and generated command
 hooks: SessionStart commits with a conversation ID in its bound thread, without

@@ -2330,12 +2330,18 @@ func runHookProbe(args []string) int {
 	return 0
 }
 
-func managedLaunch(binary, provider string, machineLogin bool) error {
+func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(root)
+	defer func() {
+		if result == nil {
+			_ = os.RemoveAll(root)
+		} else {
+			fmt.Fprintln(os.Stderr, "Managed launch fixture retained:", root)
+		}
+	}()
 	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
 	report := filepath.Join(root, "launch-paths")
 	mcpReport := filepath.Join(root, "mcp-report")
@@ -2410,6 +2416,14 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 		return err
 	}
 	if err := ui.waitFor("BEE_MANAGED_AGENT_READY", 25*time.Second); err != nil {
+		// This report contains only HTTP status codes and Boolean checks. Keep
+		// configuration and credentials out of readiness failure diagnostics.
+		if reportData, readError := os.ReadFile(mcpReport); readError == nil {
+			var status mcpProbeReport
+			if json.Unmarshal(reportData, &status) == nil {
+				return fmt.Errorf("%w; MCP probe: %+v", err, status)
+			}
+		}
 		return err
 	}
 	mcpData, err := os.ReadFile(mcpReport)
@@ -2546,6 +2560,25 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 }
 
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "managed" {
+		provider := os.Args[2]
+		if provider != "grok" && provider != "agy" && provider != "claude" && provider != "codex" {
+			os.Exit(2)
+		}
+		binary, err := filepath.Abs(os.Args[3])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		for _, present := range []bool{false, true} {
+			if err := managedLaunch(binary, provider, present); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+		fmt.Println("Managed", provider, "login, MCP and lifecycle checks passed")
+		return
+	}
 	if len(os.Args) == 4 && os.Args[1] == "command-hook-probe" {
 		os.Exit(runCommandHookProbe(os.Args[2], os.Args[3]))
 	}

@@ -120,3 +120,8 @@ native-agent-selector-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native test ../tests/native_agent_selector.go ../tests/native_agent_selector_test.go -count=1
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go "$(abspath $(BEE_BINARY))"
+
+.PHONY: native-managed-agent-check
+native-managed-agent-check:
+	test -n "$(AGENT_PROVIDER)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go managed "$(AGENT_PROVIDER)" "$(abspath $(BEE_BINARY))"

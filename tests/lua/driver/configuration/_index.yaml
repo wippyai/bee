@@ -11,6 +11,8 @@ entries:
     policies: [bee:resource_resolve_policy, bee:placement_store_policy]
   imports:
     test: wippy.test:test
+    placement_types: bee.placement:types
+    placement_configuration: bee.placement.native:configuration
     configuration: bee.driver:configuration
     claude: bee.driver.claude:configure
     codex: bee.driver.codex:configure

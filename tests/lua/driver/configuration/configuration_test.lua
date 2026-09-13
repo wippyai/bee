@@ -3,6 +3,8 @@ local test = require("test")
 local hash = require("hash")
 local json = require("json")
 local configuration = require("configuration")
+local placement_configuration = require("placement_configuration")
+local placement_types = require("placement_types")
 local claude = require("claude")
 local codex = require("codex")
 local grok = require("grok")
@@ -29,6 +31,54 @@ local function gateway(action: string): configuration.GatewayInput
 end
 local function define_tests()
     test.describe("Driver configuration delivery boundary", function()
+        test.it("fills admitted private JSON fields without modifying the recorded template", function()
+            local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-secret", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
+            local output, output_error = configuration.decode_reply(agy.handle({fixture = false, gateway = selected}), nil, selected)
+            if not output then error(tostring(output_error)) end
+            local template = output.files[1]
+            local before = template.content
+            test.eq(template.revision, "bee.agy-mcp@2")
+            test.is_nil(before:find("BEE_GATEWAY_TOKEN", 1, true))
+            local secret = 'fixture-"quoted"-token'
+            local content, content_error = placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret},
+                {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = selected.token_environment})
+            if not content then error(tostring(content_error)) end
+            local actual = json.decode(content) :: {mcpServers: {bee: {headers: {Authorization: string}}}}
+            test.eq(actual.mcpServers.bee.headers.Authorization, "Bearer " .. secret)
+            test.eq(template.content, before)
+            test.is_nil(before:find(secret, 1, true))
+            test.is_nil(placement_configuration.render(template, {}, {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = selected.token_environment}))
+            test.is_nil(placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret}, nil))
+            test.is_nil(placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret}, {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = "OTHER_TOKEN"}))
+        end)
+        test.it("rejects secret fields outside the admitted credential selection", function()
+            local item = file('{"auth":""}')
+            item.secret_fields = {{path = {"auth"}, environment = "UNSELECTED_SECRET", prefix = "Bearer "}}
+            item.provider_ref = configuration.GATEWAY_PROVIDER_REF
+            test.is_nil(configuration.decode_reply({ok = true, delivery = delivery({item})}, nil, gateway("action-a")))
+            item.provider_ref = PROVIDER
+            test.is_nil(configuration.decode_reply({ok = true, delivery = delivery({item})}, PROVIDER))
+            item.secret_fields = {{path = {}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}}
+            test.is_nil(configuration.decode_file(item))
+            item.secret_fields = {{path = {"auth"}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}, {path = {"auth"}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}}
+            test.is_nil(configuration.decode_file(item))
+        end)
+        test.it("refuses nonempty secret targets and oversized materialized content without exposing values", function()
+            local item = file('{"auth":"existing"}')
+            item.provider_ref = configuration.GATEWAY_PROVIDER_REF
+            item.secret_fields = {{path = {"auth"}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}}
+            local decoded, decode_error = configuration.decode_file(item)
+            if not decoded then error(tostring(decode_error)) end
+            local selected: placement_types.Gateway = {endpoint = "127.0.0.1:4312", tools = {"thread_read"}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"}
+            local content, err = placement_configuration.render(decoded, {BEE_GATEWAY_TOKEN = "PRIVATE_FIXTURE_TOKEN"}, selected)
+            test.is_nil(content); test.eq(err, "configuration secret target must be an empty string")
+            item.content = '{"auth":""}'; item.digest = assert(hash.sha256(item.content :: string))
+            decoded, decode_error = configuration.decode_file(item)
+            if not decoded then error(tostring(decode_error)) end
+            content, err = placement_configuration.render(decoded, {BEE_GATEWAY_TOKEN = string.rep("x", 8192)}, selected)
+            test.is_nil(content); test.eq(err, "materialized configuration exceeds its encoding bound")
+        end)
+
         test.it("renders observation-only Agy command hooks with quoted host inputs", function()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
                 hooks = {"PreToolUse", "PostToolUse", "Stop"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",

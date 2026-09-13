@@ -49,6 +49,11 @@ local function private_root(vol: fs.FS): string?
     if math.floor(mode) % 64 ~= 0 then return "placement root permits group or other access" end
     return nil
 end
+function M.check_private_root(): string?
+    local vol, vol_error = volume()
+    if not vol then return vol_error or "placement root unavailable" end
+    return private_root(vol)
+end
 local function ensure(vol: fs.FS, path: string): string?
     local exists = vol:exists(path)
     if exists then

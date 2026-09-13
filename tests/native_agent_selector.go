@@ -1696,9 +1696,9 @@ type mcpProbeReport struct {
 	MessageWriteOK   bool     `json:"message_write_annotation_ok"`
 }
 
-// mcpProbeConfig extracts only the URL and token environment name from the
-// driver's generated configuration. The token itself is read from the child
-// environment and is never written to a report or diagnostic.
+// mcpProbeConfig follows the provider credential syntax. Agy uses literal
+// headers; Claude and Codex resolve their declared environment references.
+// Credential bytes are never written to reports or diagnostics.
 func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 	if provider == "agy" {
 		config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "mcp_config.json"))
@@ -1730,6 +1730,13 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 				return "", "", false
 			}
 			authorization := server.Headers["Authorization"]
+			if provider == "agy" {
+				if !strings.HasPrefix(authorization, "Bearer ") {
+					return "", "", false
+				}
+				token := strings.TrimPrefix(authorization, "Bearer ")
+				return server.URL, token, token != ""
+			}
 			const prefix, suffix = "Bearer ${", "}"
 			if !strings.HasPrefix(authorization, prefix) || !strings.HasSuffix(authorization, suffix) {
 				return "", "", false
@@ -1738,7 +1745,7 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 			if name == "" || strings.ContainsAny(name, "=\x00\r\n") {
 				return "", "", false
 			}
-			return server.URL, name, true
+			return server.URL, os.Getenv(name), os.Getenv(name) != ""
 		}
 		return "", "", false
 	}
@@ -1764,7 +1771,7 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "bearer_token_env_var = \""), "\"")
 		}
 	}
-	return url, tokenName, url != "" && tokenName != ""
+	return url, os.Getenv(tokenName), url != "" && os.Getenv(tokenName) != ""
 }
 
 func mcpProbeRequest(client *http.Client, url, token, method string, params map[string]any, id int) (int, mcpReply, bool) {
@@ -1805,8 +1812,8 @@ func mcpProbeReportFile(path string, report mcpProbeReport) {
 func runMCPProbe(provider, reportPath string, args []string) int {
 	report := mcpProbeReport{Provider: provider, Tools: []string{}}
 	defer func() { mcpProbeReportFile(reportPath, report) }()
-	url, tokenName, ok := mcpProbeConfig(provider, args)
-	if !ok || os.Getenv(tokenName) == "" {
+	url, token, ok := mcpProbeConfig(provider, args)
+	if !ok || token == "" {
 		return 1
 	}
 	parsed, err := http.NewRequest(http.MethodPost, url, nil)
@@ -1817,7 +1824,6 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	}
 	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{DisableKeepAlives: true},
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
-	token := os.Getenv(tokenName)
 	var initReply mcpReply
 	report.InitializeStatus, initReply, ok = mcpProbeRequest(client, url, token, "initialize", map[string]any{
 		"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": "bee-native-agent", "version": "0"},
@@ -2410,6 +2416,37 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	}
 	if childHome == projectPath {
 		return errors.New("managed agent HOME was the project directory")
+	}
+	if provider == "agy" {
+		data, err := os.ReadFile(filepath.Join(childHome, ".gemini", "config", "mcp_config.json"))
+		if err != nil {
+			return err
+		}
+		var document struct {
+			Servers map[string]struct {
+				Headers map[string]string `json:"headers"`
+			} `json:"mcpServers"`
+		}
+		if json.Unmarshal(data, &document) != nil {
+			return errors.New("invalid Agy private MCP document")
+		}
+		token := strings.TrimPrefix(document.Servers["bee"].Headers["Authorization"], "Bearer ")
+		if token == "" || strings.Contains(token, "${") {
+			return errors.New("Agy MCP credential was not materialized")
+		}
+		db, err := openRecoveryDB(filepath.Join(state, "placement.db"))
+		if err != nil {
+			return err
+		}
+		var leaked int
+		err = db.QueryRow(`SELECT (SELECT count(*) FROM bee_placement_attempts WHERE instr(request_json, ?) > 0) + (SELECT count(*) FROM bee_placement_evidence WHERE instr(detail, ?) > 0)`, token, token).Scan(&leaked)
+		db.Close()
+		if err != nil {
+			return err
+		}
+		if leaked != 0 {
+			return errors.New("Agy MCP credential reached a recorded template or receipt")
+		}
 	}
 	login, loginErr := os.ReadFile(filepath.Join(childHome, providerDirectory, loginFile))
 	if machineLogin {

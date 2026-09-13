@@ -10,6 +10,7 @@ local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
 local types = require("types")
+local configuration = require("configuration")
 local M = {}
 type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
@@ -177,21 +178,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     local delivery = request.delivery
     if not delivery then return refused("attempt has no owner-recorded configuration delivery") end
-    for _, file in ipairs(delivery.files) do
-        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, file.content, created_parents, retained_home)
-        if not written then
-            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
-            return refused(write_error or "configuration")
-        end
-        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
-    end
     local arguments: {string} = {}
     for _, argument in ipairs(delivery.arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
     -- The gateway token is minted at delivery for the binding this attempt
-    -- holds under the attached carrier epoch, written nowhere: the
-    -- driver configuration already names the selected environment
-    -- destination the bytes fill. Evidence carries the generation, never the bytes.
+    -- holds under the attached carrier epoch. Bytes fill only the admitted
+    -- environment and declared private configuration fields. The stored template
+    -- and evidence retain no bytes.
     if request.gateway then
         local gateway = request.gateway
         if generation < 1 then
@@ -210,6 +203,23 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         if gateway.hook_destination and materialized.hook_token then environment[gateway.hook_destination] = materialized.hook_token end
         gateway_binding = materialized.binding.binding_id
         evidence(db, attempt_id, "gateway.materialized", "binding " .. materialized.binding.binding_id .. " credential generation " .. tostring(materialized.generation) .. " under carrier epoch " .. tostring(generation) .. " into " .. gateway.destination .. "; driver configuration frozen at admission")
+    end
+    for _, file in ipairs(delivery.files) do
+        local content, content_error = configuration.render(file, environment, request.gateway)
+        if not content then
+            evidence(db, attempt_id, "configuration.refused", content_error or "configuration", {execution = "exited"})
+            return refused(content_error or "configuration")
+        end
+        if file.secret_fields then
+            local privacy_error = homes.check_private_root()
+            if privacy_error then return refused(privacy_error) end
+        end
+        local written, write_error, replayed = homes.write_protected(selected_home_path, file.path, content, created_parents, retained_home)
+        if not written then
+            evidence(db, attempt_id, "configuration.refused", tostring(write_error), {execution = "exited"})
+            return refused(write_error or "configuration")
+        end
+        evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (replayed and " replayed" or " created"))
     end
     local work_dir, work_dir_error = resolve_work_dir(request, home_os)
     if not work_dir then

@@ -17,7 +17,8 @@ M.MAX_HOME_DIRECTORY_BYTES = 4096
 M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
-type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
+type SecretField = {path: {string}, environment: string, prefix: string}
+type Configuration = {secret_fields: {SecretField}?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
@@ -128,27 +129,6 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
 end
-function M.decode_file(value: unknown): (Configuration?, string?)
-    local item = bounds.object(value)
-    if not item then return nil, "configuration must be an object" end
-    local unexpected = bounds.fields(item, {"revision", "path", "content", "digest", "provider_ref"})
-    if unexpected then return nil, "configuration: " .. unexpected end
-    local revision = bounds.id(item.revision)
-    if not revision then return nil, "configuration.revision is not an identifier" end
-    local path, path_error = bounds.subpath(item.path)
-    if path_error then return nil, "configuration.path " .. path_error end
-    if not path or path == "" then return nil, "configuration.path must be a nonempty safe relative path" end
-    local content = bounds.text(item.content, M.MAX_CONFIGURATION_BYTES)
-    if not content or content == "" then return nil, "configuration.content must be bounded nonempty text" end
-    local digest = bounds.id(item.digest)
-    if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "configuration.digest must be a lowercase sha256 hex digest" end
-    local actual, hash_error = hash.sha256(content)
-    if hash_error or not actual then return nil, "configuration.digest could not be measured" end
-    if digest ~= actual then return nil, "configuration.digest does not match content" end
-    local provider_ref = bounds.id(item.provider_ref)
-    if not provider_ref then return nil, "configuration.provider_ref is not an identifier" end
-    return {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}, nil
-end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
     local list = value :: {unknown}
@@ -165,6 +145,54 @@ local function sequence(value: unknown, label: string, maximum: integer): ({unkn
         if list[index] == nil then return nil, label .. " must not have holes" end
     end
     return list, nil
+end
+function M.decode_file(value: unknown): (Configuration?, string?)
+    local item = bounds.object(value)
+    if not item then return nil, "configuration must be an object" end
+    local unexpected = bounds.fields(item, {"revision", "path", "content", "digest", "provider_ref", "secret_fields"})
+    if unexpected then return nil, "configuration: " .. unexpected end
+    local revision = bounds.id(item.revision)
+    if not revision then return nil, "configuration.revision is not an identifier" end
+    local path, path_error = bounds.subpath(item.path)
+    if path_error then return nil, "configuration.path " .. path_error end
+    if not path or path == "" then return nil, "configuration.path must be a nonempty safe relative path" end
+    local content = bounds.text(item.content, M.MAX_CONFIGURATION_BYTES)
+    if not content or content == "" then return nil, "configuration.content must be bounded nonempty text" end
+    local digest = bounds.id(item.digest)
+    if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "configuration.digest must be a lowercase sha256 hex digest" end
+    local actual, hash_error = hash.sha256(content)
+    if hash_error or not actual then return nil, "configuration.digest could not be measured" end
+    if digest ~= actual then return nil, "configuration.digest does not match content" end
+    local provider_ref = bounds.id(item.provider_ref)
+    if not provider_ref then return nil, "configuration.provider_ref is not an identifier" end
+    local result: Configuration = {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}
+    if item.secret_fields ~= nil then
+        local fields, fields_error = sequence(item.secret_fields, "configuration.secret_fields", 8)
+        if not fields or #fields == 0 then return nil, fields_error or "configuration.secret_fields is empty" end
+        local selected: {SecretField} = {}
+        local seen: {[string]: boolean} = {}
+        for _, value in ipairs(fields) do
+            local field = bounds.object(value)
+            if not field or bounds.fields(field, {"path", "environment", "prefix"}) then return nil, "invalid configuration secret field" end
+            local keys = sequence(field.path, "configuration secret path", 8)
+            if not keys or #keys == 0 then return nil, "invalid configuration secret path" end
+            local path_keys: {string} = {}
+            for _, key in ipairs(keys) do
+                local text = bounds.text(key, 128)
+                if not text or text == "" then return nil, "invalid configuration secret path key" end
+                path_keys[#path_keys + 1] = text
+            end
+            local environment = environment_name(field.environment, "configuration secret environment")
+            local prefix = bounds.text(field.prefix, 64)
+            if not environment or prefix == nil then return nil, "invalid configuration secret environment or prefix" end
+            local identity = canonical.encode(path_keys)
+            if not identity or seen[identity] then return nil, "duplicate configuration secret path" end
+            seen[identity] = true
+            selected[#selected + 1] = {path = path_keys, environment = environment, prefix = prefix}
+        end
+        result.secret_fields = selected
+    end
+    return result, nil
 end
 function M.decode_delivery(value: unknown): (Delivery?, string?)
     local item = bounds.object(value)
@@ -219,6 +247,14 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
         local gateway_file = gateway ~= nil and file.provider_ref == M.GATEWAY_PROVIDER_REF
         local instructions_file = instructions ~= nil and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.content == instructions
         if not provider_file and not gateway_file and not instructions_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
+        if file.secret_fields then
+            if not gateway_file or not gateway then return nil, "configuration secret fields require the admitted gateway" end
+            for _, field in ipairs(file.secret_fields) do
+                if field.environment ~= gateway.token_environment and field.environment ~= gateway.hook_token_environment then
+                    return nil, "configuration secret field names an unselected credential"
+                end
+            end
+        end
     end
     return delivery, nil
 end

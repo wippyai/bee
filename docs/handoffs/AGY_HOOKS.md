@@ -146,3 +146,27 @@ admission records, measured templates, argv or diagnostics, or weakening gateway
 authorization. Update the fixture to model actual Agy header behavior as part of
 that fix, then repeat live managed MCP acceptance. The candidate remains
 uninstalled while this integration gap is resolved.
+
+The follow-up source uses `bee.agy-mcp@2`: the JSON template has an empty
+Authorization value and a typed `secret_fields` declaration naming its object
+key path, admitted environment destination and `Bearer ` prefix. Driver
+configuration admission refuses fields for any unselected credential. Native
+placement independently checks the gateway selection, mints the token, encodes
+it into that field and writes through protected creation only after verifying
+the placement root excludes group/other access. Stored delivery templates,
+request digests, receipts and arguments contain no token bytes. Nonempty targets,
+missing credentials and oversized final encoding refuse materialization.
+The gateway's existing retirement path owns any failure after token minting.
+
+This is an optional JSON configuration field feature, not a token-expanding
+proxy or a runtime change. Other driver configurations remain unchanged. Retained
+configuration still permits only identical content; this does not introduce
+unsafe replacement or claim Agy cold recovery. Source validation and a rebuilt
+real-provider MCP proof are required before installation.
+
+Validation checkpoint: production lint passes; focused Agy/configuration tests
+pass all 31 cases. The broad unit run passed 843 cases and failed only the old
+`bee.agy-mcp@1` expectation; the corrected expectation is included in the focused
+passing run. Native fixture Go tests/vet pass. A fresh full check and assembled
+candidate are next. The earlier hook-only source full `make check` also completed
+successfully (session `75977`, exit 0).

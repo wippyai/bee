@@ -747,7 +747,7 @@ local function define_tests()
             test.eq(reply2.error, "agy hooks require the host-selected hook command")
         end)
 
-        test.it("renders verified gateway MCP configuration file path and environment expansion", function()
+        test.it("renders gateway MCP with an admitted private credential field", function()
             test.eq(configuration.AGY_AUTHENTICATION, "unproven")
             test.eq(configuration.AGY_HOOKS, "unproven")
             test.eq(configuration.AGY_MCP, "unproven")
@@ -769,7 +769,7 @@ local function define_tests()
             local file = reply_mcp.delivery.files[1]
             -- verified declared MCP file path
             test.eq(file.path, ".gemini/config/mcp_config.json")
-            test.eq(file.revision, "bee.agy-mcp@1")
+            test.eq(file.revision, "bee.agy-mcp@2")
             test.eq(file.provider_ref, "bee:gateway_endpoint")
 
             local content = tostring(file.content)
@@ -777,8 +777,11 @@ local function define_tests()
             if hash_err then error(tostring(hash_err)) end
             test.eq(file.digest, expected_hash)
             test.is_true(content:find("http://127.0.0.1:18790/mcp/act-test", 1, true) ~= nil)
-            -- verified environment expansion syntax ${GATEWAY_TOKEN} without real secrets
-            test.is_true(content:find("${GATEWAY_TOKEN}", 1, true) ~= nil)
+            -- Agy sends literal headers. Placement fills the empty template
+            -- field from the admitted gateway credential immediately before exec.
+            test.is_nil(content:find("${GATEWAY_TOKEN}", 1, true))
+            test.eq(file.secret_fields[1].environment, "GATEWAY_TOKEN")
+            test.eq(file.secret_fields[1].prefix, "Bearer ")
 
             local validated, val_err = configure_protocol.decode_reply(reply_mcp, nil, {
                 endpoint = "127.0.0.1:18790",

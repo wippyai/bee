@@ -223,3 +223,12 @@ Launch specifications separate the executable from its arguments: `argv` never
 contains the program name. The host may bind `executable` to a measured absolute
 path; placement prepends that selected executable exactly once. A window with
 an empty brief therefore supplies no prompt argument.
+
+JSON configuration files may declare bounded `secret_fields`: object-key paths,
+selected gateway environment names and literal prefixes. The template target is
+an empty string. Driver admission and native placement both restrict these fields
+to the admitted gateway credentials. Placement fills them only during private
+file materialization; token bytes never enter the stored driver delivery or argv.
+This supports harnesses such as Agy that require literal HTTP headers. Existing
+protected-create and retained-content checks still apply; this does not add
+configuration replacement or general environment interpolation.

@@ -2,6 +2,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -55,5 +57,25 @@ func TestConsumeFramesPreservesUnicodeInPartialUpdates(t *testing.T) {
 	latest, frame := d.latest, d.frame
 	if frame != 2 || !strings.Contains(latest, "选择 Codex") {
 		t.Fatalf("Unicode current screen = (%d, %q), want retained text", frame, latest)
+	}
+}
+
+// Agy 1.2.2 sends these placeholders literally; the fixture must not make an
+// unsupported credential configuration pass by expanding them itself.
+func TestAgyMCPHeaderRemainsLiteral(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("BEE_TEST_TOKEN", "resolved-token")
+	dir := filepath.Join(home, ".gemini", "config")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"mcpServers":{"bee":{"serverUrl":"http://127.0.0.1:1234/mcp/action:test","headers":{"Authorization":"Bearer ${BEE_TEST_TOKEN}"}}}}`
+	if err := os.WriteFile(filepath.Join(dir, "mcp_config.json"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, token, ok := mcpProbeConfig("agy", nil)
+	if !ok || token != "${BEE_TEST_TOKEN}" {
+		t.Fatal("fixture changed Agy literal header semantics")
 	}
 }

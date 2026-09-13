@@ -11,7 +11,7 @@ local configure_protocol = require("configure_protocol")
 local M = {}
 
 M.REVISION = "bee.agy-config@1"
-M.MCP_REVISION = "bee.agy-mcp@1"
+M.MCP_REVISION = "bee.agy-mcp@2"
 M.MCP_PATH = ".gemini/config/mcp_config.json"
 
 M.AGY_AUTHENTICATION = "unproven"
@@ -25,7 +25,7 @@ function M.render_mcp(gateway: configure_protocol.GatewayInput): string
             bee = {
                 serverUrl = url,
                 headers = {
-                    Authorization = "Bearer ${" .. gateway.token_environment .. "}",
+                    Authorization = "",
                 },
             },
         },
@@ -41,6 +41,7 @@ function M.mcp_file(gateway: configure_protocol.GatewayInput): (configure_protoc
     if hash_error or not digest then return nil, "mcp digest failed" end
     return {
         revision = M.MCP_REVISION,
+        secret_fields = {{path = {"mcpServers", "bee", "headers", "Authorization"}, environment = gateway.token_environment, prefix = "Bearer "}},
         path = M.MCP_PATH,
         content = content,
         digest = digest,

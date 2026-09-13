@@ -124,3 +124,10 @@ count as a passing continuation. Neither test deletes databases or cleans up an
 orphan before observing the recovery outcome. Both use fixture providers and
 verify retained HOME, conversation/app/view identity, fresh attempt and binding,
 and absence of fabricated success or prompt replay.
+
+Agy's corrected MCP delivery declares private JSON credential fields. Placement
+fills those after minting the admitted binding; the persisted template retains
+only field paths and environment names. Retained content still requires exact
+replay, so changed binding credentials do not authorize overwriting a retained
+configuration. Agy cold recovery remains unavailable until safe configuration
+replacement is implemented and verified.

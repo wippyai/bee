@@ -24,7 +24,8 @@ type ResourceGrant = {name: string, grant_ref: string, root_ref: string, subpath
 type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, retain_ms: integer}
 -- A generated configuration file for the private home: reviewed content
 -- rendered by the driver at admission, written with protected creation.
-type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
+type SecretField = {path: {string}, environment: string, prefix: string}
+type Configuration = {secret_fields: {SecretField}?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type ConfigurationDelivery = {arguments: {string}, files: {Configuration}}
 -- The plan's measurement of the launch executable, verified by the runner
 -- immediately before exec.

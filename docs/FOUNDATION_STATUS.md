@@ -2,6 +2,17 @@
 
 ## Current checkpoint — September 13
 
+**Docker Agent source checkpoint, not installed:** the production picker, broker
+and managed window now pass container PTY input/output, resize and close/removal
+with a fixture shell driver. Launch policies carry bounded `placement_options`
+under an explicit placement binding; the selected component validates them and
+native placement refuses unsupported options. All 875 unit tests pass, as do
+actual Docker restart, inspection-failure and stop-during-create/start checks.
+The combined full repository check is still running. This does not establish
+real harness credential/MCP delivery or supply an installable Docker profile.
+AppArmor is not required. Global refresh remains held because installed-to-new
+saved Agent recovery refuses the changed launch plan; existing state is retained.
+
 **New source, not installed:** `78b534f` includes the shared process-local
 managed-window lifecycle and a correction to native group signalling. A rejected
 OS signal command now returns failure, so the placement owner records an

@@ -4,6 +4,25 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+The current integration review found that narrow inspection discarded Docker's
+`State.StartedAt`. PR #67 now preserves it as optional `started_at` (head
+`a37e91a`), so an admitting component can distinguish executions of the same
+container. No timestamp is inferred from labels or a clock. Baseline/fixed
+regressions and isolated lint pass; the actual Lua HTTP client preserves distinct
+nanosecond timestamps through a private socket fixture. Existing sandbox and
+removal checks pass. The stacked PTY PR #68 includes this change at `4a0e62d`
+and its HTTP creation proof passes. Both remain unmerged and unpublished.
+
+Luna's read-only placement review confirms the common terminal seam is
+`src/placement/native/window.lua` at child construction before `attach_terminal`.
+Keep the attempt claim, materialization and lifecycle owner shared; do not copy
+the runner or store. Docker selection and its daemon/container/image/execution
+identity must come from the admitted attempt, not application-supplied window
+options. Host paths/configuration need an admitted container projection; native
+PID reconciliation must not be used for Docker. The gateway currently accepts
+only host loopback, so container MCP/hooks are a required integration change.
+These are implementation requirements, not callable Docker placement APIs.
+
 **Correction after the component-source review:** lack of container inspection
 in `exec.docker` does not establish a need for a new runtime inspection API.
 Published `userspace/docker` 0.5.12 already exposes narrow create, find by labels,

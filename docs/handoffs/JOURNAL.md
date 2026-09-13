@@ -6458,3 +6458,14 @@ proves completed-restart fencing, not atomic daemon control or managed Bee
 Docker integration. Global is unchanged. Placement still combines common
 admission with native process creation/identity; the gateway is loopback-only.
 Both seams need implementation before a usable Docker profile can be offered.
+
+### 2026-09-13 — Docker execution observation and placement review
+
+The existing userspace observation now preserves optional daemon `started_at`
+without losing precision (PR #67 `a37e91a`, stacked PR #68 `4a0e62d`). The
+baseline loses it; fixed regression/lint and actual Lua HTTP-client timestamp
+proof pass, alongside sandbox, removal and PTY creation checks. Neither PR is
+merged or published. Luna's review identifies the existing window child
+construction as the shared terminal seam. Durable attempt-derived Docker
+admission, container configuration projection and gateway delivery remain open;
+the descriptor must not become caller-selected window authority. Global unchanged.

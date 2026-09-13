@@ -12,8 +12,10 @@ Strict lint, 796 unit cases, and complete native executable acceptance pass.
 The candidate additionally passed the loopback-only network namespace proof:
 fresh desktop 1.429 s, restart 1.228 s, installed-module registry restore 3.889 s,
 restored restart 1.228 s, and warm public client reconnect 0.106 s. Retained
-artifacts were unchanged. The broader repository regression remains live on
-the preceding offline source; this is not a full-suite completion claim.
+artifacts were unchanged. The broader repository `make check` on the preceding
+offline source also completed successfully (`offline-full-check.log`, session
+27244, exit 0). That full-suite result does not include instruction functions;
+their separate unit and native acceptance is recorded above.
 
 Installation fenced against `230816bd`, backed up and verified all six files,
 and did not restart running nodes or reset databases. Runtime/native pins and
@@ -42,7 +44,8 @@ cache, affected runtime race/lint checks, and full native executable acceptance
 pass. Network-isolated fresh/restored startup and restart pass, as does public
 retained-client rejoin. Native Agent checks use fixture CLIs and verify scoped
 MCP integration; they do not establish authenticated provider orchestration.
-The full repository `make check` remains outstanding.
+The full repository `make check` subsequently passed (`offline-full-check.log`,
+session 27244, exit 0), including source/pack recovery and application gates.
 
 Installation fenced against `dac1ba49`, backed up and verified all six files,
 and did not restart running nodes or reset databases. Evidence:

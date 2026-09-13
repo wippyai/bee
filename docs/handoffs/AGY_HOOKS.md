@@ -51,8 +51,7 @@ Source tests verify command-file shape, separate token environment, host-command
 measurement, missing helper refusal, malformed and mixed wire-schema refusal,
 content hashing and ambiguous occurrence handling. All 841 Lua tests pass. The
 native selector fixture now invokes the rendered command and checks committed
-observations and their conservative `Activity uncertain` title, but has not yet
-run against an assembled executable with the new native helper.
+observations and their conservative `Activity uncertain` title, and passes against assembled candidate `8fdc0b37` with native `fe8cb0d`.
 
 The selected window set is `PreToolUse`, `PostToolUse` and `Stop`, which
 already exist in the gateway event catalog. Invocation events must not be renamed
@@ -87,3 +86,14 @@ fixture: the command sender rejected Bee's real `action:` ID prefix. Native
 `action:request-1` POST. Focused race tests and vet pass
 (`native-hook-post-action-id-check.log`). Source now pins this correction;
 final assembled acceptance remains pending. The failed candidate was not installed.
+
+Corrected candidate `8fdc0b37` (source `0d92979`, native `fe8cb0d`) passes
+`make native-binary-check`, including all four managed profiles with and without
+machine login. The Agy fixture executes the generated command through the real
+packaged sender, gateway and thread store and checks the conservative title.
+`make offline-boot-check` also passes fresh boot, restart and retained-client
+reconnect with only loopback available (0.104 s warm reconnect). Evidence:
+`agy-hooks-final-native-binary-check.log` and
+`agy-hooks-final-offline-boot-check.log`. Full source regression remains running;
+this candidate is not yet installed. Real-provider managed gateway delivery is
+still distinct from both these fixture checks and the earlier live CLI probes.

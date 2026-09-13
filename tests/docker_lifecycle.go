@@ -164,7 +164,7 @@ func run() error {
 		defer server.Close()
 		go func() { _ = server.Serve(listener) }()
 	}
-	policy := map[string]any{"schema_revision": "bee.launch-policy@2", "placement_binding": "bee.placement.docker:binding", "required_cleanup": "contained_tree", "required_exit_observation": "independent", "start_ms": 10000, "stop_grace_ms": 500, "drain_ms": 1000, "runner_drain_ms": 500, "fixture": true, "executables": map[string]string{}, "environment": map[string]string{}, "docker": map[string]any{"image": *image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "network": "none", "memory": 134217728, "nano_cpus": 1000000000, "pids_limit": 32, "home_target": "/home/bee", "mounts": []map[string]string{{"source": project, "target": project, "access": "read"}}}}
+	policy := map[string]any{"schema_revision": "bee.launch-policy@2", "placement_binding": "bee.placement.docker:binding", "required_cleanup": "contained_tree", "required_exit_observation": "independent", "start_ms": 10000, "stop_grace_ms": 500, "drain_ms": 1000, "runner_drain_ms": 500, "fixture": true, "executables": map[string]string{}, "environment": map[string]string{}, "placement_options": map[string]any{"image": *image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "network": "none", "memory": 134217728, "nano_cpus": 1000000000, "pids_limit": 32, "home_target": "/home/bee", "mounts": []map[string]string{{"source": project, "target": project, "access": "read"}}}}
 	policyJSON, _ := json.Marshal(policy)
 	socketJSON, _ := json.Marshal(selectedSocket)
 	manifest := `version: '1.0'

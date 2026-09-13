@@ -280,6 +280,9 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
         or (docker == true and data.placement_binding == "bee.placement.native:binding")) then
         return nil, nil, "launch policy does not select native placement"
     end
+    if docker ~= true and data.placement_options ~= nil then
+        return nil, nil, "native placement does not support placement_options"
+    end
     local instructions, instructions_error = configuration_protocol.instructions(data.instructions)
     if instructions_error then return nil, nil, instructions_error end
     local instruction_builder, builder_error = configuration_protocol.instruction_builder(data.instruction_builder)

@@ -17,6 +17,13 @@ registry resource containing an absolute Unix `socket_path`. The adapter never
 discovers a daemon or reads ambient Docker settings. Registry metadata describes
 the binding; host admission and policy grant the actual socket access.
 
+The launch policy selects `placement_binding: bee.placement.docker:binding` and
+places its image, user, network, mounts and limits in `placement_options`. The
+harness includes these component-owned options in the policy digest; Docker
+placement validates their exact fields before recording an intent. Options
+require an explicit placement binding. Native placement refuses these options
+instead of silently ignoring them. AppArmor is not required.
+
 The source manifest imports `bee.placement.docker:inspection`,
 `bee.threads.records:bounds` and `userspace.docker:docker_client`. These
 correspond to the `bee/placement-docker`, `bee/threads` and
@@ -91,8 +98,15 @@ adapter, and the optional component's `socket_policy` to allow only that socket.
 The service scope contains no `exec.run` permission.
 
 The native boot acceptance uses the production attachment policy and proves
-foreign-owner rejection before daemon I/O. Agent menu/PTY launch,
-credential/MCP delivery and retained conversation recovery remain unverified.
+foreign-owner rejection before daemon I/O. `make docker-agent-picker-check`
+uses the same runtime, component and immutable image arguments as the lifecycle
+check. It launches the production Agent picker and broker under their real
+policies with a fixture shell driver, checks container PTY input/output and
+resize, and confirms container removal after close. Failure cleanup is confined
+to the fixture's unpredictable actor and selected image labels.
+Real harness credential/MCP delivery and retained conversation recovery remain
+unverified; no default Docker profile or image installation is supplied by this
+fixture.
 The lifecycle fixture mounts the private host home at `/home/bee`. The driver
 renderer receives that container path; the shared materializer continues to
 write relative delivery files into the private host home. Before starting,

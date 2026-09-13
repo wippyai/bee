@@ -127,7 +127,7 @@ function M.build(value: unknown, delivered_environment: unknown?): (Config?, str
     local bytes = 0
     for index, item in ipairs(raw.command :: {unknown}) do
         local argument = bounds.text(item, 16384)
-        if not argument or argument == "" or argument:find("%z") then return nil, "invalid Docker command argument" end
+        if not argument or argument:find("%z") then return nil, "invalid Docker command argument" end
         command[index] = argument
         bytes = bytes + #argument
         if index > 64 or bytes > 65536 then return nil, "Docker command exceeds its budget" end

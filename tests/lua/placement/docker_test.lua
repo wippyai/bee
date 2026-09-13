@@ -28,6 +28,16 @@ local function define_tests()
         end)
     end)
     test.describe("Docker preparation", function()
+        test.it("preserves an empty argument while refusing an empty executable", function()
+            local raw = input()
+            raw.command = {"/bin/sh", "-c", "printf '%s' \"$1\"", "fixture", ""}
+            local config, err = configuration.build(raw)
+            if not config then error(tostring(err)) end
+            test.eq(#config.Cmd, 5)
+            test.eq(config.Cmd[5], "")
+            raw.command = {"", "argument"}
+            test.is_nil(configuration.build(raw))
+        end)
         test.it("projects explicit mounts and preserves command arguments without a shell", function()
             local raw = input()
             local config, err = configuration.build(raw)

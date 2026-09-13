@@ -122,8 +122,8 @@ local function policy_docker(pinned: registry.Snapshot, request: types.LaunchReq
     local entry = resolver.entry(pinned, request.policy_ref)
     local data = entry and bounds.object(entry.data) or nil
     if not data then return nil, fail("DENIED", "policy_ref is not a host launch policy") end
-    local selected = bounds.object(data.docker)
-    if not selected then return nil, fail("DENIED", "Docker policy has no host-selected docker specification") end
+    local selected = bounds.object(data.placement_options)
+    if not selected then return nil, fail("DENIED", "Docker policy has no host-selected placement_options") end
     return selected, nil
 end
 local function working_directory(request: types.LaunchRequest): (string?, Reply?)

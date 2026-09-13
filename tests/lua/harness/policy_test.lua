@@ -28,6 +28,28 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("pins component options with the explicitly selected placement", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = raw.data :: Entry
+            data.placement_options = {image = "one", user = "1000:1000"}
+            local missing = policy.decode("test:policy", raw)
+            test.is_nil(missing)
+            data.placement_binding = "test:placement"
+            local first, first_error = policy.decode("test:policy", raw)
+            if not first then error(tostring(first_error)) end
+            test.eq(first.placement_binding, "test:placement")
+            local options = first.placement_options
+            if not options then error("placement options were discarded") end
+            test.eq(options.image, "one")
+            data.placement_options = {image = "two", user = "1000:1000"}
+            local changed, changed_error = policy.decode("test:policy", raw)
+            if not changed then error(tostring(changed_error)) end
+            test.neq(first.digest, changed.digest)
+            data.placement_options = "untyped"
+            local invalid = policy.decode("test:policy", raw)
+            test.is_nil(invalid)
+        end)
+
         test.it("keeps the host authority digest while applying admitted preferences", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry

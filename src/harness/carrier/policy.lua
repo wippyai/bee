@@ -44,6 +44,7 @@ type Policy = {
     hook_command_ref: string?,
     fixture: boolean,
     placement_binding: string?,
+    placement_options: {[string]: unknown}?,
 }
 local function decode_map(value: unknown, name: string): ({[string]: string}?, string?)
     local result: {[string]: string} = {}
@@ -83,7 +84,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -169,6 +170,17 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         placement_binding = bounds.id(data.placement_binding)
         if not placement_binding then return nil, ref .. ": placement_binding is not an identifier" end
     end
+    -- Component-owned options are measured here, then decoded by the selected
+    -- placement before it records an intent. The harness does not interpret
+    -- container, VM or native execution settings.
+    local placement_options: {[string]: unknown}? = nil
+    if data.placement_options ~= nil then
+        if not placement_binding then return nil, ref .. ": placement_options requires an explicit placement_binding" end
+        placement_options = bounds.object(data.placement_options)
+        if not placement_options then return nil, ref .. ": placement_options must be an object" end
+        local options_json, options_error = canonical.encode(placement_options)
+        if not options_json or #options_json > 65536 then return nil, ref .. ": placement_options must be bounded encodable data" end
+    end
     local options: {[string]: unknown} = {}
     for name, item in pairs(prepare_options) do options[name] = item end
     local gateway_tools: {string} = {}
@@ -202,7 +214,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
     return decoded, nil
 end
 function M.load(ref: string): (Policy?, string?)

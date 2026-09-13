@@ -234,6 +234,17 @@ func configureFixture(repo, dir, image string) error {
 		return fmt.Errorf("managed window fixture owner marker anchor missing")
 	}
 	mainText = updated
+	assertion := `assert(saw, "broker-mounted PTY did not receive input")`
+	replacement := `if not saw then
+        assert(view:send({type="resize",width=120,height=20}))
+        time.sleep("100ms")
+        local final=assert(view:snapshot())
+        error("Docker Agent launch frame: "..table.concat(final.rows," | "))
+    end`
+	if !strings.Contains(mainText, assertion) {
+		return fmt.Errorf("missing launch diagnostic anchor")
+	}
+	mainText = strings.Replace(mainText, assertion, replacement, 1)
 	return os.WriteFile(mainPath, []byte(mainText), 0600)
 }
 
@@ -325,7 +336,7 @@ func run() error {
 	if err := os.MkdirAll(filepath.Join(dir, "src", "docker_host"), 0700); err != nil {
 		return err
 	}
-	hostIndex := "version: '1.0'\nnamespace: bee.placement.docker.daemon\nentries:\n- name: fixture_socket\n  kind: registry.entry\n  meta: {type: bee.docker_daemon}\n  data: {socket_path: " + selectedSocket + "}\n"
+	hostIndex := "version: '1.0'\nnamespace: bee.placement.docker.daemon\nentries:\n- name: daemon_ref\n  kind: registry.entry\n  data: {resource_ref: bee.placement.docker.daemon:fixture_socket}\n- name: fixture_socket\n  kind: registry.entry\n  meta: {type: bee.docker_daemon}\n  data: {socket_path: " + selectedSocket + "}\n"
 	if err := os.WriteFile(filepath.Join(dir, "src", "docker_host", "_index.yaml"), []byte(hostIndex), 0600); err != nil {
 		return err
 	}

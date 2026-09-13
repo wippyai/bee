@@ -41,8 +41,8 @@ parent into another session. Root privacy and regular-file expectations must be
 checked at the operation boundary, not inferred from registry creation metadata.
 No remove-then-create interval or general shell command is an acceptable substitute.
 
-The remaining design decision is how the existing filesystem provider supplies
-a handle confined to the selected session/parent for the entire operation. Merely
+The runtime proposal pins verified parent directory handles for the entire
+operation. Merely
 exposing `rename` and `lstat` to Lua does not prove this. The operation should be
 optional for providers that cannot supply the guarantee and refuse explicitly;
 it must not claim atomicity or crash durability on every filesystem backend.
@@ -60,7 +60,25 @@ sync failure, concurrent attempts, crash/restart, and unchanged provider session
 files. Real Codex/Agy continuation must then prove fresh gateway credentials and
 no duplicate native process or prompt replay.
 
-No runtime change or new callable API is introduced by this handoff. The current
-open runtime PR list has no filesystem replacement proposal. Any implementation
-belongs in a runtime PR assigned to Rodrigo (`skhaz`), with existing ownership
-preserved; do not modify the dirty shared runtime checkout.
+## Runtime proposal and validation
+
+[Runtime PR #744](https://github.com/wippyai/runtime/pull/744), assigned to Rodrigo
+(`skhaz`), adds optional `AtomicWriteFS` and Lua `fs:writefile_atomic(path, content)`.
+It is not merged or present in Bee's installed runtime. The isolated runtime
+commit is `a30ad98673`; the shared runtime checkout was not modified.
+
+The Linux/macOS directory implementation holds verified parent handles, publishes
+through an exclusive temporary file and reports post-publication directory-sync
+failure separately. Lua accepts strings up to 8 MiB, requests mode `0600`, and
+uses fixed provider-error messages. Unsupported providers refuse explicitly.
+This is whole-file publication, not compare-and-swap or a session authority grant.
+
+Final filesystem API, directory and Lua race suites pass; repository-pinned lint
+reports zero issues. Coverage includes real Lua/backend publication, parent
+replacement, concurrent readers/writers and injected publication failures.
+Darwin arm64 and Windows amd64 directory packages cross-compile; macOS has not
+been executed and Windows explicitly returns unsupported.
+
+Bee's consumer is still pending. Existing retained configuration remains
+byte-identical replay only. Real-provider recovery, crash/restart behavior and
+preservation of provider conversation files still require Bee acceptance.

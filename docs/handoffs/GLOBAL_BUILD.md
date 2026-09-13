@@ -16,8 +16,9 @@ failed while requiring a new frame after F12. Focused inspection found an
 incorrect test assumption: an unavailable row and a refresh can leave identical
 pixels, and presenter replacement need not emit an identical physical frame.
 The corrected check uses resize to require a redraw and then checks input/close;
-it passes without production or timeout changes. The complete selector is
-repeating as session `59306`, log `agent-failure-selector.log`. The original
+it passes without production or timeout changes. The complete selector passed
+as session `59306`, log `agent-failure-selector.log`, covering all four managed
+harness fixtures, saved profiles, scoped MCP and login present/absent. The original
 failure remains in `agent-failure-native.log`; the diagnostic frame showed the
 expected picker and existing unavailable message, with no sequence advancement.
 

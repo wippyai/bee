@@ -1,5 +1,35 @@
 # Global Bee build — September 12, 2026
 
+## Current install: Contents and preserved update settings
+
+Global SHA `6cfa007158d0891f8ec3413edda2c70ca3df0e00c6ff7e41b2e6b7ade1a293ff`
+contains source `ef94c84`; acceptance-only follow-up is `aa45f5c`. Modules adds
+Contents (C) for exact-version entry definitions and packaged files, including
+paging, parent navigation and compact views. Updating a Bee-managed root loads
+its saved typed values, preserves individual edits/clears and blocks planning
+until inventory is available. Stale reads retire without cancelling the Modules
+process, and the completed read has a visible readiness state.
+
+This source merges global Agent thread messaging `5156fb0`, preserving About,
+the Bee mark, existing migration management and gateway scope restrictions.
+Strict lint, 79 focused Hub/Modules cases, source/pack Modules/update/Contents
+workflows, complete native binary acceptance and live public exact-version entry
+preview pass. The live preview proves no installation and unchanged bundled
+artifacts; packaged filesystem behavior has source/pack UI and separate native
+Hub API acceptance. Evidence: `hub-contents-final-check.log` (lint/unit/general
+Modules slice), `hub-contents-workflow-check.log`, `hub-contents-update-native.log`,
+`hub-contents-global-install.json`, and rendered `modules-contents-*.png`.
+
+The installer fenced against `64610df9`, verified all six files, and preserved
+runtime/native/patch identity. Backup: `global-before-contents-64610df9`. No owners
+were restarted; retained sessions continue running their loaded UI. Settings →
+About on a fresh owner reports `ef94c84`.
+
+Full acceptance on this combined source runs in `hub-contents-full-check.log` and
+is incomplete. The older full run ended in the shared-desktop shutdown case;
+that exact source/pack case passed alone. See the [completion audit](HUB_COMPLETION.md)
+for remaining update discovery, optional plugin and installed-app admission work.
+
 ## Current install: Modules presentation follow-up
 
 Global SHA `668d2e9078bcbd53935ebb1e5840ee000faae26ea036cdce52e0b6b75fdf8b21`

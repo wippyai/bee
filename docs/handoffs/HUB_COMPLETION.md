@@ -12,13 +12,13 @@ Sources reviewed: Kickside `platform/hub/src/README.md`,
 | Requirement | Current evidence | Remaining work |
 |---|---|---|
 | Catalog, keyword `bee`, independent search, README and exact versions | `src/hub/catalog.lua`; native Modules and source/pack UI checks | Improve discoverability as more package metadata is exposed |
-| Preview before installation: module state and filesystem | `src/hub/preview.lua`; `make hub-preview-check` verifies no registry revision change | Contents UI in progress; prove actual uninstalled artifact navigation in the native executable |
-| Install/update/remove with transitive requirements and typed values | `src/hub/plan.lua`, `requirements.lua`, `service.lua`; live Hub lifecycle acceptance | Saved update values need final UI acceptance/integration; discover available updates from Installed |
+| Preview before installation: module state and filesystem | `src/hub/preview.lua`; `make hub-preview-check` verifies no registry revision change | Contents UI installed; native public entry navigation and separate file API/UI checks pass |
+| Install/update/remove with transitive requirements and typed values | `src/hub/plan.lua`, `requirements.lua`, `service.lua`; live Hub lifecycle acceptance | Saved values are preserved with source/pack acceptance; discover available updates from Installed |
 | Migration choices and restart recovery | `migrations.lua`, `migration_work.lua`, `migration_runner.lua`; real SQLite service checks | Real PostgreSQL/MySQL service acceptance remains unproven |
 | Declarative Hub component and later scanner/plugin installation | `build/modules.json`, `src/hub/_index.yaml` declare the module and scoped facade | No reviewed scanner binding contract yet; package metadata must not authorize plugins |
 | Installed apps appear under Tools and request admission before starting | Website promise; `src/core/applications/catalog.lua` reads protected admission; broker loads bindings at startup | Hub installation alone does not grant admission or refresh the broker's bindings. Need an owner-authorized, reviewed integration and actual installed-app proof |
 | Per-component overlays and approved sharing | Owned by governed authoring/activation and Hive destination admission, not by Hub artifact inspection | Not proven by successful Hub publication; coordinate with those lanes without adding parallel owners |
-| Visible version/build details and preserved Bee mark | Settings About native acceptance; global `668d2e90` | Retained owners keep the old loaded UI until owner replacement |
+| Visible version/build details and preserved Bee mark | Settings About native acceptance; global `6cfa0071` | Retained owners keep the old loaded UI until owner replacement |
 | No Keeper dependency, lock editing or runtime changes in this lane | Hub calls native public APIs and Bee-owned services; installer compares existing runtime/native/patch identity | Continue enforcing these constraints for every integration/build |
 
 Kickside also exposes catalog authentication, bulk update discovery, installed
@@ -42,3 +42,7 @@ The exact shared-store source/pack case then passed alone. Evidence is
 local evidence. This is a failed full run with a passing focused reproduction,
 not a passing final regression. The final Contents/update source still needs its
 own combined gate.
+
+Global `6cfa0071` now contains source `ef94c84` plus acceptance-only checkpoint
+`aa45f5c`. The full combined run is active in `hub-contents-full-check.log`; its
+result must be checked before claiming the final regression passed.

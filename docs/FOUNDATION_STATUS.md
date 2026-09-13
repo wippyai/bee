@@ -1,5 +1,12 @@
 # Foundation status
 
+Global `6cfa0071` adds Contents browsing and preserves saved module settings on
+updates, including failed/delayed-read handling. It retains Agent thread messaging.
+79 focused cases, source/pack workflows, native acceptance and live exact-version
+entry preview pass; the final full regression is running. Installed-app admission
+and optional Hub plugin integration remain incomplete. See
+[current build](handoffs/GLOBAL_BUILD.md).
+
 Global `668d2e90` adds readable installed-package rows, active action/policy/tab
 choices and preserved README code indentation. Strict lint, 73 focused cases,
 source/pack interaction and native acceptance pass. Running owners retain older

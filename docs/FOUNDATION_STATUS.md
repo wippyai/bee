@@ -11,8 +11,10 @@ Claude fixture cold recovery pass. The exact candidate also launches real Agy
 1.2.2 to its normal interactive prompt after the ordinary trust confirmation;
 no model prompt was submitted. Full repository regression stopped at the
 drag-failure fixture's fresh-runtime readiness timeout (no terminal output);
-isolated reproduction is running. Real Claude reaches its interactive prompt
-but reports "Not logged in"; its credential-delivery diagnosis remains open. See
+the unchanged fixture passes alone and full regression is repeating. Real Claude
+reports "Not logged in" with the copied saved login both inside Bee and directly
+in a fresh HOME. The source access token is expired; interactive refresh is
+unverified and no Bee-specific cause is established. See
 [global build](handoffs/GLOBAL_BUILD.md) for release evidence.
 
 **Remaining agent workflow work:** managed Docker execution, real-provider cold

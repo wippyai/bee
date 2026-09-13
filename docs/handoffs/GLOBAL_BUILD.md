@@ -33,6 +33,15 @@ existing account metadata also did not resolve it; that wrapper is external
 evidence only and is not a proposed production fix. File delivery and child
 authentication are being checked separately.
 
+The unchanged drag-failure fixture passes alone; full regression is repeating
+as session `45783`, log `agent-login-hooks-check-repeat.log`. The initial timeout
+remains unexplained. The Claude login failure also reproduces directly outside
+Bee with the same copied credential and minimal HOME: normal prompt, "Not logged
+in", and a changed credential file (1.52 seconds, no model prompt). The source
+access token is expired; a successful `claude auth status` alone did not prove
+interactive refresh. Evidence: `claude-direct-expired-login.log`. No new Bee
+login workaround follows from this result.
+
 Real Grok managed startup also passes through the picker and generated command
 hooks: SessionStart commits with a conversation ID in its bound thread, without
 submitting a model prompt. The opt-in `make native-grok-live-check` requires

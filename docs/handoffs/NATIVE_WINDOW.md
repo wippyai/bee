@@ -11,9 +11,12 @@ Bee MCP configuration behind that flow. Docker remains an unimplemented option
 until its separate placement acceptance exists.
 
 The private `bee.harness.window:app` actor is spawned by the application broker
-with the sole terminal grant. It owns exactly one native child and terminal
-session, reuses typed launch admission and shared attempt preparation, and
-opens the PTY in its own actor so `attach_terminal()` consumes that grant. Its
+with the sole terminal grant. Its lifecycle is implemented by the reusable
+`bee.harness.window:runtime` library, while the process entry supplies the
+native `bee.placement.native:window` implementation. It owns exactly one
+native child and terminal session, reuses typed launch admission and shared
+attempt preparation, and opens the PTY in its own actor so `attach_terminal()`
+consumes that grant. Its
 broker launch argument is one strict JSON request; the authenticated workspace
 is injected and callers cannot choose an environment or transport. Completion
 is recorded as `uncertain`, except explicit application close, which records

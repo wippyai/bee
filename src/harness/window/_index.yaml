@@ -46,11 +46,10 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.desktop:appearance
-- name: app
-  kind: process.lua
-  source: file://app.lua
-  method: main
-  modules: [tty, process, channel, time, funcs, uuid, json]
+- name: runtime
+  kind: library.lua
+  source: file://runtime.lua
+  modules: [tty, exec, process, channel, time, funcs, uuid, json]
   imports:
     client: bee.application:client
     text: bee.application:text
@@ -58,7 +57,6 @@ entries:
     input_event: bee.harness.window:input
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
-    window: bee.placement.native:window
     picker: bee.harness.window:picker
     recovery: bee.harness.window:recovery
     hooks: bee.harness.window:hooks
@@ -66,6 +64,14 @@ entries:
     records: bee.harness.carrier:hook_records
     appearance: bee.desktop:appearance
     restore_view: bee.harness.window:restore_view
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: []
+  imports:
+    runtime: bee.harness.window:runtime
+    window: bee.placement.native:window
   meta:
     type: bee.application
     application:

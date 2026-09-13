@@ -3,9 +3,9 @@
 This optional component provides `bee.placement.docker.daemon:daemon`, a thin typed
 daemon adapter, and the `bee.placement.docker` placement lifecycle over the
 existing `userspace.docker:docker_client`. It has no
-placement database, attempt state, cleanup worker, process execution or native
-fallback. The admitting placement owner remains responsible for intent,
-transitions, reconciliation and cleanup.
+owned database or native fallback. The placement lifecycle uses the shared
+native placement receipt store and owns its Docker transitions, reconciliation
+and cleanup; the daemon adapter owns no attempt state or process execution.
 
 The placement binding is `bee.placement.docker:binding`; its public methods are
 registered in the component's `lifecycle` namespace and use the shared native

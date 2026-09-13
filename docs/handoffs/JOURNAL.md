@@ -6492,3 +6492,20 @@ credential/file publication stays with the existing materializer. Codex/Agy
 hook token environment delivery is a remaining contract gap, not something this
 constructor silently omits. Actual admission, sandbox execution, gateway and
 managed Agent acceptance remain incomplete. Global Bee is unchanged.
+
+### September 13 — Docker resource mounts (Codex with Luna high)
+
+Docker preparation now accepts a bounded list of admitted resources rather than
+one project path. It preserves each mount's access, rejects ambiguous targets
+and private-home exposure, and accepts a working directory under any selected
+mount. The former workspace fields are refused. Source normalization is not
+filesystem authorization; the placement owner still has to resolve and recheck
+each grant before creating a container.
+
+Strict lint, 854 Lua tests and the Go/real-Lua-HTTP-client Docker fixture pass.
+The fixture checks simultaneous read-only project and writable output binds.
+Full `make check` is running against the atomic-FS candidate; evidence is in
+`bee-evidence/0912/bee-docker-mounts-check.log`. No Docker profile was enabled and
+global Bee was not changed. Wolfden 1628 records the preceding ownership-policy
+proof: existing principal-level expression policies avoid a required broker
+spawn redesign, but do not replace the trusted durable-attempt check.

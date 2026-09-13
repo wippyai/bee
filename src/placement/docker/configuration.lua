@@ -4,6 +4,7 @@
 local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
+type Mount = {source: string, target: string, access: "read" | "write"}
 type Config = {
     Image: string, User: string, Cmd: {string}, WorkingDir: string, Env: {string},
     Tty: boolean, OpenStdin: boolean, AttachStdin: boolean, AttachStdout: boolean, AttachStderr: boolean,
@@ -44,7 +45,7 @@ function M.build(value: unknown): (Config?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "Docker preparation must be an object" end
     local extra = bounds.fields(raw, {"image", "user", "network", "apparmor", "memory", "nano_cpus", "pids_limit",
-        "command", "home_source", "home_target", "workspace_source", "workspace_target", "workspace_access", "working_directory", "labels"})
+        "command", "home_source", "home_target", "mounts", "working_directory", "labels"})
     if extra then return nil, extra end
     local selected_image = image(raw.image)
     if not selected_image then return nil, "Docker preparation needs the exact local image ID" end
@@ -63,17 +64,47 @@ function M.build(value: unknown): (Config?, string?)
     local memory, cpu, pids = positive(raw.memory), positive(raw.nano_cpus), positive(raw.pids_limit)
     if not memory or not cpu or not pids then return nil, "Docker resource limits must be positive exact integers" end
     local home_source, home_target = path(raw.home_source), path(raw.home_target)
-    local project_source, project_target = path(raw.workspace_source), path(raw.workspace_target)
-    if not home_source or not home_target or not project_source or not project_target then return nil, "Docker mount paths must be absolute and normalized" end
-    if home_source:find("docker.sock", 1, true) or project_source:find("docker.sock", 1, true) then return nil, "Docker socket mounts are forbidden" end
-    if overlap(home_source, project_source) then return nil, "project mount must not expose the private home" end
-    if overlap(home_target, project_target) or overlap(home_target, "/tmp") or overlap(project_target, "/tmp") then
-        return nil, "Docker mount targets overlap"
+    if not home_source or not home_target then return nil, "Docker mount paths must be absolute and normalized" end
+    if home_source:find("docker.sock", 1, true) or home_target:find("docker.sock", 1, true) then return nil, "Docker socket mounts are forbidden" end
+    if overlap(home_target, "/tmp") then return nil, "Docker mount targets overlap" end
+    if type(raw.mounts) ~= "table" then return nil, "Docker mounts must be an array" end
+    local mount_values = raw.mounts :: {unknown}
+    local mount_count = 0
+    for key in pairs(raw.mounts :: Object) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 15 then
+            return nil, "Docker mounts must be dense and bounded"
+        end
+        mount_count = mount_count + 1
     end
-    local access = raw.workspace_access
-    if access ~= "read" and access ~= "write" then return nil, "workspace access must be read or write" end
+    if mount_count < 1 or mount_count > 15 then return nil, "Docker mounts must contain 1 to 15 entries" end
+    local mounts: {Mount} = {}
+    for index = 1, mount_count do
+        local declared = bounds.object(mount_values[index])
+        if not declared then return nil, "Docker mount " .. tostring(index) .. " must be an object" end
+        local extra_mount = bounds.fields(declared, {"source", "target", "access"})
+        if extra_mount then return nil, extra_mount end
+        local source, target = path(declared.source), path(declared.target)
+        if not source or not target then return nil, "Docker mount paths must be absolute and normalized" end
+        if source:find("docker.sock", 1, true) or target:find("docker.sock", 1, true) then
+            return nil, "Docker socket mounts are forbidden"
+        end
+        if overlap(home_source, source) then return nil, "mount must not expose the private home" end
+        if overlap(home_target, target) or overlap(target, "/tmp") then return nil, "Docker mount targets overlap" end
+        for _, prior_mount in ipairs(mounts) do
+            if overlap(prior_mount.target, target) then return nil, "Docker mount targets overlap" end
+        end
+        local access = declared.access
+        if access ~= "read" and access ~= "write" then return nil, "mount access must be read or write" end
+        mounts[index] = {source = source, target = target, access = access}
+    end
     local workdir = path(raw.working_directory)
-    if not workdir or (not within(workdir, home_target) and not within(workdir, project_target)) then return nil, "working directory must be within an admitted mount" end
+    local workdir_allowed = workdir and within(workdir, home_target)
+    if workdir and not workdir_allowed then
+        for _, mount in ipairs(mounts) do
+            if within(workdir, mount.target) then workdir_allowed = true; break end
+        end
+    end
+    if not workdir or not workdir_allowed then return nil, "working directory must be within an admitted mount" end
     local declared = bounds.object(raw.labels)
     if not declared then return nil, "Docker admission labels are required" end
     local extra_label = bounds.fields(declared, LABELS)
@@ -99,13 +130,17 @@ function M.build(value: unknown): (Config?, string?)
         if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > #command then return nil, "Docker command must be dense" end
     end
     if #command == 0 or not path(command[1]) then return nil, "Docker executable must be absolute" end
+    local binds: {string} = {home_source .. ":" .. home_target .. ":rw"}
+    for _, mount in ipairs(mounts) do
+        binds[#binds + 1] = mount.source .. ":" .. mount.target .. (mount.access == "read" and ":ro" or ":rw")
+    end
     return {Image = selected_image, User = user, Cmd = command, WorkingDir = workdir,
         Env = {"HOME=" .. home_target, "TMPDIR=/tmp"}, Tty = true, OpenStdin = true,
         AttachStdin = true, AttachStdout = true, AttachStderr = true, Labels = labels,
         HostConfig = {ReadonlyRootfs = true, Privileged = false, AutoRemove = false,
             CapDrop = {"ALL"}, SecurityOpt = {"no-new-privileges:true", "seccomp=runtime/default", "apparmor=" .. apparmor},
             PidsLimit = pids, Memory = memory, NanoCPUs = cpu, NetworkMode = network,
-            Binds = {home_source .. ":" .. home_target .. ":rw", project_source .. ":" .. project_target .. (access == "read" and ":ro" or ":rw")},
+            Binds = binds,
             Tmpfs = {["/tmp"] = "rw,nosuid,nodev,noexec"}, ExtraHosts = {}, Devices = {}}}, nil
 end
 return M

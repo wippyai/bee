@@ -7,7 +7,8 @@ local function input(): Object
     return {image = image, user = "1000:1000", network = "bee-agents", apparmor = "docker-default",
         memory = 536870912, nano_cpus = 1000000000, pids_limit = 128,
         command = {"/usr/bin/codex", "a task with spaces"}, home_source = "/private/session/home", home_target = "/home/bee",
-        workspace_source = "/projects/demo", workspace_target = "/workspace", workspace_access = "read", working_directory = "/workspace/src",
+        mounts = {{source = "/projects/demo", target = "/workspace", access = "read"},
+            {source = "/projects/output", target = "/output", access = "write"}}, working_directory = "/workspace/src",
         labels = {["bee.actor_ref"] = "actor", ["bee.revision_digest"] = string.rep("b", 64), ["bee.attempt_id"] = "attempt",
             ["bee.request_digest"] = string.rep("c", 64), ["bee.lease_fence"] = "1", ["bee.image_digest"] = image}}
 end
@@ -22,6 +23,7 @@ local function define_tests()
             test.eq(config.WorkingDir, "/workspace/src")
             test.eq(config.HostConfig.Binds[1], "/private/session/home:/home/bee:rw")
             test.eq(config.HostConfig.Binds[2], "/projects/demo:/workspace:ro")
+            test.eq(config.HostConfig.Binds[3], "/projects/output:/output:rw")
             test.is_true(config.HostConfig.ReadonlyRootfs)
             test.is_false(config.HostConfig.Privileged)
             test.is_false(config.HostConfig.AutoRemove)
@@ -34,27 +36,50 @@ local function define_tests()
             local labels = raw.labels :: {[string]: string}
             command[1] = "/changed"
             labels["bee.attempt_id"] = "changed"
+            local mounts = raw.mounts :: {Object}
+            mounts[2].target = "/changed-output"
             test.eq(config.Cmd[1], "/usr/bin/codex")
             test.eq(config.Labels["bee.attempt_id"], "attempt")
-            raw.workspace_access = "write"
+            test.eq(config.HostConfig.Binds[3], "/projects/output:/output:rw")
+            mounts[1].access = "write"
             local writable = configuration.build(raw)
             if not writable then error("write access refused") end
             test.eq(writable.HostConfig.Binds[2], "/projects/demo:/workspace:rw")
+            local second_workdir = input(); second_workdir.working_directory = "/output/build"
+            local second_config = configuration.build(second_workdir)
+            if not second_config then error("second mount workdir refused") end
+            test.eq(second_config.WorkingDir, "/output/build")
+            local max = input()
+            local max_mounts = max.mounts :: {Object}
+            for index = 3, 15 do
+                max_mounts[index] = {source = "/projects/mount" .. tostring(index), target = "/mount" .. tostring(index), access = index % 2 == 0 and "read" or "write"}
+            end
+            local bounded = configuration.build(max)
+            if not bounded then error("15 mounts refused") end
+            test.eq(#bounded.HostConfig.Binds, 16)
+            max_mounts[16] = {source = "/projects/mount16", target = "/mount16", access = "read"}
+            test.is_nil(configuration.build(max))
         end)
         test.it("refuses mount escapes, overlap and private home exposure", function()
             local cases: {{field: string, value: unknown}} = {
-                {field = "workspace_source", value = "/private"},
+                {field = "mounts", value = {{source = "/private", target = "/workspace", access = "read"}}},
                 {field = "home_source", value = "/projects/demo/.wippy/home"},
-                {field = "workspace_source", value = "/"},
-                {field = "workspace_source", value = "/run/docker.sock"},
-                {field = "workspace_source", value = "/projects/../private"},
-                {field = "workspace_target", value = "/home"},
-                {field = "workspace_target", value = "/tmp/project"},
+                {field = "mounts", value = {{source = "/projects/demo", target = "/", access = "read"}}},
+                {field = "mounts", value = {{source = "/run/docker.sock", target = "/workspace", access = "read"}}},
+                {field = "mounts", value = {{source = "/projects/../private", target = "/workspace", access = "read"}}},
+                {field = "mounts", value = {{source = "/projects/other", target = "/home", access = "read"}}},
+                {field = "mounts", value = {{source = "/projects/other", target = "/tmp/project", access = "read"}}},
+                {field = "home_target", value = "/tmp"},
                 {field = "home_target", value = "/workspace/home"},
                 {field = "working_directory", value = "/workspace-other"},
                 {field = "working_directory", value = "/workspace/../home"},
                 {field = "home_source", value = "/private:rw"},
                 {field = "home_source", value = "/private\nhome"},
+                {field = "mounts", value = {{source = "/projects/one", target = "/workspace", access = "read"},
+                    {source = "/projects/two", target = "/workspace/nested", access = "write"}}},
+                {field = "mounts", value = {[1] = {source = "/projects/one", target = "/workspace", access = "read"}, [3] = {source = "/projects/two", target = "/output", access = "write"}}},
+                {field = "mounts", value = {{source = "/projects/one", target = "/workspace", access = "read", metadata = "ignored"}}},
+                {field = "mounts", value = {[1] = {source = "/projects/one", target = "/workspace", access = "read"}, metadata = "ignored"}},
             }
             for _, case in ipairs(cases) do
                 local raw = input(); raw[case.field] = case.value
@@ -68,7 +93,10 @@ local function define_tests()
                 {field = "apparmor", value = "unconfined"}, {field = "network", value = "host"},
                 {field = "network", value = "bridge"}, {field = "network", value = "container:other"},
                 {field = "memory", value = 0}, {field = "nano_cpus", value = 0.5},
-                {field = "pids_limit", value = -1}, {field = "workspace_access", value = "owner"},
+                {field = "pids_limit", value = -1},
+                {field = "mounts", value = {{source = "/projects/one", target = "/workspace", access = "owner"}}},
+                {field = "mounts", value = {}},
+                {field = "mounts", value = {[1] = {source = "/projects/one", target = "/workspace", access = "read"}, [16] = {source = "/projects/sixteen", target = "/sixteen", access = "read"}}},
                 {field = "environment", value = {TOKEN = "not-admitted"}}, {field = "privileged", value = true},
                 {field = "command", value = {"relative"}}, {field = "command", value = {[1] = "/bin/sh", [3] = "gap"}},
             }
@@ -76,6 +104,10 @@ local function define_tests()
                 local raw = input(); raw[case.field] = case.value
                 local config, err = configuration.build(raw)
                 test.is_nil(config); test.is_true(err ~= nil)
+            end
+            for _, field in ipairs({"workspace_source", "workspace_target", "workspace_access"}) do
+                local raw = input(); raw[field] = "/legacy"
+                test.is_nil(configuration.build(raw))
             end
             local raw = input()
             local labels = raw.labels :: Object

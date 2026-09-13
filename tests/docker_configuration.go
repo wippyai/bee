@@ -94,7 +94,7 @@ func run() error {
 					problems = append(problems, "incorrect "+key)
 				}
 			}
-			if !reflect.DeepEqual(host["Binds"], []any{"/private/session/home:/home/bee:rw", "/projects/demo:/workspace:ro"}) {
+			if !reflect.DeepEqual(host["Binds"], []any{"/private/session/home:/home/bee:rw", "/projects/demo:/workspace:ro", "/projects/output:/output:rw"}) {
 				problems = append(problems, "incorrect mounts")
 			}
 			if !reflect.DeepEqual(host["SecurityOpt"], []any{"no-new-privileges:true", "apparmor=docker-default"}) {
@@ -163,8 +163,10 @@ local function main()
     local image = "sha256:" .. string.rep("a",64)
     local config, err = configuration.build({image=image,user="1000:1000",network="bee-agents",apparmor="docker-default",
         memory=536870912,nano_cpus=1000000000,pids_limit=128,command={"/usr/bin/codex","a task with spaces"},
-        home_source="/private/session/home",home_target="/home/bee",workspace_source="/projects/demo",workspace_target="/workspace",
-        workspace_access="read",working_directory="/workspace/src",labels={
+        home_source="/private/session/home",home_target="/home/bee",mounts={
+            {source="/projects/demo",target="/workspace",access="read"},
+            {source="/projects/output",target="/output",access="write"}},
+        working_directory="/workspace/src",labels={
             ["bee.actor_ref"]="actor",["bee.revision_digest"]=string.rep("b",64),["bee.attempt_id"]="attempt",
             ["bee.request_digest"]=string.rep("c",64),["bee.lease_fence"]="1",["bee.image_digest"]=image}})
     if not config then error(tostring(err)) end

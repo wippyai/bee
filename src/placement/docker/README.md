@@ -15,9 +15,10 @@ the selected container-visible HOME.
 The projection keeps the root read-only, drops capabilities, requires
 no-new-privileges, default seccomp and a selected AppArmor profile, uses explicit
 resource limits and network selection, and mounts only the private home plus
-admitted project. Home and project sources must not overlap: mounting a project
-that contains private placement homes would expose credentials. Mount targets
-cannot overlap each other or the private `/tmp`. Project access is preserved.
+one to fifteen admitted mounts. Home and admitted host sources must not overlap:
+mounting a source that contains private placement homes would expose credentials.
+Mount targets cannot overlap each other, the private home target or `/tmp`.
+Each admitted mount preserves its requested read or write access.
 
 Only HOME and TMPDIR are generated, matching the existing narrow contract.
 Arbitrary environment fields are refused, not discarded. Broader profile
@@ -28,8 +29,12 @@ through this library.
 
 The input is a strict object with `image` (local `sha256` image ID), `user`
 (`uid:gid`), `network`, `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
-`command`, `home_source`, `home_target`, `workspace_source`, `workspace_target`,
-`workspace_access`, `working_directory`, and the six narrow admission `labels`.
+`command`, `home_source`, `home_target`, `mounts`, `working_directory`, and the
+six narrow admission `labels`. `mounts` is a dense array of one to fifteen
+objects, each containing only `source`, `target`, and `access` (`read` or
+`write`). The home plus these mounts therefore stays within the userspace
+16-bind limit. Legacy `workspace_source`, `workspace_target`, and
+`workspace_access` fields are refused as unknown input.
 The returned config uses the existing Docker field names. Unknown input is
 refused; this is not a pass-through for arbitrary Docker options.
 

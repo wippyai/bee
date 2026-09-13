@@ -4,6 +4,14 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+Native candidate `5c4b738` adds the optional Wippy boot component
+`docker.Component(daemonRef, cli)`. The host supplies and owns the client;
+construction/loading does no discovery or daemon I/O and adds no permissions.
+Loading requires the Lua code manager and refuses replacement of an existing
+Docker module binding. The real code-manager/Lua refusal tests, native Docker
+race/integration suite and vet pass. Default desktop composition still does not
+register it; this is an available host composition seam, not a Docker Agent.
+
 The integration audit confirms that the current application scope is selected
 by the broker before spawning the managed window (`core/applications/broker.lua`).
 The window later claims its attempt and materializes configuration in
@@ -39,11 +47,21 @@ container as a completed managed Agent.
 `bee.placement.docker:configuration` now supplies an internal pure projection
 from explicit image, sandbox limits, admitted mount paths and attempt labels to
 the existing narrow Docker create config. It preserves argument boundaries and
-project access, generates container-visible HOME/TMPDIR, and refuses unknown
+per-resource access, generates container-visible HOME/TMPDIR, and refuses unknown
 options, mutable images, host network sharing, mount traversal/overlap and a
 project source containing the private home. Supplied paths/labels grant nothing.
 The optional module has no placement binding, Docker runtime dependency or Agent menu
 entry. The owner has not yet connected it to durable admission/materialization.
+
+Preparation now takes a strict `mounts` array (1–15 resource mounts in addition
+to the private home), replacing the single-project fields. Each resource retains
+its own read/write mode, and the working directory may lie under any admitted
+mount. Sparse arrays, unknown mount fields, overlaps with the private home or
+other targets, and excess mounts are refused. The real HTTP-client fixture checks
+a read-only project and a writable output mount in the same create request.
+All 854 Lua tests, strict lint, and that fixture pass; the full repository gate
+for this mount change is running. The preceding full gate below applies to the
+earlier single-project implementation.
 
 All 854 Lua tests pass. `make docker-configuration-check` loads this projection,
 the reviewed userspace narrow runtime and the actual Lua Docker HTTP client in

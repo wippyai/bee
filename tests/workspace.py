@@ -33,10 +33,11 @@ def configure_managed_gateway(folder, address=None):
     readiness = next((entry for entry in document["entries"] if entry["name"] == "gateway_readiness_policy"), None)
     assert endpoint is not None and readiness is not None
     endpoint["data"]["address"] = selected
-    resources = readiness["policy"]["resources"]
-    original = "http://127.0.0.1:*/ready"
-    assert original in resources
-    resources[resources.index(original)] = f"http://{selected}/ready"
+    assert readiness["kind"] == "security.policy.expr"
+    readiness["policy"]["expression"] = (
+        '(action == "http_client.private_ip" && resource == "127.0.0.1") || '
+        f'(action == "http_client.request" && resource == "http://{selected}/ready")'
+    )
     host.write_text(yaml.safe_dump(document, sort_keys=False))
     gateway = folder / "src/gateway/_index.yaml"
     gateway_document = yaml.safe_load(gateway.read_text())

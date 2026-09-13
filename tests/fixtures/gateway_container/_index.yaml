@@ -21,7 +21,7 @@ entries:
   kind: process.lua
   source: file://probe.lua
   method: main
-  modules: [funcs, json, http_client, time, env, logger]
+  modules: [funcs, json, http_client, time, env, logger, security]
   security:
     policies: [bee.gateway_container:policy, bee:gateway_admit_policy,
       bee:gateway_materialize_policy, bee:gateway_supervision_policy, bee:gateway_readiness_policy,

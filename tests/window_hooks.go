@@ -123,11 +123,11 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 	}
 	hostContent = strings.Replace(hostContent, addrAnchor, "address: "+endpointAddress, 1)
 
-	readyAnchor := "http://127.0.0.1:*/ready"
+	readyAnchor := `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`
 	if !strings.Contains(hostContent, readyAnchor) {
 		return "", fmt.Errorf("missing anchor %q in _index.yaml", readyAnchor)
 	}
-	hostContent = strings.Replace(hostContent, readyAnchor, "http://"+endpointAddress+"/ready", 1)
+	hostContent = strings.Replace(hostContent, readyAnchor, `resource == "http://`+endpointAddress+`/ready"`, 1)
 
 	bindAnchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
 	if !strings.Contains(hostContent, bindAnchor) {

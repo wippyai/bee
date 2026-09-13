@@ -34,10 +34,12 @@ The host must also select the readiness permission for that interface. Simple
 security policies support suffix wildcards, so `http://IP:*/ready` is not a
 matching pattern. The container acceptance composes an expression restricted to
 the selected IP, a numeric port, and `/ready`, plus private-IP access to that IP.
-The existing default readiness policy still has that invalid middle wildcard;
-the broader gateway fixture masks it with a wider caller policy. Correcting the
-default policy and its fixed-port fixture composition remains required before
-claiming narrow-policy production readiness.
+The default readiness policy now uses the same expression boundary for
+`127.0.0.1`. `make gateway-readiness-check` proves the native random-port request
+with a narrow fixture caller and refuses unrelated paths, query-bearing URLs,
+and foreign hosts. The previous middle-wildcard policy fails this proof with
+`not allowed` before credential delivery. The fixed-port acceptance fixture
+selects its exact readiness URL through that expression as well.
 
 `make gateway-container-check` takes an explicit `GATEWAY_INTERFACE`, immutable
 locally installed `DOCKER_IMAGE`, and selected `WIPPY`. It uses an isolated store,

@@ -740,12 +740,13 @@ entries:
     resources: [bee.gateway:address]
     effect: allow
 - name: gateway_readiness_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Internal readiness only; the function pins the host-selected native address and authenticates its nonce response. No agent receives this network policy.
   policy:
     actions: [http_client.request, http_client.private_ip]
-    resources: ['http://127.0.0.1:*/ready', 127.0.0.1]
+    resources: '*'
+    expression: '(action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$")'
     effect: allow
 - name: gateway_admit_policy
   kind: security.policy

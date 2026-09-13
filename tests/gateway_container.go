@@ -123,10 +123,14 @@ func run() error {
 	address := flag.String("interface", "", "explicit local Docker bridge IPv4 address")
 	image := flag.String("image", "", "already installed Node image, full sha256 ID")
 	network := flag.String("network", "bridge", "host-selected local Docker network")
+	readinessOnly := flag.Bool("readiness-only", false, "prove the default loopback readiness policy without Docker")
 	flag.Parse()
 	ip := net.ParseIP(*address)
-	if *runtime == "" || ip == nil || ip.To4() == nil || !ip.IsPrivate() ||
-		!regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(*image) {
+	if *readinessOnly {
+		*address = "127.0.0.1"
+	}
+	if *runtime == "" || (!*readinessOnly && (ip == nil || ip.To4() == nil || !ip.IsPrivate() ||
+		!regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(*image))) {
 		return fmt.Errorf("runtime, private IPv4 interface and immutable local Node image are required")
 	}
 	root, err := os.MkdirTemp("", "bee-gateway-container-")
@@ -158,13 +162,15 @@ func run() error {
 		return err
 	}
 	changed := strings.ReplaceAll(string(manifest), "127.0.0.1:0", *address+":0")
-	oldPolicy := "actions: [http_client.request, http_client.private_ip]\n    resources: ['http://127.0.0.1:*/ready', 127.0.0.1]"
-	if strings.Count(changed, oldPolicy) != 1 {
+	readinessExpression := func(ip string) string {
+		return fmt.Sprintf(`(action == "http_client.private_ip" && resource == %q) || (action == "http_client.request" && resource matches %q)`, ip, "^http://"+regexp.QuoteMeta(ip)+":[0-9]+/ready$")
+	}
+	if strings.Count(changed, readinessExpression("127.0.0.1")) != 1 {
 		return fmt.Errorf("readiness policy fixture seam changed")
 	}
-	changed = strings.Replace(changed, "- name: gateway_readiness_policy\n  kind: security.policy\n", "- name: gateway_readiness_policy\n  kind: security.policy.expr\n", 1)
-	expression := fmt.Sprintf(`(action == "http_client.private_ip" && resource == %q) || (action == "http_client.request" && resource matches %q)`, *address, "^http://"+regexp.QuoteMeta(*address)+":[0-9]+/ready$")
-	changed = strings.Replace(changed, oldPolicy, "actions: [http_client.request, http_client.private_ip]\n    resources: '*'\n    expression: '"+expression+"'", 1)
+	if !*readinessOnly {
+		changed = strings.Replace(changed, readinessExpression("127.0.0.1"), readinessExpression(*address), 1)
+	}
 	if err := os.WriteFile(manifestPath, []byte(changed), 0600); err != nil {
 		return err
 	}
@@ -222,6 +228,11 @@ func run() error {
 			return
 		}
 		tokens = append(tokens, input.Token, input.HookToken)
+		if *readinessOnly {
+			phases = append(phases, input.Phase)
+			w.WriteHeader(200)
+			return
+		}
 		body, _ := json.Marshal(input)
 		ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
 		defer cancel()
@@ -285,7 +296,11 @@ func run() error {
 		}
 		return fmt.Errorf("gateway container proof: runtime=%v phases=%v problems=%v\n%s", runError, phases, problems, detail)
 	}
-	fmt.Println("Container gateway: native random port, scoped MCP read, separate HTTP/MCP hook credentials, hook replay, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
+	if *readinessOnly {
+		fmt.Println("Default native random-port readiness passed under the narrow fixture policy")
+	} else {
+		fmt.Println("Container gateway: native random port, scoped MCP read, separate HTTP/MCP hook credentials, hook replay, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
+	}
 	return nil
 }
 func main() {

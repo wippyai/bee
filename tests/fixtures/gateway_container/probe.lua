@@ -7,6 +7,7 @@ local http_client = require("http_client")
 local time = require("time")
 local env = require("env")
 local logger = require("logger")
+local security = require("security")
 type Object = {[string]: unknown}
 local function call(target: string, request: Object): Object
     local raw, err = funcs.call(target, request)
@@ -32,6 +33,9 @@ local function main()
     end
     if not selected or type(selected.address) ~= "string" then error("listener unavailable") end
     local address = selected.address :: string
+    for _, url in ipairs({"http://" .. address .. "/mcp/other", "http://" .. address .. "/ready/extra", "http://" .. address .. "/ready?extra=1", "http://example.invalid/ready"}) do
+        if security.can("http_client.request", url) then error("readiness policy grants an unrelated URL") end
+    end
     call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
     local admitted = call("bee.gateway:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
         thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = {"SessionStart"}, ttl_ms = 120000})

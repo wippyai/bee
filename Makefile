@@ -1,6 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
-.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module gateway-check pack check
+.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
 .PHONY: hub-inspect-check
 # Explicit live-Hub proof; ordinary checks do not require Hub network access.
@@ -123,6 +123,10 @@ harness-module:
 resources-module:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/resources_module.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/resources_module.go -root .. -runtime "$(abspath $(WIPPY))"
+saved-profiles-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/saved_profiles.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/saved_profiles.go -runtime "$(abspath $(WIPPY))"
+check: saved-profiles-check
 gateway-check:
 	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
 pack: lint

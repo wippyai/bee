@@ -24,6 +24,16 @@ the same component preserves its existing module definition; a different
 `docker_pty` definition is rejected rather than replaced. The component remains
 an opt-in host composition and is not added to the default desktop launcher.
 
+`ConfiguredComponent()` is the zero-argument factory for builder composition.
+It reads explicit boot configuration `bee.docker.reference` and
+`bee.docker.host` (an absolute `unix:///path/to/docker.sock` URL), creates and owns
+the client, and closes it during component shutdown. Missing or invalid host
+configuration refuses loading; an absent Docker socket does not. Construction,
+loading and shutdown perform no daemon request. Docker environment variables
+are not consulted. This factory currently supports a local Unix socket; hosts
+using other transports can supply their configured client through `Component`.
+Including this factory does not grant apps Docker or terminal permissions.
+
 `New` accepts the caller-owned Docker client and an admitted full container ID,
 actual image ID, execution start timestamp and expected labels. It copies the
 labels and performs no daemon I/O. `Start` verifies those facts, attaches to the

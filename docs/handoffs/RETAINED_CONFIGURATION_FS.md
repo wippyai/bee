@@ -133,7 +133,7 @@ delivery reason. Source `8599893` corrects the teardown order through the existi
 fatal exit acknowledgement. A forced ordering probe now passes from source and
 pack, and strict lint passes. The supervisor-fix full repository check completed successfully, including 850
 unit cases and source/pack desktop/application acceptance. The subsequent
-cancellation change below still needs its combined full check.
+combined source also passes its full check (851 units and source/pack acceptance).
 
 ## Cancellation during materialization
 
@@ -157,5 +157,5 @@ writer releases the credential reply. The 46-case focused placement/publication
 run passes, including absent login/configuration writes, completed cancellation,
 process-group cleanup, successor admission and partial-identity refusal. Removing
 only the post-credential check in disposable source makes this regression fail
-because the login file is written (45 pass, one fails). Combined full acceptance
-and global installation remain pending.
+because the login file is written (45 pass, one fails). Combined full acceptance passes, and global `7d9182cb` includes this change.
+See [the build handoff](GLOBAL_BUILD.md) for exact installed artifacts.

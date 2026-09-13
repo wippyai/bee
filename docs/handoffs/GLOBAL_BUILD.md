@@ -1,6 +1,40 @@
 # Global Bee build — September 13, 2026
 
-## Current install: Agy hooks and authenticated MCP
+## Current install: retained configuration and Agy cold recovery
+
+Global SHA `7d9182cb40ddb5d60a2666c2e034ef3c601c51017d6e6742ebfea8bd8f172642`
+contains production `f7fe2ab` and native `fe8cb0d`. Retained host configuration is
+published atomically per file; cancellation during credential loading fences
+login writes and records explicit no-child cleanup proof. Supervisor failures
+reach the client before dependency teardown. Conversation identity is validated
+independently of hook occurrence deduplication, with conflicting claims refused.
+
+Full `make check` passed (session `90717`, exit 0; 851 units and source/pack
+acceptance). Exact native, offline fresh/restart/reconnect and Claude fixture
+restart checks pass. Real Agy print-mode cold continuation recalls an exact token
+after its source file is deleted, retaining conversation/HOME/app/thread and
+obtaining a fresh attempt/gateway. The new binding commits Stop with no tool
+observations. This does not prove interactive Agy TUI recovery or surviving
+orphan-tree cleanup. Actual Codex recovery remains unverified: a separate minimal
+provider invocation reproduces an account usage-limit refusal. Docker and
+policy-controlled sharing remain unfinished.
+
+All six installation artifacts were verified and backed up, fencing prior
+`9b499f4e`. The runtime pin remains `291f5c6b`; original four patches are preserved
+and checksum-pinned atomic-file publication from PR #744 is the fifth. No runtime
+PR was merged. Databases and running nodes were preserved; new nodes use this
+build. An injected installer replacement failure restored all six fixture
+artifacts to their original hashes. This is not a multi-file power-loss
+transaction.
+
+Evidence in `bee-evidence/0912/`: `bee-combined-recovery-{check-repeat,build,native,offline,fixture}.log`,
+`bee-combined-live-agy-recovery-strengthened.log`, `bee-codex-provider-error.json`
+and `combined-recovery-global-install.json`. The first combined full run stopped
+at a hook HTTP-202 observation assertion; unchanged isolated reproduction and
+the full repeat passed. Its cause remains unexplained; the fixture now reports
+only the observed HTTP status on failure.
+
+## Previous install: Agy hooks and authenticated MCP
 
 Global SHA `9b499f4e4f7983c61de54a56f455ef2434c23297f3828e636cc5010a1804b81a`
 contains production source `01ed3e3`, native `fe8cb0d`. Agy command hooks deliver

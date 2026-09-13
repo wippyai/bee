@@ -161,7 +161,7 @@ rendering or arbitrary orphan-tree recovery.
 
 The same candidate passes offline fresh boot/restart/reconnect, native executable
 acceptance and the existing Claude fixture restart gate. Its 851 unit cases pass;
-full combined source/pack acceptance and installation remain pending. See the
+full combined source/pack acceptance passes and global `7d9182cb` is installed. See the
 current journal and global-build handoff for installed revision status.
 
 The separate actual Codex TUI probe now reaches directory consent and records its

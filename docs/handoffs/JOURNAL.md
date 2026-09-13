@@ -6339,3 +6339,14 @@ continuation also passes exact token recall with stable conversation/HOME/app/th
 and fresh attempt/gateway, without replaying the task. Interactive Agy TUI recovery
 is not established. Full source/pack acceptance is running; global `9b499f4e`
 remains unchanged. Runtime PR #744 is still unmerged.
+
+### 2026-09-13 — recovery candidate installed globally
+
+Global `7d9182cb` now contains production `f7fe2ab`, with unchanged native
+`fe8cb0d` and the fifth checksum-pinned runtime atomic-publication patch. Full
+repeat `90717` passed (851 units and source/pack acceptance), alongside exact
+native/offline/Claude fixture checks and strengthened real Agy cold recall.
+All six artifacts were backed up and verified; databases and running nodes were
+preserved. Actual Codex recovery is gated by a reproduced provider usage limit,
+not a proven Bee defect. See GLOBAL_BUILD.md and the shared journal for the
+installation receipt and remaining scope.

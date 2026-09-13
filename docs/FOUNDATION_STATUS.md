@@ -2,16 +2,19 @@
 
 ## Current checkpoint — September 13
 
-Global `9b499f4e` contains production `01ed3e3` and native `fe8cb0d`: Agy
-command-hook delivery and corrected literal MCP credentials in private configuration.
-Full `make check` passes (844 units, source/pack acceptance), as do exact native,
-offline and fixture restart/crash recovery checks. Actual managed Agy delivers
-tool/Stop observations and, with explicit fixture tool permissions, commits a
-message through scoped MCP. Six artifacts were backed up and verified; databases,
-running nodes and runtime revision/patches were preserved. Real-provider cold
-recovery, surviving orphan trees, Docker and policy-controlled sharing remain
-incomplete. See [global build](handoffs/GLOBAL_BUILD.md) and
-[Agy acceptance](handoffs/AGY_HOOKS.md).
+Global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
+configuration publication, cancellation before login writes, preserved supervisor
+failure diagnostics and consistent hook conversation identity. Full `make check`
+passes (851 units and source/pack acceptance), as do exact native, offline and
+Claude fixture restart checks. Real Agy print-mode cold recovery retains its
+conversation/HOME/app/thread and uses a fresh attempt/gateway; it recalls the
+removed fixture token with no tool observations. All six artifacts were verified
+and backed up; databases and running nodes were preserved. Runtime PR #744 adds
+the fifth checked patch without changing the runtime pin or merging a PR.
+Interactive Agy TUI and actual Codex recovery, surviving orphan trees, Docker and
+policy-controlled sharing remain incomplete. The Codex live probe is currently
+gated by its provider account's usage limit. See [global build](handoffs/GLOBAL_BUILD.md)
+and [native recovery](handoffs/NATIVE_AGENT_RECOVERY.md) for evidence and scope.
 
 ### Preceding recovery checkpoint
 

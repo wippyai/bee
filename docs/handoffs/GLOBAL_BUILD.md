@@ -1,6 +1,22 @@
-# Global Bee build — September 12, 2026
+# Global Bee build — September 13, 2026
 
-## Current install: keep live Agents supervised
+## Current install: supervision listener before readiness
+
+Global SHA `1d7bad288c200f62452185f8e3c26562efbf8beac0e1c96788f02fd0b551850f`
+contains production source `337ff81`. The window registers its control listener
+before publishing `running`, and publication requires the recorded state still
+be `starting`. This closes the review's ordering gap and cannot overwrite a
+concurrent stop. Exact-source native PTY acceptance and final-candidate full
+native executable and network-disabled startup/restart/reconnect gates pass.
+Evidence: `bee-evidence/0912/window-supervision-order.log`,
+`window-order-{build,native,offline}.log` and `window-order-global-install.json`.
+The preceding `4b43cf1` full repository check is still running.
+
+Installation verified and backed up all six files, fenced against `dff3bf11`.
+Runtime/native pins, databases and running nodes were preserved. The terminal
+identity runtime proposal remains separate and is not in this executable.
+
+## Previous install: keep live Agents supervised
 
 Global SHA `dff3bf11aa5e170386f7c8368362d7e77f331241ae1b02be6e922f217e7aeced`
 contains production source `4b43cf1`. The managed PTY owner now answers placement

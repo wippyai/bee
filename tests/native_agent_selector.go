@@ -872,9 +872,15 @@ type mcpProbeReport struct {
 	ListStatus       int      `json:"list_status"`
 	ReadStatus       int      `json:"read_status"`
 	WaitStatus       int      `json:"wait_status"`
+	MessageStatus    int      `json:"message_status"`
 	Tools            []string `json:"tools"`
 	ReadOK           bool     `json:"read_ok"`
 	WaitOK           bool     `json:"wait_ok"`
+	MessageOK        bool     `json:"message_ok"`
+	MessageReplayOK  bool     `json:"message_replay_ok"`
+	ReadAnnotationOK bool     `json:"read_annotation_ok"`
+	WaitAnnotationOK bool     `json:"wait_annotation_ok"`
+	MessageWriteOK   bool     `json:"message_write_annotation_ok"`
 }
 
 // mcpProbeConfig extracts only the URL and token environment name from the
@@ -1003,20 +1009,34 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 	}
 	var listed struct {
 		Tools []struct {
-			Name string `json:"name"`
+			Name        string `json:"name"`
+			Annotations struct {
+				ReadOnlyHint *bool `json:"readOnlyHint"`
+			} `json:"annotations"`
 		} `json:"tools"`
 	}
-	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != 2 {
+	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != 3 {
 		return 1
 	}
 	for _, tool := range listed.Tools {
-		if tool.Name == "" {
+		if tool.Name == "" || tool.Annotations.ReadOnlyHint == nil {
+			return 1
+		}
+		switch tool.Name {
+		case "thread_read":
+			report.ReadAnnotationOK = *tool.Annotations.ReadOnlyHint
+		case "thread_wait":
+			report.WaitAnnotationOK = *tool.Annotations.ReadOnlyHint
+		case "thread_message":
+			report.MessageWriteOK = !*tool.Annotations.ReadOnlyHint
+		default:
 			return 1
 		}
 		report.Tools = append(report.Tools, tool.Name)
 	}
 	sort.Strings(report.Tools)
-	if len(report.Tools) != 2 || report.Tools[0] != "thread_read" || report.Tools[1] != "thread_wait" {
+	if len(report.Tools) != 3 || report.Tools[0] != "thread_message" || report.Tools[1] != "thread_read" || report.Tools[2] != "thread_wait" ||
+		!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.MessageWriteOK {
 		return 1
 	}
 	var readReply mcpReply
@@ -1045,10 +1065,75 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 		return 1
 	}
 	report.ReadOK = true
+	messageArguments := map[string]any{
+		"idempotency_key": "native-mcp-message-" + provider,
+		"message_id":      "native-mcp-message-" + provider,
+		"message_kind":    "notification",
+		"recipient_ids":   []string{},
+		"content":         map[string]any{"text": "native authenticated message"},
+	}
+	var messageReply mcpReply
+	report.MessageStatus, messageReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+		"name": "thread_message", "arguments": messageArguments,
+	}, 4)
+	if !ok || report.MessageStatus != http.StatusOK {
+		return 1
+	}
+	var messageResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if json.Unmarshal(messageReply.Result, &messageResult) != nil || len(messageResult.Content) != 1 || messageResult.IsError {
+		return 1
+	}
+	var messageValue struct {
+		OK       bool `json:"ok"`
+		Replayed bool `json:"replayed"`
+		Value    struct {
+			RecordID string `json:"record_id"`
+			Sequence int    `json:"sequence"`
+		} `json:"value"`
+	}
+	if json.Unmarshal([]byte(messageResult.Content[0].Text), &messageValue) != nil || !messageValue.OK || messageValue.Replayed ||
+		messageValue.Value.RecordID == "" || messageValue.Value.Sequence <= 0 {
+		return 1
+	}
+	report.MessageOK = true
+	var replayMessageReply mcpReply
+	replayStatus, replayMessageReply, ok := mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+		"name": "thread_message", "arguments": messageArguments,
+	}, 5)
+	if !ok || replayStatus != http.StatusOK {
+		return 1
+	}
+	var replayMessageResult struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if json.Unmarshal(replayMessageReply.Result, &replayMessageResult) != nil || len(replayMessageResult.Content) != 1 || replayMessageResult.IsError {
+		return 1
+	}
+	var replayMessageValue struct {
+		OK       bool `json:"ok"`
+		Replayed bool `json:"replayed"`
+		Value    struct {
+			RecordID string `json:"record_id"`
+			Sequence int    `json:"sequence"`
+		} `json:"value"`
+	}
+	if json.Unmarshal([]byte(replayMessageResult.Content[0].Text), &replayMessageValue) != nil || !replayMessageValue.OK || !replayMessageValue.Replayed ||
+		replayMessageValue.Value.RecordID != messageValue.Value.RecordID || replayMessageValue.Value.Sequence != messageValue.Value.Sequence {
+		return 1
+	}
+	report.MessageReplayOK = true
 	var waitReply mcpReply
 	report.WaitStatus, waitReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
 		"name": "thread_wait", "arguments": map[string]any{"after_sequence": readValue.Value.ScannedThrough, "wait_ms": 0},
-	}, 4)
+	}, 6)
 	if !ok || report.WaitStatus != http.StatusOK {
 		return 1
 	}
@@ -1125,7 +1210,7 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	if err := ui.send(strings.TrimSuffix(selection, "\r")); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "2 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
 		if err := ui.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("selected profile summary: %w", err)
 		}
@@ -1143,8 +1228,10 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	var mcpResult mcpProbeReport
 	if err := json.Unmarshal(mcpData, &mcpResult); err != nil || mcpResult.Provider != provider ||
 		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
-		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK ||
-		!mcpResult.ReadOK || !mcpResult.WaitOK || strings.Join(mcpResult.Tools, ",") != "thread_read,thread_wait" {
+		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
+		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageOK || !mcpResult.MessageReplayOK ||
+		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.MessageWriteOK ||
+		strings.Join(mcpResult.Tools, ",") != "thread_message,thread_read,thread_wait" {
 		return fmt.Errorf("managed MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	retained, err = ownerChild(ui.cmd.Process.Pid, binary, state, 10*time.Second)

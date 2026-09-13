@@ -57,6 +57,7 @@ entries:
   source: file://mcp.lua
   imports:
     bounds: bee.threads.records:bounds
+    message: bee.threads.records:message
 - name: address
   kind: function.lua
   source: file://address_method.lua
@@ -259,4 +260,4 @@ entries:
     gateway: bee.gateway:gateway
     mcp: bee.gateway:mcp
   security:
-    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy]

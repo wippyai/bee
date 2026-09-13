@@ -7,6 +7,8 @@ listener itself (`http.service`, router, endpoints) belongs to the host
 composition. The activation candidate binds native loopback port zero and reads
 the assigned address through supervisor state. The production-listener fixture
 passes real thread and credential checks on two runtimes. Candidate Agent
-profiles declare the two thread-read tools; Claude/Codex also declare lifecycle
-hooks. Standalone Claude/Codex fixture children pass authenticated MCP reads and
-waits; real provider conversations remain a separate gate. See `docs/GATEWAY.md`.
+profiles declare `thread_read`, `thread_wait` and the explicitly admitted
+`thread_message` write in all four default profiles. Claude/Codex also declare
+lifecycle hooks. Standalone Claude/Codex fixture children pass authenticated
+MCP reads, message append/replay and waits; real provider conversations remain
+a separate gate. See `docs/GATEWAY.md`.

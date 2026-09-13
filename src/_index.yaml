@@ -511,7 +511,7 @@ entries:
     executables: {}
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_codex_window
@@ -531,7 +531,7 @@ entries:
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
     provider_ref: bee.driver.codex:default_provider
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_agy_window
@@ -550,7 +550,7 @@ entries:
     executables: {}
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     prepare_options: {}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -568,7 +568,7 @@ entries:
     executables: {}
     executable_env: {grok: bee.driver.grok:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     prepare_options: {}
 - name: carrier_policy
   kind: security.policy
@@ -750,10 +750,10 @@ entries:
 - name: gateway_execute_policy
   kind: security.policy
   meta:
-    comment: The MCP endpoint may invoke exactly the two tool operations, as the bound subject under the tool's host-named scope; the thread owner authorizes each call by membership, and the endpoint holds no thread authority of its own
+    comment: The MCP endpoint constructs the bound subject and its host-selected scope; exact thread call permissions are attached separately
   policy:
-    actions: [funcs.security, security.scope.create, security.actor.create, security.policy.get, funcs.call]
-    resources: ['*', bee.threads.service:read_after, bee.threads.delivery:watch]
+    actions: [funcs.security, security.scope.create, security.actor.create, security.policy.get]
+    resources: ['*']
     effect: allow
 - name: gateway_tool_read_policy
   kind: security.policy
@@ -762,6 +762,14 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.threads.service:read_after, bee.threads.delivery:watch]
+    effect: allow
+- name: gateway_tool_message_policy
+  kind: security.policy
+  meta:
+    comment: The bound MCP subject may append only a decoded message through the thread authority; the endpoint supplies thread and action/attempt context
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:record]
     effect: allow
 - name: resource_store_policy
   kind: security.policy

@@ -1,6 +1,7 @@
 -- MIT. Slice 1 of the gateway against the real listener and thread owner:
 -- readiness, admission and revocation, thread_read, bounded read-only
--- thread_wait, cross-attempt and expiry refusal, drain and epoch fencing.
+-- thread_wait, authenticated thread_message append, replay and context
+-- fencing, cross-attempt and expiry refusal, drain and epoch fencing.
 -- It asserts and fails the boot; it prints nothing, so no token bytes can
 -- reach captured output.
 local funcs = require("funcs")
@@ -100,7 +101,25 @@ local function prove_configuration_scope(address: string)
     assert(type(projection.content) == "string" and (projection.content :: string):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
     assert((projection.content :: string):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
 end
+local function prove_endpoint_call_scope()
+    local policies: {security.Policy} = {}
+    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy"}) do
+        local selected, err = security.policy(name)
+        assert(selected ~= nil and err == nil, "endpoint policy unavailable")
+        policies[#policies + 1] = selected
+    end
+    local scope = security.new_scope(policies)
+    local actor = security.actor()
+    assert(actor ~= nil, "probe actor missing")
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record"}) do
+        assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
+    end
+    for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do
+        assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
+    end
+end
 local function main()
+    prove_endpoint_call_scope()
     ADDRESS = endpoint()
     prove_configuration_scope(ADDRESS)
     local opened = ok(call("bee.gateway:open", {address = ADDRESS}), "open")
@@ -188,6 +207,13 @@ local function main()
     assert(listed_status == 200 and #(((listed :: Object).result :: Object).tools :: {Object}) == 1, "only the admitted tool is advertised")
     local refused_status, refused = rpc("act-i", token_i, "tools/call", {name = "thread_wait", arguments = {after_sequence = 0, wait_ms = 10}})
     assert(refused_status == 200 and refused and refused.error ~= nil and tostring(((refused :: Object).error :: Object).message):find("not admitted", 1, true), "a tool outside the binding is refused")
+    local refused_message_status, refused_message = rpc("act-i", token_i, "tools/call", {name = "thread_message", arguments = {idempotency_key = "read-only-message", message_id = "read-only-message", message_kind = "notification", recipient_ids = {}, content = {text = "no"}}})
+    assert(refused_message_status == 200 and refused_message and refused_message.error ~= nil and tostring(((refused_message :: Object).error :: Object).message):find("not admitted", 1, true), "a read-only binding admitted a write")
+    local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-subject", action_id = "foreign-action", attempt_id = "foreign-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit non-member message")
+    local foreign_binding = tostring((foreign_admission.binding :: Object).binding_id)
+    local foreign_token = tostring(ok(materialize("foreign-attempt", 1, foreign_binding), "materialize non-member message").token)
+    local foreign_message = tool("foreign-action", foreign_token, "thread_message", {idempotency_key = "foreign-message", message_id = "foreign-message", message_kind = "notification", recipient_ids = {}, content = {text = "no"}})
+    assert(foreign_message.ok == false and type(foreign_message.error) == "table" and (foreign_message.error :: Object).code == "DENIED", "a non-member message sender was accepted")
     -- A token bound to another action is refused on this action, and vice versa.
     local token_b = admit("act-b")
     assert(select(1, rpc("act-a", token_b, "tools/list")) == 403, "cross-attempt token refused")
@@ -212,6 +238,51 @@ local function main()
     assert(woke.ok == true and (woke.value :: Object).status == "ready", "wait woke on the new record")
     local marks = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"delivery.mark"}}}), "read marks")
     assert(#(marks.records :: {unknown}) == 0, "viewing wrote a delivery mark")
+    do
+    -- thread_message is an explicitly admitted write. Its arguments contain
+    -- only the message and a stable key; the endpoint supplies the thread,
+    -- authenticated sender, fixed kind and action/attempt context.
+    ok(call("bee.threads.service:admit_action", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action",
+        admitted = {request_id = "mcp-request", principal_id = ACTOR, binding_ref = "mcp-binding", binding_digest = "mcp-digest", grant_refs = {}, budget_ref = "mcp-budget", input = {text = "mcp"}}}), "admit MCP action")
+    ok(call("bee.threads.service:prepare_attempt", {thread_id = THREAD, idempotency_key = key(), action_id = "mcp-action", attempt_id = "mcp-attempt",
+        prepared = {binding_ref = "mcp-binding", binding_digest = "mcp-digest", profile_id = "mcp-profile", profile_digest = "mcp-profile-digest", placement_binding = "mcp-placement", placement_attempt_id = "mcp-placement-attempt", plan_digest = "mcp-plan"}}), "prepare MCP attempt")
+    local mcp_admit = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "mcp-action", attempt_id = "mcp-attempt", thread_id = THREAD,
+        owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit MCP message")
+    local mcp_binding = tostring((mcp_admit.binding :: Object).binding_id)
+    local mcp_token = tostring(ok(materialize("mcp-attempt", 1, mcp_binding), "materialize MCP message").token)
+    local message_arguments: Object = {idempotency_key = "mcp-message-key", message_id = "mcp-message", message_kind = "notification", recipient_ids = {}, content = {text = "from authenticated MCP"}}
+    local appended = tool("mcp-action", mcp_token, "thread_message", message_arguments)
+    assert(appended.ok == true and type(appended.value) == "table", "thread_message append refused: " .. tostring(json.encode(appended)))
+    local appended_value = appended.value :: Object
+    local replay = tool("mcp-action", mcp_token, "thread_message", message_arguments)
+    assert(replay.ok == true and replay.replayed == true and (replay.value :: Object).record_id == appended_value.record_id and (replay.value :: Object).sequence == appended_value.sequence,
+        "identical thread_message replay duplicated or changed the result")
+    local changed_arguments: Object = {idempotency_key = "mcp-message-key", message_id = "mcp-message", message_kind = "notification", recipient_ids = {}, content = {text = "changed"}}
+    local changed = tool("mcp-action", mcp_token, "thread_message", changed_arguments)
+    assert(changed.ok == false and (changed.error :: Object).code == "CONFLICT", "changed thread_message replay was accepted")
+    local contextual = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {action_id = "mcp-action"}}), "read MCP append")
+    local message_records = 0
+    for _, item in ipairs(contextual.records :: {Object}) do
+        if item.kind == "message" then
+            message_records = message_records + 1
+            assert(item.thread_id == THREAD and item.producer_id == ACTOR and item.action_id == "mcp-action" and item.attempt_id == "mcp-attempt", "MCP append context was not bound")
+            assert((item.body :: Object).sender_id == ACTOR, "MCP sender was not authenticated")
+        end
+    end
+    assert(message_records == 1, "replayed thread_message created a duplicate record")
+    local _, foreign_thread = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-thread", message_id = "foreign-thread", message_kind = "notification", recipient_ids = {}, content = {text = "no"}, thread_id = "other-thread"}})
+    assert(foreign_thread and foreign_thread.error and tostring((foreign_thread.error :: Object).message):find("unknown field thread_id", 1, true), "foreign thread override was accepted")
+    local _, foreign_sender = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-sender", message_id = "foreign-sender", message_kind = "notification", recipient_ids = {}, content = {text = "no"}, sender_id = "foreign"}})
+    assert(foreign_sender and foreign_sender.error and tostring((foreign_sender.error :: Object).message):find("unknown field sender_id", 1, true), "foreign producer override was accepted")
+    local _, foreign_context = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-context", message_id = "foreign-context", message_kind = "notification", recipient_ids = {}, content = {text = "no"}, context = {action_id = "other-action"}}})
+    assert(foreign_context and foreign_context.error and tostring((foreign_context.error :: Object).message):find("unknown field context", 1, true), "foreign context override was accepted")
+    local _, arbitrary_record = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "arbitrary-record", kind = "receipt", message_id = "arbitrary-record", message_kind = "notification", recipient_ids = {}, content = {text = "no"}}})
+    assert(arbitrary_record and arbitrary_record.error and tostring((arbitrary_record.error :: Object).message):find("unknown field kind", 1, true), "arbitrary record kind was accepted")
+    local settled = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"receipt"}, action_id = "mcp-action"}}), "read MCP receipts")
+    assert(#(settled.records :: {unknown}) == 0, "thread_message settled an attempt")
+    ok(call("bee.gateway:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
+    assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
+    end
     -- Hooks: a binding that admits hook events gets a second credential of
     -- its own kind; neither credential opens the other endpoint.
     local function header_of(headers: unknown, name: string): string?

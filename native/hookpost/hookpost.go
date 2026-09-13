@@ -142,7 +142,7 @@ func safeSegment(value string, limit int) bool {
 	}
 	for index, char := range value {
 		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') || char == '-' || char == '_' || char == '.' {
+			(char >= '0' && char <= '9') || char == '-' || char == '_' || char == '.' || char == ':' {
 			if index == 0 && char == '.' {
 				return false
 			}

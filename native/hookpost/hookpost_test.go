@@ -87,7 +87,7 @@ func TestRunPostsGenericPayloadAndOnlyAcceptsSuccess(t *testing.T) {
 	var received map[string]json.RawMessage
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.Method != http.MethodPost || r.URL.Path != "/hook/action-1" {
+		if r.Method != http.MethodPost || r.URL.Path != "/hook/action:request-1" {
 			t.Errorf("request = %s %s", r.Method, r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer hook-secret" {
@@ -100,7 +100,7 @@ func TestRunPostsGenericPayloadAndOnlyAcceptsSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 	t.Setenv("BEE_TOKEN", "hook-secret")
-	err := Run(context.Background(), io.NopCloser(strings.NewReader(`{"session_id":"s1","tool_input":{"secret":"raw"},"hook_event_name":"Stop"}`)), strings.TrimPrefix(server.URL, "http://"), "action-1", "BEE_TOKEN", "Stop")
+	err := Run(context.Background(), io.NopCloser(strings.NewReader(`{"session_id":"s1","tool_input":{"secret":"raw"},"hook_event_name":"Stop"}`)), strings.TrimPrefix(server.URL, "http://"), "action:request-1", "BEE_TOKEN", "Stop")
 	if err != nil {
 		t.Fatal(err)
 	}

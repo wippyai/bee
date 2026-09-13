@@ -217,6 +217,10 @@ The installed UI makes plan and confirmation effects scrollable with arrow
 keys or the mouse wheel. It lists migration IDs and target databases, automatic
 starts and declared capabilities individually. This follow-up passes 56 focused
 cases and source/pack keyboard checks and is included in global `237d76a8`.
+When an update is selected, Modules refreshes the installed inventory and
+hydrates values from the matching Bee Hub dependency root. Values the user
+edits or clears remain in the request while that read completes; a failed or
+cancelled read keeps update planning blocked until the inventory is read again.
 A published or missing
 receipt state is not displayed as completion. The separate native lifecycle check covers confirmation/apply against live Hub.
 

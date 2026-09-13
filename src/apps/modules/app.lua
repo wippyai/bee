@@ -179,7 +179,9 @@ local function main(value: unknown)
         model.show_requirements(state, true)
         reading_readme, offset = false, 0
         local intent = model.inspect_intent(state)
-        if intent then begin(intent) else status = "Choose a version first" end
+        if intent then begin(intent)
+        elseif state.action == "update" then status = "Read installed settings before inspecting this update"
+        else status = "Choose a version first" end
         changed()
     end
 
@@ -389,7 +391,13 @@ local function main(value: unknown)
         elseif kind == "previous" then model.set_page(state, state.page - 1); invalidate(); catalog()
         elseif kind == "next" then model.set_page(state, state.page + 1); invalidate(); catalog()
         elseif kind == "refresh" then invalidate(); installed()
-        elseif kind == "install" or kind == "update" or kind == "uninstall" then content.open = false; model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate(); changed()
+        elseif kind == "install" or kind == "update" or kind == "uninstall" then
+            content.open = false; model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate()
+            -- Updating an existing root must use its current typed values. Read
+            -- the authoritative inventory on demand; the normal read generation
+            -- fence prevents a late snapshot from replacing newer user edits.
+            if kind == "update" then model.begin_update_hydration(state); begin(model.installed_intent(state)) end
+            changed()
         elseif kind == "plan" or kind == "refresh_plan" then plan()
         elseif kind == "parameter" then begin_editor("parameter_name")
         elseif kind == "policy_none" then model.set_policy(state, "none"); invalidate(); changed()

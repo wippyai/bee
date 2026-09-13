@@ -27,7 +27,7 @@ entries:
 - name: model
   kind: library.lua
   source: file://model.lua
-  modules: [json]
+  modules: [json, hash]
   imports:
     text: bee.application:text
     canonical: bee.sync:canonical

@@ -46,8 +46,8 @@ own combined gate.
 Global `6cfa0071` now contains source `ef94c84` plus acceptance-only checkpoint
 `aa45f5c`. The full combined run ended with exit 2 in `hub-contents-full-check.log`: the
 unit subprocess returned `context canceled` during approvals service cases,
-without a failed-case assertion. A focused unit recheck is running in
-`hub-contents-unit-recheck.log`. Neither run establishes full acceptance.
+without a failed-case assertion. The focused unit recheck passed all 787 cases in
+`hub-contents-unit-recheck.log`. This does not establish full repository acceptance.
 
 ## Installed-app admission seam
 

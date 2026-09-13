@@ -1,5 +1,25 @@
 # Global Bee build — September 12, 2026
 
+## Current install: remove desktop hints and Run queue
+
+Global SHA `b92317bec5fbc70a4e100aa6a5870ac645356c42cc40dff42c804358af553cbf`
+contains source `b59d2cc`. The user-requested cleanup removes empty-desktop
+instructional text at every size and removes Process Manager's Run queue display,
+including its compact variant. The Bee mark remains; Heap and Scheduler share
+the chart area. Hub Contents, saved update settings and Agent thread messaging
+are preserved.
+
+Strict lint, source/pack Process Manager checks, full native binary acceptance
+and real native absence/mark checks pass. Evidence: `desktop-cleanup-check.log`,
+`desktop-cleanup-native.log`, `desktop-cleanup-preview.log`, rendered
+`desktop-cleanup-*.png`, and `desktop-cleanup-global-install.json`.
+The installer fenced against `6cfa0071`, backed up and verified all six files,
+and retained identical runtime/native/patch identity. No owners were restarted.
+Backup: `global-before-desktop-cleanup-6cfa0071`.
+
+The preceding Hub source passed all 787 units on recheck in
+`hub-contents-unit-recheck.log`; this does not establish a full repository pass.
+
 ## Current install: Contents and preserved update settings
 
 Global SHA `6cfa007158d0891f8ec3413edda2c70ca3df0e00c6ff7e41b2e6b7ade1a293ff`

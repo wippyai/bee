@@ -137,13 +137,15 @@ local function encode_admitted(body: types.Admitted): string
     return encode_object(fields)
 end
 local function encode_prepared(body: types.Prepared): string
-    return encode_object({{key = "binding_ref", json = encode_string(body.binding_ref)},
+    local fields: {Field} = {{key = "binding_ref", json = encode_string(body.binding_ref)},
         {key = "binding_digest", json = encode_string(body.binding_digest)},
         {key = "profile_id", json = encode_string(body.profile_id)},
         {key = "profile_digest", json = encode_string(body.profile_digest)},
         {key = "placement_binding", json = encode_string(body.placement_binding)},
         {key = "placement_attempt_id", json = encode_string(body.placement_attempt_id)},
-        {key = "plan_digest", json = encode_string(body.plan_digest)}})
+        {key = "plan_digest", json = encode_string(body.plan_digest)}}
+    field(fields, "placement_binding_digest", optional_string(body.placement_binding_digest))
+    return encode_object(fields)
 end
 local function encode_approval_request(body: types.ApprovalRequest): string
     local fields: {Field} = {}

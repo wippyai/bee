@@ -63,6 +63,7 @@ type Prepared = {
     profile_id: string,
     profile_digest: string,
     placement_binding: string,
+    placement_binding_digest: string?,
     placement_attempt_id: string,
     plan_digest: string,
 }

@@ -192,12 +192,17 @@ Contract `bee.threads:carrier`, local binding `carrier_local`, action
 |---|---|---|
 | `claim` | `thread_id`, `idempotency_key`, `attempt_id` | New carrier epoch on a live attempt; replay by key |
 | `commit` | `thread_id`, `idempotency_key`, `attempt_id`, `carrier_epoch`, `expected_revision`, `checkpoint`, `records[]` | Appends every record (`stream` observation with a typed provenance, or a control observation with source `bee` limited to `bee.carrier.write@1` and `bee.placement.attempt@1`) and stores the checkpoint at `expected_revision + 1` in one transaction; `CONFLICT` on a stale epoch or revision |
-| `checkpoint` | `thread_id`, `attempt_id` | The stored checkpoint, revision and epoch, plus `placement_binding` and `placement_attempt_id` from the committed preparation; member read |
+| `checkpoint` | `thread_id`, `attempt_id` | The stored checkpoint, revision and epoch, plus `placement_binding`, optional `placement_binding_digest` and `placement_attempt_id` from the committed preparation; member read |
 
 The placement fields come from `attempt.prepared`, even before the first carrier
 checkpoint. Carrier checkpoint contents cannot replace them. Historical attempts
 without a preparation record omit those fields; their absence does not select a
 default placement. This read grants no authority to call the named placement.
+The binding digest is preserved when preparation supplied it; older records keep
+their original encoding and omit it. The reader never substitutes a current
+registry digest for missing historical evidence. A later checkpoint cannot
+replace the recorded digest, so a consumer can detect a remapped binding before
+calling its lifecycle methods. This additive record field needs no migration.
 
 Lifecycle gains `prepare_attempt` (`action_id`, `attempt_id`, `Prepared`)
 and `start_attempt` now moves a `prepared` attempt to `running`.

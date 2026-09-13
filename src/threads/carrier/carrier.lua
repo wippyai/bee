@@ -274,6 +274,7 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
             end
             local plan = decoded.body :: record_types.Prepared
             value.placement_binding = plan.placement_binding
+            value.placement_binding_digest = plan.placement_binding_digest
             value.placement_attempt_id = plan.placement_attempt_id
         end
         local open, open_err = reader.open_turn(tx, head.thread_id, attempt_id)

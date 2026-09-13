@@ -19,6 +19,29 @@ local function text_message(): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Thread records", function()
+        test.it("preserves preparation binding digests without inventing them for historical records", function()
+            local body: {[string]: unknown} = {binding_ref = "driver:binding", binding_digest = "driver",
+                profile_id = "window", profile_digest = "profile", placement_binding = "placement:binding",
+                placement_attempt_id = "attempt", plan_digest = "plan"}
+            local historical, historical_error = record.decode(base("attempt.prepared", body, {action_id = "action", attempt_id = "attempt"}))
+            if not historical then error(tostring(historical_error)) end
+            local old_bytes = record.encode(historical)
+            if not old_bytes then error("encode historical preparation") end
+            test.is_nil(old_bytes:find("placement_binding_digest", 1, true))
+            body.placement_binding_digest = string.rep("a", 64)
+            local measured, measured_error = record.decode(base("attempt.prepared", body, {action_id = "action", attempt_id = "attempt"}))
+            if not measured then error(tostring(measured_error)) end
+            local encoded = record.encode(measured)
+            if not encoded then error("encode measured preparation") end
+            local decoded, decode_error = record.decode_json(encoded)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq((decoded.body :: types.Prepared).placement_binding_digest, string.rep("a", 64))
+            test.eq(record.encode(decoded), encoded)
+            for _, invalid in ipairs({"", "digest", string.rep("A", 64), string.rep("a", 65)}) do
+                body.placement_binding_digest = invalid
+                test.is_nil(record.decode(base("attempt.prepared", body, {action_id = "action", attempt_id = "attempt"})))
+            end
+        end)
         test.it("encodes with sorted keys and no whitespace regardless of field order", function()
             local first = record.decode(base("message", text_message(), {correlation_id = "c1"}))
             if not first then error("decode failed") end

@@ -36,19 +36,23 @@ local function define_tests()
             harness.value(carrier:call("admit_action", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", admitted = harness.admitted()}))
             local plan = harness.prepared()
             plan.placement_binding = "fixture.docker:binding"
+            plan.placement_binding_digest = string.rep("a", 64)
             plan.placement_attempt_id = "container-attempt"
             harness.value(carrier:call("prepare_attempt", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a1", attempt_id = "t1", prepared = plan}))
             local before = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
             test.is_nil(before.checkpoint)
             test.eq(before.placement_binding, "fixture.docker:binding")
+            test.eq(before.placement_binding_digest, string.rep("a", 64))
             test.eq(before.placement_attempt_id, "container-attempt")
             harness.value(carrier:call("carrier_claim", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1"}))
             local point = checkpoint(1)
             point.placement_binding = "bee.placement.native:binding"
+            point.placement_binding_digest = string.rep("b", 64)
             point.placement_attempt_id = "another-attempt"
             harness.value(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = point, records = {}}))
             local after = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
             test.eq(after.placement_binding, before.placement_binding)
+            test.eq(after.placement_binding_digest, before.placement_binding_digest)
             test.eq(after.placement_attempt_id, before.placement_attempt_id)
             test.eq(after.checkpoint.placement_binding, "bee.placement.native:binding")
             test.eq(harness.code(runner:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"})), "DENIED")

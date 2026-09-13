@@ -26,7 +26,7 @@ end
 function M.prepared(value: unknown): (types.Prepared?, string?)
     local object = bounds.object(value)
     if not object then return nil, "preparation must be an object" end
-    local unknown_field = bounds.fields(object, {"binding_ref", "binding_digest", "profile_id", "profile_digest", "placement_binding", "placement_attempt_id", "plan_digest"})
+    local unknown_field = bounds.fields(object, {"binding_ref", "binding_digest", "profile_id", "profile_digest", "placement_binding", "placement_binding_digest", "placement_attempt_id", "plan_digest"})
     if unknown_field then return nil, unknown_field end
     local binding_ref, binding_digest = bounds.id(object.binding_ref), bounds.id(object.binding_digest)
     local profile_id, profile_digest = bounds.id(object.profile_id), bounds.id(object.profile_digest)
@@ -37,10 +37,18 @@ function M.prepared(value: unknown): (types.Prepared?, string?)
     if not profile_id then return nil, "profile_id is not an identifier" end
     if not profile_digest then return nil, "profile_digest is not an identifier" end
     if not placement_binding then return nil, "placement_binding is not an identifier" end
+    local placement_binding_digest: string? = nil
+    if object.placement_binding_digest ~= nil then
+        placement_binding_digest = bounds.text(object.placement_binding_digest, 64)
+        if not placement_binding_digest or #placement_binding_digest ~= 64 or not placement_binding_digest:match("^[0-9a-f]+$") then
+            return nil, "placement_binding_digest is not a lowercase sha256 digest"
+        end
+    end
     if not placement_attempt_id then return nil, "placement_attempt_id is not an identifier" end
     if not plan_digest then return nil, "plan_digest is not an identifier" end
     return {binding_ref = binding_ref, binding_digest = binding_digest, profile_id = profile_id, profile_digest = profile_digest,
-        placement_binding = placement_binding, placement_attempt_id = placement_attempt_id, plan_digest = plan_digest}, nil
+        placement_binding = placement_binding, placement_binding_digest = placement_binding_digest,
+        placement_attempt_id = placement_attempt_id, plan_digest = plan_digest}, nil
 end
 function M.started(value: unknown): (types.Started?, string?)
     local object = bounds.object(value)

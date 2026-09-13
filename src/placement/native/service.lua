@@ -741,8 +741,24 @@ function M.cleanup(value: unknown): Reply
     if not attempt then return denied :: Reply end
     if attempt.cleanup_state == "complete" then return succeed(attempt) end
     if not transitions.may_clean(attempt.execution_state) then return fail("CONFLICT", "cleanup needs a proven exit; execution is " .. attempt.execution_state) end
-    local recorded, _, row = recorded_identity(attempt.attempt_id)
+    local recorded, identity_error, row = recorded_identity(attempt.attempt_id)
+    if identity_error then return fail("STORAGE", identity_error) end
+    if not row then return fail("STORAGE", "attempt is not recorded") end
     local proven, why = scope_proven(attempt, recorded)
+    -- Materialization can acknowledge a stop before creating any child. Its
+    -- completion and this proof commit together in the existing evidence ledger.
+    -- Missing identity alone is never proof; contradictory identity refuses it.
+    if not proven and attempt.exit_source == "runner" and not recorded
+        and row.pid == nil and row.pgid == nil and row.start_ticks == nil and row.boot_id == nil then
+        local db, open_error = store.open()
+        if not db then return fail("STORAGE", open_error or "open placement store") end
+        local proofs, proof_error = db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.not_started' LIMIT 1", {attempt.attempt_id})
+        db:release()
+        if proof_error then return fail("STORAGE", "read child creation evidence") end
+        if proofs and #proofs == 1 then
+            proven, why = true, "the runner recorded completion before creating a child"
+        end
+    end
     if not proven then return fail("CONFLICT", "cleanup scope " .. attempt.required_cleanup .. " is not proven gone: " .. why) end
     local home_key = row and row.home_key or nil
     if type(home_key) == "string" and home_key ~= "" then

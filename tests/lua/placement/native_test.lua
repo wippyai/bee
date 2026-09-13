@@ -1412,6 +1412,87 @@ local function define_tests()
             test.is_true(has(kinds(changed_id), "credential.refused"))
             test.is_nil(shell("cat " .. home .. "/marker"):find("changed-login", 1, true))
         end)
+        test.it("fences a retained login reply after the attempt is stopped during credential materialization", function()
+            local source = "bee.credentials:codex_login_fixture"
+            admit_login_source(source)
+            local source_root = ".wippy/codex-login-fixture"
+            test.eq(shell("mkdir -p " .. source_root .. " && rm -f " .. source_root .. "/auth.json && mkfifo " .. source_root .. "/auth.json"), "")
+            local workspace = fresh("materialization-fence-workspace")
+            credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local session_ref = fresh("materialization-fence-session")
+            local request = retained_launch(OWNER, session_ref, "must-not-run")
+            request.required_cleanup = "process_group"
+            request.required_exit_observation = "independent"
+            local attempt_id = request.attempt_id :: string
+            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
+                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("materialization-fence-key")})
+            request.projections = {projection.projection_id}
+            attempt_of(call(OWNER, "prepare", request))
+
+            -- The fixture writer's FIFO open returns only after the real
+            -- broker has opened its reader; it then stops the runner before
+            -- releasing a valid file projection reply.
+            local fixture, fixture_error = caller(OWNER):async("bee.placement.native:fixture_stop_materialization", {
+                source_ref = source, attempt_id = attempt_id, content = '{"fixture":"fenced"}'})
+            if not fixture then error(tostring(fixture_error or "start materialization fence fixture")) end
+            local start, start_error = caller(OWNER):async("bee.placement.native:start", {attempt_id = attempt_id})
+            if not start then error(tostring(start_error or "start fenced attempt")) end
+            local fixture_reply = await(fixture) :: {[string]: unknown}
+            if fixture_reply.ok ~= true then error("materialization fence fixture failed: " .. tostring(fixture_reply.error)) end
+            if fixture_reply.written ~= true then error("materialization fence fixture did not write") end
+            test.eq(fixture_reply.stop_state, "stopping")
+            local started = await(start)
+            -- Both asynchronous calls have returned, so remove the source
+            -- FIFO before any assertion can abort the test and strand it.
+            test.eq(shell("rm -f " .. source_root .. "/auth.json"), "")
+            if started.ok ~= false then error("fenced start unexpectedly succeeded") end
+            test.eq(started.error and started.error.code, "UNAVAILABLE")
+
+            local stopped = value(call(OWNER, "status", {attempt_id = attempt_id})).attempt :: types.Attempt
+            test.eq(stopped.execution_state, "exited")
+            test.eq(stopped.exit_source, "runner")
+            local session_key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(session_key))
+            local home = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("test ! -e " .. quote.posix(home .. "/.codex/auth.json") .. " && test ! -e " .. quote.posix(home .. "/.codex/config.toml") .. " && printf absent"), "absent")
+            local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
+            local evidence_count = 0
+            for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                evidence_count = evidence_count + 1
+                test.is_false(item.kind == "credential.materialized")
+                test.is_false(item.kind == "configuration.materialized")
+                test.is_false(item.kind == "credential.refused")
+            end
+            test.eq(stopped.evidence_count, evidence_count)
+
+            -- A partial native identity must not be mistaken for an empty
+            -- execution scope, even with a genuine pre-creation receipt.
+            local db = store.open()
+            if not db then error("store") end
+            local _, corrupt_error = db:execute("UPDATE bee_placement_attempts SET pgid = 99999999 WHERE attempt_id = ?", {attempt_id})
+            db:release()
+            if corrupt_error then error(tostring(corrupt_error)) end
+            local contradictory = call(OWNER, "cleanup", {attempt_id = attempt_id})
+            test.is_false(contradictory.ok)
+            test.eq(contradictory.error and contradictory.error.code, "CONFLICT")
+            db = store.open()
+            if not db then error("store") end
+            local _, restore_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {attempt_id})
+            db:release()
+            if restore_error then error(tostring(restore_error)) end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
+            local successor = retained_launch(OWNER, session_ref, "successor-admitted")
+            successor.required_cleanup = "process_group"
+            successor.required_exit_observation = "independent"
+            local successor_attempt = attempt_of(call(OWNER, "prepare", successor))
+            test.eq(successor_attempt.execution_state, "intended")
+            attempt_of(call(OWNER, "start", {attempt_id = successor_attempt.attempt_id}))
+            if not wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = successor_attempt.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000) then error("successor retained launch did not exit") end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = successor_attempt.attempt_id}))
+        end)
         test.it("materializes a credential projection into the child and keeps the secret out of evidence", function()
             admit_credential_source()
             local workspace = fresh("ws")

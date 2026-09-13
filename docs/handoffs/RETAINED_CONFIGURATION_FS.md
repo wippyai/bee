@@ -96,8 +96,12 @@ regression fails on the old runner (it starts the duplicate) and passes on the
 corrected runner alongside all 845 unit tests.
 
 The consumer replaces only persisted, host-rendered `delivery.files` paths in a
-retained home. It rejects overlap with login bytes, the login source marker and
-provider initialization files. Conversation files remain separately owned.
+retained home. It rejects overlap with the login source marker and the current
+file projection's login and initialization paths. Placement obtains delivery
+from the host-selected configuration function; callers cannot supply it. Driver
+components own those paths and must keep them distinct from provider conversation
+files. The filesystem helper does not classify arbitrary paths as conversation
+data or protect against a changed trusted driver that selects those paths.
 Before materialization and each publication it checks that the attempt is still
 `starting` and its recorded runner is the current process. The existing session
 admission and cleanup rules remain; the filesystem operation grants no session
@@ -125,5 +129,33 @@ The standalone candidate passes loopback-only offline boot/restart/reconnect
 prove actual Codex/Agy conversation recovery. The prior source branch's full
 `make check` failed in `control_delivery.py`: injected structural failure reached
 the terminal as `Desktop dependency exited` instead of the required original
-delivery reason. A focused repeat fails the same way; that separate desktop gate
-is still unresolved. No claim of a fully green release is made here.
+delivery reason. Source `8599893` corrects the teardown order through the existing
+fatal exit acknowledgement. A forced ordering probe now passes from source and
+pack, and strict lint passes. The supervisor-fix full repository check completed successfully, including 850
+unit cases and source/pack desktop/application acceptance. The subsequent
+cancellation change below still needs its combined full check.
+
+## Cancellation during materialization
+
+The stop service previously attempted `starting` → `stopping`, but the transition
+table refused it. Starting attempts now accept that transition. After credential
+resolution returns, the runner rechecks its state and identity before seeding
+login files or recording credential evidence. A canceled runner returns without
+those writes.
+
+Before child creation, refusal completes only the same runner still in `stopping`:
+`exited`, cleared runner PID, existing `exit_source = runner`, and a
+`child.not_started` evidence record commit together. Cleanup accepts this explicit
+proof only when every native identity field is absent; partial or contradictory
+identity still refuses. Missing identity alone never proves cleanup. Foreign
+runners and uncertain execution remain untouched. This uses the existing schema
+and evidence ledger; no migration or new exit-source value is needed.
+
+A real credential broker reading a fixture FIFO supplies deterministic ordering:
+the public stop operation runs after the broker opens the reader and before the
+writer releases the credential reply. The 46-case focused placement/publication
+run passes, including absent login/configuration writes, completed cancellation,
+process-group cleanup, successor admission and partial-identity refusal. Removing
+only the post-credential check in disposable source makes this regression fail
+because the login file is written (45 pass, one fails). Combined full acceptance
+and global installation remain pending.

@@ -152,6 +152,13 @@ absent by identity. It does not say its group or descendants ended.
 `process_group` when no member of the recorded group answers a signal
 probe, `contained_tree` never on this runtime.
 
+A stop accepted during materialization fences the asynchronous credential reply
+before login seeding. If no child was created, the same runner commits its exit
+and `child.not_started` evidence together. Cleanup can use that proof only when
+all native identity fields are absent. Missing identity without this evidence,
+partial identity, a foreign runner or uncertain execution does not authorize
+cleanup. Retained session homes remain available for a subsequent admitted attempt.
+
 ## Resource modes
 
 The host selects the mode in `bee.placement.native:resource_mode`; a

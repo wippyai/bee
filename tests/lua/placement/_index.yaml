@@ -37,8 +37,24 @@ entries:
     actions: [funcs.call]
     resources: [bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop,
       bee.placement.native:reconcile, bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach,
-      bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.credentials:define, bee.credentials:issue_projection, bee.credentials:revoke]
+      bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.credentials:define, bee.credentials:issue_projection, bee.credentials:revoke,
+      bee.placement.native:fixture_stop_materialization]
     effect: allow
+- name: fixture_stop_materialization_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, fs.get, fs.write]
+    resources: [bee.placement.native:stop, bee.credentials:codex_login_fixture]
+    effect: allow
+- name: fixture_stop_materialization
+  kind: function.lua
+  source: file://fixture_stop_materialization.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [fs, funcs]
+  security:
+    policies: [bee.placement.native:fixture_stop_materialization_policy]
 - name: request_test
   kind: function.lua
   source: file://request_test.lua

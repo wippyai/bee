@@ -66,7 +66,16 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
 end
 function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
+    local function finish_stopped_without_child(): boolean
+        local current = store.row(db, attempt_id)
+        if not current or current.execution_state ~= "stopping" or current.runner_pid ~= process.pid() then return false end
+        local finished = store.transition(db, attempt_id, {expected_execution = "stopping", execution = "exited",
+            fields = {runner_pid = "", exit_source = "runner"},
+            evidence = {kind = "child.not_started", detail = "stopped during materialization before child creation"}})
+        return finished.ok
+    end
     local function refused(reason: string): (Prepared?, string?, string?)
+        finish_stopped_without_child()
         return nil, reason, gateway_binding
     end
     local function owns_attempt(): boolean
@@ -135,6 +144,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
         local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string?, projection_kind: string}?} or nil
+        -- Credential materialization reads an external source and can yield
+        -- while the owner stops this attempt. Fence the reply before touching
+        -- retained login state or recording materialization evidence.
+        if not owns_attempt() then
+            return refused("attempt no longer owns configuration materialization")
+        end
         if call_error or not reply or not reply.ok or not reply.value then
             local code = reply and reply.error and reply.error.code or "UNAVAILABLE"
             evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {execution = "exited"})

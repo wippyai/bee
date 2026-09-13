@@ -48,8 +48,10 @@ gate, not managed Docker launch, provider recovery, or sandbox-policy acceptance
 The real-container gate passes on the selected local Docker bridge with an
 already installed immutable Node image: initialization, exact read/wait tool
 scope, thread read, absent/cross-action/revoked credential refusal, and wrong
-Host/port/Origin refusal. The broader regression for this interface change is
-still running; it is not installed in global Bee.
+Host/port/Origin refusal. The full regression for the private-interface and
+anonymous-rejection changes passes, including source/pack desktop, client,
+recovery and app checks. The combined integration release remains unverified;
+these changes are not installed in global Bee.
 The container gate also submits and replays `SessionStart` through both HTTP and
 MCP hooks with a separate hook credential. HTTP returns the same occurrence ID
 and empty response; MCP exposes only the hook tool and returns the same queued

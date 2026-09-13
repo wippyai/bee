@@ -17,7 +17,11 @@ credentials, replay, and credential/Host/port/Origin refusals. The optional
 Docker daemon component stays outside the default pack; its protocol test uses
 the reviewed userspace client and a fake Unix daemon. That test establishes
 identity checks and confirmed-absence handling, not managed Docker execution
-or package publication. Full gateway regressions remain pending. See
+or package publication. The private-interface gateway slice passed its full
+regression; the combined integration release remains unverified. The additive
+thread checkpoint response also passed all 868 unit tests and standalone
+thread-module acceptance: it reports the placement from the committed
+preparation, which a later carrier checkpoint cannot override. See
 [gateway acceptance](GATEWAY.md) and the
 [optional component](../modules/bee-placement-docker-daemon/README.md).
 

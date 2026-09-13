@@ -80,3 +80,10 @@ runtime PR or runtime semantic change was needed. Evidence is
 `bee-evidence/0912/native-hook-post-check.log`. The first stalled-peer test hung
 in HTTP test-server teardown, independently of the sender deadline; teardown now
 has its own release path, and a real OS-pipe cancellation case also passes.
+
+The first assembled candidate passed offline boot but failed the managed Agy
+fixture: the command sender rejected Bee's real `action:` ID prefix. Native
+`fe8cb0d` permits the colon in that bounded path segment and tests an actual
+`action:request-1` POST. Focused race tests and vet pass
+(`native-hook-post-action-id-check.log`). Source now pins this correction;
+final assembled acceptance remains pending. The failed candidate was not installed.

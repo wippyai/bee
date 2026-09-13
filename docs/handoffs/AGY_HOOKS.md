@@ -116,3 +116,33 @@ Provider output and credentials were not printed to evidence. Log:
 This closes managed command-hook delivery for the tested read task. It does not
 prove real-provider cold recovery, denied-tool behavior, or interactive prompt
 and permission handling across reconnects.
+
+## Discovered real-provider MCP gap
+
+Follow-up actual-provider MCP acceptance failed: Agy reported `SUCCESS` but
+returned an empty response, and no requested thread message committed. A bounded
+loopback MCP-server probe then captured the authentication behavior using only
+a dummy credential. Agy 1.2.2 sends both `${BEE_TEST_TOKEN}` and
+`${env:BEE_TEST_TOKEN}` literally in the Authorization header; neither form is
+expanded. Its real initialize and tools/list requests reached the probe with the
+literal value. Bee's current Agy renderer therefore does not authenticate MCP.
+
+The existing native selector fixture masks this by explicitly resolving Agy's
+placeholder from the child environment in `mcpProbeConfig`. Its passing MCP gate
+proves the Bee endpoint with a fixture client, not real Agy authentication. The
+actual managed hook proof above remains valid: command hooks read their own
+credential environment through the packaged sender independently of MCP.
+
+Evidence: `agy-live-managed-mcp.log`, `agy-live-managed-mcp-diagnostic.log`,
+`agy-mcp-header-expansion.log`, `agy-mcp-header-env-expansion.log` under
+`bee-evidence/0912`. The official MCP documentation describes literal custom
+headers, matching the observed behavior: <https://antigravity.google/docs/mcp>.
+It also states that unconfigured MCP tools default to Ask. Tool permission
+behavior must be checked after correcting credential delivery; observation hooks
+must not synthesize an approval to make this pass.
+
+Correct the driver/placement credential delivery without putting token bytes in
+admission records, measured templates, argv or diagnostics, or weakening gateway
+authorization. Update the fixture to model actual Agy header behavior as part of
+that fix, then repeat live managed MCP acceptance. The candidate remains
+uninstalled while this integration gap is resolved.

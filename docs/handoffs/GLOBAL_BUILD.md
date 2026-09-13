@@ -23,8 +23,9 @@ failure remains in `agent-failure-native.log`; the diagnostic frame showed the
 expected picker and existing unavailable message, with no sequence advancement.
 
 Full candidate regression is running as session `82438`, log
-`agent-failure-full-check.log`. The earlier stop-only regression remains separate
-as `51939`. The prepared installer has passed successful install, replacement
+`agent-failure-full-check.log`. The earlier stop-only regression `51939` exited 0,
+including storage, source/pack desktop and app acceptance; its evidence remains
+separate from the combined release gate. The prepared installer has passed successful install, replacement
 failure rollback, post-verification rollback and changed-candidate snapshot tests;
 it has not been executed against global Bee. Managed Docker remains unfinished.
 

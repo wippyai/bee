@@ -42,8 +42,11 @@ intents use the existing stop/cleanup operations. Closing during settlement can
 cancel it and leaves the result unconfirmed, as the view states. All 865 unit
 tests and the Go failure acceptance pass for planning, post-admission preparation,
 and post-placement checkpoint failures, including resize, explicit close and
-release of an unstarted placement. These changes await full release and native
-executable acceptance; they are not installed globally.
+release of an unstarted placement. Exact native binary/modules/About and all
+four managed harness selector checks pass, including saved profiles, scoped MCP
+and login present/absent. Offline fresh/restart/reconnect also passes. The
+stop-only full regression passed; the combined release regression is still
+running. These changes are not installed globally.
 
 Previous global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor

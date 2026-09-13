@@ -3,8 +3,10 @@
 This guide describes available development operations. The optional Hub component
 provides scoped package reads, planning and installation through `bee.hub:call`
 and the Modules application; see [the implemented Hub contract](HUB.md), including
-its migration limits. MCP activation and end-to-end in-app self-edit remain
-unfinished. [Package boundaries](PACKAGE_BOUNDARIES.md) also contains proposals;
+its migration limits. Managed Agent profiles have scoped native MCP delivery;
+provider-specific acceptance and end-to-end in-app self-edit remain incomplete.
+See [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) and the current foundation
+checkpoint for their verified scope. [Package boundaries](PACKAGE_BOUNDARIES.md) also contains proposals;
 use implementation contracts to determine which operations are callable.
 
 Read `README.md`, `docs/FOUNDATION_STATUS.md` and `docs/DEVELOPMENT.md` first.
@@ -130,8 +132,12 @@ The registry owns definitions/configuration/history. Workspace application state
 journal events and exported application data retain their respective owners.
 Transfer declarative content and explicitly supported state, not local credentials,
 live PIDs or mounts. Legacy drivers are source references outside the repository,
-never runtime dependencies. The current `bee codex/claude/agy` aliases launch native
-programs; they do not yet configure Bee tools or recover harness conversations.
+never runtime dependencies. The `bee codex/claude/agy` aliases launch native
+programs. The managed Agent picker uses reviewed profiles and scoped gateway
+configuration; Claude/Codex hooks feed their bound threads. Fixture acceptance
+proves saved-conversation continuation, while real-provider cold recovery remains
+unverified. Read [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending
+this path.
 
 Use `make check` for production changes. `tests/lifecycle.py::detached` is the
 named-owner/revocation gate; `tests/recovery.py` covers durable identity and state;

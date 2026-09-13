@@ -10,7 +10,8 @@ concurrent stop. Exact-source native PTY acceptance and final-candidate full
 native executable and network-disabled startup/restart/reconnect gates pass.
 Evidence: `bee-evidence/0912/window-supervision-order.log`,
 `window-order-{build,native,offline}.log` and `window-order-global-install.json`.
-The preceding `4b43cf1` full repository check is still running.
+The preceding `4b43cf1` full repository check passed in its immutable checkout
+(session `51472`, exit 0; `window-supervision-full-check.log`).
 
 Installation verified and backed up all six files, fenced against `dff3bf11`.
 Runtime/native pins, databases and running nodes were preserved. The terminal
@@ -29,7 +30,7 @@ owner and runner; a raw message alone cannot stop the child.
 All 836 Lua tests, native PTY reconciliation/stop tests, the full native executable
 gate and loopback-only fresh/restored/reconnect acceptance pass. Full `make check`
 for the preceding profile UI source `017e55d` also completed successfully. A fresh
-full regression for `4b43cf1` is running in an immutable checkout. Evidence:
+full regression for `4b43cf1` passed in an immutable checkout. Evidence:
 `bee-evidence/0912/window-supervision-{before,stop,native-before,native,offline,tests}.log`,
 `window-supervision-full-check.log` and `profile-ui-full-check.log`.
 

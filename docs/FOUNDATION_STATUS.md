@@ -8,16 +8,18 @@ live PTY supervision. New/Edit/Remove and native saved-profile launch pass with
 fixture harnesses. The long-lived MCP test fails on the previous binary and passes
 after the supervision fix. All 836 units, full native executable acceptance and
 network-disabled fresh/restored/reconnect checks pass. Full `make check` for the
-preceding profile UI revision `017e55d` passed; the `4b43cf1` full check is running.
+preceding profile UI revision `017e55d` and window-supervision revision `4b43cf1`
+passed. The latter completed in its immutable checkout (session `51472`, exit 0).
 
 The installed `1de5bc0` follow-up installs the window's control listener before
 publishing `running`, with a compare-and-set against `starting`. Its native PTY
 check and the final candidate native/offline gates pass. See
 [global build](handoffs/GLOBAL_BUILD.md) for exact artifacts and preserved state.
 
-Cold Agent recovery remains incomplete: the terminal transfer does not preserve
-the process identity needed to prove process-group cleanup, and recovery must
-also settle interrupted work and establish a provider conversation reference.
+Cold Agent recovery remains incomplete. Runtime PR #743 preserves optional
+terminal process identity; the checked Bee candidate builds, but managed-window
+identity capture and process-group cleanup acceptance remain in progress. Recovery
+must also settle interrupted work and establish a provider conversation reference.
 Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),

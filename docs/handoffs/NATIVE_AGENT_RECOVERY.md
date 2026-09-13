@@ -150,8 +150,9 @@ success or become deduplicated events.
 
 A real Agy print-mode harness inside a managed Agent window now passes cold
 continuation: the first turn reads a random fixture token, Bee stops and restarts
-against the same state, and a new turn recalls the exact token without tools or
-replaying the original task. Conversation, HOME, app and thread identities stay
+against the same state, the source token file is deleted, and a new turn recalls the exact token without
+replaying the original task. The fresh attempt and binding commit a Stop hook
+with no PreToolUse or PostToolUse observations. Conversation, HOME, app and thread identities stay
 the same; the replacement attempt and gateway binding are fresh. The previous
 candidate failed to restore with these session-bearing ambiguous hooks. The
 fixture uses a private login copy and deletes its temporary state after the run.
@@ -162,3 +163,10 @@ The same candidate passes offline fresh boot/restart/reconnect, native executabl
 acceptance and the existing Claude fixture restart gate. Its 851 unit cases pass;
 full combined source/pack acceptance and installation remain pending. See the
 current journal and global-build handoff for installed revision status.
+
+The separate actual Codex TUI probe now reaches directory consent and records its
+exact first user prompt in the private provider transcript. A minimal invocation
+outside Bee then reproduced the provider account's usage-limit refusal. This is
+not evidence of a completed model turn or cold Codex recovery; that acceptance
+remains pending available provider quota. No Bee production workaround or login
+change was made for the refusal.

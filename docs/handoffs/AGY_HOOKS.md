@@ -1,7 +1,8 @@
 # Agy command hooks — integration evidence
 
-Installed Agy delivers scoped MCP and appended profile guidance, but refuses
-hook configuration. Follow-up source now renders its window command hooks and
+The installed build has appended profile guidance but its Agy MCP token header
+is incompatible with the real CLI, and it refuses hook configuration. The
+corrected candidate fixes private MCP credential delivery, renders window hooks and
 decodes their wire fields. Focused native race tests/vet, packaged acceptance,
 offline boot and actual managed-provider gateway delivery now pass. No command-hook sender is installed globally yet.
 The existing carrier commits observations and publishes fixed activity labels;

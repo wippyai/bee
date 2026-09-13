@@ -19,7 +19,9 @@ remain uncertain. Tests use captured protocol fixtures and malformed records;
 they remain outside the production pack.
 
 Gateway configuration generates `.gemini/config/mcp_config.json` with a scoped
-Bee URL and environment-token reference. The window profile also renders command
+Bee URL and an empty credential field in its measured template. Native placement
+fills the declared JSON field with the admitted token when writing the private
+file; Agy does not interpolate token environment references. The window profile also renders command
 hooks for `PreToolUse`, `PostToolUse` and `Stop` in its private hooks.json. The
 host-selected Bee helper posts observations to the existing hook endpoint and
 emits no permission decision. Missing helper selection, unsupported events and
@@ -28,11 +30,14 @@ provider configuration are refused. The component declares its opaque login file
 that machine file for an optional private copy, preserving private refreshes;
 it does not link the machine directory or copy conversations and settings.
 The native executable fixture proves present/absent login projection and scoped
-MCP requests from the generated configuration. It uses a fixture CLI; an actual
-authenticated Agy turn remains unverified. The host selects the executable and
+MCP requests from the generated configuration. A separate actual Agy 1.2.2 managed read task commits tool and Stop observations.
+An actual managed MCP task also commits one bound-thread message when the two
+fixture tools are explicitly allowed in its private permissions file. Production
+retains the harness permission prompts; this is not automatic approval or cold
+conversation recovery. The host selects the executable and
 grants; the component declaration alone gives no execution authority.
 
-Separate live Agy 1.2.2 probes verify empty-output command hooks for read-only
-tool and stop observations. Managed hook delivery still needs native executable
-acceptance before release; see
+Packaged native acceptance, live command-hook delivery and loopback-only boot
+checks pass for the corrected candidate. Installation remains gated by the full
+source/pack regression; see
 [the hook integration evidence](../../../docs/handoffs/AGY_HOOKS.md).

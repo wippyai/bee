@@ -19,6 +19,13 @@ All artifact hashes and six archived runtime patches match provenance. Full
 being checked separately. These are not real-provider model-turn or Docker
 execution claims. Managed Docker remains unfinished.
 
+Real Grok managed startup also passes through the picker and generated command
+hooks: SessionStart commits with a conversation ID in its bound thread, without
+submitting a model prompt. The opt-in `make native-grok-live-check` requires
+explicit `BEE_BINARY`, `GROK_BIN` and `GROK_LOGIN_FILE` paths. It uses disposable
+project/state/HOME directories and copies only the selected login, without
+machine settings or trust state. Evidence: `grok-actual-managed-make.log`.
+
 Evidence in `bee-evidence/0912/`: `agent-login-hooks-{build,native,offline,recovery,check}.log`
 and `agent-login-hooks-grok-title.log`. The runtime pin is unchanged; builder
 PR 8 and runtime PR 745 remain unmerged. No global installation has occurred.

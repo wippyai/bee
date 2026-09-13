@@ -1,6 +1,29 @@
 # Global Bee build — September 12, 2026
 
-## Current install: saved Agent profiles
+## Current install: saved profile effort and MCP scope
+
+Global SHA `f73dcffc6eb026ae2165f46ef6465bc88c7fa520083ff124e6a74fff6ac627e8`
+contains production source `dc86273`. Four default harness policies expose
+low/medium/high effort choices. Native Agent acceptance proves saving high effort,
+appended guidance and read/wait-only MCP access, then launching a fixture harness
+with those settings. Direct invocation of the excluded message tool is refused
+and leaves the durable thread boundary unchanged. No paid provider turn is claimed.
+
+All 836 Lua cases pass. Candidate packaged desktop, Modules, About and native Agent
+checks pass. Fresh/restored startup, restart and retained-client reconnect pass
+with only loopback networking. Full `make check` at `638d4eb` completed successfully;
+the broader UI revision `017e55d` check remains running. Evidence lives in
+`bee-evidence/0912/profile-effort-{build,native-final,binary,modules,about,offline}.log`
+and `profile-effort-full-tests.log`.
+
+The installer fenced the previous `88372d5b` executable and all five sidecars,
+verified provenance, and backed up the six files before replacement. Runtime/native
+pins are unchanged; no runtime PR was merged. Databases and running nodes were
+preserved. Installation receipt: `bee-evidence/0912/profile-effort-global-install.json`.
+Managed Docker, policy-controlled profile sharing and real-provider edited-profile
+model turns remain unfinished.
+
+## Previous install: saved Agent profiles
 
 Global SHA `88372d5b549a39e6c3ede269fcff5a2c57090562ac7c54a65a9c7dee25cf7ac3`
 contains production source `d18de64`. Agent now offers New/Edit profiles for

@@ -1,6 +1,6 @@
 # Saved agent profiles
 
-Installed in global Bee at production source `d18de64`. Saved-profile resolution,
+Installed in global Bee at production source `dc86273`. Saved-profile resolution,
 admission and the picker/form workflow have native acceptance; remaining limits
 are listed below.
 
@@ -117,7 +117,7 @@ policies. Claude, Agy and Grok already translate effort to native flags; Codex
 now emits a bounded model_reasoning_effort configuration override before any
 subcommand or prompt delimiter. An omitted selection preserves harness defaults.
 Strict lint and 23 focused profile/launch cases pass. These option defaults are
-not yet in the installed d18de64 binary.
+in the installed dc86273 binary.
 
 The installed candidate additionally passes a real saved-profile fixture launch:
 Agy receives the saved appended guidance in its private GEMINI.md and the scoped

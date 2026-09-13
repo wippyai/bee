@@ -25,6 +25,10 @@ hostname addresses are refused. Native address discovery checks that the
 reported interface matches the configured interface. MCP and both hook endpoints
 check the exact Host address and port; `localhost` is accepted only as an alias
 for `127.0.0.1` on that same port. Browser origins remain refused.
+All three endpoint handlers reject browser origins and missing bearer headers
+before resolving listener state. A request without a bearer returns 401 without
+a supervisor lookup. Requests carrying a bearer still pass the exact Host check
+before token authentication or credential-use accounting.
 
 The host must also select the readiness permission for that interface. Simple
 security policies support suffix wildcards, so `http://IP:*/ready` is not a

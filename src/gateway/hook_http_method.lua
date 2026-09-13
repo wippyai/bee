@@ -28,12 +28,12 @@ end
 local function admitted(request: http.Request, response: http.Response): (gateway.Binding?, string?)
     local action_id = request:param("action")
     if not action_id or action_id == "" then refuse(response, http.STATUS.NOT_FOUND, "no action"); return nil, nil end
-    local host = request:host() or ""
-    if not gateway.accepts_host(host) then refuse(response, http.STATUS.FORBIDDEN, "host is not the selected listener"); return nil, nil end
     if request:header("Origin") then refuse(response, http.STATUS.FORBIDDEN, "browser origins are not admitted"); return nil, nil end
     local authorization = request:header("Authorization") or ""
     local token = authorization:match("^Bearer%s+(%S+)$")
     if not token then refuse(response, http.STATUS.UNAUTHORIZED, "bearer token required"); return nil, nil end
+    local host = request:host() or ""
+    if not gateway.accepts_host(host) then refuse(response, http.STATUS.FORBIDDEN, "host is not the selected listener"); return nil, nil end
     local binding, refusal = gateway.authenticate(token, action_id, "hook")
     if not binding then
         local fault = refusal and refusal.error or {code = "UNAUTHENTICATED", message = "refused"}

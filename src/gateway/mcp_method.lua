@@ -94,14 +94,14 @@ local function handle(): nil
     if request_error then answer(response, http.STATUS.BAD_REQUEST, mcp.failure(nil, mcp.INVALID_REQUEST, "unreadable request")); return nil end
     local action_id = request:param("action")
     if not action_id or action_id == "" then answer(response, http.STATUS.NOT_FOUND, mcp.failure(nil, mcp.INVALID_REQUEST, "no action")); return nil end
-    local host = request:host() or ""
-    if not gateway.accepts_host(host) then
-        answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "host is not the selected listener")); return nil
-    end
     if request:header("Origin") then answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "browser origins are not admitted")); return nil end
     local authorization = request:header("Authorization") or ""
     local token = authorization:match("^Bearer%s+(%S+)$")
     if not token then answer(response, http.STATUS.UNAUTHORIZED, mcp.failure(nil, mcp.INVALID_REQUEST, "bearer token required")); return nil end
+    local host = request:host() or ""
+    if not gateway.accepts_host(host) then
+        answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "host is not the selected listener")); return nil
+    end
     local binding, refusal = gateway.authenticate(token, action_id, "tool")
     if not binding then
         local fault = refusal and refusal.error or {code = "UNAUTHENTICATED", message = "refused"}

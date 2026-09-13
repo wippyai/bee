@@ -93,8 +93,14 @@ The service scope contains no `exec.run` permission.
 The native boot acceptance uses the production attachment policy and proves
 foreign-owner rejection before daemon I/O. Agent menu/PTY launch,
 credential/MCP delivery and retained conversation recovery remain unverified.
-The lifecycle fixture's identity-preserving home mount also does not prove
-configuration delivery under translated home paths.
+The lifecycle fixture mounts the private host home at `/home/bee`. The driver
+renderer receives that container path; the shared materializer continues to
+write relative delivery files into the private host home. Before starting,
+Docker placement verifies the materializer's HOME matches the frozen mount
+source and selects the container HOME. Other environment values are unchanged.
+The actual container confirms HOME and its working directory by writing a marker
+through the mount. Real harness configuration files, credentials and MCP still
+need the Agent workflow acceptance above.
 
 `make docker-start-stop-check` accepts the same runtime, component and image
 arguments. It holds real Docker responses after create or start has committed,

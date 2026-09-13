@@ -247,6 +247,88 @@ local function cancel_container(attempt_id: string, saved: Identity): Reply
     return succeed(current)
 end
 
+-- A process can die after Docker commits create but before the container ID
+-- reaches the placement receipt. Reconstruct only from the frozen request and
+-- specification, then use the daemon's exact-name plus identity check. The
+-- lookup is deliberately never a create retry: absence, a replacement,
+-- duplicate names or an uncertain daemon response must settle as uncertain.
+local function recover_unrecorded(attempt: types.Attempt, row: Row): (Observation?, Identity?, Reply?)
+    local _, stored_error = store.request(row)
+    if stored_error then return nil, nil, fail("STORAGE", stored_error) end
+    local spec, spec_error = decode_json(row.placement_spec_json, "Docker specification")
+    if not spec then return nil, nil, spec_error end
+    local _, build_error = docker_configuration.build(spec)
+    if build_error then return nil, nil, fail("STORAGE", "frozen Docker specification is invalid: " .. build_error) end
+    local name, name_error = container_name(attempt, row)
+    if not name then return nil, nil, name_error end
+    local image = bounds.text(spec.image, 71)
+    local apparmor: string? = nil
+    if spec.apparmor ~= nil then apparmor = bounds.text(spec.apparmor, 128) end
+    local expected_labels = bounds.object(spec.labels)
+    if not image or not expected_labels then return nil, nil, fail("STORAGE", "frozen Docker specification has no recovery identity") end
+    local observed, recovery_error = daemon.recover_create({name = name, expected = {image_id = image, apparmor = apparmor, labels = expected_labels}})
+    if not observed then
+        local latest, _, latest_denied = load(attempt.attempt_id)
+        if not latest then return nil, nil, latest_denied :: Reply end
+        if latest.execution_state == "starting" or latest.execution_state == "stopping" then
+            local marked = transition(attempt.attempt_id, {expected_execution = latest.execution_state, execution = "uncertain",
+                evidence = {kind = "docker.reconcile.create_uncertain", detail = recovery_error and recovery_error.message or "Docker create recovery was not confirmed"}})
+            if not marked.ok then return nil, nil, marked end
+        end
+        return nil, nil, fail("UNCERTAIN", recovery_error and recovery_error.message or "Docker create recovery was not confirmed")
+    end
+    local recovered = observed_identity(observed :: Observation, nil, apparmor)
+    local encoded, encode_error = encode(recovered, "Docker identity")
+    if not encoded then return nil, nil, encode_error end
+    local current, _, current_denied = load(attempt.attempt_id)
+    if not current then return nil, nil, current_denied :: Reply end
+    if current.execution_state ~= "starting" and current.execution_state ~= "stopping" then
+        return observed, recovered, succeed(current)
+    end
+    local recorded = transition(attempt.attempt_id, {expected_execution = current.execution_state,
+        fields = {placement_identity_json = encoded, runner_pid = ""},
+        evidence = {kind = "docker.reconcile.created", detail = "recovered Docker identity after an unrecorded create"}})
+    if not recorded.ok then return nil, nil, cancel_container(attempt.attempt_id, recovered) end
+    return observed, recovered, nil
+end
+
+local function resume_recovered(attempt_id: string, observed: Observation, saved: Identity): Reply
+    local current, _, denied = load(attempt_id)
+    if not current then return denied :: Reply end
+    if current.execution_state == "stopping" then return cancel_container(attempt_id, saved) end
+    if current.execution_state ~= "starting" then return succeed(current) end
+    if observed.state == "exited" then
+        return transition(attempt_id, {expected_execution = "starting", execution = "exited",
+            evidence = {kind = "docker.reconcile.exited", detail = "recovered Docker container had already exited"}})
+    end
+    if observed.state == "running" then
+        return transition(attempt_id, {expected_execution = "starting", execution = "running",
+            evidence = {kind = "docker.reconcile.running", detail = "recovered Docker container was already running"}})
+    end
+    local checked = transition(attempt_id, {expected_execution = "starting",
+        evidence = {kind = "docker.reconcile.start_checked", detail = "recovered created container remains admitted to start"}})
+    if not checked.ok then return cancel_container(attempt_id, saved) end
+    local started, start_error = daemon.start({container_id = saved.container_id, expected = expected(saved)})
+    if not started then
+        local latest, _, latest_denied = load(attempt_id)
+        if not latest then return latest_denied :: Reply end
+        if latest.execution_state == "stopping" or latest.execution_state == "exited" then
+            return cancel_container(attempt_id, saved)
+        end
+        transition(attempt_id, {expected_execution = "starting", execution = "uncertain",
+            evidence = {kind = "docker.reconcile.start_uncertain", detail = start_error and start_error.message or "recovered Docker start was not confirmed"}})
+        return fail("UNCERTAIN", start_error and start_error.message or "recovered Docker start was not confirmed")
+    end
+    local final = observed_identity(started :: Observation, saved)
+    local encoded, encode_error = encode(final, "Docker identity")
+    if not encoded then return encode_error :: Reply end
+    local finished = transition(attempt_id, {expected_execution = "starting", execution = "running",
+        fields = {placement_identity_json = encoded, runner_pid = ""},
+        evidence = {kind = "docker.reconcile.started", detail = "recovered Docker container started and identity confirmed"}})
+    if not finished.ok then return cancel_container(attempt_id, final) end
+    return finished
+end
+
 function M.prepare(value: unknown): Reply
     local request, decode_error = request_codec.decode(value)
     if not request then return fail("INVALID", decode_error or "invalid launch request") end
@@ -281,13 +363,17 @@ function M.prepare(value: unknown): Reply
     end
     local home, home_error = native.configured_home(request)
     if not home then return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
-    configuration.home_directory = home
+    local policy, policy_error = policy_docker(pinned, request)
+    if not policy then return policy_error :: Reply end
+    -- Render paths as the harness sees them. Delivery files remain relative
+    -- and the shared materializer writes them into the private host home.
+    local container_home = bounds.text(policy.home_target or "/home/bee", 4096)
+    if not container_home then return fail("DENIED", "Docker home target is invalid") end
+    configuration.home_directory = container_home
     local delivery, delivery_error = configuration_protocol.call(target, configuration)
     if not delivery then return fail("DENIED", delivery_error or "configuration rendering failed") end
     local work, work_error = working_directory(request)
     if not work then return work_error :: Reply end
-    local policy, policy_error = policy_docker(pinned, request)
-    if not policy then return policy_error :: Reply end
     local spec, spec_error = spec_from(policy, request, digest, home :: string, work :: string, delivery :: types.ConfigurationDelivery)
     if not spec then return spec_error :: Reply end
     local capabilities, capability_error = daemon.capabilities()
@@ -350,6 +436,12 @@ function M.start(value: unknown): Reply
         if latest_denied then return latest_denied end
         return fail("DENIED", prep_error or "Docker materialization failed")
     end
+    -- HOME is owned by placement, not an arbitrary environment substitution.
+    -- Check the materializer's physical home before selecting its mounted path.
+    if prepared.environment.HOME ~= spec.home_source then return fail("DENIED", "materialized home differs from the admitted Docker source") end
+    local container_home = bounds.text(spec.home_target, 4096)
+    if not container_home then return fail("STORAGE", "frozen Docker home target is invalid") end
+    prepared.environment.HOME = container_home
     local config, config_error = docker_configuration.build(spec, prepared.environment)
     if not config then return fail("DENIED", config_error or "Docker configuration failed") end
     local ready, _, ready_denied = load(attempt.attempt_id)
@@ -466,6 +558,11 @@ function M.reconcile_attempt(attempt: types.Attempt, row: Row): Reply
     if attempt.execution_state == "intended" or attempt.execution_state == "exited" then return succeed(attempt) end
     local saved, identity_error = identity(row)
     if identity_error then return identity_error :: Reply end
+    if not saved and attempt.execution_state == "starting" then
+        local recovered, recovered_identity, recovery_result = recover_unrecorded(attempt, row)
+        if recovery_result then return recovery_result end
+        if recovered and recovered_identity then return resume_recovered(attempt.attempt_id, recovered, recovered_identity) end
+    end
     if not saved then return transition(attempt.attempt_id, {expected_execution = attempt.execution_state, execution = attempt.execution_state == "stopping" and "stopping" or "uncertain", evidence = {kind = "docker.reconcile.unidentified", detail = "no Docker identity recorded; a recorded stop remains pending"}}) end
     local observed, daemon_error = daemon.inspect({container_id = saved.container_id, expected = expected(saved)})
     if not observed then

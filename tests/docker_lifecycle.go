@@ -149,7 +149,7 @@ func run() error {
 		defer server.Close()
 		go func() { _ = server.Serve(listener) }()
 	}
-	policy := map[string]any{"schema_revision": "bee.launch-policy@2", "placement_binding": "bee.placement.docker:binding", "required_cleanup": "contained_tree", "required_exit_observation": "independent", "start_ms": 10000, "stop_grace_ms": 500, "drain_ms": 1000, "runner_drain_ms": 500, "fixture": true, "executables": map[string]string{}, "environment": map[string]string{}, "docker": map[string]any{"image": *image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "network": "none", "memory": 134217728, "nano_cpus": 1000000000, "pids_limit": 32, "home_target": home, "mounts": []map[string]string{{"source": project, "target": project, "access": "read"}}}}
+	policy := map[string]any{"schema_revision": "bee.launch-policy@2", "placement_binding": "bee.placement.docker:binding", "required_cleanup": "contained_tree", "required_exit_observation": "independent", "start_ms": 10000, "stop_grace_ms": 500, "drain_ms": 1000, "runner_drain_ms": 500, "fixture": true, "executables": map[string]string{}, "environment": map[string]string{}, "docker": map[string]any{"image": *image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "network": "none", "memory": 134217728, "nano_cpus": 1000000000, "pids_limit": 32, "home_target": "/home/bee", "mounts": []map[string]string{{"source": project, "target": project, "access": "read"}}}}
 	policyJSON, _ := json.Marshal(policy)
 	socketJSON, _ := json.Marshal(selectedSocket)
 	manifest := `version: '1.0'
@@ -212,7 +212,10 @@ entries:
 	script = strings.ReplaceAll(script, "RACE_START", fmt.Sprint(*racePhase == "start"))
 	for path, contents := range map[string]string{"src/docker_acceptance/_index.yaml": manifest, "src/docker_acceptance/check.lua": script, "src/docker_acceptance/probe.lua": `local security=require("security")
 return {handle=function():boolean return security.can("db.get","bee.placement.native:db") end}`,
-		"src/docker_acceptance/configure.lua": `return {handle=function(_:unknown): {[string]:unknown} return {ok=true, delivery={arguments={},files={}}} end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n  src: src\n  modules: .wippy\n"} {
+		"src/docker_acceptance/configure.lua": `return {handle=function(value:unknown): {[string]:unknown}
+ if type(value)~="table" or value.home_directory~="/home/bee" then return {ok=false,error="driver renderer did not receive the container home"} end
+ return {ok=true, delivery={arguments={},files={}}}
+end}`, "src/docker_host/_index.yaml": daemonHost, "wippy.lock": "directories:\n  src: src\n  modules: .wippy\n"} {
 		full := filepath.Join(root, path)
 		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
 			return err
@@ -229,7 +232,7 @@ return {handle=function():boolean return security.can("db.get","bee.placement.na
 	if *racePhase == "" {
 		commands = append(commands, []string{"run", "docker-lifecycle-check"})
 	}
-	for _, args := range commands {
+	for index, args := range commands {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		cmd := exec.CommandContext(ctx, *runtime, args...)
 		cmd.Dir = root
@@ -238,6 +241,19 @@ return {handle=function():boolean return security.can("db.get","bee.placement.na
 		cancel()
 		if e != nil {
 			return fmt.Errorf("%s failed: %w\n%s", args[0], e, out)
+		}
+		if index == 1 && *racePhase == "" {
+			ready := false
+			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+				if _, err := os.Stat(filepath.Join(home, "container-home-ready")); err == nil {
+					ready = true
+					break
+				}
+				time.Sleep(25 * time.Millisecond)
+			}
+			if !ready {
+				return fmt.Errorf("container did not confirm translated HOME and working directory")
+			}
 		}
 	}
 	proof, err := os.ReadFile(filepath.Join(root, "evidence", "complete"))
@@ -304,7 +320,7 @@ local function main()
  local request={idempotency_key="ATTEMPT",owner_id="bee.docker_acceptance",owner_incarnation=1,action_id="ATTEMPT-action",attempt_id="ATTEMPT",
  binding_ref="bee.docker_acceptance:driver",policy_ref="bee.docker_acceptance:policy",profile_id="window",binding_digest=string.rep("b",64),profile_digest=string.rep("c",64),
  placement_binding_ref=binding.binding_id,placement_binding_digest=binding.binding_digest,
- launch={executable="/bin/sh",argv={"-c","while :; do sleep 1; done"},environment={},readiness="none"},resources={},environment={},required_cleanup="contained_tree",required_exit_observation="independent",timeouts={start_ms=10000,stop_grace_ms=500}}
+ launch={executable="/bin/sh",argv={"-c","test \"$HOME\" = /home/bee && test \"$PWD\" = /home/bee || exit 19; touch \"$HOME/container-home-ready\"; while :; do sleep 1; done"},environment={},readiness="none"},resources={},environment={},required_cleanup="contained_tree",required_exit_observation="independent",timeouts={start_ms=10000,stop_grace_ms=500}}
  local denied=call("prepare",request,true);assert(denied.ok==false,"foreign preparation admitted")
  local output=assert(fs.get("bee.docker_acceptance:output"))
  local resuming=output:exists("/started")

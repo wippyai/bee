@@ -34,14 +34,14 @@ local function main()
     local address = selected.address :: string
     call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
     local admitted = call("bee.gateway:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
-        thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, ttl_ms = 120000})
+        thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = {"SessionStart"}, ttl_ms = 120000})
     local binding = admitted.binding :: Object
     local authorized = call("bee.gateway:authorize_materialization", {attempt_id = "container-attempt", carrier_epoch = 1, binding_id = binding.binding_id})
     local materialized = call("bee.gateway:materialize", {attempt_id = "container-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key})
     local ready = call("bee.gateway:ready", {binding_id = binding.binding_id})
     if ready.listening ~= true or ready.binding_valid ~= true then error("gateway readiness refused") end
     local function phase(name: string)
-        local payload = json.encode({phase = name, address = address, token = materialized.token})
+        local payload = json.encode({phase = name, address = address, token = materialized.token, hook_token = materialized.hook_token})
         local response, err = http_client.post(callback, {body = payload, headers = {["Content-Type"] = "application/json"}, timeout = "45s"})
         if not response or err or response.status_code ~= 200 then error("container " .. name .. " proof failed") end
     end

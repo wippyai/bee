@@ -26,27 +26,34 @@ import (
 const containerScript = `
 const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 function check(ok, message) { if (!ok) throw Error(message); }
-async function rpc({token=input.token, host, origin, action='container-action', method='initialize', params={}}={}) {
+async function rpc({token=input.token, host, origin, action='container-action', method='initialize', params={}, endpoint='mcp', payload}={}) {
  const headers = {'Content-Type':'application/json'};
  if (token) headers.Authorization = 'Bearer '+token;
  if (host) headers.Host = host;
  if (origin) headers.Origin = origin;
  return await new Promise((resolve,reject)=>{
-  const request = require('http').request('http://'+input.address+'/mcp/'+action,
+  const request = require('http').request('http://'+input.address+'/'+endpoint+'/'+action,
    {method:'POST',headers,timeout:5000}, response=>{
     let body='';
     response.setEncoding('utf8');
     response.on('data',chunk=>{body+=chunk;if(body.length>1048576)response.destroy(Error('oversized reply'));});
     response.on('error',reject);
-    response.on('end',()=>{try{resolve({status:response.statusCode,body:JSON.parse(body)});}catch(e){reject(e);}});
+    response.on('end',()=>{try{resolve({status:response.statusCode,headers:response.headers,
+     body:(response.headers['content-type']||'').includes('application/json') ? JSON.parse(body) : body});}catch(e){reject(e);}});
    });
   request.on('error',reject);
   request.on('timeout',()=>request.destroy(Error('request timeout')));
-  request.end(JSON.stringify({jsonrpc:'2.0',id:1,method,params}));
+  request.end(JSON.stringify(payload ?? {jsonrpc:'2.0',id:1,method,params}));
  });
 }
 (async()=>{
- if (input.phase==='revoked') { check((await rpc()).status===401,'revoked token accepted'); return; }
+ const hook = options=>rpc({endpoint:'hook',token:input.hook_token,
+  payload:{hook_event_name:'SessionStart',session_id:'container-session',source:'startup'},...options});
+ if (input.phase==='revoked') {
+  check((await rpc()).status===401,'revoked tool token accepted');
+  check((await hook()).status===401,'revoked hook token accepted');
+  return;
+ }
  check((await rpc()).body.result?.protocolVersion,'initialize failed');
  const tools = (await rpc({method:'tools/list'})).body.result?.tools?.map(t=>t.name).sort();
  check(JSON.stringify(tools)===JSON.stringify(['thread_read','thread_wait']),'scope changed');
@@ -57,6 +64,17 @@ async function rpc({token=input.token, host, origin, action='container-action', 
  check((await rpc({host:'127.0.0.1:1'})).status===403,'foreign host accepted');
  check((await rpc({host:input.address.replace(/:\d+$/,':1')})).status===403,'wrong port accepted');
  check((await rpc({origin:'http://example.invalid'})).status===403,'browser origin accepted');
+ check(input.hook_token && input.hook_token!==input.token,'hook credential is not separate');
+ check((await rpc({token:input.hook_token})).status===401,'hook credential accepted for tools');
+ check((await hook({token:input.token})).status===401,'tool credential accepted for hooks');
+ check((await hook({token:''})).status===401,'missing hook credential accepted');
+ check((await hook({action:'other-action'})).status===403,'cross-action hook accepted');
+ check((await hook({host:'127.0.0.1:1'})).status===403,'foreign hook Host accepted');
+ check((await hook({host:input.address.replace(/:\d+$/,':1')})).status===403,'wrong hook port accepted');
+ check((await hook({origin:'http://example.invalid'})).status===403,'hook browser origin accepted');
+ const first=await hook(), replay=await hook();
+ check(first.status===202 && first.body==='' && first.headers['x-bee-event'],'hook was not queued with an empty response');
+ check(replay.status===202 && replay.body==='' && replay.headers['x-bee-event']===first.headers['x-bee-event'],'hook replay duplicated its occurrence');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});
 `
 
@@ -170,9 +188,10 @@ func run() error {
 			return
 		}
 		var input struct {
-			Phase   string `json:"phase"`
-			Address string `json:"address"`
-			Token   string `json:"token"`
+			Phase     string `json:"phase"`
+			Address   string `json:"address"`
+			Token     string `json:"token"`
+			HookToken string `json:"hook_token"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384)).Decode(&input); err != nil {
 			http.Error(w, "invalid fixture callback", 400)
@@ -180,13 +199,13 @@ func run() error {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		if input.Token == "" || !strings.HasPrefix(input.Address, *address+":") ||
+		if input.Token == "" || input.HookToken == "" || !strings.HasPrefix(input.Address, *address+":") ||
 			(len(phases) == 0 && input.Phase != "active") || (len(phases) == 1 && input.Phase != "revoked") || len(phases) > 1 {
 			problems = append(problems, "invalid callback phase or identity")
 			http.Error(w, "invalid fixture state", 400)
 			return
 		}
-		tokens = append(tokens, input.Token)
+		tokens = append(tokens, input.Token, input.HookToken)
 		body, _ := json.Marshal(input)
 		ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
 		defer cancel()
@@ -204,6 +223,7 @@ func run() error {
 				problems = append(problems, fmt.Sprintf("container cleanup was not confirmed for %s: %v: %s", name, cleanupError, cleanupOutput))
 			}
 			detail := strings.ReplaceAll(string(output), input.Token, "[redacted]")
+			detail = strings.ReplaceAll(detail, input.HookToken, "[redacted]")
 			problems = append(problems, fmt.Sprintf("container %s: %v: %s", input.Phase, runError, detail))
 			http.Error(w, "container proof failed", 500)
 			return
@@ -249,7 +269,7 @@ func run() error {
 		}
 		return fmt.Errorf("gateway container proof: runtime=%v phases=%v problems=%v\n%s", runError, phases, problems, detail)
 	}
-	fmt.Println("Container gateway: native random port, scoped MCP read, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
+	fmt.Println("Container gateway: native random port, scoped MCP read, separate hook credentials, hook replay, missing/cross-action/revoked token and wrong Host/port/Origin refusal passed")
 	return nil
 }
 func main() {

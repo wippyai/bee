@@ -110,6 +110,12 @@ managed-window-app-check:
 window-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))"
+.PHONY: window-recovery-check
+check: window-recovery-check
+window-recovery-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))" -crash
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))" -cancel-recovery
 .PHONY: layout-ack-check
 layout-ack-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import personalization; personalization.acknowledged_layout()'

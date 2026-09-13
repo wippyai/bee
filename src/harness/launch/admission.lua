@@ -17,6 +17,7 @@ local definition = require("definition")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
 local continuation = require("continuation")
+local interrupted = require("interrupted")
 local profiles = require("profiles")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
@@ -341,6 +342,11 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
             -- Saved references grant nothing. Existing owner operations verify
             -- membership, exact producer/session, driver pins and completed
             -- cleanup before this request obtains any fresh grants.
+            local recovered, recovery_error = interrupted.recover({thread_id = previous.thread_id,
+                action_id = ids.action_id, attempt_id = ids.attempt_id, previous_attempt_id = previous.previous_attempt_id,
+                owner_id = requester, session_ref = session_ref, binding_ref = plan.binding_ref,
+                binding_digest = plan.binding_digest, profile_id = plan.profile_id, profile_digest = plan.profile_digest})
+            if not recovered then return nil, fail("CONFLICT", "cannot recover saved window: " .. tostring(recovery_error)) end
             local resume, resume_error = continuation.resolve_window(function(target: string, input: unknown): (unknown, string?)
                 local reply, err = funcs.call(target, input)
                 if err then return nil, tostring(err) end

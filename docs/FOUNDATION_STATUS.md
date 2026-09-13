@@ -16,8 +16,10 @@ terminal process identity. The installed build proves managed-window identity ca
 and independent process-group cleanup. Follow-up source proves graceful conversation
 continuation through the broker using an acknowledged checkpoint and retained session home. These are
 fixture-harness proofs within a running runtime, not real-provider cold recovery.
-Interrupted-window recovery is under development: its current acceptance exposes
-the need for a responsive recovery view before the broker startup deadline.
+Follow-up source passes interrupted-window restore and responsive cancellation
+through the real broker/native terminal fixture. The recovery view stays responsive
+while admission drains hooks. Its combined full regression remains outstanding;
+these changes are not in the installed global build.
 Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
 policy-controlled profile sharing, and end-to-end governed overlay activation
 also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),

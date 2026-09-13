@@ -29,6 +29,7 @@ type State = {
     hooks_enabled: boolean, drain_ms: integer, decoder: Decoder,
     work: Work, due: integer, clock: integer, inflight: InFlight?,
     batch: Batch?, checkpoint_intent: Intent?, commit: Intent?, ack: Intent?,
+    checkpoint_key: string?,
     closing: boolean, closed: boolean, sealed: boolean, started: boolean,
     drain_deadline: integer?, unresolved: boolean,
     activity: string?,
@@ -76,9 +77,54 @@ function M.new(config: Config): State
         drain_ms = config.drain_ms, decoder = config.decoder,
         work = "checkpoint", due = 0, clock = 0, inflight = nil,
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
+        checkpoint_key = nil,
         closing = false, closed = false, sealed = false, started = false,
         drain_deadline = nil, unresolved = false, activity = nil,
     }
+end
+-- Rebuild hook delivery around a checkpoint already committed by an earlier
+-- carrier. The point is decoded by the recovery owner; this constructor only
+-- checks that the selected configuration still names the same attempt pins,
+-- then fences all subsequent replies with the replacement epoch.
+function M.resume(config: Config, point: checkpoint.Checkpoint?, revision: integer): (State?, string?)
+    local stored_revision = bounds.integer(revision)
+    if not stored_revision or stored_revision < 0 then
+        return nil, "checkpoint revision must be a nonnegative integer"
+    end
+    if not point then return nil, "checkpoint is required for resume" end
+    local epoch = bounds.integer(config.epoch)
+    if not epoch or epoch < 1 then return nil, "carrier epoch must be a positive integer" end
+    local previous_epoch = bounds.integer(point.attachment_generation)
+    if not previous_epoch or epoch <= previous_epoch then
+        return nil, "carrier epoch must advance the checkpoint generation"
+    end
+    if point.binding_ref ~= config.binding_ref or point.binding_digest ~= config.binding_digest then
+        return nil, "checkpoint binding does not match the selected configuration"
+    end
+    if point.profile_id ~= config.profile_id or point.profile_digest ~= config.profile_digest then
+        return nil, "checkpoint profile does not match the selected configuration"
+    end
+    if point.plan_digest ~= config.plan_digest then
+        return nil, "checkpoint plan does not match the selected configuration"
+    end
+    if point.retained_session_ref ~= config.session_ref then
+        return nil, "checkpoint session does not match the selected configuration"
+    end
+    if point.gateway_binding ~= config.gateway_binding then
+        return nil, "checkpoint gateway binding does not match the selected configuration"
+    end
+    checkpoint.rebind(point, epoch)
+    return {
+        thread_id = config.thread_id, attempt_id = config.attempt_id, epoch = epoch, revision = stored_revision,
+        binding_id = config.gateway_binding, checkpoint = point,
+        hooks_enabled = config.hooks_enabled and config.gateway_binding ~= nil,
+        drain_ms = config.drain_ms, decoder = config.decoder,
+        work = "checkpoint", due = 0, clock = 0, inflight = nil,
+        batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
+        checkpoint_key = "launch:" .. config.attempt_id .. ":window:checkpoint:" .. tostring(epoch),
+        closing = false, closed = false, sealed = false, started = false,
+        drain_deadline = nil, unresolved = false, activity = nil,
+    }, nil
 end
 function M.decode(raw: unknown): Reply?
     local reply = bounds.object(raw)
@@ -100,8 +146,8 @@ function M.next_intent(state: State, key: string, now: integer): Intent?
     if state.work == "checkpoint" then
         if not state.checkpoint_intent then
             state.checkpoint_intent = {target = M.COMMIT, request = {
-                thread_id = state.thread_id, idempotency_key = "launch:" .. state.attempt_id .. ":window:checkpoint",
-                attempt_id = state.attempt_id, carrier_epoch = state.epoch, expected_revision = 0,
+                thread_id = state.thread_id, idempotency_key = state.checkpoint_key or ("launch:" .. state.attempt_id .. ":window:checkpoint"),
+                attempt_id = state.attempt_id, carrier_epoch = state.epoch, expected_revision = state.revision,
                 checkpoint = state.checkpoint, records = {},
             }}
         end
@@ -172,7 +218,8 @@ function M.apply(state: State, identity: string, reply: Reply): boolean
         local count, batch = bounds.integer(result.acknowledged), state.batch
         -- An exact retry may acknowledge zero: the first call committed the
         -- whole transaction but its reply was lost. IDs come from this claim.
-        if result.binding_id ~= state.binding_id or not count or count < 0 or not batch or count > #batch.event_ids then retry(state); return true end
+        if result.binding_id ~= state.binding_id or (result.carrier_epoch ~= nil and result.carrier_epoch ~= state.epoch)
+            or not count or count < 0 or not batch or count > #batch.event_ids then retry(state); return true end
         state.ack, state.batch = nil, nil
         state.work = "claim"
     elseif state.work == "seal" then

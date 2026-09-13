@@ -10,6 +10,7 @@ local json = require("json")
 local appearance = require("appearance")
 local registry = require("registry")
 local admission = require("admission")
+local store = require("store")
 
 local M = {}
 local WORKSPACE = string.rep("b", 32)
@@ -39,7 +40,7 @@ local function endpoint(): string
     return address :: string
 end
 
-local function execute()
+local function execute(crashed: boolean, cancel_recovery: boolean)
     -- 1. Open gateway listener under configured loopback endpoint
     local address = endpoint()
     local opened_gateway = call("bee.gateway:open", {address = address})
@@ -277,13 +278,24 @@ local function execute()
 
 
     -- 11. Close application and verify clean shutdown
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
+    if crashed then
+        local db = assert(store.open())
+        local recorded = assert(store.row(db, admission.identities("window-hooks-req").attempt_id))
+        db:release()
+        assert(type(recorded.runner_pid) == "string", "fixture has no recorded owner actor")
+        assert(process.terminate(recorded.runner_pid :: string))
+    else
+        assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
+    end
     local closed = false
     while not closed do
         local message = assert(replies:receive())
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then
             assert(data.error_code == "", "managed window close failed: " .. tostring(data.error))
+            closed = true
+        elseif crashed and tostring(message:from()) == broker and type(data) == "table"
+            and data.op == "closed" and data.id == opened.id then
             closed = true
         end
     end
@@ -299,7 +311,7 @@ local function execute()
             assert(body.scope == "attempt" and body.outcome == "cancelled", "expected cancelled receipt")
         end
     end
-    assert(receipts == 1, "expected exactly one cancelled receipt")
+    assert(receipts == (crashed and 0 or 1), "unexpected receipt count before recovery")
     local hook_count = 0
     for _, record in ipairs(final_page.records :: {{[string]: unknown}}) do
         assert(record.kind ~= "turn.request" and record.kind ~= "turn.end", "native hooks invented a logical turn")
@@ -337,7 +349,15 @@ local function execute()
             end
         end
     end
-    assert(continued.error_code == "", "window continuation did not become ready: " .. tostring(continued.error))
+    if continued.error_code ~= "" then
+        local checkpoint = reply(call("bee.threads.carrier:checkpoint", {thread_id = THREAD, attempt_id = previous_attempt_id}).value)
+        local placement = reply(call("bee.placement.native:status", {attempt_id = previous_attempt_id}).value)
+        local attempt = reply(placement.attempt)
+        error("window continuation did not become ready: " .. tostring(continued.error) .. "; code=" .. tostring(continued.error_code)
+            .. "; previous thread attempt=" .. tostring(checkpoint.attempt_state)
+            .. "; native execution=" .. tostring(attempt.execution_state)
+            .. "; cleanup=" .. tostring(attempt.cleanup_state))
+    end
     assert(continued.id == opened.id and continued.instance_id == opened.instance_id, "continuation did not restore the application identity")
 
     assert(process.send(broker, "bee.app.request", {
@@ -360,6 +380,45 @@ local function execute()
     end
     local view_two = assert(tty.attach(mounted_two))
     assert(view_two:send({type = "resize", width = 80, height = 24}))
+
+    if cancel_recovery then
+        local recovering = false
+        for _ = 1, 30 do
+            local frame = view_two:snapshot()
+            if frame and table.concat(frame.rows):find("Restoring Agent", 1, true) then recovering = true; break end
+            time.sleep("25ms")
+        end
+        assert(recovering, "restore did not show its responsive recovery surface")
+        assert(process.send(broker, "bee.app.request", {version = 1, request_id = "cancel-recovery", op = "close",
+            workspace_id = WORKSPACE, id = continued.id}))
+        local deadline = time.after("2s")
+        local cancelled = false
+        while not cancelled do
+            local selected = channel.select({replies:case_receive(), deadline:case_receive()})
+            if selected.channel == deadline or not selected.ok then break end
+            local message = selected.value
+            local data = message:payload():data()
+            if tostring(message:from()) == broker and type(data) == "table"
+                and data.request_id == "cancel-recovery" and data.op == "close" then
+                assert(data.error_code == "", "recovery close was refused")
+                cancelled = true
+            end
+        end
+        assert(cancelled, "recovery close waited on hook admission")
+        -- Let the delayed admission finish if cancellation failed to retire it.
+        -- It must never create a new native process after this view closes.
+        time.sleep("6s")
+        local db = assert(store.open())
+        local attempts = assert(db:query("SELECT attempt_id FROM bee_placement_attempts"))
+        db:release()
+        assert(#attempts == 1 and attempts[1].attempt_id == previous_attempt_id,
+            "cancelled recovery created another native attempt")
+        view_two:close()
+        process.terminate(broker)
+        process.unlisten(catalogs); process.unlisten(replies); process.unlisten(checkpoints)
+        io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
+        return
+    end
 
     local retained_home = false
     local continued_hook_submitted = false
@@ -444,7 +503,8 @@ local function execute()
         if item.kind == "receipt" then
             continued_receipts = continued_receipts + 1
             local body = reply(item.body)
-            assert(body.scope == "attempt" and body.outcome == "cancelled", "expected cancelled continuation receipt")
+            local expected = crashed and item.attempt_id == previous_attempt_id and "uncertain" or "cancelled"
+            assert(body.scope == "attempt" and body.outcome == expected, "unexpected continuation receipt outcome")
         end
     end
     assert(continued_receipts == 2, "expected one cancelled receipt per window attempt")
@@ -458,7 +518,9 @@ local function execute()
     io.print("BEE_WINDOW_HOOKS_ACCEPTANCE: OK")
 end
 
-M.main = execute
-M.run = execute
+M.main = function() execute(false, false) end
+M.run = M.main
+M.crash = function() execute(true, false) end
+M.cancel_recovery = function() execute(true, true) end
 
 return M

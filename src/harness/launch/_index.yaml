@@ -21,6 +21,7 @@ entries:
     carrier: bee.harness.carrier:machine
     placement_types: bee.placement:types
     continuation: bee.harness.carrier:continuation
+    interrupted: bee.harness.window:interrupted
     profiles: bee.harness.profiles:protocol
 - name: resolve
   kind: function.lua

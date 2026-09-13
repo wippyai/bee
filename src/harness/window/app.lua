@@ -23,6 +23,8 @@ local hooks = require("hooks")
 local text = require("text")
 local delivery = require("delivery")
 local records = require("records")
+local appearance = require("appearance")
+local restore_view = require("restore_view")
 
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
@@ -142,6 +144,7 @@ local function main(value: unknown)
     local selected = not restoring and #launch.arguments == 0
     local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil
+    local ready_announced = false
     if selected then
         local choice, choice_error = picker.run(launch, input, lifecycle, closes)
         if not choice then
@@ -163,16 +166,104 @@ local function main(value: unknown)
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             error("Managed window restore request: " .. tostring(request_error))
         end
-        local choice, admission_error = admission.admit_request({request_id = request_id,
+        local request: admission.Request = {request_id = request_id,
             definition_ref = restored.definition_ref, workspace_id = launch.workspace_id, brief = "", mode = "window",
             saved_profile_id = restored.saved_profile_id, saved_profile_revision = restored.saved_profile_revision,
             expected_plan_digest = restored.plan_digest, continuation = {origin_request_id = restored.origin_request_id,
-                previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id}})
-        if not choice then
-            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            error("Managed window restore admission: " .. failure(admission_error))
+                previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id}}
+
+        -- Admission may reconcile a dead native process and drain gateway
+        -- hooks. Keep the broker's readiness deadline independent of that
+        -- work: the surface is ready as soon as it can explain what it is
+        -- doing and accept cancellation.
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local preferences: appearance.Preferences = appearance.defaults()
+        local status = "Restoring Agent…"
+        local dirty = true
+        local cancelled = false
+        local states = assert(process.listen("bee.appearance.state", {message = true}))
+        local completed = channel.new(1)
+        local recovery_choice: admission.Admitted? = nil
+        local recovery_error: admission.Reply? = nil
+        local function render()
+            if not dirty then return end
+            local frame = restore_view.draw(width, height, preferences, status)
+            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            dirty = false
         end
-        admitted = choice
+        local function cancel_restore()
+            cancelled = true
+            dirty = false
+        end
+
+        render()
+        client.ready(launch, {negotiate_close = true})
+        ready_announced = true
+        process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
+        coroutine.spawn(function()
+            local choice, refused = admission.admit_request(request)
+            -- A cancelled continuation may finish reconciliation after the
+            -- UI has gone away. It never hands an admitted request to the
+            -- native preparation path in that case.
+            if cancelled then return end
+            recovery_choice, recovery_error = choice, refused
+            completed:send(true)
+        end)
+
+        while not admitted and not cancelled do
+            render()
+            local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), states:case_receive(), completed:case_receive()}
+            local event = channel.select(cases)
+            if not event.ok then
+                cancel_restore()
+            elseif event.channel == lifecycle then
+                if event.value.kind == process.event.CANCEL then cancel_restore() end
+            elseif event.channel == closes then
+                local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
+                if close then
+                    client.close_reply(launch, close.request_id, {action = "accept"})
+                    cancel_restore()
+                end
+            elseif event.channel == states then
+                if event.value:from() == launch.broker_pid then
+                    local payload: unknown = event.value:payload():data()
+                    local next_preferences = appearance.decode(payload)
+                    if next_preferences and type(payload) == "table" and payload.version == 1 then
+                        preferences = next_preferences
+                        dirty = true
+                    end
+                end
+            elseif event.channel == completed then
+                if recovery_choice then admitted = recovery_choice
+                else status = "Recovery admission refused: " .. failure(recovery_error) end
+                dirty = true
+            else
+                local data = input_event.decode(event.value)
+                if data then
+                    if data.type == "close" then
+                        cancel_restore()
+                    elseif data.type == "resize" or data.type == "start" then
+                        width, height = data.width, data.height
+                        dirty = true
+                    elseif data.type == "key" and data.action == "press"
+                        and (data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q")) then
+                        cancel_restore()
+                    end
+                end
+            end
+        end
+        process.unlisten(states)
+        if not admitted then
+            output:close()
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            return
+        end
+        local output_closed, output_error = output:close()
+        if not output_closed then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window recovery surface: " .. tostring(output_error))
+        end
     else
         local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
         if not body then
@@ -276,7 +367,7 @@ local function main(value: unknown)
         if title ~= published_title and client.title(launch, title) then published_title = title end
     end
     publish_title()
-    if not selected then client.ready(launch, {negotiate_close = true}) end
+    if not selected and not ready_announced then client.ready(launch, {negotiate_close = true}) end
 
     local done = terminal:done()
     local closing = false

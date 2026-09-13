@@ -112,6 +112,21 @@ local function define_tests()
             local request: continuation.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice",
                 previous_attempt_id = "previous", session_ref = "session", binding_ref = "driver:binding", binding_digest = "binding-digest",
                 profile_id = "window", profile_digest = "profile-digest"}
+            stored.attempt_state = "running"
+            attempt.execution_state = "running"
+            local inspected = continuation.inspect_window(call, request, false)
+            test.is_true(inspected ~= nil)
+            test.eq(cleanup_calls, 0, "inspection never cleans a live process")
+            test.eq(reads, 0, "inspection does not scan observations")
+            test.is_nil(continuation.resolve_window(call, request))
+            attempt.owner_id = "foreign"
+            test.is_nil(continuation.inspect_window(call, request, false))
+            attempt.owner_id = "alice"
+            stored.open_turn_id = "live-turn"
+            test.is_nil(continuation.inspect_window(call, request, false))
+            stored.open_turn_id = nil
+            stored.attempt_state = "ended"
+            attempt.execution_state = "exited"
             test.eq(continuation.resolve_window(call, request), "provider-session")
             test.eq(reads, 2)
             test.eq(stored.attempt_outcome, "cancelled")

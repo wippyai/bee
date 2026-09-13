@@ -199,6 +199,8 @@ func runHarness() error {
 	runtimeFlag := flag.String("runtime", defaultRuntime, "path to runtime executable")
 	srcFlag := flag.String("src", "", "source directory to stage (defaults to repository root)")
 	keepTemp := flag.Bool("keep-temp", false, "do not delete temporary directory after run")
+	crash := flag.Bool("crash", false, "terminate the window actor before checkpoint restore")
+	cancelRecovery := flag.Bool("cancel-recovery", false, "close the recovery view before delayed admission finishes")
 	flag.Parse()
 
 	runtimePath, err := filepath.Abs(*runtimeFlag)
@@ -257,7 +259,13 @@ func runHarness() error {
 	}
 
 	// 2. Run acceptance command process fixture on bee:terminal host
-	cmd := exec.CommandContext(ctx, runtimePath, "run", "--host", "bee:terminal", "--", "window-hooks-acceptance")
+	command := "window-hooks-acceptance"
+	if *cancelRecovery {
+		command = "window-hooks-cancel-recovery-acceptance"
+	} else if *crash {
+		command = "window-hooks-crash-acceptance"
+	}
+	cmd := exec.CommandContext(ctx, runtimePath, "run", "--host", "bee:terminal", "--", command)
 	cmd.Dir = tempDir
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

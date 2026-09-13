@@ -29,6 +29,23 @@ entries:
   modules: [funcs, channel]
   imports:
     hooks: bee.harness.window:hooks
+- name: interrupted
+  kind: library.lua
+  source: file://interrupted.lua
+  modules: [funcs, channel, time, uuid]
+  imports:
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+    hooks: bee.harness.window:hooks
+    delivery: bee.harness.window:delivery
+    records: bee.harness.carrier:hook_records
+- name: restore_view
+  kind: library.lua
+  source: file://restore_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -47,6 +64,8 @@ entries:
     hooks: bee.harness.window:hooks
     delivery: bee.harness.window:delivery
     records: bee.harness.carrier:hook_records
+    appearance: bee.desktop:appearance
+    restore_view: bee.harness.window:restore_view
   meta:
     type: bee.application
     application:

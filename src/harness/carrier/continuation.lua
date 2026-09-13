@@ -47,13 +47,14 @@ end
 -- Explicit interactive resume is not another successful structured turn.
 -- The old process must be gone; its committed observations identify the
 -- conversation, while the new attempt supplies fresh admission and grants.
-function M.resolve_window(call: Call, request: Request): (string?, string?)
+type PreviousWindow = {stored: {[string]: unknown}, point: checkpoint.Checkpoint, attempt: {[string]: unknown}, binding: string}
+function M.inspect_window(call: Call, request: Request, ended: boolean): (PreviousWindow?, string?)
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
     if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
     local stored, stored_error = value(call, "bee.threads.carrier:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
-    if stored.attempt_state ~= "ended" or stored.open_turn_id ~= nil then return nil, "previous window attempt has not ended" end
+    if (ended and stored.attempt_state ~= "ended") or stored.open_turn_id ~= nil then return nil, "previous window attempt has not ended" end
     local point, point_error = checkpoint.decode(stored.checkpoint)
     if not point then return nil, "previous checkpoint: " .. tostring(point_error) end
     if point.binding_ref ~= request.binding_ref or point.binding_digest ~= request.binding_digest or point.profile_id ~= request.profile_id or point.profile_digest ~= request.profile_digest then
@@ -68,11 +69,17 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
     if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
         return nil, "previous native process has another owner or session"
     end
-    if attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
+    if ended and attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
     if attempt.cleanup_state ~= "complete" and attempt.cleanup_state ~= "pending" and attempt.cleanup_state ~= "uncertain" then
         return nil, "previous native process cleanup state is invalid"
     end
 
+    return {stored = stored, point = point, attempt = attempt, binding = binding}, nil
+end
+function M.resolve_window(call: Call, request: Request): (string?, string?)
+    local previous, inspect_error = M.inspect_window(call, request, true)
+    if not previous then return nil, inspect_error end
+    local attempt, binding = previous.attempt, previous.binding
     local cursor = 0
     local session_id: string? = nil
     -- A full page advances by at least MAX_PAGE_RECORDS; a sparse page

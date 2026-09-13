@@ -61,6 +61,27 @@ end
 local function item(event_id: string, event: string): Object
     return {event_id = event_id, event = event, occurrence = event_id, ambiguous = false, digest = "d", fields = {}, provenance = "p", sequence = 1}
 end
+local function config(extra: Object?): hooks.Config
+    local value: hooks.Config = {
+        thread_id = "thread-1",
+        attempt_id = "attempt-1",
+        epoch = 7,
+        binding_ref = "driver:binding",
+        binding_digest = "binding-digest",
+        profile_id = "window",
+        profile_digest = "profile-digest",
+        plan_digest = "plan-digest",
+        session_ref = "session-home",
+        gateway_binding = "bind-1",
+        hooks_enabled = true,
+        drain_ms = 40,
+        decoder = decoder,
+    }
+    if extra then
+        for key, field in pairs(extra) do (value :: Object)[key] = field end
+    end
+    return value
+end
 local function persist(state: hooks.State, now: integer): hooks.Intent
     local intent = hooks.next_intent(state, "fresh-key", now)
     if not intent then error("missing checkpoint intent") end
@@ -165,6 +186,78 @@ local function define_tests()
             test.is_true(hooks.apply(state, "cp", ok({checkpoint_revision = 1})))
             test.is_true(hooks.may_start(state))
             test.eq(state.revision, 1)
+        end)
+
+        test.it("resumes a stored checkpoint under a fresh epoch and drains replayed hooks", function()
+            local previous = open()
+            local first = persist(previous, 0)
+            local recovered, recover_error = hooks.resume(config({epoch = 8}), previous.checkpoint, previous.revision)
+            if not recovered then error(tostring(recover_error)) end
+            test.eq(recovered.revision, 1)
+            test.eq(recovered.checkpoint.attachment_generation, 8)
+            local checkpoint_intent = hooks.next_intent(recovered, "recovery", 0)
+            if not checkpoint_intent then error("recovery checkpoint") end
+            test.eq(checkpoint_intent.request.expected_revision, 1)
+            test.eq(checkpoint_intent.request.carrier_epoch, 8)
+            test.neq(checkpoint_intent.request.idempotency_key, first.request.idempotency_key)
+            test.is_true(tostring(checkpoint_intent.request.idempotency_key):find(":8", 1, true) ~= nil)
+
+            test.is_true(hooks.begin(recovered, "recovery-checkpoint", checkpoint_intent))
+            test.is_true(hooks.apply(recovered, "recovery-checkpoint", ok({checkpoint_revision = 2, carrier_epoch = 8})))
+            local claim = hooks.next_intent(recovered, "recovery-claim", 0)
+            if not claim then error("recovery claim") end
+            test.is_true(hooks.begin(recovered, "recovery-claim", claim))
+            test.is_true(hooks.apply(recovered, "recovery-claim", ok({binding_id = "bind-1", carrier_epoch = 8, hooks = {item("e1", "Stop")}})))
+            local commit = hooks.next_intent(recovered, "recovery-commit", 0)
+            if not commit then error("recovery commit") end
+            test.eq(commit.request.expected_revision, 2)
+            test.is_true(hooks.begin(recovered, "recovery-commit", commit))
+            test.is_true(hooks.apply(recovered, "recovery-commit", ok({checkpoint_revision = 999, carrier_epoch = 7})))
+            test.eq(recovered.work, "commit")
+            test.eq(recovered.revision, 2)
+            commit = hooks.next_intent(recovered, "recovery-commit-retry", hooks.RETRY_MS)
+            if not commit then error("recovery commit retry") end
+            test.is_true(hooks.begin(recovered, "recovery-commit-retry", commit))
+            test.is_true(hooks.apply(recovered, "recovery-commit-retry", ok({checkpoint_revision = 3, carrier_epoch = 8})))
+            local ack = hooks.next_intent(recovered, "recovery-ack", hooks.RETRY_MS)
+            if not ack then error("recovery ack") end
+            test.is_true(hooks.begin(recovered, "recovery-ack", ack))
+            test.is_true(hooks.apply(recovered, "recovery-ack", ok({binding_id = "bind-1", carrier_epoch = 7, acknowledged = 1})))
+            test.eq(recovered.work, "ack")
+            ack = hooks.next_intent(recovered, "recovery-ack-retry", hooks.RETRY_MS * 2)
+            if not ack then error("recovery ack retry") end
+            test.is_true(hooks.begin(recovered, "recovery-ack-retry", ack))
+            test.is_true(hooks.apply(recovered, "recovery-ack-retry", ok({binding_id = "bind-1", carrier_epoch = 8, acknowledged = 1})))
+            test.eq(recovered.work, "claim")
+        end)
+
+        test.it("refuses an invalid or mismatched recovery checkpoint", function()
+            local previous = open()
+            persist(previous, 0)
+            local invalid, invalid_error = hooks.resume(config({epoch = 8}), previous.checkpoint, -1)
+            test.is_nil(invalid)
+            test.is_true(type(invalid_error) == "string")
+            local missing, missing_error = hooks.resume(config({epoch = 8}), nil, 1)
+            test.is_nil(missing)
+            test.is_true(type(missing_error) == "string")
+            for _, mismatch in ipairs({
+                {binding_ref = "other-binding"},
+                {binding_digest = "other-binding-digest"},
+                {profile_digest = "other-profile-digest"},
+                {plan_digest = "other-plan-digest"},
+                {session_ref = "other-session"},
+                {gateway_binding = "other-binding-id"},
+            }) do
+                local rejected, mismatch_error = hooks.resume(config(mismatch), previous.checkpoint, 1)
+                test.is_nil(rejected)
+                test.is_true(type(mismatch_error) == "string")
+            end
+            local recovered, recover_error = hooks.resume(config({epoch = 8, profile_id = "batch"}), previous.checkpoint, 1)
+            test.is_nil(recovered)
+            test.is_true(type(recover_error) == "string")
+            recovered, recover_error = hooks.resume(config({epoch = 7}), previous.checkpoint, 1)
+            test.is_nil(recovered)
+            test.is_true(type(recover_error) == "string")
         end)
 
         test.it("admits only one request until the exact pending reply arrives", function()

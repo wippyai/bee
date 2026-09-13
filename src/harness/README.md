@@ -142,9 +142,22 @@ home. Driver-owned configuration delivery gives each admitted attempt fresh
 argument literals and protected files. Claude carries per-attempt MCP/settings
 configuration inline; retained Codex files permit only byte-identical replay.
 The carrier can resolve a committed provider conversation reference and launch
-admission can obtain fresh grants for continuation. The Agent app still declares
-no recovery schema: its saved-state consumer and native process-group cleanup
-proof remain required before public cold conversation recovery. See
+admission can obtain fresh grants for continuation. The Agent app checkpoints its
+launch identity, selected profile revision and previous attempt using
+`bee.agent.window@1`. Restore shows a responsive, themed view while typed admission
+runs in a coroutine owned by the same application process. Closing that view
+prevents the returned admission from reaching native preparation. UI readiness
+does not mean the harness has started or recovered successfully.
+
+An interrupted attempt is recoverable only after placement observes the recorded
+native process exit. Recovery obtains a fresh carrier epoch, commits the rebound
+checkpoint, seals and drains accepted hooks, then records an uncertain attempt
+outcome. Continuation still requires an unambiguous committed provider conversation
+reference and independently proven process-group cleanup. It retains the session
+home and obtains fresh admission for the replacement attempt. Failure or incomplete
+hook draining refuses replacement; a copied checkpoint grants no authority.
+These paths have fixture-harness acceptance in a live runtime. Whole-runtime crash
+and real-provider cold conversation recovery remain unverified. See
 [the recovery handoff](../../docs/handoffs/NATIVE_AGENT_RECOVERY.md).
 
 First-use setup also prepares definition-declared credential names from the host's
@@ -170,7 +183,8 @@ The initial unit run passed 772 cases; the final selection/view check passed
 14 cases including exclusion of private instruction text.
 
 The saved-profile facade under `bee.harness.profiles` now stores workspace-scoped
-preferences through the existing node-owned sync ledger. It is not yet wired to
-the picker or launch admission. Its host store access grants no workspace read or
+preferences through the existing node-owned sync ledger. The picker and launch
+admission carry the selected profile ID and revision; a changed profile cannot
+silently alter a restored conversation. Store access grants no workspace read or
 write authority. See [saved profiles](../../docs/handoffs/SAVED_AGENT_PROFILES.md)
 for the verified boundary, retention limits and remaining integration gates.

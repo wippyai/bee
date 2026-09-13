@@ -1,5 +1,19 @@
 # Foundation status
 
+Global `b92317be` removes the requested desktop hint text and Run queue display,
+preserving the Bee mark and current Hub/Agent work. Source/pack Process Manager
+and native acceptance pass. The preceding Hub source passed all 787 unit cases
+on recheck; full repository acceptance remains incomplete. See
+[current build](handoffs/GLOBAL_BUILD.md).
+
+Global `6cfa0071` adds Contents browsing and preserves saved module settings on
+updates, including failed/delayed-read handling. It retains Agent thread messaging.
+79 focused cases, source/pack workflows, native acceptance and live exact-version
+entry preview pass; the final full regression stopped during unit execution
+with `context canceled`, and a focused unit recheck is running. Installed-app admission
+and optional Hub plugin integration remain incomplete. See
+[current build](handoffs/GLOBAL_BUILD.md).
+
 Global `668d2e90` adds readable installed-package rows, active action/policy/tab
 choices and preserved README code indentation. Strict lint, 73 focused cases,
 source/pack interaction and native acceptance pass. Running owners retain older

@@ -58,16 +58,16 @@ local function define_tests()
             end
         end)
 
-        test.it("keeps the Bee mark and gives an empty desktop a width-aware first action", function()
+        test.it("keeps the Bee mark without instructional desktop text", function()
             local function frame(width: integer, height: integer): string
                 return plain_text(table.concat(render.draw(model.new(width, height), {}, {}, nil, nil, "", "workspace").rows, "\n"))
             end
             local full = frame(80, 30)
             test.is_true(full:find("╰──╲ ╱──╯", 1, true) ~= nil)
-            test.is_true(full:find("F1 or BEE menu to open an application", 1, true) ~= nil)
-            test.is_true(full:find("Tools → Modules manages components", 1, true) ~= nil)
-            test.is_true(frame(24, 9):find("F1 / BEE: open apps", 1, true) ~= nil)
-            test.is_true(frame(16, 5):find("F1: menu", 1, true) ~= nil)
+            test.is_true(full:find("F1 or BEE menu to open an application", 1, true) == nil)
+            test.is_true(full:find("Tools → Modules manages components", 1, true) == nil)
+            test.is_true(frame(24, 9):find("F1 / BEE: open apps", 1, true) == nil)
+            test.is_true(frame(16, 5):find("F1: menu", 1, true) == nil)
             test.is_true(frame(15, 5):find("F1: menu", 1, true) == nil)
             local opened = plain_text(table.concat(render.draw(model.add(model.new(80, 30), "one", "app", "One"), {"one"}, {}, nil, nil, "", "workspace").rows, "\n"))
             test.is_true(opened:find("F1 or BEE menu", 1, true) == nil)

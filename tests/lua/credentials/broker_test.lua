@@ -77,6 +77,14 @@ end
 local function write_file(ref: string, path: string, content: string)
     local volume, err = fs.get(ref)
     if not volume then error("volume " .. ref .. ": " .. tostring(err)) end
+    local parent = ""
+    for segment in (path:match("^(.*)/[^/]+$") or ""):gmatch("[^/]+") do
+        parent = parent == "" and segment or parent .. "/" .. segment
+        if not volume:exists(parent) then
+            local made, mkdir_error = volume:mkdir(parent)
+            if not made then error("mkdir " .. parent .. ": " .. tostring(mkdir_error)) end
+        end
+    end
     local ok, werr = volume:writefile(path, content)
     if not ok then error("writefile " .. path .. ": " .. tostring(werr)) end
 end

@@ -280,35 +280,18 @@ local function write_exclusive(vol: fs.FS, path: string, content: string): strin
     if closed == false then return "close retained login: " .. tostring(close_error) end
     return nil
 end
-local function create_login_parents(vol: fs.FS, root: string, relative: string, created: {[string]: boolean}, retained: boolean?): string?
+local function create_login_parents(vol: fs.FS, root: string, relative: string, created: {[string]: boolean}): string?
     local directory = relative:match("^(.*)/[^/]+$")
     if not directory then return nil end
     local parent = root
     for segment in directory:gmatch("[^/]+") do
         parent = parent .. "/" .. segment
         if vol:exists(parent) then
-            if not retained and not created[parent] then return "retained login parent already exists" end
-            if not vol:isdir(parent) then return "retained login parent is not a directory" end
+            if not created[parent] then return "retained login parent already exists" end
         else
             local made, mkdir_error = vol:mkdir(parent)
             if not made then return "create retained login parent: " .. tostring(mkdir_error) end
             created[parent] = true
-        end
-    end
-    return nil
-end
-local function seed_retained_initializers(vol: fs.FS, root: string, format: formats.Format, created: {[string]: boolean}): string?
-    local file = format.file
-    if not file then return "login format has no file" end
-    for _, item in ipairs(file.initialize) do
-        local target = root .. "/" .. item.path
-        if vol:exists(target) then
-            if vol:isdir(target) then return "retained login initializer is a directory" end
-        else
-            local parent_error = create_login_parents(vol, root, item.path, created, true)
-            if parent_error then return parent_error end
-            local write_error = write_exclusive(vol, target, item.content)
-            if write_error then return write_error end
         end
     end
     return nil
@@ -340,8 +323,6 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
         if not found then return nil, read_error end
         if found ~= identity then return nil, "retained login source changed" end
         if not target_exists and destination.source.optional ~= true then return nil, "retained login is incomplete" end
-        local initializer_error = seed_retained_initializers(vol, root, destination.format, created or {})
-        if initializer_error then return nil, initializer_error end
         return target, nil, true
     end
     if target_exists then return nil, "retained login is incomplete" end

@@ -4,9 +4,10 @@ entries:
 - name: placement_service
   kind: library.lua
   source: file://service.lua
-  modules: [security, json, process, registry, hash, canonical]
+  modules: [security, json, process, registry, hash]
   imports:
     bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
     resolver: bee.driver:resolver
     placement_resolver: bee.placement:resolver
     request: bee.placement:request

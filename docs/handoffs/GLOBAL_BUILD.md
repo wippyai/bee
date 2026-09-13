@@ -1,6 +1,29 @@
 # Global Bee build — September 12, 2026
 
-## Current install: saved profile effort and MCP scope
+## Current install: keep live Agents supervised
+
+Global SHA `dff3bf11aa5e170386f7c8368362d7e77f331241ae1b02be6e922f217e7aeced`
+contains production source `4b43cf1`. The managed PTY owner now answers placement
+supervision probes. Previously the 30-second sweep could mark a live Agent
+uncertain and revoke its MCP/hook binding. The native reproduction failed on the
+previous binary; the fixed candidate keeps authenticated MCP usable after that
+sweep. Stop notifications require an already committed stop for the exact attempt,
+owner and runner; a raw message alone cannot stop the child.
+
+All 836 Lua tests, native PTY reconciliation/stop tests, the full native executable
+gate and loopback-only fresh/restored/reconnect acceptance pass. Full `make check`
+for the preceding profile UI source `017e55d` also completed successfully. A fresh
+full regression for `4b43cf1` is running in an immutable checkout. Evidence:
+`bee-evidence/0912/window-supervision-{before,stop,native-before,native,offline,tests}.log`,
+`window-supervision-full-check.log` and `profile-ui-full-check.log`.
+
+All six installed artifacts were verified and backed up, fenced against `f73dcffc`.
+Runtime/native pins, databases and running nodes were preserved. Receipt:
+`bee-evidence/0912/window-supervision-global-install.json`. Restart an existing node
+to load the corrected code. This proves supervision while the PTY owner lives;
+cold provider recovery and durable Docker reconciliation remain unfinished.
+
+## Previous install: saved profile effort and MCP scope
 
 Global SHA `f73dcffc6eb026ae2165f46ef6465bc88c7fa520083ff124e6a74fff6ac627e8`
 contains production source `dc86273`. Four default harness policies expose

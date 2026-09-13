@@ -461,9 +461,13 @@ end
 -- placement intent. It does not request a turn, attach a transport or start a
 -- child; the selected execution path owns those operations.
 type PreparedAttempt = {epoch: integer, gateway_binding: string?}
-function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?)
-    if plan.exchange_refusal then return nil, plan.exchange_refusal end
+type FailedPreparation = {epoch: integer?, gateway_binding: string?, attempt: boolean}
+function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
+    if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
     local request = plan.request
+    local attempt_prepared = false
+    local epoch: integer? = nil
+    local gateway_binding: string? = nil
     local grant_refs: {string} = {}
     for _, grant in ipairs(request.resources) do grant_refs[#grant_refs + 1] = grant.grant_ref end
     if not request.previous_attempt_id then
@@ -473,27 +477,29 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?)
         if action_input == "" and plan.profile.mode == "window" then action_input = "Open " .. plan.binding.title .. " window" end
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
             binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}}, "admit")
-        if admit_error then return nil, admit_error end
+        if admit_error then return nil, admit_error, {epoch = nil, gateway_binding = nil, attempt = false} end
     end
     step(io, "admitted")
     local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
         placement_binding = M.PLACEMENT_BINDING, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
-    if prepare_error then return nil, prepare_error end
+    if prepare_error then return nil, prepare_error, {epoch = nil, gateway_binding = nil, attempt = attempt_prepared} end
+    attempt_prepared = true
     step(io, "prepared")
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = "launch:" .. request.attempt_id .. ":claim", attempt_id = request.attempt_id})
-    if claim_error then return nil, claim_error end
-    local epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
-    local gateway_binding, gateway_error = gateway_admit(io, plan, epoch)
-    if gateway_error then return nil, gateway_error end
-    local function abandon(err: string): (PreparedAttempt?, string?)
+    if claim_error then return nil, claim_error, {epoch = nil, gateway_binding = nil, attempt = attempt_prepared} end
+    epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
+    local gateway_error: string?
+    gateway_binding, gateway_error = gateway_admit(io, plan, epoch)
+    if gateway_error then return nil, gateway_error, {epoch = epoch, gateway_binding = nil, attempt = attempt_prepared} end
+    local function abandon(err: string): (PreparedAttempt?, string?, FailedPreparation?)
         gateway_revoke(io, gateway_binding)
-        return nil, err
+        return nil, err, {epoch = epoch, gateway_binding = nil, attempt = attempt_prepared}
     end
     local _, intent_error = must(io, M.PLACEMENT .. ":prepare", plan.placement_request)
     if intent_error then return abandon(intent_error) end
     step(io, "placement_intent")
-    return {epoch = epoch, gateway_binding = gateway_binding}, nil
+    return {epoch = epoch, gateway_binding = gateway_binding}, nil, nil
 end
 -- Structured execution requests a turn and starts the pipe runner only after
 -- shared preparation. Failures before execution retire the admitted gateway.

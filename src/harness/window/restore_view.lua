@@ -20,14 +20,15 @@ local function line(canvas: tty.Canvas, width: integer, height: integer, y: inte
     canvas:put(2, y, style .. shown .. RESET, room)
 end
 
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, status: string): {rows: {string}}
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, status: string,
+    heading: string?, footer: string?): {rows: {string}}
     local theme = appearance.theme(preferences.theme)
     local canvas = tty.canvas(width, height)
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
     line(canvas, width, height, 1, "AGENT", theme.text, theme.surface)
-    line(canvas, width, height, 3, "Restoring Agent", theme.text, theme.surface)
+    line(canvas, width, height, 3, heading or "Restoring Agent", theme.text, theme.surface)
     line(canvas, width, height, 5, status, theme.accent, theme.surface)
-    line(canvas, width, height, height - 1, "Esc or Ctrl+Q cancels recovery", theme.muted, theme.surface)
+    line(canvas, width, height, height - 1, footer or "Esc or Ctrl+Q cancels recovery", theme.muted, theme.surface)
     return {rows = canvas:rows()}
 end
 

@@ -81,12 +81,35 @@ end
 -- A PTY only says the native UI completed. It never proves an agent turn
 -- succeeded, so completion becomes an explicit uncertain receipt. An explicit
 -- application close is the one case that truthfully records cancellation.
-local function receipt(admitted: admission.Admitted, epoch: integer, outcome: "cancelled" | "uncertain", reason: string): (boolean, string?)
+local function receipt(admitted: admission.Admitted, epoch: integer?, outcome: "cancelled" | "uncertain", reason: string,
+    attempt_receipt: boolean): (boolean, string?)
     local code = outcome == "cancelled" and "native_window_closed" or "native_window_unobserved"
-    return call(THREADS .. ":receipt", {thread_id = admitted.thread_id,
+    local request: {[string]: unknown} = {thread_id = admitted.thread_id,
         idempotency_key = "launch:" .. admitted.attempt_id .. ":window:receipt",
-        action_id = admitted.action_id, attempt_id = admitted.attempt_id, carrier_epoch = epoch,
-        receipt = {scope = "attempt", outcome = outcome, evidence_refs = {}, error = {code = code, message = reason, retryable = false}}})
+        action_id = admitted.action_id,
+        receipt = {scope = attempt_receipt and "attempt" or "action", outcome = outcome, evidence_refs = {}, error = {code = code, message = reason, retryable = false}}}
+    if attempt_receipt then
+        request.attempt_id = admitted.attempt_id
+        request.idempotency_key = "launch:" .. admitted.attempt_id .. ":window:receipt"
+        if epoch then request.carrier_epoch = epoch end
+    end
+    return call(THREADS .. ":receipt", request)
+end
+
+-- Failure before a native window exists still has durable work to close. A
+-- claimed attempt uses an attempt receipt; an earlier failure settles the
+-- admitted action when no attempt record was created. Gateway retirement and
+-- receipts use the same owner paths as normal window shutdown.
+local function settle_failure(admitted: admission.Admitted, epoch: integer?, reason: string, gateway_binding: string?, attempt_receipt: boolean): string
+    local details: {string} = {}
+    if gateway_binding then
+        local revoked, revoke_error = call("bee.gateway:revoke", {binding_id = gateway_binding})
+        if not revoked then details[#details + 1] = "gateway revoke: " .. tostring(revoke_error) end
+    end
+    local settled, settlement_error = receipt(admitted, epoch, "uncertain", reason, attempt_receipt)
+    if not settled then details[#details + 1] = "settlement: " .. tostring(settlement_error) end
+    if #details == 0 then return reason end
+    return reason .. " (" .. table.concat(details, "; ") .. ")"
 end
 
 local function persist_checkpoint(state: hooks.State): (boolean, string?)
@@ -145,6 +168,67 @@ local function main(value: unknown)
     local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil
     local ready_announced = false
+    local function show_failure(status: string, settle: (() -> string)?)
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local preferences: appearance.Preferences = appearance.defaults()
+        local dirty = true
+        local dismissed = false
+        local settlement = settle and channel.new(1) or nil
+        local settlement_done = false
+        if settle then
+            local pending = assert(settlement)
+            coroutine.spawn(function()
+                pending:send(settle())
+            end)
+            status = status .. " · settling"
+        end
+        local function render()
+            if not dirty then return end
+            local frame = restore_view.draw(width, height, preferences, status, "Agent launch failed", "Esc or Ctrl+Q closes")
+            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            dirty = false
+        end
+        if not ready_announced then
+            client.ready(launch, {negotiate_close = true})
+            ready_announced = true
+        end
+        while not dismissed do
+            render()
+            local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive()}
+            if settlement and not settlement_done then cases[#cases + 1] = settlement:case_receive() end
+            local event = channel.select(cases)
+            if not event.ok then
+                dismissed = true
+            elseif event.channel == lifecycle then
+                if event.value.kind == process.event.CANCEL then dismissed = true end
+            elseif event.channel == closes then
+                local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
+                if close then
+                    client.close_reply(launch, close.request_id, {action = "accept"})
+                    dismissed = true
+                end
+            elseif settlement and not settlement_done and event.channel == settlement then
+                status = tostring(event.value)
+                settlement_done = true
+                dirty = true
+            else
+                local data = input_event.decode(event.value)
+                if data then
+                    if data.type == "close" then
+                        dismissed = true
+                    elseif data.type == "resize" or data.type == "start" then
+                        width, height = data.width, data.height
+                        dirty = true
+                    elseif data.type == "key" and data.action == "press"
+                        and (data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q")) then
+                        dismissed = true
+                    end
+                end
+            end
+        end
+        output:close()
+    end
     if selected then
         local choice, choice_error = picker.run(launch, input, lifecycle, closes)
         if not choice then
@@ -267,13 +351,15 @@ local function main(value: unknown)
     else
         local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
         if not body then
+            show_failure("Invalid managed window launch: " .. tostring(body_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            error("Invalid managed window launch: " .. tostring(body_error))
+            return
         end
         local choice, admission_error = admission.admit_request(body)
         if not choice then
+            show_failure("Managed window admission: " .. failure(admission_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            error("Managed window admission: " .. failure(admission_error))
+            return
         end
         admitted = choice
     end
@@ -287,17 +373,29 @@ local function main(value: unknown)
     local transport = io()
     local plan, plan_error = machine.plan(transport, admitted.request)
     if not plan then
+        local reason = "Managed window plan: " .. tostring(plan_error)
+        show_failure(reason, function(): string return settle_failure(admitted :: admission.Admitted, nil, reason, nil, false) end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window plan: " .. tostring(plan_error))
+        return
     end
     if plan.profile.mode ~= "window" or plan.profile.protocol ~= "pty" then
+        local reason = "Managed window requires a PTY window profile"
+        show_failure(reason, function(): string return settle_failure(admitted :: admission.Admitted, nil, reason, nil, false) end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window requires a PTY window profile")
+        return
     end
-    local prepared, preparation_error = machine.prepare_attempt(transport, plan)
+    local prepared, preparation_error, failed_preparation = machine.prepare_attempt(transport, plan)
     if not prepared then
+        local reason = "Managed window preparation: " .. tostring(preparation_error)
+        local epoch = failed_preparation and failed_preparation.epoch
+        local binding = failed_preparation and failed_preparation.gateway_binding
+        local attempt = false
+        if failed_preparation then attempt = failed_preparation.attempt end
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, epoch, reason, binding, attempt)
+        end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window preparation: " .. tostring(preparation_error))
+        return
     end
     local gateway = plan.gateway
     local state = hooks.new({
@@ -318,26 +416,34 @@ local function main(value: unknown)
     local driver = delivery.new(state, start_intent, transport.key)
     local checkpointed, checkpoint_error = persist_checkpoint(state)
     if not checkpointed then
-        receipt(admitted, prepared.epoch, "uncertain", "native window checkpoint did not persist: " .. tostring(checkpoint_error))
+        local reason = "native window checkpoint did not persist: " .. tostring(checkpoint_error)
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+        end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window checkpoint: " .. tostring(checkpoint_error))
+        return
     end
     local attached, attachment_error = call(machine.PLACEMENT .. ":attach", {
         attempt_id = admitted.attempt_id, recipient = process.pid(), generation = prepared.epoch,
     })
     if not attached then
-        if prepared.gateway_binding then call(machine.GATEWAY .. ":revoke", {binding_id = prepared.gateway_binding}) end
-        receipt(admitted, prepared.epoch, "uncertain", "native placement attachment was not confirmed: " .. tostring(attachment_error))
+        local reason = "native placement attachment was not confirmed: " .. tostring(attachment_error)
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+        end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window attachment: " .. tostring(attachment_error))
+        return
     end
     local width, height = tty.screen_size()
     local terminal, terminal_error = window.open(admitted.attempt_id, {width = width, height = height,
         term = "xterm-256color", expected_binding = prepared.gateway_binding})
     if not terminal then
-        receipt(admitted, prepared.epoch, "uncertain", "native window did not open: " .. tostring(terminal_error))
+        local reason = "native window did not open: " .. tostring(terminal_error)
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+        end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window open: " .. tostring(terminal_error))
+        return
     end
     local started, started_error = call(THREADS .. ":start_attempt", {thread_id = admitted.thread_id,
         idempotency_key = "launch:" .. admitted.attempt_id .. ":window:started", action_id = admitted.action_id,
@@ -349,9 +455,12 @@ local function main(value: unknown)
         delivery.shutdown(driver, now_ms(), false)
         drain_hooks(driver)
         terminal:finish()
-        receipt(admitted, prepared.epoch, "uncertain", "native window started but thread start was refused: " .. tostring(started_error))
+        local reason = "native window started but thread start was refused: " .. tostring(started_error)
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true)
+        end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        error("Managed window thread start: " .. tostring(started_error))
+        return
     end
     local encoded, encode_error = recovery.encode(application_saved)
     local checkpoint_id: string? = nil
@@ -452,7 +561,7 @@ local function main(value: unknown)
     local reason = outcome == "cancelled" and "the managed native window was closed" or "the managed native window completed without a logical turn result"
     if state.unresolved then reason = "the managed native window ended with unresolved hook delivery" end
     local settled, settlement_error = receipt(admitted, prepared.epoch, outcome,
-        reason)
+        reason, true)
     if not settled then error("Managed window receipt: " .. tostring(settlement_error)) end
     process.unlisten(closes)
     process.unlisten(checkpoint_results)

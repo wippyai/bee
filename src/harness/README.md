@@ -165,6 +165,15 @@ These paths have fixture-harness acceptance in a live runtime. Whole-runtime cra
 and real-provider cold conversation recovery remain unverified. See
 [the recovery handoff](../../docs/handoffs/NATIVE_AGENT_RECOVERY.md).
 
+If planning, preparation or native startup fails after the Agent actor is
+admitted, the actor keeps a bounded error surface until the user closes it.
+Resize and close remain available while the failure is shown; the app does not
+retry the launch. It records the failed action or attempt when that lifecycle
+identity exists, revokes any admitted gateway binding, and asks placement to
+clean an exited attempt only after placement has proved the required scope is
+gone. A cleanup that is still unsafe or a lost settlement is shown as part of
+the failure status for supervisor recovery.
+
 First-use setup also prepares definition-declared credential names from the host's
 `bee:harness_setup.data.credentials` map. Each value selects a provider and a
 `source: {kind, ref}` accepted independently by the credential broker. Setup uses

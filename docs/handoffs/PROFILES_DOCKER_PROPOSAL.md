@@ -19,6 +19,18 @@ paused after the user's scope objection. It is uncommitted, unvalidated and not
 a runtime requirement or PR. Resolve the existing component/terminal seam before
 resuming any such API proposal.
 
+Draft [userspace PR #68](https://github.com/wippyai/userspace/pull/68), stacked on
+#67 and assigned to `skhaz`, enables PTY creation through the existing narrow
+`create` operation. It accepts an explicit boolean `Tty`, preserving the same
+stdio and sandbox validation for both modes. There is no second create operation
+or automatic start. Baseline/fixed Lua regressions, isolated lint, existing narrow
+checks and the actual HTTP client against a private fake daemon pass. It remains
+unmerged and unpublished; native terminal attachment is still a separate gap.
+The local daemon advertises seccomp and cgroup namespaces but no AppArmor, which
+the existing narrow contract requires. That requirement was preserved; the HTTP
+fixture does not establish a running hardened container or full component-host
+acceptance. Evidence is under `bee-evidence/0912/bee-docker-pty-*.log`.
+
 Component review reproduced a false cleanup receipt: failed removal followed by
 failed inspection was reported as `destroyed`. [Userspace PR #67](https://github.com/wippyai/userspace/pull/67)
 preserves the actual HTTP status and requires confirmed 404 for that reconciliation.

@@ -6403,3 +6403,14 @@ cancellation, terminal/native/Docker/Lua exec race suites and scoped lint pass.
 Evidence is archived under `bee-evidence/0912/bee-terminal-cancel-*.log`.
 Global SHA `7d9182cb` is unchanged. Production Docker attachment admission and
 container-reachable scoped gateway remain unfinished; no managed Docker claim.
+
+### 2026-09-13 — existing Docker create admits PTY mode
+
+Wolfden fact 1616 records draft [userspace PR #68](https://github.com/wippyai/userspace/pull/68)
+at `05a459b`, stacked on #67 and assigned to `skhaz`. A one-line production
+change accepts explicit boolean `Tty` through the existing narrow create path;
+all sandbox checks remain intact. Baseline/fixed regressions, isolated lint,
+existing narrow checks and real Lua HTTP-client/fake-daemon requests pass.
+Tests remain outside the component pack. Local Docker lacks advertised AppArmor,
+which this contract requires; full hardened-container and managed Bee acceptance
+remain unverified. No component publication, runtime install or global refresh.

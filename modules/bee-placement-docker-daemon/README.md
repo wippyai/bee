@@ -59,3 +59,24 @@ make docker-daemon-check \
 This is a protocol and boundary proof over a private fake Unix daemon. Managed
 Agent Docker launch, host AppArmor support, real sandbox execution and package
 publication remain pending.
+
+## Registered lifecycle acceptance
+
+`make docker-lifecycle-check WIPPY=/path/to/runtime
+DOCKER_COMPONENT=/path/to/userspace/docker-client DOCKER_IMAGE=sha256:...`
+composes the actual lifecycle namespace with Bee and uses an already-local image
+containing `/bin/sh` and `sleep`. It creates disposable state beneath the current
+user's home, without reading login files, and runs with container networking off.
+
+The test proves prepare/replay, attachment, start and exact container identity,
+then exits Bee and boots again against the same placement database. The same
+container execution survives, a new attachment fences the old recipient, and
+stop/cleanup confirms removal. Foreign ownership and ordinary-caller access to
+internal reconciliation are refused. Failure cleanup only targets the fixture's
+unpredictable attempt label.
+
+This fixture deliberately supplies host authority to its test command. It does
+not prove the Agent app's production permission composition, Docker PTY menu
+launch, credential/MCP delivery or retained conversation recovery. Those remain
+required before public managed Docker activation. Its identity-preserving home
+mount also does not prove configuration delivery under translated home paths.

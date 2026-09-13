@@ -96,6 +96,23 @@ and real application-actor/terminal-grant acceptance remains required. Do not ad
 a second Lua exec handle or reopen the generic reference/inspection experiment
 merely to return a PTY from a native component.
 
+The optional native attachment backend is now implemented at Bee native commit
+`e2ee130` on `feat/docker-attachment-component-20260913`, based on installed native
+`fe8cb0d`. `native/docker` implements the existing PTY, stdin-close and wait-cancel
+interfaces. It checks full container/image IDs, execution start time and copied
+expected labels before and after attachment, closes a failed attachment, checks
+identity before control, and does not infer exit from canceled waiting. It never
+creates, starts or removes a container. Its Makefile race/vet gate passes with
+real Docker input, resize and exact-container exit plus failure cases; evidence
+is `bee-evidence/0912/docker-attachment-component.log`.
+
+This backend is not registered as a Lua module or wired into the Agent app.
+Authorization belongs to its admitting caller, and actual Bee terminal-grant
+acceptance remains open. Docker inspection and control are not atomic: the
+lifecycle owner must serialize restart/control, and these checks cannot fence a
+daemon administrator racing an execution replacement. Full cold screen recovery
+and the complete sandbox/profile/gateway path remain unproved. Global is unchanged.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

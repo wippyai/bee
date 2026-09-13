@@ -6425,3 +6425,14 @@ This is an extension-point proof, not actual container authorization or terminal
 grant acceptance. Evidence is archived as `external-exec-process-proof` under
 `bee-evidence/0912`. A native component can reuse that handle boundary; no new
 generic runtime reference API is justified. Global Bee remains unchanged.
+
+### 2026-09-13 — optional native Docker attachment backend
+
+Wolfden fact 1618 records native candidate `e2ee130`, pushed on
+`feat/docker-attachment-component-20260913` from installed native base `fe8cb0d`.
+`native/docker` now supplies an existing-container PTY with identity checks,
+failed-attachment cleanup and cancellable waiting. Its isolated Makefile race/vet
+gate passes, including real Docker input/resize/exact-container exit. See the
+Docker handoff for evidence and non-atomic daemon-control limitations.
+The component is unregistered: Lua admission, actual Bee terminal grants,
+sandbox/profile and scoped gateway integration remain open. Global is unchanged.

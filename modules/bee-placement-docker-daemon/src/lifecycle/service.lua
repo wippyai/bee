@@ -360,6 +360,9 @@ function M.start(value: unknown): Reply
     if not start_fence.ok then return cancel_container(attempt.attempt_id, first_identity) end
     local started, start_error = daemon.start({container_id = first_identity.container_id, expected = expected(first_identity)})
     if not started then
+        local latest, _, latest_denied = load(attempt.attempt_id)
+        if latest and (latest.execution_state == "stopping" or latest.execution_state == "exited") then return cancel_container(attempt.attempt_id, first_identity) end
+        if latest_denied then return latest_denied end
         transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "docker.start_uncertain", detail = start_error and start_error.message or "Docker start was not confirmed"}})
         return fail("UNCERTAIN", start_error and start_error.message or "Docker start was not confirmed")
     end

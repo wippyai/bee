@@ -90,8 +90,8 @@ local function define_tests()
         test.it("delivers admitted environment without changing it or container-owned paths", function()
             local raw = input()
             raw.home_target = raw.home_source
-            raw.environment = {HOME = raw.home_source, BEE_GATEWAY_TOKEN = "fixture-token", EMPTY = "", VALUE = "a=b\nsecond line"}
-            local config, err = configuration.build(raw)
+            local environment: Object = {HOME = raw.home_source, BEE_GATEWAY_TOKEN = "fixture-token", EMPTY = "", VALUE = "a=b\nsecond line"}
+            local config, err = configuration.build(raw, environment)
             if not config then error(tostring(err)) end
             test.eq(config.HostConfig.Binds[1], "/private/session/home:/private/session/home:rw")
             test.eq(config.Env[1], "BEE_GATEWAY_TOKEN=fixture-token")
@@ -99,27 +99,27 @@ local function define_tests()
             test.eq(config.Env[3], "HOME=/private/session/home")
             test.eq(config.Env[4], "TMPDIR=/tmp")
             test.eq(config.Env[5], "VALUE=a=b\nsecond line")
-            local environment = raw.environment :: Object
+            test.is_nil(raw.environment)
             environment.BEE_GATEWAY_TOKEN = "changed"
             test.eq(config.Env[1], "BEE_GATEWAY_TOKEN=fixture-token")
-            test.is_nil(environment.TMPDIR)
+            test.is_nil(rawget(environment, "TMPDIR"))
             local maximum: Object = {}
             for index = 1, 62 do maximum["VAR_" .. tostring(index)] = "" end
-            raw.environment = maximum
-            local bounded = configuration.build(raw)
+            local bounded = configuration.build(raw, maximum)
             if not bounded then error("64 environment entries refused") end
             test.eq(#bounded.Env, 64)
             maximum.EXTRA = ""
-            test.is_nil(configuration.build(raw))
+            test.is_nil(configuration.build(raw, maximum))
             local invalid: {unknown} = {
                 "not an object", {HOME = "/other"}, {TMPDIR = "/other"}, {TOKEN = "a\0b"},
                 {TOKEN = 3}, {["A=B"] = "bad"}, {[1] = "bad"}, {TOKEN = string.rep("a", 16385)},
                 {A = string.rep("a", 16384), B = string.rep("a", 16384), C = string.rep("a", 16384), D = string.rep("a", 16384)},
             }
             for _, value in ipairs(invalid) do
-                raw.environment = value
-                test.is_nil(configuration.build(raw))
+                test.is_nil(configuration.build(raw, value))
             end
+            raw.environment = environment
+            test.is_nil(configuration.build(raw))
         end)
         test.it("refuses implicit authority, mutable images and malformed profile values", function()
             local cases: {{field: string, value: unknown}} = {

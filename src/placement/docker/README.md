@@ -26,8 +26,11 @@ Admission must verify that the daemon actually enforces the required sandbox;
 config generation alone does not prove that. There is no intermediate policy
 selector or second configuration translation.
 
-The builder accepts the existing materializer's admitted `environment` map;
-it does not read the host environment. It preserves values and generates HOME
+`build(specification, environment)` accepts the existing materializer's admitted
+environment map as a separate transient argument. An `environment` field inside
+the specification is refused, so credential delivery does not require adding
+bytes to the admitted specification. The builder does not read the host
+environment. It preserves values and generates HOME
 and TMPDIR if absent, refusing values that disagree with the selected home or
 `/tmp`. The final environment is bounded to 64 entries and 65536 bytes, with
 16384 bytes per value, and sorted by name. Credential and gateway values belong
@@ -77,8 +80,7 @@ decoder as lifecycle observations.
 
 The input is a strict object with `image` (local `sha256` image ID), `user`
 (`uid:gid`), `network`, `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
-`command`, `home_source`, `home_target`, `mounts`, `working_directory`, optional
-`environment`, and the
+`command`, `home_source`, `home_target`, `mounts`, `working_directory`, and the
 six attempt `labels`. `mounts` is a dense array of one to fifteen
 objects, each containing only `source`, `target`, and `access` (`read` or
 `write`). Bee bounds the home plus these mounts to 16 binds.

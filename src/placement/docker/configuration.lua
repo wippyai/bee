@@ -41,11 +41,14 @@ local function image(value: unknown): string?
     if not text or #text ~= 71 or not text:match("^sha256:[0-9a-f]+$") then return nil end
     return text
 end
-function M.build(value: unknown): (Config?, string?)
+-- The first argument is the admitted specification. Materialized environment
+-- values are separate transient input; the resulting daemon request may hold
+-- credentials and must never be used as the durable placement specification.
+function M.build(value: unknown, delivered_environment: unknown?): (Config?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "Docker preparation must be an object" end
     local extra = bounds.fields(raw, {"image", "user", "network", "apparmor", "memory", "nano_cpus", "pids_limit",
-        "command", "home_source", "home_target", "mounts", "working_directory", "labels", "environment"})
+        "command", "home_source", "home_target", "mounts", "working_directory", "labels"})
     if extra then return nil, extra end
     local selected_image = image(raw.image)
     if not selected_image then return nil, "Docker preparation needs the exact local image ID" end
@@ -133,8 +136,8 @@ function M.build(value: unknown): (Config?, string?)
     -- Values come from the existing materializer after policy, credential and
     -- gateway admission. Do not discover host environment or log these bytes.
     local environment: {[string]: string} = {HOME = home_target, TMPDIR = "/tmp"}
-    if raw.environment ~= nil then
-        local supplied = bounds.object(raw.environment)
+    if delivered_environment ~= nil then
+        local supplied = bounds.object(delivered_environment)
         if not supplied then return nil, "Docker environment must be an object" end
         local count, size = 2, #home_target + #"HOME=" + #"TMPDIR=/tmp"
         for name, value in pairs(supplied) do

@@ -78,6 +78,21 @@ Migration 3 (`optional_files`) adds the constrained `optional` flag to
 definitions with a default of false; it is additive and preserves existing
 definitions, projections and the applied migration ledger.
 
+Migration 4 (`declared_providers`) removes the storage-level Claude/Codex enum
+while retaining a bounded, nonempty provider label and the other constraints.
+The populated upgrade proof preserves definition identities, projection receipts,
+consumed generations and earlier migration records across reopen. The broker
+still admits only its implemented providers; widening storage grants no access.
+
+The pure `formats` decoder prepares component-owned login layouts: a bounded
+environment destination or relative file path, JSON or opaque content, and up
+to four bounded initialization files. It rejects traversal, sparse arrays,
+duplicate files and file/parent-directory collisions. It grants no filesystem
+authority and is not yet wired into admission or placement. Declarative provider
+activation and Agy single-file login remain unimplemented. Before activation,
+definitions and projections must durably bind the selected layout so an edited
+declaration cannot redirect an already-admitted credential.
+
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
 

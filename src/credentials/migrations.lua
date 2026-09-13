@@ -82,10 +82,33 @@ INSERT INTO bee_credential_definitions_next
 DROP TABLE bee_credential_definitions;
 ALTER TABLE bee_credential_definitions_next RENAME TO bee_credential_definitions;
 ]]
+local DECLARED_PROVIDERS_SQL = [[
+CREATE TABLE bee_credential_definitions_next (
+    workspace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    definition_id TEXT NOT NULL UNIQUE,
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    provider TEXT NOT NULL CHECK (length(provider) BETWEEN 1 AND 160),
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('env_variable', 'fs_directory')),
+    source_ref TEXT NOT NULL,
+    projection_kind TEXT NOT NULL CHECK (projection_kind IN ('environment', 'file')),
+    destination TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    owner_node TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    optional INTEGER NOT NULL DEFAULT 0 CHECK (optional IN (0,1)),
+    PRIMARY KEY (workspace_id, name)
+);
+INSERT INTO bee_credential_definitions_next SELECT * FROM bee_credential_definitions;
+DROP TABLE bee_credential_definitions;
+ALTER TABLE bee_credential_definitions_next RENAME TO bee_credential_definitions;
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
     {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
     {id = 3, name = "optional_files", sql = "ALTER TABLE bee_credential_definitions ADD COLUMN optional INTEGER NOT NULL DEFAULT 0 CHECK(optional IN (0,1));", rebuild = false},
+    {id = 4, name = "declared_providers", sql = DECLARED_PROVIDERS_SQL, rebuild = true},
 }
 function M.all(): {Migration}
     return list

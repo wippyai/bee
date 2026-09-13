@@ -2,6 +2,21 @@
 
 ## Current checkpoint — September 13
 
+**Release candidate, not installed:** production `f36e488`, binary `c8537ef7`,
+adds Grok login/hooks and imports existing Agy onboarding state when creating a
+private harness HOME. All four managed harness fixtures pass through the actual
+picker, login delivery and scoped MCP. Real Grok startup commits SessionStart to
+its bound thread without a model prompt. Offline fresh/restart/reconnect and
+Claude fixture cold recovery pass. Full repository regression and the exact
+candidate's real Agy interactive check are pending. See
+[global build](handoffs/GLOBAL_BUILD.md) for release evidence.
+
+**Remaining agent workflow work:** managed Docker execution, real-provider cold
+recovery across all harnesses, surviving orphan cleanup, and policy-controlled
+sharing. Some post-picker launch failures still close the window instead of
+leaving a readable failure surface. Native Docker module composition is present
+in the candidate; it does not make Docker selectable or usable in the Agent UI.
+
 Global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor
 failure diagnostics and consistent hook conversation identity. Full `make check`

@@ -127,6 +127,10 @@ native-managed-agent-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go managed "$(AGENT_PROVIDER)" "$(abspath $(BEE_BINARY))"
 
 .PHONY: native-grok-live-check
+.PHONY: native-agent-picker-check
+native-agent-picker-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go picker "$(abspath $(BEE_BINARY))"
+
 native-grok-live-check:
 	test -n "$(GROK_BIN)" -a -n "$(GROK_LOGIN_FILE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" GROK_BIN="$(abspath $(GROK_BIN))" GROK_LOGIN_FILE="$(abspath $(GROK_LOGIN_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go -run TestActualGrokManagedStartup -count=1 -v

@@ -1,5 +1,32 @@
 # Global Bee build — September 13, 2026
 
+## Candidate: visible Agent launch failures and unstarted-session cleanup
+
+Production `1a0ae17`, binary
+`c78b764d589476ebef58c69286d235766b593c69a4e889f6eb8f34240fa2edaa`,
+is built but not installed. Runtime and native selections match current global
+`c8537ef7`. All artifact hashes match provenance. Offline boot/restart/reconnect
+passes, as do 865 unit tests and three real failure-view stages: before action
+admission, after action admission, and after placement preparation. The existing
+stop operation releases an unstarted session; no abort API or migration is added.
+Closing the failure view during asynchronous settlement leaves its result unconfirmed.
+
+The native binary/modules/About checks passed, but the selector gate initially
+failed while requiring a new frame after F12. Focused inspection found an
+incorrect test assumption: an unavailable row and a refresh can leave identical
+pixels, and presenter replacement need not emit an identical physical frame.
+The corrected check uses resize to require a redraw and then checks input/close;
+it passes without production or timeout changes. The complete selector is
+repeating as session `59306`, log `agent-failure-selector.log`. The original
+failure remains in `agent-failure-native.log`; the diagnostic frame showed the
+expected picker and existing unavailable message, with no sequence advancement.
+
+Full candidate regression is running as session `82438`, log
+`agent-failure-full-check.log`. The earlier stop-only regression remains separate
+as `51939`. The prepared installer has passed successful install, replacement
+failure rollback, post-verification rollback and changed-candidate snapshot tests;
+it has not been executed against global Bee. Managed Docker remains unfinished.
+
 ## Current install: Agy setup and Grok integration
 
 Candidate SHA `c8537ef7bc83048ea7a052b449f56e8fc27713b67b49999e828d5cff8d86a486`

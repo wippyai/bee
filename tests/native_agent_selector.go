@@ -496,6 +496,17 @@ func (s *terminalScreen) render() string {
 // visible removes terminal control sequences while preserving only the text
 // in one byte string. It remains useful for callers that need a one-off text
 // extraction; consumeFrames uses terminalScreen because frames are deltas.
+func (d *desktop) resize(columns, rows uint16) error {
+	d.mu <- struct{}{}
+	defer func() { <-d.mu }()
+	if err := pty.Setsize(d.terminal, &pty.Winsize{Cols: columns, Rows: rows}); err != nil {
+		return err
+	}
+	d.screen = newTerminalScreen(int(columns), int(rows))
+	d.latest = ""
+	return nil
+}
+
 func (d *desktop) snapshot() (string, uint64, []byte) {
 	d.mu <- struct{}{}
 	defer func() { <-d.mu }()
@@ -569,7 +580,8 @@ func (d *desktop) waitForAfter(text string, previous uint64, timeout time.Durati
 		case err := <-d.wait:
 			return fmt.Errorf("Bee exited while waiting for refreshed %q: %v\n%s", text, err, string(log))
 		case <-deadline.C:
-			return fmt.Errorf("timed out waiting for refreshed %q\n%s", text, string(log))
+			latest, current, _ := d.snapshot()
+			return fmt.Errorf("timed out waiting for refreshed %q (after %d, current %d)\n%s", text, previous, current, latest)
 		case <-tick.C:
 		}
 	}
@@ -938,6 +950,8 @@ func defaultPicker(binary string) error {
 	if err := countThreadWork(state); err != nil {
 		return fmt.Errorf("removing profile created thread work before launch: %w", err)
 	}
+	// Unavailable rows do not launch work. Enter and Refresh may leave
+	// identical pixels, so neither operation requires a fresh physical frame.
 	if err := ui.send("\r"); err != nil {
 		return err
 	}
@@ -956,6 +970,11 @@ func defaultPicker(binary string) error {
 	}
 	_, before, _ = ui.snapshot()
 	if err := ui.send("\x1b[24~"); err != nil {
+		return err
+	}
+	// A presenter replacement may reproduce identical pixels. Resize gives
+	// the native bridge observable work without relying on an incidental redraw.
+	if err := ui.resize(101, 31); err != nil {
 		return err
 	}
 	if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
@@ -2588,6 +2607,21 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "picker" {
+		binary, err := filepath.Abs(os.Args[2])
+		if err == nil {
+			binary, err = filepath.EvalSymlinks(binary)
+		}
+		if err == nil {
+			err = defaultPicker(binary)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("Native Agent picker: editing, unavailable launch, refresh, F12, close and no thread work passed")
+		return
+	}
 	if len(os.Args) == 4 && os.Args[1] == "managed" {
 		provider := os.Args[2]
 		if provider != "grok" && provider != "agy" && provider != "claude" && provider != "codex" {

@@ -87,7 +87,7 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
     if not field then return nil end
     if field.kind == "tool" or field.kind == "option" then
         if event.type == "key" and event.action == "press" and
-            (event.key_type == "enter" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
+            (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
             if field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
@@ -103,6 +103,7 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
         if event.ctrl and event.key == "u" then value = ""
         elseif event.key_type == "backspace" or event.key_type == "backspace2" then value = erase(value)
         elseif event.key_type == "enter" and field.kind == "guidance" then value = value .. "\n"
+        elseif event.key_type == "space" and not event.ctrl and not event.alt then value = value .. " "
         elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
     end
     if #value > limit then state.status = "Text exceeds " .. tostring(limit) .. " bytes"; return nil end

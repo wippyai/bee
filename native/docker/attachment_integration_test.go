@@ -17,16 +17,15 @@ import (
 	"github.com/moby/moby/client"
 )
 
-// Requires a local daemon and already-local alpine:latest. The fixture uses
-// Docker directly; it does not establish Bee's full sandbox/profile admission.
-func TestExistingContainerPTYIntegration(t *testing.T) {
+func newContainerFixture(t *testing.T) (context.Context, *client.Client, Identity, string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.Close()
+	t.Cleanup(func() { _ = cli.Close() })
 	image, err := cli.ImageInspect(ctx, "alpine:latest")
 	if err != nil {
 		t.Fatal("local image required; no pulls:", err)
@@ -40,14 +39,14 @@ func TestExistingContainerPTYIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		_, err := cli.ContainerRemove(cleanupCtx, created.ID, client.ContainerRemoveOptions{Force: true})
 		if err != nil {
 			t.Errorf("fixture cleanup: %v", err)
 		}
-	}()
+	})
 	if _, err := cli.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +54,19 @@ func TestExistingContainerPTYIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handle, err := New(ctx, cli, Identity{ContainerID: created.ID, ImageID: image.ID, StartedAt: observed.Container.State.StartedAt, Labels: labels})
+	return ctx, cli, Identity{ContainerID: created.ID, ImageID: image.ID, StartedAt: observed.Container.State.StartedAt, Labels: labels}, name
+}
+
+// Requires a local daemon and already-local alpine:latest. The fixture uses
+// Docker directly; it does not establish Bee's full sandbox/profile admission.
+func TestExistingContainerPTYIntegration(t *testing.T) {
+	ctx, cli, expected, name := newContainerFixture(t)
+	handle, err := New(ctx, cli, expected)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer handle.Stop()
-	labels["bee.test"] = "caller-mutated-after-admission"
+	expected.Labels["bee.test"] = "caller-mutated-after-admission"
 	if err := handle.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +118,11 @@ func TestExistingContainerPTYIntegration(t *testing.T) {
 	if err := handle.Wait(); err == nil {
 		t.Fatal("killed container reported successful exit")
 	}
-	after, err := cli.ContainerInspect(ctx, created.ID, client.ContainerInspectOptions{})
+	after, err := cli.ContainerInspect(ctx, expected.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Container.ID != created.ID || after.Container.State.Status != container.StateExited || after.Container.Name != "/"+name {
+	if after.Container.ID != expected.ContainerID || after.Container.State.Status != container.StateExited || after.Container.Name != "/"+name {
 		t.Fatal("wrong container lifecycle result")
 	}
 }

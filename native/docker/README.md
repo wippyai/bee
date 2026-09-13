@@ -2,7 +2,18 @@
 
 This optional Go component supplies the runtime's existing `exec.PTYProcess`
 interface for a container created and started by its admitting component. It is
-not registered as a Lua module or wired into Bee's Agent application yet.
+not registered in the public launcher or wired into Bee's Agent application yet.
+
+`NewModule(daemonRef, client)` provides the typed `docker_pty` Lua module. The host
+selects the daemon client and stable reference; Lua cannot supply a daemon URL or
+socket. `docker_pty.attach({container_id, image_id, started_at, labels})` requires
+an authenticated actor and scope, then checks `docker.attach` on
+`<daemonRef>/<full-container-id>`. Policy metadata includes `image_id`, `started_at`
+and `labels`; metadata is a requested constraint, not proof of ownership. The
+host must grant access from its own admitted records, never merely from supplied
+labels. The operation returns the existing runtime `exec.Process` handle without
+daemon I/O. Its `attach_terminal()` must run in the actor holding the terminal
+grant; the normal runtime method owns the resulting terminal session.
 
 `New` accepts the caller-owned Docker client and an admitted full container ID,
 actual image ID, execution start timestamp and expected labels. It copies the
@@ -21,10 +32,12 @@ changing execution between an inspection and control request. Initial log replay
 is enabled, but full cold screen recovery is not established.
 
 The runtime's public Lua `exec.NewProcess` constructor can carry this interface;
-that extension point is separately proven. Lua permission admission, actual Bee
-terminal-grant acceptance, profile/sandbox validation and the container gateway
-remain unfinished. This directory must not be registered broadly to bypass those
-boundaries.
+that extension point is exercised by the module. Scope refusal tests and an
+integration test with actual runtime frames, a native viewport grant and Docker
+pass. A child frame inherits the security scope but cannot inherit the parent's
+terminal port. This is not Bee broker/placement acceptance: its host binding,
+admitted-record policy, profile/sandbox validation and container gateway remain
+unfinished. This directory must not be registered broadly to bypass those boundaries.
 
 Run isolated race tests and vet through the native Makefile:
 

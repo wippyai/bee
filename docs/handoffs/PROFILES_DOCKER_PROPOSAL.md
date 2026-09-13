@@ -4,6 +4,16 @@ Written 2026-09-10 for Astra's review after the user's direction the same day: "
 
 ## September 13 implementation boundary
 
+The next integration source emits Docker daemon configuration directly and
+uses the existing userspace `client:create_container` / `inspect_container`
+methods in its real HTTP boundary check. The intermediate narrow creation
+wrapper is no longer needed for this path. Default seccomp is selected by
+omitting an override; host admission still must verify enforcement. AppArmor,
+non-root execution, resource bounds, and mount restrictions remain required.
+The direct-client fixture passes without starting a container. This does not
+complete lifecycle integration or eliminate the generic inspect HTTP-status
+correction in userspace PR #67. Earlier narrow-wrapper proofs below are history.
+
 Native candidate `5c4b738` adds the optional Wippy boot component
 `docker.Component(daemonRef, cli)`. The host supplies and owns the client;
 construction/loading does no discovery or daemon I/O and adds no permissions.

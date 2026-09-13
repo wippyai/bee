@@ -6509,3 +6509,26 @@ Full `make check` is running against the atomic-FS candidate; evidence is in
 global Bee was not changed. Wolfden 1628 records the preceding ownership-policy
 proof: existing principal-level expression policies avoid a required broker
 spawn redesign, but do not replace the trusted durable-attempt check.
+
+### September 13 — Direct Docker client integration (Codex, Luna high review)
+
+Mount preparation is committed/pushed as `1bc02d4`. Its full gate continues in
+the unchanged materialization checkout (session 60330). Follow-up work lives in
+`bee-docker-managed-launch-20260913` so that gate retains its original source.
+
+The follow-up removes the narrow creation translation from Bee's path: the
+builder emits daemon configuration and the HTTP fixture uses the ordinary
+userspace Docker client directly. Go vet and the real-Lua/private-daemon fixture
+pass; strict lint passes with the existing fixpoint warning. Unit verification
+is running; the follow-up full gate is still required. Wolfden fact 1633 records
+the checkpoint. No container execution or global installation is claimed.
+
+Luna confirms the existing window owner has the right order: claim attempt,
+authorize materialization, publish files, construct child, attach terminal.
+Keep that owner. Add container lifecycle operations there rather than creating
+a second runner. Container HOME must be selected before service preparation
+freezes driver delivery, while file writes remain in the host private home.
+The admitted attempt must retain the path mapping and exact container execution;
+window options cannot select them. Container-reachable scoped MCP/hooks and
+durable container reconciliation are still required before a Docker Agent is
+selectable. No new runtime API requirement is established by this review.

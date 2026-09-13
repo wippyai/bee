@@ -138,7 +138,9 @@ function M.build(value: unknown): (Config?, string?)
         Env = {"HOME=" .. home_target, "TMPDIR=/tmp"}, Tty = true, OpenStdin = true,
         AttachStdin = true, AttachStdout = true, AttachStderr = true, Labels = labels,
         HostConfig = {ReadonlyRootfs = true, Privileged = false, AutoRemove = false,
-            CapDrop = {"ALL"}, SecurityOpt = {"no-new-privileges:true", "seccomp=runtime/default", "apparmor=" .. apparmor},
+            -- Docker selects its default seccomp profile when no override is
+            -- supplied. The admitting owner must verify daemon support.
+            CapDrop = {"ALL"}, SecurityOpt = {"no-new-privileges:true", "apparmor=" .. apparmor},
             PidsLimit = pids, Memory = memory, NanoCPUs = cpu, NetworkMode = network,
             Binds = binds,
             Tmpfs = {["/tmp"] = "rw,nosuid,nodev,noexec"}, ExtraHosts = {}, Devices = {}}}, nil

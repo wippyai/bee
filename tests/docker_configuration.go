@@ -44,7 +44,6 @@ func run() error {
 	for target, origin := range map[string]string{
 		"configuration.lua": "src/placement/docker/configuration.lua",
 		"bounds.lua":        "src/threads/records/bounds.lua",
-		"runtime.lua":       filepath.Join(*dockerSource, "narrow/runtime.lua"),
 		"client.lua":        filepath.Join(*dockerSource, "client.lua"),
 	} {
 		data, err := os.ReadFile(origin)
@@ -130,10 +129,6 @@ entries:
   kind: library.lua
   source: file://configuration.lua
   imports: {bounds: 'app:bounds'}
-- name: runtime
-  kind: library.lua
-  source: file://runtime.lua
-  modules: [time]
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -142,7 +137,7 @@ entries:
   kind: process.lua
   source: file://check.lua
   method: main
-  imports: {configuration: 'app:configuration', runtime: 'app:runtime', client: 'app:client'}
+  imports: {configuration: 'app:configuration', client: 'app:client'}
   meta:
     command:
       name: check
@@ -157,7 +152,6 @@ entries:
   policy: {actions: [http_client.request], resources: ['http://docker/*'], effect: allow}
 `, "SOCKET", string(socketJSON))
 	script := strings.ReplaceAll(`local configuration = require("configuration")
-local runtime = require("runtime")
 local client = require("client")
 local function main()
     local image = "sha256:" .. string.rep("a",64)
@@ -172,8 +166,12 @@ local function main()
     if not config then error(tostring(err)) end
     local docker, connect_error = client.new(SOCKET)
     if not docker then error(tostring(connect_error)) end
-    local result, create_error = runtime.create_with({name="bee-"..string.rep("d",64),config=config},{client=function() return docker end})
-    if not result or create_error or result.state ~= "created" then error(tostring(create_error or "not created")) end
+    local result, create_error = docker:create_container(config, {name="bee-"..string.rep("d",64)})
+    if not result or create_error or result.Id ~= string.rep("c",64) then error(tostring(create_error or "not created")) end
+    local observed, inspect_error, status = docker:inspect_container(result.Id)
+    if not observed or inspect_error or status ~= 200 or observed.Image ~= image or observed.State.Status ~= "created" then
+        error(tostring(inspect_error or "inspection differs"))
+    end
     return true
 end
 return {main=main}
@@ -208,6 +206,6 @@ return {main=main}
 	if creates != 1 || inspects != 1 {
 		return fmt.Errorf("expected one create and inspection, got %v", calls)
 	}
-	fmt.Println("PASS: Bee configuration through narrow create and actual Lua HTTP client; no start or container execution")
+	fmt.Println("PASS: Bee configuration through direct Docker client create/inspect and actual Lua HTTP; no start or container execution")
 	return nil
 }

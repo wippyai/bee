@@ -35,6 +35,7 @@ entries:
   meta:
     command:
       name: bee-host
+      host: bee:terminal
       short: Run a local workspace without a desktop
       security:
         actor: {id: bee.local}
@@ -85,4 +86,5 @@ entries:
     comment: Native start keeps this command alive while the Hive service owns the retained desktop; it spawns no host
     command:
       name: bee-owner
+      host: bee:terminal
       short: Internal retained-owner lifetime entry selected by bee start

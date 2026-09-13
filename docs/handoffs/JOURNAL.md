@@ -6327,3 +6327,15 @@ confinement. Sources refer to the Docker daemon's host.
 Bee's managed Docker launch/recovery integration remains unfinished. Global
 `887d0769` is unchanged by this work. Desktop regression continues through
 source/pack command handlers; full acceptance is not yet proven.
+
+### 2026-09-13 — cancellation and real Agy recovery candidate
+
+Journal 1602–1604 records the corrected materialization stop transition,
+`child.not_started` cleanup evidence without schema changes, and independently
+validated conversation IDs from occurrence-ambiguous hooks. Combined source
+`f7fe2ab` is pushed. All 851 unit cases, native executable acceptance, offline
+boot/reconnect and Claude fixture restart pass. Real managed Agy print-mode cold
+continuation also passes exact token recall with stable conversation/HOME/app/thread
+and fresh attempt/gateway, without replaying the task. Interactive Agy TUI recovery
+is not established. Full source/pack acceptance is running; global `9b499f4e`
+remains unchanged. Runtime PR #744 is still unmerged.

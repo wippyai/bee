@@ -139,3 +139,26 @@ See [the verified filesystem boundary](RETAINED_CONFIGURATION_FS.md).
 Lua already exposes file sync;
 `os.Root` follows in-root symlinks, and `lstat` followed by rename is not enough
 to guarantee session-parent identity across the operation.
+
+## September 13 — real Agy cold continuation candidate
+
+The combined source candidate now treats hook occurrence deduplication separately
+from its validated provider conversation claim. All eligible claims must agree;
+predecessor ownership, driver/profile identity, retained session, binding and
+process cleanup checks still apply. Ambiguous occurrences do not establish turn
+success or become deduplicated events.
+
+A real Agy print-mode harness inside a managed Agent window now passes cold
+continuation: the first turn reads a random fixture token, Bee stops and restarts
+against the same state, and a new turn recalls the exact token without tools or
+replaying the original task. Conversation, HOME, app and thread identities stay
+the same; the replacement attempt and gateway binding are fresh. The previous
+candidate failed to restore with these session-bearing ambiguous hooks. The
+fixture uses a private login copy and deletes its temporary state after the run.
+This proves actual provider conversation continuity, not interactive Agy TUI
+rendering or arbitrary orphan-tree recovery.
+
+The same candidate passes offline fresh boot/restart/reconnect, native executable
+acceptance and the existing Claude fixture restart gate. Its 851 unit cases pass;
+full combined source/pack acceptance and installation remain pending. See the
+current journal and global-build handoff for installed revision status.

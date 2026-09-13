@@ -620,6 +620,14 @@ entries:
     actions: [db.get, registry.get, system.read, env.get]
     resources: [bee.credentials:db, bee.credentials:database_ref, bee.credentials:sources_ref, bee:credential_sources, node, '*']
     effect: allow
+- name: profile_store_policy
+  kind: security.policy
+  meta:
+    comment: Saved profile facade storage access; callers separately require workspace read or write authority
+  policy:
+    actions: [db.get, registry.get, system.read]
+    resources: [bee.node:db, bee.harness.profiles:database_ref, node]
+    effect: allow
 - name: credential_file_policy
   kind: security.policy
   meta:

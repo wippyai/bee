@@ -110,6 +110,7 @@
         "bee.harness.catalog",
         "bee.harness.launch",
         "bee.harness.permission",
+        "bee.harness.profiles",
         "bee.harness.window"
       ]
     },

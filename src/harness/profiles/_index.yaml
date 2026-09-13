@@ -1,0 +1,44 @@
+version: '1.0'
+namespace: bee.harness.profiles
+entries:
+- name: target_db
+  kind: ns.requirement
+  default: bee.node:db
+  meta: {comment: Host-selected SQLite resource for saved profiles}
+  targets:
+  - entry: bee.harness.profiles:database_ref
+    path: .resource_ref
+- name: database_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules: [security, system, registry, sql, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    sync: bee.sync:store
+    transaction: bee.persist:transaction
+    protocol: bee.harness.profiles:protocol
+- name: contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Read or compare-and-set a typed saved agent profile owned by the host node
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.harness.profiles:contract
+    methods: {call: bee.harness.profiles:call}
+- name: call
+  kind: function.lua
+  source: file://method.lua
+  method: handle
+  imports: {service: bee.harness.profiles:service}
+  security: {policies: [bee:profile_store_policy]}

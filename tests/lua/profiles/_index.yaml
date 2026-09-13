@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.harness.profiles
+entries:
+- name: test_call
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.profiles:call]
+    effect: allow
+- name: test_read
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.read]
+    resources: [saved-profile-workspace]
+    effect: allow
+- name: test_write
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.write]
+    resources: [saved-profile-workspace]
+    effect: allow
+- name: service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid]
+  imports:
+    test: wippy.test:test
+    bounds: bee.threads.records:bounds

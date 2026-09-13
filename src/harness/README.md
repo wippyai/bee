@@ -168,3 +168,9 @@ the existing list and actions without the summary row. This UI addition passes t
 summary before launching Claude/Codex and retained session/login behavior.
 The initial unit run passed 772 cases; the final selection/view check passed
 14 cases including exclusion of private instruction text.
+
+The saved-profile facade under `bee.harness.profiles` now stores workspace-scoped
+preferences through the existing node-owned sync ledger. It is not yet wired to
+the picker or launch admission. Its host store access grants no workspace read or
+write authority. See [saved profiles](../../docs/handoffs/SAVED_AGENT_PROFILES.md)
+for the verified boundary, retention limits and remaining integration gates.

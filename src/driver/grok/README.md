@@ -24,8 +24,13 @@ A process exit alone never establishes success.
 Gateway configuration projects `.grok/config.toml` with a scoped Bee MCP URL and
 an environment-token reference. It accepts no external provider configuration
 or hooks. The installed CLI advertises stdio, Streamable HTTP and SSE MCP
-transports. Token interpolation and an authenticated managed MCP turn remain
-unverified; the installed Grok CLI was logged out during acceptance.
+transports. A September 13 loopback probe of the actual `grok mcp doctor`
+confirmed `${BEE_TEST_TOKEN}` expansion: initialize and tools/list requests
+carried the expanded dummy credential. The diagnostic returned exit 1 against
+the minimal server, so this is only header-behavior evidence, not a healthy-server
+or completed agent-turn proof. An authenticated managed MCP turn remains
+unverified; the installed Grok CLI was logged out during earlier acceptance.
+Evidence: `bee-evidence/0912/grok-mcp-header-expansion.log`.
 
 `tests/lua/driver/grok` covers launch arguments, configuration bounds, malformed
 state, session changes, answer bounds and terminal/tool outcomes. These fixtures

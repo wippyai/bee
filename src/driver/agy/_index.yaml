@@ -165,5 +165,16 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: []
+    credentials: [agy_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
+
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    file:
+      path: .gemini/antigravity-cli/antigravity-oauth-token
+      content_format: opaque
+      initialize: []

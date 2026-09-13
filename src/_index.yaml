@@ -308,6 +308,7 @@ entries:
     roots: {project: bee:workspace_root, session: bee.placement.native:root}
     credentials:
       codex_login: {provider: codex, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
+      agy_login: {provider: agy, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
       claude_login: {provider: claude, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
 - name: workspace_db
   kind: db.sql.sqlite
@@ -603,9 +604,14 @@ entries:
     type: bee.credential_sources
     comment: env.variable entries a workspace may define credentials from, with the audience, provider and projection kinds each admits; host policy, never a workspace choice
   data:
+    formats:
+      claude: bee.driver.claude:credential_format
+      codex: bee.driver.codex:credential_format
+      agy: bee.driver.agy:credential_format
     sources:
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: codex, projection_kinds: [file], path: .codex/auth.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [file], path: .claude/.credentials.json}
+    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: agy, projection_kinds: [file], path: .gemini/antigravity-cli/antigravity-oauth-token}
 - name: credential_store_policy
   kind: security.policy
   meta:

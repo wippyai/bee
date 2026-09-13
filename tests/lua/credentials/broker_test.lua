@@ -88,7 +88,8 @@ local function admit_sources(workspace: string)
         {ref = CLAUDE_LOGIN_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"file"}},
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
-        {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}}}
+        {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
+        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}}}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local file_policy = registry.get("bee:credential_file_policy")
@@ -343,6 +344,36 @@ local function define_tests()
             select_path("different/auth.json")
             test.eq(code(call(manager, "availability", {workspace_id = ws, name = "login"})), "CONFLICT")
             test.eq(code(call(runner, "check", request)), "CONFLICT")
+            select_path(".codex/auth.json")
+            test.eq(value(call(manager, "availability", {workspace_id = ws, name = "login"})).present, true)
+            test.eq(value(call(runner, "check", request)).destination, "auth.json")
+            -- A changed host-selected format is fenced independently of the
+            -- source digest and cannot retarget a retained projection.
+            local format_entry = registry.get("bee.driver.codex:credential_format")
+            if not format_entry then error("codex credential format") end
+            local format_data = format_entry.data :: {[string]: unknown}
+            local file_data = format_data.file :: {[string]: unknown}
+            local saved_format_path = file_data.path
+            -- Keep the basename and source unchanged: only the destination
+            -- directory changes, so destination-name checks cannot prove this.
+            file_data.path = ".moved/auth.json"
+            local format_changes = registry.snapshot():changes()
+            format_changes:update(format_entry)
+            local format_applied, format_apply_error = format_changes:apply()
+            if not format_applied then error(tostring(format_apply_error)) end
+            local format_ok, format_failure = pcall(function()
+                test.eq(code(call(manager, "availability", {workspace_id = ws, name = "login"})), "CONFLICT")
+                test.eq(code(call(runner, "check", request)), "CONFLICT")
+                test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                    attempt_id = attempt, generation_key = fresh("format-generation")})), "CONFLICT")
+            end)
+            file_data.path = saved_format_path
+            local format_restore = registry.snapshot():changes()
+            format_restore:update(format_entry)
+            local format_restored, format_restore_error = format_restore:apply()
+            if not format_restored then error(tostring(format_restore_error)) end
+            if not format_ok then error(tostring(format_failure)) end
+            select_path("different/auth.json")
             local rejected = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = fresh("generation")})
             test.eq(code(rejected), "CONFLICT")
@@ -408,6 +439,20 @@ local function define_tests()
             local after = value(call(runner, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt}))
             test.eq(after.materialization_generation, 2)
             clean(call(runner, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt}))
+
+            -- Agy selects an opaque host format. Arbitrary bytes pass through
+            -- without JSON parsing and are labeled as bytes for placement.
+            write_file(CODEX_LOGIN_SOURCE, "antigravity-oauth-token", "opaque-login-bytes")
+            local agy_def = value(call(manager, "define", {workspace_id = ws, name = "agy_login", provider = "agy",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
+            test.eq(agy_def.destination, "antigravity-oauth-token")
+            local agy_proj = issue(user, ws, "agy_login", attempt)
+            local agy_mat = value(call(runner, "materialize", {projection_id = agy_proj.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = "agy-g1"}))
+            test.eq(agy_mat.value, "opaque-login-bytes")
+            test.eq(agy_mat.encoding, "bytes")
+            test.eq(agy_mat.destination, "antigravity-oauth-token")
+            test.eq(agy_mat.format.file.content_format, "opaque")
 
             local claude_proj = issue(user, ws, "claude_login", attempt)
             test.eq(claude_proj.destination, ".credentials.json")

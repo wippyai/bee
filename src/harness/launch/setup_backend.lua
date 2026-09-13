@@ -36,7 +36,7 @@ type Credential = {provider: string, source: {kind: string, ref: string}, projec
 local function credential(value: unknown): Credential?
     local object = bounds.object(value)
     if not object or bounds.fields(object, {"provider", "source", "projection_kind", "optional"}) then return nil end
-    local provider = bounds.member(object.provider, {"claude", "codex"})
+    local provider = bounds.id(object.provider)
     local source = bounds.object(object.source)
     if not provider or not source or bounds.fields(source, {"kind", "ref"}) then return nil end
     local kind = bounds.member(source.kind, {"env_variable", "fs_directory"})

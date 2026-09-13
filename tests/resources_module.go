@@ -308,7 +308,15 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	}
 	if !dropSources {
 		sources = resourcesModuleCloneEntry(sources)
-		sources["data"] = map[string]interface{}{"sources": []map[string]interface{}{{"ref": "bee:module_secret", "workspace_id": "*", "audience": "bee.test.cmod", "provider": "claude", "projection_kinds": []string{"environment"}}}}
+		sources["data"] = map[string]interface{}{
+			"formats": map[string]string{"claude": "bee:module_credential_format"},
+			"sources": []map[string]interface{}{{"ref": "bee:module_secret", "workspace_id": "*", "audience": "bee.test.cmod", "provider": "claude", "projection_kinds": []string{"environment"}}},
+		}
+		hostEntries = append(hostEntries, map[string]interface{}{
+			"name": "module_credential_format", "kind": "registry.entry",
+			"meta": map[string]interface{}{"type": "bee.credential_format"},
+			"data": map[string]interface{}{"schema_revision": "bee.credential-format@1", "environment_destination": "ANTHROPIC_API_KEY"},
+		})
 	}
 	hostEntries = append(hostEntries, sources, map[string]interface{}{"name": "terminal", "kind": "terminal.host", "hide_logs": true, "lifecycle": map[string]interface{}{"auto_start": true}})
 	if err := resourcesModuleWrite(folder, filepath.Join("src", "host", "_index.yaml"), resourcesModuleIndex{Version: "1.0", Namespace: "bee", Entries: hostEntries}); err != nil {

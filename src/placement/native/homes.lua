@@ -6,6 +6,7 @@ local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local resources = require("resources")
+local formats = require("formats")
 local M = {}
 M.ATTEMPTS = "attempts"
 M.SESSIONS = "sessions"
@@ -17,7 +18,7 @@ M.REPLAY_CHUNK_BYTES = 4096
 M.MAX_LOGIN_BYTES = 65536
 M.MAX_LOGIN_IDENTITY_BYTES = 2048
 type LoginSource = {provider: string, definition_id: string, definition_revision: integer, optional: boolean?}
-type LoginDestination = {path: string, identity_path: string, source: LoginSource}
+type LoginDestination = {path: string, identity_path: string, source: LoginSource, format: formats.Format}
 local function key(kind: string, id: string): (string?, string?)
     local digest, err = hash.sha256(kind .. "\n" .. id)
     if err or not digest then return nil, "derive directory key" end
@@ -174,23 +175,14 @@ function M.write_protected(home_path: string, relative: string, content: string,
     if not written then return nil, "write configuration: " .. tostring(write_error) end
     return target, nil, false
 end
-local function login_paths(provider: string): (string?, string?)
-    -- One identity marker is shared by the whole retained home. A provider
-    -- change must not be able to seed a second login in its other fixed
-    -- directory and thereby reuse the same session home.
-    if provider == "codex" then return ".codex/auth.json", ".bee-retained-login-ready.json" end
-    if provider == "claude" then return ".claude/.credentials.json", ".bee-retained-login-ready.json" end
-    return nil, nil
-end
--- Decodes only the non-secret source binding that makes a retained login home
--- reusable. Provider destinations are fixed here rather than supplied by a
--- caller, so a projection cannot redirect opaque login bytes elsewhere.
+-- The authorized broker supplies the frozen layout. Definition identity binds
+-- that layout while preserving the existing retained-home identity encoding.
 function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     local object = bounds.object(value)
     if not object then return nil, "login source must be an object" end
-    local unknown_field = bounds.fields(object, {"provider", "definition_id", "definition_revision", "optional"})
+    local unknown_field = bounds.fields(object, {"provider", "definition_id", "definition_revision", "optional", "format"})
     if unknown_field then return nil, unknown_field end
-    local provider = bounds.member(object.provider, {"codex", "claude"})
+    local provider = bounds.id(object.provider)
     if not provider then return nil, "login provider is unsupported" end
     local definition_id = bounds.id(object.definition_id)
     if not definition_id then return nil, "login definition_id is not an identifier" end
@@ -200,10 +192,15 @@ function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     local source: LoginSource = {provider = provider, definition_id = definition_id, definition_revision = definition_revision}
     -- Required sources retain their existing identity encoding.
     if object.optional == true then source.optional = true end
-    local path, identity_path = login_paths(provider)
-    if not path or not identity_path then return nil, "login provider is unsupported" end
-    return {path = path, identity_path = identity_path,
-        source = source}, nil
+    local format, format_error = formats.decode(object.format)
+    if not format or not format.file then return nil, format_error or "login format has no file" end
+    local marker = ".bee-retained-login-ready.json"
+    local paths: {string} = {format.file.path}
+    for _, item in ipairs(format.file.initialize) do paths[#paths + 1] = item.path end
+    for _, path in ipairs(paths) do
+        if path == marker or path:sub(1, #marker + 1) == marker .. "/" then return nil, "login format overlaps retained identity" end
+    end
+    return {path = format.file.path, identity_path = marker, source = source, format = format}, nil
 end
 local function read_bounded(vol: fs.FS, path: string, bound: integer): (string?, string?)
     local file, open_error = vol:open(path, "r")
@@ -242,17 +239,23 @@ local function write_exclusive(vol: fs.FS, path: string, content: string): strin
     if closed == false then return "close retained login: " .. tostring(close_error) end
     return nil
 end
-local function create_login_parent(vol: fs.FS, root: string, relative: string): (string?, string?)
-    local parent = (root .. "/" .. relative):match("^(.*)/[^/]+$")
-    if not parent or parent == root then return nil, nil end
-    if vol:exists(parent) then
-        return nil, "retained login parent already exists"
+local function create_login_parents(vol: fs.FS, root: string, relative: string, created: {[string]: boolean}): string?
+    local directory = relative:match("^(.*)/[^/]+$")
+    if not directory then return nil end
+    local parent = root
+    for segment in directory:gmatch("[^/]+") do
+        parent = parent .. "/" .. segment
+        if vol:exists(parent) then
+            if not created[parent] then return "retained login parent already exists" end
+        else
+            local made, mkdir_error = vol:mkdir(parent)
+            if not made then return "create retained login parent: " .. tostring(mkdir_error) end
+            created[parent] = true
+        end
     end
-    local made, mkdir_error = vol:mkdir(parent)
-    if not made then return nil, "create retained login parent: " .. tostring(mkdir_error) end
-    return parent, nil
+    return nil
 end
--- Seeds one fixed provider login destination. On later resumes it verifies
+-- Seeds one admitted login destination. On later resumes it verifies
 -- the non-secret source identity and leaves the destination untouched: the
 -- harness's opaque refresh is therefore retained without applying immutable
 -- configuration replay rules to authentication bytes.
@@ -282,23 +285,20 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
         return target, nil, true
     end
     if target_exists then return nil, "retained login is incomplete" end
-    local parent, parent_error = create_login_parent(vol, root, destination.path)
+    local parents: {[string]: boolean} = created or {}
+    local parent_error = create_login_parents(vol, root, destination.path, parents)
     if parent_error then return nil, parent_error end
-    -- A provider login can precede immutable driver configuration in the
-    -- same provider directory. Record only the parent this runner just made;
-    -- write_protected still refuses every parent it did not create itself.
-    if parent and created then created[parent] = true end
     -- The ready marker is written only after the opaque bytes. A failed or
     -- interrupted seed leaves no accepted marker and is refused on resume.
     if opaque ~= nil then
         local write_error = write_exclusive(vol, target, opaque)
         if write_error then return nil, write_error end
-        -- Claude's interactive onboarding asks for a login method even when
-        -- its credential file already contains a valid login. Initialize only
-        -- that first-run state for an imported login; project trust and all
-        -- other settings remain the harness's responsibility.
-        if destination.source.provider == "claude" then
-            local setup_error = write_exclusive(vol, root .. "/.claude.json", '{"hasCompletedOnboarding":true}')
+        local file = destination.format.file
+        if not file then return nil, "login format has no file" end
+        for _, item in ipairs(file.initialize) do
+            local setup_parent_error = create_login_parents(vol, root, item.path, parents)
+            if setup_parent_error then return nil, setup_parent_error end
+            local setup_error = write_exclusive(vol, root .. "/" .. item.path, item.content)
             if setup_error then return nil, setup_error end
         end
     end

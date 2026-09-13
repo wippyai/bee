@@ -5,6 +5,8 @@ local migrations = require("migrations")
 local broker = require("broker")
 local canonical = require("canonical")
 local sql = require("sql")
+local json = require("json")
+local formats = require("formats")
 local RESOURCE = "bee.credentials:upgrade_db"
 local function opened(count: integer): sql.DB
     local all = migrations.all()
@@ -105,12 +107,55 @@ local function define_tests()
             test.is_true(empty_provider ~= nil)
             local _, invalid_optional = declared:execute("UPDATE bee_credential_definitions SET optional = 2 WHERE name = 'new-login'")
             test.is_true(invalid_optional ~= nil)
+            execute(declared, [[INSERT INTO bee_credential_definitions VALUES
+                ('workspace','claude-login','claude-definition',2,'claude','fs_directory','host:claude',
+                 'file','.credentials.json','claude-config-digest','node','created','updated',1)]])
             local preserved = rows(declared, "SELECT * FROM bee_credential_definitions ORDER BY definition_id")
             declared:release()
             local reopened = opened(4)
             test.eq(rows(reopened, "SELECT * FROM bee_credential_definitions ORDER BY definition_id"), preserved)
             test.eq(rows(reopened, statements[3]), before[3])
+            local columns, columns_error = reopened:query("PRAGMA table_info(bee_credential_projections)")
+            if not columns then error(tostring(columns_error)) end
+            local names: {string} = {}
+            for _, column in ipairs(columns) do
+                if type(column.name) ~= "string" then error("invalid column name") end
+                names[#names + 1] = column.name
+            end
+            local original_projection = "SELECT " .. table.concat(names, ",") .. " FROM bee_credential_projections ORDER BY projection_id"
+            local original_definitions = rows(reopened, statements[1])
             reopened:release()
+            local frozen = opened(5)
+            test.eq(rows(frozen, statements[1]), original_definitions)
+            test.eq(rows(frozen, original_projection), before[2])
+            test.eq(rows(frozen, statements[3]), before[3])
+            test.eq(rows(frozen, "SELECT * FROM " .. broker.LEDGER.table .. " WHERE id <= 3 ORDER BY id"), old_ledger)
+            local saved, saved_error = frozen:query("SELECT provider,format_json FROM bee_credential_definitions ORDER BY definition_id")
+            if not saved then error(tostring(saved_error)) end
+            for _, row in ipairs(saved) do
+                if row.provider == "fixture.harness" then test.eq(row.format_json, "")
+                else
+                    if type(row.format_json) ~= "string" then error("missing frozen format") end
+                    local decoded, decode_error = formats.decode(json.decode(row.format_json))
+                    if not decoded or not decoded.file then error(tostring(decode_error)) end
+                    if row.provider == "claude" then
+                        test.eq(decoded.file.path, ".claude/.credentials.json")
+                        test.eq(decoded.environment_destination, "ANTHROPIC_API_KEY")
+                        test.eq(decoded.file.initialize[1].path, ".claude.json")
+                        test.eq(decoded.file.initialize[1].content, '{"hasCompletedOnboarding":true}')
+                    else
+                        test.eq(decoded.file.path, ".codex/auth.json")
+                        test.eq(decoded.environment_destination, "OPENAI_API_KEY")
+                    end
+                end
+            end
+            local snapshots = rows(frozen, "SELECT definition_id,format_json FROM bee_credential_definitions ORDER BY definition_id")
+            local projected = rows(frozen, "SELECT projection_id,format_json FROM bee_credential_projections ORDER BY projection_id")
+            frozen:release()
+            local restored = opened(5)
+            test.eq(rows(restored, "SELECT definition_id,format_json FROM bee_credential_definitions ORDER BY definition_id"), snapshots)
+            test.eq(rows(restored, "SELECT projection_id,format_json FROM bee_credential_projections ORDER BY projection_id"), projected)
+            restored:release()
             local downgraded, err = persist.open({resource = RESOURCE, ledger = broker.LEDGER, migrations = {migrations.all()[1]}})
             test.is_nil(downgraded)
             test.eq(err, "credential database schema is newer")

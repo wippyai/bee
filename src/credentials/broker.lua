@@ -19,6 +19,7 @@ local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
 local sources = require("sources")
+local formats = require("formats")
 local M = {}
 M.LEDGER = {table = "bee_credential_schema_migrations", label = "credential"}
 M.MANAGE = "bee.credentials.manage"
@@ -29,14 +30,13 @@ M.DEFAULT_TTL_MS = 3600000
 M.MAX_SECRET_BYTES = 8192
 M.MAX_FILE_BYTES = 65536
 M.MAX_LIST = 64
-M.PROVIDERS = {"claude", "codex"}
 M.SOURCE_KINDS = {"env_variable", "fs_directory"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
 type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
 type AvailabilityRequest = {workspace_id: string, name: string}
-type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, present: boolean, optional: boolean}
+type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, format: unknown, present: boolean, optional: boolean}
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
@@ -77,6 +77,34 @@ local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
     return value
 end
+local function canonical_format(value: formats.Format): (string?, string?)
+    return canonical.encode(value)
+end
+local function stored_format(row: Row): (formats.Format?, string?)
+    local encoded = text(row.format_json)
+    if not encoded or encoded == "" then return nil, "credential format is not frozen" end
+    local ok, parsed = pcall(json.decode, encoded)
+    if not ok then return nil, "frozen credential format is invalid" end
+    local decoded, decode_error = formats.decode(parsed)
+    if not decoded then return nil, decode_error or "frozen credential format is invalid" end
+    return decoded, nil
+end
+local function format_matches(row: Row, selected: formats.Format): boolean
+    local frozen = stored_format(row)
+    if not frozen then return false end
+    local frozen_json = canonical_format(frozen)
+    local selected_json = canonical_format(selected)
+    return frozen_json ~= nil and selected_json ~= nil and frozen_json == selected_json
+end
+local function format_for(admitted: sources.SourceSet, provider: string, kind: string): (formats.Format?, string?, string?)
+    local selected, selected_error = sources.format(admitted, provider)
+    if not selected then return nil, selected_error or "credential format is unavailable", nil end
+    local destination = sources.destination(selected, kind)
+    if not destination then return nil, "credential format has no " .. kind .. " destination", nil end
+    local encoded, encode_error = canonical_format(selected)
+    if not encoded then return nil, encode_error or "credential format is invalid", nil end
+    return selected, nil, encoded
+end
 local function integer(value: unknown): integer?
     if type(value) ~= "number" then return nil end
     return math.floor(value)
@@ -108,7 +136,7 @@ end
 local function definition_view(row: Row): {[string]: unknown}
     return {workspace_id = row.workspace_id, name = row.name, definition_id = row.definition_id, revision = row.revision, provider = row.provider,
         source_kind = row.source_kind, source_ref = row.source_ref, projection_kind = row.projection_kind, destination = row.destination, optional = integer(row.optional) == 1, digest = row.digest,
-        owner_node = row.owner_node, created_at = row.created_at, updated_at = row.updated_at}
+        format = stored_format(row), owner_node = row.owner_node, created_at = row.created_at, updated_at = row.updated_at}
 end
 -- A projection as callers see it: bindings, never bytes.
 local function projection_view(row: Row): {[string]: unknown}
@@ -117,7 +145,7 @@ local function projection_view(row: Row): {[string]: unknown}
         profile_id = row.profile_id, profile_digest = row.profile_digest, binding_digest = row.binding_digest, launch_policy_digest = row.launch_policy_digest,
         provider = row.provider, projection_kind = row.projection_kind, destination = row.destination, materializer = row.materializer,
         materialization_generation = row.materialization_generation, expires_at = row.expires_at, authorization_epoch = row.authorization_epoch,
-        revoked_at = row.revoked_at, created_at = row.created_at}
+        format = stored_format(row), revoked_at = row.revoked_at, created_at = row.created_at}
 end
 -- define: a workspace manager names a credential from a host-admitted
 -- source; the digest covers configuration and source identity, never
@@ -141,8 +169,8 @@ function M.define(value: unknown): Reply
         if type(object.optional) ~= "boolean" then return fail("INVALID", "optional must be a boolean") end
         optional = object.optional :: boolean
     end
-    local provider = bounds.member(object.provider, M.PROVIDERS)
-    if not provider then return fail("INVALID", "provider must be claude or codex") end
+    local provider = bounds.id(object.provider)
+    if not provider then return fail("INVALID", "provider is not an identifier") end
     local source = bounds.object(object.source)
     if not source then return fail("INVALID", "source must be an object") end
     local source_field = bounds.fields(source, {"kind", "ref"})
@@ -160,6 +188,8 @@ function M.define(value: unknown): Reply
     local projection_kind: string
     local destination: string?
     local digest_payload: {[string]: unknown}
+    local selected_format: formats.Format?
+    local format_json: string
 
     if source_kind == "env_variable" then
         if optional then return fail("INVALID", "optional credentials require a file source") end
@@ -170,9 +200,12 @@ function M.define(value: unknown): Reply
         if not sources.admits(admitted, source_ref, workspace_id, provider, "environment") then
             return fail("FORBIDDEN", "source " .. source_ref .. " is not admitted for " .. provider .. " environment projections in workspace " .. workspace_id)
         end
+        local selected, format_error, encoded = format_for(admitted, provider, "environment")
+        if not selected then return fail("INVALID", format_error or "credential format is unavailable") end
+        selected_format, format_json = selected, encoded :: string
         local variable, variable_error = sources.variable(source_ref)
         if not variable then return fail("INVALID", variable_error or "source") end
-        destination = sources.DESTINATIONS[provider]
+        destination = sources.destination(selected_format, "environment")
         digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, variable = variable, projection_kind = projection_kind, destination = destination, optional = optional}
     else
         projection_kind = "file"
@@ -182,10 +215,13 @@ function M.define(value: unknown): Reply
         if not sources.admits(admitted, source_ref, workspace_id, provider, "file") then
             return fail("FORBIDDEN", "source " .. source_ref .. " is not admitted for " .. provider .. " file projections in workspace " .. workspace_id)
         end
+        local selected, format_error, encoded = format_for(admitted, provider, "file")
+        if not selected then return fail("INVALID", format_error or "credential format is unavailable") end
+        selected_format, format_json = selected, encoded :: string
         local directory, dir_error = sources.directory(source_ref)
         if not directory then return fail("INVALID", dir_error or "source") end
-        destination = sources.FILE_DESTINATIONS[provider]
-        local path, path_error = sources.file_path(admitted, source_ref, workspace_id, provider, nil)
+        destination = sources.destination(selected_format, "file")
+        local path, path_error = sources.file_path(admitted, source_ref, workspace_id, provider, nil, selected_format)
         if not path then return fail("FORBIDDEN", path_error or "file source path unavailable") end
         digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory,
             path = path, projection_kind = projection_kind, destination = destination, optional = optional}
@@ -211,12 +247,12 @@ function M.define(value: unknown): Reply
         if id_error or not definition_id then return transaction.failure("STORAGE", "definition id") :: TransactionResult end
         local at = stamp(now_ms())
         if existing then
-            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, optional = ?, digest = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
-                {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, node(), at, workspace_id, name})
+            local _, update_error = tx:execute("UPDATE bee_credential_definitions SET definition_id = ?, revision = ?, provider = ?, source_kind = ?, source_ref = ?, projection_kind = ?, destination = ?, optional = ?, digest = ?, format_json = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
+            {definition_id, current_revision + 1, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, node(), at, workspace_id, name})
             if update_error then return transaction.failure("STORAGE", "replace definition") :: TransactionResult end
         else
-            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, optional, digest, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
-                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, node(), at, at})
+            local _, insert_error = tx:execute("INSERT INTO bee_credential_definitions (workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination, optional, digest, format_json, owner_node, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
+                {workspace_id, name, definition_id, provider, source_kind, source_ref, projection_kind, destination, optional and 1 or 0, digest, format_json, node(), at, at})
             if insert_error then return transaction.failure("STORAGE", "record definition") :: TransactionResult end
         end
         local stored, stored_error = definition_in(tx, workspace_id, name)
@@ -291,9 +327,24 @@ function M.issue_projection(value: unknown): Reply
         db:release()
         return fail("STORAGE", admitted_error or "host sources")
     end
-    if not sources.admits(admitted, text(definition.source_ref) or "", request.workspace_id, text(definition.provider) or "", text(definition.projection_kind) or "environment", request.audience) then
+    local definition_provider = text(definition.provider) or ""
+    local definition_kind = text(definition.projection_kind) or "environment"
+    if not sources.admits(admitted, text(definition.source_ref) or "", request.workspace_id, definition_provider, definition_kind, request.audience) then
         db:release()
         return fail("FORBIDDEN", "the host does not admit audience " .. request.audience .. " for credential " .. request.name)
+    end
+    local selected_format, format_error, format_json = format_for(admitted, definition_provider, definition_kind)
+    if not selected_format then
+        db:release()
+        return fail("CONFLICT", format_error or "credential format is unavailable")
+    end
+    if not format_matches(definition, selected_format) then
+        db:release()
+        return fail("CONFLICT", "credential format changed; redefine before issuing a projection")
+    end
+    if sources.destination(selected_format, definition_kind) ~= definition.destination then
+        db:release()
+        return fail("CONFLICT", "credential destination does not match its frozen format")
     end
     local epoch, epoch_error = epoch_of(db, request.workspace_id)
     if not epoch then
@@ -307,11 +358,11 @@ function M.issue_projection(value: unknown): Reply
     end
     local created = now_ms()
     local _, insert_error = db:execute([[INSERT INTO bee_credential_projections (projection_id, workspace_id, name, definition_id, definition_revision, issuer_owner, issuer_incarnation,
-        subject, audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind, destination, materializer, idempotency_key,
-        materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
+        subject, audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind, destination, format_json, materializer, idempotency_key,
+        materialization_generation, expires_at, authorization_epoch, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)]],
         {projection_id, request.workspace_id, request.name, definition.definition_id, definition.revision, node(), 1, subject, request.audience, request.attempt_id,
             request.profile_id, request.profile_digest, request.binding_digest, request.launch_policy_digest, definition.provider, definition.projection_kind, definition.destination,
-            sources.MATERIALIZER, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
+            format_json, sources.MATERIALIZER, request.idempotency_key, stamp(created + request.ttl), epoch, stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record projection")
@@ -327,7 +378,15 @@ local function file_binding(definition: Row, workspace_id: string, audience: str
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return nil, fail("STORAGE", admitted_error or "host sources") end
     local ref, provider = text(definition.source_ref) or "", text(definition.provider) or ""
-    local path, path_error = sources.file_path(admitted, ref, workspace_id, provider, audience)
+    if not sources.admits(admitted, ref, workspace_id, provider, "file", audience) then
+        return nil, fail("FORBIDDEN", "the host no longer admits this file source")
+    end
+    local selected_format, format_error = format_for(admitted, provider, "file")
+    if not selected_format then return nil, fail("CONFLICT", format_error or "credential format is unavailable") end
+    if not format_matches(definition, selected_format) then
+        return nil, fail("CONFLICT", "credential format changed; redefine before use")
+    end
+    local path, path_error = sources.file_path(admitted, ref, workspace_id, provider, audience, selected_format)
     if not path then return nil, fail("FORBIDDEN", path_error or "file source unavailable") end
     local directory, directory_error = sources.directory(ref)
     if not directory then return nil, fail("INVALID", directory_error or "file source unavailable") end
@@ -355,6 +414,21 @@ local function holds(db: sql.DB, projection: Row, subject: string, audience: str
     if not admitted then return fail("STORAGE", admitted_error or "host sources") end
     if not sources.admits(admitted, text(definition.source_ref) or "", workspace_id, text(definition.provider) or "", text(definition.projection_kind) or "environment", audience) then
         return fail("FORBIDDEN", "the host no longer admits this source for audience " .. audience)
+    end
+    local provider = text(definition.provider) or ""
+    local kind = text(definition.projection_kind) or "environment"
+    local selected_format, format_error = format_for(admitted, provider, kind)
+    if not selected_format then return fail("CONFLICT", format_error or "credential format is unavailable") end
+    if not format_matches(definition, selected_format) or not format_matches(projection, selected_format) then
+        return fail("CONFLICT", "credential format changed; redefine and re-issue before use")
+    end
+    local selected_destination = sources.destination(selected_format, kind)
+    if not selected_destination or definition.destination ~= selected_destination then
+        return fail("CONFLICT", "credential destination does not match its frozen format")
+    end
+    if projection.provider ~= definition.provider or projection.projection_kind ~= definition.projection_kind
+        or projection.destination ~= definition.destination then
+        return fail("CONFLICT", "projection credential metadata does not match its definition")
     end
     if definition.projection_kind == "file" then
         local _, binding_error = file_binding(definition, workspace_id, audience)
@@ -385,9 +459,9 @@ local function decode_availability(value: unknown): (AvailabilityRequest?, strin
     return {workspace_id = workspace_id, name = name}, nil
 end
 local function availability_view(request: AvailabilityRequest, definition_id: string, revision: integer, provider: string,
-    source_kind: string, projection_kind: string, destination: string, present: boolean, optional: boolean): Availability
+    source_kind: string, projection_kind: string, destination: string, format: unknown, present: boolean, optional: boolean): Availability
     return {workspace_id = request.workspace_id, name = request.name, definition_id = definition_id, revision = revision,
-        provider = provider, source_kind = source_kind, projection_kind = projection_kind, destination = destination, present = present, optional = optional}
+        provider = provider, source_kind = source_kind, projection_kind = projection_kind, destination = destination, format = format, present = present, optional = optional}
 end
 -- availability checks the provider-fixed login file without opening it. A
 -- missing stat is the only absence result; a missing or denied fs.get is an
@@ -410,16 +484,16 @@ function M.availability(value: unknown): Reply
         db:release()
         return fail("NOT_FOUND", "credential definition does not exist")
     end
-    local provider = bounds.member(definition.provider, M.PROVIDERS)
+    local provider = bounds.id(definition.provider)
     local source_kind = text(definition.source_kind)
     local projection_kind = text(definition.projection_kind)
     local source_ref = bounds.id(definition.source_ref)
     local definition_id = bounds.id(definition.definition_id)
     local revision = integer(definition.revision)
     local optional_value = integer(definition.optional)
-    local destination = provider and sources.FILE_DESTINATIONS[provider] or nil
+    local destination = provider and text(definition.destination) or nil
     if not provider or source_kind ~= "fs_directory" or projection_kind ~= "file" or not source_ref
-        or not definition_id or not revision or revision < 1 or (optional_value ~= 0 and optional_value ~= 1) or not destination or definition.destination ~= destination then
+        or not definition_id or not revision or revision < 1 or (optional_value ~= 0 and optional_value ~= 1) or not destination then
         db:release()
         if projection_kind ~= "file" then return fail("INVALID", "availability only supports file projections") end
         return fail("INVALID", "credential definition has invalid file metadata")
@@ -432,6 +506,20 @@ function M.availability(value: unknown): Reply
     if not sources.admits(admitted, source_ref, request.workspace_id, provider, "file") then
         db:release()
         return fail("FORBIDDEN", "the host no longer admits this source")
+    end
+    local selected_format, format_error = format_for(admitted, provider, "file")
+    if not selected_format then
+        db:release()
+        return fail("CONFLICT", format_error or "credential format is unavailable")
+    end
+    if not format_matches(definition, selected_format) then
+        db:release()
+        return fail("CONFLICT", "credential format changed; redefine before use")
+    end
+    local selected_destination = sources.destination(selected_format, "file")
+    if not selected_destination or destination ~= selected_destination then
+        db:release()
+        return fail("CONFLICT", "credential destination changed; redefine before use")
     end
     local directory, directory_error = sources.directory(source_ref)
     if not directory then
@@ -456,10 +544,10 @@ function M.availability(value: unknown): Reply
     db:release()
     if info then
         if info.type ~= "file" or info.is_dir == true then return fail("INVALID", "provider login path is not a file") end
-        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, true, optional_value == 1))
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, selected_format, true, optional_value == 1))
     end
     if stat_error and stat_error:kind() == errors.NOT_FOUND then
-        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, false, optional_value == 1))
+        return succeed(availability_view(request, definition_id, revision, provider, source_kind, projection_kind, destination, selected_format, false, optional_value == 1))
     end
     return fail("UNAVAILABLE", "provider login path could not be inspected")
 end
@@ -548,6 +636,11 @@ function M.materialize(value: unknown): Reply
         return fail("STORAGE", "credential optional flag is corrupt")
     end
     local optional = optional_value == 1
+    local frozen_format, frozen_format_error = stored_format(definition)
+    if not frozen_format then
+        db:release()
+        return fail("CONFLICT", frozen_format_error or "credential format is not frozen")
+    end
 
     if proj_kind == "environment" then
         local secret, secret_error = env.get(source_ref)
@@ -556,12 +649,14 @@ function M.materialize(value: unknown): Reply
         if #secret > M.MAX_SECRET_BYTES then return fail("INVALID", "source " .. source_ref .. " exceeds " .. tostring(M.MAX_SECRET_BYTES) .. " bytes") end
         if secret:find("\0", 1, true) or secret:find("[\r\n]") then return fail("INVALID", "source " .. source_ref .. " holds bytes an environment value cannot carry") end
         return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "environment", encoding = "utf-8",
-            generation = generation, generation_key = generation_key, value = secret})
+            generation = generation, generation_key = generation_key, format = frozen_format, value = secret})
     elseif proj_kind == "file" then
-        local expected_dest = sources.FILE_DESTINATIONS[provider]
-        if not expected_dest or destination ~= expected_dest then
+        local file_object = frozen_format.file
+        local content_format = file_object and file_object.content_format or nil
+        local expected_dest = sources.destination(frozen_format, "file")
+        if not expected_dest or destination ~= expected_dest or (content_format ~= "json" and content_format ~= "opaque") then
             db:release()
-            return fail("CONFLICT", "projection destination does not match provider fixed destination")
+            return fail("CONFLICT", "projection destination does not match credential format")
         end
         local path, binding_error = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
         if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
@@ -574,7 +669,7 @@ function M.materialize(value: unknown): Reply
         local file, open_error = volume:open("/" .. path, "r")
         if not file then
             if optional and open_error and open_error:kind() == errors.NOT_FOUND then
-                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",
+                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = frozen_format,
                     generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
                     definition_revision = definition.revision, provider = provider, present = false, optional = true})
             end
@@ -607,14 +702,16 @@ function M.materialize(value: unknown): Reply
         if #content > M.MAX_FILE_BYTES then
             return fail("INVALID", "source file " .. destination .. " exceeds " .. tostring(M.MAX_FILE_BYTES) .. " bytes")
         end
-        local ok, parsed = pcall(json.decode, content)
-        if not ok or type(parsed) ~= "table" then
-            return fail("INVALID", "source file " .. destination .. " is not valid JSON")
+        if content_format == "json" then
+            local ok, parsed = pcall(json.decode, content)
+            if not ok or type(parsed) ~= "table" then
+                return fail("INVALID", "source file " .. destination .. " is not valid JSON")
+            end
         end
         -- Login formats belong to the harness. Do not guess OS-keyring
         -- locations or reinterpret provider fields; only an actual admitted
         -- file can be projected. Its bytes remain outside persisted state.
-        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = "utf-8",
+        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = frozen_format,
             generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
             definition_revision = definition.revision, provider = provider, present = true, optional = optional, value = content})
     else
@@ -702,8 +799,22 @@ function M.list(value: unknown): Reply
     return succeed({workspace_id = workspace_id, definitions = definition_views, projections = projection_views})
 end
 function M.capabilities(): Reply
-    return succeed({credential_broker = true, projection_kinds = {"environment", "file"}, providers = M.PROVIDERS, destinations = sources.DESTINATIONS,
-        file_destinations = sources.FILE_DESTINATIONS, file_projections = true, provider_revocation = false, refresh = false, write_back = false,
+    local admitted, admitted_error = sources.host_sources()
+    if not admitted then return fail("STORAGE", admitted_error or "host sources") end
+    local providers = sources.providers(admitted)
+    local destinations: {[string]: string} = {}
+    local file_destinations: {[string]: string} = {}
+    for _, provider in ipairs(providers) do
+        local selected = sources.format(admitted, provider)
+        if selected then
+            local environment = sources.destination(selected, "environment")
+            local file = sources.destination(selected, "file")
+            if environment then destinations[provider] = environment end
+            if file then file_destinations[provider] = file end
+        end
+    end
+    return succeed({credential_broker = true, projection_kinds = {"environment", "file"}, providers = providers, destinations = destinations,
+        file_destinations = file_destinations, file_projections = true, provider_revocation = false, refresh = false, write_back = false,
         rotation = "next_materialization", repeat_generation = "refused", max_secret_bytes = M.MAX_SECRET_BYTES, max_file_bytes = M.MAX_FILE_BYTES,
         max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = node()})
 end

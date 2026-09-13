@@ -14,10 +14,10 @@ rather than replace an existing login configuration. The allowlist is checked ag
 every `check` and `materialize`, so removing a source or an audience takes
 effect for projections already issued. A projection binds the authenticated subject, an audience, one
 attempt, the profile, binding and launch-policy digests, the provider's
-fixed destination, the materializer identity, an expiry and the workspace
+frozen declared destination, the materializer identity, an expiry and the workspace
 authorization epoch. `check` re-checks the bindings without bytes;
 `availability` is a manager-only metadata probe for an existing file
-definition and reports whether its provider-fixed login file is present;
+definition and reports whether its admitted login file is present;
 `materialize` re-checks them for an admitted materializer and returns the
 value once, in a reply nothing persists, recording the generation key, the
 generation and the materializer's actor. A generation key is accepted once
@@ -37,10 +37,12 @@ bounded bytes. Missing required files, permission failures, invalid JSON and
 other source failures remain errors. Environment definitions always have
 `optional: false`.
 
-The broker projects API keys into `ANTHROPIC_API_KEY` (Claude) or
-`OPENAI_API_KEY` (Codex), or reads an admitted login file. File sources name a
-host-selected `fs.directory` using `source.kind: fs_directory`; their filenames
-are fixed by provider: `auth.json` for Codex and `.credentials.json` for Claude.
+The host's `data.formats` map selects reviewed component-owned registry entries
+whose data declares an environment destination or a relative login layout.
+Claude and Codex declare their API-key destinations and JSON login files;
+Agy declares an opaque file. File sources name a host-selected `fs.directory`
+using `source.kind: fs_directory`. The host source row selects the source path;
+when omitted, it uses the declared login basename.
 Callers cannot choose a path, filename or mount. The host's `bee:credential_file_policy`
 grants filesystem access separately from source metadata and is attached to
 availability for a stat-only check and to materialization for bounded reads.
@@ -61,8 +63,10 @@ hold secret bytes. Only the admitted placement materializer holding
 `bee:credential_materialize_policy` receives bytes once per generation key in a
 transient RPC reply that nothing persists.
 
-File reads stop after 64 KiB plus one byte, reject empty, oversized or invalid
-JSON, and return bytes only in the authorized transient materialization reply.
+File reads stop after 64 KiB plus one byte and reject empty or oversized content.
+JSON formats additionally require a JSON object or array; opaque formats preserve
+arbitrary bytes and report encoding `bytes`. Both return bytes only in the
+authorized transient materialization reply.
 Definition IDs/revisions accompany file replies so placement can bind retained
 login state to the selected source without hashing its contents. The broker
 never searches or exports the OS keyring: when credentials exist only there,
@@ -81,17 +85,23 @@ definitions, projections and the applied migration ledger.
 Migration 4 (`declared_providers`) removes the storage-level Claude/Codex enum
 while retaining a bounded, nonempty provider label and the other constraints.
 The populated upgrade proof preserves definition identities, projection receipts,
-consumed generations and earlier migration records across reopen. The broker
-still admits only its implemented providers; widening storage grants no access.
+consumed generations and earlier migration records across reopen. Provider declarations do not authorize source reads.
 
-The pure `formats` decoder prepares component-owned login layouts: a bounded
-environment destination or relative file path, JSON or opaque content, and up
-to four bounded initialization files. It rejects traversal, sparse arrays,
-duplicate files and file/parent-directory collisions. It grants no filesystem
-authority and is not yet wired into admission or placement. Declarative provider
-activation and Agy single-file login remain unimplemented. Before activation,
-definitions and projections must durably bind the selected layout so an edited
-declaration cannot redirect an already-admitted credential.
+Migration 5 (`frozen_formats`) adds nonsecret `format_json` to definitions and
+projections and backfills the historical Claude/Codex layouts without reading
+registry declarations or credentials. Existing definition digests, identities,
+receipts and retained-home markers are preserved. Unknown historical formats
+remain unbound and are refused. New definitions freeze the decoded host-selected
+layout; projections copy it. Issue, availability and use compare the saved layout
+with the current declaration; use also checks the projection's saved layout.
+Changing the declaration requires explicit redefinition and fresh projection.
+It cannot redirect a previously admitted credential.
+
+The pure `formats` decoder bounds paths, environment names and initialization
+files, rejecting traversal, sparse arrays, duplicate files and file/directory
+collisions. Native placement admits only the broker's frozen format and refuses
+its reserved identity-marker path. The component owns its layout; callers still
+select a credential name and never supply a materialization path.
 
 Test suites enforce these invariants using synthetic workspace-scoped fixtures
 (`.wippy/*-fixture`) and never touch actual host credential files or OS keyrings.
@@ -104,15 +114,16 @@ for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 
 First-use harness setup can create definition-declared credential names from
-host-selected source configuration, without reading the secret. Default Claude
-and Codex window definitions select optional machine-login files under the
+host-selected source configuration, without reading the secret. Default Claude, Codex
+and Agy window definitions select optional machine-login files under the
 host's existing home directory. An absent provider directory/file permits normal
 CLI sign-in in the private retained home; host credential directories are never
 created. The host allowlist owns the relative source path; callers cannot supply
 it. Source metadata and path are bound in the definition digest and rechecked
 before availability or projection use. A changed source requires explicit
 redefinition. Existing definitions with an older digest are refused rather than
-silently retargeted. Source-free executable acceptance proves both present and absent machine login using disposable host homes.
+silently retargeted. Earlier source-free acceptance proves Claude/Codex present and absent login;
+Agy executable acceptance is pending on this branch and uses disposable host homes.
 Docker delivery is unimplemented. Broker `refresh` and
 `write_back` remain false: it neither refreshes provider tokens nor copies
 session changes back to the user's original login files.

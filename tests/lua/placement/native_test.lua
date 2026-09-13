@@ -20,6 +20,11 @@ local protocol = require("protocol")
 local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
+local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
+    path = ".codex/auth.json", content_format = "json", initialize = {}}}
+local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
+    path = ".claude/.credentials.json", content_format = "json",
+    initialize = {{path = ".claude.json", content = '{"hasCompletedOnboarding":true}'}}}}
 local OWNER = "bee.test.owner"
 local DIGEST = string.rep("b", 64)
 local ROOT = "bee.placement.native:project_fixture"
@@ -801,7 +806,7 @@ local function define_tests()
         test.it("seeds fixed private login destinations and preserves harness-refreshed bytes", function()
             local session_key = assert(homes.session_key(OWNER, fresh("login-session")))
             local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", definition_id = "bee.test.codex_login", definition_revision = 1}
+            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.codex_login", definition_revision = 1}
             local seeded, seed_error, resumed = homes.retain_login(session_path, source, "initial-login-bytes")
             test.not_nil(seeded)
             test.is_nil(seed_error)
@@ -818,14 +823,14 @@ local function define_tests()
             local claude_key = assert(homes.session_key(OWNER, fresh("claude-login-session")))
             local claude_session = assert(homes.ensure_session(claude_key))
             local claude = assert(homes.retain_login(claude_session,
-                {provider = "claude", definition_id = "bee.test.claude_login", definition_revision = 1}, "claude-login-bytes"))
+                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1}, "claude-login-bytes"))
             test.is_true(claude:find("/.claude/.credentials.json", 1, true) ~= nil)
             local claude_home, home_error = homes.os_path(claude_session .. "/home")
             if not claude_home then error(tostring(home_error)) end
             test.eq(shell("cat " .. quote.posix(claude_home .. "/.claude.json")), '{"hasCompletedOnboarding":true}')
             test.eq(shell("printf private-settings > " .. quote.posix(claude_home .. "/.claude.json")), "")
             local _, replay_error = homes.retain_login(claude_session,
-                {provider = "claude", definition_id = "bee.test.claude_login", definition_revision = 1}, "stale-login")
+                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1}, "stale-login")
             test.is_nil(replay_error)
             test.eq(shell("cat " .. quote.posix(claude_home .. "/.claude.json")), "private-settings")
         end)
@@ -835,7 +840,7 @@ local function define_tests()
             local session_path, session_error = homes.ensure_session(key)
             if not session_path then error(tostring(session_error)) end
             local target, seed_error = homes.retain_login(session_path,
-                {provider = "claude", definition_id = "bee.test.claude_login", definition_revision = 1, optional = true}, nil)
+                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.claude_login", definition_revision = 1, optional = true}, nil)
             test.not_nil(target)
             test.is_nil(seed_error)
             local home, home_error = homes.os_path(session_path .. "/home")
@@ -845,7 +850,7 @@ local function define_tests()
         test.it("retains optional login absence and preserves later private sign-in and sign-out", function()
             local session_key = assert(homes.session_key(OWNER, fresh("optional-login")))
             local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", definition_id = "bee.test.optional_login", definition_revision = 1, optional = true}
+            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.optional_login", definition_revision = 1, optional = true}
             local created: {[string]: boolean} = {}
             local target, seed_error = homes.retain_login(session_path, source, nil, created)
             test.not_nil(target)
@@ -864,23 +869,23 @@ local function define_tests()
             test.is_nil(logout_error)
             test.eq(shell("test ! -e " .. home .. "/.codex/auth.json && printf absent"), "absent")
             local _, changed_error = homes.retain_login(session_path,
-                {provider = "codex", definition_id = "bee.test.optional_login", definition_revision = 1}, "machine-login")
+                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.optional_login", definition_revision = 1}, "machine-login")
             test.eq(changed_error, "retained login source changed")
             local _, empty_error = homes.retain_login(session_path, source, "")
             test.eq(empty_error, "login bytes exceed bound")
             local _, required_error = homes.retain_login(session_path,
-                {provider = "codex", definition_id = "bee.test.required_login", definition_revision = 1}, nil)
+                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.required_login", definition_revision = 1}, nil)
             test.eq(required_error, "required login bytes missing")
         end)
         test.it("refuses changed or incomplete retained login state without exposing bytes", function()
             local session_key = assert(homes.session_key(OWNER, fresh("login-reject-session")))
             local session_path = assert(homes.ensure_session(session_key))
-            local source = {provider = "codex", definition_id = "bee.test.login_source", definition_revision = 1}
+            local source = {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 1}
             assert(homes.retain_login(session_path, source, "opaque-login-not-in-errors"))
             for _, changed in ipairs({
-                {provider = "claude", definition_id = "bee.test.login_source", definition_revision = 1},
-                {provider = "codex", definition_id = "bee.test.other_login_source", definition_revision = 1},
-                {provider = "codex", definition_id = "bee.test.login_source", definition_revision = 2},
+                {provider = "claude", format = CLAUDE_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 1},
+                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.other_login_source", definition_revision = 1},
+                {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.login_source", definition_revision = 2},
             }) do
                 local _, changed_error = homes.retain_login(session_path, changed, "different-opaque-login-bytes")
                 test.eq(changed_error, "retained login source changed")
@@ -898,6 +903,39 @@ local function define_tests()
             -- the fs.directory manifest's requested mode.
             local root = assert(homes.os_path("/"))
             test.eq(shell("stat -c %a " .. root):match("%d+"), "700")
+        end)
+        test.it("seeds a nested component login without adopting unrelated existing directories", function()
+            local key, key_error = homes.session_key(OWNER, fresh("nested-login"))
+            if not key then error(tostring(key_error)) end
+            local session, session_error = homes.ensure_session(key)
+            if not session then error(tostring(session_error)) end
+            local format = {schema_revision = "bee.credential-format@1", file = {
+                path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque",
+                initialize = {{path = ".gemini/antigravity-cli/initialized", content = "ready"}}}}
+            local source = {provider = "agy", definition_id = "bee.test.nested_login", definition_revision = 1, format = format}
+            local created: {[string]: boolean} = {}
+            local target, seed_error = homes.retain_login(session, source, "opaque\0login", created)
+            if not target then error(tostring(seed_error)) end
+            test.is_true(created[session .. "/home/.gemini"] == true)
+            test.is_true(created[session .. "/home/.gemini/antigravity-cli"] == true)
+            local written, write_error = homes.write_protected(session, ".gemini/config/mcp_config.json", "approved", created, true)
+            if not written then error(tostring(write_error)) end
+            local _, replay_error, replayed = homes.retain_login(session, source, "stale")
+            test.is_nil(replay_error)
+            test.is_true(replayed == true)
+            local bad_key, bad_key_error = homes.session_key(OWNER, fresh("existing-login-parent"))
+            if not bad_key then error(tostring(bad_key_error)) end
+            local bad_session, bad_error = homes.ensure_session(bad_key)
+            if not bad_session then error(tostring(bad_error)) end
+            local made, make_error = homes.write_protected(bad_session, ".gemini/unrelated", "existing", {}, true)
+            if not made then error(tostring(make_error)) end
+            local refused, refusal = homes.retain_login(bad_session, source, "secret")
+            test.is_nil(refused)
+            test.eq(refusal, "retained login parent already exists")
+            local reserved, reserved_error = homes.decode_login_source({provider = "fixture", definition_id = "fixture", definition_revision = 1,
+                format = {schema_revision = "bee.credential-format@1", file = {path = ".bee-retained-login-ready.json", content_format = "opaque"}}})
+            test.is_nil(reserved)
+            test.eq(reserved_error, "login format overlaps retained identity")
         end)
         test.it("keeps a retained home excluded when its placement is uncertain", function()
             local session_ref = fresh("uncertain-session")

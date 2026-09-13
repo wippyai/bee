@@ -209,3 +209,17 @@ entries:
     session_resource: session
     credentials: [claude_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
+
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    environment_destination: ANTHROPIC_API_KEY
+    file:
+      path: .claude/.credentials.json
+      content_format: json
+      initialize:
+      - path: .claude.json
+        content: '{"hasCompletedOnboarding":true}'

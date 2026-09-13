@@ -153,7 +153,7 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
         return fail("DENIED", "file credential projections require a selected retained home"), nil
     end
     local source, source_error = homes.decode_login_source({provider = projection.provider,
-        definition_id = projection.definition_id, definition_revision = projection.definition_revision})
+        definition_id = projection.definition_id, definition_revision = projection.definition_revision, format = projection.format})
     if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
     end

@@ -104,11 +104,26 @@ INSERT INTO bee_credential_definitions_next SELECT * FROM bee_credential_definit
 DROP TABLE bee_credential_definitions;
 ALTER TABLE bee_credential_definitions_next RENAME TO bee_credential_definitions;
 ]]
+-- These are the layouts used before provider declarations. Freeze them during
+-- upgrade without consulting mutable registry entries or reading login bytes.
+local FROZEN_FORMATS_SQL = [[
+ALTER TABLE bee_credential_definitions ADD COLUMN format_json TEXT NOT NULL DEFAULT '';
+ALTER TABLE bee_credential_projections ADD COLUMN format_json TEXT NOT NULL DEFAULT '';
+UPDATE bee_credential_definitions SET format_json = CASE provider
+    WHEN 'codex' THEN '{"schema_revision":"bee.credential-format@1","environment_destination":"OPENAI_API_KEY","file":{"path":".codex/auth.json","content_format":"json","initialize":[]}}'
+    WHEN 'claude' THEN '{"schema_revision":"bee.credential-format@1","environment_destination":"ANTHROPIC_API_KEY","file":{"path":".claude/.credentials.json","content_format":"json","initialize":[{"path":".claude.json","content":"{\"hasCompletedOnboarding\":true}"}]}}'
+    ELSE '' END;
+UPDATE bee_credential_projections SET format_json = CASE provider
+    WHEN 'codex' THEN '{"schema_revision":"bee.credential-format@1","environment_destination":"OPENAI_API_KEY","file":{"path":".codex/auth.json","content_format":"json","initialize":[]}}'
+    WHEN 'claude' THEN '{"schema_revision":"bee.credential-format@1","environment_destination":"ANTHROPIC_API_KEY","file":{"path":".claude/.credentials.json","content_format":"json","initialize":[{"path":".claude.json","content":"{\"hasCompletedOnboarding\":true}"}]}}'
+    ELSE '' END;
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
     {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
     {id = 3, name = "optional_files", sql = "ALTER TABLE bee_credential_definitions ADD COLUMN optional INTEGER NOT NULL DEFAULT 0 CHECK(optional IN (0,1));", rebuild = false},
     {id = 4, name = "declared_providers", sql = DECLARED_PROVIDERS_SQL, rebuild = true},
+    {id = 5, name = "frozen_formats", sql = FROZEN_FORMATS_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

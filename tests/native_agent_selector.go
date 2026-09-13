@@ -887,21 +887,32 @@ type mcpProbeReport struct {
 // driver's generated configuration. The token itself is read from the child
 // environment and is never written to a report or diagnostic.
 func mcpProbeConfig(provider string, args []string) (string, string, bool) {
-	if provider == "claude" {
+	if provider == "agy" {
+		config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "mcp_config.json"))
+		if err != nil {
+			return "", "", false
+		}
+		args = []string{"--mcp-config", string(config)}
+	}
+	if provider == "claude" || provider == "agy" {
 		for index, arg := range args {
 			if arg != "--mcp-config" || index+1 >= len(args) {
 				continue
 			}
 			var document struct {
 				Servers map[string]struct {
-					URL     string            `json:"url"`
-					Headers map[string]string `json:"headers"`
+					URL       string            `json:"url"`
+					ServerURL string            `json:"serverUrl"`
+					Headers   map[string]string `json:"headers"`
 				} `json:"mcpServers"`
 			}
 			if json.Unmarshal([]byte(args[index+1]), &document) != nil {
 				return "", "", false
 			}
 			server, ok := document.Servers["bee"]
+			if provider == "agy" {
+				server.URL = server.ServerURL
+			}
 			if !ok || server.URL == "" {
 				return "", "", false
 			}
@@ -1175,12 +1186,20 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 		providerDirectory, loginFile = ".claude", ".credentials.json"
 		selection, label = "\x1b[B\r", "Claude"
 	}
-	const fixtureLogin = `{"fixture":"machine-login"}`
+	fixtureLogin := `{"fixture":"machine-login"}`
+	if provider == "agy" {
+		providerDirectory, loginFile = filepath.Join(".gemini", "antigravity-cli"), "antigravity-oauth-token"
+		selection, label = "\r", "Antigravity"
+		fixtureLogin = "opaque-fixture-login\x00bytes"
+	}
 	if machineLogin {
 		if err := os.MkdirAll(filepath.Join(home, providerDirectory), 0700); err != nil {
 			return err
 		}
 		if err := os.WriteFile(filepath.Join(home, providerDirectory, loginFile), []byte(fixtureLogin), 0600); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(home, providerDirectory, "machine-only-state"), []byte("not projected"), 0600); err != nil {
 			return err
 		}
 	}
@@ -1266,6 +1285,13 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 		if loginErr != nil || string(login) != fixtureLogin {
 			return errors.New("machine login was not seeded into private home")
 		}
+		if _, err := os.Stat(filepath.Join(childHome, providerDirectory, "machine-only-state")); !os.IsNotExist(err) {
+			return errors.New("unrelated machine state appeared in private home")
+		}
+		info, err := os.Lstat(filepath.Join(childHome, providerDirectory, loginFile))
+		if err != nil || !info.Mode().IsRegular() {
+			return errors.New("private login is not an independent regular file")
+		}
 	} else {
 		if !os.IsNotExist(loginErr) {
 			return errors.New("absent machine login unexpectedly produced a login file")
@@ -1323,7 +1349,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "default Agent picker acceptance failed: %v\n", err)
 		os.Exit(1)
 	}
-	for _, provider := range []string{"codex", "claude"} {
+	for _, provider := range []string{"codex", "claude", "agy"} {
 		for _, present := range []bool{false, true} {
 			if err := managedLaunch(binary, provider, present); err != nil {
 				fmt.Fprintf(os.Stderr, "managed %s launch (machine login=%v) failed: %v\n", provider, present, err)

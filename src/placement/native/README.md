@@ -56,13 +56,17 @@ pre-existing directories.
 
 `homes.retain_login` receives broker file projections during runtime materialization
 only after a launch selects its retained session home. It accepts bounded opaque bytes and
-only two fixed home-relative targets: Codex `.codex/auth.json` and Claude
-`.claude/.credentials.json`. Claude imports also initialize `.claude.json` with only
+a frozen host-selected relative target declared by the harness component.
+Codex declares `.codex/auth.json`, Claude `.claude/.credentials.json`, and Agy
+`.gemini/antigravity-cli/antigravity-oauth-token`. Claude's declaration also initializes `.claude.json` with only
 `hasCompletedOnboarding: true`: the real CLI otherwise asks for a login method
 despite recognizing the imported subscription. This does not trust any project,
 import machine settings or change later harness-owned preferences. An absent
 optional login does not initialize onboarding. Existing retained homes are not
-rewritten.
+rewritten. Nested parent creation records every directory it creates, so later
+immutable driver configuration can share those directories. Existing parents
+are refused unless the current materialization created them; login formats
+cannot overwrite the retained identity marker.
 
 The first seed records a separate nonsecret
 provider/definition-id/definition-revision identity only after the opaque file
@@ -87,8 +91,9 @@ provided bytes remain an error. Native materialization requires explicit `presen
 the broker; absent bytes are accepted only for an optional absent reply. This
 records an unseeded home without placing file credentials in the environment.
 First-use setup preserves the host-selected optional policy and refuses a
-conflicting existing definition. Default Claude/Codex window profiles select optional machine-login sources.
-Source-free executable acceptance proves both present and absent machine login.
+conflicting existing definition. Default Claude/Codex/Agy window profiles select optional machine-login sources.
+Earlier source-free acceptance covers Claude/Codex present and absent login;
+Agy admission and executable acceptance are still being validated on this branch.
 
 ## Capability
 
@@ -161,7 +166,7 @@ A launch names credential projection ids. `prepare` checks each binding
 through `bee.credentials:check` for the owner it admitted with the attempt
 as scope. Environment projections materialize right before the child starts
 at the provider's fixed environment destination. A file projection requires
-the selected retained session home, validates its provider-fixed login
+the selected retained session home, validates its frozen declared login
 destination and nonsecret definition identity, then writes its opaque bytes
 before immutable driver configuration. One file projection may select a
 retained home; matching later resumes preserve provider-refreshed bytes.

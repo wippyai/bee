@@ -2,15 +2,14 @@
 -- source allowlist, the ceiling every definition stays under. Providers map
 -- to the single environment destination each admits in phase 1.
 local registry = require("registry")
+local bounds = require("bounds")
+local formats = require("formats")
 local M = {}
 M.DATABASE_REF = "bee.credentials:database_ref"
 M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER = "bee.placement.native:binding"
--- The destination a provider adapter admits for an environment projection.
-M.DESTINATIONS = {claude = "ANTHROPIC_API_KEY", codex = "OPENAI_API_KEY"}
--- The relative file destination a provider adapter admits for a login file projection.
-M.FILE_DESTINATIONS = {claude = ".credentials.json", codex = "auth.json"}
 type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?}
+type SourceSet = {sources: {Source}, formats: {[string]: string}}
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
     if err or not entry then return nil, label .. " reference unavailable" end
@@ -26,14 +25,27 @@ end
 -- from, with the provider, the projection kinds and the audience (the
 -- placement owner a projection may name) each admits. "*" admits every
 -- workspace or every audience.
-function M.host_sources(): ({Source}?, string?)
+function M.host_sources(): (SourceSet?, string?)
     local sources_entry, sources_error = reference(M.SOURCES_REF, "resource_ref", "host sources")
     if not sources_entry then return nil, sources_error end
     local entry, err = registry.get(sources_entry)
     if err or not entry then return nil, "host sources unavailable" end
     local data = entry.data
-    local sources: {Source} = {}
+    local sources: SourceSet = {sources = {}, formats = {}}
     local list = type(data) == "table" and data.sources or nil
+    local declared_formats = type(data) == "table" and data.formats or nil
+    if declared_formats ~= nil then
+        if type(declared_formats) ~= "table" then return nil, "host credential formats are invalid" end
+        local format_count = 0
+        for provider, ref in pairs(declared_formats :: {[unknown]: unknown}) do
+            if type(provider) ~= "string" or not bounds.id(provider) or type(ref) ~= "string" or not bounds.id(ref) then
+                return nil, "host credential formats are invalid"
+            end
+            format_count = format_count + 1
+            if format_count > 64 then return nil, "host credential formats exceed the limit" end
+            sources.formats[provider] = ref
+        end
+    end
     if type(list) ~= "table" then return sources, nil end
     for _, item in ipairs(list :: {unknown}) do
         if type(item) == "table" then
@@ -55,10 +67,13 @@ function M.host_sources(): ({Source}?, string?)
                     if kind == "environment" or kind == "file" then kinds[#kinds + 1] = kind end
                 end
             end
-            if type(declared.ref) == "string" and type(declared.workspace_id) == "string" and type(declared.audience) == "string"
-                and (M.DESTINATIONS[declared.provider] or M.FILE_DESTINATIONS[declared.provider]) then
-                sources[#sources + 1] = {ref = declared.ref :: string, workspace_id = declared.workspace_id :: string, audience = declared.audience :: string,
-                    provider = declared.provider :: string, projection_kinds = kinds, path = path}
+            local provider = bounds.id(declared.provider)
+            local ref = bounds.id(declared.ref)
+            local workspace_id = bounds.id(declared.workspace_id)
+            local audience = bounds.id(declared.audience)
+            if ref and workspace_id and audience and provider then
+                sources.sources[#sources.sources + 1] = {ref = ref, workspace_id = workspace_id, audience = audience,
+                    provider = provider, projection_kinds = kinds, path = path}
             end
         end
     end
@@ -66,8 +81,8 @@ function M.host_sources(): ({Source}?, string?)
 end
 -- Whether the host admits a source for a workspace, provider and kind, and
 -- when an audience is named, for that audience too.
-function M.admits(sources: {Source}, ref: string, workspace_id: string, provider: string, kind: string, audience: string?): boolean
-    for _, source in ipairs(sources) do
+function M.admits(sources: SourceSet, ref: string, workspace_id: string, provider: string, kind: string, audience: string?): boolean
+    for _, source in ipairs(sources.sources) do
         if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
             and (audience == nil or source.audience == "*" or source.audience == audience) then
             for _, admitted in ipairs(source.projection_kinds) do
@@ -79,15 +94,45 @@ function M.admits(sources: {Source}, ref: string, workspace_id: string, provider
 end
 -- Paths belong to host admission, never to a definition request. Ambiguous
 -- host rows refuse rather than selecting whichever happens to come first.
-function M.file_path(sources: {Source}, ref: string, workspace_id: string, provider: string, audience: string?): (string?, string?)
+local function basename(path: string): string
+    return path:match("[^/]+$") or path
+end
+function M.format(sources: SourceSet, provider: string): (formats.Format?, string?)
+    local ref = sources.formats[provider]
+    if not ref then return nil, "host credential format is not declared for " .. provider end
+    local entry, err = registry.get(ref)
+    if err or not entry then return nil, "credential format " .. ref .. " is unavailable" end
+    local decoded, decode_error = formats.decode(entry.data)
+    if not decoded then return nil, decode_error or "credential format is invalid" end
+    return decoded, nil
+end
+function M.destination(format: formats.Format, kind: string): string?
+    if kind == "environment" and format.environment_destination then
+        return format.environment_destination
+    end
+    if kind == "file" and format.file then
+        return basename(format.file.path)
+    end
+    return nil
+end
+function M.file_path(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?, format: formats.Format?): (string?, string?)
     local selected: string? = nil
-    for _, source in ipairs(sources) do
+    for _, source in ipairs(sources.sources) do
         if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
             and (audience == nil or source.audience == "*" or source.audience == audience) then
             for _, kind in ipairs(source.projection_kinds) do
                 if kind == "file" then
-                    local path = source.path or M.FILE_DESTINATIONS[provider]
-                    if not path then return nil, "unsupported credential provider" end
+                    local path = source.path
+                    if not path then
+                        local selected_format = format
+                        if not selected_format then
+                            local format_error
+                            selected_format, format_error = M.format(sources, provider)
+                            if not selected_format then return nil, format_error or "credential format unavailable" end
+                        end
+                        path = M.destination(selected_format, "file")
+                    end
+                    if not path then return nil, "credential format has no file destination" end
                     if selected ~= nil and selected ~= path then return nil, "host credential paths are ambiguous" end
                     selected = path
                 end
@@ -96,6 +141,18 @@ function M.file_path(sources: {Source}, ref: string, workspace_id: string, provi
     end
     if not selected then return nil, "host file source is not admitted" end
     return selected, nil
+end
+function M.providers(sources: SourceSet): {string}
+    local providers: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, source in ipairs(sources.sources) do
+        if not seen[source.provider] then
+            seen[source.provider] = true
+            providers[#providers + 1] = source.provider
+        end
+    end
+    table.sort(providers)
+    return providers
 end
 -- The env.variable entry behind a source, as configuration only.
 function M.variable(ref: string): ({[string]: unknown}?, string?)

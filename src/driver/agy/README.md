@@ -20,6 +20,9 @@ they remain outside the production pack.
 
 Gateway configuration generates `.gemini/config/mcp_config.json` with a scoped
 Bee URL and environment-token reference. Unsupported provider configuration and
-HTTP hooks are refused. Automatic user-login reuse and a live managed MCP turn
-remain unverified. Driver activation does not supply a production launch profile,
+HTTP hooks are refused. The component declares its opaque login file at
+`.gemini/antigravity-cli/antigravity-oauth-token`. The default host admits only
+that machine file for an optional private copy, preserving private refreshes;
+it does not link the machine directory or copy conversations and settings.
+End-to-end automatic login and a live managed MCP turn remain unverified. Driver activation does not supply a production launch profile,
 credentials or execution permissions.

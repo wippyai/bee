@@ -134,9 +134,9 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 return refused("invalid file login projection")
             end
             local login = reply.value :: {destination: string, value: string?, projection_kind: string,
-                provider: unknown, definition_id: unknown, definition_revision: unknown, optional: unknown, present: unknown}
+                provider: unknown, definition_id: unknown, definition_revision: unknown, optional: unknown, present: unknown, format: unknown}
             local source = homes.decode_login_source({provider = login.provider,
-                definition_id = login.definition_id, definition_revision = login.definition_revision, optional = login.optional})
+                definition_id = login.definition_id, definition_revision = login.definition_revision, optional = login.optional, format = login.format})
             if not source or projected.destination ~= (source.path:match("[^/]+$") :: string)
                 or type(login.optional) ~= "boolean" or type(login.present) ~= "boolean"
                 or (login.present == true and type(projected.value) ~= "string")
@@ -144,7 +144,8 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
             end
-            local _, login_error, replayed = homes.retain_login(selected_home_path, source.source, projected.value, created_parents)
+            local _, login_error, replayed = homes.retain_login(selected_home_path, {provider = source.source.provider, definition_id = source.source.definition_id,
+                definition_revision = source.source.definition_revision, optional = source.source.optional, format = source.format}, projected.value, created_parents)
             if login_error then
                 evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
                 return refused("file login projection refused")

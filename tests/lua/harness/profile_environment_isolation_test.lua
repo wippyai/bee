@@ -155,7 +155,7 @@ local function define_tests()
                 local copied_sources: {{[string]: unknown}} = {}
                 for index, item in ipairs(sources_data.sources :: {{[string]: unknown}}) do copied_sources[index] = item end
                 copied_sources[#copied_sources + 1] = {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}
-                sources.data = {sources = copied_sources}
+                sources.data = {sources = copied_sources, formats = sources_data.formats}
                 local changes = registry.snapshot():changes()
                 changes:update(policy_alpha)
                 changes:update(policy_beta)

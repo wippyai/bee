@@ -386,7 +386,10 @@ local function main(value: unknown)
     local plan, plan_error = machine.plan(transport, admitted.request)
     if not plan then
         local reason = "Managed window plan: " .. tostring(plan_error)
-        show_failure(reason, function(): string return settle_failure(admitted :: admission.Admitted, nil, reason, nil, false) end)
+        -- Planning precedes action admission, so there is no thread action
+        -- to settle yet. Keep the diagnostic visible without manufacturing a
+        -- lifecycle receipt for an identity that was never admitted.
+        show_failure(reason)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end

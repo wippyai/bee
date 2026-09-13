@@ -180,7 +180,7 @@ end
 function M.prepare(value: unknown): Reply
     local request, decode_error = request_codec.decode(value)
     if not request then return fail("INVALID", decode_error or "invalid launch request") end
-    if request.placement_binding_ref ~= M.BINDING then return fail("DENIED", "Docker placement requires its selected binding") end
+    if not request.placement_binding_ref then return fail("DENIED", "Docker placement requires its selected binding") end
     local current = actor()
     if not current then return fail("UNAUTHENTICATED", "no actor") end
     if current ~= request.owner_id then return fail("FORBIDDEN", "owner_id is not the caller") end

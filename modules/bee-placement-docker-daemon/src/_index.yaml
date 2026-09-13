@@ -18,3 +18,102 @@ entries:
     bounds: bee.threads.records:bounds
     inspection: bee.placement.docker:inspection
     docker_client: userspace.docker:docker_client
+- name: placement_service
+  kind: library.lua
+  source: file://lifecycle/service.lua
+  modules: [security, json, process, registry, hash, canonical]
+  imports:
+    bounds: bee.threads.records:bounds
+    resolver: bee.driver:resolver
+    placement_resolver: bee.placement:resolver
+    request: bee.placement:request
+    types: bee.placement:types
+    store: bee.placement.native:store
+    native_service: bee.placement.native:service
+    materialization: bee.placement.native:materialization
+    configuration_protocol: bee.driver:configuration
+    docker_configuration: bee.placement.docker:configuration
+    daemon: bee.placement.docker.daemon:daemon
+    resources: bee.placement.native:resources
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.placement:placement
+    methods:
+      prepare: bee.placement.docker.daemon:prepare
+      start: bee.placement.docker.daemon:start
+      status: bee.placement.docker.daemon:status
+      stop: bee.placement.docker.daemon:stop
+      reconcile: bee.placement.docker.daemon:reconcile
+      cleanup: bee.placement.docker.daemon:cleanup
+      evidence: bee.placement.docker.daemon:evidence
+      attach: bee.placement.docker.daemon:attach
+      capabilities: bee.placement.docker.daemon:capabilities
+      measure_executable: bee.placement.docker.daemon:measure_executable
+      close_stdin: bee.placement.docker.daemon:close_stdin
+  meta: {type: placement, placement_kind: docker}
+- name: prepare
+  kind: function.lua
+  source: file://lifecycle/prepare_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: start
+  kind: function.lua
+  source: file://lifecycle/start_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: status
+  kind: function.lua
+  source: file://lifecycle/status_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: stop
+  kind: function.lua
+  source: file://lifecycle/stop_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: reconcile
+  kind: function.lua
+  source: file://lifecycle/reconcile_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: cleanup
+  kind: function.lua
+  source: file://lifecycle/cleanup_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: evidence
+  kind: function.lua
+  source: file://lifecycle/evidence_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: attach
+  kind: function.lua
+  source: file://lifecycle/attach_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: capabilities
+  kind: function.lua
+  source: file://lifecycle/capabilities_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: measure_executable
+  kind: function.lua
+  source: file://lifecycle/measure_executable_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: close_stdin
+  kind: function.lua
+  source: file://lifecycle/close_stdin_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: container_identity
+  kind: function.lua
+  source: file://lifecycle/container_identity_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}
+- name: reconcile_internal
+  kind: function.lua
+  source: file://lifecycle/reconcile_internal_method.lua
+  method: handle
+  imports: {service: bee.placement.docker.daemon:placement_service}

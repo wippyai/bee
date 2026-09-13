@@ -158,7 +158,7 @@ end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id",
+    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest",
         "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
@@ -173,6 +173,16 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not attempt_id then return nil, "attempt_id is not an identifier" end
     local binding_ref = bounds.id(object.binding_ref)
     if not binding_ref then return nil, "binding_ref is not an identifier" end
+    local placement_binding_ref: string? = nil
+    local placement_binding_digest: string? = nil
+    if object.placement_binding_ref ~= nil then
+        placement_binding_ref = bounds.id(object.placement_binding_ref)
+        if not placement_binding_ref then return nil, "placement_binding_ref is not an identifier" end
+        placement_binding_digest = digest_hex(object.placement_binding_digest)
+        if not placement_binding_digest then return nil, "placement_binding_digest must be a sha256 hex digest" end
+    elseif object.placement_binding_digest ~= nil then
+        return nil, "placement_binding_digest needs placement_binding_ref"
+    end
     local policy_ref = bounds.id(object.policy_ref)
     if not policy_ref then return nil, "policy_ref is not an identifier" end
     local profile_id = bounds.id(object.profile_id)
@@ -281,7 +291,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not timeouts then return nil, timeouts_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
-        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
+        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
         required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts}
     return decoded, nil

@@ -20,6 +20,7 @@ entries:
     definition: bee.harness.launch:definitions
     carrier: bee.harness.carrier:machine
     placement_types: bee.placement:types
+    placement_resolver: bee.placement:resolver
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.window:interrupted
     profiles: bee.harness.profiles:protocol

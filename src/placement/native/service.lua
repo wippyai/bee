@@ -23,6 +23,7 @@ local protocol = require("protocol")
 local registry = require("registry")
 local gateway_configuration = require("gateway_configuration")
 local resolver = require("resolver")
+local placement_resolver = require("placement_resolver")
 local configuration_protocol = require("configuration")
 local preferences = require("preferences")
 local materialization = require("materialization")
@@ -318,6 +319,12 @@ end
 function M.prepare(value: unknown): Reply
     local request, decode_error = request_codec.decode(value)
     if not request then return fail("INVALID", decode_error or "invalid launch request") end
+    -- This implementation is one contract binding. A carrier may select a
+    -- different placement, but it must never route that request into native
+    -- materialization or create a native intent under the wrong identity.
+    if request.placement_binding_ref and request.placement_binding_ref ~= placement_resolver.DEFAULT then
+        return fail("DENIED", "native placement cannot prepare a non-native placement binding")
+    end
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if caller ~= request.owner_id then return fail("FORBIDDEN", "owner_id is not the caller") end
@@ -348,6 +355,11 @@ function M.prepare(value: unknown): Reply
     end
     local prepare_pinned, prepare_pin_error = resolver.pin()
     if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
+    local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)
+    if not selected_placement then return fail("DENIED", placement_error or "native placement binding is unavailable") end
+    if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
+        return fail("CONFLICT", "native placement binding changed since admission")
+    end
     local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target)

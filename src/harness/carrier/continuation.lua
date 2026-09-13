@@ -5,8 +5,9 @@ local record = require("record")
 local hooks = require("hooks")
 local json = require("json")
 local M = {}
+local DEFAULT_PLACEMENT = "bee.placement.native:"
 type Request = {thread_id: string, action_id: string, attempt_id: string, owner_id: string, previous_attempt_id: string, session_ref: string,
-    binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string}
+    binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, placement_binding_ref: string?, placement_binding_digest: string?, placement_methods: {[string]: string}?}
 type Call = (string, unknown) -> (unknown, string?)
 local function value(call: Call, target: string, request: unknown): ({[string]: unknown}?, string?)
     local raw, err = call(target, request)
@@ -17,12 +18,18 @@ local function value(call: Call, target: string, request: unknown): ({[string]: 
     if not result then return nil, target .. " returned an invalid value" end
     return result, nil
 end
+local function target(request: Request, method: string): string?
+    if request.placement_methods then return request.placement_methods[method] end
+    if request.placement_binding_ref == nil then return DEFAULT_PLACEMENT .. method end
+    return nil
+end
 function M.resolve(call: Call, request: Request): (string?, string?)
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
     if not bounds.id(request.session_ref) then return nil, "continuation needs a retained session" end
     local stored, stored_error = value(call, "bee.threads.carrier:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
+    if request.placement_binding_ref and stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
     if stored.attempt_state ~= "ended" or stored.attempt_outcome ~= "succeeded" or stored.open_turn_id ~= nil then return nil, "previous attempt has no successful completed turn" end
     local point, point_error = checkpoint.decode(stored.checkpoint)
     if not point then return nil, "previous checkpoint: " .. tostring(point_error) end
@@ -35,7 +42,9 @@ function M.resolve(call: Call, request: Request): (string?, string?)
     local terminal = point.terminal
     local resume_ref = terminal and bounds.id(terminal.resume_ref) or nil
     if not terminal or terminal.outcome ~= "succeeded" or not resume_ref then return nil, "native harness did not record a successful resumable result" end
-    local status, status_error = value(call, "bee.placement.native:status", {attempt_id = request.previous_attempt_id})
+    local status_target = target(request, "status")
+    if not status_target then return nil, "placement binding has no status method" end
+    local status, status_error = value(call, status_target, {attempt_id = request.previous_attempt_id})
     if not status then return nil, status_error end
     local attempt = bounds.object(status.attempt)
     if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
@@ -63,7 +72,9 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if point.retained_session_ref ~= request.session_ref then return nil, "previous attempt did not use this retained session" end
     local binding = point.gateway_binding
     if not binding then return nil, "previous window has no recorded hook binding" end
-    local status, status_error = value(call, "bee.placement.native:status", {attempt_id = request.previous_attempt_id})
+    local status_target = target(request, "status")
+    if not status_target then return nil, "placement binding has no status method" end
+    local status, status_error = value(call, status_target, {attempt_id = request.previous_attempt_id})
     if not status then return nil, status_error end
     local attempt = bounds.object(status.attempt)
     if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
@@ -144,7 +155,9 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
             -- the retained session home; a refused or uncertain cleanup does
             -- not authorize a replacement attempt.
             if attempt.cleanup_state ~= "complete" then
-                local cleaned, cleanup_error = value(call, "bee.placement.native:cleanup", {attempt_id = request.previous_attempt_id})
+                local cleanup_target = target(request, "cleanup")
+                if not cleanup_target then return nil, "placement binding has no cleanup method" end
+                local cleaned, cleanup_error = value(call, cleanup_target, {attempt_id = request.previous_attempt_id})
                 if not cleaned then return nil, cleanup_error end
                 if cleaned.attempt_id ~= request.previous_attempt_id or cleaned.action_id ~= request.action_id
                     or cleaned.owner_id ~= request.owner_id or cleaned.session_ref ~= request.session_ref then

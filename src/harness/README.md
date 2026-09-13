@@ -56,6 +56,16 @@ Nonsecret environment and driver options come from the selected host policy;
 credentials are projected separately by the broker. The lower carrier and
 placement contracts remain separate execution primitives.
 
+Launch admission resolves the `bee.placement:placement` contract from the
+same pinned registry snapshot as the driver and launch policy. The resulting
+plan records the selected binding ID, its digest and all contract method
+targets; the carrier routes every placement operation through those targets.
+The binding ID is copied into the durable `attempt.prepared` record, so
+continuation, interrupted-window recovery and checkpoint resume refuse a
+changed placement selection. Registry metadata describes the implementation
+kind but does not authorize it. Native window code additionally requires the
+exact native binding ID before opening a terminal.
+
 After a profile has been selected, `bee.harness.launch:setup` accepts its
 workspace, definition and measured plan digest. The caller needs the scoped
 `bee.harness.setup` action; the facade remeasures the plan before it enters a

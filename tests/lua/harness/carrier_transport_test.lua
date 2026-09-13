@@ -12,6 +12,7 @@ local function plan(mode: string, protocol: string): machine.Plan
             executables = {}, environment = {}, gateway_tools = {}, gateway_ttl_ms = 1000, gateway_hooks = {}, fixture = true}
     local placement_request_value: placement_types.LaunchRequest = {idempotency_key = "key", owner_id = "actor", owner_incarnation = 1, action_id = "action", attempt_id = "attempt",
             binding_ref = "binding", policy_ref = "policy", profile_id = "window", binding_digest = "binding-digest", profile_digest = "profile-digest",
+            placement_binding_ref = "bee.placement.native:binding", placement_binding_digest = string.rep("a", 64),
             launch = launch, resources = {}, environment = {}, environment_refs = {}, projections = {}, required_cleanup = "direct_process",
             required_exit_observation = "eof_gated", timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 100, retain_ms = 100}}
     local profile_value: classify.Profile = {id = "window", mode = mode, protocol = protocol, protocol_revision = "1", supported = true,
@@ -26,6 +27,12 @@ local function plan(mode: string, protocol: string): machine.Plan
         profile = profile_value,
         launch = launch,
         policy = policy_value,
+        placement_binding = {binding_id = "bee.placement.native:binding", binding_digest = string.rep("a", 64), placement_kind = "native", methods = {
+            prepare = "bee.placement.native:prepare", start = "bee.placement.native:start", status = "bee.placement.native:status",
+            stop = "bee.placement.native:stop", reconcile = "bee.placement.native:reconcile", cleanup = "bee.placement.native:cleanup",
+            evidence = "bee.placement.native:evidence", attach = "bee.placement.native:attach",
+            capabilities = "bee.placement.native:capabilities", measure_executable = "bee.placement.native:measure_executable",
+            close_stdin = "bee.placement.native:close_stdin"}},
         plan_digest = "plan-digest",
         placement_request = placement_request_value,
         exit_codes_trustworthy = false, prepare_target = "prepare", normalize_target = "normalize",
@@ -90,6 +97,35 @@ local function define_tests()
             test.eq(prepared.epoch, 7)
             test.is_nil(prepared.gateway_binding)
             test.eq(table.concat(calls, ","), "bee.threads.service:admit_action,bee.threads.service:prepare_attempt,bee.threads.carrier:claim,bee.placement.native:prepare")
+        end)
+        test.it("dispatches preparation through the selected placement binding", function()
+            local selected = plan("window", "pty")
+            selected.placement_binding = {binding_id = "example.placement:binding", binding_digest = string.rep("b", 64), placement_kind = "native", methods = {
+                prepare = "example.placement:prepare", start = "example.placement:start", status = "example.placement:status",
+                stop = "example.placement:stop", reconcile = "example.placement:reconcile", cleanup = "example.placement:cleanup",
+                evidence = "example.placement:evidence", attach = "example.placement:attach",
+                capabilities = "example.placement:capabilities", measure_executable = "example.placement:measure_executable",
+                close_stdin = "example.placement:close_stdin"}}
+            selected.placement_request.placement_binding_ref = "example.placement:binding"
+            selected.placement_request.placement_binding_digest = string.rep("b", 64)
+            local calls: {string} = {}
+            local io: machine.IO = {
+                call = function(target: string, value: unknown): (unknown, string?)
+                    calls[#calls + 1] = target
+                    if target == "example.placement:prepare" then test.eq(value, selected.placement_request) end
+                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    return {ok = true, value = {}}, nil
+                end,
+                send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            test.is_false(machine.placement_is_native(selected))
+            local prepared, err = machine.prepare_attempt(io, selected)
+            if not prepared then error(tostring(err)) end
+            test.eq(calls[#calls], "example.placement:prepare")
+            test.is_nil(table.concat(calls, ","):find("bee.placement.native:prepare", 1, true))
         end)
         test.it("refuses window and nonstructured profiles before opening or claiming an attempt", function()
             local calls = 0

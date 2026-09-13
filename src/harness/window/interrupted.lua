@@ -11,6 +11,11 @@ local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
 local M = {}
+local function placement_target(request: continuation.Request, method: string): string?
+    if request.placement_methods then return request.placement_methods[method] end
+    if request.placement_binding_ref == nil then return "bee.placement.native:" .. method end
+    return nil
+end
 local BUDGET_MS = 5000
 local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
 local function key(): string
@@ -41,7 +46,9 @@ function M.recover(request: continuation.Request): (boolean, string?)
     if previous.stored.attempt_state == "ended" then return true, nil end
     -- Reconciliation observes the recorded native identity; a dead presenter
     -- or a copied checkpoint cannot establish process exit.
-    local native, native_error = call("bee.placement.native:reconcile", {attempt_id = request.previous_attempt_id})
+    local reconcile_target = placement_target(request, "reconcile")
+    if not reconcile_target then return false, "placement binding has no reconcile method" end
+    local native, native_error = call(reconcile_target, {attempt_id = request.previous_attempt_id})
     if not native then return false, native_error end
     if not matches(native, request) or native.execution_state ~= "exited" then
         return false, "previous native process exit is not proven"

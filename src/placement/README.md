@@ -12,6 +12,14 @@ directories and receipts; this module owns none of them.
 |---|---|
 | `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; contract `placement` |
 
+The host resolves one `bee.placement:placement` contract binding from the
+registry snapshot used for launch admission. Its digest and method targets
+travel in the measured plan and launch request, and the carrier records the
+binding ID in `attempt.prepared` before placement preparation. Retries and
+recovery verify that recorded ID and digest before dispatching. The native
+implementation rejects requests naming another binding before durable intent;
+native windows require the exact native binding ID.
+
 ## Rules
 
 - A `LaunchRequest` names the owner and its incarnation, the action and

@@ -29,6 +29,14 @@ entries:
   source: file://transitions.lua
   imports:
     types: bee.placement:types
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    types: bee.placement:types
 - name: placement
   kind: contract.definition
   meta:
@@ -50,3 +58,9 @@ entries:
     description: A bounded page of the attempt's transition evidence
   - name: attach
     description: Bind the recipient that receives output and may write input; advances the attachment generation
+  - name: capabilities
+    description: Report the selected placement's measured executable and cleanup capabilities
+  - name: measure_executable
+    description: Measure an absolute executable path under the selected placement's host rules
+  - name: close_stdin
+    description: Close the admitted attempt's stdin when its driver declares session end on stdin closure

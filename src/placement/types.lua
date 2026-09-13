@@ -37,6 +37,9 @@ type ExecutableMeasurement = {revision: string, kind: string, digest: string}
 -- The binding itself is resolved by attempt and carrier epoch at
 -- materialization; no token or binding id travels in the request.
 type Gateway = {endpoint: string, tools: {string}, destination: string, hooks: {string}, hook_destination: string?}
+-- The host-selected implementation of the placement contract. Registry
+-- metadata supplies the method targets; authority remains with the host.
+type PlacementBinding = {binding_id: string, binding_digest: string, placement_kind: string, methods: {[string]: string}}
 type LaunchRequest = {
     preferences: Preferences?,
     idempotency_key: string,
@@ -63,6 +66,8 @@ type LaunchRequest = {
     required_cleanup: Capability,
     required_exit_observation: ExitObservation,
     timeouts: Timeouts,
+    placement_binding_ref: string?,
+    placement_binding_digest: string?,
 }
 type Exit = {code: integer?, signal: integer?}
 -- The projection of an attempt's evidence: execution and cleanup are

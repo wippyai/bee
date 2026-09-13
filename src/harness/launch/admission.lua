@@ -16,6 +16,7 @@ local policy = require("policy")
 local definition = require("definition")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
+local placement_resolver = require("placement_resolver")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
 local profiles = require("profiles")
@@ -42,6 +43,9 @@ type Plan = {
     profile_digest: string,
     policy_ref: string,
     policy_digest: string,
+    placement_binding_ref: string,
+    placement_binding_digest: string,
+    placement_methods: {[string]: string},
     catalog_generation: integer,
     mode: string,
     plan_digest: string,
@@ -164,6 +168,11 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if not policy_entry then return nil, fail("NOT_FOUND", "launch policy " .. launch.policy_ref .. " is not in the registry") end
     local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, preference_value(selected))
     if not launch_policy then return nil, fail("NOT_FOUND", policy_error or "policy") end
+    -- Resolve placement alongside the driver and policy from this immutable
+    -- registry snapshot. The policy may select an implementation; absent that
+    -- field the resolver's native host default is used.
+    local placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
+    if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
     if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
     -- A listed profile needs a host-selected executable, but this passive
     -- read cannot know the driver's eventual launch.executable. The carrier
@@ -187,10 +196,13 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         provider_digest = measured
     end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
+        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
         provider = provider_digest, mode = chosen, saved_profile = selected})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
+        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
+        placement_methods = placement.methods,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
         saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil}, nil
 end
@@ -345,7 +357,9 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
             local recovered, recovery_error = interrupted.recover({thread_id = previous.thread_id,
                 action_id = ids.action_id, attempt_id = ids.attempt_id, previous_attempt_id = previous.previous_attempt_id,
                 owner_id = requester, session_ref = session_ref, binding_ref = plan.binding_ref,
-                binding_digest = plan.binding_digest, profile_id = plan.profile_id, profile_digest = plan.profile_digest})
+                binding_digest = plan.binding_digest, profile_id = plan.profile_id, profile_digest = plan.profile_digest,
+                placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
+                placement_methods = plan.placement_methods})
             if not recovered then return nil, fail("CONFLICT", "cannot recover saved window: " .. tostring(recovery_error)) end
             local resume, resume_error = continuation.resolve_window(function(target: string, input: unknown): (unknown, string?)
                 local reply, err = funcs.call(target, input)
@@ -354,7 +368,9 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
             end, {thread_id = previous.thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id,
                 previous_attempt_id = previous.previous_attempt_id, owner_id = requester, session_ref = session_ref,
                 binding_ref = plan.binding_ref, binding_digest = plan.binding_digest,
-                profile_id = plan.profile_id, profile_digest = plan.profile_digest})
+                profile_id = plan.profile_id, profile_digest = plan.profile_digest,
+                placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
+                placement_methods = plan.placement_methods})
             if not resume then return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error)) end
         end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
@@ -389,7 +405,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
         preferences = preference_value(selected),
-        binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
+        binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
+        placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
         previous_attempt_id = previous and previous.previous_attempt_id or nil}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,

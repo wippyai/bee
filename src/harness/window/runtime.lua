@@ -27,6 +27,11 @@ local restore_view = require("restore_view")
 
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
+local function placement_target(admitted: admission.Admitted, method: string): string?
+    if admitted.request.placement_methods then return admitted.request.placement_methods[method] end
+    if admitted.request.placement_binding_ref == nil then return "bee.placement.native:" .. method end
+    return nil
+end
 
 local function io(): machine.IO
     return {
@@ -102,9 +107,11 @@ end
 local function settle_failure(admitted: admission.Admitted, epoch: integer?, reason: string, gateway_binding: string?, attempt_receipt: boolean, placement_attempt: boolean?): string
     local details: {string} = {}
     if placement_attempt then
-        local stopped, stop_error = call(machine.PLACEMENT .. ":stop", {attempt_id = admitted.attempt_id})
+        local stop_target = placement_target(admitted, "stop")
+        local stopped, stop_error = stop_target and call(stop_target, {attempt_id = admitted.attempt_id}) or nil, "selected placement binds no stop"
         if not stopped then details[#details + 1] = "placement stop: " .. tostring(stop_error) end
-        local cleaned, cleanup_error = call(machine.PLACEMENT .. ":cleanup", {attempt_id = admitted.attempt_id})
+        local cleanup_target = placement_target(admitted, "cleanup")
+        local cleaned, cleanup_error = cleanup_target and call(cleanup_target, {attempt_id = admitted.attempt_id}) or nil, "selected placement binds no cleanup"
         if not cleaned then details[#details + 1] = "placement cleanup: " .. tostring(cleanup_error) end
     end
     if gateway_binding then
@@ -457,9 +464,10 @@ local function main(value: unknown, window: Window)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    local attached, attachment_error = call(machine.PLACEMENT .. ":attach", {
+    local attach_target = machine.placement_target(plan, "attach")
+    local attached, attachment_error = attach_target and call(attach_target, {
         attempt_id = admitted.attempt_id, recipient = process.pid(), generation = prepared.epoch,
-    })
+    }) or nil, "selected placement binds no attach"
     if not attached then
         local reason = "native placement attachment was not confirmed: " .. tostring(attachment_error)
         show_failure(reason, function(): string
@@ -468,9 +476,17 @@ local function main(value: unknown, window: Window)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    if not machine.placement_is_native(plan) then
+        local reason = "native window requires the native placement binding"
+        show_failure(reason, function(): string
+            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+        end)
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+        return
+    end
     local width, height = tty.screen_size()
     local terminal, terminal_error = window.open(admitted.attempt_id, {width = width, height = height,
-        term = "xterm-256color", expected_binding = prepared.gateway_binding})
+        term = "xterm-256color", expected_binding = prepared.gateway_binding, expected_placement_binding = plan.placement_binding.binding_id})
     if not terminal then
         local reason = "native window did not open: " .. tostring(terminal_error)
         show_failure(reason, function(): string

@@ -23,13 +23,13 @@ local settle = require("settle")
 local stream_json = require("stream_json")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
+local placement_resolver = require("placement_resolver")
 local placement_protocol = require("placement_protocol")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
 local hook_records = require("hook_records")
 local M = {}
-M.PLACEMENT_BINDING = "bee.placement.native:binding"
-M.PLACEMENT = "bee.placement.native"
+M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.THREADS = "bee.threads.service"
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway"
@@ -60,6 +60,9 @@ type Request = {
     profile_id: string,
     brief: string,
     policy_ref: string,
+    placement_binding_ref: string?,
+    placement_binding_digest: string?,
+    placement_methods: {[string]: string}?,
     resources: {placement_types.ResourceGrant},
     environment: {[string]: string},
     session_ref: string?,
@@ -77,6 +80,7 @@ type Plan = {
     profile: classify.Profile,
     launch: driver_types.Launch,
     policy: policy.Policy,
+    placement_binding: placement_types.PlacementBinding,
     plan_digest: string,
     placement_request: placement_types.LaunchRequest,
     exit_codes_trustworthy: boolean,
@@ -148,7 +152,7 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
@@ -156,6 +160,11 @@ local function measure(request: Request): (Measured?, string?)
     if not snapshot then return nil, snapshot_error end
     local usable, usable_error = catalog.usable(snapshot)
     if not usable then return nil, usable_error end
+    local selected_placement, placement_error = placement_resolver.resolve(pinned, request.placement_binding_ref)
+    if not selected_placement then return nil, placement_error end
+    if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
+        return nil, "placement binding changed since admission"
+    end
     local binding: classify.Binding? = nil
     for _, candidate in ipairs(usable) do
         if candidate.binding_id == request.binding_ref then binding = candidate end
@@ -222,7 +231,7 @@ local function measure(request: Request): (Measured?, string?)
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
         provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, exchange = exchange,
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
         configuration_digest = configuration_digest, gateway = gateway}
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
@@ -230,7 +239,7 @@ end
 function M.plan(io: IO, request: Request): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.exchange, measured.configuration_digest, measured.gateway
+    local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
     if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
     local resume_ref: string? = nil
@@ -299,22 +308,32 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         -- A production exchange needs a runtime that measures a stream and
         -- a measurement volume proven read-only; the report is measured,
         -- never declared.
-        local capabilities_value, capabilities_error = must(io, M.PLACEMENT .. ":capabilities", {})
-        if capabilities_error then return nil, capabilities_error end
-        local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
-        if reported.streaming ~= true then refuse_exchange("production exchange: this runtime cannot measure an executable as a stream") end
-        if reported.read_only_volume ~= true then refuse_exchange("production exchange: the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail)) end
+        local capabilities_target = placement_binding.methods.capabilities
+        if not capabilities_target then
+            refuse_exchange("production exchange: selected placement cannot measure an executable")
+        else
+            local capabilities_value, capabilities_error = must(io, capabilities_target, {})
+            if capabilities_error then return nil, capabilities_error end
+            local reported = bounds.object((bounds.object(capabilities_value) or {}).executable_measurement) or {}
+            if reported.streaming ~= true then refuse_exchange("production exchange: this runtime cannot measure an executable as a stream") end
+            if reported.read_only_volume ~= true then refuse_exchange("production exchange: the measurement volume is not proven read-only on this runtime: " .. tostring(reported.detail)) end
+        end
     end
     if launch.executable:sub(1, 1) == "/" then
-        local raw, measure_call_error = io.call(M.PLACEMENT .. ":measure_executable", {path = launch.executable})
-        local reply, reply_error = reply_of(raw, measure_call_error)
-        if not reply then return nil, "measure executable: " .. tostring(reply_error) end
-        if reply.ok then
-            local measured = bounds.object(reply.value) or {}
-            measurement = {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
+        local measure_target = placement_binding.methods.measure_executable
+        if measure_target then
+            local raw, measure_call_error = io.call(measure_target, {path = launch.executable})
+            local reply, reply_error = reply_of(raw, measure_call_error)
+            if not reply then return nil, "measure executable: " .. tostring(reply_error) end
+            if reply.ok then
+                local measured = bounds.object(reply.value) or {}
+                measurement = {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
+            elseif exchange and not launch_policy.fixture then
+                local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
+                refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
+            end
         elseif exchange and not launch_policy.fixture then
-            local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
-            refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
+            refuse_exchange("production exchange: selected placement cannot measure the executable")
         end
     elseif exchange and not launch_policy.fixture then
         refuse_exchange("production exchange: the launch policy binds no absolute executable to measure")
@@ -335,17 +354,19 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
-    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
+    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
+        placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
+        launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
     }
-    return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, plan_digest = plan_digest,
+    return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
 end
 -- Thread operations of the open sequence key on the attempt and the step,
@@ -462,6 +483,14 @@ end
 -- child; the selected execution path owns those operations.
 type PreparedAttempt = {epoch: integer, gateway_binding: string?}
 type FailedPreparation = {epoch: integer?, gateway_binding: string?, attempt: boolean}
+-- Every placement operation is selected once in the measured plan. Persisted
+-- and admitted plans always carry the concrete binding and its targets.
+function M.placement_target(plan: Plan, method: string): string?
+    return plan.placement_binding.methods[method]
+end
+function M.placement_is_native(plan: Plan): boolean
+    return plan.placement_binding.binding_id == placement_resolver.DEFAULT
+end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
     local request = plan.request
@@ -484,7 +513,7 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
     step(io, "admitted")
     local _, prepare_error = thread_call(io, request, "prepare_attempt", {action_id = request.action_id, attempt_id = request.attempt_id, expected_previous_attempt_id = request.previous_attempt_id, prepared = {
         binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry,
-        placement_binding = M.PLACEMENT_BINDING, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
+        placement_binding = plan.placement_binding.binding_id, placement_attempt_id = request.attempt_id, plan_digest = plan.plan_digest}}, "prepare")
     if prepare_error then
         if not action_admitted then return nil, prepare_error, nil end
         return nil, prepare_error, {epoch = nil, gateway_binding = nil, attempt = false}
@@ -501,7 +530,9 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
         gateway_revoke(io, gateway_binding)
         return nil, err, {epoch = epoch, gateway_binding = gateway_binding, attempt = attempt_prepared}
     end
-    local _, intent_error = must(io, M.PLACEMENT .. ":prepare", plan.placement_request)
+    local prepare_target = M.placement_target(plan, "prepare")
+    if not prepare_target then return abandon("selected placement binds no prepare") end
+    local _, intent_error = must(io, prepare_target, plan.placement_request)
     if intent_error then return abandon(intent_error) end
     step(io, "placement_intent")
     return {epoch = epoch, gateway_binding = gateway_binding}, nil, nil
@@ -530,14 +561,18 @@ function M.open(io: IO, plan: Plan): (Session?, string?)
     local session = new_session(plan, turn_id, epoch, 0, point)
     local committed, commit_error = M.commit(io, session, {})
     if not committed then return abandon(commit_error or "commit") end
-    local _, attach_error = must(io, M.PLACEMENT .. ":attach", {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
+    local attach_target = M.placement_target(plan, "attach")
+    if not attach_target then return abandon("selected placement binds no attach") end
+    local _, attach_error = must(io, attach_target, {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
     if attach_error then return abandon(attach_error) end
     step(io, "attached")
     if gateway_binding then
         local readiness_error = gateway_ready(io, gateway_binding)
         if readiness_error then return abandon(readiness_error) end
     end
-    local started_value, start_error = must(io, M.PLACEMENT .. ":start", {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
+    local start_target = M.placement_target(plan, "start")
+    if not start_target then return abandon("selected placement binds no start") end
+    local started_value, start_error = must(io, start_target, {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
     if start_error then return abandon(start_error) end
     step(io, "placement_started")
     local attempt = started_value :: placement_types.Attempt
@@ -565,13 +600,16 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     local point, point_error = checkpoint.decode(view.checkpoint)
     if not point then return nil, "stored checkpoint: " .. tostring(point_error) end
     if point.binding_digest ~= plan.binding.binding_digest.entry or point.profile_digest ~= plan.binding.profile_digest.entry then return nil, "pinned measurements changed since the checkpoint" end
+    if view.placement_binding ~= plan.placement_binding.binding_id then return nil, "placement binding changed since the checkpoint" end
 
     local claimed, claim_error = must(io, M.CARRIER_OPS .. ":claim", {thread_id = request.thread_id, idempotency_key = io.key(), attempt_id = request.attempt_id})
     if claim_error then return nil, claim_error end
     local epoch = (claimed :: {carrier_epoch: integer}).carrier_epoch
     local session = new_session(plan, "turn:" .. request.attempt_id .. ":1", epoch, view.checkpoint_revision, checkpoint.rebind(point, epoch))
     session.recovered = true
-    local status_value, status_error = must(io, M.PLACEMENT .. ":status", {attempt_id = request.attempt_id})
+    local status_target = M.placement_target(plan, "status")
+    if not status_target then return nil, "selected placement binds no status" end
+    local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
     if status_error then return nil, status_error end
     local status = status_value :: placement_types.Status
     local attempt = status.attempt
@@ -598,13 +636,17 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
             local committed, commit_error = M.commit(io, session, {})
             if not committed then return abandon(commit_error or "commit") end
         end
-        local _, attach_first_error = must(io, M.PLACEMENT .. ":attach", {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
+        local attach_target = M.placement_target(plan, "attach")
+        if not attach_target then return abandon("selected placement binds no attach") end
+        local _, attach_first_error = must(io, attach_target, {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
         if attach_first_error then return abandon(attach_first_error) end
         if gateway_binding then
             local readiness_error = gateway_ready(io, gateway_binding)
             if readiness_error then return abandon(readiness_error) end
         end
-        local started_value, placement_error = must(io, M.PLACEMENT .. ":start", {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
+        local start_target = M.placement_target(plan, "start")
+        if not start_target then return abandon("selected placement binds no start") end
+        local started_value, placement_error = must(io, start_target, {attempt_id = request.attempt_id, gateway_binding = gateway_binding})
         if placement_error then return abandon(placement_error) end
         attempt = started_value :: placement_types.Attempt
         session.runner = attempt.runner
@@ -637,7 +679,9 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     -- is gone nothing resends output past the checkpoint, no write can be
     -- asked about, and settlement comes from the recorded exit after the
     -- drain.
-    local attached_value, attach_error = must(io, M.PLACEMENT .. ":attach", {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
+    local attach_target = M.placement_target(plan, "attach")
+    if not attach_target then return nil, "selected placement binds no attach" end
+    local attached_value, attach_error = must(io, attach_target, {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
     if attach_error then
         if attempt.execution_state ~= "exited" and attempt.execution_state ~= "uncertain" then return nil, attach_error end
         -- Placement can prove neither exit nor presence and no runner
@@ -928,7 +972,9 @@ local function revalidate_context(io: IO, session: Session, exchange: Exchange, 
     if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
     local proposal_digest = digest_of(proposal_of(session, exchange, state))
     if proposal_digest ~= state.proposal_digest then return "proposal no longer digests as recorded" end
-    local reconciled, reconcile_error = must(io, M.PLACEMENT .. ":reconcile", {attempt_id = session.plan.request.attempt_id})
+    local reconcile_target = M.placement_target(session.plan, "reconcile")
+    if not reconcile_target then return "selected placement binds no reconcile" end
+    local reconciled, reconcile_error = must(io, reconcile_target, {attempt_id = session.plan.request.attempt_id})
     if reconcile_error then return "placement reconcile: " .. reconcile_error end
     local attempt = reconciled :: placement_types.Attempt
     if attempt.execution_state ~= "running" then return "placement is " .. tostring(attempt.execution_state) .. " under its grants and projections" end
@@ -1134,7 +1180,9 @@ end
 -- through placement, which keeps signal and cleanup authority.
 function M.stop_session(io: IO, session: Session): (string, string?)
     if session.exit or not session.runner then return "none", nil end
-    local _, stop_error = must(io, M.PLACEMENT .. ":stop", {attempt_id = session.plan.request.attempt_id, mode = "cooperative"})
+    local stop_target = M.placement_target(session.plan, "stop")
+    if not stop_target then return "none", "selected placement binds no stop" end
+    local _, stop_error = must(io, stop_target, {attempt_id = session.plan.request.attempt_id, mode = "cooperative"})
     if stop_error then return "none", stop_error end
     return "stopping", nil
 end
@@ -1169,7 +1217,9 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         -- A refusal (the attempt already gone, no runner) is a closure
         -- that did not happen, on record with its reason; the stop path
         -- then settles what remains.
-        local raw, call_error = io.call(M.PLACEMENT .. ":close_stdin", {attempt_id = session.plan.request.attempt_id})
+        local close_target = session.plan.placement_binding.methods.close_stdin
+        if not close_target then return "none", "selected placement cannot close stdin" end
+        local raw, call_error = io.call(close_target, {attempt_id = session.plan.request.attempt_id})
         local reply, reply_error = reply_of(raw, call_error)
         if not reply then return "none", reply_error end
         local closed = false
@@ -1216,11 +1266,15 @@ function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
         io.call(M.GATEWAY .. ":hook_reject", {binding_id = binding_id, carrier_epoch = session.epoch, reason = "attempt settled"})
     end
     gateway_revoke(io, binding_id)
-    local status_value, status_error = must(io, M.PLACEMENT .. ":status", {attempt_id = request.attempt_id})
+    local status_target = M.placement_target(session.plan, "status")
+    if not status_target then return nil, "selected placement binds no status" end
+    local status_value, status_error = must(io, status_target, {attempt_id = request.attempt_id})
     if status_error then return nil, status_error end
     local attempt = (status_value :: placement_types.Status).attempt
     if attempt.execution_state == "exited" and attempt.cleanup_state == "pending" then
-        local cleaned, cleanup_error = io.call(M.PLACEMENT .. ":cleanup", {attempt_id = request.attempt_id})
+        local cleanup_target = M.placement_target(session.plan, "cleanup")
+        if not cleanup_target then return nil, "selected placement binds no cleanup" end
+        local cleaned, cleanup_error = io.call(cleanup_target, {attempt_id = request.attempt_id})
         local reply = reply_of(cleaned, cleanup_error)
         if reply and reply.ok then attempt = reply.value :: placement_types.Attempt end
     end

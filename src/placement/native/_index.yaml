@@ -168,6 +168,7 @@ entries:
     configuration: bee.driver:configuration
     preferences: bee.driver:preferences
     resolver: bee.driver:resolver
+    placement_resolver: bee.placement:resolver
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.placement:types
@@ -259,6 +260,9 @@ entries:
       cleanup: bee.placement.native:cleanup
       evidence: bee.placement.native:evidence
       attach: bee.placement.native:attach
+      capabilities: bee.placement.native:capabilities
+      measure_executable: bee.placement.native:measure_executable
+      close_stdin: bee.placement.native:close_stdin
   meta:
     type: placement
     placement_kind: native

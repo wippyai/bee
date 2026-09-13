@@ -21,7 +21,7 @@ local service = require("service")
 local protocol = require("protocol")
 local identity = require("identity")
 
-type Options = {width: integer, height: integer, term: string, expected_binding: string?}
+type Options = {width: integer, height: integer, term: string, expected_binding: string?, expected_placement_binding: string?}
 type Window = {
     send: (Window, tty.TTYEvent) -> (boolean, string?),
     done: (Window) -> exec.TerminalCompletionChannel,
@@ -72,7 +72,7 @@ local function options(value: unknown): (Options?, string?)
     if type(value) ~= "table" then return nil, "window options must be an object" end
     local object = value :: {[string]: unknown}
     for key in pairs(object) do
-        if key ~= "width" and key ~= "height" and key ~= "term" and key ~= "expected_binding" then
+        if key ~= "width" and key ~= "height" and key ~= "term" and key ~= "expected_binding" and key ~= "expected_placement_binding" then
             return nil, "unknown window option " .. tostring(key)
         end
     end
@@ -88,7 +88,9 @@ local function options(value: unknown): (Options?, string?)
     if term == "" or #term > 64 or term:find("[%z%c]", 1) then return nil, "window term is invalid" end
     local expected_binding = object.expected_binding
     if expected_binding ~= nil and not bounds.id(expected_binding) then return nil, "expected_binding is invalid" end
-    return {width = width, height = height, term = term, expected_binding = expected_binding :: string?}, nil
+    local expected_placement_binding = object.expected_placement_binding
+    if expected_placement_binding ~= nil and not bounds.id(expected_placement_binding) then return nil, "expected_placement_binding is invalid" end
+    return {width = width, height = height, term = term, expected_binding = expected_binding :: string?, expected_placement_binding = expected_placement_binding :: string?}, nil
 end
 
 -- Open is the only constructor. It derives the caller from the authenticated
@@ -112,6 +114,12 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     local request, request_error = store.request(row)
     if not request then return fail(db, request_error or "attempt request is unreadable", nil) end
     if request.owner_id ~= owner or request.attempt_id ~= attempt_id then return fail(db, "attempt owner does not match its request", nil) end
+    if chosen.expected_placement_binding and request.placement_binding_ref ~= chosen.expected_placement_binding then
+        return fail(db, "attempt uses another placement binding", nil)
+    end
+    if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native:binding" then
+        return fail(db, "native window cannot use a non-native placement binding", nil)
+    end
     if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
 
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})

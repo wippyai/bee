@@ -149,20 +149,13 @@ local function read_source_file(volume: fs.FS, path: string, content_format: str
 end
 -- Resolve one host-selected setup file into a fresh in-memory format value.
 -- The frozen format in the definition and projection is never mutated.
-local function append_setup(format: formats.Format, path: string, content: string): string?
+local function append_setup(format: formats.Format, path: string, content: string): (formats.Format?, string?)
     local file = format.file
-    if not file then return "credential setup requires a file format" end
-    if #file.initialize >= 4 then return "credential setup exceeds initializer count" end
-    local bytes = 0
-    for _, item in ipairs(file.initialize) do
-        bytes = bytes + #item.content
-        if item.path == path or path:sub(1, #item.path + 1) == item.path .. "/" or item.path:sub(1, #path + 1) == path .. "/" then
-            return "credential setup overlaps login state"
-        end
-    end
-    if bytes + #content > 8192 then return "credential setup exceeds initializer byte limit" end
+    if not file then return nil, "credential setup requires a file format" end
     file.initialize[#file.initialize + 1] = {path = path, content = content}
-    return nil
+    local decoded, decode_error = formats.decode(format)
+    if not decoded then return nil, decode_error or "credential setup format is invalid" end
+    return decoded, nil
 end
 local function definition_of(db: sql.DB, workspace_id: string, name: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? AND name = ?", {workspace_id, name})
@@ -725,8 +718,9 @@ function M.materialize(value: unknown): Reply
         if setup_path then
             local setup_content, setup_status, setup_error = read_source_file(volume, setup_path, "json", 4096, "setup file")
             if setup_status == "PRESENT" and setup_content then
-                local append_error = append_setup(resolved_format, setup_path, setup_content)
-                if append_error then return fail("CONFLICT", append_error) end
+                local appended, append_error = append_setup(resolved_format, setup_path, setup_content)
+                if not appended then return fail("CONFLICT", append_error or "credential setup format is invalid") end
+                resolved_format = appended
             elseif setup_status ~= "MISSING" then
                 return fail(setup_status or "UNAVAILABLE", setup_error or "source setup file unavailable")
             end

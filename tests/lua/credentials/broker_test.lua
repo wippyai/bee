@@ -476,6 +476,55 @@ local function define_tests()
             test.eq(claude_mat.projection_kind, "file")
             test.eq(claude_mat.value, CLAUDE_FILE_SENTINEL)
         end)
+        test.it("resolves optional setup files transiently with bounds and preserves the credential revision", function()
+            local ws = fresh("agy-setup")
+            admit_sources(ws)
+            write_file(CODEX_LOGIN_SOURCE, "antigravity-oauth-token", "opaque-login-bytes")
+            write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, '{"consumerOnboardingComplete":true}')
+            local definition = value(call(manager, "define", {workspace_id = ws, name = "agy_setup", provider = "agy",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}, optional = true}))
+            local digest, revision = definition.digest, definition.revision
+            local attempt = fresh("attempt")
+            local projection = issue(user, ws, "agy_setup", attempt)
+            local present = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-present"}))
+            test.eq(present.format.file.initialize[1].path, AGY_ONBOARDING)
+            test.eq(present.format.file.initialize[1].content, '{"consumerOnboardingComplete":true}')
+            local volume = fs.get(CODEX_LOGIN_SOURCE)
+            if not volume then error("setup source volume unavailable") end
+            local removed, remove_error = volume:remove(AGY_ONBOARDING)
+            if not removed then error("remove setup file: " .. tostring(remove_error)) end
+            local absent = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-absent"}))
+            test.eq(#absent.format.file.initialize, 0)
+            write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, "not-json")
+            test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-invalid"})), "INVALID")
+            write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, string.rep("x", 4097))
+            test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-oversized"})), "INVALID")
+            local entry = registry.get("bee:credential_sources")
+            if not entry then error("credential sources entry") end
+            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+                if item.provider == "agy" then item.setup_path = nil end
+            end
+            local changes = registry.snapshot():changes()
+            changes:update(entry)
+            local applied, apply_error = changes:apply()
+            if not applied then error("remove setup admission: " .. tostring(apply_error)) end
+            local revoked_setup = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-revoked"}))
+            test.eq(#revoked_setup.format.file.initialize, 0)
+            local listed = value(call(manager, "list", {workspace_id = ws}))
+            local definitions = listed.definitions :: {{[string]: unknown}}
+            local persisted: {[string]: unknown}? = nil
+            for _, item in ipairs(definitions) do
+                if item.name == "agy_setup" then persisted = item end
+            end
+            if not persisted then error("Agy setup definition disappeared") end
+            test.eq(persisted.digest, digest)
+            test.eq(persisted.revision, revision)
+        end)
         test.it("fails closed on missing, invalid, empty or oversized login files", function()
             local ws = fresh("ws")
             admit_sources(ws)

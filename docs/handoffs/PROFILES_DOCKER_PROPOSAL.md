@@ -113,6 +113,24 @@ lifecycle owner must serialize restart/control, and these checks cannot fence a
 daemon administrator racing an execution replacement. Full cold screen recovery
 and the complete sandbox/profile/gateway path remain unproved. Global is unchanged.
 
+Native candidate `32e632f` adds the typed `docker_pty` module factory. The host
+binds its daemon client/reference; Lua cannot choose a URL or socket. Attachment
+requires an actor and scope and checks `docker.attach` on the daemon-qualified
+full container ID, with requested image/start/labels as policy metadata. It
+returns the existing runtime `exec.Process` without daemon I/O. Refusal tests
+cover wrong daemon/container/actor, missing scope, malformed fields and changed
+execution time. A real Docker integration uses runtime frames, a system TTY
+viewport grant and Lua `attach_terminal()` for rendering/input/resize/close.
+A child inherits the security scope but not the parent's port and is refused.
+The native Makefile race/vet gate passes; evidence is
+`bee-evidence/0912/docker-module-frame-integration.log`.
+
+This is native frame/grant acceptance, not Bee broker/application acceptance.
+The public launcher does not register the module yet. Host policy must derive
+container permission from admitted records, not the labels supplied to the
+operation. Placement/profile/sandbox and scoped container gateway integration
+remain unfinished; global Bee is unchanged.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

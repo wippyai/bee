@@ -6436,3 +6436,14 @@ gate passes, including real Docker input/resize/exact-container exit. See the
 Docker handoff for evidence and non-atomic daemon-control limitations.
 The component is unregistered: Lua admission, actual Bee terminal grants,
 sandbox/profile and scoped gateway integration remain open. Global is unchanged.
+
+### 2026-09-13 — scoped Docker Lua boundary and runtime terminal grant
+
+Wolfden fact 1619 records native candidate `32e632f`: a host-bound `docker_pty`
+module returning the existing exec handle after daemon-qualified container
+permission checks. Wrong/malformed/unauthenticated requests are refused before
+daemon I/O. The real Docker fixture uses actual runtime frames and a system TTY
+viewport grant; an authorized actor renders, inputs, resizes and closes, while
+a child lacking the non-inherited terminal port is refused. Native race tests
+and vet pass. This is not Bee broker/placement acceptance. Public registration,
+admitted-record policy and Docker profile/gateway integration remain open.

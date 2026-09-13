@@ -14,6 +14,15 @@ documents pack/UI configuration, native factories, typed Lua exports and argumen
 passing. Event adapters depend on pinned runtime engine APIs.
 `filesystem:watch()` remains a proposed runtime extension.
 
+## Offline startup
+
+Normal Bee startup must use embedded code and locally retained deployment artifacts
+without downloading dependencies or requiring a reachable Hive peer. Installing or
+updating modules is an explicit operation. Fresh startup, restored deployments,
+restart and local client reconnect must work with external networking disabled;
+see [offline acceptance](handoffs/OFFLINE_BOOT.md). Local loopback communication
+remains available for clients and scoped MCP endpoints.
+
 ## Build and check
 
 ```sh

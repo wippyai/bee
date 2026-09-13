@@ -44,5 +44,24 @@ not a passing final regression. The final Contents/update source still needs its
 own combined gate.
 
 Global `6cfa0071` now contains source `ef94c84` plus acceptance-only checkpoint
-`aa45f5c`. The full combined run is active in `hub-contents-full-check.log`; its
-result must be checked before claiming the final regression passed.
+`aa45f5c`. The full combined run ended with exit 2 in `hub-contents-full-check.log`: the
+unit subprocess returned `context canceled` during approvals service cases,
+without a failed-case assertion. A focused unit recheck is running in
+`hub-contents-unit-recheck.log`. Neither run establishes full acceptance.
+
+## Installed-app admission seam
+
+The existing protected `bee:application_admission` entry selects each definition's
+policies. `src/core/applications/catalog.lua` validates those bindings, and the
+broker snapshots them at startup. Hub publication writes dependency roots and
+operation receipts only. The governed workspace API stages candidates; it does
+not approve or activate them. The approvals service can bind a durable decision
+to an exact proposal/effect, but no admission effect owner consumes that decision.
+
+The next integration needs a protected, owner-authorized publication operation
+for an exact definition and host-selected binding, followed by catalog refresh.
+An unbound installed app must remain absent from Tools and refuse direct opens.
+Acceptance must show unauthorized decision/consumption denial, digest/revision
+revalidation, limited execution after explicit approval and revocation of future
+opens. Do not give Hub or ordinary apps direct registry publication authority,
+or treat package metadata as an authorization source.

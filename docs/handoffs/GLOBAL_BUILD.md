@@ -25,8 +25,10 @@ runtime/native/patch identity. Backup: `global-before-contents-64610df9`. No own
 were restarted; retained sessions continue running their loaded UI. Settings →
 About on a fresh owner reports `ef94c84`.
 
-Full acceptance on this combined source runs in `hub-contents-full-check.log` and
-is incomplete. The older full run ended in the shared-desktop shutdown case;
+Full acceptance on this combined source ended with `context canceled` during
+approvals unit cases in `hub-contents-full-check.log` (exit 2, no failed-case
+assertion). The focused unit recheck runs in `hub-contents-unit-recheck.log`;
+full acceptance is incomplete. The older full run ended in the shared-desktop shutdown case;
 that exact source/pack case passed alone. See the [completion audit](HUB_COMPLETION.md)
 for remaining update discovery, optional plugin and installed-app admission work.
 

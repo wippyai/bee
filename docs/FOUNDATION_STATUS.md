@@ -3,7 +3,8 @@
 Global `6cfa0071` adds Contents browsing and preserves saved module settings on
 updates, including failed/delayed-read handling. It retains Agent thread messaging.
 79 focused cases, source/pack workflows, native acceptance and live exact-version
-entry preview pass; the final full regression is running. Installed-app admission
+entry preview pass; the final full regression stopped during unit execution
+with `context canceled`, and a focused unit recheck is running. Installed-app admission
 and optional Hub plugin integration remain incomplete. See
 [current build](handoffs/GLOBAL_BUILD.md).
 

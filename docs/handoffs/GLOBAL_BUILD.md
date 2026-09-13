@@ -1,10 +1,10 @@
 # Global Bee build — September 13, 2026
 
-## Candidate: visible Agent launch failures and unstarted-session cleanup
+## Current install: visible Agent launch failures and unstarted-session cleanup
 
 Production `1a0ae17`, binary
 `c78b764d589476ebef58c69286d235766b593c69a4e889f6eb8f34240fa2edaa`,
-is built but not installed. Runtime and native selections match current global
+is installed globally. Runtime and native selections match the preceding build
 `c8537ef7`. All artifact hashes match provenance. Offline boot/restart/reconnect
 passes, as do 865 unit tests and three real failure-view stages: before action
 admission, after action admission, and after placement preparation. The existing
@@ -22,17 +22,23 @@ harness fixtures, saved profiles, scoped MCP and login present/absent. The origi
 failure remains in `agent-failure-native.log`; the diagnostic frame showed the
 expected picker and existing unavailable message, with no sequence advancement.
 
-Full candidate regression is running as session `82438`, log
-`agent-failure-full-check.log`. The earlier stop-only regression `51939` exited 0,
+Full candidate regression session `82438` exited 0, log
+`agent-failure-full-check.log`: 865 units and complete storage, source/pack desktop,
+client, recovery and app acceptance. The earlier stop-only regression `51939` exited 0,
 including storage, source/pack desktop and app acceptance; its evidence remains
 separate from the combined release gate. The prepared installer has passed successful install, replacement
 failure rollback, post-verification rollback and changed-candidate snapshot tests;
-it has not been executed against global Bee. Managed Docker remains unfinished.
+it then installed the candidate successfully. The installed binary and all five
+sidecars were independently compared byte-for-byte with the candidate. Backup:
+`bee-evidence/0912/global-before-agent-failure-c8537ef7`; receipt:
+`agent-failure-global-install.json`. Databases and running nodes were preserved.
+Existing nodes keep their loaded code; newly started nodes use this build.
+Managed Docker remains unfinished.
 
-## Current install: Agy setup and Grok integration
+## Previous install: Agy setup and Grok integration
 
 Candidate SHA `c8537ef7bc83048ea7a052b449f56e8fc27713b67b49999e828d5cff8d86a486`
-contains production `f36e488` and native `79a1cd9` and is now installed globally.
+contains production `f36e488` and native `79a1cd9` and was installed globally.
 Full `make check` repeat session `45783` exited 0: 863 unit tests and the complete
 storage, source/pack desktop, recovery and app acceptance. The first run's
 readiness timeout below remains unexplained; the unchanged isolated fixture and

@@ -2,7 +2,32 @@
 
 ## Current checkpoint — September 13
 
-**Installed globally:** production `f36e488`, binary `c8537ef7`,
+**Installed globally:** production `1a0ae17`, binary `c78b764d`.
+Agent launch failures remain visible and responsive. Stopping an unstarted
+placement atomically retires the attempt and releases its retained session;
+delayed starts are fenced without deleting the retained home. Planning failures
+write no receipt. Confirmed action/attempt failures settle asynchronously using
+existing stop/cleanup operations. Closing during settlement can cancel it and
+leaves the result unconfirmed, as the view states. No abort API or migration was added.
+
+Full regression session `82438` passed: 865 units plus storage, source/pack
+desktop, multi-display/client, recovery and app acceptance. Exact native
+binary/modules/About and all four managed harness selector checks pass,
+including saved profiles, scoped MCP and login present/absent. Offline
+fresh/restart/reconnect and all three launch-failure stages pass. All six
+installed artifacts match the candidate byte-for-byte; the preceding build is
+backed up. Databases and running nodes were preserved. Existing nodes retain
+their loaded code; newly started nodes use this build.
+
+**Remaining agent workflow work:** managed Docker execution, real-provider cold
+recovery across all harnesses, surviving orphan cleanup, and policy-controlled
+sharing. Native Docker module composition is present, but Docker is not yet
+selectable or usable in the Agent UI. See [global build](handoffs/GLOBAL_BUILD.md)
+for release evidence and provider limitations.
+
+### Previous login/hooks checkpoint
+
+Previous production `f36e488`, binary `c8537ef7`,
 adds Grok login/hooks and imports existing Agy onboarding state when creating a
 private harness HOME. All four managed harness fixtures pass through the actual
 picker, login delivery and scoped MCP. Real Grok startup commits SessionStart to
@@ -19,34 +44,6 @@ reports "Not logged in" with the copied saved login both inside Bee and directly
 in a fresh HOME. The source access token is expired; interactive refresh is
 unverified and no Bee-specific cause is established. See
 [global build](handoffs/GLOBAL_BUILD.md) for release evidence.
-
-**Remaining agent workflow work:** managed Docker execution, real-provider cold
-recovery across all harnesses, surviving orphan cleanup, and policy-controlled
-sharing. Some post-picker launch failures still close the window instead of
-leaving a readable failure surface. Native Docker module composition is present
-in the installed build; it does not make Docker selectable or usable in the Agent UI.
-
-The next source change corrects `stop` before placement startup: it atomically
-retires the unstarted attempt and releases its retained session. Both runners
-must claim startup before creating files or a child, so a delayed start is fenced
-without deleting the retained home. No new abort operation or migration is added.
-The baseline regression fails and all 865 fixed unit tests pass, including
-concurrent start/stop in both request orders. Managed-window checks pass too;
-the next full release gate remains pending.
-This change is not in global `c8537ef7`.
-
-The following source integration keeps Agent launch failures visible and
-responsive instead of closing their window. Planning failures write no receipt;
-confirmed action/attempt failures settle asynchronously, and confirmed placement
-intents use the existing stop/cleanup operations. Closing during settlement can
-cancel it and leaves the result unconfirmed, as the view states. All 865 unit
-tests and the Go failure acceptance pass for planning, post-admission preparation,
-and post-placement checkpoint failures, including resize, explicit close and
-release of an unstarted placement. Exact native binary/modules/About and all
-four managed harness selector checks pass, including saved profiles, scoped MCP
-and login present/absent. Offline fresh/restart/reconnect also passes. The
-stop-only full regression passed; the combined release regression is still
-running. These changes are not installed globally.
 
 Previous global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor

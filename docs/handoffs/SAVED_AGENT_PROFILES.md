@@ -131,3 +131,10 @@ guidance, then calls the actual authenticated gateway. Only `thread_read` and
 JSON-RPC invalid-params rejection and leaves the durable thread boundary unchanged.
 This is real Bee admission and gateway I/O with a fixture executable, not a paid
 provider turn. The checks remain outside production packs.
+
+Continuation source now verifies the ended attempt, ownership and unambiguous
+conversation observations before requesting any outstanding cleanup through
+`bee.placement.native:cleanup`. It accepts only a completed cleanup reply for the
+same attempt, owner, action and session. Refusal or uncertainty cannot admit a
+replacement. This does not establish cold-window recovery: the terminal-identity
+runtime requirement and interrupted-turn settlement remain separate gates.

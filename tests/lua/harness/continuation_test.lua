@@ -87,9 +87,16 @@ local function define_tests()
             local more = false
             local denied = false
             local reads = 0
+            local cleanup_calls = 0
+            local cleanup_reply: unknown = {ok = false, error = {code = "CONFLICT"}}
             local function call(target: string, input: unknown): (unknown, string?)
                 if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
                 if target == "bee.placement.native:status" then return {ok = true, value = {attempt = attempt}}, nil end
+                if target == "bee.placement.native:cleanup" then
+                    test.eq((input :: {[string]: unknown}).attempt_id, "previous")
+                    cleanup_calls = cleanup_calls + 1
+                    return cleanup_reply, nil
+                end
                 test.eq(target, "bee.threads.service:read_after")
                 reads = reads + 1
                 if denied then return {ok = false, error = {code = "DENIED"}}, nil end
@@ -118,10 +125,32 @@ local function define_tests()
             denied = false
             for _, state in ipairs({"pending", "uncertain"}) do
                 attempt.cleanup_state = state
-                local before = reads
+                local before = cleanup_calls
                 test.is_nil(continuation.resolve_window(call, request))
-                test.eq(reads, before)
+                test.eq(cleanup_calls, before + 1)
             end
+            local cleaned: {[string]: unknown} = {attempt_id = "previous", action_id = "action", owner_id = "alice",
+                session_ref = "session", execution_state = "exited", cleanup_state = "complete"}
+            cleanup_reply = {ok = true, value = cleaned}
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            for _, field in ipairs({"attempt_id", "action_id", "owner_id", "session_ref", "execution_state", "cleanup_state"}) do
+                local original = cleaned[field]
+                cleaned[field] = "foreign"
+                test.is_nil(continuation.resolve_window(call, request))
+                cleaned[field] = original
+            end
+            local before_invalid = cleanup_calls
+            rows = {}
+            test.is_nil(continuation.resolve_window(call, request))
+            test.eq(cleanup_calls, before_invalid, "no cleanup without a verified conversation")
+            rows = {observation(1025, "provider-session", "old-binding", false, "previous")}
+            attempt.owner_id = "foreign"
+            test.is_nil(continuation.resolve_window(call, request))
+            test.eq(cleanup_calls, before_invalid, "no cleanup of another owner's attempt")
+            attempt.owner_id = "alice"
+            attempt.execution_state = "running"
+            test.is_nil(continuation.resolve_window(call, request))
+            test.eq(cleanup_calls, before_invalid, "no cleanup of a live attempt")
             attempt.cleanup_state = "complete"
             attempt.execution_state = "running"
             test.is_nil(continuation.resolve_window(call, request))

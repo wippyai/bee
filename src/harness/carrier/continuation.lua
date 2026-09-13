@@ -68,7 +68,10 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
     if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
         return nil, "previous native process has another owner or session"
     end
-    if attempt.execution_state ~= "exited" or attempt.cleanup_state ~= "complete" then return nil, "previous native process cleanup is not complete" end
+    if attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
+    if attempt.cleanup_state ~= "complete" and attempt.cleanup_state ~= "pending" and attempt.cleanup_state ~= "uncertain" then
+        return nil, "previous native process cleanup state is invalid"
+    end
 
     local cursor = 0
     local session_id: string? = nil
@@ -127,6 +130,21 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
         cursor = through
         if not page.has_more then
             if not session_id then return nil, "previous window recorded no unambiguous provider conversation" end
+            -- Only an owned, ended attempt with a verified conversation can
+            -- request cleanup. Placement still proves group absence and keeps
+            -- the retained session home; a refused or uncertain cleanup does
+            -- not authorize a replacement attempt.
+            if attempt.cleanup_state ~= "complete" then
+                local cleaned, cleanup_error = value(call, "bee.placement.native:cleanup", {attempt_id = request.previous_attempt_id})
+                if not cleaned then return nil, cleanup_error end
+                if cleaned.attempt_id ~= request.previous_attempt_id or cleaned.action_id ~= request.action_id
+                    or cleaned.owner_id ~= request.owner_id or cleaned.session_ref ~= request.session_ref then
+                    return nil, "cleanup reply belongs to another attempt or session"
+                end
+                if cleaned.execution_state ~= "exited" or cleaned.cleanup_state ~= "complete" then
+                    return nil, "previous native process cleanup is not complete"
+                end
+            end
             return session_id, nil
         end
     end

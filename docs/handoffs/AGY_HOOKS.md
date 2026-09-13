@@ -2,8 +2,8 @@
 
 Installed Agy delivers scoped MCP and appended profile guidance, but refuses
 hook configuration. Follow-up source now renders its window command hooks and
-decodes their wire fields; the native sender passes its focused race tests and vet, while executable
-acceptance remains under integration. No command-hook sender is installed globally yet.
+decodes their wire fields. Focused native race tests/vet, packaged acceptance,
+offline boot and actual managed-provider gateway delivery now pass. No command-hook sender is installed globally yet.
 The existing carrier commits observations and publishes fixed activity labels;
 it does not need an Agy-specific title process.
 
@@ -97,3 +97,22 @@ reconnect with only loopback available (0.104 s warm reconnect). Evidence:
 `agy-hooks-final-offline-boot-check.log`. Full source regression remains running;
 this candidate is not yet installed. Real-provider managed gateway delivery is
 still distinct from both these fixture checks and the earlier live CLI probes.
+
+## Live managed gateway acceptance
+
+The corrected exact candidate also passes an authenticated Agy 1.2.2 run launched
+through Bee's native Agent picker. The disposable project supplied one read-only
+fixture file; Bee generated the private session HOME, scoped MCP configuration
+and command hooks. The actual Agy executable ran a bounded print-mode read task
+inside that managed terminal, without permission bypass flags. It returned
+`SUCCESS` and the exact fixture text. Read-only inspection of Bee's thread store
+confirmed committed `PreToolUse`, `PostToolUse` and `Stop` observations with a
+nonempty conversation identity and no invented stable tool occurrence ID.
+
+The probe used a sanitized environment and copied only the machine login into a
+private fixture HOME; all fixture homes and copied credentials were removed.
+Provider output and credentials were not printed to evidence. Log:
+`bee-evidence/0912/agy-live-managed-gateway.log` (session `85239`, exit 0).
+This closes managed command-hook delivery for the tested read task. It does not
+prove real-provider cold recovery, denied-tool behavior, or interactive prompt
+and permission handling across reconnects.

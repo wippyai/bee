@@ -511,7 +511,7 @@ entries:
     executables: {}
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_codex_window
@@ -531,7 +531,7 @@ entries:
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
     provider_ref: bee.driver.codex:default_provider
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     prepare_options: {}
 - name: launch_policy_agy_window
@@ -550,7 +550,7 @@ entries:
     executables: {}
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     prepare_options: {}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -568,7 +568,7 @@ entries:
     executables: {}
     executable_env: {grok: bee.driver.grok:executable}
     environment: {}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, thread_wait, thread_message]
     prepare_options: {}
 - name: carrier_policy
   kind: security.policy

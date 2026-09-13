@@ -32,10 +32,7 @@ local TOOLS: {Tool} = {
         }}},
 }
 M.TOOLS = TOOLS
--- The old name remains as a read-only compatibility value. Advertised tools
--- carry their own annotations so writing tools cannot be presented as read-only.
-M.ANNOTATIONS = READ_ANNOTATIONS
-M.READ_ANNOTATIONS = READ_ANNOTATIONS
+-- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?
     for _, tool in ipairs(TOOLS) do if tool.name == name then return tool end end

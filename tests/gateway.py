@@ -2,9 +2,8 @@
 managed host that carries the loopback listener, and a probe that drives
 readiness, admission, revocation, thread_read, bounded read-only thread_wait,
 cross-attempt and expiry refusal, drain and epoch fencing against the real
-listener and thread owner. The default source still declares no listener;
-`tests/architecture.py` asserts that. Runs `run` on the staged host, so the
-supervisor lane's pinned lint failure does not block it."""
+listener and thread owner. BEE_GATEWAY_NATIVE=1 exercises the production
+port-zero listener; otherwise the fixture supplies its managed listener."""
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 import os

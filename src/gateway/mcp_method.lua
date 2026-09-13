@@ -29,7 +29,7 @@ local function refused(code: string, message: string): Object
     return mcp.tool_result(json.encode({ok = false, error = {code = code, message = message}}) or "{}", true)
 end
 -- The executor that runs a tool as the bound subject under the tool's
--- host-named scope. The endpoint's own right to invoke the two operations
+-- host-named scope. The endpoint's own right to invoke these operations
 -- is a separate grant; membership is the thread owner's decision.
 local function subject_executor(binding: gateway.Binding, tool: mcp.Tool): (funcs.Executor?, Object?)
     local scope, scope_error = scope_for(tool.policies)

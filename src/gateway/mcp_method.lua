@@ -95,8 +95,8 @@ local function handle(): nil
     local action_id = request:param("action")
     if not action_id or action_id == "" then answer(response, http.STATUS.NOT_FOUND, mcp.failure(nil, mcp.INVALID_REQUEST, "no action")); return nil end
     local host = request:host() or ""
-    if not host:find("^127%.0%.0%.1:%d+$") and not host:find("^localhost:%d+$") then
-        answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "host is not the loopback listener")); return nil
+    if not gateway.accepts_host(host) then
+        answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "host is not the selected listener")); return nil
     end
     if request:header("Origin") then answer(response, http.STATUS.FORBIDDEN, mcp.failure(nil, mcp.INVALID_REQUEST, "browser origins are not admitted")); return nil end
     local authorization = request:header("Authorization") or ""

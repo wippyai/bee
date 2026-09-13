@@ -9,7 +9,7 @@ local function handle(value: unknown): (configuration.Listener?, string?)
     local configured, config_error = configuration.configured()
     if not configured then return nil, config_error end
     local selected: configuration.Listener = {address = configured}
-    if configured ~= "127.0.0.1:0" then return selected, nil end
+    if not configured:match(":0$") then return selected, nil end
     local entry, entry_error = registry.get("bee.gateway:listener_ref")
     if entry_error or not entry then return nil, "gateway listener is not linked" end
     local data = entry.data
@@ -21,10 +21,11 @@ local function handle(value: unknown): (configuration.Listener?, string?)
     if state.status ~= "running" then return nil, "gateway listener is " .. state.status end
     local details = state.details
     if not details then return nil, "gateway listener has not reported its address" end
-    local address = details:match("^service listening on (127%.0%.0%.1:%d+)$")
+    local address = details:match("^service listening on ([%d%.]+:%d+)$")
     if not address or not configuration.valid_address(address, false) then
-        return nil, "gateway listener has not reported a valid loopback address"
+        return nil, "gateway listener has not reported a valid address"
     end
+    if address:match("^([^:]+):") ~= configured:match("^([^:]+):") then return nil, "gateway listener differs from the host-selected interface" end
     if state.started_at <= 0 or state.retry_count < 0 then return nil, "gateway listener has no execution identity" end
     return {address = address, native_key = reference .. ":" .. tostring(state.started_at) .. ":" .. tostring(state.retry_count) .. ":" .. address}, nil
 end

@@ -160,6 +160,10 @@ saved-profiles-check:
 check: saved-profiles-check
 gateway-check:
 	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py
+.PHONY: gateway-container-check
+gateway-container-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/gateway_container.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/gateway_container.go -runtime "$(abspath $(WIPPY))" -interface "$(GATEWAY_INTERFACE)" -image "$(DOCKER_IMAGE)"
 pack: lint
 	mkdir -p dist
 	$(WIPPY) pack dist/bee.wapp

@@ -1,0 +1,39 @@
+version: '1.0'
+namespace: bee.gateway_container
+entries:
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: callback
+  kind: env.variable
+  storage: bee.gateway_container:environment
+  variable: BEE_CONTAINER_CALLBACK
+  readonly: true
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, http_client.request, http_client.private_ip]
+    resources: [bee.gateway:address, bee.gateway:admit, bee.gateway:authorize_materialization,
+      bee.gateway:materialize, bee.gateway:ready, bee.gateway:revoke, bee.threads.service:create,
+      BEE_CONTAINER_CALLBACK_URL, 127.0.0.1]
+    effect: allow
+- name: probe
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [funcs, json, http_client, time, env, logger]
+  security:
+    policies: [bee.gateway_container:policy, bee:gateway_admit_policy,
+      bee:gateway_materialize_policy, bee:gateway_supervision_policy, bee:gateway_readiness_policy,
+      bee:thread_create_policy, bee.gateway_container:callback_policy]
+  meta:
+    command:
+      name: gateway-container-probe
+      security:
+        actor: {id: bee.test.container}
+- name: callback_policy
+  kind: security.policy
+  policy:
+    actions: [env.get]
+    resources: [bee.gateway_container:callback]
+    effect: allow

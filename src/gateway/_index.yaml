@@ -71,6 +71,11 @@ entries:
   kind: library.lua
   source: file://configuration.lua
   modules: [registry, funcs, env]
+  imports:
+    address_value: bee.gateway:address_value
+- name: address_value
+  kind: library.lua
+  source: file://address_value.lua
 - name: hook_executable
   kind: env.variable
   storage: bee.harness.host:environment

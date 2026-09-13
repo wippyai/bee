@@ -23,6 +23,10 @@ local registry = require("registry")
 local configuration = require("configuration")
 local hooks = require("hooks")
 local M = {}
+function M.accepts_host(value: unknown): boolean
+    local current = configuration.current()
+    return current ~= nil and configuration.host_matches(value, current.address)
+end
 M.LEDGER = {table = "bee_gateway_schema_migrations", label = "gateway"}
 M.ADMIT = "bee.gateway.admit"
 M.MANAGE = "bee.gateway.manage"
@@ -165,7 +169,7 @@ end
 local function synchronize_native_listener(db: sql.DB): (boolean, string?)
     local configured, config_error = configuration.configured()
     if not configured then return false, config_error end
-    if configured ~= "127.0.0.1:0" then return true, nil end
+    if not configured:match(":0$") then return true, nil end
     local current, current_error = configuration.current()
     if not current or not current.native_key then return false, current_error or "native listener identity is unavailable" end
     local secret, secret_error = random_text()
@@ -209,7 +213,7 @@ function M.open(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"address"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local address = bounds.line(object.address, 120)
-    if not address or not address:find("^127%.0%.0%.1:%d+$") then return fail("INVALID", "address must be a loopback host and port") end
+    if not address or not configuration.valid_address(address, false) then return fail("INVALID", "address must be a loopback or private IPv4 host and port") end
     local selected, endpoint_error = configuration.current()
     if not selected then return fail("UNAVAILABLE", endpoint_error or "gateway endpoint") end
     if address ~= selected.address then return fail("DENIED", "address is not the host-configured gateway endpoint") end

@@ -29,7 +29,7 @@ local function admitted(request: http.Request, response: http.Response): (gatewa
     local action_id = request:param("action")
     if not action_id or action_id == "" then refuse(response, http.STATUS.NOT_FOUND, "no action"); return nil, nil end
     local host = request:host() or ""
-    if not host:find("^127%.0%.0%.1:%d+$") and not host:find("^localhost:%d+$") then refuse(response, http.STATUS.FORBIDDEN, "host is not the loopback listener"); return nil, nil end
+    if not gateway.accepts_host(host) then refuse(response, http.STATUS.FORBIDDEN, "host is not the selected listener"); return nil, nil end
     if request:header("Origin") then refuse(response, http.STATUS.FORBIDDEN, "browser origins are not admitted"); return nil, nil end
     local authorization = request:header("Authorization") or ""
     local token = authorization:match("^Bearer%s+(%S+)$")

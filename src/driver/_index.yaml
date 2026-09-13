@@ -28,6 +28,7 @@ entries:
   source: file://configuration.lua
   modules: [hash, funcs, security]
   imports:
+    address_value: bee.gateway:address_value
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
 - name: preferences

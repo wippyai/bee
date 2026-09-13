@@ -18,6 +18,35 @@ still running; see the global-build handoff for installation status.
 
 ## Authority boundaries
 
+Host-selected container access uses the same native listener and gateway bindings.
+The default remains `127.0.0.1:0`; an explicit host composition may select a
+loopback or RFC1918 IPv4 literal and port zero. Wildcard, public, link-local and
+hostname addresses are refused. Native address discovery checks that the
+reported interface matches the configured interface. MCP and both hook endpoints
+check the exact Host address and port; `localhost` is accepted only as an alias
+for `127.0.0.1` on that same port. Browser origins remain refused.
+
+The host must also select the readiness permission for that interface. Simple
+security policies support suffix wildcards, so `http://IP:*/ready` is not a
+matching pattern. The container acceptance composes an expression restricted to
+the selected IP, a numeric port, and `/ready`, plus private-IP access to that IP.
+The existing default readiness policy still has that invalid middle wildcard;
+the broader gateway fixture masks it with a wider caller policy. Correcting the
+default policy and its fixed-port fixture composition remains required before
+claiming narrow-policy production readiness.
+
+`make gateway-container-check` takes an explicit `GATEWAY_INTERFACE`, immutable
+locally installed `DOCKER_IMAGE`, and selected `WIPPY`. It uses an isolated store,
+the native random port, and a disposable non-root read-only container. Fixture
+credentials travel through an in-memory callback and container stdin, with no
+host credentials or filesystem mounts. This is a network/credential acceptance
+gate, not managed Docker launch, provider recovery, or sandbox-policy acceptance.
+The real-container gate passes on the selected local Docker bridge with an
+already installed immutable Node image: initialization, exact read/wait tool
+scope, thread read, absent/cross-action/revoked credential refusal, and wrong
+Host/port/Origin refusal. The broader regression for this interface change is
+still running; it is not installed in global Bee.
+
 | Boundary | Rule |
 |---|---|
 | Endpoint scope | Security setup permissions do not grant function calls. The endpoint separately holds exact call grants for address resolution and the three thread operations; tool execution uses the bound subject's selected tool scope. |

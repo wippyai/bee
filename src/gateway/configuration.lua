@@ -3,6 +3,7 @@
 local registry = require("registry")
 local funcs = require("funcs")
 local env = require("env")
+local address_value = require("address_value")
 local M = {}
 M.DESTINATION = "BEE_GATEWAY_TOKEN"
 M.HOOK_DESTINATION = "BEE_GATEWAY_HOOK_TOKEN"
@@ -10,20 +11,17 @@ M.SERVER = "bee"
 M.ENDPOINT = "bee:gateway_endpoint"
 type Object = {[string]: unknown}
 type Listener = {address: string, native_key: string?}
-function M.valid_address(value: unknown, allow_zero: boolean): boolean
-    if type(value) ~= "string" then return false end
-    local port_text = (value :: string):match("^127%.0%.0%.1:(%d+)$")
-    if not port_text then return false end
-    local port = tonumber(port_text)
-    return port ~= nil and port >= (allow_zero and 0 or 1) and port <= 65535 and tostring(port) == port_text
-end
+M.valid_address = address_value.valid
+-- Host headers must name this exact listener, including its selected port.
+-- localhost is an alias only for the default loopback address.
+M.host_matches = address_value.host_matches
 function M.configured(): (string?, string?)
     local entry, err = registry.get(M.ENDPOINT)
     if err or not entry then return nil, "gateway endpoint is not configured by the host" end
     local data = entry.data
     if type(data) ~= "table" then return nil, "gateway endpoint has no data" end
     local address = (data :: Object).address
-    if not M.valid_address(address, true) then return nil, "gateway endpoint must be a loopback host and port" end
+    if not M.valid_address(address, true) then return nil, "gateway endpoint must be a loopback or private IPv4 host and port" end
     return address :: string, nil
 end
 function M.current(): (Listener?, string?)

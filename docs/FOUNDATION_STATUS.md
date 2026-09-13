@@ -1,5 +1,32 @@
 # Foundation status
 
+## Current checkpoint — September 13
+
+Global `dff3bf11` contains production `4b43cf1`: offline embedded/local startup,
+saved Agent profiles, appended guidance, effort choices, scoped MCP and corrected
+live PTY supervision. New/Edit/Remove and native saved-profile launch pass with
+fixture harnesses. The long-lived MCP test fails on the previous binary and passes
+after the supervision fix. All 836 units, full native executable acceptance and
+network-disabled fresh/restored/reconnect checks pass. Full `make check` for the
+preceding profile UI revision `017e55d` passed; the `4b43cf1` full check is running.
+
+Source `1de5bc0` additionally installs the window's control listener before
+publishing `running`, with a compare-and-set against `starting`. Its native PTY
+check passes; this follow-up is not yet in global Bee. See
+[global build](handoffs/GLOBAL_BUILD.md) for exact artifacts and preserved state.
+
+Cold Agent recovery remains incomplete: the terminal transfer does not preserve
+the process identity needed to prove process-group cleanup, and recovery must
+also settle interrupted work and establish a provider conversation reference.
+Agy/Grok window adapters do not provide the Claude/Codex hook path. Managed Docker,
+policy-controlled profile sharing, and end-to-end governed overlay activation
+also remain unfinished. See [runtime requirements](handoffs/STATUS_RUNTIME_GATE.md),
+[saved profiles](handoffs/SAVED_AGENT_PROFILES.md) and [Hub completion](handoffs/HUB_COMPLETION.md).
+Tests and development dependencies remain outside production packs. No runtime PR
+was merged for these changes.
+
+## Earlier checkpoints
+
 Global `dac1ba49` refreshes protected application admission and scopes without
 replacing existing producers. Source/pack broker and attachment checks, 787 units,
 complete native acceptance and real native Modules install/update/uninstall pass.

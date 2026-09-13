@@ -333,3 +333,28 @@ Native-window identity capture and cold conversation recovery acceptance remain
 in progress. Neither PID availability nor terminal completion proves process-group
 absence; existing cleanup must still establish that independently. The global
 Bee binary remains unchanged by this candidate.
+
+## September 13: optional Docker composition candidate
+
+The Docker assembly candidate includes the existing runtime PR
+[#745](https://github.com/wippyai/runtime/pull/745), head `9444ddb1db`, as a
+checksummed patch on the unchanged runtime pin. This keeps terminal shutdown
+independent of blocked input; it adds no remote-monitor or ingress API. The PR
+remains open, assigned to Rodrigo (`skhaz`), and unmerged. The patched terminal
+proxy race/integration suite and vet pass against the candidate's exact dependency
+graph; the native Docker attachment integration/race/vet gate passes there too.
+
+The native selection includes `79a1cd9` desktop and Docker factories from one
+module version. Builder PR #8, now stacked on the existing launch-wiring PR #7,
+preserves one instance per factory and supplies the selected instance's launch
+callback. Neither builder PR is merged. `make native-tools` uses the pinned
+builder commit `5e69ee6` without an override.
+
+The actual composed executable passes strict Lua types, authorized handle
+construction and denied attachment with zero daemon requests. With Docker
+configuration absent, the typed module loads and attachment reports unconfigured;
+ordinary boot remains available. Partial or malformed explicit bindings refuse.
+The preceding candidate failed this unconfigured-boot probe, so this is a
+regression proof, not an inferred guarantee. `make docker-boot-check` runs the
+probe outside production packs. Managed Docker placement and gateway wiring
+remain unfinished; this candidate is not a global installation.

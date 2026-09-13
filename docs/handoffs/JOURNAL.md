@@ -6602,3 +6602,20 @@ lifetime, offline behavior and tests without finding a concrete issue. Builder
 Its full check and offline four-factory compile/run proof pass. Wolfden 1643
 records the exact commits and scope. Global remains unchanged; managed Docker
 launch and the container gateway remain unfinished.
+
+### September 13 — Actual Docker boot composition and optional-startup correction
+
+Built through normal pinned `make native-tools`, composing native `79a1cd9`
+with builder `5e69ee6` (PR #8 stacked on #7). The unconfigured-Docker boot failure
+was reproduced in both the native unit and actual executable before correction.
+Both configured and unconfigured strict-Lua/process probes now pass, proving
+exact-container policy refusal and no daemon requests during boot/handle creation.
+The native Docker integration/race/vet and terminal proxy integration/race/vet
+pass on the exact runtime pin plus six patches. The sixth patch is existing
+runtime PR #745, still open and assigned to Rodrigo; no PR was merged.
+
+The executable SHA starts `fc8d6560`; evidence is in `bee-evidence/0912` under
+`docker-optional-*`, `docker-composed-*` and `bee-docker-pinned-build.log`.
+This candidate adds no selectable Docker Agent yet and is not globally installed.
+Luna is independently checking the real Agy interactive managed TUI in disposable
+state. The earlier source environment/inspection full gate remains session 75095.

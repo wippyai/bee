@@ -131,3 +131,8 @@ only field paths and environment names. Retained content still requires exact
 replay, so changed binding credentials do not authorize overwriting a retained
 configuration. Agy cold recovery remains unavailable until safe configuration
 replacement is implemented and verified.
+
+See [the verified filesystem boundary](RETAINED_CONFIGURATION_FS.md) before
+implementing retained configuration replacement. Lua already exposes file sync;
+`os.Root` follows in-root symlinks, and `lstat` followed by rename is not enough
+to guarantee session-parent identity across the operation.

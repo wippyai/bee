@@ -14,6 +14,11 @@ end
 local function delivery(files: {unknown}?, arguments: {unknown}?): {[string]: unknown}
     return {arguments = arguments or {}, files = files or {}}
 end
+local function measured_digest(value: unknown, target: string): string
+    local digest, digest_error = configuration.digest(value, target)
+    if not digest then error(tostring(digest_error or "configuration digest failed")) end
+    return digest
+end
 local function refused(value: unknown, provider: string?)
     local result, err = configuration.decode_reply(value, provider)
     test.is_nil(result); test.is_true(err ~= nil)
@@ -112,6 +117,130 @@ local function define_tests()
                 {fixture = false, gateway_section = "x"}, {fixture = false, gateway = gateway("a"), home_directory = "relative"},
                 {fixture = false, gateway = {endpoint = "example.test:1", action_id = "a", tools = {"x"}, hooks = {}, token_environment = "TOKEN"}},
             }) do test.is_nil(configuration.decode_request(value)) end
+        end)
+        test.it("decodes instruction_builder and measures its selection in configuration digest", function()
+            local valid_builder = {func_id = "bee.driver:fixture_builder_ok", args = {tag = "unit", count = 1}}
+            local request = {fixture = false, instruction_builder = valid_builder}
+            local decoded, err = configuration.decode_request(request)
+            if not decoded then error(tostring(err)) end
+            test.is_true(decoded.instruction_builder ~= nil)
+            test.eq(decoded.instruction_builder and decoded.instruction_builder.func_id, "bee.driver:fixture_builder_ok")
+            test.eq(decoded.instruction_builder and decoded.instruction_builder.args.tag, "unit")
+
+            -- Digest measurement
+            local digest1 = measured_digest(request, "bee.driver.claude:configure")
+            -- Key ordering in args should produce the same canonical digest
+            local reordered = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_ok", args = {count = 1, tag = "unit"}}}
+            local digest_reordered = measured_digest(reordered, "bee.driver.claude:configure")
+            test.eq(digest1, digest_reordered)
+
+            -- Changing func_id changes digest
+            local diff_func = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_bad_output", args = {tag = "unit", count = 1}}}
+            test.neq(digest1, measured_digest(diff_func, "bee.driver.claude:configure"))
+
+            -- Changing args changes digest
+            local diff_args = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_ok", args = {tag = "different", count = 1}}}
+            test.neq(digest1, measured_digest(diff_args, "bee.driver.claude:configure"))
+
+            -- Malformed args / builder validation
+            for _, invalid in ipairs({
+                "not_an_object",
+                {args = {}}, -- missing func_id
+                {func_id = "", args = {}}, -- empty func_id
+                {func_id = "bad\0func", args = {}}, -- non-identifier func_id
+                {func_id = "bee.driver:builder"}, -- missing args
+                {func_id = "bee.driver:builder", args = "not_an_object"}, -- non-object args
+                {func_id = "bee.driver:builder", args = {large = string.rep("x", 4097)}}, -- oversized args
+                {func_id = "bee.driver:builder", args = {}, extra_field = "invalid"}, -- unexpected fields
+            }) do
+                test.is_nil(configuration.decode_request({fixture = false, instruction_builder = invalid}))
+            end
+        end)
+        test.it("accepts an empty memory result without adding or replacing guidance", function()
+            local builder = {func_id = "bee.driver:fixture_builder_empty", args = {}}
+            local empty, empty_error = configuration.call("bee.driver.agy:configure", {fixture = false, instruction_builder = builder})
+            if not empty then error(tostring(empty_error)) end
+            test.eq(#empty.files, 0)
+            test.eq(#empty.arguments, 0)
+            local retained, retained_error = configuration.call("bee.driver.claude:configure", {
+                fixture = false, instructions = "Persistent guidance.", instruction_builder = builder,
+            })
+            if not retained then error(tostring(retained_error)) end
+            test.eq(retained.arguments[#retained.arguments - 1], "--append-system-prompt")
+            test.eq(retained.arguments[#retained.arguments], "Persistent guidance.")
+        end)
+        test.it("evaluates builder in configuration.call, appends with blank line, and enforces bounds", function()
+            local static_text = "Static profile guidance."
+            local builder_target = "bee.driver:fixture_builder_ok"
+            local request = {
+                fixture = false,
+                instructions = static_text,
+                instruction_builder = {func_id = builder_target, args = {tag = "custom_test"}},
+            }
+
+            -- Static + Dynamic append for Claude
+            local claude_delivery, claude_err = configuration.call("bee.driver.claude:configure", request)
+            if not claude_delivery then error(tostring(claude_err)) end
+            local expected_combined = "Static profile guidance.\n\nDynamic memory rules from custom_test"
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt")
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments], expected_combined)
+
+            -- Static + Dynamic append for Agy
+            local agy_delivery, agy_err = configuration.call("bee.driver.agy:configure", request)
+            if not agy_delivery then error(tostring(agy_err)) end
+            test.eq(#agy_delivery.arguments, 0)
+            test.eq(agy_delivery.files[1].path, ".gemini/GEMINI.md")
+            test.eq(agy_delivery.files[1].content, expected_combined)
+
+            -- Dynamic only (no static instructions)
+            local dynamic_only_request = {
+                fixture = false,
+                instruction_builder = {func_id = builder_target, args = {tag = "standalone"}},
+            }
+            local dyn_delivery, dyn_err = configuration.call("bee.driver.agy:configure", dynamic_only_request)
+            if not dyn_delivery then error(tostring(dyn_err)) end
+            test.eq(dyn_delivery.files[1].content, "Dynamic memory rules from standalone")
+
+            -- Malformed output: non-string
+            local bad_output_req = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_bad_output", args = {}}}
+            local res1, err1 = configuration.call("bee.driver.agy:configure", bad_output_req)
+            test.is_nil(res1)
+            test.is_true(err1 ~= nil and tostring(err1):find("output must be a plain string", 1, true) ~= nil)
+
+            -- Malformed output: control bytes
+            local control_req = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_control_chars", args = {}}}
+            local res2, err2 = configuration.call("bee.driver.agy:configure", control_req)
+            test.is_nil(res2)
+            test.is_true(err2 ~= nil and tostring(err2):find("unsupported control bytes", 1, true) ~= nil)
+
+            -- Malformed output: oversized builder output
+            local oversized_req = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_oversized", args = {}}}
+            local res3, err3 = configuration.call("bee.driver.agy:configure", oversized_req)
+            test.is_nil(res3)
+            test.is_true(err3 ~= nil and tostring(err3):find("up to 4096 bytes", 1, true) ~= nil)
+
+            -- Malformed output: combined oversized (static + dynamic > 4096 bytes)
+            local large_static = string.rep("A", 3000)
+            local combined_oversized_req = {
+                fixture = false,
+                instructions = large_static,
+                instruction_builder = {func_id = builder_target, args = {tag = string.rep("B", 1500)}},
+            }
+            local res4, err4 = configuration.call("bee.driver.agy:configure", combined_oversized_req)
+            test.is_nil(res4)
+            test.is_true(err4 ~= nil and tostring(err4):find("combined instructions must be nonempty text up to 4096 bytes", 1, true) ~= nil)
+
+            -- Builder runtime error
+            local error_req = {fixture = false, instruction_builder = {func_id = "bee.driver:fixture_builder_error", args = {}}}
+            local res5, err5 = configuration.call("bee.driver.agy:configure", error_req)
+            test.is_nil(res5)
+            test.is_true(err5 ~= nil and tostring(err5):find("intentional builder failure", 1, true) ~= nil)
+
+            -- Nonexistent builder
+            local missing_req = {fixture = false, instruction_builder = {func_id = "bee.driver:nonexistent_builder_target", args = {}}}
+            local res6, err6 = configuration.call("bee.driver.agy:configure", missing_req)
+            test.is_nil(res6)
+            test.is_true(err6 ~= nil)
         end)
     end)
 end

@@ -144,17 +144,34 @@ confirms the Claude and Grok flags; Agy 1.2.2
 bundled customization documentation describes the global-rules path; pure delivery tests do not prove a provider
 applied the instructions during an authenticated turn.
 
-### Planned instruction builders
+### Instruction builders
 
-Profile memory must contribute additional instructions, preserving the harness's
-built-in guidance. Follow native `wippy/agent` traits: `build_func_id` contributes
-prompt text at compilation with merged context, while `prompt_func_id` runs on
-each native agent step. Bee has not implemented these fields for CLI profiles.
-A builder must run under explicitly granted permissions and current `ctx`, return
-bounded text, and become part of the measured launch configuration. Persistent
-memory remains owned by its existing store; instruction building grants no store
-access. Refreshing instructions during a running CLI conversation requires that
-harness's supported mechanism and its own acceptance proof.
+A host launch policy may select `instruction_builder = {func_id = ..., args = ...}`.
+The function receives a bounded JSON object and returns text. Empty text means
+there is no additional guidance. Nonempty output
+is appended to static `instructions` with a blank line; the combined text retains
+the 4096-byte limit. Drivers receive only the resulting instructions, preserving
+built-in harness guidance and keeping the turn prompt separate.
+
+The builder inherits the authenticated caller and actual runtime `ctx`. It runs
+with an empty inherited scope; only its own declared policies can grant resource
+access. Declare reviewed read permissions, since an interrupted preparation may
+retry the function. Placement storage, process execution and gateway authority
+are not inherited. Host policy selects the builder; launch callers cannot override it.
+
+The configuration digest covers the function identifier and arguments. Changing
+either invalidates a prepared launch plan. It does not pin the function's code:
+a reviewed revision at the same identifier may change the next evaluation.
+Evaluation occurs during launch preparation, after checking for an existing
+receipt. A committed intent stores the validated delivery, and replay uses that
+frozen value even if the builder later changes or fails. Failures before commit
+can evaluate again. Builder errors or invalid output refuse the new intent.
+
+This supports launch-time guidance, not per-turn refresh inside a running CLI.
+Native placement acceptance checks actor and `ctx` inheritance, declared reads,
+denied storage/execution, generated instructions, and replay after replacing the
+builder with a failing implementation. The Agent picker does not yet edit this
+host-policy field.
 
 ## Claude authentication path
 

@@ -18,9 +18,10 @@ M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type Configuration = {revision: string, path: string, content: string, digest: string, provider_ref: string}
+type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
-type Request = {instructions: string?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
+type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 function M.instructions(value: unknown): (string?, string?)
@@ -34,6 +35,22 @@ function M.instructions(value: unknown): (string?, string?)
         end
     end
     return text, nil
+end
+function M.instruction_builder(value: unknown): (InstructionBuilder?, string?)
+    if value == nil then return nil, nil end
+    local item = bounds.object(value)
+    if not item then return nil, "instruction_builder must be an object" end
+    local unexpected = bounds.fields(item, {"func_id", "args"})
+    if unexpected then return nil, "instruction_builder: " .. unexpected end
+    local func_id = bounds.id(item.func_id)
+    if not func_id then return nil, "instruction_builder.func_id must be an identifier" end
+    if item.args == nil then return nil, "instruction_builder.args is required" end
+    local args = bounds.object(item.args)
+    if not args then return nil, "instruction_builder.args must be an object" end
+    local encoded, encode_error = canonical.encode(args)
+    if not encoded then return nil, "instruction_builder.args is not canonical JSON: " .. tostring(encode_error) end
+    if #encoded > M.MAX_INSTRUCTIONS_BYTES then return nil, "instruction_builder.args exceeds " .. tostring(M.MAX_INSTRUCTIONS_BYTES) .. " bytes" end
+    return {func_id = func_id, args = args}, nil
 end
 local function environment_name(value: unknown, label: string): (string?, string?)
     local name = bounds.id(value)
@@ -71,11 +88,17 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "fixture", "instructions"})
+    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "fixture", "instructions", "instruction_builder"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
     local instructions, instructions_error = M.instructions(request.instructions)
     if instructions_error then return nil, instructions_error end
+    local instruction_builder: InstructionBuilder? = nil
+    if request.instruction_builder ~= nil then
+        local builder_error: string?
+        instruction_builder, builder_error = M.instruction_builder(request.instruction_builder)
+        if not instruction_builder then return nil, builder_error end
+    end
     local provider_ref: string? = nil
     local provider: Object? = nil
     if request.provider_ref ~= nil then
@@ -95,7 +118,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         home_directory = bounds.text(request.home_directory, M.MAX_HOME_DIRECTORY_BYTES)
         if not home_directory or home_directory == "" or home_directory:sub(1, 1) ~= "/" then return nil, "configuration request.home_directory must be an absolute bounded path" end
     end
-    return {instructions = instructions, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
+    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
 end
 function M.decode_file(value: unknown): (Configuration?, string?)
     local item = bounds.object(value)
@@ -196,7 +219,7 @@ function M.digest(request_value: unknown, target: string): (string?, string?)
     if not request then return nil, request_error end
     local selected = bounds.id(target)
     if not selected then return nil, "configuration target is not an identifier" end
-    local encoded, encode_error = canonical.encode({target = selected, instructions = request.instructions, provider_ref = request.provider_ref, provider = request.provider, gateway = request.gateway, fixture = request.fixture})
+    local encoded, encode_error = canonical.encode({target = selected, instructions = request.instructions, instruction_builder = request.instruction_builder, provider_ref = request.provider_ref, provider = request.provider, gateway = request.gateway, fixture = request.fixture})
     if not encoded then return nil, "configuration digest: " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, "configuration digest failed" end
@@ -207,8 +230,37 @@ function M.call(target: string, request_value: unknown): (Delivery?, string?)
     if not request then return nil, request_error end
     local scoped, scope_error = funcs.new():with_scope(security.new_scope({}))
     if not scoped then return nil, "configuration scope: " .. tostring(scope_error) end
-    local raw, call_error = scoped:call(target, request)
+    local final_instructions = request.instructions
+    if request.instruction_builder then
+        local builder = request.instruction_builder
+        local raw_output, call_error = scoped:call(builder.func_id, builder.args)
+        if call_error then return nil, "instruction builder: " .. tostring(call_error) end
+        if type(raw_output) ~= "string" then
+            return nil, "instruction builder: output must be a plain string"
+        end
+        if raw_output ~= "" then
+            local validated_output, output_error = M.instructions(raw_output)
+            if not validated_output then
+                return nil, "instruction builder: " .. tostring(output_error)
+            end
+            local combined = final_instructions and (final_instructions .. "\n\n" .. validated_output) or validated_output
+            local combined_validated, combined_error = M.instructions(combined)
+            if not combined_validated then
+                return nil, "instruction builder: combined " .. tostring(combined_error)
+            end
+            final_instructions = combined_validated
+        end
+    end
+    local driver_request = {
+        instructions = final_instructions,
+        provider_ref = request.provider_ref,
+        provider = request.provider,
+        gateway = request.gateway,
+        home_directory = request.home_directory,
+        fixture = request.fixture,
+    }
+    local raw, call_error = scoped:call(target, driver_request)
     if call_error then return nil, "driver configure: " .. tostring(call_error) end
-    return M.decode_reply(raw, request.provider_ref, request.gateway, request.instructions)
+    return M.decode_reply(raw, request.provider_ref, request.gateway, final_instructions)
 end
 return M

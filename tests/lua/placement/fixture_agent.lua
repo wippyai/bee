@@ -40,7 +40,14 @@ local function configure(value: unknown): {[string]: unknown}
     local content = '{"provider_ref":"' .. PROVIDER_REF .. '","model":"terra"}\n'
     local digest, digest_error = hash.sha256(content)
     if not digest then return {ok = false, error = tostring(digest_error or "configuration digest failed")} end
-    return {ok = true, delivery = {arguments = {}, files = {{revision = REVISION, path = PATH, content = content, digest = digest, provider_ref = PROVIDER_REF}}}}
+    local files = {{revision = REVISION, path = PATH, content = content, digest = digest, provider_ref = PROVIDER_REF}}
+    if request.instructions then
+        local ins_content = request.instructions
+        local ins_digest, ins_digest_error = hash.sha256(ins_content)
+        if not ins_digest then return {ok = false, error = tostring(ins_digest_error or "instructions digest failed")} end
+        files[#files + 1] = {revision = "bee.fixture-agent-instructions@1", path = ".fixture-agent/instructions.txt", content = ins_content, digest = ins_digest, provider_ref = configure_protocol.INSTRUCTIONS_PROVIDER_REF}
+    end
+    return {ok = true, delivery = {arguments = {}, files = files}}
 end
 
 return {prepare = prepare, dispatch = dispatch, normalize = normalize, configure = configure}

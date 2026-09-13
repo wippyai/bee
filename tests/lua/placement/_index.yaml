@@ -192,3 +192,73 @@ entries:
     homes: bee.placement.native:homes
     quote: bee.driver.kit:quote
     configuration_protocol: bee.driver:configuration
+- name: fixture_builder_read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [env.get]
+    resources: [bee.placement.native:sentinel_key]
+    effect: allow
+- name: builder_test_caller_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.context, funcs.call, funcs.actor, security.scope.create, funcs.security]
+    resources: '*'
+    effect: allow
+- name: fixture_instruction_builder
+  kind: library.lua
+  source: file://fixture_instruction_builder.lua
+  meta: {type: test_support}
+  modules: [security, ctx, env, exec]
+  imports:
+    store: bee.placement.native:store
+- name: fixture_builder_build
+  kind: function.lua
+  source: file://fixture_instruction_builder.lua
+  method: build
+  meta: {type: test_support}
+  modules: [security, ctx, env, exec]
+  imports:
+    store: bee.placement.native:store
+  security:
+    policies: [bee.placement.native:fixture_builder_read_policy]
+- name: instruction_builder_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    provider_ref: bee.placement.native:fixture_agent_provider
+    instructions: "Base static instructions."
+    instruction_builder:
+      func_id: bee.placement.native:fixture_builder_build
+      args:
+        tag: integration
+- name: instruction_builder_test
+  kind: function.lua
+  source: file://instruction_builder_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, json, hash, time, exec, ctx, env]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_store_policy, bee:credential_store_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee.placement.native:builder_test_caller_policy]
+  imports:
+    test: wippy.test:test
+    service: bee.placement.native:service
+    store: bee.placement.native:store
+    homes: bee.placement.native:homes
+    quote: bee.driver.kit:quote
+    configuration_protocol: bee.driver:configuration
+    canonical: bee.threads.records:canonical
+    fixture_builder: bee.placement.native:fixture_instruction_builder

@@ -217,7 +217,7 @@ local function measure(request: Request): (Measured?, string?)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
-        provider = provider_entry, instructions = launch_policy.instructions, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
+        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, exchange = exchange,
         configuration_digest = configuration_digest, gateway = gateway}

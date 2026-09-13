@@ -22,6 +22,7 @@ type Policy = {
     permission_exchange: PermissionExchange?,
     provider_ref: string?,
     instructions: string?,
+    instruction_builder: configuration.InstructionBuilder?,
     prepare_options: {[string]: unknown},
     required_cleanup: placement_types.Capability,
     required_exit_observation: placement_types.ExitObservation,
@@ -79,7 +80,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -146,6 +147,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     end
     local instructions, instructions_error = configuration.instructions(data.instructions)
     if instructions_error then return nil, ref .. ": " .. instructions_error end
+    local instruction_builder, builder_error = configuration.instruction_builder(data.instruction_builder)
+    if builder_error then return nil, ref .. ": " .. builder_error end
     local provider_ref: string? = nil
     if data.provider_ref ~= nil then
         provider_ref = bounds.id(data.provider_ref)
@@ -180,7 +183,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, fixture = fixture}
     return decoded, nil
 end

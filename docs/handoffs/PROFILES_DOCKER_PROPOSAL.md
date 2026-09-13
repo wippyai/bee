@@ -44,6 +44,20 @@ provide a callable production attachment operation, its permissions, cold
 reattachment, safe write cancellation or managed Agent-window acceptance.
 The test wrapper is not production code and must not be copied in as a driver.
 
+A subsequent blocked-input proof exposes an existing cancellation gap at that
+same runtime pin. `TestProxyNativeDockerBlockedInputCancellation` uses the actual
+Docker executor, an already-local immutable Alpine image and a container that
+does not read stdin. A 16 MiB paste blocks native `WriteStdin`; cancellation does
+not complete within eight seconds, and explicit kill of the fixture child releases
+it. The focused race run fails in 8.961s. The proxy handles input synchronously,
+so the event loop cannot observe cancellation while that write is blocked.
+This was also reproduced with the test-only existing-container attachment.
+Evidence: `bee-evidence/0912/docker-native-blocked-input-cancel.log` and
+`docker-blocked-input-proof_test.go`. Check current runtime and installed patches
+for overlap before requesting a correction to this existing path. This result
+does not justify a new reference/inspection API and is not yet evidence against
+the installed runtime combination. Managed Docker remains unimplemented.
+
 Saved profile data, the Agent picker and appended instructions are implemented;
 see [saved profiles](SAVED_AGENT_PROFILES.md). The additional profile schema and
 instruction-entry scheme below remain historical proposals.

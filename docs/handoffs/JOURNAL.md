@@ -6380,3 +6380,14 @@ Draft userspace PR #67 now also preserves actual daemon state/image identity and
 requires a terminal observation for stop success (`8488864`). Baseline failures,
 corrected regressions, existing narrow checks and isolated lint pass. Full module
 acceptance and publication remain outstanding; global Bee is unchanged.
+
+### 2026-09-13 — native Docker blocked-input cancellation reproduced
+
+Wolfden fact 1614 records a failing real Docker executor/terminal proxy test at
+the exact Bee runtime pin. A non-reading container blocks a 16 MiB paste;
+context cancellation cannot progress within eight seconds. Killing only the
+fixture child releases the operation. The race run fails in 8.961s; reproduction
+and log are archived under `bee-evidence/0912/docker-blocked-input-proof_test.go`
+and `docker-native-blocked-input-cancel.log`. No production runtime changes or
+global installation occurred. Check current runtime/patch overlap before fixing
+the existing cancellation path. The broad runtime API experiment remains paused.

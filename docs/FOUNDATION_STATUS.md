@@ -2,6 +2,16 @@
 
 ## Current checkpoint — September 13
 
+**Changed-plan Agent recovery, verified source:** restore resolves the current
+plan before admission. A changed plan stays paused for explicit review; Enter
+submits the exact current digest, and a stale review never retries automatically.
+The previous placement, driver/profile, owner and retained session must agree,
+and exit, cleanup and the hook conversation are still verified. No historical
+digest is fabricated and no runtime API was added. Installed-to-new Claude
+fixture recovery and automatic same-build recovery pass with stable app/thread,
+conversation and HOME, fresh attempt and gateway. Combined lint passes; full
+regression remains pending. Global installation is unchanged.
+
 **Docker Agent source checkpoint, not installed:** the production picker, broker
 and managed window now pass container PTY input/output, resize and close/removal
 with a fixture shell driver. Launch policies carry bounded `placement_options`
@@ -10,8 +20,8 @@ native placement refuses unsupported options. All 875 unit tests pass, as do
 actual Docker restart, inspection-failure and stop-during-create/start checks.
 The combined full repository check is still running. This does not establish
 real harness credential/MCP delivery or supply an installable Docker profile.
-AppArmor is not required. Global refresh remains held because installed-to-new
-saved Agent recovery refuses the changed launch plan; existing state is retained.
+AppArmor is not required. The changed-plan recovery refusal is addressed by the
+following source review workflow; release validation is still underway.
 
 **New source, not installed:** `78b534f` includes the shared process-local
 managed-window lifecycle and a correction to native group signalling. A rejected

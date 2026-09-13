@@ -56,7 +56,7 @@ type Admitted = {
     session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
 }
-type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string}
+type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string, reauthorize: boolean?}
 type Request = {
     saved_profile_id: string?,
     saved_profile_revision: integer?,
@@ -270,7 +270,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     if object.continuation ~= nil then
         local source = bounds.object(object.continuation)
         if not source then return nil, "continuation must be an object" end
-        local field = bounds.fields(source, {"origin_request_id", "previous_attempt_id", "thread_id"})
+        local field = bounds.fields(source, {"origin_request_id", "previous_attempt_id", "thread_id", "reauthorize"})
         if field then return nil, "continuation: " .. field end
         local origin = bounds.id(source.origin_request_id)
         local attempt = bounds.id(source.previous_attempt_id)
@@ -279,7 +279,8 @@ function M.decode_request(value: unknown): (Request?, string?)
         if brief ~= "" then return nil, "window continuation cannot replay a brief" end
         if thread_id then return nil, "continuation cannot override its thread" end
         if not expected_plan_digest then return nil, "continuation needs the saved launch plan digest" end
-        previous = {origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread}
+        if source.reauthorize ~= nil and type(source.reauthorize) ~= "boolean" then return nil, "continuation.reauthorize must be a boolean" end
+        previous = {origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread, reauthorize = source.reauthorize == true}
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
         saved_profile_id = saved_id, saved_profile_revision = saved_revision,
@@ -359,7 +360,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
                 owner_id = requester, session_ref = session_ref, binding_ref = plan.binding_ref,
                 binding_digest = plan.binding_digest, profile_id = plan.profile_id, profile_digest = plan.profile_digest,
                 placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
-                placement_methods = plan.placement_methods})
+                placement_methods = plan.placement_methods, reauthorize = previous.reauthorize})
             if not recovered then return nil, fail("CONFLICT", "cannot recover saved window: " .. tostring(recovery_error)) end
             local resume, resume_error = continuation.resolve_window(function(target: string, input: unknown): (unknown, string?)
                 local reply, err = funcs.call(target, input)
@@ -370,7 +371,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
                 binding_ref = plan.binding_ref, binding_digest = plan.binding_digest,
                 profile_id = plan.profile_id, profile_digest = plan.profile_digest,
                 placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
-                placement_methods = plan.placement_methods})
+                placement_methods = plan.placement_methods, reauthorize = previous.reauthorize})
             if not resume then return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error)) end
         end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
@@ -408,7 +409,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
-        previous_attempt_id = previous and previous.previous_attempt_id or nil}
+        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
         thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
 end

@@ -5,6 +5,14 @@ local appearance = require("appearance")
 local M = {}
 local RESET = "\27[0m"
 
+type ReviewPlan = {
+    title: string,
+    definition_ref: string,
+    profile_id: string,
+    placement_binding_ref: string,
+    plan_digest: string,
+}
+
 local function maximum(a: integer, b: integer): integer
     if a > b then return a end
     return b
@@ -29,6 +37,27 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     line(canvas, width, height, 3, heading or "Restoring Agent", theme.text, theme.surface)
     line(canvas, width, height, 5, status, theme.accent, theme.surface)
     line(canvas, width, height, height - 1, footer or "Esc or Ctrl+Q cancels recovery", theme.muted, theme.surface)
+    return {rows = canvas:rows()}
+end
+
+-- A changed checkpoint is held for an explicit user decision. Keep the
+-- displayed values presentation-safe and bounded: this surface never renders
+-- provider configuration, grants or executable details.
+function M.review(width: integer, height: integer, preferences: appearance.Preferences, plan: ReviewPlan,
+    previous_digest: string, status: string?, footer: string?): {rows: {string}}
+    local theme = appearance.theme(preferences.theme)
+    local canvas = tty.canvas(width, height)
+    canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
+    line(canvas, width, height, 1, "AGENT", theme.text, theme.surface)
+    line(canvas, width, height, 3, "Review Agent changes", theme.text, theme.surface)
+    line(canvas, width, height, 5, "Definition: " .. plan.definition_ref, theme.text, theme.surface)
+    line(canvas, width, height, 6, "Title: " .. plan.title, theme.text, theme.surface)
+    line(canvas, width, height, 7, "Profile: " .. plan.profile_id, theme.text, theme.surface)
+    line(canvas, width, height, 8, "Placement: " .. plan.placement_binding_ref, theme.text, theme.surface)
+    line(canvas, width, height, 10, "Old plan digest: " .. previous_digest, theme.muted, theme.surface)
+    line(canvas, width, height, 11, "Current plan digest: " .. plan.plan_digest, theme.accent, theme.surface)
+    if status then line(canvas, width, height, 13, status, theme.accent, theme.surface) end
+    line(canvas, width, height, height - 1, footer or "Enter confirms · Esc or Ctrl+Q cancels", theme.muted, theme.surface)
     return {rows = canvas:rows()}
 end
 

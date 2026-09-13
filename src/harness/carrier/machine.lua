@@ -66,6 +66,7 @@ type Request = {
     environment: {[string]: string},
     session_ref: string?,
     previous_attempt_id: string?,
+    reauthorize: boolean?,
     working_directory: string?,
     projections: {string}?,
     workspace_id: string?,
@@ -246,6 +247,9 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
     if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
     local resume_ref: string? = nil
+    if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
+        return nil, "reauthorization requires a saved window"
+    end
     if request.previous_attempt_id then
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
@@ -253,7 +257,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         local resumed, resume_error = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
             owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
             binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry,
-            placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods})
+            placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods, reauthorize = request.reauthorize})
         if not resumed then return nil, resume_error end
         resume_ref = resumed
         local dispatch = binding.methods.dispatch
@@ -360,7 +364,8 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
     local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
         placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
-        launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
+        launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
+        environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         preferences = request.preferences,

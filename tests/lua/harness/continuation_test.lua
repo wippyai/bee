@@ -142,6 +142,32 @@ local function define_tests()
             attempt.execution_state = "exited"
             test.eq(continuation.resolve_window(call, request), "provider-session")
             test.eq(reads, 2)
+            -- Reviewing a new implementation never rewrites historical pins.
+            -- Automatic restore still refuses that same changed preparation.
+            stored.placement_binding_digest = nil
+            test.is_nil(continuation.resolve_window(call, request))
+            request.reauthorize = true
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            test.is_nil(stored.placement_binding_digest)
+            stored.placement_binding_digest = string.rep("a", 64)
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            stored.placement_binding = "other:placement"
+            test.is_nil(continuation.resolve_window(call, request))
+            stored.placement_binding = PLACEMENT.binding_id
+            attempt.execution_state = "running"
+            test.is_nil(continuation.resolve_window(call, request))
+            attempt.execution_state = "exited"
+            attempt.owner_id = "foreign"
+            test.is_nil(continuation.resolve_window(call, request))
+            attempt.owner_id = "alice"
+            attempt.session_ref = "other-session"
+            test.is_nil(continuation.resolve_window(call, request))
+            attempt.session_ref = "session"
+            request.profile_digest = "other-profile"
+            test.is_nil(continuation.resolve_window(call, request))
+            request.profile_digest = "profile-digest"
+            request.reauthorize = false
+            stored.placement_binding_digest = PLACEMENT.binding_digest
             test.eq(stored.attempt_outcome, "cancelled")
             test.is_nil(point.terminal)
             test.is_nil(continuation.resolve(call, request))

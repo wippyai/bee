@@ -2,7 +2,9 @@
 -- acknowledgements are accepted only from the authenticated broker request.
 local test = require("test")
 local recovery = require("recovery")
+local restore_view = require("restore_view")
 local json = require("json")
+local appearance = require("appearance")
 
 local PLAN = string.rep("a", 64)
 local SAVED: recovery.Saved = {definition_ref = "host:codex", plan_digest = PLAN,
@@ -65,6 +67,24 @@ local function define_tests()
             test.is_false(recovery.acknowledged(launch, "broker", {version = 1, request_id = "stale", error_code = "", error = ""}, "request"))
             test.is_false(recovery.acknowledged(launch, "broker", {version = 1, request_id = "request", error_code = "denied", error = "refused"}, "request"))
             test.is_true(recovery.acknowledged(launch, "broker", {version = 1, request_id = "request", error_code = "", error = ""}, "request"))
+        end)
+
+        test.it("renders a bounded changed-plan review", function()
+            local old_digest = string.rep("a", 64)
+            local current_digest = string.rep("b", 64)
+            local frame = restore_view.review(100, 16, appearance.defaults(), {
+                title = "Docker Agent", definition_ref = "bee.agent:docker", profile_id = "window",
+                placement_binding_ref = "bee.placement.docker:binding", plan_digest = current_digest}, old_digest)
+            local rows = table.concat(frame.rows)
+            test.eq(#frame.rows, 16)
+            test.is_true(rows:find("Review Agent changes", 1, true) ~= nil)
+            test.is_true(rows:find("bee.agent:docker", 1, true) ~= nil)
+            test.is_true(rows:find("Docker Agent", 1, true) ~= nil)
+            test.is_true(rows:find("window", 1, true) ~= nil)
+            test.is_true(rows:find("bee.placement.docker:binding", 1, true) ~= nil)
+            test.is_true(rows:find(old_digest, 1, true) ~= nil)
+            test.is_true(rows:find(current_digest, 1, true) ~= nil)
+            test.is_true(rows:find("Enter confirms", 1, true) ~= nil)
         end)
     end)
 end

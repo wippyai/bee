@@ -64,6 +64,35 @@ obtains fresh grants for the new attempt. The app presents a responsive
 remain usable; cancellation prevents a later recovery result from starting a
 native process. Admission refusal never launches a replacement.
 
+### Changed-plan review — verified source, not installed
+
+Automatic continuation keeps the saved admission digest and placement digest
+fences. An authorized caller can deliberately review the current plan and call
+the same admission operation with its exact `expected_plan_digest` and
+`continuation.reauthorize = true`. This does not skip current-plan resolution or
+grant checks. A stale digest still refuses admission before recovery effects.
+The Agent resolves before admission and keeps a changed plan paused until Enter.
+The installed-to-new Claude fixture passes: no replacement attempt or harness
+report before confirmation, then the original application, thread, conversation
+and HOME with a fresh attempt and gateway. Unchanged same-build recovery also
+passes automatically. The combined full regression remains pending; this is not
+yet an installed workflow or real-provider recovery proof.
+
+Reviewed continuation may use a changed implementation of the same committed
+placement binding. It does not require or invent an old placement digest, and
+it never rewrites the historical preparation. The placement owner must still
+report the exact predecessor, owner, action and retained session; exit and
+complete cleanup are required before replacement. Driver/profile closure pins
+and the committed hook conversation must still agree. Switching placement or
+driver is not a retained-home transfer operation. Structured turns do not use
+this review path. The replacement receives current grants, gateway configuration
+and a newly measured plan.
+
+The app's admission digest and the carrier's executable/configuration plan
+digest describe different values. They are not interchangeable. Reconciliation
+uses the old carrier checkpoint's own digest; review fences the new admission
+plan selected by the caller.
+
 An interrupted attempt first requires observed native exit. Recovery advances
 the carrier epoch, commits the rebound checkpoint, seals gateway intake and
 reconciles recoverable hook deliveries before settling the old attempt as

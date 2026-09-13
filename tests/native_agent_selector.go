@@ -1412,6 +1412,13 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	if err := os.WriteFile(filepath.Join(project, "bin", "claude"), []byte(script), 0700); err != nil {
 		return err
 	}
+	firstBinary := binary
+	if previous := os.Getenv("BEE_RECOVERY_PREVIOUS_BINARY"); previous != "" {
+		firstBinary, err = filepath.Abs(previous)
+		if err != nil {
+			return err
+		}
+	}
 	var first *desktop
 	var second *desktop
 	var retained *owner
@@ -1428,6 +1435,9 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 			second.close()
 		}
 		_ = stopFixtureOwners(binary, state)
+		if firstBinary != binary {
+			_ = stopFixtureOwners(firstBinary, state)
+		}
 		if crash {
 			if rows, readErr := readRecoveryPlacement(state); readErr == nil {
 				for _, item := range rows {
@@ -1445,7 +1455,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 			_ = os.RemoveAll(root)
 		}
 	}()
-	first, err = newDesktop(binary, project, state, home)
+	first, err = newDesktop(firstBinary, project, state, home)
 	if err != nil {
 		return err
 	}
@@ -1534,7 +1544,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	if err != nil {
 		return err
 	}
-	retained, err = ownerChild(first.cmd.Process.Pid, binary, state, 10*time.Second)
+	retained, err = ownerChild(first.cmd.Process.Pid, firstBinary, state, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -1574,6 +1584,41 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	second, err = newDesktop(binary, project, state, home)
 	if err != nil {
 		return err
+	}
+	if firstBinary != binary {
+		if err = second.waitFor("Review Agent changes", 30*time.Second); err != nil {
+			return err
+		}
+		if _, reportErr := os.Stat(secondReport); !os.IsNotExist(reportErr) {
+			return errors.New("changed-plan review launched the harness before confirmation")
+		}
+		rows, readErr := readRecoveryPlacement(state)
+		if readErr != nil {
+			return readErr
+		}
+		if len(rows) != 1 || rows[0].AttemptID != old.AttemptID {
+			return errors.New("changed-plan review created a replacement attempt before confirmation")
+		}
+		// `bee agent` also opens a new picker. Focus the restored window by
+		// its visible review heading before confirming its plan.
+		frame, _, _ := second.snapshot()
+		focused := false
+		for row, line := range strings.Split(frame, "\n") {
+			if column := strings.Index(line, "Review Agent changes"); column >= 0 {
+				x, y := utf8.RuneCountInString(line[:column])+1, row+1
+				if err = second.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y, x, y)); err != nil {
+					return err
+				}
+				focused = true
+				break
+			}
+		}
+		if !focused {
+			return errors.New("changed-plan review heading is not visible for confirmation")
+		}
+		if err = second.send("\r"); err != nil {
+			return err
+		}
 	}
 	if crash {
 		deadline := time.Now().Add(30 * time.Second)

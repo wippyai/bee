@@ -128,10 +128,12 @@ entries:
   source: file://window_recovery_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [json]
+  modules: [json, tty]
   imports:
     test: wippy.test:test
     recovery: bee.harness.window:recovery
+    restore_view: bee.harness.window:restore_view
+    appearance: bee.desktop:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua

@@ -289,11 +289,20 @@ local function main(value: unknown, constructors: {[string]: Open})
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             error("Managed window restore request: " .. tostring(request_error))
         end
-        local request: admission.Request = {request_id = request_id,
-            definition_ref = restored.definition_ref, workspace_id = launch.workspace_id, brief = "", mode = "window",
-            saved_profile_id = restored.saved_profile_id, saved_profile_revision = restored.saved_profile_revision,
-            expected_plan_digest = restored.plan_digest, continuation = {origin_request_id = restored.origin_request_id,
-                previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id}}
+
+        local function recovery_request(id: string, digest: string, reauthorize: boolean): admission.Request
+            local continuation: admission.Continuation = {origin_request_id = restored.origin_request_id,
+                previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id, reauthorize = reauthorize}
+            -- The continuation identity remains the checkpoint's identity. A
+            -- changed plan is an explicit reauthorization of that identity,
+            -- never a fresh conversation or an unbounded retry.
+            return {request_id = id, definition_ref = restored.definition_ref, workspace_id = launch.workspace_id,
+                brief = "", mode = "window", saved_profile_id = restored.saved_profile_id,
+                saved_profile_revision = restored.saved_profile_revision, expected_plan_digest = digest,
+                continuation = continuation}
+        end
+
+        local request = recovery_request(request_id, restored.plan_digest, false)
 
         -- Admission may reconcile a dead native process and drain gateway
         -- hooks. Keep the broker's readiness deadline independent of that
@@ -307,11 +316,18 @@ local function main(value: unknown, constructors: {[string]: Open})
         local cancelled = false
         local states = assert(process.listen("bee.appearance.state", {message = true}))
         local completed = channel.new(1)
-        local recovery_choice: admission.Admitted? = nil
-        local recovery_error: admission.Reply? = nil
+        local phase: string = "initial"
+        local reviewed: admission.Plan? = nil
+        local operation: integer = 0
+
         local function render()
             if not dirty then return end
-            local frame = restore_view.draw(width, height, preferences, status)
+            local frame
+            if reviewed and (phase == "review" or phase == "resolving" or phase == "confirming") then
+                frame = restore_view.review(width, height, preferences, reviewed, restored.plan_digest, status)
+            else
+                frame = restore_view.draw(width, height, preferences, status)
+            end
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -319,20 +335,38 @@ local function main(value: unknown, constructors: {[string]: Open})
             cancelled = true
             dirty = false
         end
+        local function start_admission(candidate: admission.Request)
+            operation = operation + 1
+            local serial = operation
+            phase = phase == "initial" and "initializing" or "confirming"
+            coroutine.spawn(function()
+                local choice, refused = admission.admit_request(candidate)
+                -- A cancelled continuation may finish reconciliation after
+                -- the UI has gone away. It never hands an admitted request to
+                -- the native preparation path in that case.
+                if cancelled or serial ~= operation then return end
+                completed:send({kind = "admission", serial = serial, choice = choice, refused = refused})
+            end)
+        end
+        local function start_resolve(refusal: admission.Reply?)
+            operation = operation + 1
+            local serial = operation
+            phase = "resolving"
+            status = refusal and "Checking the reviewed launch plan…" or "Checking the saved launch plan…"
+            dirty = true
+            coroutine.spawn(function()
+                local plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
+                    restored.saved_profile_id, restored.saved_profile_revision)
+                if cancelled or serial ~= operation then return end
+                completed:send({kind = "resolve", serial = serial, plan = plan, refused = refused, admission_refusal = refusal})
+            end)
+        end
 
         render()
         client.ready(launch, {negotiate_close = true})
         ready_announced = true
         process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
-        coroutine.spawn(function()
-            local choice, refused = admission.admit_request(request)
-            -- A cancelled continuation may finish reconciliation after the
-            -- UI has gone away. It never hands an admitted request to the
-            -- native preparation path in that case.
-            if cancelled then return end
-            recovery_choice, recovery_error = choice, refused
-            completed:send(true)
-        end)
+        start_resolve(nil)
 
         while not admitted and not cancelled do
             render()
@@ -358,9 +392,44 @@ local function main(value: unknown, constructors: {[string]: Open})
                     end
                 end
             elseif event.channel == completed then
-                if recovery_choice then admitted = recovery_choice
-                else status = "Recovery admission refused: " .. failure(recovery_error) end
-                dirty = true
+                local result = event.value :: {kind: string, serial: integer, choice: admission.Admitted?,
+                    refused: admission.Reply?, plan: admission.Plan?, admission_refusal: admission.Reply?}
+                if result.kind == "resolve" and result.serial == operation then
+                    if result.plan then
+                        -- A conflict that did not change the measured plan is
+                        -- another admission refusal, not a reason to offer a
+                        -- confirmation for an unchanged checkpoint.
+                        if result.plan.plan_digest == request.expected_plan_digest then
+                            if result.admission_refusal then
+                                status = "Recovery admission refused: " .. failure(result.admission_refusal)
+                                phase = "refused"
+                            else
+                                start_admission(request)
+                            end
+                        else
+                            reviewed = result.plan
+                            phase = "review"
+                            status = "Review the changed plan, then press Enter to continue"
+                        end
+                    else
+                        status = "Changed launch plan could not be reviewed: " .. failure(result.refused)
+                        phase = "refused"
+                    end
+                    dirty = true
+                elseif result.kind == "admission" and result.serial == operation then
+                    if result.choice then
+                        admitted = result.choice
+                    elseif result.refused and result.refused.error
+                        and result.refused.error.code == "CONFLICT" then
+                        -- A stale fence after Enter returns to review. Never
+                        -- silently retry a plan the user has not re-confirmed.
+                        start_resolve(result.refused)
+                    else
+                        status = "Recovery admission refused: " .. failure(result.refused)
+                        phase = "refused"
+                    end
+                    dirty = true
+                end
             else
                 local data = input_event.decode(event.value)
                 if data then
@@ -369,9 +438,23 @@ local function main(value: unknown, constructors: {[string]: Open})
                     elseif data.type == "resize" or data.type == "start" then
                         width, height = data.width, data.height
                         dirty = true
-                    elseif data.type == "key" and data.action == "press"
-                        and (data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q")) then
-                        cancel_restore()
+                    elseif data.type == "key" and data.action == "press" then
+                        if data.key_type == "escape" or data.key_type == "esc" or (data.ctrl and data.key == "q") then
+                            cancel_restore()
+                        elseif data.key_type == "enter" or data.key == "enter" then
+                            if phase == "review" and reviewed then
+                                local confirmed_id, confirmed_error = uuid.v7()
+                                if not confirmed_id then
+                                    status = "Recovery admission refused: " .. tostring(confirmed_error)
+                                    phase = "refused"
+                                else
+                                    request = recovery_request(confirmed_id, reviewed.plan_digest, true)
+                                    status = "Authorizing reviewed launch plan…"
+                                    dirty = true
+                                    start_admission(request)
+                                end
+                            end
+                        end
                     end
                 end
             end

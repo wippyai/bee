@@ -854,6 +854,29 @@ local function define_tests()
             test.eq(resume_plan.resume_ref, "provider-session")
             test.is_nil(resume_plan.launch.stdin)
             test.eq(resume_plan.launch.argv[#resume_plan.launch.argv], "provider-session")
+            local prior_retention = window_policy.retain_ms
+            window_policy.retain_ms = 54321
+            policy_entry.data = window_policy
+            apply(policy_entry)
+            request.request_id = fresh("reviewed-resume")
+            request.continuation.reauthorize = true
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
+            if not current then error(tostring(current_error)) end
+            request.expected_plan_digest = current.plan_digest
+            local reviewed = value(call("bee.harness.launch:admit", request)) :: admission.Admitted
+            test.eq(reviewed.plan.plan_digest, current.plan_digest)
+            test.eq(reviewed.session_ref, first.session_ref)
+            test.eq(reviewed.action_id, first.action_id)
+            test.is_true(reviewed.request.reauthorize)
+            local reviewed_plan, reviewed_error = machine.plan(transport, reviewed.request)
+            if not reviewed_plan then error(tostring(reviewed_error)) end
+            test.eq(reviewed_plan.resume_ref, "provider-session")
+            window_policy.retain_ms = prior_retention
+            policy_entry.data = window_policy
+            apply(policy_entry)
+            request.expected_plan_digest = first.plan.plan_digest
+            request.continuation.reauthorize = false
             -- Mutated saved references and changed host plans cannot select
             -- another session or silently replay under new configuration.
             request.workspace_id = fresh("foreign-workspace")
@@ -861,6 +884,9 @@ local function define_tests()
             request.workspace_id = workspace
             request.expected_plan_digest = string.rep("0", 64)
             test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            request.continuation.reauthorize = true
+            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
+            request.continuation.reauthorize = false
             request.expected_plan_digest = first.plan.plan_digest
             request.brief = "repeat original prompt"
             test.eq(code(call("bee.harness.launch:admit", request)), "INVALID")

@@ -7,7 +7,7 @@ local json = require("json")
 local M = {}
 local PLACEMENT_METHODS = {"prepare", "start", "status", "stop", "reconcile", "cleanup", "evidence", "attach", "capabilities", "measure_executable", "close_stdin"}
 type Request = {thread_id: string, action_id: string, attempt_id: string, owner_id: string, previous_attempt_id: string, session_ref: string,
-    binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, placement_binding_ref: string, placement_binding_digest: string, placement_methods: {[string]: string}}
+    binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, placement_binding_ref: string, placement_binding_digest: string, placement_methods: {[string]: string}, reauthorize: boolean?}
 type Call = (string, unknown) -> (unknown, string?)
 local function value(call: Call, target: string, request: unknown): ({[string]: unknown}?, string?)
     local raw, err = call(target, request)
@@ -30,6 +30,7 @@ local function placement_error(request: Request): string?
     return nil
 end
 function M.resolve(call: Call, request: Request): (string?, string?)
+    if request.reauthorize == true then return nil, "reauthorization requires a saved window" end
     local missing_placement = placement_error(request)
     if missing_placement then return nil, missing_placement end
     if not bounds.id(request.previous_attempt_id) or request.previous_attempt_id == request.attempt_id then return nil, "continuation needs a distinct previous attempt" end
@@ -75,7 +76,11 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if not stored then return nil, stored_error end
     if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
     if stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
-    if stored.placement_binding_digest ~= request.placement_binding_digest then return nil, "previous attempt has no matching placement binding digest" end
+    -- Automatic continuation pins the old placement. Explicit review authorizes
+    -- today's implementation of that same binding, after its owner proves the
+    -- old execution and retained session below. It grants no cross-placement
+    -- transfer and never changes the historical preparation record.
+    if request.reauthorize ~= true and stored.placement_binding_digest ~= request.placement_binding_digest then return nil, "previous attempt has no matching placement binding digest" end
     if (ended and stored.attempt_state ~= "ended") or stored.open_turn_id ~= nil then return nil, "previous window attempt has not ended" end
     local point, point_error = checkpoint.decode(stored.checkpoint)
     if not point then return nil, "previous checkpoint: " .. tostring(point_error) end

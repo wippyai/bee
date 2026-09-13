@@ -157,7 +157,13 @@ launch identity, selected profile revision and previous attempt using
 `bee.agent.window@1`. Restore shows a responsive, themed view while typed admission
 runs in a coroutine owned by the same application process. Closing that view
 prevents the returned admission from reaching native preparation. UI readiness
-does not mean the harness has started or recovered successfully.
+does not mean the harness has started or recovered successfully. If the saved
+launch plan digest is fenced by a changed registry plan, restore resolves the
+current definition, profile and placement for display and pauses for an explicit
+Enter confirmation. The confirmation admits the current digest with the saved
+continuation identity and its reauthorization marker; a later stale conflict
+returns to the review instead of retrying automatically. Esc, close and Ctrl+Q
+cancel without changing the checkpoint.
 
 An interrupted attempt is recoverable only after placement observes the recorded
 native process exit. Recovery obtains a fresh carrier epoch, commits the rebound

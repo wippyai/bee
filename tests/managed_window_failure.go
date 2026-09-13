@@ -168,7 +168,7 @@ local function run()
 	assert(failure, "failure surface did not remain visible")
     assert((pending ~= nil) == (not BEFORE_ADMISSION), "incorrect settlement scope")
     local failure_text = table.concat(failure.rows)
-	assert(failure_text:find(STAGE == "component" and "window component" or "injected", 1, true), "failure reason missing")
+	assert(failure_text:find(STAGE == "component" and "window component" or (STAGE == "generation" and "attachment generation" or "injected"), 1, true), "failure reason missing")
     assert(appearance_replies > 0, "broker did not receive authenticated appearance state response")
     assert(view:send({type = "resize", width = 70, height = 14}))
     local resized = false
@@ -188,19 +188,19 @@ local function run()
         if BEFORE_ADMISSION then assert(record.kind ~= "receipt", "planning failure wrote a receipt") end
     end
     assert(admitted == (BEFORE_ADMISSION and 0 or 1), "incorrect action admission count")
-    assert(prepared == (STAGE == "placement" and 1 or 0), "incorrect attempt preparation count")
-    if STAGE == "placement" then
+    assert(prepared == ((STAGE == "placement" or STAGE == "generation") and 1 or 0), "incorrect attempt preparation count")
+    if STAGE == "placement" or STAGE == "generation" then
         local cleaned = false
         for _ = 1, 80 do
             local status = call("bee.placement.native:status", {attempt_id = attempt_id}).value
             local attempt = (status :: {[string]: unknown}).attempt :: {[string]: unknown}
             if attempt.execution_state == "exited" and attempt.cleanup_state == "complete" then
-                assert(attempt.runner == nil, "checkpoint failure created a runner")
+                assert(attempt.runner == nil, "refused window created a runner")
                 cleaned = true; break
             end
             time.sleep("25ms")
         end
-        assert(cleaned, "checkpoint failure retained the unstarted placement")
+        assert(cleaned, "refused window retained the unstarted placement")
     end
     time.sleep("250ms")
     assert(view:snapshot(), "failure surface auto-dismissed before explicit close")
@@ -262,9 +262,9 @@ func envFor(dir string) []string {
 func run() error {
 	runtime := flag.String("runtime", ".wippy/bin/bee-wippy", "Bee runtime executable")
 	root := flag.String("root", ".", "Bee repository root")
-	stage := flag.String("stage", "admitted", "failure stage: plan, component, admitted or placement")
+	stage := flag.String("stage", "admitted", "failure stage: plan, component, admitted, placement or generation")
 	flag.Parse()
-	if *stage != "plan" && *stage != "admitted" && *stage != "placement" && *stage != "component" {
+	if *stage != "plan" && *stage != "admitted" && *stage != "placement" && *stage != "component" && *stage != "generation" {
 		return fmt.Errorf("unknown failure stage %q", *stage)
 	}
 	repo, err := filepath.Abs(*root)
@@ -398,6 +398,21 @@ func run() error {
 		}
 		machineText = string(machine)
 	}
+	if *stage == "generation" {
+		runtimePath := filepath.Join(dir, "src", "harness", "window", "runtime.lua")
+		runtimeSource, err := os.ReadFile(runtimePath)
+		if err != nil {
+			return err
+		}
+		changed := strings.Replace(string(runtimeSource), "generation = prepared.epoch})", "generation = prepared.epoch + 1})", 1)
+		if changed == string(runtimeSource) {
+			return fmt.Errorf("window generation anchor missing")
+		}
+		if err := os.WriteFile(runtimePath, []byte(changed), 0600); err != nil {
+			return err
+		}
+		machineText = string(machine)
+	}
 	if *stage == "component" {
 		appPath := filepath.Join(dir, "src", "harness", "window", "app.lua")
 		appSource, err := os.ReadFile(appPath)
@@ -413,7 +428,7 @@ func run() error {
 		}
 		machineText = string(machine)
 	}
-	if *stage != "placement" && *stage != "component" && machineText == string(machine) {
+	if *stage != "placement" && *stage != "component" && *stage != "generation" && machineText == string(machine) {
 		return fmt.Errorf("machine admission anchor missing")
 	}
 	if err := os.WriteFile(machinePath, []byte(machineText), 0600); err != nil {

@@ -72,6 +72,7 @@ entries:
   imports:
     runtime: bee.harness.window:runtime
     window: bee.placement.native:window
+    docker_window: bee.placement.docker:window
   meta:
     type: bee.application
     application:

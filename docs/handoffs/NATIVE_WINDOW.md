@@ -1,26 +1,28 @@
 # Managed native window implementation boundary
 
-Status: a private harness-owned actor and fixture acceptance exist; this remains
-outside the callable production interface. The current public Claude/Codex
-commands still run ordinary native Terminals. Structured native continuation is
-checkpoint d4e84b7; it does not supply an interactive UI.
+Status: native managed Agent windows are implemented and installed; managed
+Docker windows remain under integration. The constructor routing below is source
+work and is not installed globally yet.
 
-The ordinary user flow is **Agent → Codex** (or Claude), opening the native
-harness UI. The selected profile supplies local or Docker placement, flags and
-Bee MCP configuration behind that flow. Docker remains an unimplemented option
-until its separate placement acceptance exists.
+The ordinary flow is **Agent → Codex** (or Claude/Agy). A profile selects the
+harness, placement, options and MCP scope. The broker gives the Agent process its
+terminal grant. That same process handles the picker, admission, hooks and window
+lifecycle; selecting Docker does not create another application manager.
 
-The private `bee.harness.window:app` actor is spawned by the application broker
-with the sole terminal grant. Its lifecycle is implemented by the reusable
-`bee.harness.window:runtime` library, while the process entry supplies the
-native `bee.placement.native:window` implementation. It owns exactly one
-native child and terminal session, reuses typed launch admission and shared
-attempt preparation, and opens the PTY in its own actor so `attach_terminal()`
-consumes that grant. Its
-broker launch argument is one strict JSON request; the authenticated workspace
-is injected and callers cannot choose an environment or transport. Completion
-is recorded as `uncertain`, except explicit application close, which records
-`cancelled`. The application has no command metadata or public catalog route.
+`bee.harness.window:runtime` receives a typed constructor table from the process
+entry, keyed by the native and Docker placement bindings. Only the host-admitted
+plan selects the constructor. Missing constructors refuse before attempt
+preparation. Request data cannot supply callbacks. The current attachment epoch
+is passed to the constructor; native placement verifies that it matches the
+recorded recipient and generation before starting its child.
+
+`bee.placement.docker:window` attaches an already-started container using the
+placement service's checked identity. Its registered library loads without a
+daemon connection; actual use requires the separately configured Docker service
+and native attachment permission. It neither creates containers directly nor
+owns another store. Terminal completion is not container exit: reconciliation and
+cleanup remain placement operations. Public Docker launch, scoped attachment,
+restart recovery and session release still require integration acceptance.
 
 ## Existing boundaries that constrain implementation
 

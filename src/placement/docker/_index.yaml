@@ -19,3 +19,9 @@ entries:
   modules: [time]
   imports:
     bounds: bee.threads.records:bounds
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  modules: [funcs, process, docker_pty, exec, tty]
+  imports:
+    bounds: bee.threads.records:bounds

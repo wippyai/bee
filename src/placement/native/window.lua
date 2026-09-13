@@ -21,7 +21,7 @@ local service = require("service")
 local protocol = require("protocol")
 local identity = require("identity")
 
-type Options = {width: integer, height: integer, term: string, expected_binding: string?, expected_placement_binding: string?}
+type Options = {width: integer, height: integer, term: string, expected_binding: string?, expected_placement_binding: string?, generation: integer?}
 type Window = {
     send: (Window, tty.TTYEvent) -> (boolean, string?),
     done: (Window) -> exec.TerminalCompletionChannel,
@@ -72,7 +72,7 @@ local function options(value: unknown): (Options?, string?)
     if type(value) ~= "table" then return nil, "window options must be an object" end
     local object = value :: {[string]: unknown}
     for key in pairs(object) do
-        if key ~= "width" and key ~= "height" and key ~= "term" and key ~= "expected_binding" and key ~= "expected_placement_binding" then
+        if key ~= "width" and key ~= "height" and key ~= "term" and key ~= "expected_binding" and key ~= "expected_placement_binding" and key ~= "generation" then
             return nil, "unknown window option " .. tostring(key)
         end
     end
@@ -90,7 +90,9 @@ local function options(value: unknown): (Options?, string?)
     if expected_binding ~= nil and not bounds.id(expected_binding) then return nil, "expected_binding is invalid" end
     local expected_placement_binding = object.expected_placement_binding
     if expected_placement_binding ~= nil and not bounds.id(expected_placement_binding) then return nil, "expected_placement_binding is invalid" end
-    return {width = width, height = height, term = term, expected_binding = expected_binding :: string?, expected_placement_binding = expected_placement_binding :: string?}, nil
+    local generation = bounds.integer(object.generation)
+    if object.generation ~= nil and (not generation or generation < 1) then return nil, "generation is invalid" end
+    return {generation = generation, width = width, height = height, term = term, expected_binding = expected_binding :: string?, expected_placement_binding = expected_placement_binding :: string?}, nil
 end
 
 -- Open is the only constructor. It derives the caller from the authenticated
@@ -119,6 +121,9 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     end
     if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native:binding" then
         return fail(db, "native window cannot use a non-native placement binding", nil)
+    end
+    if chosen.generation and (row.attachment_generation ~= chosen.generation or row.recipient ~= process.pid()) then
+        return fail(db, "window attachment generation is not admitted", nil)
     end
     if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
 

@@ -133,6 +133,7 @@ managed-window-failure-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage plan
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage placement
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage component
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/managed_window_failure.go -runtime "$(abspath $(WIPPY))" -root "$(CURDIR)" -stage generation
 window-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/window_hooks.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/window_hooks.go -runtime "$(abspath $(WIPPY))"

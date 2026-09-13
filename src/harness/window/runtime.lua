@@ -174,9 +174,10 @@ type Window = {
 }
 type Open = (string, unknown) -> (Window?, string?)
 
--- The component-owned process supplies its binding and constructor. These
--- are not application request fields or a caller-selected factory.
-local function main(value: unknown, placement_binding: string, open: Open)
+-- The component-owned process supplies constructors keyed by placement binding.
+-- Request data cannot supply executable callbacks or choose a constructor outside
+-- the host-admitted placement plan.
+local function main(value: unknown, constructors: {[string]: Open})
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
@@ -425,7 +426,8 @@ local function main(value: unknown, placement_binding: string, open: Open)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    if plan.placement_binding.binding_id ~= placement_binding then
+    local open = constructors[plan.placement_binding.binding_id]
+    if not open then
         show_failure("window component does not support the selected placement binding")
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -491,7 +493,8 @@ local function main(value: unknown, placement_binding: string, open: Open)
     end
     local width, height = tty.screen_size()
     local terminal, terminal_error = open(admitted.attempt_id, {width = width, height = height,
-        term = "xterm-256color", expected_binding = prepared.gateway_binding, expected_placement_binding = plan.placement_binding.binding_id})
+        term = "xterm-256color", expected_binding = prepared.gateway_binding, expected_placement_binding = plan.placement_binding.binding_id,
+        generation = prepared.epoch})
     if not terminal then
         local reason = "managed window did not open: " .. tostring(terminal_error)
         show_failure(reason, function(): string

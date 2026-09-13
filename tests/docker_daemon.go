@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Focused proof for the optional Docker daemon adapter. The fixture composes
-// the unpublished userspace/docker-client source and a private Unix HTTP
+// the reviewed local userspace/docker-client package and a private Unix HTTP
 // daemon; it never needs Docker credentials or a real daemon.
 package main
 
@@ -32,7 +32,7 @@ func main() {
 
 func run() error {
 	runtime := flag.String("runtime", "", "selected Bee runtime executable")
-	dockerSource := flag.String("docker-source", "", "local userspace/docker-client source")
+	dockerSource := flag.String("docker-source", "", "reviewed userspace/docker-client package directory")
 	flag.Parse()
 	if *runtime == "" || *dockerSource == "" {
 		return fmt.Errorf("runtime and docker-source are required")
@@ -48,27 +48,12 @@ func run() error {
 	}
 	componentSource := filepath.Join("modules", "bee-placement-docker-daemon", "src")
 	userspaceIndex, readIndexErr := os.ReadFile(filepath.Join(*dockerSource, "_index.yaml"))
-	if os.IsNotExist(readIndexErr) {
-		userspaceIndex = []byte(`version: '1.0'
-namespace: userspace.docker
-entries:
-- name: client_definition
-  kind: ns.definition
-  meta:
-    title: Docker HTTP client fixture
-- name: docker_client
-  kind: library.lua
-  source: file://client.lua
-  modules: [http_client, json]
-`)
-	} else if readIndexErr != nil {
-		return fmt.Errorf("read userspace component manifest: %w", readIndexErr)
+	if readIndexErr != nil {
+		return fmt.Errorf("read userspace component manifest %s: %w", filepath.Join(*dockerSource, "_index.yaml"), readIndexErr)
 	}
 	userspaceReadme, readReadmeErr := os.ReadFile(filepath.Join(*dockerSource, "README.md"))
-	if os.IsNotExist(readReadmeErr) {
-		userspaceReadme = []byte("Docker HTTP client fixture\n")
-	} else if readReadmeErr != nil {
-		return fmt.Errorf("read userspace component README: %w", readReadmeErr)
+	if readReadmeErr != nil {
+		return fmt.Errorf("read userspace component README %s: %w", filepath.Join(*dockerSource, "README.md"), readReadmeErr)
 	}
 	files := map[string]string{
 		"bee/placement/docker/_index.yaml":              filepath.Join(componentSource, "_index.yaml"),

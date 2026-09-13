@@ -149,8 +149,10 @@ function M.write_protected(home_path: string, relative: string, content: string,
         if replay_error then return nil, replay_error end
         return target, nil, true
     end
-    local parent = target:match("^(.*)/[^/]+$")
-    if parent and parent ~= root then
+    local directories = relative:match("^(.*)/[^/]+$") or ""
+    local parent = root
+    for segment in directories:gmatch("[^/]+") do
+        parent = parent .. "/" .. segment
         -- The attempt home was created by this runner moments ago, so the
         -- parent is created here, never adopted: an existing entry, whether a
         -- directory, a link or anything else, refuses the write unless this
@@ -291,6 +293,14 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
     if opaque ~= nil then
         local write_error = write_exclusive(vol, target, opaque)
         if write_error then return nil, write_error end
+        -- Claude's interactive onboarding asks for a login method even when
+        -- its credential file already contains a valid login. Initialize only
+        -- that first-run state for an imported login; project trust and all
+        -- other settings remain the harness's responsibility.
+        if destination.source.provider == "claude" then
+            local setup_error = write_exclusive(vol, root .. "/.claude.json", '{"hasCompletedOnboarding":true}')
+            if setup_error then return nil, setup_error end
+        end
     end
     -- Optional absence commits the source binding too. Later CLI sign-in or
     -- sign-out belongs to this private home and must not trigger reseeding.

@@ -82,3 +82,33 @@ entries:
     selection: bee.harness.launch:selection
     admission: bee.harness.launch:admission
     view: bee.harness.window:picker_view
+    forms: bee.harness.window:profile_form
+    profile_view: bee.harness.window:profile_view
+
+- name: profile_editor
+  kind: library.lua
+  source: file://profile_editor.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    preferences: bee.driver:preferences
+    protocol: bee.harness.profiles:protocol
+- name: profile_form
+  kind: library.lua
+  source: file://profile_form.lua
+  modules: [funcs, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    protocol: bee.harness.profiles:protocol
+    editor: bee.harness.window:profile_editor
+    selection: bee.harness.launch:selection
+- name: profile_view
+  kind: library.lua
+  source: file://profile_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    text: bee.application:text
+    editor: bee.harness.window:profile_editor
+    forms: bee.harness.window:profile_form

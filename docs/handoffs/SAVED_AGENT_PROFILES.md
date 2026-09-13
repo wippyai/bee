@@ -1,7 +1,7 @@
 # Saved agent profiles
 
 Source work in progress; saved-profile resolution/admission is implemented, but
-not installed. Picker selection wiring is in progress; the editor is unfinished.
+not installed. The picker and profile form are wired in source; native UI acceptance is pending.
 
 A saved profile selects a reviewed launch definition and stores a title, scalar
 options, MCP tool identifiers and appended instructions. The definition selects
@@ -66,8 +66,7 @@ authorized profile resolution/admission, stale revision rejection, host digest
 preservation and native pre-intent refusal, alongside existing launch tests.
 Successful real-provider execution with edited options remains unverified.
 
-Next: picker/editor integration and default host selections, then native Agent
-acceptance. Saving preferences must never launch a process as a side effect.
+Next: native Agent form/launch acceptance and the global build. Saving preferences must never launch a process as a side effect.
 
 No profile replication or cross-node human identity is claimed. Hive distribution
 and governed registry overlays remain separate work.
@@ -86,10 +85,29 @@ and revision alongside the measured plan. Cold recovery resubmits that selection
 through the same admission checks; it cannot silently recover using default
 preferences. Partial or invalid profile identities are refused. A changed or
 removed saved profile therefore requires a fresh selection rather than silently
-changing a recovered conversation's configuration. UI wiring remains pending.
+changing a recovered conversation's configuration. The picker carries this identity through setup and admission.
 
 The picker requests a workspace-qualified saved-profile snapshot and carries its
 selected ID/revision through both setup and admission. Saved choices contain no
 instruction content. A failed saved-profile read leaves registry defaults usable
 and shows the failure. The merge has a bounded page count and choice count;
 tombstones and hidden definitions are not selectable.
+
+The Agent picker now offers New and Edit (N/E shortcuts). New copies the selected
+definition/profile into a new local profile identity. The form edits name,
+appended instructions, host-allowed scalar options and MCP tool selection.
+Tab/arrow keys change fields; Space/left/right change selections. Text accepts
+typing/paste, Backspace and Ctrl+U clear. Ctrl+S saves; Escape cancels. Removal
+requires confirmation. Default host harness policies permit appended guidance;
+they still do not enable arbitrary editable options.
+
+Form loading rechecks saved identity/revision against the authorized facade and
+reads its allowed fields from the selected host policy. Saving and removal use
+separate retry identities and expected revisions. Once submitted, retries keep
+the same request values and competing save/remove operations are refused.
+Successful saves return to the picker without launching. Form values and draft
+instructions are transient until saved; closing the form discards the draft.
+
+Thirty focused model, profile store, selection and recovery cases pass with the
+form/editor source. Actual keyboard/mouse form acceptance and native launch with
+an edited profile remain required before a global refresh.

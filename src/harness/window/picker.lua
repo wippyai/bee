@@ -12,6 +12,8 @@ local input_event = require("input_event")
 local selection = require("selection")
 local admission = require("admission")
 local view = require("view")
+local forms = require("forms")
+local profile_view = require("profile_view")
 local M = {}
 type Channel = channel.Channel
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
@@ -33,20 +35,30 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local status = load_error or ""
     local request_id: string? = nil
     local request_definition, request_plan = "", ""
+    local editing: profile_view.State? = nil
+    local edit_frame: profile_view.Frame = {rows = {}, hits = {}}
     local announced = false
     local dirty = true
     local frame: view.Frame = {rows = {}, first = 1, capacity = 0, hits = {}}
     process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
     while true do
         if dirty then
-            frame = view.draw(width, height, preferences, listed, selected, status)
-            assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local rows: {string}
+            if editing then
+                edit_frame = profile_view.draw(width, height, preferences, editing)
+                rows = edit_frame.rows
+            else
+                frame = view.draw(width, height, preferences, listed, selected, status)
+                rows = frame.rows
+            end
+            assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch, {negotiate_close = true}); announced = true end
             dirty = false
         end
         local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(), states:case_receive()})
         if not event.ok then return finish(nil, nil) end
         local activate, refresh = false, false
+        local edit, duplicate = false, false
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then return finish(nil, nil) end
         elseif event.channel == closes then
@@ -64,12 +76,26 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then
                     width, height = data.width, data.height; dirty = true
+                elseif editing then
+                    local action = profile_view.input(editing, data, edit_frame)
+                    if action == "cancel" then editing = nil
+                    elseif action == "save" or action == "remove" then
+                        local ok: boolean = false
+                        local err: string? = nil
+                        if action == "save" then ok, err = forms.save(editing.form)
+                        else ok, err = forms.remove(editing.form) end
+                        if ok then editing = nil; refresh = true
+                        else editing.status = err or "Profile operation failed" end
+                    end
+                    dirty = true
                 elseif data.type == "key" and data.action == "press" then
                     if data.key_type == "escape" or data.key_type == "esc" then return finish(nil, nil)
                     elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
                     elseif data.key_type == "down" then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" then activate = true
-                    elseif data.key == "r" and not data.ctrl and not data.alt then refresh = true end
+                    elseif data.key == "r" and not data.ctrl and not data.alt then refresh = true
+                    elseif data.key == "e" and not data.ctrl and not data.alt then edit = true
+                    elseif data.key == "n" and not data.ctrl and not data.alt then edit = true; duplicate = true end
                 elseif data.type == "mouse" then
                     if data.action == "wheel" then
                         local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
@@ -80,6 +106,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                                 if hit.action == "close" then return finish(nil, nil) end
                                 if hit.action == "open" then activate = true end
                                 if hit.action == "refresh" then refresh = true end
+                                if hit.action == "edit" then edit = true end
+                                if hit.action == "new" then edit = true; duplicate = true end
                             end
                         end
                         if data.y >= 3 and data.y < 3 + frame.capacity then
@@ -88,6 +116,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         end
                     end
                 end
+            end
+        end
+        if edit then
+            local choice = listed.items[selected]
+            if choice then
+                local opened, open_error = forms.load(launch.workspace_id, choice, duplicate)
+                if opened then editing = profile_view.new(opened)
+                else status = open_error or "Profile could not be opened" end
+                dirty = true
             end
         end
         if activate and frame.capacity > 0 then

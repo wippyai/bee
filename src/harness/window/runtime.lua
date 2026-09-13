@@ -1,6 +1,6 @@
 -- MIT. Shared managed-window lifecycle for component-owned process entries.
 --
--- The caller supplies a process-local Window implementation. The broker grants
+-- The process entry supplies a constructor returning a process-local window. The broker grants
 -- the terminal to that caller, so attach_terminal remains in the actual app actor.
 -- Gateway hooks are claimed, committed and acknowledged one future at a time.
 local tty = require("tty")
@@ -106,10 +106,14 @@ local function settle_failure(admitted: admission.Admitted, epoch: integer?, rea
     local details: {string} = {}
     if placement_attempt then
         local stop_target = placement_target(admitted, "stop")
-        local stopped, stop_error = stop_target and call(stop_target, {attempt_id = admitted.attempt_id}) or nil, "selected placement binds no stop"
+        local stopped = false
+        local stop_error: string? = "selected placement binds no stop"
+        if stop_target then stopped, stop_error = call(stop_target, {attempt_id = admitted.attempt_id}) end
         if not stopped then details[#details + 1] = "placement stop: " .. tostring(stop_error) end
         local cleanup_target = placement_target(admitted, "cleanup")
-        local cleaned, cleanup_error = cleanup_target and call(cleanup_target, {attempt_id = admitted.attempt_id}) or nil, "selected placement binds no cleanup"
+        local cleaned = false
+        local cleanup_error: string? = "selected placement binds no cleanup"
+        if cleanup_target then cleaned, cleanup_error = call(cleanup_target, {attempt_id = admitted.attempt_id}) end
         if not cleaned then details[#details + 1] = "placement cleanup: " .. tostring(cleanup_error) end
     end
     if gateway_binding then
@@ -162,15 +166,17 @@ local function drain_hooks(driver: delivery.Driver)
 end
 
 type Window = {
-    open: (string, unknown) -> (Window?, string?),
     send: (Window, tty.TTYEvent) -> (boolean, string?),
     done: (Window) -> exec.TerminalCompletionChannel,
     status: (Window) -> ("running" | "done", string?),
     close: (Window) -> (boolean, string?),
     finish: (Window) -> (boolean, string?),
 }
+type Open = (string, unknown) -> (Window?, string?)
 
-local function main(value: unknown, window: Window)
+-- The component-owned process supplies its binding and constructor. These
+-- are not application request fields or a caller-selected factory.
+local function main(value: unknown, placement_binding: string, open: Open)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
@@ -419,6 +425,11 @@ local function main(value: unknown, window: Window)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
+    if plan.placement_binding.binding_id ~= placement_binding then
+        show_failure("window component does not support the selected placement binding")
+        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+        return
+    end
     local prepared, preparation_error, failed_preparation = machine.prepare_attempt(transport, plan)
     if not prepared then
         local reason = "Managed window preparation: " .. tostring(preparation_error)
@@ -463,9 +474,13 @@ local function main(value: unknown, window: Window)
         return
     end
     local attach_target = machine.placement_target(plan, "attach")
-    local attached, attachment_error = attach_target and call(attach_target, {
-        attempt_id = admitted.attempt_id, recipient = process.pid(), generation = prepared.epoch,
-    }) or nil, "selected placement binds no attach"
+    local attached = false
+    local attachment_error: string? = "selected placement binds no attach"
+    if attach_target then
+        attached, attachment_error = call(attach_target, {
+            attempt_id = admitted.attempt_id, recipient = process.pid(), generation = prepared.epoch,
+        })
+    end
     if not attached then
         local reason = "native placement attachment was not confirmed: " .. tostring(attachment_error)
         show_failure(reason, function(): string
@@ -474,19 +489,11 @@ local function main(value: unknown, window: Window)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    if not machine.placement_is_native(plan) then
-        local reason = "native window requires the native placement binding"
-        show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
-        end)
-        tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-        return
-    end
     local width, height = tty.screen_size()
-    local terminal, terminal_error = window.open(admitted.attempt_id, {width = width, height = height,
+    local terminal, terminal_error = open(admitted.attempt_id, {width = width, height = height,
         term = "xterm-256color", expected_binding = prepared.gateway_binding, expected_placement_binding = plan.placement_binding.binding_id})
     if not terminal then
-        local reason = "native window did not open: " .. tostring(terminal_error)
+        local reason = "managed window did not open: " .. tostring(terminal_error)
         show_failure(reason, function(): string
             return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)

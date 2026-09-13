@@ -121,7 +121,6 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            test.is_false(machine.placement_is_native(selected))
             local prepared, err = machine.prepare_attempt(io, selected)
             if not prepared then error(tostring(err)) end
             test.eq(calls[#calls], "example.placement:prepare")

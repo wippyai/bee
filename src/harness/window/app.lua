@@ -7,5 +7,5 @@ local runtime = require("runtime")
 local window = require("window")
 
 return {main = function(value: unknown)
-    return runtime.main(value, window :: runtime.Window)
+    return runtime.main(value, "bee.placement.native:binding", window.open)
 end}

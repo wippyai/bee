@@ -58,6 +58,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
 end
 local WORKSPACE = string.rep("a", 32)
 local STAGE = "admitted"
+local BEFORE_ADMISSION = STAGE == "plan" or STAGE == "component"
 
 local function run()
     local thread = "managed_window_selector"
@@ -158,16 +159,16 @@ local function run()
 			local text = table.concat(frame.rows)
 			if text:find("Agent launch failed", 1, true) then
 				if not failure then failure = frame end
-                if STAGE == "plan" and appearance_replies > 0 then break end
+                if BEFORE_ADMISSION and appearance_replies > 0 then break end
 				if text:find("settlement pending", 1, true) then pending = frame; break end
 			end
 		end
 		time.sleep("25ms")
 	end
 	assert(failure, "failure surface did not remain visible")
-    assert((pending ~= nil) == (STAGE ~= "plan"), "incorrect settlement scope")
+    assert((pending ~= nil) == (not BEFORE_ADMISSION), "incorrect settlement scope")
     local failure_text = table.concat(failure.rows)
-	assert(failure_text:find("injected", 1, true), "failure reason missing")
+	assert(failure_text:find(STAGE == "component" and "window component" or "injected", 1, true), "failure reason missing")
     assert(appearance_replies > 0, "broker did not receive authenticated appearance state response")
     assert(view:send({type = "resize", width = 70, height = 14}))
     local resized = false
@@ -184,9 +185,9 @@ local function run()
         if record.kind == "action.admitted" then admitted = admitted + 1 end
         if record.kind == "attempt.prepared" then prepared = prepared + 1; attempt_id = tostring(record.attempt_id) end
         assert(record.kind ~= "attempt.started", "failed launch started a thread attempt")
-        if STAGE == "plan" then assert(record.kind ~= "receipt", "planning failure wrote a receipt") end
+        if BEFORE_ADMISSION then assert(record.kind ~= "receipt", "planning failure wrote a receipt") end
     end
-    assert(admitted == (STAGE == "plan" and 0 or 1), "incorrect action admission count")
+    assert(admitted == (BEFORE_ADMISSION and 0 or 1), "incorrect action admission count")
     assert(prepared == (STAGE == "placement" and 1 or 0), "incorrect attempt preparation count")
     if STAGE == "placement" then
         local cleaned = false
@@ -261,9 +262,9 @@ func envFor(dir string) []string {
 func run() error {
 	runtime := flag.String("runtime", ".wippy/bin/bee-wippy", "Bee runtime executable")
 	root := flag.String("root", ".", "Bee repository root")
-	stage := flag.String("stage", "admitted", "failure stage: plan, admitted or placement")
+	stage := flag.String("stage", "admitted", "failure stage: plan, component, admitted or placement")
 	flag.Parse()
-	if *stage != "plan" && *stage != "admitted" && *stage != "placement" {
+	if *stage != "plan" && *stage != "admitted" && *stage != "placement" && *stage != "component" {
 		return fmt.Errorf("unknown failure stage %q", *stage)
 	}
 	repo, err := filepath.Abs(*root)
@@ -397,7 +398,22 @@ func run() error {
 		}
 		machineText = string(machine)
 	}
-	if *stage != "placement" && machineText == string(machine) {
+	if *stage == "component" {
+		appPath := filepath.Join(dir, "src", "harness", "window", "app.lua")
+		appSource, err := os.ReadFile(appPath)
+		if err != nil {
+			return err
+		}
+		changed := strings.Replace(string(appSource), `"bee.placement.native:binding"`, `"fixture.other:binding"`, 1)
+		if changed == string(appSource) {
+			return fmt.Errorf("component binding anchor missing")
+		}
+		if err := os.WriteFile(appPath, []byte(changed), 0600); err != nil {
+			return err
+		}
+		machineText = string(machine)
+	}
+	if *stage != "placement" && *stage != "component" && machineText == string(machine) {
 		return fmt.Errorf("machine admission anchor missing")
 	}
 	if err := os.WriteFile(machinePath, []byte(machineText), 0600); err != nil {

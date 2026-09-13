@@ -492,9 +492,6 @@ type FailedPreparation = {epoch: integer?, gateway_binding: string?, attempt: bo
 function M.placement_target(plan: Plan, method: string): string?
     return plan.placement_binding.methods[method]
 end
-function M.placement_is_native(plan: Plan): boolean
-    return plan.placement_binding.binding_id == placement_resolver.DEFAULT
-end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
     local request = plan.request

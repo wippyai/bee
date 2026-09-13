@@ -68,7 +68,7 @@ or treat package metadata as an authorization source.
 
 ## Broker reconciliation checkpoint
 
-The next source reconciles protected application bindings and scopes by registry
+Global `dac1ba49` (source `7b7f4af`) reconciles protected application bindings and scopes by registry
 revision, using one snapshot and a shared admission record. The real source/pack
 broker fixture passes unbound denial, host-selected grant and grant reduction,
 revocation before a fresh open, missing-policy refusal, recovery after a valid
@@ -78,8 +78,12 @@ and renderer replacement checks also pass. Evidence is
 `hub-admission-check.log` and `hub-admission-attachments.log` in September 12
 local evidence. Strict lint and pack pass after resetting a reproduced stale
 linter cache (`hub-admission-pack-reset.log`); the pre-existing lifecycle fixpoint
-warning remains. Full regression and native installation of this source are
-pending. The global executable still contains the desktop cleanup checkpoint.
+warning remains. All 787 units pass, and full regression continues in
+`hub-admission-full-check.log`. Complete native acceptance passed on both the
+previous global and candidate, following two initial candidate startup timeouts
+whose cause remains unproven. The real native Modules install/update/uninstall
+cycle also passes, preserving Bee base modules. `hub-admission-global-install.json`
+records the installation with unchanged runtime/native pins and retained owners.
 
 This fixture grants registry publication only to its disposable test owner. It
 does not prove Hub install-to-Tools, approval consumption, atomic publication

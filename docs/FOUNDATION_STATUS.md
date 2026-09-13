@@ -1,9 +1,10 @@
 # Foundation status
 
-The next Hub lane source refreshes protected application admission and scopes
-without replacing existing producers. Its source/pack broker and detached
-Terminal/client-attachment checks pass. Approval-backed publication and native
-installation remain pending; see [Hub completion](handoffs/HUB_COMPLETION.md).
+Global `dac1ba49` refreshes protected application admission and scopes without
+replacing existing producers. Source/pack broker and attachment checks, 787 units,
+complete native acceptance and real native Modules install/update/uninstall pass.
+Full regression is running; approval-backed publication remains unfinished. See
+[current build](handoffs/GLOBAL_BUILD.md) and [Hub completion](handoffs/HUB_COMPLETION.md).
 
 Global `b92317be` removes the requested desktop hint text and Run queue display,
 preserving the Bee mark and current Hub/Agent work. Source/pack Process Manager

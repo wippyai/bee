@@ -21,6 +21,11 @@ and verifies that the committed receipt replays with byte-identical delivery.
 Driver checks cover empty results, static/dynamic append, errors and bounds.
 Luna's independent review found no concrete authority or replay defect.
 
+The source picker labels either static guidance or an instruction function as
+"Profile instructions". Discovery does not evaluate the function and reveals
+neither instruction text nor the function identifier/arguments. The summary
+correction passes the 801-case suite and awaits the next global refresh.
+
 This is launch-time host configuration. The picker does not yet edit this field,
 and active CLI sessions do not refresh it per turn. Global SHA `1b56f795`
 includes this feature, with native launch and offline restart/reconnect checks;

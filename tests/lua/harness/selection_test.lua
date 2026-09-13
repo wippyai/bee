@@ -180,12 +180,18 @@ local function define_tests()
         end)
 
         isolated_it("summarizes configured guidance without exposing its text", function()
+          for _, guidance in ipairs({
+            {instructions = "PRIVATE_GUIDANCE_SENTINEL"},
+            {instruction_builder = {func_id = "fixture:not_called_during_discovery", args = {memory = "PRIVATE_GUIDANCE_SENTINEL"}}},
+            {instructions = "PRIVATE_GUIDANCE_SENTINEL", instruction_builder = {func_id = "fixture:not_called_during_discovery", args = {}}},
+          }) do
             local original = registry.get(POLICY)
             if not original then error("missing selection policy") end
             local configured = copy_table(original)
             configured.id = PREFIX .. "guidance_policy"
             local data = copy_table(original.data :: Entry)
-            data.instructions = "PRIVATE_GUIDANCE_SENTINEL"
+            data.instructions = guidance.instructions
+            data.instruction_builder = guidance.instruction_builder
             configured.data = data
             with_entries({configured, definition("guided", "Guided profile", "selection-guided", "window", true, nil,
                 PREFIX .. "guidance_policy")}, function()
@@ -196,8 +202,10 @@ local function define_tests()
                 local rows = table.concat(frame.rows)
                 test.is_true(rows:find("Profile instructions", 1, true) ~= nil)
                 test.is_true(rows:find("PRIVATE_GUIDANCE_SENTINEL", 1, true) == nil)
+                test.is_true(rows:find("not_called_during_discovery", 1, true) == nil)
                 has_only_choice_fields(result.items[1])
             end)
+          end
         end)
 
         isolated_it("keeps an inactive profile visible with its refusal and disables launch", function()

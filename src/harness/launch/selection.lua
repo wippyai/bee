@@ -31,7 +31,7 @@ function M.read(pinned: catalog.Pinned): (Choices?, string?)
                     if not selected_policy then return nil, policy_error or "Selected profile policy is invalid" end
                     local location = definition.workdir_policy.kind == "caller_workspace" and "Project folder" or
                         (definition.workdir_policy.kind == "declared_resource" and "Configured folder" or "Directory required")
-                    local guidance = selected_policy.instructions and "Profile instructions" or "No instructions"
+                    local guidance = (selected_policy.instructions or selected_policy.instruction_builder) and "Profile instructions" or "No instructions"
                     local tools = #selected_policy.gateway_tools
                     local summary = location .. " · " .. guidance .. " · " .. tostring(tools) .. " tools configured"
                     result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,

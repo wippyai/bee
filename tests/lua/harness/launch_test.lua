@@ -29,7 +29,7 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy",
+local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee:thread_create_policy", "bee:thread_observe_policy",
     "bee:thread_lifecycle_policy", "bee:thread_carrier_policy", "bee:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee:resource_manage_policy",
     "bee:resource_grant_policy", "bee:credential_manage_policy", "bee:credential_issue_policy", "bee:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(): security.Scope
@@ -95,6 +95,16 @@ local function prepare_host(workspace: string)
     if not present then
         roots[#roots + 1] = {root_ref = ROOT, access = "write"}
         apply(roots_entry)
+    end
+    local native_roots = registry.get("bee.placement.native:admitted_roots")
+    if not native_roots then error("native admitted roots") end
+    local native_data = native_roots.data :: {[string]: unknown}
+    local admitted = native_data.roots :: {{[string]: unknown}}
+    local native_present = false
+    for _, root in ipairs(admitted) do if root.root_ref == ROOT then native_present = true end end
+    if not native_present then
+        admitted[#admitted + 1] = {root_ref = ROOT, access = "write"}
+        apply(native_roots)
     end
     local setup_entry = registry.get("bee:harness_setup")
     if not setup_entry then error("harness setup") end
@@ -169,6 +179,38 @@ local function define_tests()
     test.describe("Launch admission", function()
         local workspace = fresh("ws")
         prepare_host(workspace)
+        test.it("fences a saved profile revision before admission and rejects preferences outside host policy", function()
+            local workspace_id, saved_id = workspace, fresh("profile")
+            local function save(revision: integer, title: string, options: {[string]: unknown})
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
+                    expected_revision = revision, idempotency_key = fresh("save"), profile = {title = title, definition_ref = DEFINITION, options = options}}))
+            end
+            save(0, "First profile", {})
+            local original = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 1}))
+            test.eq(original.saved_profile_id, saved_id)
+            test.eq(original.saved_profile_revision, 1)
+            test.is_nil(original.preferences)
+            local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("saved-profile-admit"), definition_ref = DEFINITION,
+                workspace_id = workspace_id, brief = "profile fixture", saved_profile_id = saved_id, saved_profile_revision = 1,
+                expected_plan_digest = original.plan_digest}))
+            local carrier_request = admitted.request :: {[string]: unknown}
+            local preferences = carrier_request.preferences :: {[string]: unknown}
+            test.eq(preferences.instructions, "")
+            test.eq(#(preferences.mcp_tools :: {unknown}), 0)
+            save(1, "Revised profile", {})
+            local refused = call("bee.harness.launch:admit", {request_id = fresh("stale-profile"), definition_ref = DEFINITION,
+                workspace_id = workspace_id, brief = "never launch", saved_profile_id = saved_id, saved_profile_revision = 1,
+                expected_plan_digest = original.plan_digest})
+            test.eq(code(refused), "CONFLICT")
+            local updated = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 2}))
+            test.neq(original.plan_digest, updated.plan_digest)
+            save(2, "Forbidden option", {permission_mode = "dontAsk"})
+            local unsafe = call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 3})
+            test.is_false(unsafe.ok)
+        end)
         test.it("sets selected resources once, then admission grants the exact associations", function()
             local first_workspace = fresh("setup")
             local first = setup(first_workspace, RETAINED_DEFINITION)

@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.harness.profiles
 entries:
+- name: preferences_test
+  kind: function.lua
+  source: file://preferences_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    preferences: bee.driver:preferences
 - name: test_call
   kind: security.policy
   meta: {type: test_support}

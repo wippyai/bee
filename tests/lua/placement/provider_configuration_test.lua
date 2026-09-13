@@ -233,6 +233,17 @@ local function define_tests()
             local body_ok, body_error = pcall(function()
                 set_activation(true)
                 assert_provider_argument_isolated()
+                local unadmitted_preferences = launch(fresh("profile-options"))
+                unadmitted_preferences.preferences = {options = {model = "unadmitted"}, mcp_tools = {}, instructions = ""}
+                local refused_preferences = call(OWNER, "prepare", unadmitted_preferences)
+                test.is_false(refused_preferences.ok)
+                test.eq(refused_preferences.error and refused_preferences.error.code, "DENIED")
+                local profile_db, profile_db_error = store.open()
+                if not profile_db then error(tostring(profile_db_error)) end
+                local profile_intent, profile_intent_error = store.attempt(profile_db, unadmitted_preferences.attempt_id :: string)
+                profile_db:release()
+                test.is_nil(profile_intent_error)
+                test.is_nil(profile_intent)
                 -- A profile edit after planning must be refused before creating
                 -- an intent, even when the driver/provider are unchanged.
                 local stale = launch(fresh("instructions"))

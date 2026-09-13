@@ -7,6 +7,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
+local preferences = require("preferences")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -158,7 +159,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
     local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id",
-        "binding_digest", "profile_digest", "launch", "configuration_digest", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
+        "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
     if not key then return nil, "idempotency_key is not an identifier" end
@@ -214,6 +215,12 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         if environment[name] == nil and refs[name] == nil then return nil, "launch.environment requires " .. name .. " and nothing supplies it" end
     end
     local configuration_digest: string? = nil
+    local selected: types.Preferences? = nil
+    if object.preferences ~= nil then
+        local decoded_preferences, preference_error = preferences.decode(object.preferences)
+        if not decoded_preferences then return nil, preference_error end
+        selected = decoded_preferences
+    end
     if object.configuration_digest ~= nil then
         configuration_digest = digest_hex(object.configuration_digest)
         if not configuration_digest then return nil, "configuration_digest must be a sha256 hex digest" end
@@ -273,6 +280,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
+        preferences = selected,
         binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
         required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts}

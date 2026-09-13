@@ -166,6 +166,7 @@ entries:
   imports:
     gateway_configuration: bee.gateway:configuration
     configuration: bee.driver:configuration
+    preferences: bee.driver:preferences
     resolver: bee.driver:resolver
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

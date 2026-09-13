@@ -1,6 +1,7 @@
 # Saved agent profiles
 
-Source work in progress; not installed or exposed in the Agent picker yet.
+Source work in progress; saved-profile resolution/admission is implemented, but
+not installed or exposed in the Agent picker yet.
 
 A saved profile selects a reviewed launch definition and stores a title, scalar
 options, MCP tool identifiers and appended instructions. The definition selects
@@ -38,12 +39,33 @@ Each workspace feed retains 128 change events and up to 1024 mutation receipts.
 Receipt exhaustion refuses new edits instead of silently forgetting retry
 history. A retention/compaction policy is not implemented.
 
-Next integration must resolve the selected definition and current host policy
-again at launch, validate user options under that policy, restrict MCP tools to
-its authorized set and bind profile identity/revision/content into the launch
-plan. A stale selection must fail before credential reads, gateway grants, thread
-creation or native execution. Only then should the picker/editor use this facade.
-Saving preferences must never launch a process as a side effect.
+Launch resolve, setup and admission now accept `saved_profile_id` and
+`saved_profile_revision` alongside the workspace and definition. They read the
+authorized profile and require its current revision and matching definition.
+Admission also requires the displayed plan digest. The plan measures profile
+identity/revision/content without returning instruction text to the picker.
+Stale selection refuses before thread creation, grants or native execution.
+
+`bee.driver:preferences` is the shared pure policy application used by launch
+planning, the carrier and native configuration. `profile_options` in the host
+launch policy maps editable option names to bounded lists of allowed scalar
+values; driver control fields remain reserved. `profile_instructions: true`
+permits appended profile guidance within the combined 4096-byte limit. Disabled
+guidance is refused, never silently dropped. Selected MCP tools must be a subset
+of the host list; hooks remain independent. There are no production grants or
+editable options enabled by this change.
+
+Credentials retain the original host policy digest. Carrier/native requests carry
+decoded preferences, and the resulting configuration and placement request are
+measured separately. Native placement reapplies current host policy before a new
+intent; an unadmitted option leaves no intent. Existing frozen placement delivery
+continues to govern replay. The 42 focused cases pass shared preference bounds,
+authorized profile resolution/admission, stale revision rejection, host digest
+preservation and native pre-intent refusal, alongside existing launch tests.
+Successful real-provider execution with edited options remains unverified.
+
+Next: picker/editor integration and default host selections, then native Agent
+acceptance. Saving preferences must never launch a process as a side effect.
 
 No profile replication or cross-node human identity is claimed. Hive distribution
 and governed registry overlays remain separate work.

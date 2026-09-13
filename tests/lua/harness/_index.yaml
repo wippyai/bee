@@ -980,3 +980,11 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.harness.profiles:protocol
+
+- name: saved_profile_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.read, bee.harness.profiles.write, funcs.call]
+    resources: ['*']
+    effect: allow

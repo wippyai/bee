@@ -30,6 +30,11 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+- name: preferences
+  kind: library.lua
+  source: file://preferences.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:

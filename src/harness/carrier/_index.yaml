@@ -25,6 +25,7 @@ entries:
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
     configuration: bee.driver:configuration
+    preferences: bee.driver:preferences
 - name: continuation
   kind: library.lua
   source: file://continuation.lua

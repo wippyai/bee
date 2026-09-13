@@ -28,6 +28,23 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("keeps the host authority digest while applying admitted preferences", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = raw.data :: Entry
+            data.prepare_options = {max_turns = 1}
+            data.profile_options = {max_turns = {1, 3}}
+            data.profile_instructions = true
+            data.instructions = "Host instructions"
+            local host, host_error = policy.decode("test:policy", raw)
+            if not host then error(tostring(host_error)) end
+            local selected, selected_error = policy.decode("test:policy", raw, nil, {options = {max_turns = 3}, mcp_tools = {}, instructions = "Profile instructions"})
+            if not selected then error(tostring(selected_error)) end
+            test.eq(host.digest, selected.digest)
+            test.eq(host.prepare_options.max_turns, 1)
+            test.eq(selected.prepare_options.max_turns, 3)
+            test.eq(selected.instructions, "Host instructions\n\nProfile instructions")
+            test.eq(selected.executables.claude, host.executables.claude)
+        end)
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry

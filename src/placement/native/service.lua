@@ -24,6 +24,7 @@ local registry = require("registry")
 local gateway_configuration = require("gateway_configuration")
 local resolver = require("resolver")
 local configuration_protocol = require("configuration")
+local preferences = require("preferences")
 local materialization = require("materialization")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
@@ -262,6 +263,11 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
+    if request.preferences then
+        local effective, preference_error = preferences.apply(data, request.preferences)
+        if not effective then return nil, nil, preference_error end
+        data = effective
+    end
     local instructions, instructions_error = configuration_protocol.instructions(data.instructions)
     if instructions_error then return nil, nil, instructions_error end
     local instruction_builder, builder_error = configuration_protocol.instruction_builder(data.instruction_builder)

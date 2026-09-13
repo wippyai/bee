@@ -17,6 +17,7 @@ local definition = require("definition")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
 local continuation = require("continuation")
+local profiles = require("profiles")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -28,6 +29,8 @@ M.MAX_BRIEF_BYTES = 16384
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
+    saved_profile_id: string?,
+    saved_profile_revision: integer?,
     title: string,
     definition_ref: string,
     definition_digest: string,
@@ -50,6 +53,8 @@ type Admitted = {
 }
 type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string}
 type Request = {
+    saved_profile_id: string?,
+    saved_profile_revision: integer?,
     request_id: string,
     definition_ref: string,
     workspace_id: string,
@@ -108,7 +113,26 @@ local function read_definition(pinned: catalog.Pinned, definition_ref: string): 
     if not entry then return nil, "launch definition " .. definition_ref .. " is not in the registry" end
     return definition.decode(definition_ref, entry)
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?): (Plan?, Reply?)
+type Selected = {profile_id: string, revision: integer, profile: profiles.Profile}
+local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
+    local raw, err = funcs.call("bee.harness.profiles:call", {operation = "get", workspace_id = workspace, profile_id = id})
+    if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
+    local reply = bounds.object(raw)
+    if not reply then return nil, fail("UNAVAILABLE", "invalid saved profile reply") end
+    if reply.ok ~= true then return nil, fail(bounds.id(reply.code) or "DENIED", "saved profile is unavailable") end
+    local value = bounds.object(reply.value)
+    if not value or value.workspace_id ~= workspace or value.profile_id ~= id then return nil, fail("UNAVAILABLE", "saved profile identity differs") end
+    if value.tombstone ~= false or value.revision ~= revision then return nil, fail("CONFLICT", "saved profile changed; select it again") end
+    local profile, profile_error = profiles.profile(value.profile)
+    if not profile then return nil, fail("UNAVAILABLE", profile_error or "invalid saved profile") end
+    if profile.definition_ref ~= definition_ref then return nil, fail("CONFLICT", "saved profile selects a different launch definition") end
+    return {profile_id = id, revision = revision, profile = profile}, nil
+end
+local function preference_value(selected: Selected?): placement_types.Preferences?
+    if not selected then return nil end
+    return {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
+end
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?): (Plan?, Reply?)
     local definition_ref = launch.ref
     local chosen = launch.default_mode
     if mode and mode ~= chosen then
@@ -137,7 +161,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if not supported then return nil, fail("UNSUPPORTED_CAPABILITY", "profile " .. launch.profile_id .. " of " .. launch.binding_ref .. " does not run in mode " .. chosen) end
     local policy_entry = catalog.entry(pinned, launch.policy_ref)
     if not policy_entry then return nil, fail("NOT_FOUND", "launch policy " .. launch.policy_ref .. " is not in the registry") end
-    local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry)
+    local launch_policy, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, preference_value(selected))
     if not launch_policy then return nil, fail("NOT_FOUND", policy_error or "policy") end
     if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
     -- A listed profile needs a host-selected executable, but this passive
@@ -162,11 +186,12 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         provider_digest = measured
     end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
-        provider = provider_digest, mode = chosen})
+        provider = provider_digest, mode = chosen, saved_profile = selected})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
-        catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest}, nil
+        catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
+        saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil}, nil
 end
 -- A caller composing a larger host plan can retain the same snapshot for
 -- its other declarations; this read performs no registry mutation or admission.
@@ -175,20 +200,34 @@ function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): 
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
     return resolve(pinned, launch, mode)
 end
-function M.resolve(definition_ref: string, mode: string?): (Plan?, Reply?)
+function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?): (Plan?, Reply?)
+    local selected: Selected? = nil
+    if saved_id or saved_revision then
+        if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
+        local found, refused = selected_profile(workspace, saved_id, saved_revision, definition_ref)
+        if not found then return nil, refused end
+        selected = found
+    end
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
-    return M.read(pinned, definition_ref, mode)
+    local launch, definition_error = read_definition(pinned, definition_ref)
+    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
+    return resolve(pinned, launch, mode, selected)
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
     if not definition_ref then return nil, "definition_ref is not an identifier" end
     if not workspace_id then return nil, "workspace_id is not an identifier" end
+    local saved_id, saved_revision = bounds.id(object.saved_profile_id), bounds.count(object.saved_profile_revision)
+    if object.saved_profile_id ~= nil or object.saved_profile_revision ~= nil then
+        if not saved_id or not saved_revision or saved_revision < 1 then return nil, "saved profile needs identity and positive revision" end
+        if object.expected_plan_digest == nil then return nil, "saved profile needs the selected launch plan digest" end
+    end
     local brief = bounds.text(object.brief, M.MAX_BRIEF_BYTES)
     if not brief then return nil, "brief must be bounded text" end
     local mode: string? = nil
@@ -230,6 +269,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         previous = {origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread}
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
+        saved_profile_id = saved_id, saved_profile_revision = saved_revision,
         expected_plan_digest = expected_plan_digest, continuation = previous}, nil
 end
 -- The durable identities of a request: the same request id always names
@@ -250,11 +290,17 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if not request then return nil, fail("INVALID", decode_error or "invalid request") end
     local requester = actor()
     if not requester then return nil, fail("UNAUTHENTICATED", "no actor") end
+    local selected: Selected? = nil
+    if request.saved_profile_id and request.saved_profile_revision then
+        local found, refused = selected_profile(request.workspace_id, request.saved_profile_id, request.saved_profile_revision, request.definition_ref)
+        if not found then return nil, refused end
+        selected = found
+    end
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused = resolve(pinned, launch, request.mode)
+    local plan, plan_refused = resolve(pinned, launch, request.mode, selected)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
@@ -336,6 +382,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         projections[index] = tostring(issued.projection_id)
     end
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
+        preferences = preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
         previous_attempt_id = previous and previous.previous_attempt_id or nil}

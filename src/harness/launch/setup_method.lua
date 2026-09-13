@@ -14,13 +14,17 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest"}) then return {ok = false, error = "unknown field"} end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision"}) then return {ok = false, error = "unknown field"} end
     local workspace, definition_ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace then return {ok = false, error = "workspace_id is not an identifier"} end
     if not definition_ref then return {ok = false, error = "definition_ref is not an identifier"} end
     if not digest(request.expected_plan_digest) then return {ok = false, error = "expected_plan_digest must be a lowercase SHA-256 hex digest"} end
     if not security.can("bee.harness.setup", workspace) then return {ok = false, error = "setup is not authorized"} end
-    local plan, plan_error = admission.resolve(definition_ref, nil)
+    local saved_id, saved_revision = bounds.id(request.saved_profile_id), bounds.count(request.saved_profile_revision)
+    if request.saved_profile_id ~= nil or request.saved_profile_revision ~= nil then
+        if not saved_id or not saved_revision or saved_revision < 1 then return {ok = false, error = "saved profile needs identity and positive revision"} end
+    end
+    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     local scope, scope_error = security.named_scope(SCOPE)

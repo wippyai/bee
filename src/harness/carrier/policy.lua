@@ -8,6 +8,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local placement_types = require("placement_types")
 local configuration = require("configuration")
+local preferences = require("preferences")
 local M = {}
 M.SCHEMA = "bee.launch-policy@2"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
@@ -75,12 +76,12 @@ local function decode_executable_env(value: unknown, executables: {[string]: str
     end
     return nil
 end
-function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?): (Policy?, string?)
+function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -129,6 +130,13 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
+    -- Credentials bind the host policy; the launch separately measures the
+    -- preferences and resulting configuration under that policy.
+    if selected then
+        local effective, preference_error = preferences.apply(data, selected)
+        if not effective then return nil, ref .. ": " .. tostring(preference_error) end
+        data = effective
+    end
     -- Host-owned options for the driver's prepare: scalar values the
     -- driver decodes under its own rules (permission mode, turn bound,
     -- sandbox); the caller never chooses them.

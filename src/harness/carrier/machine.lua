@@ -50,6 +50,7 @@ type IO = {
     after: ((string) -> ())?,
 }
 type Request = {
+    preferences: placement_types.Preferences?,
     thread_id: string,
     action_id: string,
     attempt_id: string,
@@ -167,7 +168,7 @@ local function measure(request: Request): (Measured?, string?)
     if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry)
+    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences)
     if not launch_policy then return nil, policy_error end
     local exchange: Exchange? = nil
     local declared = launch_policy.permission_exchange
@@ -335,6 +336,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry, launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
+        preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
         binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,

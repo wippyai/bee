@@ -1,6 +1,8 @@
 -- MIT. Placement values: what a launch asks for, what an attempt is, and
 -- what a runtime can promise about cleanup. Nothing here runs anything.
 local driver_types = require("driver_types")
+local preferences = require("preferences")
+type Preferences = preferences.Value
 type Capability = "direct_process" | "process_group" | "contained_tree"
 -- How a runtime lets the runner learn the exit: independently of the pipes,
 -- or only once both streams end.
@@ -34,6 +36,7 @@ type ExecutableMeasurement = {revision: string, kind: string, digest: string}
 -- materialization; no token or binding id travels in the request.
 type Gateway = {endpoint: string, tools: {string}, destination: string, hooks: {string}, hook_destination: string?}
 type LaunchRequest = {
+    preferences: Preferences?,
     idempotency_key: string,
     owner_id: string,
     owner_incarnation: integer,

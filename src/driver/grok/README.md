@@ -46,7 +46,7 @@ Grok fixture now passes picker launch, present/absent machine login, scoped MCP,
 committed PreToolUse/Stop delivery and the resulting "Using tool" window title.
 This fixture does not prove real Grok model turns or cold window recovery.
 Evidence: `bee-evidence/0912/grok-session-hook-live.log` and
-`agent-login-hooks-grok-title.log`. This source is not installed globally.
+`agent-login-hooks-grok-title.log`. Global binary `c8537ef7` includes this integration.
 
 The installed CLI advertises stdio, Streamable HTTP and SSE MCP
 transports. A September 13 loopback probe of the actual `grok mcp doctor`

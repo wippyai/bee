@@ -2,16 +2,19 @@
 
 ## Current checkpoint — September 13
 
-**Release candidate, not installed:** production `f36e488`, binary `c8537ef7`,
+**Installed globally:** production `f36e488`, binary `c8537ef7`,
 adds Grok login/hooks and imports existing Agy onboarding state when creating a
 private harness HOME. All four managed harness fixtures pass through the actual
 picker, login delivery and scoped MCP. Real Grok startup commits SessionStart to
 its bound thread without a model prompt. Offline fresh/restart/reconnect and
 Claude fixture cold recovery pass. The exact candidate also launches real Agy
 1.2.2 to its normal interactive prompt after the ordinary trust confirmation;
-no model prompt was submitted. Full repository regression stopped at the
-drag-failure fixture's fresh-runtime readiness timeout (no terminal output);
-the unchanged fixture passes alone and full regression is repeating. Real Claude
+no model prompt was submitted. Full repository regression passed on repeat
+(session `45783`, 863 unit tests plus storage and source/pack acceptance).
+The first run's drag-failure readiness timeout remains unexplained; the unchanged
+fixture passes alone and in the full repeat. All six installed artifacts match
+the verified candidate; the previous build is backed up, and databases and running
+nodes were preserved. Real Claude
 reports "Not logged in" with the copied saved login both inside Bee and directly
 in a fresh HOME. The source access token is expired; interactive refresh is
 unverified and no Bee-specific cause is established. See
@@ -23,7 +26,7 @@ sharing. Some post-picker launch failures still close the window instead of
 leaving a readable failure surface. Native Docker module composition is present
 in the candidate; it does not make Docker selectable or usable in the Agent UI.
 
-Global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
+Previous global `7d9182cb` contains production `f7fe2ab` and native `fe8cb0d`: retained
 configuration publication, cancellation before login writes, preserved supervisor
 failure diagnostics and consistent hook conversation identity. Full `make check`
 passes (851 units and source/pack acceptance), as do exact native, offline and

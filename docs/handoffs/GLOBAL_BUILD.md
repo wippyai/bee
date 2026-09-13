@@ -1,9 +1,17 @@
 # Global Bee build — September 13, 2026
 
-## Candidate under verification: Agy setup and Grok integration
+## Current install: Agy setup and Grok integration
 
 Candidate SHA `c8537ef7bc83048ea7a052b449f56e8fc27713b67b49999e828d5cff8d86a486`
-contains production `f36e488` and native `79a1cd9`. Global remains `7d9182cb`.
+contains production `f36e488` and native `79a1cd9` and is now installed globally.
+Full `make check` repeat session `45783` exited 0: 863 unit tests and the complete
+storage, source/pack desktop, recovery and app acceptance. The first run's
+readiness timeout below remains unexplained; the unchanged isolated fixture and
+full repeat both pass. The installed binary and all five sidecars were independently
+compared byte-for-byte with the verified candidate after installation.
+Previous global `7d9182cb` is backed up in
+`bee-evidence/0912/global-before-agent-login-hooks-7d9182cb`; the install receipt is
+`agent-login-hooks-global-install.json`. Databases and running nodes were preserved.
 Agy imports the host-admitted existing onboarding JSON only when initializing
 a new private HOME. Credential identity and already-initialized homes remain
 unchanged. Grok has optional machine login delivery and five admitted window
@@ -17,8 +25,8 @@ Offline fresh/restart/reconnect and Claude fixture cold recovery also pass.
 All artifact hashes and six archived runtime patches match provenance. Full
 `make check` session `52992` exited 2 at `tests/drag_failure.py`: the fresh
 runtime emitted no terminal bytes within its readiness deadline. Earlier
-control-delivery source/pack checks passed. The failure is being reproduced
-separately; the full gate has not passed. Real Agy 1.2.2 interactive startup
+control-delivery source/pack checks passed. The subsequent full repeat passed,
+as recorded above. Real Agy 1.2.2 interactive startup
 passes on this exact binary: the picker launches it, production delivery imports
 matching existing login/onboarding files, and the normal prompt appears after
 the ordinary disposable-project trust confirmation. No settings or trust state
@@ -33,7 +41,7 @@ existing account metadata also did not resolve it; that wrapper is external
 evidence only and is not a proposed production fix. File delivery and child
 authentication are being checked separately.
 
-The unchanged drag-failure fixture passes alone; full regression is repeating
+The unchanged drag-failure fixture passes alone; full regression passed
 as session `45783`, log `agent-login-hooks-check-repeat.log`. The initial timeout
 remains unexplained. The Claude login failure also reproduces directly outside
 Bee with the same copied credential and minimal HOME: normal prompt, "Not logged
@@ -51,9 +59,10 @@ machine settings or trust state. Evidence: `grok-actual-managed-make.log`.
 
 Evidence in `bee-evidence/0912/`: `agent-login-hooks-{build,native,offline,recovery,check}.log`
 and `agent-login-hooks-grok-title.log`. The runtime pin is unchanged; builder
-PR 8 and runtime PR 745 remain unmerged. No global installation has occurred.
+PR 8 and runtime PR 745 remain unmerged. Pending launch-failure UI changes and
+the unused placement abort API are not included in this installation.
 
-## Current install: retained configuration and Agy cold recovery
+## Previous install: retained configuration and Agy cold recovery
 
 Global SHA `7d9182cb40ddb5d60a2666c2e034ef3c601c51017d6e6742ebfea8bd8f172642`
 contains production `f7fe2ab` and native `fe8cb0d`. Retained host configuration is

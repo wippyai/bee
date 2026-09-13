@@ -1,5 +1,11 @@
 # Foundation status
 
+Global `dac1ba49` refreshes protected application admission and scopes without
+replacing existing producers. Source/pack broker and attachment checks, 787 units,
+complete native acceptance and real native Modules install/update/uninstall pass.
+Full regression is running; approval-backed publication remains unfinished. See
+[current build](handoffs/GLOBAL_BUILD.md) and [Hub completion](handoffs/HUB_COMPLETION.md).
+
 Global `b92317be` removes the requested desktop hint text and Run queue display,
 preserving the Bee mark and current Hub/Agent work. Source/pack Process Manager
 and native acceptance pass. The preceding Hub source passed all 787 unit cases

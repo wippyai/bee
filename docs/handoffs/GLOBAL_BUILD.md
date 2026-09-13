@@ -1,6 +1,41 @@
 # Global Bee build — September 12, 2026
 
-## Current install: remove desktop hints and Run queue
+## Current install: reconcile protected application admission
+
+Global SHA `dac1ba49436ddb79672f6ab5a9cddc39a49d8acf55d7f992ad7e46f0e682786a`
+contains source `7b7f4af`. The broker reloads protected bindings, descriptors and
+host-selected scopes by registry revision and before new opens. Revoked bindings
+prevent new launches; invalid replacements clear future admission while existing
+producers retain their bindings and viewports. A valid replacement recovers the
+catalog and launch path together. This grants no new publication authority and
+does not yet expose an approval-backed install-to-Tools workflow.
+
+The source/pack admission fixture and existing detached Terminal/client/renderer
+attachment gate pass. All 787 unit cases pass in the running full regression.
+Strict lint and pack pass after resetting a reproduced stale cache; the existing
+lifecycle fixpoint warning remains. Complete native acceptance passes, including
+Modules, About, terminal behavior and Agent launch. A real native Modules
+install/update/uninstall cycle preserves all Bee base artifacts. Evidence:
+`hub-admission-check.log`, `hub-admission-attachments.log`,
+`hub-admission-pack-reset.log`, `hub-admission-native-comparison-candidate.log`,
+`hub-admission-native-modules.log`, `hub-admission-full-check.log`, and
+`hub-admission-global-install.json`.
+
+Two initial native smoke runs missed the four-second startup wait with no output.
+Fresh candidate and prior-global startup probes then passed around 1.4 seconds,
+and the complete native target passed sequentially on both builds. The initial
+cause is unproven; see `hub-admission-native.log`,
+`hub-admission-native-recheck.log`, `hub-admission-startup-probe.json`, and
+`hub-admission-native-comparison.json`. Do not describe these initial runs as
+passing or the full repository gate as completed.
+
+The installer verified and backed up all six global files, fenced against
+`b92317be`, and preserved the existing runtime/native/patch identity. No running
+Bee owner was restarted. The Bee mark, desktop hint/Run queue cleanup, current
+Hub UI and Agent work are included. Existing sessions keep their loaded source.
+
+
+## Previous install: remove desktop hints and Run queue
 
 Global SHA `b92317bec5fbc70a4e100aa6a5870ac645356c42cc40dff42c804358af553cbf`
 contains source `b59d2cc`. The user-requested cleanup removes empty-desktop

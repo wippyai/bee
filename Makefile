@@ -274,3 +274,8 @@ check: modules-contents-check
 # Explicit live Hub probe, like native-modules-lifecycle-check.
 native-contents-check:
 	python3 tests/native_contents.py "$(BEE_BINARY)"
+
+check: app-admission-check
+.PHONY: app-admission-check
+app-admission-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py

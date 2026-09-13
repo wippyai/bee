@@ -15,6 +15,8 @@ local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
 local shutdown = require("shutdown")
+type Admission = {revision: string, bindings: {contract.Binding}, items: {contract.Descriptor},
+    descriptors: {[string]: contract.Descriptor}, scopes: {[string]: security.Scope}}
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
@@ -47,7 +49,7 @@ local function main(owner: string, initial_preferences: unknown)
     assert(process.monitor(owner))
     local ticker = assert(time.ticker("100ms"))
     local ticks = ticker:channel()
-    local bindings = catalog.bindings()
+    local admission: {current: Admission?, error: string} = {error = ""}
     local instances: {[string]: Instance} = {}
     -- The host receives a complete snapshot after every change. A PID is only
     -- an execution-local reader reference; it is not a durable principal.
@@ -78,26 +80,54 @@ local function main(owner: string, initial_preferences: unknown)
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
     local preference_waiters: {[string]: PreferenceWaiter} = {}
-    local scope_cache: {[string]: security.Scope} = {}
-    local base, base_error = security.policy("bee:base_app_policy")
-    if base_error then error(tostring(base_error)) end
-    local boundary, boundary_error = security.policy("bee:app_boundary_policy")
-    if boundary_error then error(tostring(boundary_error)) end
-    local scope_boundary, scope_boundary_error = security.policy("bee:scope_managing_app_boundary")
-    if scope_boundary_error then error(tostring(scope_boundary_error)) end
-    local private_core, private_error = security.policy("bee:core_spawn_boundary")
-    if private_error then error(tostring(private_error)) end
-    local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
-    if storage_error then error(tostring(storage_error)) end
-    for _, binding in ipairs(bindings) do
-        local selected_boundary: security.Policy = binding.scope_management and scope_boundary or boundary
-        local policies: {security.Policy} = {base, selected_boundary, private_core, storage_boundary}
-        for _, name in ipairs(binding.policies) do
-            local policy, err = security.policy(name)
-            if err then error(tostring(err)) end
-            policies[#policies + 1] = policy
+    -- Reconcile the protected registry declaration without replacing live producers.
+    -- Reads use one snapshot; policy lookup must still finish at that revision.
+    local function refresh_admission(initial: boolean?)
+        local current = registry.current_version()
+        local previous = admission.current
+        if current and previous and current:string() == previous.revision then return end
+        local ok, loaded = pcall(function(): Admission
+            local pinned = assert(registry.snapshot())
+            local revision = pinned:version():string()
+            local next_bindings = catalog.bindings(pinned)
+            local next_items = catalog.items(next_bindings, pinned)
+            local next_scopes: {[string]: security.Scope} = {}
+            local base, base_error = security.policy("bee:base_app_policy")
+            if base_error then error(tostring(base_error)) end
+            local boundary, boundary_error = security.policy("bee:app_boundary_policy")
+            if boundary_error then error(tostring(boundary_error)) end
+            local scope_boundary, scope_boundary_error = security.policy("bee:scope_managing_app_boundary")
+            if scope_boundary_error then error(tostring(scope_boundary_error)) end
+            local private_core, private_error = security.policy("bee:core_spawn_boundary")
+            if private_error then error(tostring(private_error)) end
+            local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
+            if storage_error then error(tostring(storage_error)) end
+            for _, binding in ipairs(next_bindings) do
+                local selected_boundary: security.Policy = binding.scope_management and scope_boundary or boundary
+                local policies: {security.Policy} = {base, selected_boundary, private_core, storage_boundary}
+                for _, name in ipairs(binding.policies) do
+                    local policy, err = security.policy(name)
+                    if err then error(tostring(err)) end
+                    policies[#policies + 1] = policy
+                end
+                next_scopes[binding.definition_id] = security.new_scope(policies)
+            end
+            local checked = assert(registry.current_version())
+            if checked:string() ~= revision then error("Application admission changed during refresh") end
+            local next_descriptors: {[string]: contract.Descriptor} = {}
+            for _, item in ipairs(next_items) do next_descriptors[item.definition_id] = item end
+            return {revision = revision, bindings = next_bindings, descriptors = next_descriptors, scopes = next_scopes, items = next_items}
+        end)
+        if ok then
+            admission.current, admission.error = loaded, ""
+            assert(process.send(owner, "bee.application.catalog", {version = 1, items = loaded.items}))
+        else
+            if initial then error(tostring(loaded)) end
+            -- An invalid or unreadable replacement must not leave stale grants
+            -- available for another launch. Existing instances retain their scope.
+            admission.current, admission.error = nil, tostring(loaded):sub(1, 2000)
+            if previous then assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}})) end
         end
-        scope_cache[binding.definition_id] = security.new_scope(policies)
     end
     local function emit(reply: contract.Reply, remember: boolean?)
         reply.workspace_id = workspace_id
@@ -303,7 +333,7 @@ local function main(owner: string, initial_preferences: unknown)
             emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
         else transition(item, force and "force_stop" or "stop") end
     end
-    assert(process.send(owner, "bee.application.catalog", {version = 1, items = catalog.items(bindings)}))
+    refresh_admission(true)
     publish_catalog_readers()
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local function abort_shutdown()
@@ -358,6 +388,7 @@ local function main(owner: string, initial_preferences: unknown)
                 if item then transition(item, "exit") end
             end
         elseif selected.channel == ticks then
+            refresh_admission()
             for id, waiter in pairs(checkpoint_waiters) do
                 if now() >= waiter.deadline then
                     process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
@@ -714,9 +745,13 @@ local function main(owner: string, initial_preferences: unknown)
                     elseif req.op == "open" and shutdown_plan then
                         emit(contract.reply(req.request_id, "open", "busy", "Quit confirmation pending"), true)
                     elseif req.op == "open" then
+                        refresh_admission()
+                        local selected_admission = admission.current
                         local binding: contract.Binding? = nil
-                        for _, candidate in ipairs(bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
-                        local descriptor = binding and catalog.descriptor(req.definition_id)
+                        if selected_admission then
+                            for _, candidate in ipairs(selected_admission.bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
+                        end
+                        local descriptor = selected_admission and binding and selected_admission.descriptors[req.definition_id]
                         local existing: Instance? = nil
                         local count = 0
                         for _, item in pairs(instances) do
@@ -728,7 +763,7 @@ local function main(owner: string, initial_preferences: unknown)
                                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Singleton application is associated with another thread"), true)
                             elseif existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
                             else emit(contract.reply(req.request_id, "open", "busy", "Application is changing state"), true) end
-                        elseif not binding or not descriptor then emit(contract.reply(req.request_id, "open", "not_admitted", "Application is not admitted"), true)
+                        elseif not selected_admission or not binding or not descriptor then emit(contract.reply(req.request_id, "open", "not_admitted", admission.error ~= "" and ("Application admission unavailable: " .. admission.error) or "Application is not admitted"), true)
                         elseif req.restore_instance_id ~= "" and (req.resume_schema ~= descriptor.resume_schema or descriptor.restart_policy == "never") then
                             emit(contract.reply(req.request_id, "open", "incompatible_checkpoint", "Application checkpoint schema is incompatible"), true)
                         elseif req.restore_view_id ~= "" and instances[req.restore_view_id] then
@@ -746,7 +781,7 @@ local function main(owner: string, initial_preferences: unknown)
                                 if not grant then view:close(); emit(contract.reply(req.request_id, "open", "grant_failed", tostring(grant_err)), true)
                                 else
                                     local version = assert(registry.current_version())
-                                    local pid, spawn_err = process.with_options({terminal = grant}):with_scope(scope_cache[req.definition_id])
+                                    local pid, spawn_err = process.with_options({terminal = grant}):with_scope(selected_admission.scopes[req.definition_id])
                                         :spawn_monitored(req.definition_id, "bee:workers", {version = 1, broker_pid = tostring(process.pid()), workspace_pid = owner, workspace_id = workspace_id,
                                             instance_id = instance_id, view_id = view_id, definition_id = req.definition_id,
                                             definition_revision = descriptor.definition_revision, registry_revision = version:string(), launch_token = token, resume_schema = descriptor.resume_schema, resume_state = req.resume_state, arguments = req.arguments})

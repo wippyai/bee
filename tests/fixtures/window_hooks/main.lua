@@ -160,15 +160,23 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     -- 6. Verify child submitted hook and gateway returned 202 Accepted
     local hook_submitted = false
+    local hook_status = "not observed"
     for _ = 1, 160 do
         local frame, frame_error = view:snapshot()
-        if frame and table.concat(frame.rows):find("HOOK_HTTP_CODE:202", 1, true) then
-            hook_submitted = true
-            break
+        if frame then
+            local text = table.concat(frame.rows)
+            local code = text:match("HOOK_HTTP_CODE:(%d%d%d)")
+            if code then hook_status = code end
+            if text:find("HOOK_HTTP_CODE:202", 1, true) then
+                hook_submitted = true
+                break
+            end
         end
         time.sleep("50ms")
     end
-    assert(hook_submitted, "actual hook was not accepted by real gateway (expected HOOK_HTTP_CODE:202)")
+    -- Keep diagnostics to the nonsecret status marker, never configuration,
+    -- authorization headers or arbitrary terminal content.
+    assert(hook_submitted, "actual hook was not accepted by real gateway (expected HOOK_HTTP_CODE:202; observed " .. hook_status .. ")")
 
     -- 7. Verify terminal input is functional
     local input_started = time.now():unix_nano()

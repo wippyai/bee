@@ -93,6 +93,7 @@ func run() error {
 	startCalls := 0
 	containerName := ""
 	inspectName := ""
+	selectedAppArmor := ""
 	labels := map[string]string{
 		"bee.attempt_id":     "attempt-daemon",
 		"bee.request_digest": strings.Repeat("b", 64),
@@ -106,7 +107,21 @@ func run() error {
 			return
 		}
 		if r.URL.Path == "/containers/create" && r.Method == http.MethodPost {
+			var config struct {
+				HostConfig struct{ SecurityOpt []string }
+			}
+			if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+				http.Error(w, "invalid config", 400)
+				return
+			}
+			selectedAppArmor = ""
+			for _, option := range config.HostConfig.SecurityOpt {
+				if strings.HasPrefix(option, "apparmor=") {
+					selectedAppArmor = strings.TrimPrefix(option, "apparmor=")
+				}
+			}
 			status = "created"
+			startedAt = "0001-01-01T00:00:00Z"
 			removed = false
 			containerName = r.URL.Query().Get("name")
 			inspectName = containerName
@@ -141,7 +156,7 @@ func run() error {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"Id": containerID, "Name": "/" + inspectName, "Image": imageID, "AppArmorProfile": "docker-default",
+				"Id": containerID, "Name": "/" + inspectName, "Image": imageID, "AppArmorProfile": selectedAppArmor,
 				"Config": map[string]any{"Labels": labels},
 				"State":  map[string]any{"Status": status, "StartedAt": startedAt, "ExitCode": 0},
 			})
@@ -261,6 +276,20 @@ local zero, zero_error = daemon.recover_create({name="bee-"..string.rep("f", 64)
 if zero ~= nil or not zero_error or zero_error.kind ~= "unavailable" then error("zero create recovery matches were accepted") end
 local transport, transport_error = daemon.inspect({container_id="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", expected={container_id="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", image_id=image, apparmor="docker-default", labels=labels}})
 if transport ~= nil or not transport_error or transport_error.kind ~= "unavailable" or transport_error.status ~= nil then error("transport failure was treated as a lifecycle fact") end
+local portable_expected = {image_id=image, labels=labels}
+local portable_config = {Image=image, Labels=labels, HostConfig={SecurityOpt={"no-new-privileges:true"}}}
+local portable, portable_error = daemon.create({name=create_name, config=portable_config, expected=portable_expected})
+if not portable or portable_error then error((portable_error and portable_error.message) or "portable create failed") end
+local portable_identity = {container_id=id, image_id=image, labels=labels}
+local portable_running, portable_start_error = daemon.start({container_id=id, expected=portable_identity})
+if not portable_running or portable_start_error or portable_running.state ~= "running" then error("portable start failed") end
+portable_identity.started_at = portable_running.started_at
+local required, required_error = daemon.inspect({container_id=id, expected=expected})
+if required ~= nil or not required_error or required_error.kind ~= "mismatch" then error("an explicit AppArmor requirement was silently dropped") end
+local portable_stopped, portable_stop_error = daemon.stop({container_id=id, expected=portable_identity})
+if not portable_stopped or portable_stop_error or portable_stopped.state ~= "exited" then error("portable stop failed") end
+local portable_removed, portable_remove_error = daemon.remove({container_id=id, expected=portable_identity})
+if not portable_removed or portable_remove_error then error("portable remove failed") end
 return true
 end
 return {main=main}
@@ -300,8 +329,8 @@ return {main=main}
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if startCalls != 1 {
-		return fmt.Errorf("identity mismatch caused %d Docker start calls; want one", startCalls)
+	if startCalls != 2 {
+		return fmt.Errorf("identity mismatch caused %d Docker start calls; want two admitted launches", startCalls)
 	}
 	fmt.Println("PASS: optional Docker daemon adapter validates identity, lost-create recovery, lifecycle and confirmed absence over a host-bound Unix client")
 	return nil

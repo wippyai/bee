@@ -14,7 +14,7 @@ Host writes remain with the existing materializer; driver configuration must use
 the selected container-visible HOME.
 
 The projection keeps the root read-only, drops capabilities, requires
-no-new-privileges and a selected AppArmor profile, uses explicit
+no-new-privileges, enforces AppArmor when the profile selects it, uses explicit
 resource limits and network selection, and mounts only the private home plus
 one to fifteen admitted mounts. Home and admitted host sources must not overlap:
 mounting a source that contains private placement homes would expose credentials.
@@ -23,8 +23,21 @@ Each admitted mount preserves its requested read or write access.
 
 The config supplies no seccomp override, selecting Docker's daemon default.
 Admission must verify that the daemon actually enforces the required sandbox;
-config generation alone does not prove that. There is no intermediate policy
+config generation alone does not prove that. Omitting `apparmor` preserves the
+daemon defaults; it does not request `unconfined`. A named AppArmor requirement
+is never silently dropped when unsupported. There is no intermediate policy
 selector or second configuration translation.
+
+`make docker-sandbox-check WIPPY=... DOCKER_IMAGE=sha256:...` runs this
+production projection on a local Docker daemon with an already-present image
+containing `/bin/sh`, `grep`, `touch` and `chmod`. It makes no image pull, uses
+network `none` and disposable mounts, and verifies active seccomp,
+no-new-privileges, empty effective capabilities, read-only root/project,
+non-executable tmp, writable private home and confirmed container removal.
+This proves the configuration on that host; it does not prove managed agent
+admission, credential delivery, retained-session recovery or a complete Docker
+placement implementation. Explicit AppArmor enforcement has a separate
+inspection/daemon refusal test and is not claimed on hosts without AppArmor.
 
 `build(specification, environment)` accepts the existing materializer's admitted
 environment map as a separate transient argument. An `environment` field inside
@@ -54,7 +67,7 @@ It exposes only typed create, lost-create-reply recovery, start, inspect, stop
 and remove calls. Recovery finds exactly one existing container by its
 deterministic name and expected image and labels; it never creates or restarts.
 It checks
-the full container and image IDs, expected labels and AppArmor profile before
+the full container and image IDs, expected labels and any selected AppArmor profile before
 mutating an existing container, and confirms absence after removal. A
 transport failure remains unknown. It owns no placement database, state
 transitions, cleanup or process execution. The local fixture composition is
@@ -71,7 +84,7 @@ ignored and the returned map contains only expected labels. `created` requires
 Docker's zero start timestamp and returns no `started_at`; `running` and
 `exited` require a nonzero parseable RFC3339 timestamp and preserve its exact
 text. An optional previously recorded `started_at` must match exactly, fencing
-a same-ID replacement. The expected AppArmor profile must match Docker's
+a same-ID replacement. When selected, the expected AppArmor profile must match Docker's
 post-start `AppArmorProfile` for running and exited containers; this
 corroborates the selected profile but does not authorize creation or start.
 Only `exited` returns `exit_code`. Unsupported states are rejected, and
@@ -79,7 +92,7 @@ transport failures must be handled by the caller rather than passed to this
 decoder as lifecycle observations.
 
 The input is a strict object with `image` (local `sha256` image ID), `user`
-(`uid:gid`), `network`, `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
+(`uid:gid`), `network`, optional `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
 `command`, `home_source`, `home_target`, `mounts`, `working_directory`, and the
 six attempt `labels`. `mounts` is a dense array of one to fifteen
 objects, each containing only `source`, `target`, and `access` (`read` or

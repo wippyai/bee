@@ -25,7 +25,8 @@ before inspecting it. Malformed candidates and duplicate exact names retain
 uncertainty even if another candidate has valid labels.
 
 Create, start, inspect, stop and remove validate full IDs, expected labels and
-the selected AppArmor profile. `recover_create` is a read-only lost-reply
+the AppArmor profile when explicitly selected. An omitted AppArmor requirement
+uses daemon defaults; `unconfined` remains invalid. `recover_create` is a read-only lost-reply
 recovery: it lists the exact deterministic name, re-inspects candidates and
 returns a result only when exactly one candidate has the expected image, labels
 and name. Zero, multiple, malformed, absent and transport outcomes remain

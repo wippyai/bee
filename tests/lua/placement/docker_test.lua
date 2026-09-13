@@ -13,6 +13,20 @@ local function input(): Object
             ["bee.request_digest"] = string.rep("c", 64), ["bee.lease_fence"] = "1", ["bee.image_digest"] = image}}
 end
 local function define_tests()
+    test.describe("Portable Docker profile", function()
+        test.it("keeps baseline isolation when no AppArmor profile is selected", function()
+            local raw = input()
+            raw.apparmor = nil
+            local config, err = configuration.build(raw)
+            if not config then error(tostring(err)) end
+            test.eq(#config.HostConfig.SecurityOpt, 1)
+            test.eq(config.HostConfig.SecurityOpt[1], "no-new-privileges:true")
+            test.eq(config.HostConfig.CapDrop[1], "ALL")
+            test.is_true(config.HostConfig.ReadonlyRootfs)
+            test.is_false(config.HostConfig.Privileged)
+            test.eq(config.HostConfig.PidsLimit, raw.pids_limit)
+        end)
+    end)
     test.describe("Docker preparation", function()
         test.it("projects explicit mounts and preserves command arguments without a shell", function()
             local raw = input()

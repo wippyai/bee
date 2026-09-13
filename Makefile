@@ -85,6 +85,10 @@ docker-configuration-check:
 	test -n "$(DOCKER_COMPONENT)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_configuration.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_configuration.go -runtime "$(abspath $(WIPPY))" -docker-source "$(abspath $(DOCKER_COMPONENT))"
+.PHONY: docker-sandbox-check
+docker-sandbox-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/docker_sandbox.go -runtime "$(abspath $(WIPPY))" -image "$(DOCKER_IMAGE)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client

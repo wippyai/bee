@@ -21,8 +21,8 @@ type Client = {
     remove_container: (Client, string, boolean?) -> (boolean?, string?),
     list_containers: (Client, Object?) -> ({unknown}?, string?),
 }
-type Expected = {container_id: string, image_id: string, apparmor: string, started_at: string?, labels: Labels}
-type CreateExpected = {image_id: string, apparmor: string, labels: Labels}
+type Expected = {container_id: string, image_id: string, apparmor: string?, started_at: string?, labels: Labels}
+type CreateExpected = {image_id: string, apparmor: string?, labels: Labels}
 type Observation = {container_id: string, image_id: string, started_at: string?, state: string, exit_code: integer?, labels: Labels}
 type FailureKind = "invalid" | "unavailable" | "absent" | "mismatch"
 type Failure = {kind: FailureKind, message: string, status: integer?, container_id: string?}
@@ -100,8 +100,12 @@ local function expected(value: unknown): (Expected?, Failure?)
     if not container_id then return nil, id_error end
     local image_id, image_error = image(raw.image_id)
     if not image_id then return nil, image_error end
-    local profile, profile_error = apparmor(raw.apparmor)
-    if not profile then return nil, profile_error end
+    local profile: string? = nil
+    if raw.apparmor ~= nil then
+        local selected, profile_error = apparmor(raw.apparmor)
+        if not selected then return nil, profile_error end
+        profile = selected
+    end
     local selected_labels, labels_error = labels(raw.labels, "expected.labels")
     if not selected_labels then return nil, labels_error end
     local started_at: string? = nil
@@ -111,7 +115,7 @@ local function expected(value: unknown): (Expected?, Failure?)
             return nil, failure("invalid", "expected.started_at must be bounded text")
         end
     end
-    return {container_id = container_id :: string, image_id = image_id :: string, apparmor = profile :: string,
+    return {container_id = container_id :: string, image_id = image_id :: string, apparmor = profile,
         started_at = started_at, labels = selected_labels :: Labels}, nil
 end
 
@@ -122,11 +126,15 @@ local function create_expected(value: unknown): (CreateExpected?, Failure?)
     if unknown then return nil, failure("invalid", "create.expected: " .. unknown) end
     local image_id, image_error = image(raw.image_id)
     if not image_id then return nil, image_error end
-    local profile, profile_error = apparmor(raw.apparmor)
-    if not profile then return nil, profile_error end
+    local profile: string? = nil
+    if raw.apparmor ~= nil then
+        local selected, profile_error = apparmor(raw.apparmor)
+        if not selected then return nil, profile_error end
+        profile = selected
+    end
     local selected_labels, labels_error = labels(raw.labels, "create.expected.labels")
     if not selected_labels then return nil, labels_error end
-    return {image_id = image_id :: string, apparmor = profile :: string, labels = selected_labels :: Labels}, nil
+    return {image_id = image_id :: string, apparmor = profile, labels = selected_labels :: Labels}, nil
 end
 
 local function ref(value: unknown, name: string, allow_timeout: boolean?): (Ref?, Failure?)
@@ -206,13 +214,13 @@ local function equal_labels(left: Labels, right: Labels): boolean
     return count == right_count
 end
 
-local function profile_in_config(config: Config, profile: string): boolean
+local function profile_in_config(config: Config, profile: string?): boolean
     local host = config.HostConfig
     if type(host) ~= "table" then return false end
     local options = (host :: Object).SecurityOpt
     if type(options) ~= "table" then return false end
-    local wanted = "apparmor=" .. profile
-    local found = false
+    local wanted = profile and "apparmor=" .. profile or nil
+    local found = profile == nil
     for _, option in ipairs(options :: {unknown}) do
         if type(option) == "string" and option:match("^apparmor=") then
             if option ~= wanted then return false end

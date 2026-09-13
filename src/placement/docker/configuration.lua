@@ -60,9 +60,12 @@ function M.build(value: unknown, delivered_environment: unknown?): (Config?, str
     if network == "host" or network == "default" or network == "bridge" then
         return nil, "Docker network must be explicitly selected without host or default sharing"
     end
-    local apparmor = bounds.text(raw.apparmor, 128)
-    if not apparmor or not apparmor:match("^[A-Za-z0-9_.-]+$") or apparmor == "unconfined" then
-        return nil, "Docker preparation needs an enforced AppArmor profile"
+    local apparmor: string? = nil
+    if raw.apparmor ~= nil then
+        apparmor = bounds.text(raw.apparmor, 128)
+        if not apparmor or not apparmor:match("^[A-Za-z0-9_.-]+$") or apparmor == "unconfined" then
+            return nil, "Docker AppArmor requirement must name an enforced profile"
+        end
     end
     local memory, cpu, pids = positive(raw.memory), positive(raw.nano_cpus), positive(raw.pids_limit)
     if not memory or not cpu or not pids then return nil, "Docker resource limits must be positive exact integers" end
@@ -161,13 +164,15 @@ function M.build(value: unknown, delivered_environment: unknown?): (Config?, str
     for _, mount in ipairs(mounts) do
         binds[#binds + 1] = mount.source .. ":" .. mount.target .. (mount.access == "read" and ":ro" or ":rw")
     end
+    local security_options: {string} = {"no-new-privileges:true"}
+    if apparmor then security_options[#security_options + 1] = "apparmor=" .. apparmor end
     return {Image = selected_image, User = user, Cmd = command, WorkingDir = workdir,
         Env = encoded_environment, Tty = true, OpenStdin = true,
         AttachStdin = true, AttachStdout = true, AttachStderr = true, Labels = labels,
         HostConfig = {ReadonlyRootfs = true, Privileged = false, AutoRemove = false,
             -- Docker selects its default seccomp profile when no override is
             -- supplied. The admitting owner must verify daemon support.
-            CapDrop = {"ALL"}, SecurityOpt = {"no-new-privileges:true", "apparmor=" .. apparmor},
+            CapDrop = {"ALL"}, SecurityOpt = security_options,
             PidsLimit = pids, Memory = memory, NanoCPUs = cpu, NetworkMode = network,
             Binds = binds,
             Tmpfs = {["/tmp"] = "rw,nosuid,nodev,noexec"}, ExtraHosts = {}, Devices = {}}}, nil

@@ -7,7 +7,7 @@ local time = require("time")
 local M = {}
 
 type Labels = {[string]: string}
-type Expected = {container_id: string, image_id: string, apparmor: string, started_at: string?, labels: Labels}
+type Expected = {container_id: string, image_id: string, apparmor: string?, started_at: string?, labels: Labels}
 type Observation = {
     container_id: string, image_id: string, started_at: string?,
     state: "created" | "running" | "exited", exit_code: integer?, labels: Labels,
@@ -62,9 +62,12 @@ local function expected(value: unknown): (Expected?, string?)
     if not container_id then return nil, "Docker expected container ID must be full lowercase hex" end
     local image_id = image(object.image_id)
     if not image_id then return nil, "Docker expected image ID must be a full sha256 ID" end
-    local apparmor = bounds.text(object.apparmor, 128)
-    if not apparmor or not apparmor:match("^[A-Za-z0-9_.-]+$") or apparmor == "unconfined" then
-        return nil, "Docker expected AppArmor profile is invalid"
+    local apparmor: string? = nil
+    if object.apparmor ~= nil then
+        apparmor = bounds.text(object.apparmor, 128)
+        if not apparmor or not apparmor:match("^[A-Za-z0-9_.-]+$") or apparmor == "unconfined" then
+            return nil, "Docker expected AppArmor profile is invalid"
+        end
     end
     local started_at: string? = nil
     if object.started_at ~= nil then
@@ -74,7 +77,7 @@ local function expected(value: unknown): (Expected?, string?)
     end
     local labels, labels_error = expected_labels(object.labels)
     if not labels then return nil, labels_error end
-    local result: Expected = {container_id = container_id, image_id = image_id, apparmor = apparmor :: string,
+    local result: Expected = {container_id = container_id, image_id = image_id, apparmor = apparmor,
         started_at = started_at, labels = labels}
     return result, nil
 end
@@ -135,7 +138,7 @@ function M.decode(value: unknown, expected_value: unknown): (Observation?, strin
         return nil, "Docker execution start time changed"
     end
     local apparmor = bounds.text(object.AppArmorProfile, 128)
-    if apparmor ~= expected_identity.apparmor then return nil, "Docker AppArmor profile is not enforced" end
+    if expected_identity.apparmor ~= nil and apparmor ~= expected_identity.apparmor then return nil, "Docker AppArmor profile is not enforced" end
     if status == "running" then
         local observation: Observation = {container_id = container_id, image_id = image_id,
             started_at = started_at, state = "running", labels = labels}

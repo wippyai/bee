@@ -19,6 +19,15 @@ end
 
 local function define_tests()
     test.describe("Docker inspection decoding", function()
+        test.it("allows daemon defaults only when no AppArmor requirement was selected", function()
+            local value = inspect("running", "2026-09-13T12:34:56Z")
+            value.AppArmorProfile = ""
+            local observed, err = inspection.decode(value, {container_id = container_id, image_id = image_id, labels = expected.labels})
+            if not observed then error(tostring(err)) end
+            test.eq(observed.state, "running")
+            assert_rejected(value, expected)
+            assert_rejected(value, {container_id = container_id, image_id = image_id, apparmor = "unconfined", labels = expected.labels})
+        end)
         test.it("decodes created without inventing an execution timestamp", function()
             local observation, err = inspection.decode(inspect("created", "0001-01-01T00:00:00Z"), expected)
             if not observation then error(tostring(err)) end

@@ -11,6 +11,16 @@ checks). The lifecycle extraction preserves the native app identity and admissio
 policy; its module, native-window, managed-window and failure-settlement checks
 pass. These are separate slice results, not a combined release gate.
 
+The integration branch also contains host-selected private gateway interfaces.
+Its actual-container check passes scoped MCP tools, separate HTTP/MCP hook
+credentials, replay, and credential/Host/port/Origin refusals. The optional
+Docker daemon component stays outside the default pack; its protocol test uses
+the reviewed userspace client and a fake Unix daemon. That test establishes
+identity checks and confirmed-absence handling, not managed Docker execution
+or package publication. Full gateway regressions remain pending. See
+[gateway acceptance](GATEWAY.md) and the
+[optional component](../modules/bee-placement-docker-daemon/README.md).
+
 **Installed globally:** production `1a0ae17`, binary `c78b764d`.
 Agent launch failures remain visible and responsive. Stopping an unstarted
 placement atomically retires the attempt and releases its retained session;

@@ -20,8 +20,11 @@ context. Docker image/version and mounts belong to isolation configuration.
 
 This is the product contract. Current `harness.profile` entries describe a
 driver's supported execution modes, and `bee.launch_definition` plus protected
-launch policies compose the implemented native launch. A custom profile editor,
-Docker placement and production MCP activation are not complete yet.
+launch policies compose the implemented native launch. Saved profiles and their
+editor select reviewed definitions, options, appended instructions and MCP tools;
+the managed native selector verifies scoped MCP delivery. Docker placement is
+not selectable yet. See [current evidence](FOUNDATION_STATUS.md) for installed
+behavior and the remaining provider-recovery limits.
 Future Bee-native agents may use a different application UI while remaining
 peer components, using the same threads and subscriptions for communication.
 

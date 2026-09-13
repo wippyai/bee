@@ -45,6 +45,28 @@ local function define_tests()
             test.eq(call(reader, {operation = "list", workspace_id = "foreign"}).code, "DENIED")
             test.eq(call(reader, put(fresh(), 0, fresh(), "Denied")).code, "DENIED")
         end)
+        test.it("uses host context for profile grants and refuses a foreign request", function()
+            local grants: {security.Policy} = {}
+            for _, name in ipairs({"bee.harness.profiles:test_call", "bee:profile_workspace_policy", "bee:profile_context_boundary"}) do
+                local policy, err = security.policy(name)
+                if not policy then error(tostring(err)) end
+                grants[#grants + 1] = policy
+            end
+            local scope = security.new_scope(grants)
+            local actor = security.new_actor("profile-context-client")
+            local bound = funcs.new():with_context({["bee.workspace_id"] = WORKSPACE}):with_actor(actor):with_scope(scope)
+            test.is_true(call(bound, {operation = "list", workspace_id = WORKSPACE}).ok)
+            test.eq(call(bound, {operation = "list", workspace_id = "foreign"}).code, "DENIED")
+            local unbound = funcs.new():with_context({["bee.workspace_id"] = ""}):with_actor(actor):with_scope(scope)
+            test.eq(call(unbound, {operation = "list", workspace_id = WORKSPACE}).code, "DENIED")
+            local probe, probe_error = bound:call("bee.harness.profiles:context_probe")
+            if probe_error then error(tostring(probe_error)) end
+            local checked = bounds.object(probe)
+            if not checked then error("missing context substitution result") end
+            test.is_true(checked.blocked)
+            test.eq(scope:evaluate(actor, "funcs.context", "context"), "deny")
+            test.eq(scope:evaluate(actor, "process.context", "context"), "deny")
+        end)
         test.it("shares committed preferences across authorized clients and fences edits", function()
             local writer = caller("profile-writer", "bee.harness.profiles:test_write")
             local reader = caller("profile-reader", "bee.harness.profiles:test_read")

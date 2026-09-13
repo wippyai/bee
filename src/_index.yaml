@@ -137,6 +137,8 @@ entries:
     policies:
     - bee:carrier_policy
     - bee:carrier_environment_policy
+    - bee:profile_workspace_policy
+    - bee:profile_context_boundary
     - bee:thread_create_policy
     - bee:harness_setup_policy
     - bee:placement_store_policy
@@ -1005,3 +1007,21 @@ entries:
     actions: [bee.node.read]
     resources: '*'
     effect: allow
+
+- name: profile_workspace_policy
+  kind: security.policy.expr
+  meta:
+    comment: Profile facade supplies the host-inherited workspace as evaluation metadata; request fields cannot select it
+  policy:
+    actions: [bee.harness.profiles.read, bee.harness.profiles.write]
+    resources: '*'
+    expression: 'meta.workspace_id != "" && resource == meta.workspace_id'
+    effect: allow
+- name: profile_context_boundary
+  kind: security.policy
+  meta:
+    comment: The Agent app retains its host workspace; it cannot substitute context for profile operations
+  policy:
+    actions: [funcs.context, process.context]
+    resources: '*'
+    effect: deny

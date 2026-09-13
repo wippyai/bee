@@ -46,12 +46,14 @@ entries:
 - name: selection
   kind: library.lua
   source: file://selection.lua
+  modules: [funcs]
   imports:
     catalog: bee.harness.catalog:catalog
     definitions: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
+    profiles: bee.harness.profiles:protocol
 - name: setup_backend
   kind: function.lua
   source: file://setup_backend.lua

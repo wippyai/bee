@@ -1,7 +1,7 @@
 # Saved agent profiles
 
 Source work in progress; saved-profile resolution/admission is implemented, but
-not installed or exposed in the Agent picker yet.
+not installed. Picker selection wiring is in progress; the editor is unfinished.
 
 A saved profile selects a reviewed launch definition and stores a title, scalar
 options, MCP tool identifiers and appended instructions. The definition selects
@@ -20,8 +20,11 @@ Mutations require the observed revision and an idempotency key. Removal writes a
 tombstone. Lists use a bounded key page with an expected cursor for continuation;
 a changed feed requires restarting the snapshot. Profile content is bounded and
 decoded before any storage access. Host store grants alone do not authorize a
-workspace operation. The production host currently grants no profile read/write
-permissions to the picker.
+workspace operation. The production host binds profile read/write to the Agent app's inherited
+workspace context. The facade supplies that context as policy metadata; the
+request supplies only the checked resource. The Agent app cannot replace
+function or process context. Explicit host policies may still authorize other
+callers for separately selected workspace resources.
 
 Six decoder cases pass. Three real-facade cases pass workspace authorization and
 cross-workspace denial, reuse by different actors, mutation replay/conflict/removal
@@ -52,8 +55,7 @@ launch policy maps editable option names to bounded lists of allowed scalar
 values; driver control fields remain reserved. `profile_instructions: true`
 permits appended profile guidance within the combined 4096-byte limit. Disabled
 guidance is refused, never silently dropped. Selected MCP tools must be a subset
-of the host list; hooks remain independent. There are no production grants or
-editable options enabled by this change.
+of the host list; hooks remain independent. Editable options remain disabled in the default host policies.
 
 Credentials retain the original host policy digest. Carrier/native requests carry
 decoded preferences, and the resulting configuration and placement request are
@@ -85,3 +87,9 @@ through the same admission checks; it cannot silently recover using default
 preferences. Partial or invalid profile identities are refused. A changed or
 removed saved profile therefore requires a fresh selection rather than silently
 changing a recovered conversation's configuration. UI wiring remains pending.
+
+The picker requests a workspace-qualified saved-profile snapshot and carries its
+selected ID/revision through both setup and admission. Saved choices contain no
+instruction content. A failed saved-profile read leaves registry defaults usable
+and shows the failure. The merge has a bounded page count and choice count;
+tombstones and hidden definitions are not selectable.

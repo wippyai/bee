@@ -26,7 +26,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local choices, load_error = selection.snapshot()
+    local choices, load_error = selection.snapshot(launch.workspace_id)
     local listed: selection.Choices = {items = {}, unavailable = 0}
     if choices then listed = choices end
     local selected: integer = #listed.items > 0 and 1 or 0
@@ -99,6 +99,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 end
                 local setup, setup_error = funcs.call("bee.harness.launch:setup", {
                     workspace_id = launch.workspace_id, definition_ref = choice.definition_ref,
+                    saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
                     expected_plan_digest = choice.plan_digest})
                 local prepared = bounds.object(setup)
                 if setup_error or not prepared or prepared.ok ~= true then
@@ -107,6 +108,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     dirty = true
                 else
                     local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
+                        saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
                         expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
                     if admitted then
                         client.title(launch, choice.title)
@@ -124,7 +126,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         end
         if refresh then
-            local next_choices, next_error = selection.snapshot()
+            local next_choices, next_error = selection.snapshot(launch.workspace_id)
             listed = {items = {}, unavailable = 0}
             if next_choices then listed = next_choices end
             selected = #listed.items > 0 and 1 or 0

@@ -1,6 +1,7 @@
 -- MIT. Host-owned saved launch profiles. The profile store is a typed facade
 -- over bee.sync; callers never select its database or owner identity.
 local security = require("security")
+local ctx = require("ctx")
 local system = require("system")
 local registry = require("registry")
 local sql = require("sql")
@@ -55,7 +56,9 @@ local function authority(input: Request): (string?, string?, Result?)
     if not actor then return nil, nil, failure("UNAUTHENTICATED", "profile actor identity is invalid") end
     local action = (input.operation == "get" or input.operation == "list") and READ or WRITE
     -- This check deliberately precedes registry access and database opening.
-    if not security.can(action, input.workspace_id) then
+    -- Metadata is derived here from host-inherited context, never from the request.
+    local workspace = bounds.id(ctx.get("bee.workspace_id"))
+    if not security.can(action, input.workspace_id, {workspace_id = workspace or ""}) then
         return nil, nil, failure("DENIED", "profile operation is not authorized")
     end
     local node, node_error = system.node.id()

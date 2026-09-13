@@ -19,7 +19,7 @@ entries:
 - name: service
   kind: library.lua
   source: file://service.lua
-  modules: [security, system, registry, sql, hash]
+  modules: [security, ctx, system, registry, sql, hash]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

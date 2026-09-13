@@ -14,7 +14,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.profiles:call]
+    resources: [bee.harness.profiles:call, bee.harness.profiles:context_probe]
     effect: allow
 - name: test_read
   kind: security.policy
@@ -39,3 +39,22 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.threads.records:bounds
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid]
+  security:
+    policies: [bee.harness.profiles:test_call, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
+  imports:
+    test: wippy.test:test
+    selection: bee.harness.launch:selection
+    bounds: bee.threads.records:bounds
+
+- name: context_probe
+  kind: function.lua
+  source: file://context_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [funcs]

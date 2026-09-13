@@ -131,6 +131,12 @@ local function define_tests()
             test.not_nil(accepted)
             local _, other_sender = protocol.status_reply_accepted("runner-2", reply, expected)
             test.eq(other_sender, "reply from runner-2, not the recorded runner")
+            local starting = {attempt_id = "attempt-1", generation = 3, probe = "probe-1", execution = "starting", eof_seen = 0, pending_outputs = 0, remembered_writes = 0}
+            local startup = protocol.status_reply_accepted("runner-1", starting, expected)
+            test.not_nil(startup)
+            test.eq(startup and startup.execution, "starting")
+            local _, forged_start = protocol.status_reply_accepted("runner-2", starting, expected)
+            test.eq(forged_start, "reply from runner-2, not the recorded runner")
             local foreign = {attempt_id = "attempt-2", generation = 3, probe = "probe-1", execution = "running", eof_seen = 0, pending_outputs = 0, remembered_writes = 0}
             local _, foreign_error = protocol.status_reply_accepted("runner-1", foreign, expected)
             test.eq(foreign_error, "reply names another attempt")

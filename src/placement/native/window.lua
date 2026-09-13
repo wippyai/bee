@@ -8,6 +8,7 @@
 local exec = require("exec")
 local tty = require("tty")
 local process = require("process")
+local time = require("time")
 local security = require("security")
 local bounds = require("bounds")
 local store = require("store")
@@ -18,6 +19,7 @@ local quote = require("quote")
 local funcs = require("funcs")
 local service = require("service")
 local protocol = require("protocol")
+local identity = require("identity")
 
 type Options = {width: integer, height: integer, term: string, expected_binding: string?}
 type Window = {
@@ -188,9 +190,18 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
                 local data = raw :: {[string]: unknown}
                 if data.command == "status" and data.attempt_id == attempt_id and bounds.id(data.probe) then
                     local state = terminal:status()
+                    local current = store.row(db, attempt_id)
+                    local execution: "starting" | "running" | "stopping" | "exited" = "running"
+                    if current and current.execution_state == "starting" then
+                        execution = "starting"
+                    elseif state == "done" then
+                        execution = "exited"
+                    elseif closed then
+                        execution = "stopping"
+                    end
                     process.send(tostring(message:from()), protocol.TOPIC_STATUS, {
                         attempt_id = attempt_id, generation = generation, probe = data.probe,
-                        execution = state == "done" and "exited" or (closed and "stopping" or "running"),
+                        execution = execution,
                         eof_seen = 0, pending_outputs = 0, remembered_writes = 0, truncated = false,
                     })
                 elseif data.command == "stop" then
@@ -204,8 +215,87 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             end
         end
     end)
-    -- Publish readiness only after the owner can answer supervision.
-    local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", evidence = {kind = "child.attached", detail = "managed PTY attached to the broker terminal grant"}})
+
+    -- The terminal proxy starts its child asynchronously. Capture the host
+    -- process identity before publication, while the control listener above
+    -- remains able to close the session if stop wins the startup race.
+    local fields: {[string]: unknown} = {}
+    local identity_detail = "execution identity unavailable"
+    local deadline = time.now():unix_nano() + request.timeouts.start_ms * 1000000
+    local pending = true
+    local pending_timeout = false
+    while pending do
+        local pid, pid_error = terminal:pid()
+        if pid then
+            local found, read_error = identity.read(executor, pid)
+            if found then
+                fields.pid = found.pid
+                if found.pgid then fields.pgid = found.pgid end
+                if found.start_ticks then fields.start_ticks = found.start_ticks end
+                if found.boot_id then fields.boot_id = found.boot_id end
+                identity_detail = "pid " .. tostring(found.pid) .. " pgid " .. tostring(found.pgid)
+                    .. " start_ticks " .. tostring(found.start_ticks) .. " boot_id " .. tostring(found.boot_id)
+            else
+                identity_detail = "execution identity unavailable: " .. tostring(read_error or "identity read failed")
+            end
+            pending = false
+        elseif pid_error and pid_error:retryable() == true and time.now():unix_nano() < deadline then
+            -- Yield between probes so the terminal bridge and control
+            -- listener can make progress without an unbounded busy loop.
+            time.sleep("10ms")
+        else
+            pending_timeout = pid_error ~= nil and pid_error:retryable() == true
+            if pid_error then identity_detail = "execution identity unavailable: " .. tostring(pid_error) end
+            pending = false
+        end
+    end
+    local function fields_with_exit(): {[string]: unknown}
+        local exited: {[string]: unknown} = {}
+        for name, value in pairs(fields) do exited[name] = value end
+        exited.exit_source = "terminal"
+        return exited
+    end
+
+    -- A stop may have committed while identity was pending. Request close and
+    -- preserve the stopping state until terminal:status() observes done;
+    -- terminal completion does not prove that a process group is absent.
+    local current = store.row(db, attempt_id)
+    local terminal_state = terminal:status()
+    if current and current.execution_state == "stopping" then
+        terminal:close()
+        local stopped
+        if terminal_state == "done" then
+            stopped = store.transition(db, attempt_id, {expected_execution = "stopping", execution = "exited", fields = fields_with_exit(), evidence = {kind = "child.exited", detail = "terminal completed during startup stop; " .. identity_detail}})
+        else
+            stopped = store.transition(db, attempt_id, {expected_execution = "stopping", fields = fields, evidence = {kind = "stop.pending", detail = "terminal close requested during startup; " .. identity_detail}})
+        end
+        finished = true
+        process.unlisten(controls)
+        executor:release()
+        if not stopped.ok then return fail(db, stopped.message or "record terminal stop", gateway_binding, attempt_id) end
+        return fail(db, "window stopped during startup", gateway_binding, attempt_id)
+    end
+    if terminal_state == "done" and current and current.execution_state == "starting" then
+        local ended = store.transition(db, attempt_id, {expected_execution = "starting", execution = "exited", fields = fields_with_exit(), evidence = {kind = "child.exited", detail = "terminal completed during startup; " .. identity_detail}})
+        finished = true
+        process.unlisten(controls)
+        executor:release()
+        if not ended.ok then return fail(db, ended.message or "record terminal exit", gateway_binding, attempt_id) end
+        return fail(db, "terminal completed during startup", gateway_binding, attempt_id)
+    end
+    if pending_timeout then
+        terminal:close()
+        local uncertain = store.transition(db, attempt_id, {expected_execution = "starting", execution = "uncertain", fields = fields, evidence = {kind = "identity.pending_timeout", detail = "terminal process identity stayed unavailable through the start budget; close requested; " .. identity_detail}})
+        finished = true
+        process.unlisten(controls)
+        executor:release()
+        if not uncertain.ok then return fail(db, uncertain.message or "record identity timeout", gateway_binding, attempt_id) end
+        return fail(db, "terminal process identity did not become available before startup deadline", gateway_binding, attempt_id)
+    end
+
+    -- Publish readiness only after supervision is installed and identity
+    -- capture has had its bounded opportunity to complete.
+    local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", fields = fields, evidence = {kind = "child.attached", detail = "managed PTY attached to the broker terminal grant; " .. identity_detail}})
     if not running.ok then
         finished = true
         process.unlisten(controls)

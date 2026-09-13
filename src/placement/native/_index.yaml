@@ -209,7 +209,7 @@ entries:
 - name: window
   kind: library.lua
   source: file://window.lua
-  modules: [process, exec, tty, security, funcs]
+  modules: [process, exec, tty, time, security, funcs]
   imports:
     protocol: bee.placement.native:protocol
     store: bee.placement.native:store
@@ -220,6 +220,7 @@ entries:
     types: bee.placement:types
     service: bee.placement.native:service
     bounds: bee.threads.records:bounds
+    identity: bee.placement.native:identity
 - name: sweeper
   kind: process.lua
   source: file://sweeper.lua

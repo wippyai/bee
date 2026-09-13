@@ -25,7 +25,7 @@ M.MAX_REMEMBERED_WRITES = 256
 type Control = {command: "stop", mode: "cooperative" | "forced", grace_ms: integer} | {command: "attach", recipient: string, generation: integer} | {command: "detach", generation: integer} | {command: "write_status", write_id: string} | {command: "status", attempt_id: string, probe: string} | {command: "close_stdin", attempt_id: string, probe: string}
 -- What the runner itself observes: supervision evidence, never exit or
 -- cleanup proof. The reply echoes the probe that asked.
-type RunnerStatus = {attempt_id: string, generation: integer, probe: string, execution: "running" | "stopping" | "exited", exit_code: integer?, eof_seen: integer, pending_outputs: integer, remembered_writes: integer, truncated: boolean}
+type RunnerStatus = {attempt_id: string, generation: integer, probe: string, execution: "starting" | "running" | "stopping" | "exited", exit_code: integer?, eof_seen: integer, pending_outputs: integer, remembered_writes: integer, truncated: boolean}
 type StatusProbe = {runner: string, attempt_id: string, generation: integer, probe: string}
 -- The runner's answer to the owner's stdin closure after settlement:
 -- closed, or why not; evidence carries the same fact.
@@ -60,7 +60,7 @@ function M.status_reply_accepted(sender: string, reply: unknown, expected: Statu
     if status.attempt_id ~= expected.attempt_id then return nil, "reply names another attempt" end
     if status.generation ~= expected.generation then return nil, "reply names generation " .. tostring(status.generation) .. ", not " .. tostring(expected.generation) end
     if status.probe ~= expected.probe then return nil, "reply answers another probe" end
-    if status.execution ~= "running" and status.execution ~= "stopping" and status.execution ~= "exited" then return nil, "reply reports an unknown execution" end
+    if status.execution ~= "starting" and status.execution ~= "running" and status.execution ~= "stopping" and status.execution ~= "exited" then return nil, "reply reports an unknown execution" end
     return status, nil
 end
 return M

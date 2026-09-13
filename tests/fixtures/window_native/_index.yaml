@@ -27,6 +27,22 @@ entries:
     fixture: true
     executables: {}
     environment: {}
+- name: launch_policy_group
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
 - name: caller_policy
   kind: security.policy
   policy:
@@ -47,6 +63,7 @@ entries:
   imports:
     test: wippy.test:test
     service: bee.placement.native:service
+    placement_store: bee.placement.native:store
     window: bee.placement.native:window
   security:
     policies: [bee.window_native:activation_policy, bee.window_native:caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_resolve_policy]

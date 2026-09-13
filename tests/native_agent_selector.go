@@ -1749,19 +1749,21 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 		}
 		return "", "", false
 	}
-	if provider != "codex" {
+	if provider != "codex" && provider != "grok" {
 		return "", "", false
 	}
-	config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".codex", "config.toml"))
+	config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), "."+provider, "config.toml"))
 	if err != nil {
 		return "", "", false
 	}
 	var url, tokenName string
 	inBeeServer := false
+	inBeeHeaders := false
 	for _, line := range strings.Split(string(config), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[") {
 			inBeeServer = line == "[mcp_servers.bee]"
+			inBeeHeaders = line == "[mcp_servers.bee.headers]"
 			continue
 		}
 		if inBeeServer && strings.HasPrefix(line, "url = \"") && strings.HasSuffix(line, "\"") {
@@ -1769,6 +1771,9 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 		}
 		if inBeeServer && strings.HasPrefix(line, "bearer_token_env_var = \"") && strings.HasSuffix(line, "\"") {
 			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "bearer_token_env_var = \""), "\"")
+		}
+		if provider == "grok" && inBeeHeaders && strings.HasPrefix(line, "Authorization = \"Bearer ${") && strings.HasSuffix(line, "}\"") {
+			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "Authorization = \"Bearer ${"), "}\"")
 		}
 	}
 	return url, os.Getenv(tokenName), url != "" && os.Getenv(tokenName) != ""
@@ -2094,8 +2099,14 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 
 // runAgyHookProbe executes the delivered command, exactly as Agy's command hook
 // does. It does not substitute a direct HTTP client for Bee's native helper.
-func runAgyHookProbe(event string) int {
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "hooks.json"))
+func runCommandHookProbe(provider, event string) int {
+	path := filepath.Join(os.Getenv("HOME"), ".gemini", "config", "hooks.json")
+	if provider == "grok" {
+		path = filepath.Join(os.Getenv("HOME"), ".grok", "hooks", "bee.json")
+	} else if provider != "agy" {
+		return 1
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 1
 	}
@@ -2109,14 +2120,21 @@ func runAgyHookProbe(event string) int {
 		Hooks   []handler `json:"hooks"`
 	}
 	var config struct {
-		Bee map[string][]entry `json:"bee"`
+		Bee   map[string][]entry `json:"bee"`
+		Hooks map[string][]entry `json:"hooks"`
 	}
-	if json.Unmarshal(data, &config) != nil || len(config.Bee[event]) != 1 {
+	if json.Unmarshal(data, &config) != nil {
+		return 1
+	}
+	if provider == "grok" {
+		config.Bee = config.Hooks
+	}
+	if len(config.Bee[event]) != 1 {
 		return 1
 	}
 	selected := config.Bee[event][0]
 	command := selected.Command
-	if event == "PreToolUse" {
+	if event == "PreToolUse" || provider == "grok" {
 		if len(selected.Hooks) != 1 || selected.Hooks[0].Type != "command" {
 			return 1
 		}
@@ -2134,6 +2152,14 @@ func runAgyHookProbe(event string) int {
 	} else {
 		payload["fullyIdle"] = true
 		payload["executionNum"] = 1
+	}
+	if provider == "grok" {
+		payload = map[string]any{"sessionId": "native-grok-hook-session", "session_id": "native-grok-hook-session", "promptId": "prompt-1", "permissionMode": "default", "permission_mode": "default"}
+		if event == "PreToolUse" {
+			payload["toolUseId"] = "tool-1"
+			payload["toolName"] = "run_terminal_command"
+			payload["toolInput"] = map[string]any{"command": "BEE_PRIVATE_HOOK_CONTENT"}
+		}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -2153,7 +2179,7 @@ func runAgyHookProbe(event string) int {
 	return 0
 }
 
-func waitAgyHook(state, event string) error {
+func waitCommandHook(state, provider, event string) error {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
@@ -2189,13 +2215,17 @@ func waitAgyHook(state, event string) error {
 				Ambiguous bool           `json:"ambiguous"`
 				Fields    map[string]any `json:"fields"`
 			}
-			if json.Unmarshal([]byte(record.Body.Data.Payload), &payload) != nil || payload.Event != event || payload.Fields["session_id"] != "native-agy-hook-session" {
+			if json.Unmarshal([]byte(record.Body.Data.Payload), &payload) != nil || payload.Event != event || payload.Fields["session_id"] != "native-"+provider+"-hook-session" {
 				continue
 			}
-			if !payload.Ambiguous || payload.Fields["tool_use_id"] != nil || strings.Contains(text, "BEE_PRIVATE_HOOK_CONTENT") || strings.Contains(text, "/private/hook-transcript") {
+			identityOK := payload.Ambiguous && payload.Fields["tool_use_id"] == nil
+			if provider == "grok" && event == "PreToolUse" {
+				identityOK = !payload.Ambiguous && payload.Fields["tool_use_id"] == "tool-1"
+			}
+			if !identityOK || strings.Contains(text, "BEE_PRIVATE_HOOK_CONTENT") || strings.Contains(text, "/private/hook-transcript") {
 				rows.Close()
 				db.Close()
-				return errors.New("Agy hook invented occurrence identity or retained private content")
+				return errors.New("command hook changed occurrence identity or retained private content")
 			}
 			found = true
 		}
@@ -2210,7 +2240,7 @@ func waitAgyHook(state, event string) error {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return fmt.Errorf("Agy %s observation was not committed", event)
+	return fmt.Errorf("%s %s observation was not committed", provider, event)
 }
 
 // runHookProbe submits one Claude PreToolUse event using the URL and token
@@ -2325,6 +2355,10 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 		selection, label = "\r", "Antigravity"
 		fixtureLogin = "opaque-fixture-login\x00bytes"
 	}
+	if provider == "grok" {
+		providerDirectory, loginFile = ".grok", "auth.json"
+		selection, label = "\x1b[B\x1b[B\x1b[B\r", "Grok"
+	}
 	if machineLogin {
 		if err := os.MkdirAll(filepath.Join(home, providerDirectory), 0700); err != nil {
 			return err
@@ -2343,9 +2377,10 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	}
 	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) +
 		"\nif ! " + shellQuote(helper) + " mcp-probe " + shellQuote(provider) + " " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
-	if provider == "agy" {
-		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", shellQuote(helper)+" agy-hook-probe PreToolUse || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
-		script += shellQuote(helper) + " agy-hook-probe Stop || exit 1\n"
+	if provider == "agy" || provider == "grok" {
+		probe := shellQuote(helper) + " command-hook-probe " + shellQuote(provider)
+		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", probe+" PreToolUse || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
+		script += probe + " Stop || exit 1\n"
 	}
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
@@ -2476,19 +2511,21 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 	if err != nil || string(data) != "retained" {
 		return fmt.Errorf("managed session marker = %q, err=%v", string(data), err)
 	}
-	if provider == "agy" {
-		if err := waitAgyHook(state, "PreToolUse"); err != nil {
+	if provider == "agy" || provider == "grok" {
+		if err := waitCommandHook(state, provider, "PreToolUse"); err != nil {
 			return err
 		}
-		if err := ui.waitFor("Activity uncertain", 5*time.Second); err != nil {
-			return fmt.Errorf("committed Agy hook title: %w", err)
+		if provider == "agy" {
+			if err := ui.waitFor("Activity uncertain", 5*time.Second); err != nil {
+				return fmt.Errorf("committed Agy hook title: %w", err)
+			}
 		}
 	}
 	if err := ui.send("finish\r"); err != nil {
 		return err
 	}
-	if provider == "agy" {
-		if err := waitAgyHook(state, "Stop"); err != nil {
+	if provider == "agy" || provider == "grok" {
+		if err := waitCommandHook(state, provider, "Stop"); err != nil {
 			return err
 		}
 	}
@@ -2509,8 +2546,8 @@ func managedLaunch(binary, provider string, machineLogin bool) error {
 }
 
 func main() {
-	if len(os.Args) == 3 && os.Args[1] == "agy-hook-probe" {
-		os.Exit(runAgyHookProbe(os.Args[2]))
+	if len(os.Args) == 4 && os.Args[1] == "command-hook-probe" {
+		os.Exit(runCommandHookProbe(os.Args[2], os.Args[3]))
 	}
 	if len(os.Args) >= 4 && os.Args[1] == "mcp-probe" {
 		os.Exit(runMCPProbe(os.Args[2], os.Args[3], os.Args[4:]))
@@ -2576,7 +2613,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "saved profile launch acceptance failed: %v\n", err)
 		os.Exit(1)
 	}
-	for _, provider := range []string{"codex", "claude", "agy"} {
+	for _, provider := range []string{"codex", "claude", "agy", "grok"} {
 		for _, present := range []bool{false, true} {
 			if err := managedLaunch(binary, provider, present); err != nil {
 				fmt.Fprintf(os.Stderr, "managed %s launch (machine login=%v) failed: %v\n", provider, present, err)

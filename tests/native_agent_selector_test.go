@@ -79,3 +79,30 @@ func TestAgyMCPHeaderRemainsLiteral(t *testing.T) {
 		t.Fatal("fixture changed Agy literal header semantics")
 	}
 }
+
+func TestGrokMCPProbeSelectsOnlyBeeHeader(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("BEE_TEST_TOKEN", "selected-fixture-token")
+	t.Setenv("OTHER_TOKEN", "unrelated-fixture-token")
+	dir := filepath.Join(home, ".grok")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config := `[mcp_servers.bee]
+url = "http://127.0.0.1:1234/mcp/action"
+[mcp_servers.bee.headers]
+Authorization = "Bearer ${BEE_TEST_TOKEN}"
+[mcp_servers.other]
+url = "http://127.0.0.1:4567/mcp/other"
+[mcp_servers.other.headers]
+Authorization = "Bearer ${OTHER_TOKEN}"
+`
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	url, token, ok := mcpProbeConfig("grok", nil)
+	if !ok || url != "http://127.0.0.1:1234/mcp/action" || token != "selected-fixture-token" {
+		t.Fatal("probe selected unrelated MCP configuration")
+	}
+}

@@ -311,6 +311,7 @@ entries:
     credentials:
       codex_login: {provider: codex, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
       agy_login: {provider: agy, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
+      grok_login: {provider: grok, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
       claude_login: {provider: claude, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
 - name: workspace_db
   kind: db.sql.sqlite
@@ -622,10 +623,12 @@ entries:
       claude: bee.driver.claude:credential_format
       codex: bee.driver.codex:credential_format
       agy: bee.driver.agy:credential_format
+      grok: bee.driver.grok:credential_format
     sources:
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: codex, projection_kinds: [file], path: .codex/auth.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [file], path: .claude/.credentials.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: agy, projection_kinds: [file], path: .gemini/antigravity-cli/antigravity-oauth-token}
+    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: grok, projection_kinds: [file], path: .grok/auth.json}
 - name: credential_store_policy
   kind: security.policy
   meta:

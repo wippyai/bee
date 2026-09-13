@@ -14,6 +14,13 @@ through the existing terminal placement. Structured turns admit bounded
 mode preserves interactive permission defaults and refuses `max_turns`.
 Prompts and resume references cannot become command-line options.
 
+The default window requests the optional `grok_login` credential. Its component
+declares `.grok/auth.json`; the host separately admits that exact machine file.
+The existing credential broker seeds only the new private HOME and preserves
+subsequent harness refreshes. A missing login leaves normal Grok sign-in
+available. Machine settings, trusted folders, sessions and MCP credentials are
+not included. This uses the login path documented by Grok 1.0.24.
+
 The normalizer retains the first valid session identity, validates persisted
 state and bounds accumulated answers to 12,288 bytes. Larger answers remain in
 their thread observations; the terminal summary omits the accumulated answer.

@@ -39,6 +39,17 @@ terminal port. This is not Bee broker/placement acceptance: its host binding,
 admitted-record policy, profile/sandbox validation and container gateway remain
 unfinished. This directory must not be registered broadly to bypass those boundaries.
 
+A fixed runtime expression policy can constrain attachment to a selected daemon
+and the authenticated principal's owner label without embedding each newly
+allocated container ID in the spawn scope. The Lua module test exercises that
+policy with the actual expression evaluator and a fake daemon: a different
+principal or daemon is refused without I/O; a forged owner label fails inspection
+before attachment; matching observed ownership reaches the attach operation.
+The fixture deliberately refuses the stream there. This is principal-level
+authorization, not isolation between sibling apps under the same principal.
+The trusted Bee attempt owner must still validate the selected durable attempt;
+the policy does not consult that record or prove full placement admission.
+
 Run isolated race tests and vet through the native Makefile:
 
 ```sh

@@ -274,7 +274,20 @@ or marks the requirement missing if it has no default. This is installed in glob
 Missing parameters from dependency planning can now be configured directly from
 the review screen: click a Required row, use Configure required, or press E.
 The editor uses the exact ID reported by the plan. Saving invalidates that plan;
-a new plan and confirmation are required before publication. This source change
-is pending the next release. The current standalone redesign also passes live
+a new plan and confirmation are required before publication. This is installed
+in global source `c5f636e` (SHA `4f93cc36`). The current standalone redesign also passes live
 Hub install/update/uninstall/reopen checks while preserving all bundled artifacts
 (`modules-redesign-live-lifecycle.log`).
+
+### Modules presentation follow-up
+
+Installed packages separate names and versions from direct-installation and
+dependency information when space permits, retaining compact rows on small
+canvases. Selected actions, migration policies and details tabs use the active
+theme accent. README fenced examples preserve indentation, and long words wrap
+so their remaining content stays reachable by scrolling. The Bee mark is unchanged.
+
+Retained Bee owners keep the UI loaded when they started. Replacing the global
+executable or reconnecting a presenter does not upgrade those running applications.
+Settings → About reports the loaded bundle; use a fresh owner to inspect a newly
+installed build without interrupting existing terminals.

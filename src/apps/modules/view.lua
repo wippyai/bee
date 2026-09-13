@@ -42,8 +42,10 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     local function button(x: integer, y: integer, kind: string, label: string, enabled: boolean): integer
         local size = tty.text.width(label)
         if x + size > width or y < 1 or y > height then return x end
-        local active = kind == state.phase or (kind == "readme" and reading == true)
-            or (kind == "versions" and reading ~= true) or kind == "confirm" or kind == "review" or kind == "plan"
+        local active = kind == state.phase or (kind == "readme" and reading == true and not state.requirements_open)
+            or (kind == "versions" and reading ~= true and not state.requirements_open)
+            or (kind == "requirements" and state.requirements_open) or kind == state.action
+            or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
         put(x, y, label, size, enabled and (active and appearance.selection_text(theme) or theme.text) or theme.muted,
             enabled and active and theme.accent or theme.surface)
@@ -106,23 +108,38 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local actions = 2
         actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
         actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
-        line(height, status ~= "" and status or "Type / to search · K changes keyword · Enter details · ←/→ page", theme.muted)
+        line(height, status ~= "" and status or "/ search · K keyword · Enter open · ←/→ page", theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "installed" then
-        line(3, "Your installed packages", theme.muted)
-        local first, last = 4, height - 2
-        local capacity = maximum(0, last - first + 1)
+        local roomy = width >= 48 and height >= 16
+        line(3, "Your installed packages · " .. tostring(#state.installed), theme.muted)
+        local first, stride = roomy and 5 or 4, roomy and 3 or 1
+        local capacity = maximum(0, (height - 1 - first) // stride)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.installed - capacity), offset)))
-        if #state.installed == 0 then line(first, "No installed Hub modules", theme.muted) end
+        if #state.installed == 0 then
+            line(first, "No installed Hub modules", theme.text)
+            if roomy then line(first + 1, "Browse the catalog to find your first package.", theme.muted) end
+        end
         for slot = 1, capacity do
             local item = state.installed[next_offset + slot]
             if not item then break end
-            local y, selected = first + slot - 1, item.component == state.selected
-            local label = (item.direct and "root " or "     ") .. item.component .. "  " .. item.version
-            if width >= 68 and #item.used_by > 0 then label = label .. "  used by " .. table.concat(item.used_by, ", ") end
-            line(y, label, selected and appearance.selection_text(theme) or theme.text, selected and theme.accent or theme.surface)
-            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = 1}
+            local y, selected = first + (slot - 1) * stride, item.component == state.selected
+            local foreground = selected and appearance.selection_text(theme) or theme.text
+            local background = selected and theme.accent or theme.surface
+            if roomy then
+                local version_width = tty.text.width(item.version)
+                local name_width = maximum(0, width - version_width - 7)
+                line(y, " " .. tty.text.truncate(item.component, name_width, "…"), foreground, background)
+                put(width - version_width - 2, y, item.version, version_width, foreground, background)
+                local description = item.direct and "Direct installation" or "Dependency"
+                if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
+                line(y + 1, " " .. description, theme.muted)
+                line(y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
+            else
+                line(y, item.component .. "  " .. item.version, foreground, background)
+            end
+            hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = stride}
         end
         button(2, height - 1, "refresh", " Refresh ", true)
         line(height, status ~= "" and status or "↑↓ select · Enter details · R refresh", theme.muted)
@@ -187,9 +204,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         if detail then
             line(4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2
-            tab_x = button(tab_x, 5, "readme", reading and " [README] " or " README ", true)
-            tab_x = button(tab_x, 5, "versions", not reading and not state.requirements_open and " [Versions] " or " Versions ", true)
-            tab_x = button(tab_x, 5, "requirements", state.requirements_open and " [Requirements] " or " Requirements ", true)
+            tab_x = button(tab_x, 5, "readme", " README ", true)
+            tab_x = button(tab_x, 5, "versions", " Versions ", true)
+            tab_x = button(tab_x, 5, "requirements", " Requirements ", true)
             if state.requirements_open then
                 local capacity = maximum(0, math.floor((height - 9) / 3))
                 local selected = state.selected_requirement
@@ -217,16 +234,37 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 local lines: {string} = {}
                 local available = maximum(1, width - 4)
                 local content = detail.readme .. "\n"
+                local code = false
                 for paragraph in string.gmatch(content, "([^\n]*)\n") do
-                    local row = ""
-                    for word in paragraph:gmatch("%S+") do
-                        if row ~= "" and tty.text.width(row .. " " .. word) > available then
-                            lines[#lines + 1] = row
-                            row = ""
+                    if paragraph:match("^%s*```") then
+                        code = not code
+                        lines[#lines + 1] = code and "── Example ──" or ""
+                    elseif code or paragraph:match("^    ") then
+                        local remaining = paragraph
+                        while tty.text.width(remaining) > available do
+                            local part = tty.text.truncate(remaining, available, "")
+                            if part == "" then break end
+                            lines[#lines + 1] = part
+                            remaining = remaining:sub(#part + 1)
                         end
-                        row = row == "" and word or (row .. " " .. word)
+                        lines[#lines + 1] = remaining
+                    else
+                        local row = ""
+                        for word in paragraph:gmatch("%S+") do
+                            if row ~= "" and tty.text.width(row .. " " .. word) > available then
+                                lines[#lines + 1] = row
+                                row = ""
+                            end
+                            while tty.text.width(word) > available do
+                                local part = tty.text.truncate(word, available, "")
+                                if part == "" then break end
+                                lines[#lines + 1] = part
+                                word = word:sub(#part + 1)
+                            end
+                            row = row == "" and word or (row .. " " .. word)
+                        end
+                        lines[#lines + 1] = row
                     end
-                    lines[#lines + 1] = row
                 end
                 if detail.readme == "" then lines = {"No README provided by this package."} end
                 local capacity = maximum(0, height - 8)
@@ -271,7 +309,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
             if width >= 74 then line(height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
-        line(height, status ~= "" and status or "↑↓ version · H README · I install · U update · X remove · P prepare · J edit JSON parameter", theme.muted)
+        line(height, status ~= "" and status or "↑↓ version · I install · U update · X remove · P review", theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
     if state.phase == "confirm" and state.recovery then

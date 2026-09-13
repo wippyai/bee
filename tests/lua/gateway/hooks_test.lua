@@ -10,6 +10,30 @@ local codex_configuration = require("codex_configuration")
 type Object = {[string]: unknown}
 local function define_tests()
     test.describe("Gateway hooks", function()
+        test.it("normalizes Grok occurrence claims and hashes tool content", function()
+            local value, err = hooks.normalize("PreToolUse", {sessionId = "grok-session", promptId = "prompt-1",
+                toolUseId = "tool-1", toolName = "run_terminal_command", toolInput = {command = "private-command"},
+                permissionMode = "default", hook_event_name = "PreToolUse", hookEventName = "pre_tool_use"})
+            if not value then error(tostring(err)) end
+            test.eq(value.fields.session_id, "grok-session")
+            test.eq(value.fields.prompt_id, "prompt-1")
+            test.eq(value.fields.tool_name, "run_terminal_command")
+            test.eq(value.occurrence, "tool:tool-1")
+            test.is_false(value.ambiguous)
+            local encoded = json.encode(value.fields)
+            test.is_nil(encoded:find("private-command", 1, true))
+            local digests = value.fields.content_digests :: Object
+            test.not_nil(digests.tool_input)
+            local start, start_error = hooks.normalize("SessionStart", {sessionId = "s", session_id = "s",
+                permissionMode = "default", permission_mode = "default", source = "startup"})
+            if not start then error(tostring(start_error)) end
+            test.eq(start.occurrence, "session:s:startup")
+            for _, payload in ipairs({{sessionId = "s", session_id = "other"}, {sessionId = "s", conversationId = "other"},
+                {sessionId = "s", toolUseId = "t", tool_use_id = "other"}, {sessionId = "s", promptId = "p", prompt_id = "other"}, {sessionId = {}},
+                {sessionId = "s", toolUseId = {}}}) do
+                test.is_nil(hooks.normalize("PreToolUse", payload))
+            end
+        end)
         test.it("decodes command-hook claims without retaining content or inventing tool identities", function()
             local input: Object = {conversationId = "conversation-1", transcriptPath = "/private/conversation.db",
                 toolCall = {name = "view_file", args = {path = "/private/file", secret = "never-store-this"}},

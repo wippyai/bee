@@ -26,6 +26,10 @@ entries:
   kind: library.lua
   source: file://configuration.lua
   modules: [hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    quote: bee.driver.kit:quote
+    configure_protocol: bee.driver:configuration
 - name: launch
   kind: library.lua
   source: file://launch.lua
@@ -146,6 +150,7 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
+        hooks: {transports: [command], events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]}
         answer_path:
           strategy: none
         resume:

@@ -580,6 +580,8 @@ entries:
     executable_env: {grok: bee.driver.grok:executable}
     environment: {}
     gateway_tools: [thread_read, thread_wait, thread_message]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
     prepare_options: {}

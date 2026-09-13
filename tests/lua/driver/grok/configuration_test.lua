@@ -1,7 +1,8 @@
 -- MIT. Grok configuration tests: projection of .grok/config.toml,
--- strict rejection of provider configuration and gateway hooks,
+-- strict rejection of provider configuration and unbound command hooks,
 -- and deterministic SHA-256 measurement.
 local test = require("test")
+local json = require("json")
 local configuration = require("configuration")
 local configure = require("configure")
 
@@ -105,7 +106,7 @@ local function define_tests()
             test.is_false(provider_reply.ok)
             test.eq(provider_reply.error, "grok accepts no provider configuration")
 
-            -- Rejects gateway hooks
+            -- Hook delivery requires the host-selected executable.
             local hooks_req = {
                 fixture = false,
                 gateway = {
@@ -119,7 +120,27 @@ local function define_tests()
             }
             local hooks_reply = configure.handle(hooks_req)
             test.is_false(hooks_reply.ok)
-            test.eq(hooks_reply.error, "grok accepts no gateway hooks")
+            test.eq(hooks_reply.error, "grok hooks require the host-selected hook command")
+        end)
+        test.it("delivers command hooks without enabling an unused MCP server", function()
+            local reply = configure.handle({fixture = false, gateway = {
+                endpoint = "127.0.0.1:9090", action_id = "action-hooks", tools = {},
+                hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+                token_environment = "BEE_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN",
+                hook_command = "/private/bee tool",
+            }})
+            test.is_true(reply.ok)
+            local delivery = reply.delivery :: {files: {{path: string, content: string}}}
+            test.eq(#delivery.files, 1)
+            test.eq(delivery.files[1].path, ".grok/hooks/bee.json")
+            local decoded = json.decode(delivery.files[1].content) :: {hooks: {[string]: {{hooks: {{command: string, timeout: number}}}}}}
+            for _, event in ipairs({"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}) do
+                local handler = decoded.hooks[event][1].hooks[1]
+                test.is_true(handler.command:find("'/private/bee tool'", 1, true) ~= nil)
+                test.is_true(handler.command:find("hook-post", 1, true) ~= nil)
+                test.is_true(handler.command:find("BEE_HOOK_TOKEN", 1, true) ~= nil)
+                test.eq(handler.timeout, 3)
+            end
         end)
     end)
 end

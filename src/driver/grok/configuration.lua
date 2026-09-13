@@ -1,6 +1,9 @@
 -- MIT. Grok configuration: projection of .grok/config.toml for gateway MCP delivery.
 -- Grok loads MCP servers and permissions from $GROK_HOME/config.toml or .grok/config.toml.
 local hash = require("hash")
+local canonical = require("canonical")
+local quote = require("quote")
+local configure_protocol = require("configure_protocol")
 
 local M = {}
 M.REVISION = "bee.grok-config@1"
@@ -64,6 +67,30 @@ function M.projection(gateway: Gateway): (Projection?, string?)
         digest = digest,
         provider_ref = M.PROVIDER_REF,
     }, nil
+end
+
+function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
+    local executable = gateway.hook_command
+    if not executable then return nil, "grok hooks require the host-selected hook command" end
+    local token = gateway.hook_token_environment
+    if not token then return nil, "grok hooks require a separate hook credential environment" end
+    local selected: {[string]: unknown} = {}
+    for _, event in ipairs(gateway.hooks) do
+        if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse"
+            and event ~= "PostToolUse" and event ~= "Stop" then
+            return nil, "grok does not support gateway hook event " .. event
+        end
+        local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, token, event})
+        selected[event] = {{hooks = {{type = "command", command = command, timeout = 3}}}}
+    end
+    local content, encode_error = canonical.encode({hooks = selected})
+    if not content then return nil, encode_error end
+    content = content .. "\n"
+    if #content > M.MAX_CONFIGURATION_BYTES then return nil, "hook configuration exceeds byte limit" end
+    local digest, digest_error = hash.sha256(content)
+    if not digest then return nil, tostring(digest_error or "hook configuration digest failed") end
+    return {revision = "bee.grok-hooks@1", path = ".grok/hooks/bee.json", content = content,
+        digest = digest, provider_ref = configure_protocol.GATEWAY_PROVIDER_REF}, nil
 end
 
 return M

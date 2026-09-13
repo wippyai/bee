@@ -89,6 +89,29 @@ end
 -- applying the same privacy and occurrence rules as the HTTP/MCP shape. These
 -- values describe the sender's own activity; they establish no authority.
 local function wire_fields(payload: Object): (Object?, string?)
+    if payload.sessionId ~= nil then
+        -- Grok 1.0.24 emits matching aliases on its command wire. Keep one
+        -- value; contradictory correlation claims cannot select a session.
+        if payload.conversationId ~= nil or payload.toolCall ~= nil then return nil, "mixed hook field schemas are not accepted" end
+        local session = bounds.id(payload.sessionId)
+        if not session then return nil, "sessionId must be an identifier" end
+        local names = {sessionId = "session_id", promptId = "prompt_id", toolUseId = "tool_use_id",
+            agentId = "agent_id", toolName = "tool_name", toolInput = "tool_input", toolResponse = "tool_response",
+            permissionMode = "permission_mode", stopHookActive = "stop_hook_active", transcriptPath = "transcript_path",
+            lastAssistantMessage = "last_assistant_message"}
+        local result: Object = {}
+        for name, value in pairs(payload) do result[name] = value end
+        for source, target in pairs(names) do
+            if payload[target] ~= nil and payload[source] ~= nil then
+                local original = canonical.encode(payload[source])
+                local alias = canonical.encode(payload[target])
+                if not original or not alias or original ~= alias then return nil, "conflicting hook field aliases" end
+            end
+            if payload[source] ~= nil then result[target] = payload[source] end
+        end
+        if payload.turn_id ~= nil then return nil, "mixed hook field schemas are not accepted" end
+        return result, nil
+    end
     if payload.conversationId == nil and payload.toolCall == nil and payload.transcriptPath == nil then return payload, nil end
     local session = bounds.id(payload.conversationId)
     if not session then return nil, "conversationId must be an identifier" end

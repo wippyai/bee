@@ -332,6 +332,34 @@ local function define_tests()
                 test.eq(grouped.error and grouped.error.code, "UNSUPPORTED_CAPABILITY")
             end
         end)
+        test.it("refuses a duplicate runner before it can materialize the claimed attempt", function()
+            local prepared = attempt_of(call(OWNER, "prepare", launch({"sh", "-c", "true"}, "direct_process")))
+            local db, open_error = store.open()
+            if not db then error(open_error or "store") end
+            local winner = process.pid()
+            local claimed = store.transition(db, prepared.attempt_id, {expected_execution = "intended", execution = "starting",
+                fields = {runner_pid = winner}, evidence = {kind = "test.claimed", detail = "first runner already owns materialization"}})
+            if not claimed.ok then db:release(); error(claimed.message or "claim") end
+            local topic = "bee.test.duplicate-runner." .. fresh("reply")
+            local replies = assert(process.listen(topic, {message = true}))
+            local duplicate, spawn_error = process.spawn("bee.placement.native:runner", "bee:workers", prepared.attempt_id, process.pid(), topic)
+            if not duplicate then process.unlisten(replies); db:release(); error(tostring(spawn_error)) end
+            local selected = channel.select({replies:case_receive(), time.after("5s"):case_receive()})
+            process.unlisten(replies)
+            if not selected.ok or selected.channel ~= replies then db:release(); error("duplicate runner did not answer") end
+            test.eq(tostring(selected.value:from()), tostring(duplicate))
+            local reply = selected.value:payload():data() :: {started: boolean, reason: string?}
+            test.is_false(reply.started)
+            test.is_true((reply.reason or ""):find("not the expected intended", 1, true) ~= nil)
+            local row = store.row(db, prepared.attempt_id)
+            if not row then db:release(); error("attempt disappeared") end
+            test.eq(row.runner_pid, winner)
+            test.eq(row.execution_state, "starting")
+            test.eq(row.evidence_count, 2)
+            local home_key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
+            test.is_false(homes.attempt_exists(home_key))
+            db:release()
+        end)
         test.it("runs a child through the runner with acknowledged streams and a proven exit", function()
             local request = launch({"sh", "-c", "echo start:$PROBE_VALUE; pwd; read line; echo got:$line; echo warn 1>&2"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))

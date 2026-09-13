@@ -22,8 +22,10 @@ session directories live under a placement-owned root.
    transaction, not a home lock or a separate manager.
 2. `start` spawns the runner under the placement scope and waits for its
    startup acknowledgment within the admitted start budget.
-3. The runner records `starting` and creates the attempt home under a derived
-   key. A launch that names both a retained session and its writable session
+3. Both structured and window runners atomically claim `intended` as `starting`
+   before creating files. A duplicate runner refuses without replacing the
+   recorded runner identity or materializing the attempt home. A launch that
+   names both a retained session and its writable session
    home selects that session's derived `/home` before materializing provider,
    gateway, hook or trust configuration; the attempt home still owns attempt
    evidence and cleanup. Protected files in a retained home permit only exact

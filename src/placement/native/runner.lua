@@ -66,7 +66,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local recipient: string? = type(row.recipient) == "string" and row.recipient :: string or nil
     local generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation :: number) or 0
     local group = row.capability == "process_group"
-    local starting = store.transition(db, attempt_id, {execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
+    local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
     if not starting.ok then return refuse(starting.message or "attempt is not intended") end
     local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, generation, expected_binding, materialization_key)
     gateway_binding = bound_gateway

@@ -1020,6 +1020,24 @@ local function define_tests()
             test.is_nil(replay_error)
             test.eq(shell("cat " .. quote.posix(claude_home .. "/.claude.json")), "private-settings")
         end)
+        test.it("adds a newly admitted initializer to an existing retained login without replacing it", function()
+            local session_key = assert(homes.session_key(OWNER, fresh("agy-existing-session")))
+            local session_path = assert(homes.ensure_session(session_key))
+            local original = {provider = "agy", definition_id = "bee.test.agy_login", definition_revision = 1,
+                format = {schema_revision = "bee.credential-format@1", file = {
+                    path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque", initialize = {}}}}
+            assert(homes.retain_login(session_path, original, "existing-login"))
+            local home = assert(homes.os_path(session_path .. "/home"))
+            local resolved = {provider = "agy", definition_id = "bee.test.agy_login", definition_revision = 1,
+                format = {schema_revision = "bee.credential-format@1", file = {
+                    path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque",
+                    initialize = {{path = ".gemini/antigravity-cli/cache/onboarding.json", content = '{"onboardingComplete":true}'}}}}}
+            local target, seed_error, replayed = homes.retain_login(session_path, resolved, "rotated-login")
+            if not target then error(tostring(seed_error)) end
+            test.is_true(replayed == true)
+            test.eq(shell("cat " .. quote.posix(home .. "/.gemini/antigravity-cli/antigravity-oauth-token")), "existing-login")
+            test.eq(shell("cat " .. quote.posix(home .. "/.gemini/antigravity-cli/cache/onboarding.json")), '{"onboardingComplete":true}')
+        end)
         test.it("leaves Claude onboarding to the harness when no machine login is available", function()
             local key, key_error = homes.session_key(OWNER, fresh("claude-no-login"))
             if not key then error(tostring(key_error)) end

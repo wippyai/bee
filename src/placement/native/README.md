@@ -77,10 +77,12 @@ a frozen host-selected relative target declared by the harness component.
 Codex declares `.codex/auth.json`, Claude `.claude/.credentials.json`, and Agy
 `.gemini/antigravity-cli/antigravity-oauth-token`. Claude's declaration also initializes `.claude.json` with only
 `hasCompletedOnboarding: true`: the real CLI otherwise asks for a login method
-despite recognizing the imported subscription. This does not trust any project,
-import machine settings or change later harness-owned preferences. An absent
-optional login does not initialize onboarding. Existing retained homes are not
-rewritten. Nested parent creation records every directory it creates, so later
+despite recognizing the imported subscription. Agy's host source may add its
+existing `cache/onboarding.json` as a transient initializer. This does not trust
+any project, import machine settings or change later harness-owned preferences.
+An absent optional login does not initialize onboarding. Existing retained files
+are never overwritten; a newly resolved initializer may be created when absent.
+Nested parent creation records every directory it creates, so later
 immutable driver configuration can share those directories. Existing parents
 are refused unless the current materialization created them; login formats
 cannot overwrite the retained identity marker.

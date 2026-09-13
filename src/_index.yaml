@@ -617,7 +617,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.credential_sources
-    comment: env.variable entries a workspace may define credentials from, with the audience, provider and projection kinds each admits; host policy, never a workspace choice
+    comment: Host-selected credential sources with audience, provider and projection kinds; an optional setup_path is a fixed supplemental file under the same source root
   data:
     formats:
       claude: bee.driver.claude:credential_format
@@ -627,7 +627,7 @@ entries:
     sources:
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: codex, projection_kinds: [file], path: .codex/auth.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [file], path: .claude/.credentials.json}
-    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: agy, projection_kinds: [file], path: .gemini/antigravity-cli/antigravity-oauth-token}
+    - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: agy, projection_kinds: [file], path: .gemini/antigravity-cli/antigravity-oauth-token, setup_path: .gemini/antigravity-cli/cache/onboarding.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: grok, projection_kinds: [file], path: .grok/auth.json}
 - name: credential_store_policy
   kind: security.policy

@@ -26,9 +26,11 @@ hooks for `PreToolUse`, `PostToolUse` and `Stop` in its private hooks.json. The
 host-selected Bee helper posts observations to the existing hook endpoint and
 emits no permission decision. Missing helper selection, unsupported events and
 provider configuration are refused. The component declares its opaque login file at
-`.gemini/antigravity-cli/antigravity-oauth-token`. The default host admits only
-that machine file for an optional private copy, preserving private refreshes;
-it does not link the machine directory or copy conversations and settings.
+`.gemini/antigravity-cli/antigravity-oauth-token`. The default host admits that
+machine file and the existing `.gemini/antigravity-cli/cache/onboarding.json`
+as an optional transient setup copy, preserving private refreshes; it does not
+link the machine directory or copy conversations, settings or trusted-workspace
+state.
 The native executable fixture proves present/absent login projection and scoped
 MCP requests from the generated configuration. A separate actual Agy 1.2.2 managed read task commits tool and Stop observations.
 An actual managed MCP task also commits one bound-thread message when the two

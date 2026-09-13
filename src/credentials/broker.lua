@@ -3,7 +3,8 @@
 -- an audience, an attempt, exact profile, binding and policy digests, a
 -- provider-fixed destination and an expiry; materialize re-checks all of it
 -- for the authorized materializer and returns bytes once, to that caller,
--- in a reply nothing persists.
+-- in a reply nothing persists. Host sources may also resolve one bounded
+-- setup file into a transient initializer.
 local sql = require("sql")
 local hash = require("hash")
 local time = require("time")
@@ -108,6 +109,60 @@ end
 local function integer(value: unknown): integer?
     if type(value) ~= "number" then return nil end
     return math.floor(value)
+end
+-- Read one host-selected supplemental file with the same bounded, typed
+-- source read used for provider login files. The bytes remain transient.
+local function read_source_file(volume: fs.FS, path: string, content_format: string, bound: integer, label: string): (string?, string?, string?)
+    local file, open_error = volume:open("/" .. path, "r")
+    if not file then
+        if open_error and open_error:kind() == errors.NOT_FOUND then return nil, "MISSING", nil end
+        return nil, "UNAVAILABLE", "source " .. label .. " unavailable"
+    end
+    local chunks: {string} = {}
+    local size: integer = 0
+    while true do
+        local remaining = bound + 1 - size
+        if remaining <= 0 then break end
+        local chunk, read_error = file:read(math.min(4096, remaining))
+        if read_error and tostring(read_error) == "EOF" then break end
+        if read_error then
+            file:close()
+            return nil, "UNAVAILABLE", "source " .. label .. " could not be read"
+        end
+        if chunk == nil or chunk == "" then break end
+        if type(chunk) ~= "string" then
+            file:close()
+            return nil, "UNAVAILABLE", "source " .. label .. " yielded invalid bytes"
+        end
+        chunks[#chunks + 1] = chunk
+        size = size + #chunk
+    end
+    file:close()
+    local content = table.concat(chunks)
+    if #content == 0 then return nil, "UNAVAILABLE", "source " .. label .. " is empty" end
+    if #content > bound then return nil, "INVALID", "source " .. label .. " exceeds " .. tostring(bound) .. " bytes" end
+    if content_format == "json" then
+        local ok, parsed = pcall(json.decode, content)
+        if not ok or type(parsed) ~= "table" then return nil, "INVALID", "source " .. label .. " is not valid JSON" end
+    end
+    return content, "PRESENT", nil
+end
+-- Resolve one host-selected setup file into a fresh in-memory format value.
+-- The frozen format in the definition and projection is never mutated.
+local function append_setup(format: formats.Format, path: string, content: string): string?
+    local file = format.file
+    if not file then return "credential setup requires a file format" end
+    if #file.initialize >= 4 then return "credential setup exceeds initializer count" end
+    local bytes = 0
+    for _, item in ipairs(file.initialize) do
+        bytes = bytes + #item.content
+        if item.path == path or path:sub(1, #item.path + 1) == item.path .. "/" or item.path:sub(1, #path + 1) == path .. "/" then
+            return "credential setup overlaps login state"
+        end
+    end
+    if bytes + #content > 8192 then return "credential setup exceeds initializer byte limit" end
+    file.initialize[#file.initialize + 1] = {path = path, content = content}
+    return nil
 end
 local function definition_of(db: sql.DB, workspace_id: string, name: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_credential_definitions WHERE workspace_id = ? AND name = ?", {workspace_id, name})
@@ -374,7 +429,7 @@ function M.issue_projection(value: unknown): Reply
 end
 -- Recheck the host-selected file source against the definition before using
 -- its capability. Host edits cannot retarget an already-issued projection.
-local function file_binding(definition: Row, workspace_id: string, audience: string?): (string?, Reply?)
+local function file_binding(definition: Row, workspace_id: string, audience: string?): (string?, Reply?, string?)
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return nil, fail("STORAGE", admitted_error or "host sources") end
     local ref, provider = text(definition.source_ref) or "", text(definition.provider) or ""
@@ -388,12 +443,15 @@ local function file_binding(definition: Row, workspace_id: string, audience: str
     end
     local path, path_error = sources.file_path(admitted, ref, workspace_id, provider, audience, selected_format)
     if not path then return nil, fail("FORBIDDEN", path_error or "file source unavailable") end
+    local setup_path, setup_error = sources.setup_path(admitted, ref, workspace_id, provider, audience)
+    if setup_error then return nil, fail("FORBIDDEN", setup_error) end
     local directory, directory_error = sources.directory(ref)
     if not directory then return nil, fail("INVALID", directory_error or "file source unavailable") end
-    local digest = digest_of({provider = provider, source_kind = "fs_directory", source_ref = ref, directory = directory,
-        path = path, projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1})
+    local digest_payload: {[string]: unknown} = {provider = provider, source_kind = "fs_directory", source_ref = ref, directory = directory,
+        path = path, projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1}
+    local digest = digest_of(digest_payload)
     if not digest or digest ~= definition.digest then return nil, fail("CONFLICT", "credential source changed; redefine before use") end
-    return path, nil
+    return path, nil, setup_path
 end
 -- The checks every use of a projection repeats; nil means it holds.
 local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
@@ -580,7 +638,7 @@ function M.check(value: unknown): Reply
 end
 -- materialize: the authorized materializer receives the bytes once, in a
 -- reply nothing persists; each generation key is accepted once, so a lost
--- reply is never repaired by a silent second read. The source is read now,
+-- reply is never repaired by a silent second read. Sources are read now,
 -- so rotation at an unchanged reference reaches the next materialization.
 function M.materialize(value: unknown): Reply
     local object, decode_error = decode_use(value, {"generation_key"})
@@ -658,60 +716,35 @@ function M.materialize(value: unknown): Reply
             db:release()
             return fail("CONFLICT", "projection destination does not match credential format")
         end
-        local path, binding_error = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
+        local path, binding_error, setup_path = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
         if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
         local volume = fs.get(source_ref)
         db:release()
         if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable") end
-        -- Read at most one byte beyond the limit; never allocate an unbounded
-        -- login file before enforcing its bound. Only the provider-fixed path
-        -- is opened under the host-selected filesystem capability.
-        local file, open_error = volume:open("/" .. path, "r")
-        if not file then
-            if optional and open_error and open_error:kind() == errors.NOT_FOUND then
-                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = frozen_format,
+        local resolved_format = frozen_format
+        if setup_path then
+            local setup_content, setup_status, setup_error = read_source_file(volume, setup_path, "json", 4096, "setup file")
+            if setup_status == "PRESENT" and setup_content then
+                local append_error = append_setup(resolved_format, setup_path, setup_content)
+                if append_error then return fail("CONFLICT", append_error) end
+            elseif setup_status ~= "MISSING" then
+                return fail(setup_status or "UNAVAILABLE", setup_error or "source setup file unavailable")
+            end
+        end
+        local content, status, content_error = read_source_file(volume, path, content_format, M.MAX_FILE_BYTES, "login file")
+        if status == "MISSING" then
+            if optional then
+                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = resolved_format,
                     generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
                     definition_revision = definition.revision, provider = provider, present = false, optional = true})
             end
             return fail("UNAVAILABLE", "source login file unavailable")
         end
-        local chunks: {string} = {}
-        local size: integer = 0
-        while true do
-            local remaining = M.MAX_FILE_BYTES + 1 - size
-            if remaining <= 0 then break end
-            local chunk, read_error = file:read(math.min(4096, remaining))
-            if read_error and tostring(read_error) == "EOF" then break end
-            if read_error then
-                file:close()
-                return fail("UNAVAILABLE", "source login file could not be read")
-            end
-            if chunk == nil or chunk == "" then break end
-            if type(chunk) ~= "string" then
-                file:close()
-                return fail("UNAVAILABLE", "source login file yielded invalid bytes")
-            end
-            chunks[#chunks + 1] = chunk
-            size = size + #chunk
-        end
-        file:close()
-        local content = table.concat(chunks)
-        if #content == 0 then
-            return fail("UNAVAILABLE", "source file " .. destination .. " is empty")
-        end
-        if #content > M.MAX_FILE_BYTES then
-            return fail("INVALID", "source file " .. destination .. " exceeds " .. tostring(M.MAX_FILE_BYTES) .. " bytes")
-        end
-        if content_format == "json" then
-            local ok, parsed = pcall(json.decode, content)
-            if not ok or type(parsed) ~= "table" then
-                return fail("INVALID", "source file " .. destination .. " is not valid JSON")
-            end
-        end
+        if status ~= "PRESENT" or not content then return fail(status or "UNAVAILABLE", content_error or "source login file unavailable") end
         -- Login formats belong to the harness. Do not guess OS-keyring
         -- locations or reinterpret provider fields; only an actual admitted
         -- file can be projected. Its bytes remain outside persisted state.
-        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = frozen_format,
+        return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "file", encoding = content_format == "opaque" and "bytes" or "utf-8", format = resolved_format,
             generation = generation, generation_key = generation_key, definition_id = definition.definition_id,
             definition_revision = definition.revision, provider = provider, present = true, optional = optional, value = content})
     else

@@ -1,6 +1,7 @@
 -- MIT. Linked references of the credential broker: the store and the host's
 -- source allowlist, the ceiling every definition stays under. Providers map
--- to the single environment destination each admits in phase 1.
+-- to their declared destinations; a file source may additionally name one
+-- host-selected setup path.
 local registry = require("registry")
 local bounds = require("bounds")
 local formats = require("formats")
@@ -8,7 +9,7 @@ local M = {}
 M.DATABASE_REF = "bee.credentials:database_ref"
 M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER = "bee.placement.native:binding"
-type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?}
+type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup_path: string?}
 type SourceSet = {sources: {Source}, formats: {[string]: string}}
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
@@ -52,14 +53,13 @@ function M.host_sources(): (SourceSet?, string?)
             local declared = item :: {[string]: unknown}
             local path: string? = nil
             if declared.path ~= nil then
-                if type(declared.path) ~= "string" or #declared.path == 0 or #declared.path > 512
-                    or declared.path:find("[%z\r\n\\]") or declared.path:sub(1, 1) == "/" then
-                    return nil, "host credential path is invalid"
-                end
-                for segment in (declared.path .. "/"):gmatch("(.-)/") do
-                    if segment == "" or segment == "." or segment == ".." then return nil, "host credential path is invalid" end
-                end
-                path = declared.path :: string
+                path = formats.path(declared.path)
+                if not path then return nil, "host credential path is invalid" end
+            end
+            local setup_path: string? = nil
+            if declared.setup_path ~= nil then
+                setup_path = formats.path(declared.setup_path)
+                if not setup_path then return nil, "host credential setup path is invalid" end
             end
             local kinds: {string} = {}
             if type(declared.projection_kinds) == "table" then
@@ -73,11 +73,37 @@ function M.host_sources(): (SourceSet?, string?)
             local audience = bounds.id(declared.audience)
             if ref and workspace_id and audience and provider then
                 sources.sources[#sources.sources + 1] = {ref = ref, workspace_id = workspace_id, audience = audience,
-                    provider = provider, projection_kinds = kinds, path = path}
+                    provider = provider, projection_kinds = kinds, path = path, setup_path = setup_path}
             end
         end
     end
     return sources, nil
+end
+-- An optional provider setup file is a host-selected path paired with a file
+-- source. It is metadata only; the file policy still authorizes fs.get/read.
+-- Ambiguous declarations refuse rather than choosing one path.
+function M.setup_path(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (string?, string?)
+    local selected: string? = nil
+    local matched = false
+    local selected_set = false
+    for _, source in ipairs(sources.sources) do
+        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
+            and (audience == nil or source.audience == "*" or source.audience == audience) then
+            for _, kind in ipairs(source.projection_kinds) do
+                if kind == "file" then
+                    matched = true
+                    if not selected_set then
+                        selected = source.setup_path
+                        selected_set = true
+                    elseif selected ~= source.setup_path then
+                        return nil, "host credential setup paths are ambiguous"
+                    end
+                end
+            end
+        end
+    end
+    if not matched then return nil, "host file source is not admitted" end
+    return selected, nil
 end
 -- Whether the host admits a source for a workspace, provider and kind, and
 -- when an audience is named, for that audience too.

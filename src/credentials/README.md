@@ -43,7 +43,11 @@ Claude and Codex declare their API-key destinations and JSON login files;
 Agy declares an opaque file. File sources name a host-selected `fs.directory`
 using `source.kind: fs_directory`. The host source row selects the source path;
 when omitted, it uses the declared login basename.
-Callers cannot choose a path, filename or mount. The host's `bee:credential_file_policy`
+Callers cannot choose a path, filename or mount. A file source may also carry one
+host-selected `setup_path`; materialization reads that optional path from the same
+source (bounded to 4 KiB) and appends its JSON bytes to the transient returned
+format as an initializer. The setup path and its contents are never stored in a
+definition or projection, and a missing setup file is allowed. The host's `bee:credential_file_policy`
 grants filesystem access separately from source metadata and is attached to
 availability for a stat-only check and to materialization for bounded reads.
 Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
@@ -63,7 +67,8 @@ hold secret bytes. Only the admitted placement materializer holding
 `bee:credential_materialize_policy` receives bytes once per generation key in a
 transient RPC reply that nothing persists.
 
-File reads stop after 64 KiB plus one byte and reject empty or oversized content.
+Login file reads stop after 64 KiB plus one byte; supplemental setup reads stop
+after 4 KiB plus one byte. Both reject empty or oversized content.
 JSON formats additionally require a JSON object or array; opaque formats preserve
 arbitrary bytes and report encoding `bytes`. Both return bytes only in the
 authorized transient materialization reply.

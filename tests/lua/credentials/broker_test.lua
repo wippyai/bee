@@ -22,6 +22,8 @@ local CLAUDE_LOGIN_SOURCE = "bee.credentials:claude_login_fixture"
 local INVALID_LOGIN_SOURCE = "bee.credentials:invalid_login_fixture"
 local MISSING_LOGIN_SOURCE = "bee.credentials:missing_login_fixture"
 local UNPRIVILEGED_LOGIN_SOURCE = "bee.credentials:unprivileged_login_fixture"
+local AGY_ONBOARDING = ".gemini/antigravity-cli/cache/onboarding.json"
+local ONBOARDING_SENTINEL = "agy-onboarding-sentinel-42"
 local CODEX_FILE_SENTINEL = '{"access_token":"sentinel-codex-tok-123","auth_mode":"chatgpt"}'
 local CLAUDE_FILE_SENTINEL = '{"sessionKey":"sentinel-claude-key-456"}'
 local MANAGER, USER, OTHER, RUNNER = "bee.test.cred.manager", "bee.test.cred.user", "bee.test.cred.other", "bee.test.cred.runner"
@@ -70,6 +72,7 @@ local function clean(reply: broker.Reply)
     if encoded:find("sentinel-claude-key-456", 1, true) then error("claude login sentinel leaked into a reply that must not carry it") end
     if encoded:find("chatgpt", 1, true) then error("codex login auth_mode leaked into a reply that must not carry it") end
     if encoded:find("sessionKey", 1, true) then error("claude login sessionKey leaked into a reply that must not carry it") end
+    if encoded:find(ONBOARDING_SENTINEL, 1, true) then error("Agy onboarding leaked into a reply that must not carry it") end
 end
 local function write_file(ref: string, path: string, content: string)
     local volume, err = fs.get(ref)
@@ -88,8 +91,8 @@ local function admit_sources(workspace: string)
         {ref = CLAUDE_LOGIN_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"file"}},
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
-        {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
-        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}}}
+        {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
+        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING}}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local file_policy = registry.get("bee:credential_file_policy")
@@ -443,6 +446,7 @@ local function define_tests()
             -- Agy selects an opaque host format. Arbitrary bytes pass through
             -- without JSON parsing and are labeled as bytes for placement.
             write_file(CODEX_LOGIN_SOURCE, "antigravity-oauth-token", "opaque-login-bytes")
+            write_file(CODEX_LOGIN_SOURCE, AGY_ONBOARDING, '{"consumerOnboardingComplete":"' .. ONBOARDING_SENTINEL .. '"}')
             local agy_def = value(call(manager, "define", {workspace_id = ws, name = "agy_login", provider = "agy",
                 source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
             test.eq(agy_def.destination, "antigravity-oauth-token")
@@ -453,6 +457,8 @@ local function define_tests()
             test.eq(agy_mat.encoding, "bytes")
             test.eq(agy_mat.destination, "antigravity-oauth-token")
             test.eq(agy_mat.format.file.content_format, "opaque")
+            test.eq(agy_mat.format.file.initialize[1].path, AGY_ONBOARDING)
+            test.eq(agy_mat.format.file.initialize[1].content, '{"consumerOnboardingComplete":"' .. ONBOARDING_SENTINEL .. '"}')
 
             local claude_proj = issue(user, ws, "claude_login", attempt)
             test.eq(claude_proj.destination, ".credentials.json")
@@ -657,6 +663,7 @@ local function define_tests()
                     test.is_nil(encoded:find("sentinel-claude-key-456", 1, true))
                     test.is_nil(encoded:find("chatgpt", 1, true))
                     test.is_nil(encoded:find("sessionKey", 1, true))
+                    test.is_nil(encoded:find(ONBOARDING_SENTINEL, 1, true))
                 end
             end
             db:release()

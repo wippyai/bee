@@ -963,7 +963,7 @@ func savedProfileLaunch(binary string) error {
 		helper = resolved
 	}
 	const guidance = "Saved launch guidance."
-	script := "#!/bin/sh\nset -eu\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
+	script := "#!/bin/sh\nset -eu\ncase \" $* \" in *\" --effort high \"*) ;; *) exit 1 ;; esac\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " --subset \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
 	if err := os.WriteFile(filepath.Join(project, "bin", "agy"), []byte(script), 0700); err != nil {
 		return err
 	}
@@ -971,7 +971,10 @@ func savedProfileLaunch(binary string) error {
 	if err != nil {
 		return err
 	}
-	defer ui.close()
+	defer func() {
+		ui.close()
+		_ = stopFixtureOwners(binary, state)
+	}()
 	if err := ui.waitFor("Choose a profile", 25*time.Second); err != nil {
 		return err
 	}
@@ -984,7 +987,7 @@ func savedProfileLaunch(binary string) error {
 	if err := ui.waitFor("Name: Antigravity", 5*time.Second); err != nil {
 		return err
 	}
-	if err := ui.send("\x15Saved Launch\t\x15" + guidance); err != nil {
+	if err := ui.send("\x15Saved Launch\t\x15" + guidance + "\t\x1b[C\x1b[C\x1b[C\t "); err != nil {
 		return err
 	}
 	_, before, _ := ui.snapshot()
@@ -1020,9 +1023,9 @@ func savedProfileLaunch(binary string) error {
 	if err := json.Unmarshal(mcpData, &mcpResult); err != nil || mcpResult.Provider != "agy" ||
 		mcpResult.InitializeStatus != http.StatusOK || mcpResult.ListStatus != http.StatusOK ||
 		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
-		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageOK || !mcpResult.MessageReplayOK ||
-		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.MessageWriteOK ||
-		strings.Join(mcpResult.Tools, ",") != "thread_message,thread_read,thread_wait" {
+		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageRefusedOK || !mcpResult.NoAppendOK ||
+		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || mcpResult.MessageWriteOK ||
+		strings.Join(mcpResult.Tools, ",") != "thread_read,thread_wait" {
 		return fmt.Errorf("saved profile MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	if err := ui.quit(); err != nil {
@@ -1053,6 +1056,8 @@ type mcpProbeReport struct {
 	WaitOK           bool     `json:"wait_ok"`
 	MessageOK        bool     `json:"message_ok"`
 	MessageReplayOK  bool     `json:"message_replay_ok"`
+	MessageRefusedOK bool     `json:"message_refused_ok"`
+	NoAppendOK       bool     `json:"no_append_ok"`
 	ReadAnnotationOK bool     `json:"read_annotation_ok"`
 	WaitAnnotationOK bool     `json:"wait_annotation_ok"`
 	MessageWriteOK   bool     `json:"message_write_annotation_ok"`
@@ -1201,7 +1206,18 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 			} `json:"annotations"`
 		} `json:"tools"`
 	}
-	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != 3 {
+	subset := false
+	for _, arg := range args {
+		if arg == "--subset" {
+			subset = true
+			break
+		}
+	}
+	expectedTools := 3
+	if subset {
+		expectedTools = 2
+	}
+	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != expectedTools {
 		return 1
 	}
 	for _, tool := range listed.Tools {
@@ -1221,6 +1237,101 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 		report.Tools = append(report.Tools, tool.Name)
 	}
 	sort.Strings(report.Tools)
+	if subset {
+		if len(report.Tools) != 2 || report.Tools[0] != "thread_read" || report.Tools[1] != "thread_wait" ||
+			!report.ReadAnnotationOK || !report.WaitAnnotationOK || report.MessageWriteOK {
+			return 1
+		}
+		readScanned := func(id int) (int, bool) {
+			status, reply, requestOK := mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+				"name": "thread_read", "arguments": map[string]any{"cursor": 0},
+			}, id)
+			report.ReadStatus = status
+			if !requestOK || status != http.StatusOK {
+				return 0, false
+			}
+			var result struct {
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+				IsError bool `json:"isError"`
+			}
+			if json.Unmarshal(reply.Result, &result) != nil || len(result.Content) != 1 || result.IsError {
+				return 0, false
+			}
+			var value struct {
+				OK    bool `json:"ok"`
+				Value struct {
+					ScannedThrough *int  `json:"scanned_through"`
+					HasMore        *bool `json:"has_more"`
+				} `json:"value"`
+			}
+			if json.Unmarshal([]byte(result.Content[0].Text), &value) != nil || !value.OK {
+				return 0, false
+			}
+			if value.Value.ScannedThrough == nil || value.Value.HasMore == nil || *value.Value.HasMore {
+				return 0, false
+			}
+			return *value.Value.ScannedThrough, true
+		}
+		initialScanned, readOK := readScanned(3)
+		if !readOK {
+			return 1
+		}
+		report.ReadOK = true
+		messageArguments := map[string]any{
+			"idempotency_key": "native-mcp-message-subset",
+			"message_id":      "native-mcp-message-subset",
+			"message_kind":    "notification",
+			"recipient_ids":   []string{},
+			"content":         map[string]any{"text": "refused native authenticated message"},
+		}
+		var messageReply mcpReply
+		report.MessageStatus, messageReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+			"name": "thread_message", "arguments": messageArguments,
+		}, 4)
+		if !ok || report.MessageStatus != http.StatusOK {
+			return 1
+		}
+		var messageError struct {
+			Code int `json:"code"`
+		}
+		if json.Unmarshal(messageReply.Error, &messageError) != nil || messageError.Code != -32602 {
+			return 1
+		}
+		report.MessageRefusedOK = true
+		// Re-read the initial cursor and compare its durable boundary. The
+		// refused write must not append a record.
+		afterScanned, readOK := readScanned(5)
+		if !readOK || afterScanned != initialScanned {
+			return 1
+		}
+		report.NoAppendOK = true
+		var waitReply mcpReply
+		report.WaitStatus, waitReply, ok = mcpProbeRequest(client, url, token, "tools/call", map[string]any{
+			"name": "thread_wait", "arguments": map[string]any{"after_sequence": afterScanned, "wait_ms": 0},
+		}, 6)
+		if !ok || report.WaitStatus != http.StatusOK {
+			return 1
+		}
+		var waitResult struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+			IsError bool `json:"isError"`
+		}
+		if json.Unmarshal(waitReply.Result, &waitResult) != nil || len(waitResult.Content) != 1 || waitResult.IsError {
+			return 1
+		}
+		var waitValue struct {
+			OK bool `json:"ok"`
+		}
+		if json.Unmarshal([]byte(waitResult.Content[0].Text), &waitValue) != nil || !waitValue.OK {
+			return 1
+		}
+		report.WaitOK = true
+		return 0
+	}
 	if len(report.Tools) != 3 || report.Tools[0] != "thread_message" || report.Tools[1] != "thread_read" || report.Tools[2] != "thread_wait" ||
 		!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.MessageWriteOK {
 		return 1

@@ -34,7 +34,7 @@ runtime processes against the same disposable database: native node identity,
 value/revision and the tombstone survive; a different authenticated reader sees
 the saved value; historical receipt replay does not resurrect a removed profile.
 The restart gate is included in `make check` and uses no desktop/driver closure.
-The current full unit run passes all 813 cases. An earlier run hit the recurring
+The effort-option source (`dc86273`) passes all 836 unit cases. An earlier run hit the recurring
 harness crash-recovery assertion (`clean child read evidence`); the passing rerun
 does not establish its cause or a fix. Full repository acceptance of this source
 is still pending.
@@ -56,7 +56,7 @@ launch policy maps editable option names to bounded lists of allowed scalar
 values; driver control fields remain reserved. `profile_instructions: true`
 permits appended profile guidance within the combined 4096-byte limit. Disabled
 guidance is refused, never silently dropped. Selected MCP tools must be a subset
-of the host list; hooks remain independent. Editable options remain disabled in the default host policies.
+of the host list; hooks remain independent. Default host policies expose only low/medium/high effort choices; other editable options require explicit host policy.
 
 Credentials retain the original host policy digest. Carrier/native requests carry
 decoded preferences, and the resulting configuration and placement request are
@@ -67,7 +67,7 @@ authorized profile resolution/admission, stale revision rejection, host digest
 preservation and native pre-intent refusal, alongside existing launch tests.
 Successful real-provider execution with edited options remains unverified.
 
-Next: native Agent form/launch acceptance and the global build. Saving preferences must never launch a process as a side effect.
+Native Agent form/launch acceptance passes with a fixture harness. Saving preferences does not launch a process or create thread work.
 
 No profile replication or cross-node human identity is claimed. Hive distribution
 and governed registry overlays remain separate work.
@@ -110,8 +110,7 @@ Successful saves return to the picker without launching. Form values and draft
 instructions are transient until saved; closing the form discards the draft.
 
 Thirty focused model, profile store, selection and recovery cases pass with the
-form/editor source. Actual native keyboard form acceptance now passes and the global build is
-updated. Native launch with an edited profile remains unverified.
+form/editor source. Actual native keyboard form acceptance passes and the global build includes the form. Native launch with saved guidance passes using a fixture harness.
 
 Follow-up source adds low/medium/high effort choices to the four default window
 policies. Claude, Agy and Grok already translate effort to native flags; Codex
@@ -124,3 +123,11 @@ The installed candidate additionally passes a real saved-profile fixture launch:
 Agy receives the saved appended guidance in its private GEMINI.md and the scoped
 gateway exposes the declared thread tools. This uses a fixture executable; no
 authenticated provider model turn is claimed.
+
+The effort candidate also passes native UI selection of high effort and an MCP
+subset. The fixture checks the emitted Agy `--effort high` arguments and appended
+guidance, then calls the actual authenticated gateway. Only `thread_read` and
+`thread_wait` are listed and callable; a direct `thread_message` call receives
+JSON-RPC invalid-params rejection and leaves the durable thread boundary unchanged.
+This is real Bee admission and gateway I/O with a fixture executable, not a paid
+provider turn. The checks remain outside production packs.

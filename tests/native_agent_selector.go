@@ -103,6 +103,8 @@ func filteredEnvironment() []string {
 		"ANTHROPIC_CUSTOM_HEADERS": true, "CLAUDE_CODE_OAUTH_TOKEN": true,
 		"CLAUDE_CODE_USE_BEDROCK": true, "CLAUDE_CODE_USE_VERTEX": true,
 		"CLAUDE_CODE_USE_FOUNDRY": true, "OPENAI_API_KEY": true,
+		"XAI_API_KEY": true, "GROK_BIN": true, "GROK_LOGIN_FILE": true,
+		"GROK_CONFIG_FILE": true, "GROK_MODEL": true,
 		"AWS_ACCESS_KEY_ID": true, "AWS_SECRET_ACCESS_KEY": true,
 		"AWS_SESSION_TOKEN": true, "AWS_PROFILE": true,
 		"AWS_WEB_IDENTITY_TOKEN_FILE": true, "AWS_BEARER_TOKEN_BEDROCK": true,

@@ -7,7 +7,7 @@ fresh continuation request on restore. Source acceptance now proves graceful
 continuation, interrupted-window recovery, cancellation during recovery, and
 whole-node restart with a fixture Claude executable. Controlled node SIGKILL
 also passes when the independently inspected native process is gone. Real-provider
-cold recovery passes for Agy and Codex; Claude, Grok and surviving orphan
+cold recovery passes for Agy, Codex and Grok; Claude and surviving orphan
 process trees remain unverified. The installed
 revision is tracked separately in [global build](GLOBAL_BUILD.md).
 
@@ -191,8 +191,21 @@ attempt and gateway identities; paired MCP hooks; unchanged source login/global
 configuration and project tree; explicit provider exit status; and final native
 process cleanup. It removes ambient provider credential variables and deletes
 all disposable credential-bearing state. Installed Codex 0.154.0 passes this
-gate against exact-source standalone `64679b3f`; the manifest still declares
-0.153.4 and the full row must rerun after the released runtime cut.
+gate against exact-source standalone `64679b3f`; the driver now declares 0.154.0
+and the full row must rerun after the released runtime cut.
+
+`make native-grok-recovery-live-check BEE_BINARY=... GROK_BIN=...
+GROK_LOGIN_FILE=... GROK_CONFIG_FILE=...` runs installed Grok twice through the
+same managed-window path. The first result must end with the random source token,
+share its conversation ID with the committed hooks, and complete the scoped Bee
+`thread_read`; after source deletion and owner restart, the resumed result must
+be exactly that token with no tool hooks or prompt replay. It also proves all
+five configured first-turn hooks, stable project/HOME/application/thread/action,
+fresh attempt/native/gateway identity, retired predecessor, unchanged source
+login and global configuration, no project configuration writes, explicit exit
+status and final process cleanup. Ambient XAI credentials are removed before Bee
+starts. Installed Grok 1.0.30 passes against exact-source standalone `64679b3f`;
+the driver now declares 1.0.30 and the row must rerun after the runtime cut.
 
 Agy's corrected MCP delivery declares private JSON credential fields. Placement
 fills those after minting the admitted binding; the persisted template retains

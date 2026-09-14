@@ -42,7 +42,7 @@ Completed on this branch:
   edit, select, tombstone, restart persistence and receipt replay pass;
 - an exact-source standalone passes the four-provider selector, real Grok 1.0.30
   authenticated and clean/login/cancel/restart paths, graceful and abrupt
-  fixture owner recovery, and real Agy and Codex cold conversation continuation;
+  fixture owner recovery, and real Agy, Codex and Grok cold conversation continuation;
 - the direct native Docker PTY and lower placement foundations pass;
 - the Hub already implements most of its local immutable
   install/update/remove, migration, receipt and recovery backend;
@@ -66,9 +66,11 @@ real-Agy acceptance proves exact tool-free recall after its source file is
 deleted, with stable conversation/HOME/application/thread and fresh attempt and
 gateway identities. The checked real-Codex acceptance now proves the same cold
 recall plus its command read, scoped MCP/hook pairing and unchanged global
-configuration. Real Claude recovery and Grok reconciliation remain; Codex must
-also be rerun after the runtime cut and its 0.154.0 installed version reconciled
-with the 0.153.4 manifest.
+configuration. The checked real-Grok acceptance now proves matching provider/hook
+conversation identity, scoped MCP, exact tool-free recall and stable global
+configuration. Real Claude recovery remains. Codex and Grok now declare their
+tested versions and must be rerun after the runtime cut; Claude metadata is
+reconciled when its authenticated row qualifies.
 Native Agents also remains blocked from global promotion until the selected-state-root
 runtime gate is released and consumed.
 
@@ -189,9 +191,9 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Finish real Claude cold recovery and reconcile Grok close/restart fencing; retain the passing Agy and Codex rows as regression gates | Claude, Codex, Agy and Grok each have one evidence row covering configuration, hooks/MCP, normal close, owner restart, abrupt restart, no prompt replay and fresh attempt/gateway fencing |
-| 2 | Runtime integration | Consume the released selected-state-root, structural TOML insertion and OS-assigned listener primitives; apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, upgrade preserves all owned data, and the four-provider matrix passes again on the released runtime |
-| 3 | Release | Promote **Native Agents** from one clean immutable commit | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
+| 1 | Agents before runtime cut | Commit the passing Grok recovery unit, finish real Claude cold recovery and reconcile provider version metadata; retain the passing Agy, Codex and Grok evidence without claiming promotion | All four providers have named recovery targets; Claude is authenticated and qualified; pre-cut evidence and exact provider versions are recorded |
+| 2 | Runtime integration | Consume the released selected-state-root, structural TOML insertion and OS-assigned listener primitives; reconcile the manifest and runtime handoff, then apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, legacy state imports once, and upgrade preserves all owned data |
+| 3 | Agents after runtime cut / release | Build one immutable candidate, rerun the complete four-provider matrix on the released runtime, then promote **Native Agents** | Full check, standalone, offline/restart/recovery, aggregate provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish durable displays, asynchronous Hive rejoin, F9 topology and controller transfer on the selected state model | Same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
 | 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One candidate app closure can enter and leave the catalog without a core edit or authority leak; independent package extraction and harness parity remain order 8 |
 | 6 | Release | Promote **Local Components** | Correct folder/display behavior and admitted local Hub components pass together from a clean executable |
@@ -221,7 +223,7 @@ status and handoff documents.
 
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
-| Agents / integration | active | Make real Claude reach managed readiness and prove source-file recall across owner restart; reconcile Grok close/restart fencing and retain the passing Agy/Codex rows | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
+| Agents / integration | active | Make real Claude reach managed readiness and prove source-file recall; reconcile provider versions and run the combined matrix while retaining the passing Agy/Codex/Grok rows | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
 | State | external gate | Consume one released runtime state-root pin and prove the documented store-selection matrix from two folders and an explicit override | runtime PR #726 and its builder release |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
@@ -230,11 +232,12 @@ status and handoff documents.
 | Overlays | queued | Complete governed `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | local Hub admission and released registry compare-and-set |
 
 The first usable global update is deliberately smaller than finished Bee: it is
-the Native Agents checkpoint. Its remaining local work is Claude recovery, Grok
-recovery reconciliation and the clean promotion gate. The current real Claude
+the Native Agents checkpoint. Its remaining local work is committing the Grok
+unit, Claude recovery, provider-version reconciliation, the runtime/state cut
+and the clean post-cut promotion gate. The current real Claude
 acceptance opens its managed window, delivers the scoped MCP/hooks configuration
 and promptly reports the provider's authentication refusal; its row remains
-unqualified until the account completes both turns. Agy and Codex real
+unqualified until the account completes both turns. Agy, Codex and Grok real
 cold-recovery rows pass. No Hive, Hub, Docker or overlay work is
 allowed to enlarge this integration diff.
 
@@ -243,13 +246,13 @@ allowed to enlarge this integration diff.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. complete the real Claude cold-recovery row while retaining the passing Codex
-   row, preserving global and project configuration fingerprints and proving
-   that recovery never replays the original prompt;
-2. reconcile Grok into the same matrix, including normal close, owner restart,
-   abrupt restart and fresh attempt/secret/gateway fencing;
-3. fix only defects exposed by the matrix, rerun affected focused checks, then
-   commit and push the bounded recovery unit.
+1. finish and commit the passing Grok cold-recovery row, including normal close,
+   owner restart, fresh attempt/secret/gateway fencing and unchanged user state;
+2. complete the real Claude cold-recovery row while retaining the passing Agy,
+   Codex and Grok evidence, preserving global and project configuration
+   fingerprints and proving that recovery never replays the original prompt;
+3. record exact provider versions, fix only defects exposed by these rows, rerun
+   affected focused checks, then commit and push the bounded pre-cut unit.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
 Afterward the selected-state-root cut is the only work admitted before the Native
@@ -304,16 +307,21 @@ workspaces and displays survive restart and a binary upgrade.
 
 Write one store-selection matrix before changing paths. For every store it names
 the owner, whether it is project-selected, user-shared or explicitly overridden,
-its import source and its restart/upgrade rule. Shared registry history and
-authorized overlays must not silently become empty merely because a project
-folder changes. Every database declaration follows the matrix; no service derives
-an alternate private root.
+its import source and its restart/upgrade rule. The inventory includes every
+SQLite declaration and derived client database, registry history, placement and
+native-mesh state, deployment/artifact caches, and retained attempt/session
+homes. Shared registry history and authorized overlays must not silently become
+empty merely because a project folder changes. Every database and retained
+resource declaration follows the matrix; no service derives an alternate private
+root.
 
 Exit proof: the installed executable opens the intended folder offline and every
-store resolves beneath the selected root or its explicit override. The accepted
-runtime also supplies structural TOML insertion and the authoritative port-zero
-listener address, and the complete provider matrix passes again against those
-exact released pins.
+store resolves beneath the selected root, a documented user-shared root or its
+explicit override. The accepted runtime also supplies structural TOML insertion
+and the authoritative port-zero listener address. After this exit proof, build
+one immutable candidate and rerun the complete provider matrix against those
+exact released pins; the matrix is the next promotion step, not a prerequisite
+for consuming the runtime cut.
 
 ### 1. Finish native Agents
 
@@ -333,12 +341,14 @@ build.
 2. Complete clean-install default-profile acceptance through both the picker and
    CLI. Existing create/edit/select, revision CAS, tombstone, restart and replay
    behavior remains a regression gate.
-3. Give every attempt an OS-assigned MCP endpoint and a per-attempt secret. The
+3. Give the managed gateway an OS-assigned listener address and every attempt a
+   distinct action URL/binding and per-attempt secret. The listener may be shared;
+   attempt identity and authority may not be. The
    callable surface is the intersection of saved profile scope, host policy and
    the request's dynamic `ctx`; ports, secrets, grants and `ctx` are never durable
    profile data. Hooks and MCP bind to the same attempt and thread. Prove two
-   simultaneous attempts get distinct endpoints and secrets, cross-attempt calls
-   refuse, and a retired attempt cannot call after restart.
+   simultaneous attempts get distinct action bindings and secrets, cross-attempt
+   calls refuse, and a retired attempt cannot call after restart.
 4. Bind every provider window to one durable thread, committed activity/title
    state and subscription cursor. The disconnected surface keeps the last
    confirmed value; Timeline resumes its cursor; Inbox distinguishes empty from
@@ -349,8 +359,8 @@ build.
    the provider's durable conversation identity without replaying the original
    prompt. Login, subscription and account refusals remain visible provider
    outcomes and do not count as authenticated qualification.
-6. Give every row a checked-in live recovery target. Agy, Claude and Codex have
-   named targets; add the equivalent Grok target before promotion. Rerun all four
+6. Give every row a checked-in live recovery target. All four now have named
+   targets. Rerun all four
    after consuming the released state-root/runtime cut, because moving retained
    stores can invalidate earlier recovery evidence.
 

@@ -6,7 +6,7 @@ and normalize protocol records. It owns no executor, credential store or service
 The host selects activation, executable, profile and permissions. Bundling the
 component does not publish it independently to Hub or activate a launch profile.
 
-The driver targets Grok CLI 1.0.24. Its `session` and `batch` profiles use
+The driver targets Grok CLI 1.0.30. Its `session` and `batch` profiles use
 `--output-format streaming-json`; session continuation supplies `-r` with the
 recorded conversation reference. The `window` profile runs the normal Grok TUI
 through the existing terminal placement. Structured turns admit bounded

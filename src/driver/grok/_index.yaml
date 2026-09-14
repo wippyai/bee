@@ -87,7 +87,7 @@ entries:
       schema_revision: bee.driver@1
       kind: harness
       title: Grok CLI
-      implementation_version: 1.0.24
+      implementation_version: 1.0.30
       default_profile: session
       profiles:
       - id: session

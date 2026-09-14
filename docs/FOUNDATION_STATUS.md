@@ -63,9 +63,23 @@ conversation, project, HOME, CODEX_HOME, application and thread remain stable;
 the attempt and gateway binding are fresh. Required command/MCP hooks pair
 successfully, the old attempt retires, the final process exits, and the source
 `auth.json`, global `config.toml` and project tree remain unchanged. The target
-passes against exact-source standalone `64679b3f`. Manifest version 0.153.4 and
-the installed 0.154.0 still need reconciliation, and the row must rerun after the
-released runtime cut before promotion. Global Bee remains Train A.
+passes against exact-source standalone `64679b3f`. The driver now declares the
+tested 0.154.0 implementation; the row must rerun after the released runtime cut
+before promotion. Global Bee remains Train A.
+
+**B1 Grok cold recovery source complete, not installed (September 14):** the
+checked `native-grok-recovery-live-check` runs installed Grok 1.0.30 twice
+through the public managed window. Its first turn completes scoped Bee
+`thread_read` and reads a random project fixture; after source deletion and owner
+restart, `-r` resumes the same provider conversation and recalls the exact token
+without tools. All five configured first-turn hooks commit under the matching
+conversation and binding. Project, HOME, application, thread and action remain
+stable; attempt, native process and gateway identities are fresh. The predecessor
+retires, final cleanup completes, and source login/global configuration and the
+project tree remain unchanged. Ambient XAI credentials are removed before the
+test starts. The target passes against exact-source standalone `64679b3f`.
+The driver now declares the tested 1.0.30 implementation; the row must rerun
+after the released runtime cut. Global Bee remains Train A.
 
 ## Current checkpoint — September 13
 
@@ -165,9 +179,9 @@ installed artifacts match the candidate byte-for-byte; the preceding build is
 backed up. Databases and running nodes were preserved. Existing nodes retain
 their loaded code; newly started nodes use this build.
 
-**Remaining agent workflow work:** real Claude and Grok cold-recovery
+**Remaining agent workflow work:** real Claude cold-recovery
 qualification, managed Docker execution, surviving orphan cleanup, and
-policy-controlled sharing. Real Agy and Codex recovery pass. The checked real Claude
+policy-controlled sharing. Real Agy, Codex and Grok recovery pass. The checked real Claude
 target reaches the admitted managed launch with scoped hooks/MCP, then records a
 provider authentication refusal; it does not count as a recovered turn. Native
 Docker module composition is present, but Docker is not yet

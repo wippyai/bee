@@ -204,9 +204,13 @@ function M.event(state: State, event: process.Event)
             desktops.exited(state.resources, event)
             state.children[id] = nil
         else
-            local result = attachments.detach(child.resource.grants, sender)
-            if result.error_code ~= "" then fail(state, child, "Desktop attachment revocation failed") end
-            publish_attachments(child)
+            local grants = child.resource.grants
+            local attached = (grants.controller and grants.controller.recipient == sender) or grants.observers[sender] ~= nil
+            if attached then
+                local result = attachments.detach(grants, sender)
+                if result.error_code ~= "" then fail(state, child, "Desktop attachment revocation failed")
+                else publish_attachments(child) end
+            end
         end
     end
 end

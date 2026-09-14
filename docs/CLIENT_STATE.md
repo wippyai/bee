@@ -539,5 +539,7 @@ mount references never enter presentation. The
 workspace readiness and display dimensions remain visible. Full durable IDs are
 behind Details (click or D); Escape/F9 closes the card, clicks within it stay
 inside the card, and F12 still replaces the presenter. This view uses trusted
-desktop bootstrap plus authenticated push updates from the attachment owner; it
-does not poll clients or infer peer health from supervisor readiness.
+desktop bootstrap plus authenticated push updates from the attachment owner. The
+owner publishes its resulting aggregate after every valid grant operation,
+including a failed replacement that already revoked an older mount. It does not
+poll clients or infer peer health from supervisor readiness.

@@ -694,7 +694,6 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             elseif data.op == "ready" then
                                 if waiting_presenter and not paused then
                                     waiting_presenter = false
-                                    if attachment_state ~= nil then send(presenter, "bee.desktop.attachments", attachment_state) end
                                     send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
                                         connection_id = connection_id, renderer = presenter})
                                 end
@@ -716,6 +715,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                                 pause_presenter()
                             elseif data.renderer == presenter and data.pending == false and not paused then
                                 renderer_generation, active, paused = generation, true, false
+                                if attachment_state ~= nil then send(presenter, "bee.desktop.attachments", attachment_state) end
                                 if retired_presenter ~= "" then process.terminate(retired_presenter); retired_presenter = "" end
                                 if retired_view then retired_view:close(); retired_view = nil end
                                 publish()

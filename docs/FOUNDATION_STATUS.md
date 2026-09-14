@@ -1050,12 +1050,13 @@ The following source correction restricts the dropdown to unmodified F9.
 
 The current source F9 card now reports the retained display's aggregate attachment
 state as `Controlled` or `Uncontrolled`, with a bounded observer count when one is
-present. The retained supervisor updates this projection after successful grant
-changes and recipient exit; the client accepts updates only from its authenticated
-owner and forwards them across presenter replacement. It exposes no recipient or
+present. The retained supervisor updates this projection after grant operations
+and recipient exit, including replacement failures that already revoked an older
+mount. The client accepts updates only from its authenticated owner and flushes
+the latest value after presenter activation. It exposes no recipient or
 mount identity and performs no polling. `make test` passes 894/894, source/pack
 connection acceptance passes, and standalone SHA-256
-`77d249e15402c2f1d652041a5bb9eb666191a43b8f99da3a49724590a6977660`
+`004d9995d5c9dab462eed081f93d8dada2bc2aef32e8399ec046ff06777f7985`
 proves reconnect, one real observer visible on both clients, and return to the
 controlled state after detach. This bounded source feature is not installed globally.
 

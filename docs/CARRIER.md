@@ -425,9 +425,10 @@ directory; it does not publish Bee settings into the user home. Arbitrary HOME
 values and other HOME references remain refused. Default Claude/Codex launches
 read their existing login directly and request no credential copies. Host policy
 `environment_refs` carries `CODEX_HOME` / `CLAUDE_CONFIG_DIR` when set, omits empty
-defaults, and fences resolved values in its digest. This source change is under
-acceptance testing; native launch fixtures pass for default and custom config
-directories, and Agy/Grok still require inheritance work.
+defaults, and fences resolved values in its digest. Native launch fixtures pass
+for default and custom config directories. Agy uses the same authorized host
+HOME boundary and receives Bee files through its supported additional
+customization root. Grok still requires inheritance work.
 
 The default Codex launch adds Bee MCP servers and inline hooks with session
 `-c` options. Hook trust uses the exact session-source key and measured handler

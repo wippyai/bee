@@ -78,8 +78,8 @@ the credential broker supplies secrets; precedence is not used to hide conflicts
 Nested configuration paths create each missing parent in order. Every existing
 ancestor must belong to the current materialization's created-parent set;
 retained byte-identical file replay remains unchanged. This permits Agy's
-`.gemini/config/mcp_config.json` in a fresh home without adopting unrelated
-pre-existing directories.
+`.agents/mcp_config.json` in a retained customization root without adopting
+or changing the user's global configuration directories.
 
 ## Retained provider login destinations
 
@@ -120,10 +120,13 @@ provided bytes remain an error. Native materialization requires explicit `presen
 the broker; absent bytes are accepted only for an optional absent reply. This
 records an unseeded home without placing file credentials in the environment.
 First-use setup preserves the host-selected optional policy and refuses a
-conflicting existing definition. Default Claude/Codex/Agy window profiles select optional machine-login sources.
-Source-free acceptance covers Claude/Codex/Agy present and absent login,
-independent regular-file copies and exclusion of unrelated machine state, using
-fixture CLIs. Real authenticated provider turns remain unverified.
+conflicting existing definition. Default Claude, Codex and Agy window profiles
+use the explicitly authorized host HOME and select no login-file projection.
+Agy places Bee-generated files in its retained session customization root.
+Private structured profiles may still select declared credential sources.
+Source-free acceptance covers present and absent global login and exclusion of
+Bee-generated files from global configuration trees, using fixture CLIs. Real
+authenticated provider turns remain verified separately per driver.
 
 ## Capability
 

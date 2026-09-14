@@ -119,8 +119,8 @@ subcommand or prompt delimiter. An omitted selection preserves harness defaults.
 Strict lint and 23 focused profile/launch cases pass. These option defaults are
 in the installed dc86273 binary.
 
-The installed candidate additionally passes a real saved-profile fixture launch:
-Agy receives the saved appended guidance in its private GEMINI.md and the scoped
+The saved-profile fixture launches Agy with its retained `.agents/AGENTS.md` as
+an additional customization root while preserving the ordinary host HOME. The scoped
 gateway exposes the declared thread tools. This uses a fixture executable; no
 authenticated provider model turn is claimed.
 

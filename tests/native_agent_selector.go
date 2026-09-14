@@ -1059,7 +1059,11 @@ func savedProfileLaunch(binary string) error {
 	// Keep the child alive beyond placement's 30-second sweep before MCP I/O.
 	// A missing PTY supervision reply used to revoke this live binding.
 	const guidance = "Saved launch guidance."
-	script := "#!/bin/sh\nset -eu\ncase \" $* \" in *\" --effort high \"*) ;; *) exit 1 ;; esac\nactual=$(cat \"$HOME/.gemini/GEMINI.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nsleep 35\nif ! " + shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " --subset \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " + shellQuote(marker) + "\nIFS= read -r answer\n"
+	script := "#!/bin/sh\nset -eu\ncase \" $* \" in *\" --effort high \"*) ;; *) exit 1 ;; esac\n" +
+		"config_root=\nprevious=\nfor argument in \"$@\"; do if [ \"$previous\" = --add-dir ]; then config_root=$argument; break; fi; previous=$argument; done\n" +
+		"[ -n \"$config_root\" ]\nactual=$(cat \"$config_root/.agents/AGENTS.md\")\n[ \"$actual\" = " + shellQuote(guidance) + " ]\nsleep 35\nif ! " +
+		shellQuote(helper) + " mcp-probe agy " + shellQuote(mcpReport) + " --subset \"$@\"; then exit 1; fi\nprintf '%s\\n' BEE_SAVED_PROFILE_GUIDANCE\nprintf '%s' \"$actual\" > " +
+		shellQuote(marker) + "\nIFS= read -r answer\n"
 	if err := os.WriteFile(filepath.Join(project, "bin", "agy"), []byte(script), 0700); err != nil {
 		return err
 	}
@@ -1918,7 +1922,11 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 		return "", "", false
 	}
 	if provider == "agy" {
-		config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "mcp_config.json"))
+		root, ok := optionValue(args, "--add-dir")
+		if !ok {
+			return "", "", false
+		}
+		config, err := os.ReadFile(filepath.Join(root, ".agents", "mcp_config.json"))
 		if err != nil {
 			return "", "", false
 		}
@@ -1994,6 +2002,15 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 		}
 	}
 	return url, os.Getenv(tokenName), url != "" && os.Getenv(tokenName) != ""
+}
+
+func optionValue(args []string, name string) (string, bool) {
+	for index, arg := range args {
+		if arg == name && index+1 < len(args) && args[index+1] != "" {
+			return args[index+1], true
+		}
+	}
+	return "", false
 }
 
 func mcpProbeRequest(client *http.Client, url, token, method string, params map[string]any, id int) (int, mcpReply, bool) {
@@ -2316,8 +2333,15 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 
 // runAgyHookProbe executes the delivered command, exactly as Agy's command hook
 // does. It does not substitute a direct HTTP client for Bee's native helper.
-func runCommandHookProbe(provider, event string) int {
-	path := filepath.Join(os.Getenv("HOME"), ".gemini", "config", "hooks.json")
+func runCommandHookProbe(provider, event string, args []string) int {
+	path := ""
+	if provider == "agy" {
+		root, ok := optionValue(args, "--add-dir")
+		if !ok {
+			return 1
+		}
+		path = filepath.Join(root, ".agents", "hooks.json")
+	}
 	if provider == "grok" {
 		path = filepath.Join(os.Getenv("HOME"), ".grok", "hooks", "bee.json")
 	} else if provider != "agy" {
@@ -2626,8 +2650,12 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	}
 	if provider == "agy" || provider == "grok" {
 		probe := shellQuote(helper) + " command-hook-probe " + shellQuote(provider)
-		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", probe+" PreToolUse || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
-		script += probe + " Stop || exit 1\n"
+		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", probe+" PreToolUse \"$@\" || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
+		script += probe + " Stop \"$@\" || exit 1\n"
+	}
+	if provider == "agy" {
+		capture := "config_root=\nprevious=\nfor argument in \"$@\"; do if [ \"$previous\" = --add-dir ]; then config_root=$argument; break; fi; previous=$argument; done\n[ -n \"$config_root\" ]\nprintf '%s\\n' \"$config_root\" >> " + shellQuote(report) + "\n"
+		script = strings.Replace(script, "\nif ! ", "\n"+capture+"if ! ", 1)
 	}
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
@@ -2709,6 +2737,9 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if configVariable != "" {
 		expectedPaths = 3
 	}
+	if provider == "agy" {
+		expectedPaths = 3
+	}
 	if len(lines) != expectedPaths {
 		return fmt.Errorf("managed launch wrote malformed paths: %q", string(paths))
 	}
@@ -2727,15 +2758,36 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if childHome == projectPath {
 		return errors.New("managed agent HOME was the project directory")
 	}
-	inheritsHome := provider == "claude" || provider == "codex"
+	inheritsHome := provider == "claude" || provider == "codex" || provider == "agy"
 	if inheritsHome {
 		expectedHome, err := filepath.EvalSymlinks(home)
 		if err != nil || childHome != expectedHome {
 			return errors.New("managed agent did not inherit the global user home")
 		}
 	}
+	var agyCustomizationRoot string
 	if provider == "agy" {
-		data, err := os.ReadFile(filepath.Join(childHome, ".gemini", "config", "mcp_config.json"))
+		configurationRoot, err := filepath.EvalSymlinks(lines[2])
+		if err != nil {
+			return fmt.Errorf("resolve Agy customization root %q: %w", lines[2], err)
+		}
+		agyCustomizationRoot = configurationRoot
+		statePath, err := filepath.EvalSymlinks(state)
+		if err != nil {
+			return fmt.Errorf("resolve Bee state root: %w", err)
+		}
+		relative, err := filepath.Rel(statePath, configurationRoot)
+		if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return errors.New("Agy customization root is outside Bee-owned state")
+		}
+		if configurationRoot == childHome || configurationRoot == projectPath {
+			return errors.New("Agy customization root overlaps HOME or project")
+		}
+		info, err := os.Stat(configurationRoot)
+		if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+			return errors.New("Agy customization root is not a private directory")
+		}
+		data, err := os.ReadFile(filepath.Join(configurationRoot, ".agents", "mcp_config.json"))
 		if err != nil {
 			return err
 		}
@@ -2745,7 +2797,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			} `json:"mcpServers"`
 		}
 		if json.Unmarshal(data, &document) != nil {
-			return errors.New("invalid Agy private MCP document")
+			return errors.New("invalid Agy additive MCP document")
 		}
 		token := strings.TrimPrefix(document.Servers["bee"].Headers["Authorization"], "Bearer ")
 		if token == "" || strings.Contains(token, "${") {
@@ -2763,6 +2815,15 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		}
 		if leaked != 0 {
 			return errors.New("Agy MCP credential reached a recorded template or receipt")
+		}
+		for _, path := range []string{
+			filepath.Join(childHome, ".gemini", "config", "mcp_config.json"),
+			filepath.Join(childHome, ".gemini", "config", "hooks.json"),
+			filepath.Join(childHome, ".gemini", "GEMINI.md"),
+		} {
+			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+				return errors.New("Bee generated Agy configuration in the global home")
+			}
 		}
 	}
 	childLoginRoot := filepath.Join(childHome, providerDirectory)
@@ -2858,6 +2919,11 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if err != nil || string(data) != "retained" {
 		return fmt.Errorf("session marker did not survive node exit: %q, err=%v", string(data), err)
 	}
+	if agyCustomizationRoot != "" {
+		if _, err := os.Stat(filepath.Join(agyCustomizationRoot, ".agents", "mcp_config.json")); err != nil {
+			return fmt.Errorf("Agy session customization did not survive node exit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2902,8 +2968,8 @@ func main() {
 		fmt.Println("Managed", provider, "login, MCP and lifecycle checks passed")
 		return
 	}
-	if len(os.Args) == 4 && os.Args[1] == "command-hook-probe" {
-		os.Exit(runCommandHookProbe(os.Args[2], os.Args[3]))
+	if len(os.Args) >= 4 && os.Args[1] == "command-hook-probe" {
+		os.Exit(runCommandHookProbe(os.Args[2], os.Args[3], os.Args[4:]))
 	}
 	if len(os.Args) >= 4 && os.Args[1] == "mcp-probe" {
 		os.Exit(runMCPProbe(os.Args[2], os.Args[3], os.Args[4:]))

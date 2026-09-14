@@ -33,7 +33,9 @@ local function define_tests()
     test.describe("Driver configuration delivery boundary", function()
         test.it("fills admitted private JSON fields without modifying the recorded template", function()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-secret", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
-            local output, output_error = configuration.decode_reply(agy.handle({fixture = false, gateway = selected}), nil, selected)
+            local output, output_error = configuration.decode_reply(agy.handle({
+                fixture = false, gateway = selected, home_directory = "/private/agy-session",
+            }), nil, selected)
             if not output then error(tostring(output_error)) end
             local template = output.files[1]
             local before = template.content
@@ -83,11 +85,13 @@ local function define_tests()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
                 hooks = {"PreToolUse", "PostToolUse", "Stop"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",
                 hook_command = "/private/Bee's bin/bee"}
-            local reply = agy.handle({fixture = false, gateway = selected})
+            local reply = agy.handle({fixture = false, gateway = selected, home_directory = "/private/agy-session"})
             local output, err = configuration.decode_reply(reply, nil, selected)
             if not output then error(tostring(err)) end
             test.eq(#output.files, 1)
-            test.eq(output.files[1].path, ".gemini/config/hooks.json")
+            test.eq(output.arguments[1], "--add-dir")
+            test.eq(output.arguments[2], "/private/agy-session")
+            test.eq(output.files[1].path, ".agents/hooks.json")
             local raw, decode_error = json.decode(output.files[1].content)
             if decode_error then error(tostring(decode_error)) end
             local doc = raw :: {bee: {PreToolUse: {{matcher: string, hooks: {{type: string, command: string}}}},
@@ -134,11 +138,12 @@ local function define_tests()
             if not grok_delivery then error(tostring(grok_error)) end
             test.eq(grok_delivery.arguments[1], "--rules")
             test.eq(grok_delivery.arguments[2], text)
-            local agy_reply = agy.handle({fixture = false, instructions = text})
+            local agy_reply = agy.handle({fixture = false, instructions = text, home_directory = "/private/agy-session"})
             local agy_delivery, agy_error = configuration.decode_reply(agy_reply, nil, nil, text)
             if not agy_delivery then error(tostring(agy_error)) end
-            test.eq(#agy_delivery.arguments, 0)
-            test.eq(agy_delivery.files[1].path, ".gemini/GEMINI.md")
+            test.eq(agy_delivery.arguments[1], "--add-dir")
+            test.eq(agy_delivery.arguments[2], "/private/agy-session")
+            test.eq(agy_delivery.files[1].path, ".agents/AGENTS.md")
             test.eq(agy_delivery.files[1].content, text)
             test.is_nil(configuration.decode_reply(agy_reply, nil))
             test.is_nil(configuration.decode_reply(agy_reply, nil, nil, "different instructions"))
@@ -264,6 +269,7 @@ local function define_tests()
             local builder_target = "bee.driver:fixture_builder_ok"
             local request = {
                 fixture = false,
+                home_directory = "/private/agy-session",
                 instructions = static_text,
                 instruction_builder = {func_id = builder_target, args = {tag = "custom_test"}},
             }
@@ -278,13 +284,15 @@ local function define_tests()
             -- Static + Dynamic append for Agy
             local agy_delivery, agy_err = configuration.call("bee.driver.agy:configure", request)
             if not agy_delivery then error(tostring(agy_err)) end
-            test.eq(#agy_delivery.arguments, 0)
-            test.eq(agy_delivery.files[1].path, ".gemini/GEMINI.md")
+            test.eq(agy_delivery.arguments[1], "--add-dir")
+            test.eq(agy_delivery.arguments[2], "/private/agy-session")
+            test.eq(agy_delivery.files[1].path, ".agents/AGENTS.md")
             test.eq(agy_delivery.files[1].content, expected_combined)
 
             -- Dynamic only (no static instructions)
             local dynamic_only_request = {
                 fixture = false,
+                home_directory = "/private/agy-session",
                 instruction_builder = {func_id = builder_target, args = {tag = "standalone"}},
             }
             local dyn_delivery, dyn_err = configuration.call("bee.driver.agy:configure", dynamic_only_request)

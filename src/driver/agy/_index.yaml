@@ -145,7 +145,7 @@ entries:
         resume: {strategy: none, portable: false}
         isolation_env:
           variables: [HOME]
-          private_home: true
+          private_home: false
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
@@ -167,7 +167,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: [agy_login]
+    credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 
 - name: credential_format

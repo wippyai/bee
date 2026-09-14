@@ -35,10 +35,13 @@ on the same thread record chain.
 Rules the carriers learned the hard way, all still true:
 
 - The child's entire environment comes from `prepare`; nothing leaks from the runtime.
-- Each action gets its own home (`CODEX_HOME`, `GROK_HOME`, `HOME` for Agy) so only Bee's MCP server and hook file are visible; credentials are linked in.
+- Generated Bee configuration lives in the retained Agent session home. Default
+  Claude, Codex and Agy windows can read an explicitly authorized host HOME;
+  Agy receives the session home as an additional customization root. Grok keeps
+  a private `GROK_HOME` until its additive global-configuration path is proven.
 - Sessions are one process per turn, resumed by id. A long-lived stdin stream parks the actor and can never receive thread messages.
 - Window carriers hold typed input until the first hook arrives; keystrokes before the TUI is up are lost.
-- Harnesses without hooks (Agy) are observed only through output and MCP.
+- Harnesses without admitted hooks are observed only through output and MCP.
 - A hook handler must return a JSON object, never an empty array.
 
 ## Integration point taxonomy

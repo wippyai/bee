@@ -139,8 +139,9 @@ Claude appends it with `--append-system-prompt`; Grok appends it with `--rules`;
 Codex writes `developer_instructions` in its private configuration. Declaring it
 both in the Codex provider and launch policy is refused as ambiguous. These paths
 preserve the harness's built-in guidance; there is no shared system-prompt
-replacement option. Agy receives the exact text in `.gemini/GEMINI.md` under its private HOME,
-using its documented global-rules mechanism. Its selected `--agent` and turn
+replacement option. Agy receives the exact text in the retained session's
+`.agents/AGENTS.md`, supplied as an additional customization root with
+`--add-dir` while its ordinary HOME remains intact. Its selected `--agent` and turn
 prompt are unchanged. Agy custom agents still control inheritance of ambient
 rules; this file is not a system-prompt replacement. The configuration boundary refuses an instruction file
 when no instructions were selected or its content differs from the selection.

@@ -30,6 +30,18 @@ selector proves the application definition, provider profile, thread, carrier,
 placement and scoped gateway retain one identity. The remaining B1 provider and
 recovery work plus the complete release gate must pass before global Bee changes.
 
+**B1 Agy inheritance source complete, not installed (September 14):** the
+default Agy window keeps the authorized OS-user HOME and loads Bee's scoped MCP,
+hooks and appended instructions from a retained session-owned `.agents` root
+passed through Agy's supported `--add-dir`. Bee does not write these files into
+the user's `.gemini` tree or project. The standalone fixture proves present and
+absent global login, ordinary global state visibility, private session-root
+containment, scoped gateway calls, hook delivery, prompt detach and retention
+across owner exit. An opt-in test launches installed Agy 1.2.2 without a model
+prompt and observes it loading the added hook root while leaving the seeded
+global marker and project unchanged. Grok global-configuration parity remains
+B1.1's open provider unit; global Bee remains Train A.
+
 ## Current checkpoint — September 13
 
 **Agent configuration inheritance, installed:** default managed Claude and

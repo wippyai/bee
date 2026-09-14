@@ -26,7 +26,18 @@ local function handle(value: unknown): {[string]: unknown}
         if not file then return {ok = false, error = tostring(file_error)} end
         files[#files + 1] = file
     end
-    return {ok = true, delivery = {arguments = {}, files = files}}
+    local arguments = {}
+    if #files > 0 then
+        if not request.home_directory then
+            return {ok = false, error = "agy additive configuration needs the owner-derived home_directory"}
+        end
+        -- Agy has no alternate config-home variable. Its supported --add-dir
+        -- makes this retained, session-owned directory an additional
+        -- customization root while HOME continues to name the user's ordinary
+        -- global configuration and credentials.
+        arguments = {"--add-dir", request.home_directory}
+    end
+    return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
 return {handle = handle}

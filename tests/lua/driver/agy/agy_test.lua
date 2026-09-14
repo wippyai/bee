@@ -760,6 +760,7 @@ local function define_tests()
                     hooks = {},
                     token_environment = "GATEWAY_TOKEN",
                 },
+                home_directory = "/private/agy-session",
                 fixture = false,
             })
             if err_mcp then error(tostring(err_mcp)) end
@@ -768,9 +769,11 @@ local function define_tests()
 
             local file = reply_mcp.delivery.files[1]
             -- verified declared MCP file path
-            test.eq(file.path, ".gemini/config/mcp_config.json")
+            test.eq(file.path, ".agents/mcp_config.json")
             test.eq(file.revision, "bee.agy-mcp@2")
             test.eq(file.provider_ref, "bee:gateway_endpoint")
+            test.eq(reply_mcp.delivery.arguments[1], "--add-dir")
+            test.eq(reply_mcp.delivery.arguments[2], "/private/agy-session")
 
             local content = tostring(file.content)
             local expected_hash, hash_err = hash.sha256(content)

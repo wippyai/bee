@@ -563,6 +563,7 @@ entries:
     executables: {}
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
+    allow_host_home: true
     gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable

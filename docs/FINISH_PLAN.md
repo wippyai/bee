@@ -196,7 +196,7 @@ worktrees with disjoint ownership; integration follows this table.
 
 | Unit | Concrete result | Depends on | Proof that closes it |
 |---|---|---|---|
-| B1.1 | Agy and Grok retain ordinary global settings/login while Bee files remain attempt-owned and additive | current HEAD | real executable clean-start, cancel and restart probes; global config trees unchanged |
+| B1.1 | Agy and Grok retain ordinary global settings/login while Bee files remain session-owned and additive | current HEAD | real executable clean-start, cancel and restart probes; global config trees unchanged |
 | B1.2 | Saved profile UI exposes only harness, isolation, options and MCP scope; instructions and dynamic context remain admitted inputs | B1.1 | create/edit/select/restart journeys from source and pack |
 | B1.3 | Every provider has one durable thread, committed title activity, cold recovery and surviving-child reconciliation | B1.1 | four-provider replacement/restart matrix and Timeline cursor proof |
 | B1 release | Native four-provider candidate | B1.1–B1.3 | full `make check`, standalone checks, pack inspection and atomic rollback-capable install |

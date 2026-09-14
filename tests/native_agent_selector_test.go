@@ -66,7 +66,8 @@ func TestAgyMCPHeaderRemainsLiteral(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("BEE_TEST_TOKEN", "resolved-token")
-	dir := filepath.Join(home, ".gemini", "config")
+	customizationRoot := t.TempDir()
+	dir := filepath.Join(customizationRoot, ".agents")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestAgyMCPHeaderRemainsLiteral(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "mcp_config.json"), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, token, ok := mcpProbeConfig("agy", nil)
+	_, token, ok := mcpProbeConfig("agy", []string{"--add-dir", customizationRoot})
 	if !ok || token != "${BEE_TEST_TOKEN}" {
 		t.Fatal("fixture changed Agy literal header semantics")
 	}

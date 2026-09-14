@@ -6619,3 +6619,23 @@ The executable SHA starts `fc8d6560`; evidence is in `bee-evidence/0912` under
 This candidate adds no selectable Docker Agent yet and is not globally installed.
 Luna is independently checking the real Agy interactive managed TUI in disposable
 state. The earlier source environment/inspection full gate remains session 75095.
+
+### September 14 — Bee completion plan corrected
+
+The canonical forward plan is `docs/FINISH_PLAN.md` on
+`feat/docker-harness-delivery-20260913`. It now defines six executable user
+journeys and four incremental global promotions: native Agents, Connected Bee,
+Docker Agents and Editable Bee v1. Agents, Docker, topology and Hub may advance
+in isolated lanes; folder/Hive no longer waits for Agents, and local governed
+overlays no longer wait for cross-node distribution.
+
+Three generic runtime gates are explicit and remain separate PRs assigned to
+`skhaz`: executable-selected default state root, atomic registry compare-and-set
+for Hub/overlay publication, and exact native remote-actor lifecycle/public
+enrollment. Docker uses native `exec.docker`; `userspace/docker` is optional.
+
+The active Grok B1.1 work is not landable. Its generalized credential setup
+delivery passes 888 Lua tests, but real Grok 1.0.30 removes its
+`.grok/managed_config.toml`; that destination and its documentation claims must
+be replaced before B1.1 can commit. Global Bee remains Train A SHA `4692e267`.
+No global installation was performed.

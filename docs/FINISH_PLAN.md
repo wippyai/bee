@@ -28,7 +28,7 @@ It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
 The integration branch is `feat/docker-harness-delivery-20260913`; this execution
-queue was reconciled against current HEAD `2967021`. The worktree also
+queue was reconciled against current HEAD `8956e44`. The worktree also
 contains an uncommitted Grok B1.1 candidate; those files are not a release source
 until the focused acceptance below passes and the result is committed.
 
@@ -48,18 +48,14 @@ The uncommitted Grok B1.1 candidate now replaces the invalid provider-owned
 `managed_config.toml` path with a private composition base and structural TOML
 insertion. Credential definition and use-time digests now cover the normalized
 setup descriptor without hashing setup contents, and the launch specification
-is the sole owner of Grok's Bee MCP permission. The first full behavioral run
-reports 890 passed tests and two focused assertions failed: structural TOML
-insertion is a runtime acceptance failure against runtime PR #746, while the
-retained-configuration expectation is a Bee-owned acceptance contract/test
-failure around the authorized retained base. The runtime candidate must prove
-the reusable insertion operation independently; Bee must define the retained-base
-lifecycle and correct its own expectation. The placement proof must still show
-that only the base produced by the current credential initializer can be
-composed. The candidate remains unlandable until those owners close their
-failures, the placement refusal matrix passes, and real Grok 1.0.30 proves the
-generated private configuration while leaving global and project trees
-unchanged. Global Bee must not be built from this dirty worktree.
+is the sole owner of Grok's Bee MCP permission. The combined candidate passes
+all 892 behavioral tests and focused strict lint. The placement proof must still
+show that only the base produced by the current credential initializer can be
+composed, and the native Go acceptance needs its final hook/configuration review.
+The candidate remains unlandable until the placement refusal matrix passes and
+real Grok 1.0.30 proves clean/login/cancel/restart with the generated private
+configuration while leaving global and project trees unchanged. Global Bee must
+not be built from this dirty worktree.
 
 ### Reusable runtime gates
 
@@ -165,6 +161,41 @@ advances only at the named promotion.
 The integration owner keeps the critical path on orders 1 through 3 while the
 topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
 adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
+
+### Current bounded unit
+
+Work stays on this unit until it either passes or produces one named external
+blocker:
+
+1. finish the placement test proving initializer-owned Grok composition bases,
+   missing-base refusal, semantic MCP collision refusal, and exactly one admitted
+   Bee MCP permission;
+2. run focused placement, publication and driver lint plus the affected and full
+   Lua suite against the combined runtime candidate;
+3. finish the Go acceptance review so user hooks and Bee hooks are both preserved;
+4. run real Grok 1.0.30 clean/login/cancel/restart acceptance and hash the global
+   and project `.grok` trees before and after;
+5. commit the bounded Grok B1.1 diff, then continue directly to saved profiles
+   and durable sessions.
+
+No unrelated refactor, UI polish or new provider abstraction enters this unit.
+Once the Native Agents journey passes from a clean commit, install it globally
+before continuing broader cleanup.
+
+### Execution discipline
+
+- Finish user-visible vertical slices before reorganizing working code. Remove
+  obsolete POC and fallback paths only after their replacement journey passes.
+- Keep at most four implementation lanes active: Agents, topology, Hub and
+  Docker. Use additional agents for bounded acceptance, review and independent
+  files, with one integration owner resolving shared seams.
+- A lane reports progress only as a passing acceptance proof, an immutable commit
+  ready to integrate, or one precisely reproduced blocker with an owner.
+- Build the global executable only from a clean immutable integration commit.
+  Never promote a dirty worktree or bypass a failing production lint gate.
+- Prefer existing runtime, mesh, registry, thread, gateway and `exec.docker`
+  primitives. A new abstraction must remove duplicated authority or lifecycle
+  logic and must have a current consumer.
 
 ### Delivery windows
 

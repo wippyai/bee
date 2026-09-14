@@ -102,7 +102,7 @@ func (h *Host) DefaultStateDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return launch.ProjectStateDir(filepath.Join(root, "bee"), directory)
+	return launch.DefaultProjectStateDir(filepath.Join(root, "bee"), directory)
 }
 
 // Launch is the cmd/app entry selected by Bee's executable. It is deliberately

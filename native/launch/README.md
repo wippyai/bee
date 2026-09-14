@@ -105,6 +105,16 @@ wire that resolver before `Run`, while explicit `--state-dir` remains
 authoritative. Until that complete executable wiring passes, this source does
 not claim separate project stores or concurrent project nodes.
 
+An upgrade from a Bee that used the shared `~/.config/bee` root binds that root
+to the first canonical project through the protected `project-state.json`
+receipt. The binding is written only while the legacy application lock is free.
+It copies and deletes nothing, so the previous executable can still use the
+legacy root for rollback. Other projects use their digest-qualified roots.
+Concurrent first launches serialize on the receipt and exactly one project gets
+the legacy root. A malformed receipt or running legacy owner refuses the
+cutover. A fresh installation creates no receipt. Machine-shared Hive enrollment
+continues to use `~/.config/bee/local-hive` independently of this selection.
+
 `bee client` is an explicit attachment-only route, optionally taking a workspace
 and display ID pair. It refuses if the selected state has no running Bee.
 After the executable applies `ProjectStateDir`, ordinary `bee` starts that

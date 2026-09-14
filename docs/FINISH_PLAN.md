@@ -112,6 +112,135 @@ Passing a model test, fixture or source-only check does not complete a public
 feature. Full regression runs once per integration candidate rather than after
 every small change. Focused checks carry intermediate development.
 
+## Delivery checkpoints
+
+Bee will ship through three usable checkpoints. A checkpoint is promoted only
+from a clean integration commit after the release gates above pass; unfinished
+lanes continue in their own worktrees and cannot leak into the global build.
+
+| Checkpoint | User-visible result | Required milestones | Promotion gate |
+|---|---|---|---|
+| Agent Bee | Agent picker and `bee claude`, `bee codex`, `bee agy`, `bee grok` use the same managed definitions; Local and Docker are profile choices; threads, hooks, MCP and recovery agree | 1 and 2 | All four native and Docker journeys, offline boot, restart/recovery, pack inspection, full `make check`, atomic six-file install |
+| Connected Bee | Folder launch, displays, two-node Hive and local Hub install/update/remove are coherent and visible in the shell | 3 and 4 local | Multi-display and two-real-node mesh acceptance, ordinary package lifecycle, restart/recovery, full `make check`, atomic install |
+| Editable Bee v1 | Hub distribution and governed stage, review, apply and rollback work end to end | 4 distribution, 5 and 6 | Cross-node package install, overlay conflict/rollback, platform matrix twice, permission/secret/pack audit, atomic install |
+
+The release lane owns the integration commit and global installation. Feature
+lanes hand it reviewed commits plus focused evidence; they never install a
+mixed worktree. Existing databases, profiles, conversations, workspaces and
+displays are migration inputs in every checkpoint.
+
+## Immediate execution queue
+
+This is the concrete queue from the current Train A source. Work inside a unit
+may run in parallel when its files and ownership do not overlap. Integration
+and promotion remain sequential.
+
+### B1 — finish native managed Agents
+
+1. Finish canonical command routing so the four CLI aliases resolve the same
+   measured launch definitions as the Agent picker. Duplicate aliases and raw
+   argument bypasses must refuse before admission.
+2. Make all four clean-install defaults launchable and give Agy and Grok safe
+   access to their ordinary global configuration without writing generated Bee
+   MCP or hook files into the user's global configuration directories.
+3. Complete picker profile create, edit and select for the public profile fields:
+   harness, isolation, options and MCP scope. Resolve context and additional
+   instruction functions only at admission.
+4. Prove one durable thread, title/activity projection and subscription cursor
+   for every provider across presenter, client and owner replacement.
+5. Prove provider cold resume where credentials permit and classify provider
+   login/refusal as an external visible outcome. Reconcile a surviving child
+   before starting a replacement.
+
+Merge gate: UI and CLI acceptance for all four providers, raw-bypass refusal,
+offline boot, cancellation/close, restart recovery, and no credentials or test
+fixtures in the pack.
+
+### B2 — make Docker an isolation choice
+
+1. Implement the Bee durable Docker placement adapter over native `exec.docker`:
+   record intent, label the container with owner/action/attempt identity, and
+   implement start, stop, reconcile, cleanup and restart recovery under the
+   existing placement owner and sweeper. The direct PTY proof is a foundation,
+   not this admitted lifecycle. The optional `userspace.docker` component is not
+   a release dependency.
+2. Add `isolation` to saved profiles and route the same managed window/carrier
+   through the selected placement binding. Image, mounts, credentials, resource
+   limits and placement options remain host-selected. Do not add a Docker-specific
+   carrier, state owner or sweeper.
+3. Run the user's installed harness executable with the selected project mount,
+   minimum credential/configuration mounts and attempt-owned writable state.
+   AppArmor remains an optional explicit profile requirement.
+4. Make the host-selected gateway reachable from the container while preserving
+   randomized addressing, bound credentials, MCP scope intersection, additive
+   hooks, thread context and revocation.
+5. Prove lifecycle parity: PTY input/output/resize, cancellation, close and
+   container removal, failed create/start, owner restart, surviving-container
+   reconciliation and secret-path inspection.
+6. Delete superseded release-path userspace Docker scaffolding after parity is
+   proven; separately installable optional components may remain outside the
+   default pack.
+
+Merge gate: the same four profile journeys pass with only `isolation` changed
+from Local to Docker on ordinary Linux Docker and Docker Desktop/WSL.
+
+### B3 — correct folder, display and Hive behavior
+
+1. Make the executable-selected folder derive the default state directory for
+   every Bee database, while explicit `--state-dir` takes precedence. Preserve
+   existing stores and prove two folders remain isolated across restart.
+2. Implement the public launch decision table in Milestone 3. A project launch
+   creates or reuses its node/workspace and creates an independent display when
+   appropriate; explicit client/observe commands attach without changing the
+   selected project.
+3. Make local readiness immediate. Hive rejoin proceeds asynchronously and can
+   remain connectable for up to 60 seconds without blocking local presentation,
+   input, cancellation or exit.
+4. Replace ephemeral client-node pollution with display attachments and retire
+   stale displays through leases and generations. Preserve retained applications
+   and saved layouts.
+5. Finish the compact shell status/switcher and F9 topology view. Always show
+   friendly Hive, node, workspace and display identity plus reachability,
+   authorization and controller/observer state.
+6. Add safe `Send to display`, multi-client/multi-display acceptance and two
+   real Bee nodes over the existing native TLS mesh, including sleep/reconnect
+   and remote approval.
+
+Merge gate: offline folder boot is immediate, two local folders and several
+displays behave predictably, and the two-node acceptance passes without a second
+mesh or remote-monitor subsystem.
+
+### B4 — complete the local Hub lifecycle
+
+1. Finish immutable resolve, plan, install, update and remove with provenance,
+   migrations, receipts and rollback. Reuse the current Hub catalog and planner.
+2. Route capability changes through protected application admission. A package
+   appears in Tools or Agents only after the required review succeeds.
+3. Preserve configuration and service-owned application values across update
+   and restart; expose clear pending, installed, failed and rollback states in
+   Modules.
+4. Package each harness driver independently and prove install/update/removal
+   changes the Agent catalog without a Bee core edit.
+
+Merge gate: a clean Bee completes the ordinary application lifecycle and an
+independent harness package lifecycle using only admitted immutable content.
+
+### C through E — distribute, edit and release
+
+1. Transfer one admitted immutable application and one harness package to a
+   second Bee. The destination performs its own plan, admission and installation;
+   credentials, grants, PIDs, mounts and database ownership never transfer.
+2. Build the single governed overlay path: exact-revision stage, review,
+   registry-owner apply and receipt-backed rollback. Expose it to the UI and
+   narrowly scoped Agent MCP tools.
+3. Require a released compare-and-set registry publication primitive before
+   activating overlays. Any runtime work is a separate PR assigned to `skhaz`.
+4. Remove dead paths, measure startup/idle/shutdown and run the Linux, WSL,
+   macOS, Docker and two-host Hive matrix twice.
+
+Final gate: the tagged executable, source documentation, website claims and MIT
+install/download notices describe exactly the same accepted behavior.
+
 ## Milestone 0: release the current native Agent foundation — complete
 
 Finish the active `feat/docker-harness-delivery-20260913` checkpoint before

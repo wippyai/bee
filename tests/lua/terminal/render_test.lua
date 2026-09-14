@@ -26,6 +26,8 @@ local function define_tests()
             test.is_true(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
                 controller = true, observers = 2}))
             test.eq(info.attachments, "Controlled · 2 observers")
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = true, observers = 2}))
             test.is_false(connection.observe(info, {version = 1, display_id = string.rep("c", 32),
                 controller = false, observers = 0}))
             test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
@@ -33,6 +35,8 @@ local function define_tests()
             test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
                 controller = false, observers = 0, recipient = "private"}))
             test.eq(info.attachments, "Controlled · 2 observers")
+            test.is_false(connection.details_hit(12, 4, info, 4, 2))
+            test.is_true(connection.details_hit(100, 30, info, 58, 14))
         end)
         test.it("keeps Classic terminals dark without changing application panels", function()
             local theme = appearance.theme("classic")

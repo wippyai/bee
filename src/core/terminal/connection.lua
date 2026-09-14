@@ -4,8 +4,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
-type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?,
-    attachments: string, details: boolean?}
+type Info = {node: string, workspace: string, display: string, hive: string, attachments: string, details: boolean?}
 local M = {}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or value == "" or #value > limit or value:find("%c") then return nil end
@@ -15,8 +14,7 @@ function M.new(owner: string, workspace: string, display: unknown, supervisor: u
     local node = owner:match("^{([^@|}]+)@[^|}]+|[^}]+}$") or "Local node"
     local selected = line(supervisor, 160)
     return {node = node, workspace = workspace, display = line(display, 64) or "Current session",
-        hive = selected and "Supervisor ready" or "Not reported", supervisor = selected,
-        attachments = "Not reported"}
+        hive = selected and "Supervisor ready" or "Not reported", attachments = "Not reported"}
 end
 function M.observe(info: Info, value: unknown): boolean
     if type(value) ~= "table" or value.version ~= 1 or value.display_id ~= info.display then return false end
@@ -29,6 +27,7 @@ function M.observe(info: Info, value: unknown): boolean
     if value.observers > 0 then
         status = status .. " · " .. tostring(value.observers) .. (value.observers == 1 and " observer" or " observers")
     end
+    if status == info.attachments then return false end
     info.attachments = status
     return true
 end
@@ -49,7 +48,8 @@ end
 function M.details_hit(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
     local rect = geometry(width, height, info.details)
     local left, rows = rect.left, rect.rows
-    return M.contains(width, height, info, x, y) and y == rows and x >= left + 2 and x < left + 15
+    return rows >= 3 and M.contains(width, height, info, x, y)
+        and y == rows and x >= left + 2 and x < left + 15
 end
 function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, info: Info, ready: boolean)
     if width < 12 or height < 4 then return end

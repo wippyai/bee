@@ -162,6 +162,15 @@ local function main(owner: string, initial_application: string?, secondary_appli
         pending_clipboard = nil
         pending_clipboard_at = nil
     end
+    local function toggle_connection()
+        local selected = active_selection ~= nil
+        cancel_selection()
+        if selected then status = "" end
+        connection_open = not connection_open
+        start = nil
+        capture, preview = nil, nil
+        awaiting_place = false
+    end
     local function begin_selection(target: string)
         local chosen: model.Window? = nil
         for _, win in ipairs(model.visible(scene)) do
@@ -644,7 +653,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 handled = true; dirty = true
             elseif active_selection and event.type ~= "resize" and event.type ~= "close" then
                 local body = selection_body(active_selection)
-                if not body then
+                if event.type == "key" and kind == "f9" and event.action ~= "release"
+                    and event.alt ~= true and event.ctrl ~= true and event.shift ~= true then
+                    toggle_connection()
+                    captured_releases[kind] = true
+                elseif not body then
                     cancel_selection()
                     status = "Text selection unavailable: view changed"
                 elseif event.type == "key" and event.action ~= "release" and (kind == "esc" or kind == "escape") then
@@ -682,9 +695,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 dirty = true
             elseif event.type == "key" and kind == "f9" and event.action ~= "release"
                 and event.alt ~= true and event.ctrl ~= true and event.shift ~= true then
-                connection_open = not connection_open
-                start = nil
-                capture, preview = nil, nil; awaiting_place = false
+                toggle_connection()
                 captured_releases[kind] = true
                 handled = true; dirty = true
             elseif connection_open and event.type ~= "resize" and event.type ~= "close"

@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import re
 import time
+from terminal_selection import begin
 from tui_smoke import Desktop
 
 
@@ -11,8 +12,15 @@ def exercise(packed=False):
         ui = Desktop(directory, packed=packed)
         try:
             ui.wait(' BEE ')
+            ui.open_start()
+            ui.choose('Terminal')
+            ui.wait('Terminal')
+            ui.key(b"printf 'SELECTION_F9_PROBE\\n'\r")
+            ui.wait('SELECTION_F9_PROBE')
+            begin(ui, 'SELECTION_F9_PROBE')
             ui.key(b'\x1b[20~')  # F9
             ui.wait('CONNECTION')
+            assert 'drag to select' not in ui.text(), ui.text()
             for label in ('HIVE', 'NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
@@ -54,7 +62,7 @@ def exercise(packed=False):
             ui.resize(100, 30)
             ui.pump(.3)
             ui.key(b'\x1b')
-            ui.quit()
+            ui.quit(confirm=True)
         finally:
             ui.close()
     print(f'Connection dropdown {"pack" if packed else "source"}: identities, honest unknown Hive, mouse/F9, Escape and F12 passed')

@@ -9,6 +9,23 @@ from native_workspace import NativeDesktop, STATE_ENVIRONMENT
 from native_client import owner_handle, stop_owner
 
 
+def attachment(ui):
+    rows = [row for row in ui.text().splitlines() if 'ATTACH' in row]
+    if not rows:
+        return None
+    assert len(rows) == 1, ui.text()
+    return rows[0].split('ATTACH', 1)[1].rsplit('│', 1)[0].strip()
+
+
+def wait_attachment(ui, expected, timeout=5):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ui.pump()
+        if attachment(ui) == expected:
+            return
+    assert attachment(ui) == expected, ui.text()
+
+
 def exercise(binary):
     with tempfile.TemporaryDirectory(prefix='bee-native-connection-ui-') as directory:
         folder = Path(directory)
@@ -62,23 +79,18 @@ def exercise(binary):
             ui.wait(' BEE ', timeout=15)
             ui.key(b'\x1b[20~')
             ui.wait('Supervisor ready')
-            ui.wait('Controlled')
+            wait_attachment(ui, 'Controlled')
             rows = catalog()
             assert len(rows) == 1 and len(rows[0]) == 3 and rows[0][2] == 'yes', rows
             workspace, display_id = rows[0][:2]
             observer = NativeDesktop(binary, folder, state, arguments=('observe', workspace, display_id))
             observer.wait(' BEE ', timeout=15)
-            ui.wait('Controlled · 1 observer')
-            observer.wait('Controlled · 1 observer')
+            wait_attachment(ui, 'Controlled · 1 observer')
+            wait_attachment(observer, 'Controlled · 1 observer')
             observer.quit()
             observer.close()
             observer = None
-            deadline = time.monotonic() + 5
-            while time.monotonic() < deadline:
-                ui.pump()
-                if 'ATTACH' in ui.text() and 'Controlled' in ui.text() and 'observer' not in ui.text():
-                    break
-            assert 'ATTACH' in ui.text() and 'Controlled' in ui.text() and 'observer' not in ui.text(), ui.text()
+            wait_attachment(ui, 'Controlled')
             assert display in ui.text(), ui.text()
             ui.key(b'\x1b')
             ui.quit()

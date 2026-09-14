@@ -1054,9 +1054,11 @@ present. The retained supervisor updates this projection after grant operations
 and recipient exit, including replacement failures that already revoked an older
 mount. The client accepts updates only from its authenticated owner and flushes
 the latest value after presenter activation. It exposes no recipient or
-mount identity and performs no polling. `make test` passes 894/894, source/pack
-connection acceptance passes, and standalone SHA-256
-`004d9995d5c9dab462eed081f93d8dada2bc2aef32e8399ec046ff06777f7985`
+mount identity and performs no polling. Identical projections do not redraw the
+desktop. Plain F9 cancels an active text selection before opening the card, and
+the Details hit target is absent when its row cannot be drawn. `make test` passes
+894/894, source/pack connection acceptance passes, and standalone SHA-256
+`73ae9395cfce80f7a11ec3c0854fc04d76c0af457949c334adef7f51d5f2ae59`
 proves reconnect, one real observer visible on both clients, and return to the
 controlled state after detach. This bounded source feature is not installed globally.
 

@@ -126,6 +126,24 @@ local function settle_failure(admitted: admission.Admitted, epoch: integer?, rea
     return reason .. " (" .. table.concat(details, "; ") .. ")"
 end
 
+-- Picker admission may finish after the visible picker accepted close. It has
+-- no action, attempt, gateway or placement yet. Retire only the attempt-bound
+-- authority it obtained; first-use associations and credential definitions are
+-- durable setup and remain available to a later launch.
+local function release_unstarted(admitted: admission.Admitted): (boolean, string?)
+    local details: {string} = {}
+    for _, resource in ipairs(admitted.request.resources) do
+        local revoked, revoke_error = call("bee.resources:revoke", {grant_id = resource.grant_ref})
+        if not revoked then details[#details + 1] = "resource " .. resource.grant_ref .. ": " .. tostring(revoke_error) end
+    end
+    for _, projection_id in ipairs(admitted.request.projections or {}) do
+        local revoked, revoke_error = call("bee.credentials:revoke", {projection_id = projection_id})
+        if not revoked then details[#details + 1] = "credential " .. projection_id .. ": " .. tostring(revoke_error) end
+    end
+    if #details > 0 then return false, table.concat(details, "; ") end
+    return true, nil
+end
+
 local function persist_checkpoint(state: hooks.State): (boolean, string?)
     local intent = hooks.next_intent(state, "launch:" .. state.attempt_id .. ":window:checkpoint", now_ms())
     if not intent then return false, "window checkpoint intent is missing" end
@@ -270,7 +288,19 @@ local function main(value: unknown, constructors: {[string]: Open})
         output:close()
     end
     if selected then
-        local choice, choice_error = picker.run(launch, input, lifecycle, closes)
+        local choice, choice_error, picker_cancelled, pending_activation = picker.run(launch, input, lifecycle, closes)
+        if picker_cancelled then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            if pending_activation then
+                local late = pending_activation:receive() :: picker.Activation
+                if late and late.admitted then
+                    local released, release_error = release_unstarted(late.admitted)
+                    if not released then error("Cancel Agent activation: " .. tostring(release_error)) end
+                end
+            end
+            if choice_error then error(choice_error) end
+            return
+        end
         if not choice then
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             if choice_error then error(choice_error) end

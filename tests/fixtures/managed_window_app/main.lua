@@ -46,7 +46,7 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     result.data = data
     return result
 end
-local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?): string?
+local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): string?
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
     if retained_id then THREAD = "managed-window-thread:" .. retained_id end
     local definition_ref = retained_id and "bee.managed_window_fixture:retained_definition" or "bee.managed_window_fixture:definition"
@@ -98,7 +98,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     end
     assert(opened.error_code == "", "managed app did not become ready: " .. tostring(opened.error))
     if selected then
-        assert(time.now():unix_nano() - picker_started < 1500000000,
+        assert(time.now():unix_nano() - picker_started < 1000000000,
             "Agent picker readiness waited for profile discovery")
     end
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-one", op = "bind", workspace_id = WORKSPACE,
@@ -137,6 +137,69 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         apply(original_definition)
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
         wait_for("Selected agent fixture")
+        if cancel_activation then
+            local resource_state = reply(call("bee.resources:list", {workspace_id = WORKSPACE}).value)
+            local grants_before = #(resource_state.grants :: {{[string]: unknown}})
+            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+            wait_for("Starting Agent")
+            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}), "duplicate Enter was not accepted as input")
+            assert(view:send({type = "resize", width = 36, height = 12}))
+            local resized = false
+            for _ = 1, 40 do
+                local snapshot = view:snapshot()
+                if snapshot and #snapshot.rows == 12 and table.concat(snapshot.rows):find("Starting Agent", 1, true) then resized = true; break end
+                time.sleep("25ms")
+            end
+            assert(resized, "Agent picker did not resize during activation")
+            local closing = time.now():unix_nano()
+            local escaped = channel.new(1)
+            coroutine.spawn(function()
+                escaped:send(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
+            end)
+            for _ = 1, 40 do
+                if not view:snapshot() then break end
+                time.sleep("25ms")
+            end
+            assert(not view:snapshot(), "Escape did not close the activating picker")
+            assert(time.now():unix_nano() - closing < 1500000000, "activating picker did not close within bounded admission cleanup")
+            local escaped_result = channel.select({escaped:case_receive(), time.after("2s"):case_receive()})
+            assert(escaped_result.ok and escaped_result.channel == escaped and escaped_result.value == true,
+                "activating picker did not finish close after admission cleanup")
+            local after = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+            for _, record in ipairs(after.records :: {{[string]: unknown}}) do
+                assert(record.kind ~= "action.admitted" and record.kind ~= "attempt.prepared"
+                    and record.kind ~= "attempt.started" and record.kind ~= "receipt",
+                    "cancelled picker crossed the carrier lifecycle boundary")
+            end
+            local resources_after = reply(call("bee.resources:list", {workspace_id = WORKSPACE}).value)
+            assert(#(resources_after.grants :: {{[string]: unknown}}) == grants_before,
+                "cancelled picker retained an attempt-bound resource grant")
+            view:close()
+            assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open-after-cancel", op = "open",
+                workspace_id = WORKSPACE, definition_id = "bee.harness.window:app", arguments = {}}))
+            opened = nil
+            while not opened do
+                local message = receive_reply()
+                local data = message:payload():data()
+                if tostring(message:from()) == broker and type(data) == "table"
+                    and data.request_id == "open-after-cancel" and data.op == "open" then opened = data :: {[string]: unknown} end
+            end
+            assert(opened.error_code == "", "replacement picker did not become ready: " .. tostring(opened.error))
+            assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-after-cancel", op = "bind",
+                workspace_id = WORKSPACE, id = opened.id, instance_id = opened.instance_id, recipient = owner}))
+            mounted = ""
+            while mounted == "" do
+                local message = receive_reply()
+                local data = message:payload():data()
+                if tostring(message:from()) == broker and type(data) == "table"
+                    and data.request_id == "bind-after-cancel" and data.op == "attached" then
+                    assert(data.error_code == "", tostring(data.error)); mounted = tostring(data.mount)
+                end
+            end
+            view = assert(tty.attach(mounted))
+            assert(view:send({type = "resize", width = 30, height = 10}))
+            wait_for("Selected agent fixture")
+        end
         local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(before.records :: {{[string]: unknown}}) == 0, "selector created work before selection")
         -- Change the exact plan displayed, then prove Enter cannot use it.
@@ -154,6 +217,18 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         wait_without("selected launch plan")
         wait_for("Selected agent fixture")
         assert(view:send({type = "mouse", x = 3, y = 9, button = "left", action = "press"}))
+    end
+    if selected then
+        local launched = false
+        for _ = 1, 160 do
+            local page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
+            for _, record in ipairs(page.records :: {{[string]: unknown}}) do
+                if record.kind == "attempt.started" then launched = true; break end
+            end
+            if launched then break end
+            time.sleep("25ms")
+        end
+        assert(launched, "Agent picker did not start the selected child")
     end
     assert(view:send({type = "paste", text = "hello"}))
     assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
@@ -444,11 +519,14 @@ M.select = function()
                 apply(hidden_default)
             end
         end
-        local hidden = changed(definition)
+        local configured = changed(definition)
+        local configured_data = configured.data :: {[string]: unknown}
+        configured_data.session_resource = "session"
+        local hidden = changed(configured)
         local hidden_data = hidden.data :: {[string]: unknown}
         hidden_data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
         apply(hidden)
-        run(false, true, definition, policy)
+        run(false, true, configured, policy, nil, true)
     end)
     apply(definition)
     apply(policy)

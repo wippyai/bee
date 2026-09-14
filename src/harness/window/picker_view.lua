@@ -7,7 +7,7 @@ local M = {}
 type Hit = {action: string, x: integer, y: integer, width: integer}
 type Frame = {rows: {string}, first: integer, capacity: integer, hits: {Hit}}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
-    choices: selection.Choices, selected: integer, status: string): Frame
+    choices: selection.Choices, selected: integer, status: string, busy: boolean?): Frame
     local theme = appearance.theme(preferences.theme)
     local canvas = tty.canvas(width, height)
     local hits: {Hit} = {}
@@ -46,8 +46,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             local size = #action.label
             if x + size - 1 <= width then
                 local selection_action = action.name == "open" or action.name == "new" or action.name == "edit"
-                local enabled = not selection_action or (choice ~= nil and capacity > 0
-                    and (action.name ~= "open" or not choice.unavailable))
+                local enabled = action.name == "close" or (not busy and (not selection_action or
+                    (choice ~= nil and capacity > 0 and (action.name ~= "open" or not choice.unavailable))))
                 canvas:put(x, height - 1, appearance.style(enabled and appearance.selection_text(theme) or theme.muted,
                     enabled and theme.accent or theme.surface) .. action.label .. reset, size)
                 if enabled then hits[#hits + 1] = {action = action.name, x = x, y = height - 1, width = size} end

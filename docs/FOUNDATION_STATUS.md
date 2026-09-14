@@ -55,6 +55,21 @@ Edit or Open actions for an invisible choice. Strict lint, 894/894 Lua tests, th
 managed-window journey and source-free native picker pass. Standalone SHA-256 is
 `d5304bc03bfa61b7e6c6fac6ed613dabbd558635a9b58e303c51d3b98d96d7fb`.
 
+**B1 Agent activation responsiveness, source complete and not installed (September 14):**
+setup and admission now run in one serialized, generation-fenced worker after
+selection. The picker shows `Starting Agent…`, disables profile mutation,
+refresh and duplicate activation, and continues to process resize and close.
+Refresh requested during discovery is queued once behind the active read. If
+close wins while admission is already in flight, the picker hands that exact
+completion to the window runtime; it revokes every returned attempt-bound
+resource grant and credential projection without inventing an action receipt,
+gateway or placement attempt. A staged journey delays the real admission path,
+closes during the delay, proves no action or attempt starts, then opens a fresh
+picker and launches the real fixture terminal. The five existing failure stages,
+strict lint, 894/894 Lua tests, standalone build and source-free native picker
+pass. Standalone SHA-256 is
+`54f86e1abcf08f9ee02c430ae5fb23582734e8549bb9bea0a6e0e693d9ff6c31`.
+
 **B1 Agy inheritance source complete, not installed (September 14):** the
 default Agy window keeps the authorized OS-user HOME and loads Bee's scoped MCP,
 hooks and appended instructions from a retained session-owned `.agents` root

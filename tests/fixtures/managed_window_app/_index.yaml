@@ -169,13 +169,20 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native:homes
   security:
-    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy]
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:resource_inspection_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: selection_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: resource_inspection_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.resources.manage]
     resources: '*'
     effect: allow
 

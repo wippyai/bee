@@ -147,6 +147,11 @@ local function define_tests()
                 {items = {}, unavailable = 0}, 0, "Loading profiles…").rows)
             test.is_true(loading:find("Loading profiles", 1, true) ~= nil)
             test.is_true(loading:find("No agent profiles", 1, true) == nil)
+            local starting = view.draw(80, 12, appearance.defaults(), listed, 1, "Starting Agent…", true)
+            test.is_true(table.concat(starting.rows):find("Starting Agent", 1, true) ~= nil)
+            for _, hit in ipairs(starting.hits) do
+                test.is_true(hit.action ~= "open" and hit.action ~= "new" and hit.action ~= "edit" and hit.action ~= "refresh")
+            end
         end)
         isolated_it("returns an empty eligible list when only hidden or batch definitions exist", function()
             local entries = {

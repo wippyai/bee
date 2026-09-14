@@ -28,10 +28,15 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
         'local system = require("system")\nlocal time = require("time")').replace(
         'function M.call(raw: unknown): Result\n',
         'function M.call(raw: unknown): Result\n'
-        '    if type(raw) == "table" and raw.operation == "list" and raw.workspace_id == string.rep("a", 32) then time.sleep("2s") end\n')
+        '    if type(raw) == "table" and raw.operation == "list" and raw.workspace_id == string.rep("a", 32) then time.sleep("1500ms") end\n')
     profiles_service.write_text(profile_source)
+    admission_source = folder / "src/harness/launch/admission.lua"
+    admission_source.write_text(admission_source.read_text().replace(
+        '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n',
+        '    if request.workspace_id == string.rep("a", 32) then time.sleep("1s") end\n'
+        '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n'))
     environment = workspace.database_environment(folder)
     subprocess.run([str(workspace.RUNTIME), "lint"], cwd=folder, env=environment, check=True, timeout=60)
     subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)
 
-print("Managed window app: broker terminal grant, input/resize, detach/rebind, revoked input after close and truthful cancelled/uncertain attempt receipts passed")
+print("Managed window app: responsive discovery/activation, cancellation cleanup, broker terminal grant, input/resize, detach/rebind and truthful receipts passed")

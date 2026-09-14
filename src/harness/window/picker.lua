@@ -16,6 +16,7 @@ local forms = require("forms")
 local profile_view = require("profile_view")
 local M = {}
 type Channel = channel.Channel
+type Activation = {serial: integer, admitted: admission.Admitted?, refused: admission.Reply?, error: string?, title: string?}
 local function fault(reply: admission.Reply?): string
     local value = reply and reply.error
     if not value then return "Agent launch was not admitted" end
@@ -46,19 +47,28 @@ function M.direct(workspace_id: string, definition_ref: string): (admission.Admi
 end
 
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
-    closes: Channel<process.Message>): (admission.Admitted?, string?)
+    closes: Channel<process.Message>): (admission.Admitted?, string?, boolean?, Channel<Activation>?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local output = assert(tty.surface())
     local running = true
     local load_serial = 0
     local loads = channel.new(1)
-    local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
+    local activation_serial = 0
+    local activations = channel.new(1) :: Channel<Activation>
+    local activating = false
+    -- The surface may close while admission is already executing. Closing the
+    -- surface wins immediately and hands its one completion channel to the
+    -- runtime, which revokes authority obtained before the cancellation.
+    local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?, boolean?, Channel<Activation>?)
+        local pending = activating
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
         local closed, close_error = output:close()
-        if not closed then return nil, "Close profile screen: " .. tostring(close_error) end
-        return admitted, err
+        local failure = not closed and ("Close profile screen: " .. tostring(close_error)) or err
+        if pending then return nil, failure, true, activations end
+        activation_serial = activation_serial + 1
+        return admitted, failure, nil, nil
     end
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
@@ -66,6 +76,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local selected: integer = 0
     local status = "Loading profiles…"
     local loading = false
+    local reload_pending = false
     local request_id: string? = nil
     local request_definition, request_plan = "", ""
     local editing: profile_view.State? = nil
@@ -74,7 +85,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local dirty = true
     local frame: view.Frame = {rows = {}, first = 1, capacity = 0, hits = {}}
     local function load()
-        if loading then return end
+        if loading then reload_pending = true; return end
         load_serial = load_serial + 1
         local serial = load_serial
         loading = true
@@ -97,7 +108,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 edit_frame = profile_view.draw(width, height, preferences, editing)
                 rows = edit_frame.rows
             else
-                frame = view.draw(width, height, preferences, listed, selected, status)
+                frame = view.draw(width, height, preferences, listed, selected, status, activating)
                 rows = frame.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -106,7 +117,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if load_serial == 0 then load() end
         local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(),
-            states:case_receive(), loads:case_receive()})
+            states:case_receive(), loads:case_receive(), activations:case_receive()})
         if not event.ok then return finish(nil, nil) end
         local activate, refresh = false, false
         local edit, duplicate = false, false
@@ -130,6 +141,28 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 selected = #listed.items > 0 and 1 or 0
                 status = result.error or ""
                 dirty = true
+                if reload_pending then reload_pending = false; load() end
+            end
+        elseif event.channel == activations then
+            local result = event.value :: Activation
+            if result.serial == activation_serial then
+                activating = false
+                if result.admitted then
+                    if result.title then client.title(launch, result.title) end
+                    return finish(result.admitted, nil)
+                end
+                if result.error then
+                    status = result.error
+                else
+                    local denied = result.refused and result.refused.error
+                    if denied and denied.code == "CONFLICT" then
+                        status = "Profile changed. Refresh and select it again."
+                        listed = {items = {}, unavailable = 0}; selected = 0
+                    else
+                        status = denied and (denied.code .. ": " .. denied.message) or "Agent launch was not admitted"
+                    end
+                end
+                dirty = true
             end
         else
             local data = input_event.decode(event.value)
@@ -151,15 +184,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     dirty = true
                 elseif data.type == "key" and data.action == "press" then
                     if data.key_type == "escape" or data.key_type == "esc" then return finish(nil, nil)
-                    elseif data.key_type == "up" and selected > 0 then selected = math.floor(math.max(1, selected - 1)); dirty = true
-                    elseif data.key_type == "down" and selected > 0 then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
-                    elseif data.key_type == "enter" then activate = true
-                    elseif data.key == "r" and not data.ctrl and not data.alt then refresh = true
-                    elseif data.key == "e" and not data.ctrl and not data.alt then edit = true
-                    elseif data.key == "n" and not data.ctrl and not data.alt then edit = true; duplicate = true end
+                    elseif data.key_type == "up" and selected > 0 and not activating then selected = math.floor(math.max(1, selected - 1)); dirty = true
+                    elseif data.key_type == "down" and selected > 0 and not activating then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
+                    elseif data.key_type == "enter" and not activating then activate = true
+                    elseif data.key == "r" and not data.ctrl and not data.alt and not activating then refresh = true
+                    elseif data.key == "e" and not data.ctrl and not data.alt and not activating then edit = true
+                    elseif data.key == "n" and not data.ctrl and not data.alt and not activating then edit = true; duplicate = true end
                 elseif data.type == "mouse" then
                     if data.action == "wheel" then
-                        if selected > 0 then
+                        if selected > 0 and not activating then
                             local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
                             selected = math.floor(math.max(1, math.min(#listed.items, selected + delta))); dirty = true
                         end
@@ -173,7 +206,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                                 if hit.action == "new" then edit = true; duplicate = true end
                             end
                         end
-                        if data.y >= 3 and data.y < 3 + frame.capacity then
+                        if not activating and data.y >= 3 and data.y < 3 + frame.capacity then
                             local index = frame.first + data.y - 3
                             if listed.items[index] then selected = index; dirty = true end
                         end
@@ -190,39 +223,37 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         end
-        if activate and not loading and frame.capacity > 0 then
+        if activate and not loading and not activating and frame.capacity > 0 then
             local choice = listed.items[selected]
             if choice and not choice.unavailable then
                 if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then
                     request_id = assert(uuid.v7())
                     request_definition, request_plan = choice.definition_ref, choice.plan_digest
                 end
-                local setup, setup_error = funcs.call("bee.harness.launch:setup", {
-                    workspace_id = launch.workspace_id, definition_ref = choice.definition_ref,
-                    saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
-                    expected_plan_digest = choice.plan_digest})
-                local prepared = bounds.object(setup)
-                if setup_error or not prepared or prepared.ok ~= true then
-                    status = setup_error and tostring(setup_error) or
-                        (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")
-                    dirty = true
-                else
-                    local admitted, refused = admission.admit_request({request_id = request_id, definition_ref = choice.definition_ref,
-                        saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
-                        expected_plan_digest = choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
-                    if admitted then
-                        client.title(launch, choice.title)
-                        return finish(admitted, nil)
+                activation_serial = activation_serial + 1
+                local serial = activation_serial
+                local id = request_id :: string
+                local selected_choice = choice
+                activating = true
+                status = "Starting Agent…"
+                dirty = true
+                coroutine.spawn(function()
+                    local setup, setup_error = funcs.call("bee.harness.launch:setup", {
+                        workspace_id = launch.workspace_id, definition_ref = selected_choice.definition_ref,
+                        saved_profile_id = selected_choice.saved_profile_id, saved_profile_revision = selected_choice.saved_profile_revision,
+                        expected_plan_digest = selected_choice.plan_digest})
+                    local prepared = bounds.object(setup)
+                    if setup_error or not prepared or prepared.ok ~= true then
+                        activations:send({serial = serial, error = setup_error and tostring(setup_error) or
+                            (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")})
+                        return
                     end
-                    local fault = refused and refused.error
-                    if fault and fault.code == "CONFLICT" then
-                        status = "Profile changed. Refresh and select it again."
-                        listed = {items = {}, unavailable = 0}; selected = 0; dirty = true
-                    else
-                        status = fault and (fault.code .. ": " .. fault.message) or "Agent launch was not admitted"
-                        dirty = true
-                    end
-                end
+                    if not running or serial ~= activation_serial then activations:send({serial = serial}); return end
+                    local admitted, refused = admission.admit_request({request_id = id, definition_ref = selected_choice.definition_ref,
+                        saved_profile_id = selected_choice.saved_profile_id, saved_profile_revision = selected_choice.saved_profile_revision,
+                        expected_plan_digest = selected_choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window"})
+                    activations:send({serial = serial, admitted = admitted, refused = refused, title = selected_choice.title})
+                end)
             end
         end
         if refresh then

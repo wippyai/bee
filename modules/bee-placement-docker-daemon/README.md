@@ -18,9 +18,14 @@ discovers a daemon or reads ambient Docker settings. Registry metadata describes
 the binding; host admission and policy grant the actual socket access.
 
 The launch policy selects `placement_binding: bee.placement.docker:binding` and
-places its image, user, network, mounts and limits in `placement_options`. The
-harness includes these component-owned options in the policy digest; Docker
-placement validates their exact fields before recording an intent. Options
+places its image, user, network, mounts and limits in `placement_options`.
+Each mount names an admitted resource with `{resource, target, access}`. The
+placement owner resolves its host source from the attempt-bound grant before
+freezing Docker configuration; policy metadata cannot supply or authorize a
+host path. A policy may declare no additional mounts when the process works
+entirely from its private HOME. The harness includes these component-owned
+options in the policy digest; Docker placement validates their exact fields
+before recording an intent. Options
 require an explicit placement binding. Native placement refuses these options
 instead of silently ignoring them. AppArmor is not required.
 The network remains an explicit host choice: `none`, `bridge` or a named Docker

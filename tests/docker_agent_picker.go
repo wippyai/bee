@@ -157,7 +157,6 @@ func configureFixture(repo, dir, image string) error {
 		return err
 	}
 	kept := make([]map[string]interface{}, 0, len(index.Entries))
-	project := filepath.ToSlash(filepath.Join(dir, "project"))
 	for _, entry := range index.Entries {
 		name, _ := entry["name"].(string)
 		if name == "natural_completion_test" || name == "checkpoint_ack_test" || name == "retained_test" || name == "selector_test" {
@@ -188,8 +187,15 @@ func configureFixture(repo, dir, image string) error {
 				"image": image, "user": fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
 				"network": "none", "memory": 134217728, "nano_cpus": 1000000000,
 				"pids_limit": 32, "home_target": "/home/bee",
-				"mounts": []map[string]string{{"source": project, "target": "/workspace", "access": "read"}},
+				"mounts": []map[string]string{{"resource": "project", "target": "/workspace", "access": "read"}},
 			}
+		}
+		if name == "selector_definition" {
+			data, ok := entry["data"].(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("selector definition has no data")
+			}
+			data["workdir_policy"] = map[string]interface{}{"kind": "declared_resource", "resource_ref": "project"}
 		}
 		kept = append(kept, entry)
 	}
@@ -232,6 +238,16 @@ func configureFixture(repo, dir, image string) error {
 	updated = strings.Replace(mainText, ownerMarker, ownerReplacement, 1)
 	if updated == mainText {
 		return fmt.Errorf("managed window fixture owner marker anchor missing")
+	}
+	mainText = updated
+	updated = strings.Replace(mainText, `assert(launched, "Agent picker did not start the selected child")`, `if not launched then
+            assert(view:send({type = "resize", width = 120, height = 20}))
+            time.sleep("100ms")
+            local final = assert(view:snapshot())
+            error("Agent picker did not start the selected child: " .. table.concat(final.rows, " | "))
+        end`, 1)
+	if updated == mainText {
+		return fmt.Errorf("managed window fixture launch diagnostic anchor missing")
 	}
 	mainText = updated
 	assertion := `assert(saw, "broker-mounted PTY did not receive input")`
@@ -311,9 +327,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	workspaceRoot := "- name: workspace_root\n  kind: fs.directory\n  directory: .\n  base: project"
+	fixtureRoot := "- name: workspace_root\n  kind: fs.directory\n  directory: project\n  base: project"
+	rootText := strings.Replace(string(rootIndex), workspaceRoot, fixtureRoot, 1)
+	if rootText == string(rootIndex) {
+		return fmt.Errorf("workspace root fixture anchor missing")
+	}
 	anchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
-	updatedIndex := strings.Replace(string(rootIndex), anchor, strings.TrimSuffix(anchor, "]")+", bee.managed_window_fixture:binding]", 1)
-	if updatedIndex == string(rootIndex) {
+	updatedIndex := strings.Replace(rootText, anchor, strings.TrimSuffix(anchor, "]")+", bee.managed_window_fixture:binding]", 1)
+	if updatedIndex == rootText {
 		return fmt.Errorf("host activation anchor missing")
 	}
 	updatedIndex = strings.TrimRight(updatedIndex, "\n") + "\n- name: test_dependency\n  kind: ns.dependency\n  component: wippy/test\n  version: 0.4.17\n"

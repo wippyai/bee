@@ -82,7 +82,7 @@ function M.build(value: unknown, delivered_environment: unknown?): (Config?, str
         end
         mount_count = mount_count + 1
     end
-    if mount_count < 1 or mount_count > 15 then return nil, "Docker mounts must contain 1 to 15 entries" end
+    if mount_count > 15 then return nil, "Docker mounts must contain at most 15 entries" end
     local mounts: {Mount} = {}
     for index = 1, mount_count do
         local declared = bounds.object(mount_values[index])

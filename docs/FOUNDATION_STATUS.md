@@ -171,11 +171,16 @@ regression and installed recovery now pass.
 **Docker Agent source checkpoint, not installed:** the production picker, broker
 and managed window now pass container PTY input/output, resize and close/removal
 with a fixture shell driver. Launch policies carry bounded `placement_options`
-under an explicit placement binding; the selected component validates them and
-native placement refuses unsupported options. All 875 unit tests pass, as do
+under an explicit placement binding. Policy mounts name admitted resources;
+the Docker placement owner resolves their concrete host sources from the
+attempt-bound grants before freezing configuration. Literal source paths in
+policy are refused, and a HOME-only launch may use no additional resource
+mounts. The selected component validates these options and native placement
+refuses unsupported options. All 895 unit tests pass, as do
 actual Docker restart, inspection-failure and stop-during-create/start checks.
-The combined full repository check is still running. This does not establish
-real harness credential/MCP delivery or supply an installable Docker profile.
+The production picker also passes a real grant-backed project mount, PTY resize
+and exact container removal. This does not establish real harness credential/MCP
+delivery or supply an installable Docker profile.
 AppArmor is not required. The changed-plan recovery refusal is addressed by the
 following source review workflow; release validation is still underway.
 

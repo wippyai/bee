@@ -6693,3 +6693,23 @@ predecessor retirement, a fresh attempt/gateway, no fabricated Bee success and
 unchanged source login/project state. Disposable credential-bearing state is
 always removed. Real Claude/Codex recovery and Grok matrix reconciliation remain;
 global Bee is unchanged.
+
+### September 14 — Docker resources are portable across workspaces
+
+Docker launch policy now names logical resources with
+`{resource, target, access}`. After the existing resource authority resolves the
+attempt-bound grant and confirms locality, the Docker placement owner derives
+the concrete host source and freezes only `{source, target, access}` in the
+container specification. Policy metadata cannot select a machine path or widen
+a read grant. Session HOME remains placement-owned; a HOME-only launch may have
+zero additional mounts.
+
+The production Agent picker passes with a real grant-backed project directory,
+container PTY input/output, resize and exact removal. The lifecycle passes both
+ordinary and injected-inspection restart paths with only private HOME mounted.
+Strict lint passes with the existing fixpoint warning, all 895 Lua tests pass,
+Docker configuration, Go vet and standalone assembly pass; standalone SHA-256
+is `1820bfe4b2154b668d4780d7356e2646a474c561ba00c82accda7a4ccf0b5559`.
+The optional userspace Docker package is
+still unpublished, and no installable Docker harness image/profile is supplied.
+Global Bee is unchanged.

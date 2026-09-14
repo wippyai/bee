@@ -86,6 +86,16 @@ local function define_tests()
             max_mounts[16] = {source = "/projects/mount16", target = "/mount16", access = "read"}
             test.is_nil(configuration.build(max))
         end)
+        test.it("runs from its private home without an additional resource mount", function()
+            local raw = input()
+            raw.mounts = {}
+            raw.working_directory = "/home/bee"
+            local config, err = configuration.build(raw)
+            if not config then error(tostring(err)) end
+            test.eq(#config.HostConfig.Binds, 1)
+            test.eq(config.HostConfig.Binds[1], "/private/session/home:/home/bee:rw")
+            test.eq(config.WorkingDir, "/home/bee")
+        end)
         test.it("refuses mount escapes, overlap and private home exposure", function()
             local cases: {{field: string, value: unknown}} = {
                 {field = "mounts", value = {{source = "/private", target = "/workspace", access = "read"}}},
@@ -155,7 +165,7 @@ local function define_tests()
                 {field = "memory", value = 0}, {field = "nano_cpus", value = 0.5},
                 {field = "pids_limit", value = -1},
                 {field = "mounts", value = {{source = "/projects/one", target = "/workspace", access = "owner"}}},
-                {field = "mounts", value = {}},
+                {field = "mounts", value = {{resource = "project", target = "/workspace", access = "read"}}},
                 {field = "mounts", value = {[1] = {source = "/projects/one", target = "/workspace", access = "read"}, [16] = {source = "/projects/sixteen", target = "/sixteen", access = "read"}}},
                 {field = "privileged", value = true},
                 {field = "command", value = {"relative"}}, {field = "command", value = {[1] = "/bin/sh", [3] = "gap"}},

@@ -15,8 +15,9 @@ the selected container-visible HOME.
 
 The projection keeps the root read-only, drops capabilities, requires
 no-new-privileges, enforces AppArmor when the profile selects it, uses explicit
-resource limits and network selection, and mounts only the private home plus
-one to fifteen admitted mounts. Home and admitted host sources must not overlap:
+resource limits and network selection, and mounts only the private home plus up
+to fifteen admitted resource mounts. Home and admitted host sources must not
+overlap:
 mounting a source that contains private placement homes would expose credentials.
 Mount targets cannot overlap each other, the private home target or `/tmp`.
 Each admitted mount preserves its requested read or write access.
@@ -103,9 +104,11 @@ decoder as lifecycle observations.
 The input is a strict object with `image` (local `sha256` image ID), `user`
 (`uid:gid`), `network`, optional `apparmor`, `memory`, `nano_cpus`, `pids_limit`,
 `command`, `home_source`, `home_target`, `mounts`, `working_directory`, and the
-six attempt `labels`. `mounts` is a dense array of one to fifteen
+six attempt `labels`. `mounts` is a dense array of zero to fifteen
 objects, each containing only `source`, `target`, and `access` (`read` or
-`write`). Bee bounds the home plus these mounts to 16 binds.
+`write`). The private HOME bind is always present, so Bee bounds the total to
+16 binds. Logical resource names belong to launch policy and are refused by
+this concrete builder.
 Legacy `workspace_source`, `workspace_target`, and
 `workspace_access` fields are refused as unknown input.
 The returned config uses the existing Docker field names. Unknown input is

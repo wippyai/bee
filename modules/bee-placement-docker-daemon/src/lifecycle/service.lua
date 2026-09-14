@@ -31,6 +31,7 @@ type Row = store.Row
 type Identity = {container_id: string, image_id: string, apparmor: string?, started_at: string?, labels: {[string]: string}}
 type Spec = Object
 type Observation = {container_id: string, image_id: string, started_at: string?, state: string, exit_code: integer?, labels: {[string]: string}}
+type Mount = {source: string, target: string, access: string}
 
 local function fail(code: string, message: string): Reply return {ok = false, error = {code = code, message = message}, value = nil} end
 local function succeed(value: unknown): Reply return {ok = true, error = nil, value = value} end
@@ -142,6 +143,56 @@ local function labels(request: types.LaunchRequest, digest: string, image: strin
         ["bee.attempt_id"] = request.attempt_id, ["bee.request_digest"] = digest,
         ["bee.lease_fence"] = tostring(request.owner_incarnation), ["bee.image_digest"] = image}
 end
+-- Policies name admitted resources, never machine-specific source paths. The
+-- placement owner resolves the exact grant before it freezes Docker config.
+local function policy_mounts(policy: Object, request: types.LaunchRequest): ({Mount}?, Reply?)
+    local declared = policy.mounts
+    if declared == nil then return {}, nil end
+    if type(declared) ~= "table" then return nil, fail("DENIED", "Docker policy mounts must be an array") end
+    local count = 0
+    for key in pairs(declared :: Object) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 then
+            return nil, fail("DENIED", "Docker policy mounts must be a dense array")
+        end
+        count = count + 1
+    end
+    if count ~= #(declared :: {unknown}) or count > 15 then
+        return nil, fail("DENIED", "Docker policy mounts must contain at most 15 entries")
+    end
+    local result: {Mount} = {}
+    local seen: {[string]: boolean} = {}
+    for index, raw in ipairs(declared :: {unknown}) do
+        local mount = bounds.object(raw)
+        if not mount then return nil, fail("DENIED", "Docker policy mount " .. tostring(index) .. " must be an object") end
+        local unknown = bounds.fields(mount, {"resource", "target", "access"})
+        if unknown then return nil, fail("DENIED", "Docker policy mount " .. tostring(index) .. ": " .. unknown) end
+        local name = bounds.id(mount.resource)
+        local target = bounds.text(mount.target, 4096)
+        local access = bounds.member(mount.access, {"read", "write"})
+        if not name or not target or target == "" or not access then
+            return nil, fail("DENIED", "Docker policy mount " .. tostring(index) .. " is invalid")
+        end
+        if seen[name] then return nil, fail("DENIED", "Docker policy mounts resource " .. name .. " more than once") end
+        seen[name] = true
+        local selected: types.ResourceGrant? = nil
+        for _, grant in ipairs(request.resources) do
+            if grant.name == name then
+                if selected then return nil, fail("DENIED", "launch carries duplicate resource " .. name) end
+                selected = grant
+            end
+        end
+        if not selected then return nil, fail("DENIED", "Docker policy resource " .. name .. " was not granted") end
+        if selected.purpose == "session" then return nil, fail("DENIED", "the session resource is mounted as Docker HOME") end
+        if access == "write" and selected.access ~= "write" then
+            return nil, fail("FORBIDDEN", "Docker policy widens read-only resource " .. name)
+        end
+        local source, source_error = resources.directory(selected.root_ref)
+        if not source then return nil, fail("DENIED", source_error or "resource root") end
+        if selected.subpath ~= "" then source = source .. "/" .. selected.subpath end
+        result[#result + 1] = {source = source, target = target, access = access}
+    end
+    return result, nil
+end
 local function spec_from(policy: Object, request: types.LaunchRequest, digest: string, home: string, work: string, delivery: types.ConfigurationDelivery): (Spec?, Reply?)
     local image = policy.image or policy.image_digest
     local command: {string} = {request.launch.executable}
@@ -149,15 +200,13 @@ local function spec_from(policy: Object, request: types.LaunchRequest, digest: s
     for _, item in ipairs(request.launch.argv) do command[#command + 1] = item end
     local home_target = policy.home_target or "/home/bee"
     local container_work = work == home and home_target or nil
-    local mounts = type(policy.mounts) == "table" and policy.mounts :: {unknown} or {}
+    local mounts, mounts_refused = policy_mounts(policy, request)
+    if not mounts then return nil, mounts_refused end
     local function under(child: string, parent: string): boolean return child == parent or child:sub(1, #parent + 1) == parent .. "/" end
     if not container_work then
         for _, item in ipairs(mounts) do
-            local mount = bounds.object(item)
-            local source = mount and bounds.text(mount.source, 4096)
-            local target = mount and bounds.text(mount.target, 4096)
-            if source and target and under(work, source) then
-                container_work = target .. work:sub(#source + 1)
+            if under(work, item.source) then
+                container_work = item.target .. work:sub(#item.source + 1)
                 break
             end
         end
@@ -165,7 +214,7 @@ local function spec_from(policy: Object, request: types.LaunchRequest, digest: s
     if not container_work then return nil, fail("DENIED", "working directory is outside Docker mount targets") end
     local spec: Spec = {image = image, user = policy.user, network = policy.network, apparmor = policy.apparmor,
         memory = policy.memory, nano_cpus = policy.nano_cpus, pids_limit = policy.pids_limit, command = command,
-        home_source = home, home_target = home_target, mounts = policy.mounts,
+        home_source = home, home_target = home_target, mounts = mounts,
         working_directory = container_work, labels = labels(request, digest, tostring(image))}
     local checked, check_error = docker_configuration.build(spec)
     if not checked then return nil, fail("DENIED", check_error or "Docker specification is not admitted") end

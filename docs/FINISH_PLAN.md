@@ -28,7 +28,7 @@ It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
 The integration branch is `feat/docker-harness-delivery-20260913`; this execution
-queue was reconciled against current HEAD `8956e44`. The worktree also
+queue was reconciled against implementation base `2cc4e1f`. The worktree also
 contains an uncommitted Grok B1.1 candidate; those files are not a release source
 until the focused acceptance below passes and the result is committed.
 
@@ -48,14 +48,18 @@ The uncommitted Grok B1.1 candidate now replaces the invalid provider-owned
 `managed_config.toml` path with a private composition base and structural TOML
 insertion. Credential definition and use-time digests now cover the normalized
 setup descriptor without hashing setup contents, and the launch specification
-is the sole owner of Grok's Bee MCP permission. The combined candidate passes
-all 892 behavioral tests and focused strict lint. The placement proof must still
-show that only the base produced by the current credential initializer can be
-composed, and the native Go acceptance needs its final hook/configuration review.
-The candidate remains unlandable until the placement refusal matrix passes and
-real Grok 1.0.30 proves clean/login/cancel/restart with the generated private
-configuration while leaving global and project trees unchanged. Global Bee must
-not be built from this dirty worktree.
+is the sole owner of Grok's Bee MCP permission. The placement authority matrix
+and full Lua suite now pass: 893/893 behavioral tests. Real Grok 1.0.30 also
+passes the clean/login/cancel/restart path, and authenticated startup commits its
+SessionStart record with user hooks and Bee MCP visible. The remaining B1.1 issue
+is a Go assertion that expects Grok's inspected hook event and source path in the
+wrong spelling/form; the observed event is `session_start` and the hook source is
+the private hooks directory. After correcting that assertion, the authenticated
+run must finish its global/project tree fingerprints and the 27-file bounded diff
+must receive one review. Global Bee must not be built from this dirty worktree.
+`docs/BUILD_SEQUENCE.md` still describes the earlier Claude/Codex-only launch
+checkpoint; update it with the four-provider callable status when B1.1 lands so
+the implementation map and this operational plan agree.
 
 ### Reusable runtime gates
 
@@ -80,6 +84,11 @@ in separate PRs assigned to `skhaz`:
 The next global promotion requires gates 1 and 4. Connected Bee requires gate 3.
 Hub admission and governed activation require gate 2. Candidate binaries may be
 used for acceptance, but Bee does not merge these runtime PRs.
+
+Before implementation claims depend on these gates, copy each accepted runtime
+pin, digest, proof command and remaining limitation into
+`docs/handoffs/STATUS_RUNTIME_GATE.md`. The finish plan orders work; that handoff
+is the canonical runtime evidence.
 
 ## Definition of finished
 
@@ -107,6 +116,21 @@ These six journeys must pass from one tagged executable:
    and the registry owner applies or rejects it once. Apply and rollback have
    durable receipts.
 
+### Release scoreboard
+
+This table is the progress view. A journey moves to **ready** only when its
+installed-executable acceptance passes; source code or a fixture alone is
+**partial**.
+
+| Journey | State | Remaining release boundary |
+|---|---|---|
+| Open locally | partial | executable-selected state root for every store; offline folder and multi-display installed proof |
+| Run an Agent | partial | land Grok B1.1, saved-profile UI, durable four-provider session/recovery proof |
+| Change isolation | foundation | compose the same saved profiles through native `exec.docker`; reconcile and recover containers |
+| Join a Hive | partial | public enrollment/discovery, project-node selection, controller transfer, remote placement and two-real-runtime recovery |
+| Install a component | partial | close local Hub lifecycle, protected admission and independently packaged app/harness proofs |
+| Edit safely | foundation | complete the governed stage/review/apply/receipt/rollback journey over released registry CAS |
+
 ## Critical path
 
 The implementation lanes can run in parallel. Their release gates are
@@ -116,7 +140,7 @@ sequential and use immutable commits.
 flowchart LR
     A[Train A installed] --> N[Native Agents]
     A --> T[Folder, display, Hive]
-    A --> H[Local Hub]
+    A --> H[Local Hub lifecycle]
     S[State-dir gate] --> N
     M[TOML insert gate] --> N
     S --> T
@@ -125,9 +149,10 @@ flowchart LR
     H --> P
     T --> D[Cross-node distribution]
     P --> D
-    H --> O[Governed overlays]
-    C[Released registry CAS] --> O
-    C --> H
+    H --> I[Protected Hub admission]
+    C[Released registry CAS] --> I
+    I --> O[Governed overlays]
+    C --> O
     N --> R[Final release]
     X --> R
     D --> R
@@ -146,17 +171,19 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Close Grok B1.1: fix the two focused failures, enforce initializer-owned composition bases, correct the stale docs and complete the placement refusal matrix | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
+| 1 | Agents | Close Grok B1.1: normalize the final real-provider inspection assertion, finish tree fingerprints, review and land the bounded diff | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
 | 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
-| 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass remote viewport/rejoin |
-| 5 | Hub | Close local immutable install/update/remove and protected admission using released registry compare-and-set | One app and each harness can enter and leave the catalog without a core edit or authority leak |
-| 6 | Release | Promote **Connected Bee** | Folder/display/Hive and local Hub journeys pass together from a clean executable |
+| 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
+| 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One app and each harness can enter and leave the catalog without a core edit or authority leak |
+| 6 | Release | Promote **Local Components** | Correct folder/display behavior and admitted local Hub components pass together from a clean executable |
 | 7 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
-| 8 | Release | Promote **Docker Agents** | All four real providers pass native and Docker profile acceptance from one executable |
-| 9 | Distribution | Transfer admitted immutable app and harness packages through the existing mesh and Hub receipt model | A second Bee installs, launches, restarts and updates after the source disappears; credentials, grants, PIDs and mounts never transfer |
-| 10 | Overlays | Complete `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | Exact-revision apply, protected approval, stale refusal and rollback pass for user and Agent edits |
-| 11 | Release | Promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
+| 8 | Automation | Prove the native runner/dataflow path, freeze accepted schemas and extract independently mounted packages | One headless runner turn and two-node settle pass; host and standalone package closures behave identically with no duplicate IDs |
+| 9 | Release | Promote **Docker Agents** | All four real providers pass native and Docker profile acceptance from one executable |
+| 10 | Distribution | Finish remote placement and transfer admitted immutable app/harness packages through the native mesh and Hub receipt model | Remote child/carrier/gateway/PTY and package install/restart/update pass after sleep, lost acknowledgments and destination restart |
+| 11 | Release | Promote **Connected Bee** | Public enrollment/discovery, remote selection, placement, approvals, retained apps and package delivery pass between two real Bees |
+| 12 | Overlays | Complete `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | Exact-revision apply, protected approval, stale refusal and rollback pass for user and Agent edits |
+| 13 | Release | Promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
 
 The integration owner keeps the critical path on orders 1 through 3 while the
 topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
@@ -167,16 +194,17 @@ adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. finish the placement test proving initializer-owned Grok composition bases,
-   missing-base refusal, semantic MCP collision refusal, and exactly one admitted
-   Bee MCP permission;
-2. run focused placement, publication and driver lint plus the affected and full
-   Lua suite against the combined runtime candidate;
-3. finish the Go acceptance review so user hooks and Bee hooks are both preserved;
-4. run real Grok 1.0.30 clean/login/cancel/restart acceptance and hash the global
-   and project `.grok` trees before and after;
-5. commit the bounded Grok B1.1 diff, then continue directly to saved profiles
-   and durable sessions.
+1. normalize Grok inspection events by case and separator, require the private
+   hooks directory and its `user` source type, and retain the user Stop hook's
+   `configToml` source proof;
+2. rerun authenticated real Grok 1.0.30 and finish the global/project `.grok`
+   tree fingerprints;
+3. rerun Go vet/compile and the managed Grok fixture; retain the already-passing
+   893/893 Lua and clean-start evidence unless the implementation changes;
+4. review all 27 Grok B1.1 files as one authority/configuration/lifecycle unit;
+5. update its implementation status and `docs/BUILD_SEQUENCE.md`, commit the
+   bounded diff separately from this plan update, then continue directly to saved
+   profiles and durable sessions.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
 Once the Native Agents journey passes from a clean commit, install it globally
@@ -204,14 +232,20 @@ exist. They are planning ranges, not release claims.
 
 | Promotion | Remaining focused work | External gate |
 |---|---:|---|
-| Native Agents | 1–2 days | selected state root and TOML insertion runtime cuts |
-| Connected Bee | 3–5 days after Native Agents | remote lifecycle and registry compare-and-set runtime cuts |
-| Docker Agents | 2–3 days after Native Agents; may overlap Connected Bee | none beyond the Native Agents runtime base |
-| Editable Bee v1 | 4–7 days after Connected Bee and Docker Agents | stable two-node package transfer and released registry compare-and-set |
+| Native Agents | 1–2 focused days | selected state root and TOML insertion runtime cuts |
+| Local Components | 3–5 focused days after Native Agents | registry compare-and-set for protected admission |
+| Docker Agents | 2–3 focused days after Native Agents; may overlap Local Components | none beyond the Native Agents runtime base |
+| Connected Bee | 3–5 focused days after Local Components and package extraction | remote lifecycle and stable two-node package transfer |
+| Editable Bee v1 | 4–7 focused days after Connected Bee and Docker Agents | released registry compare-and-set |
 
 Every window ends at an installed executable and user journey. A lane that misses
 its acceptance proof does not consume release time through polishing or unrelated
 cleanup; its failing boundary becomes the next bounded work unit.
+
+With the runtime gates available and topology/Hub/Docker work kept parallel, the
+estimated critical path is 11–19 focused engineering days. The first usable global
+promotion, Native Agents, remains the 1–2 day target; later promotions do not
+delay it.
 
 ## Work plan
 
@@ -254,11 +288,25 @@ build.
    function-built instruction text are resolved at admission and never become
    stored authority. Bee adds instructions to provider behavior; it does not
    replace the provider's built-in system prompt.
-4. Bind every provider window to one durable thread, committed activity/title
-   state and subscription cursor. Prove presenter, client and owner replacement.
-5. Prove cold recovery where provider credentials permit it. Reconcile a
+4. Give every attempt an OS-assigned MCP endpoint and a per-attempt secret. The
+   callable surface is the intersection of saved profile scope, host policy and
+   the request's dynamic `ctx`; ports, secrets, grants and `ctx` are never durable
+   profile data. Hooks and MCP bind to the same attempt and thread.
+5. Bind every provider window to one durable thread, committed activity/title
+   state and subscription cursor. The disconnected surface keeps the last
+   confirmed value; Timeline resumes its cursor; Inbox distinguishes empty from
+   unreachable. Prove presenter replacement, client reattachment and owner/host
+   restart separately.
+6. Prove cold recovery where provider credentials permit it. Reconcile a
    surviving child before starting a replacement. Login, subscription and account
    refusals remain visible provider outcomes.
+
+Maintain a four-row provider matrix. Each row requires a real installed binary,
+real configuration composition, MCP/hook delivery, close/cancel and restart. When
+credentials exist it also requires an authenticated startup and turn; otherwise
+the row records the provider's explicit login/account refusal and remains
+unqualified for authenticated use. Fixture-only evidence never marks a provider
+working.
 
 Exit proof: UI and CLI launch all four real harnesses; global settings remain
 intact; scoped MCP and hooks reach the bound thread; cancel, close, restart and
@@ -278,16 +326,19 @@ resume work; pack inspection finds no credentials or fixtures.
 3. Present the local desktop immediately. Hive join and rejoin run asynchronously.
    A remote node may remain connectable for 60 seconds, while local input, cancel
    and exit stay responsive.
-4. Stop representing physical clients as durable Hive nodes. Displays have stable
+4. Implement public enrollment, discovery and selection. `bee hive` and the
+   workspace/display switcher use supervisor admission over the native mesh; they
+   expose no transport-derived user authority.
+5. Stop representing physical clients as durable Hive nodes. Displays have stable
    friendly identities, attachments have leases and generations, stale displays
    retire gradually, and retained applications/layout survive client loss.
-5. Finish the compact shell switcher and F9 topology view. Show Hive service,
+6. Finish the compact shell switcher and F9 topology view. Show Hive service,
    executing node, workspace, display, controller/observer state and precise
    reachable/unavailable/unauthorized status without polling dead clients.
-6. Implement safe `Send to display`: revoke or fence the previous controller
+7. Implement safe `Send to display`: revoke or fence the previous controller
    before granting the next one; allow many observers; never let an uncertain
    result create two input controllers.
-7. Prove two actual Bee runtimes over the existing native TLS mesh, including
+8. Prove two actual Bee runtimes over the existing native TLS mesh, including
    sleep/rejoin, remote viewport, resize/input, approval and retained apps.
 
 Exit proof: offline folder boot is immediate, several clients/displays behave
@@ -298,19 +349,26 @@ predictably, stale records retire, and the two-node native-mesh journey passes.
 1. Treat the current Hub backend as implemented foundation. Close its remaining
    combined regression and native lifecycle evidence instead of rebuilding its
    planner, migration or receipt model.
-2. Require the released generic registry compare-and-set operation for every Hub
+2. Measure and bind the exact dependency/artifact closure, configuration
+   parameters, migration bodies/effects and destination requirements before
+   review. A missing or changed input invalidates the plan.
+3. Require the released generic registry compare-and-set operation for every Hub
    publication. The current single-writer revision check is foundation evidence,
    not the final concurrent-writer guarantee.
-3. Add the missing protected admission effect owner. Hub publication installs
+4. Add the missing protected admission effect owner. Hub publication installs
    immutable definitions; it never grants their capabilities. An unadmitted app
    stays out of Tools and direct open refuses.
-4. Bind approval to the exact artifact, definition digest, registry revision and
+5. Bind approval to the exact artifact, definition digest, registry revision and
    host-selected capability set. Revalidate all four before the registry owner
-   publishes the admission effect.
-5. Preserve service-owned application configuration and state across update and
+   publishes the admission effect. The requester cannot approve its own protected
+   install, and a consumed decision cannot authorize a second effect.
+6. Prove lost acknowledgments, injected migration/install failures, process
+   restart and worker takeover. Resume from durable receipts without manually
+   applying migrations or repeating committed effects.
+7. Preserve service-owned application configuration and state across update and
    restart. Registry metadata remains declarative; app data remains in its owning
    database.
-6. Keep Claude, Codex, Agy and Grok as independent components. Prove one harness
+8. Keep Claude, Codex, Agy and Grok as independent components. Prove one harness
    can be installed, updated and removed through Hub without editing Bee core;
    run the same packaging acceptance for all four before the final release.
 
@@ -322,15 +380,21 @@ injected failure recovery, admission/revocation, restart and pack inspection.
 1. Route the existing carrier and managed-window lifecycle through the native
    `exec.docker` placement binding. Keep the same attempt owner, sweeper, thread,
    driver and gateway. Do not depend on the optional userspace Docker component.
-2. Record creation intent before dispatch and label containers with exact
+2. Keep session mode and interactive-window mode explicit. One request owns
+   exactly one measured execution/container identity; a PTY does not imply
+   structured ACP or RPC behavior.
+3. Record creation intent before dispatch and label containers with exact
    owner/action/attempt identity. Implement start, stop, inspect, reconcile and
    cleanup, including surviving-container recovery.
-3. Run the normal installed harness command. Mount the selected project and the
+4. Run the normal installed harness command. Mount the selected project and the
    minimum approved configuration/credential inputs. Keep Bee material and
    writable harness state in attempt/session storage. AppArmor is optional.
-4. Expose the same randomized authenticated MCP/hook endpoint to the container;
+5. Expose the same randomized authenticated MCP/hook endpoint to the container;
    intersect profile scope, host policy and dynamic context at admission.
-5. Prove PTY input/output/resize, close, cancellation, create/start failures,
+6. Refuse when a profile's required hardening is unavailable; portable profiles
+   use non-root execution, dropped capabilities, the daemon's seccomp policy,
+   bounded resources and only their admitted mounts.
+7. Prove PTY input/output/resize, close, cancellation, create/start failures,
    owner restart, container removal and absence of secrets from argv, records,
    logs and the production pack on Linux Engine and Docker Desktop/WSL.
 
@@ -338,22 +402,34 @@ Exit proof: changing only `isolation` from Local to Docker preserves the Agent's
 identity, project, thread, tools, hooks, terminal and recovery behavior for all
 four providers.
 
-### 5. Distribute apps and harnesses through Hive
+### 5. Extract packages, then place and distribute through Hive
 
-1. Transfer content-addressed immutable package data through supervisor-selected
+1. Prove the native runner without a PTY or MCP shortcut: one admitted headless
+   turn and a two-node dataflow settle use the same request, delivery and receipt
+   queries as interactive Agents.
+2. Freeze accepted schema revisions and extract app and harness closures into
+   independently mounted packages. The host assembly and minimal standalone host
+   must behave identically; reject missing requirements and duplicate definition
+   IDs. Production `src` consumes packages through declared dependencies.
+3. Complete destination admission and remote placement for child, carrier,
+   gateway and PTY. Prove destination restart, same-name rejoin, Mac sleep,
+   revoked attachments, lost launch acknowledgments and remote approvals without
+   inferring authority from mesh membership.
+4. Transfer content-addressed immutable package data through supervisor-selected
    native-mesh operations. Reuse the Hub plan and receipt types; do not create a
    second installer or transport.
-2. The destination independently resolves policy, reviews capability changes,
+5. The destination independently resolves policy, reviews capability changes,
    admits and installs. Transfer package bytes and declared filesystem resources;
    never transfer credentials, grants, PIDs, live mounts or database ownership.
-3. Add retry/restart recovery around content chunks and install receipts. A fat
+6. Add retry/restart recovery around content chunks and install receipts. A fat
    storage Bee is a role expressed by installed components and admitted
    interfaces, not a special topology.
-4. Prove one app and one harness move to a second node, install, launch, restart
+7. Prove one app and one harness move to a second node, install, launch, restart
    and update while the source can disappear after transfer.
 
-Exit proof: another Bee gains usable components from immutable admitted content
-with no core edit and no authority leakage.
+Exit proof: independently mounted packages behave the same as the host assembly;
+another Bee remotely runs an admitted Agent and gains usable components from
+immutable admitted content with no core edit or authority leakage.
 
 ### 6. Finish governed overlays and self-edit
 
@@ -362,7 +438,9 @@ Use one path for user edits, Agent edits and installed overlay content:
 `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback`
 
 1. Store the staged candidate durably with base registry revision, entry digests,
-   source, declared capability changes and target scope. Staging grants nothing.
+   exact dependency/artifact closure, parameter bindings, source, migration
+   bodies/effects, declared capability changes and target scope. Staging grants
+   nothing.
 2. Show a review that distinguishes code/data changes, capability changes and
    protected core targets. Bind an inbox item to the exact candidate digest and
    effect.
@@ -371,9 +449,12 @@ Use one path for user edits, Agent edits and installed overlay content:
    silently replan.
 4. Record applied revision, changed definitions and inverse data required for
    rollback. Rollback is another authorized compare-and-set operation.
-5. Expose stage, inspect, status and submission through narrow Agent MCP tools.
+5. Recover from lost apply acknowledgments, process restart and worker takeover
+   using durable receipts. Refuse self-approval, replayed decisions and any
+   candidate whose artifact, closure, migration or reviewed revision changed.
+6. Expose stage, inspect, status and submission through narrow Agent MCP tools.
    Agents never receive direct registry publication authority.
-6. Replicate approved declarative overlays through the same package/content path.
+7. Replicate approved declarative overlays through the same package/content path.
    Service-owned databases and thread data keep their existing owners.
 
 Exit proof: an Agent prepares an ordinary edit, the user reviews it, the owner
@@ -389,15 +470,17 @@ branches.
 | Checkpoint | User-visible result | Required work |
 |---|---|---|
 | Native Agents | Correct offline folder state plus four working managed harnesses, profiles, threads and recovery | Plans 0 and 1 |
-| Connected Bee | Correct folders/displays, two-node Hive and admitted local Hub components | Plans 2 and 3 |
+| Local Components | Correct folders/displays and admitted local Hub components | Plans 2 and 3 |
 | Docker Agents | The same four profiles work through native Docker | Plans 1 and 4 |
+| Connected Bee | Public two-node Hive, remote Agent placement and cross-node app/harness delivery | Plans 2, 3 and 5 |
 | Editable Bee v1 | Cross-node component delivery and governed overlays | Plans 1–6 |
 
 Each promotion runs:
 
-1. strict lint and focused behavioral acceptance;
-2. source and packed user journeys;
-3. one full `make check` with the exact pinned runtime;
+1. `make lint` and focused behavioral acceptance;
+2. source and packed user journeys, including standalone source/pack isolation;
+3. one full `make check` with the exact pinned runtime, including
+   `tests/native_binary.py`, `tests/recovery.py` and the detached lifecycle gate;
 4. a fresh standalone build and offline/restart/recovery checks;
 5. production-pack inspection for tests, fixtures, credentials and local state;
 6. an atomic six-file install with a recorded rollback receipt.
@@ -437,6 +520,10 @@ After all six journeys pass together:
 - audit migration from existing global databases and injected rollback failures;
 - update implementation docs and `bee.wippy.ai` so claims and MIT notices match
   the tagged executable exactly.
+
+ACP, pi RPC and additional provider transports follow v1 as independently
+installable components. The v1 plan does not claim those semantics from a PTY or
+delay the six release journeys on them.
 
 No architecture-count test is a release gate. No database is deleted to make a
 migration pass. Design proposals become implementation status only after their

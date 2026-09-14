@@ -20,8 +20,9 @@ inserts only Bee MCP and keeps Bee hooks separate. The exact-source standalone
 passes the four-provider selector, real Grok authenticated and clean/restart
 acceptance, fixture graceful/SIGKILL recovery and real Agy cold continuation.
 Global Bee is still the Train A rollback point. Saved-profile storage is built;
-the complete four-provider recovery matrix, Docker and complete authenticated
-provider turns remain open. The lower-level step proofs below do not imply those
+the checked real Claude recovery target currently stops at the provider's
+authentication refusal, so the complete four-provider recovery matrix, Docker
+and complete authenticated provider turns remain open. The lower-level step proofs below do not imply those
 workflows are complete. Source also supports a
 host-selected instruction function with inherited actor/context and frozen
 launch delivery; the picker does not yet edit that policy field. See

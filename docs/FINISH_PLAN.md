@@ -228,9 +228,10 @@ status and handoff documents.
 The first usable global update is deliberately smaller than finished Bee: it is
 the Native Agents checkpoint. Its remaining local work is Claude, Codex and Grok
 recovery qualification plus the clean promotion gate. The current real Claude
-acceptance opens its managed window but times out before the readiness marker;
-that launch/admission boundary is fixed before making any recovery claim. Agy's
-real cold-recovery row already passes. No Hive, Hub, Docker or overlay work is
+acceptance opens its managed window, delivers the scoped MCP/hooks configuration
+and promptly reports the provider's authentication refusal; its row remains
+unqualified until the account completes both turns. Agy's real cold-recovery row
+already passes. No Hive, Hub, Docker or overlay work is
 allowed to enlarge this integration diff.
 
 ### Current bounded unit

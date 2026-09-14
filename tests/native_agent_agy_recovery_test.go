@@ -87,47 +87,6 @@ func hasActualAgyResume(args []string, expected string) bool {
 	return false
 }
 
-func actualAgyHookCounts(state, attemptID, bindingID, sessionID string) (map[string]int, error) {
-	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	rows, err := db.Query("SELECT record_json FROM bee_thread_records WHERE kind='observation' AND source='bee' ORDER BY sequence")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	counts := map[string]int{}
-	for rows.Next() {
-		var encoded string
-		if err := rows.Scan(&encoded); err != nil {
-			return nil, err
-		}
-		var record map[string]any
-		if json.Unmarshal([]byte(encoded), &record) != nil || record["attempt_id"] != attemptID {
-			continue
-		}
-		body, _ := record["body"].(map[string]any)
-		data, _ := body["data"].(map[string]any)
-		if data["event_name"] != "bee.harness.hook" {
-			continue
-		}
-		raw, _ := data["payload_json"].(string)
-		var payload map[string]any
-		if json.Unmarshal([]byte(raw), &payload) != nil || payload["binding_id"] != bindingID {
-			continue
-		}
-		fields, _ := payload["fields"].(map[string]any)
-		if fields["session_id"] != sessionID {
-			return nil, errors.New("real Agy hook changed conversation identity")
-		}
-		event, _ := payload["event"].(string)
-		counts[event]++
-	}
-	return counts, rows.Err()
-}
-
 func proveActualAgyToolFreeRecall(state, attemptID, bindingID string) error {
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
@@ -350,7 +309,7 @@ func actualAgyColdRecovery(binary, executable, loginFile, model string) (result 
 	var hookCounts map[string]int
 	hookDeadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(hookDeadline) {
-		hookCounts, err = actualAgyHookCounts(state, old.AttemptID, oldBinding, sessionID)
+		hookCounts, err = recoveryHookCounts(state, old.AttemptID, oldBinding, sessionID)
 		if err != nil {
 			return err
 		}

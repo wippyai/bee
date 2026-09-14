@@ -7,7 +7,8 @@ fresh continuation request on restore. Source acceptance now proves graceful
 continuation, interrupted-window recovery, cancellation during recovery, and
 whole-node restart with a fixture Claude executable. Controlled node SIGKILL
 also passes when the independently inspected native process is gone. Real-provider
-cold recovery and surviving orphan process trees remain unverified. The installed
+cold recovery passes for Agy; Claude, Codex and Grok plus surviving orphan
+process trees remain unverified. The installed
 revision is tracked separately in [global build](GLOBAL_BUILD.md).
 
 An interactive Agent must retain both the provider conversation ID and its
@@ -166,6 +167,19 @@ and private HOME, a retired predecessor, a fresh attempt and gateway binding,
 consistent first-turn tool/Stop hooks, no fabricated Bee turn success, unchanged
 source login and no project provider writes. The test copies only the explicit
 login file into disposable state and removes that state on every outcome.
+
+`make native-claude-recovery-live-check BEE_BINARY=... CLAUDE_BIN=...
+CLAUDE_LOGIN_FILE=...` is the equivalent checked real-Claude gate. Its first turn
+must call the bound `thread_read` MCP tool and use Claude's Read tool on a random
+fixture; the fixture is deleted before owner restart and the resumed turn must
+recall it without tools. The target also fences application, thread, HOME,
+attempt, gateway, hook, prompt-replay, process and source-login identity. It
+removes ambient provider credential variables and every disposable credential
+copy on all outcomes. Installed Claude 2.1.270 currently reaches this managed
+launch but the copied machine OAuth is refused before a turn completes; a direct
+ordinary-HOME probe reports unavailable account credit. This is an unqualified
+provider row, not recovery evidence. The provider version also differs from the
+current 2.1.265 manifest metadata and must be reconciled before promotion.
 
 Agy's corrected MCP delivery declares private JSON credential fields. Placement
 fills those after minting the admitted binding; the persisted template retains

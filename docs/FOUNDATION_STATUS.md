@@ -152,9 +152,12 @@ installed artifacts match the candidate byte-for-byte; the preceding build is
 backed up. Databases and running nodes were preserved. Existing nodes retain
 their loaded code; newly started nodes use this build.
 
-**Remaining agent workflow work:** managed Docker execution, real-provider cold
-recovery across all harnesses, surviving orphan cleanup, and policy-controlled
-sharing. Native Docker module composition is present, but Docker is not yet
+**Remaining agent workflow work:** real Claude, Codex and Grok cold-recovery
+qualification, managed Docker execution, surviving orphan cleanup, and
+policy-controlled sharing. Real Agy recovery passes. The checked real Claude
+target reaches the admitted managed launch with scoped hooks/MCP, then records a
+provider authentication refusal; it does not count as a recovered turn. Native
+Docker module composition is present, but Docker is not yet
 selectable or usable in the Agent UI. See [global build](handoffs/GLOBAL_BUILD.md)
 for release evidence and provider limitations.
 

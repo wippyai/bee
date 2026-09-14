@@ -97,7 +97,17 @@ func filteredEnvironment() []string {
 	remove := map[string]bool{
 		"BEE_RUNTIME": true, "BEE_BINARY": true, "USER": true,
 		"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "GROK_HOME": true,
+		"CLAUDE_BIN": true, "CLAUDE_LOGIN_FILE": true,
 		"AGY_BIN": true, "AGY_LOGIN_FILE": true, "AGY_MODEL": true,
+		"ANTHROPIC_API_KEY": true, "ANTHROPIC_AUTH_TOKEN": true,
+		"ANTHROPIC_CUSTOM_HEADERS": true, "CLAUDE_CODE_OAUTH_TOKEN": true,
+		"CLAUDE_CODE_USE_BEDROCK": true, "CLAUDE_CODE_USE_VERTEX": true,
+		"CLAUDE_CODE_USE_FOUNDRY": true, "OPENAI_API_KEY": true,
+		"AWS_ACCESS_KEY_ID": true, "AWS_SECRET_ACCESS_KEY": true,
+		"AWS_SESSION_TOKEN": true, "AWS_PROFILE": true,
+		"AWS_WEB_IDENTITY_TOKEN_FILE": true, "AWS_BEARER_TOKEN_BEDROCK": true,
+		"HTTP_PROXY": true, "HTTPS_PROXY": true, "ALL_PROXY": true,
+		"http_proxy": true, "https_proxy": true, "all_proxy": true,
 		"GEMINI_API_KEY": true, "GOOGLE_API_KEY": true,
 		"GOOGLE_APPLICATION_CREDENTIALS": true, "GOOGLE_GENAI_USE_VERTEXAI": true,
 		"XDG_CACHE_HOME": true, "XDG_DATA_HOME": true,
@@ -1246,7 +1256,7 @@ func recoveryIdentityAlive(item recoveryPlacement) (bool, error) {
 	}
 	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", item.PID.Int64))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || errors.Is(err, unix.ESRCH) {
 			return false, nil
 		}
 		return false, err
@@ -1464,6 +1474,47 @@ func recoveryHookCommitted(state, threadID, sessionID string) (bool, error) {
 		return false, err
 	}
 	return false, nil
+}
+
+func recoveryHookCounts(state, attemptID, bindingID, sessionID string) (map[string]int, error) {
+	db, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.Query("SELECT record_json FROM bee_thread_records WHERE kind='observation' AND source='bee' ORDER BY sequence")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var encoded string
+		if err := rows.Scan(&encoded); err != nil {
+			return nil, err
+		}
+		var record map[string]any
+		if json.Unmarshal([]byte(encoded), &record) != nil || record["attempt_id"] != attemptID {
+			continue
+		}
+		body, _ := record["body"].(map[string]any)
+		data, _ := body["data"].(map[string]any)
+		if data["event_name"] != "bee.harness.hook" {
+			continue
+		}
+		raw, _ := data["payload_json"].(string)
+		var payload map[string]any
+		if json.Unmarshal([]byte(raw), &payload) != nil || payload["binding_id"] != bindingID {
+			continue
+		}
+		fields, _ := payload["fields"].(map[string]any)
+		if fields["session_id"] != sessionID {
+			return nil, errors.New("provider hook changed conversation identity")
+		}
+		event, _ := payload["event"].(string)
+		counts[event]++
+	}
+	return counts, rows.Err()
 }
 
 func recoveryThreadFacts(state, threadID, actionID string) (int, int, error) {

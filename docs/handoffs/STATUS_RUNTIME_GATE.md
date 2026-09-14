@@ -9,8 +9,8 @@ historical evidence, not the current installation status.
 
 The September 14 selected-state candidate supersedes those pins for integration
 testing only. Runtime PR #747 head `6b40cb0fb9a0` supplies the optional executable
-default state resolver; its lint, native application, PostgreSQL and SQLite CDC
-checks pass, with Ubuntu and Windows still running at the time of this update.
+default state resolver; every hosted check passes, including lint, Ubuntu,
+Windows, native application, PostgreSQL registry, and SQLite/PostgreSQL CDC race.
 Builder PR #9 head `c1e6df6bf346` wires the resolver from the single launch
 component and passes local race/vet; hosted jobs are unable to start because of
 the repository account billing gate. Both PRs remain open and assigned to

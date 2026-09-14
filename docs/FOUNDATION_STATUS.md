@@ -8,10 +8,11 @@ shared root through one protected project binding. The executable refuses the
 binding while the old owner runs, preserves workspace identity and every existing
 migration-ledger row, gives a second project fresh state, retains the machine Hive
 authority and remains readable by the installed rollback binary. No databases
-are copied or deleted. Runtime hosted checks are mostly green with two platform
-jobs still running; builder hosted jobs are blocked before startup by account
-billing. The candidate is not installed globally and still awaits the post-cut
-Agent and promotion gates. See [the runtime gate](handoffs/STATUS_RUNTIME_GATE.md).
+are copied or deleted. Every runtime PR #747 hosted check is green; builder
+hosted jobs are blocked before startup by account billing, while its local
+race/vet proof passes. The candidate is not installed globally and still awaits
+the post-cut Agent and promotion gates. See
+[the runtime gate](handoffs/STATUS_RUNTIME_GATE.md).
 
 The September 13 Train A build is installed globally from production commit
 `414c03b` with executable SHA `4692e267`. The exact pinned `make check` passed

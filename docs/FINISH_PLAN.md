@@ -27,8 +27,10 @@ The installed Train A executable has SHA-256 `4692e267` and source `414c03b`.
 It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
-The integration branch is `feat/docker-harness-delivery-20260913`. Its committed
-implementation is `df31a70`; the finish-plan commit is `18e7e85`.
+The integration branch is `feat/docker-harness-delivery-20260913`; this execution
+queue was reconciled against committed checkpoint `1660b7d`. The worktree also
+contains an uncommitted Grok B1.1 candidate; those files are not a release source
+until the focused acceptance below passes and the result is committed.
 
 Completed on this branch:
 
@@ -42,12 +44,16 @@ Completed on this branch:
 - workspace host/client, display, Hive, thread, gateway, governance and
   authoring foundations exist, but their final public journeys do not.
 
-The uncommitted Grok B1.1 candidate is **not landable**. Its generalized setup
-delivery and optional-login behavior pass 888 Lua tests and fixture acceptance,
-but real Grok 1.0.30 owns and removes `.grok/managed_config.toml`. Bee cannot use
-that file for a durable snapshot of the user's configuration. The next change
-must remove the invalid destination and its documentation claims before B1.1 is
-committed. Global Bee must not be built from this dirty worktree.
+The uncommitted Grok B1.1 candidate now replaces the invalid provider-owned
+`managed_config.toml` path with a private composition base and structural TOML
+insertion. Review found two implementation defects that must be closed before
+acceptance: credential definition digests do not yet cover the normalized setup
+descriptor, and Grok currently receives the Bee MCP `--allow` argument twice.
+The placement proof must also show that only the base produced by the current
+credential initializer can be composed. It remains unlandable until those fixes,
+the Bee regression and real Grok 1.0.30 prove the generated private
+configuration while leaving global and project trees unchanged. Global Bee must
+not be built from this dirty worktree.
 
 ### Reusable runtime gates
 
@@ -63,10 +69,15 @@ in separate PRs assigned to `skhaz`:
 3. **Remote actor lifecycle.** Native mesh acceptance proves authenticated public
    enrollment/discovery, exact remote actor exit delivery, destination restart and
    same-name rejoin without a Bee remote-monitor subsystem.
+4. **Narrow structural TOML insertion.** Grok private configuration uses the
+   reusable `toml.insert(document, path, source)` operation. Runtime PR #746 is
+   assigned to `skhaz`; its candidate is pinned at `ce0c3e9d3b` with SHA-256
+   `8d36335263418328f8a5c2ca117ce2fe612d890b3d5c74062eb69cb15408b240`.
+   Bee does not expose general TOML parsing or carry a private copy of the codec.
 
-The next global promotion requires gate 1. Connected Bee requires gate 3. Hub
-admission and governed activation require gate 2. Candidate binaries may be used
-for acceptance, but Bee does not merge these runtime PRs.
+The next global promotion requires gates 1 and 4. Connected Bee requires gate 3.
+Hub admission and governed activation require gate 2. Candidate binaries may be
+used for acceptance, but Bee does not merge these runtime PRs.
 
 ## Definition of finished
 
@@ -105,6 +116,7 @@ flowchart LR
     A --> T[Folder, display, Hive]
     A --> H[Local Hub]
     S[State-dir gate] --> N
+    M[TOML insert gate] --> N
     S --> T
     N --> X[Docker parity]
     N --> P[Harness packages]
@@ -124,6 +136,30 @@ Folder/display/Hive work does not depend on finishing Agents. Local overlay work
 does not depend on cross-node distribution. Package distribution and overlay
 activation converge only at the final release.
 
+## Immediate execution queue
+
+This queue turns the parallel lanes into reviewable promotions. A later item may
+be implemented early when it does not share mutable files, but the global binary
+advances only at the named promotion.
+
+| Order | Lane | Work unit | Ends when |
+|---|---|---|---|
+| 1 | Agents | Close Grok B1.1: bind setup metadata into credential digests, emit one MCP permission, enforce initializer-owned composition bases, correct the stale docs and complete placement refusal tests | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
+| 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
+| 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
+| 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass remote viewport/rejoin |
+| 5 | Hub | Close local immutable install/update/remove and protected admission using released registry compare-and-set | One app and each harness can enter and leave the catalog without a core edit or authority leak |
+| 6 | Release | Promote **Connected Bee** | Folder/display/Hive and local Hub journeys pass together from a clean executable |
+| 7 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
+| 8 | Release | Promote **Docker Agents** | All four real providers pass native and Docker profile acceptance from one executable |
+| 9 | Distribution | Transfer admitted immutable app and harness packages through the existing mesh and Hub receipt model | A second Bee installs, launches, restarts and updates after the source disappears; credentials, grants, PIDs and mounts never transfer |
+| 10 | Overlays | Complete `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | Exact-revision apply, protected approval, stale refusal and rollback pass for user and Agent edits |
+| 11 | Release | Promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
+
+The integration owner keeps the critical path on orders 1 through 3 while the
+topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
+adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
+
 ## Work plan
 
 ### 0. Freeze state selection
@@ -142,16 +178,17 @@ store resolves beneath the selected root or its explicit override.
 This is the immediate lane and the shortest route to the next useful global
 build.
 
-1. Replace the invalid Grok managed-config design with the smallest
-   provider-supported private composition:
-   - first check the pinned runtime for a real TOML decoder/encoder;
-   - if present, structurally compose the approved user `config.toml` snapshot
-     with Bee's scoped `mcp_servers.bee` and hooks in private session state;
-   - define an exact refusal or host-selected rule for an existing
-     `mcp_servers.bee` collision;
-   - if no structural codec exists, use only a documented stable Grok source;
-     do not implement a broad hand-written TOML parser and do not write into the
-     project or global `.grok` tree.
+1. Complete the Grok private composition against runtime PR #746:
+   - snapshot the approved user `config.toml` once into private retained state;
+   - structurally insert only Bee's scoped `mcp_servers.bee` subtree;
+   - refuse an existing semantic `mcp_servers.bee` collision;
+   - bind the normalized setup descriptor into credential definition and
+     projection digests;
+   - compose only a base returned by the current authorized credential
+     initializer, and refuse before publication or child start otherwise;
+   - emit `--allow MCPTool(bee__*)` exactly once and keep Bee hooks in the
+     private `.grok/hooks/bee.json`;
+   - do not write into the project or global `.grok` tree.
 2. Prove real Grok clean start, authenticated start, cancel and restart. Hash the
    user's global and project trees before and after. The selected private config
    must remain present after Grok exits.

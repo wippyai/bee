@@ -202,6 +202,30 @@ Governed overlay implementation may start as soon as local Hub admission and
 released registry compare-and-set are stable; only overlay replication waits for
 Connected Bee.
 
+### Live execution board
+
+This board is the current handoff into the ordered queue. It names the next
+bounded result in each lane; detailed evidence remains in the implementation
+status and handoff documents.
+
+| Lane | State | Next bounded result | Dependency |
+|---|---|---|---|
+| Agents / integration | active | Make real Claude reach managed readiness, then prove source-file recall across owner restart; complete the equivalent Codex row and reconcile Grok close/restart fencing | released selected state root and structural TOML insertion only for global promotion |
+| State | external gate | Consume one released runtime state-root pin and prove the documented store-selection matrix from two folders and an explicit override | runtime PR #726 and its builder release |
+| Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
+| Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
+| Docker | queued behind Agent contract | Run one saved profile through native `exec.docker` with the same thread, hooks, MCP and recovery identity | qualified native provider row; no userspace or AppArmor dependency |
+| Packages / distribution | queued | Extract one app and one harness package, then deliver admitted immutable content to a second Bee | local Hub lifecycle and two-node topology |
+| Overlays | queued | Complete governed `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | local Hub admission and released registry compare-and-set |
+
+The first usable global update is deliberately smaller than finished Bee: it is
+the Native Agents checkpoint. Its remaining local work is Claude, Codex and Grok
+recovery qualification plus the clean promotion gate. The current real Claude
+acceptance opens its managed window but times out before the readiness marker;
+that launch/admission boundary is fixed before making any recovery claim. Agy's
+real cold-recovery row already passes. No Hive, Hub, Docker or overlay work is
+allowed to enlarge this integration diff.
+
 ### Current bounded unit
 
 Work stays on this unit until it either passes or produces one named external

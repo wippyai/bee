@@ -3,7 +3,7 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "291f5c6b708c80afe5da07f3223767573b4d183f",
+    "commit": "6b40cb0fb9a0c4249ac0891ae7be33adb455f0f1",
     "go": "1.27.0",
     "tags": [
       "fts5",
@@ -37,6 +37,10 @@
       {
         "path": "build/patches/runtime-terminal-input-cancellation.patch",
         "sha256": "8ae384769ded2c0600d6e39a953aaf42afd9d3228dcba6c18eb5ede6fc3d6b0c"
+      },
+      {
+        "path": "build/patches/runtime-toml-insert-candidate.patch",
+        "sha256": "4cfe05ca1f9a377398b9086d50b00bf4c5e96eaf75d3f2e2c89118001fab090d"
       }
     ]
   },
@@ -69,7 +73,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260913153139-79a1cd97446b",
+      "version": "v0.0.0-20260914120651-bd63538ef916",
       "package": "github.com/wippyai/bee/native/desktop",
       "factory": "Component",
       "private": true,
@@ -77,7 +81,7 @@
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260913153139-79a1cd97446b",
+      "version": "v0.0.0-20260914120651-bd63538ef916",
       "package": "github.com/wippyai/bee/native/docker",
       "factory": "ConfiguredComponent",
       "private": true

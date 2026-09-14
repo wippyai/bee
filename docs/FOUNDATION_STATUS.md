@@ -1,5 +1,18 @@
 # Foundation status
 
+The September 14 selected-state integration candidate now passes the missing
+old-global upgrade boundary. Runtime PR #747 (`6b40cb0fb9a0`), builder PR #9
+(`c1e6df6bf346`) and Bee native `bd63538ef916` compose a source-free executable
+that selects distinct canonical-folder state roots while preserving the existing
+shared root through one protected project binding. The executable refuses the
+binding while the old owner runs, preserves workspace identity and every existing
+migration-ledger row, gives a second project fresh state, retains the machine Hive
+authority and remains readable by the installed rollback binary. No databases
+are copied or deleted. Runtime hosted checks are mostly green with two platform
+jobs still running; builder hosted jobs are blocked before startup by account
+billing. The candidate is not installed globally and still awaits the post-cut
+Agent and promotion gates. See [the runtime gate](handoffs/STATUS_RUNTIME_GATE.md).
+
 The September 13 Train A build is installed globally from production commit
 `414c03b` with executable SHA `4692e267`. The exact pinned `make check` passed
 883 Lua tests plus storage, source/pack desktop, recovery and bundled-app

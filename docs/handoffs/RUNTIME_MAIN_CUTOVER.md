@@ -1,5 +1,23 @@
 # Runtime main cutover
 
+## September 14 selected-state candidate
+
+Runtime PR #747 head `6b40cb0fb9a0` is stacked on the embedded-baseline branch
+and adds the optional executable-selected default state directory. Builder PR #9
+head `c1e6df6bf346` carries it from the same native component that owns Launch.
+Both remain separate PRs assigned to `skhaz`; the builder's hosted jobs currently
+cannot start because of the account billing gate, while its local race and vet
+checks pass.
+
+Bee native `bd63538ef916` completes the application-side cutover. Fresh folders
+use `projects/<SHA256(canonical-folder)>`; an existing shared root is bound once
+to the first canonical project after the old owner stops. The receipt is atomic
+and strict, no SQLite file is copied or deleted, explicit `--state-dir` bypasses
+the resolver, and the old executable remains a valid rollback reader. The
+composed executable passes the current-global-to-candidate-to-current-global
+upgrade journey. It remains an integration candidate until the runtime stack is
+accepted and the Native Agents promotion gates pass.
+
 September 11 check: runtime main is
 `865a96dc5620f1435ff6b23939e5c89cd9a4a260`. The existing Bee toolchain
 uses `674b58a1a117fa79398f723c4311201cca8472e1`.

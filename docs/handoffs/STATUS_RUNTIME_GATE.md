@@ -7,6 +7,26 @@ acceptance record. The candidate runtime pin is `674b58a1a1`; the current native
 Bee pin is `a36ac552880d`. Earlier binary hashes and failed gates below are
 historical evidence, not the current installation status.
 
+The September 14 selected-state candidate supersedes those pins for integration
+testing only. Runtime PR #747 head `6b40cb0fb9a0` supplies the optional executable
+default state resolver; its lint, native application, PostgreSQL and SQLite CDC
+checks pass, with Ubuntu and Windows still running at the time of this update.
+Builder PR #9 head `c1e6df6bf346` wires the resolver from the single launch
+component and passes local race/vet; hosted jobs are unable to start because of
+the repository account billing gate. Both PRs remain open and assigned to
+`skhaz`.
+
+Bee native `bd63538ef916` selects hashed project roots and binds an existing
+legacy `~/.config/bee` root to one canonical project through a protected receipt.
+It copies and deletes no state, refuses while the legacy owner lock is held, and
+leaves `local-hive` machine-shared. Candidate
+`/tmp/bee-state-legacy/bee` has SHA-256 `9f760dde78b9b0c5cec19d0a9ccfa3c8b7a3de2f5974f3507ebbbc3c4e2a596d`.
+Its executable gate passes distinct folders, same-folder reuse, explicit state
+precedence, running-owner refusal, one-time legacy binding, unchanged workspace
+identity and migration history, isolated second-project state, shared Hive
+authority and rollback through the currently installed old binary. This is not
+a global installation or a released-runtime cutover.
+
 Runtime [PR #716](https://github.com/wippyai/runtime/pull/716) was closed without
 merge at the user's request on September 10. The Bee pin does not contain its
 `system/topology/remote` subsystem, and Bee has no dependency on it. Do not

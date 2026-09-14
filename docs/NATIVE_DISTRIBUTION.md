@@ -23,6 +23,15 @@ restart and local client reconnect must work with external networking disabled;
 see [offline acceptance](handoffs/OFFLINE_BOOT.md). Local loopback communication
 remains available for clients and scoped MCP endpoints.
 
+The selected-state candidate derives a project root from the canonical launch
+folder before runtime state opens. Explicit `--state-dir` still wins. On upgrade,
+one protected receipt binds the existing shared root to the first project after
+the old owner stops; it does not copy databases, and another project receives a
+new hashed root. Machine Hive enrollment remains under `~/.config/bee/local-hive`.
+The executable upgrade gate also reopens the bound state with the old binary to
+prove rollback. These semantics are candidate evidence until runtime PR #747 and
+builder PR #9 are accepted and the global promotion passes.
+
 ## Build and check
 
 ```sh

@@ -113,7 +113,7 @@ native-hive-catalog-check:
 
 .PHONY: native-project-nodes-check
 native-project-nodes-check:
-	python3 tests/native_project_nodes.py "$(BEE_BINARY)"
+	python3 tests/native_project_nodes.py "$(BEE_BINARY)" $(if $(PREVIOUS_BEE),"$(PREVIOUS_BEE)",)
 
 .PHONY: native-agent-selector-check
 native-agent-selector-check:

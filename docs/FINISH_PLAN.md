@@ -84,9 +84,10 @@ Native Agents also remains blocked from global promotion until the selected-stat
 runtime gate is released and consumed.
 
 The selected-state implementation now has a composed, executable candidate:
-runtime PR #747 (`f97b4d7`) adds the executable-selected default state directory,
+runtime PR #747 (`6b40cb0`) adds the executable-selected default state directory,
 builder PR #9 (`c1e6df6`) wires it from the single native launch component, and
-Bee native `93285e9` derives `~/.config/bee/projects/<canonical-folder-hash>`.
+Bee native `bd63538` derives `~/.config/bee/projects/<canonical-folder-hash>`
+and preserves a legacy shared root through one protected project binding.
 The candidate passes the two-folder, same-folder, explicit-client and explicit
 `--state-dir` executable checks. It is not promotable yet: the existing global
 state still lives at `~/.config/bee`, and the upgrade must preserve that state
@@ -120,9 +121,9 @@ Docker, Hub or overlay changes to this candidate.
 1. Make runtime PR #747 and builder PR #9 green and reviewable; consume the
    accepted heads through the manifest. Resolve structural TOML insertion and
    listener-address pins through their existing reusable runtime lanes.
-2. Freeze the store-selection matrix and implement the durable legacy-root
-   cutover. Prove it against a copy of the installed global state and retain the
-   old state for rollback.
+2. Retain the implemented direct legacy-root binding and its executable proof
+   against the installed global binary. It keeps the old root intact for rollback
+   and gives other projects hashed roots.
 3. Build from one clean integration commit. Run offline two-folder launch,
    explicit state override, same-folder reuse, multi-display/client, source and
    packed Agent selection, and cold/restart/crash recovery.
@@ -270,7 +271,7 @@ advances only at the named promotion.
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
 | 1 | Agents before runtime cut — complete | Retain pushed commit `1254ba4`, the passing Agy, Codex and Grok evidence, and Claude's exact external account refusal without claiming qualification | The pre-cut branch stays immutable and every provider keeps a named recovery target and exact evidence or one named external blocker |
-| 2 | Runtime integration — active | Finish the legacy-root cutover, then consume accepted selected-state-root, structural TOML insertion and OS-assigned listener primitives; reconcile the manifest and runtime handoff and apply one store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, legacy state maps or imports once, and upgrade preserves all owned data |
+| 2 | Runtime integration — active | Retain the proven legacy-root cutover, consume accepted selected-state-root, structural TOML insertion and OS-assigned listener primitives, then reconcile the manifest and runtime handoff | Offline launch from two folders isolates project state, explicit `--state-dir` wins, legacy state binds once, and upgrade plus rollback preserve all owned data |
 | 3 | Agents after runtime cut / release | Build one immutable candidate, rerun the complete four-provider matrix on the released runtime, then promote **Native Agents** | Full check, standalone, offline/restart/recovery, aggregate provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Local topology | Finish folder selection, durable displays, immediate offline presentation, F9 local topology and controller transfer on the selected state model | Same-folder clients get predictable displays, distinct folders get distinct project state, local boot never waits for Hive, and retained applications survive client replacement |
 | 5 | Package foundation | Prove the native runner/dataflow path, freeze accepted schemas and complete Plan 5's local package-extraction slice | One headless runner turn passes; host and standalone app/harness closures behave identically with no duplicate IDs |
@@ -303,7 +304,7 @@ status and handoff documents.
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
 | Agents / integration | waiting on state cut | Retain `1254ba4`; after the state cut, rerun the combined matrix and qualify Claude when account credit is available | accepted selected state root, structural TOML insertion and OS-assigned listener address for global promotion; funded Claude account for its row |
-| State | candidate proven; upgrade gate open | Finish the one-time legacy-root mapping/import, then consume released runtime PR #747 and builder PR #9 and rerun the store-selection matrix | clean hosted/runtime review for #747 and #9; preservation proof for existing `~/.config/bee` state |
+| State | executable candidate proven | Preserve native `bd63538` and the passing current-global upgrade gate, then consume released runtime PR #747 and builder PR #9 | accepted upstream stack; candidate already proves existing `~/.config/bee` binding, isolation and rollback |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
 | Docker | queued behind Agent contract | Run one saved profile through native `exec.docker` with the same thread, hooks, MCP and recovery identity | qualified native provider row; no userspace or AppArmor dependency |
@@ -326,14 +327,12 @@ allowed to enlarge this integration diff.
 The Agent pre-cut unit is complete at `1254ba4`; real Claude has one named
 external blocker. The current unit is only state selection and upgrade safety:
 
-1. reconcile runtime PR #747, builder PR #9, Bee native `93285e9` and the accepted
+1. reconcile runtime PR #747, builder PR #9, Bee native `bd63538` and the accepted
    TOML/listener primitives in the runtime handoff;
-2. freeze the store matrix and choose one durable legacy-root mapping or atomic
-   import rule;
-3. implement and prove that rule against a copy of the current global state,
-   including interruption, replay, rollback and a second project;
-4. commit the bounded state integration only after its executable gates pass;
-5. build the Native Agents candidate and rerun Claude when account credit becomes
+2. retain the selected direct binding and its current-global executable proof,
+   including busy-owner refusal, replay, rollback and a second project;
+3. commit the bounded state integration only after its executable gates pass;
+4. build the Native Agents candidate and rerun Claude when account credit becomes
    available, changing provider metadata only after both real turns qualify.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
@@ -398,17 +397,16 @@ empty merely because a project folder changes. Every database and retained
 resource declaration follows the matrix; no service derives an alternate private
 root.
 
-Treat migration as a mapping problem before treating it as a copy problem. The
+The selected cutover is a direct mapping rather than a copy. The
 machine-shared Hive enrollment remains at `~/.config/bee/local-hive`. The first
-project cutover must durably bind the legacy runtime root to exactly one canonical
-project/workspace, or perform an atomic checked import into that project's root.
-It must never copy live SQLite files, guess from the current directory on every
-boot, bind the legacy root to several projects, or mark completion before every
-owned store and registry history has been verified. A receipt records the
-canonical project, source root, destination or retained mapping, store inventory,
-and completion revision. Replaying the cutover returns the same result. A partial
-or conflicting cutover refuses and leaves the legacy root usable by the rollback
-binary.
+project cutover durably binds the legacy runtime root to exactly one canonical
+project after proving the old owner lock is free. It never copies live SQLite
+files, reselects from the current directory after the receipt exists, or binds
+the legacy root to several projects. The strict receipt records the canonical
+project, legacy root and mapping mode; the executable gate inventories every
+owned store and registry history. Replaying the cutover returns the same result.
+A malformed, busy or conflicting cutover refuses and leaves the legacy root
+usable by the rollback binary.
 
 The executable upgrade acceptance starts from a copy of the current global
 state and old global binary, creates representative profiles, conversations,

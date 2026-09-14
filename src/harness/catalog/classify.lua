@@ -16,7 +16,7 @@ type Digest = {entry: string, scope: "entry"}
 -- means the profile pins an adapter the snapshot measures; acceptance is a
 -- host record checked at admission, never inferred from a fixture name.
 type Permission = {mode: string, adapter_ref: string?, adapter_digest: string?, proof_fixture: string?, eligible: boolean}
-type Profile = {id: string, mode: string, protocol: string, protocol_revision: string, supported: boolean, permission: Permission}
+type Profile = {id: string, mode: string, protocol: string, protocol_revision: string, supported: boolean, private_home: boolean, permission: Permission}
 type Binding = {
     binding_id: string,
     driver_id: string,
@@ -115,7 +115,7 @@ function M.binding(input: Input): Binding
         for index, item in ipairs(decoded.profiles) do
             local ok = supported(item.mode, item.protocol)
             if ok then any_supported = true end
-            profiles[index] = {id = item.id, mode = item.mode, protocol = item.protocol, protocol_revision = item.protocol_revision, supported = ok,
+            profiles[index] = {id = item.id, mode = item.mode, protocol = item.protocol, protocol_revision = item.protocol_revision, supported = ok, private_home = item.isolation_env.private_home,
                 permission = {mode = item.permission_exchange.mode, adapter_ref = item.permission_exchange.adapter_ref, adapter_digest = item.permission_exchange.adapter_digest, proof_fixture = nil, eligible = false}}
         end
         if not any_supported then fail("no profile uses a supported protocol") end

@@ -14,6 +14,16 @@ entries:
   variable: claude
   default: ''
   readonly: true
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: config_home
+  kind: env.variable
+  storage: bee.driver.claude:environment
+  variable: CLAUDE_CONFIG_DIR
+  default: ''
+  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -185,7 +195,7 @@ entries:
         resume: {strategy: none, portable: false}
         isolation_env:
           variables: [HOME, CLAUDE_CONFIG_DIR]
-          private_home: true
+          private_home: false
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
@@ -207,7 +217,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: [claude_login]
+    credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 
 - name: credential_format

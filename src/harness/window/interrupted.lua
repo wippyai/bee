@@ -11,6 +11,8 @@ local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
 local M = {}
+type RawCall = (string, unknown) -> (unknown, string?)
+type Resume = (hooks.Config, checkpoint.Checkpoint?, integer) -> (hooks.State?, string?)
 local function placement_target(request: continuation.Request, method: string): string?
     return request.placement_methods[method]
 end
@@ -21,8 +23,8 @@ local function key(): string
     if not id then error(tostring(err)) end
     return id
 end
-local function call(target: string, request: unknown): ({[string]: unknown}?, string?)
-    local raw, err = funcs.call(target, request)
+local function call(raw_call: RawCall, target: string, request: unknown): ({[string]: unknown}?, string?)
+    local raw, err = raw_call(target, request)
     if err then return nil, tostring(err) end
     local reply = bounds.object(raw)
     if not reply or reply.ok ~= true then return nil, target .. " refused recovery" end
@@ -34,9 +36,25 @@ local function matches(attempt: {[string]: unknown}, request: continuation.Reque
     return attempt.attempt_id == request.previous_attempt_id and attempt.action_id == request.action_id
         and attempt.owner_id == request.owner_id and attempt.session_ref == request.session_ref
 end
-function M.recover(request: continuation.Request): (boolean, string?)
+function M.recover(request: continuation.Request, call_override: RawCall?, resume_override: Resume?): (boolean, string?)
+    local raw_call: RawCall
+    if call_override then
+        raw_call = call_override
+    else
+        raw_call = function(target: string, input: unknown): (unknown, string?)
+            local raw, err = funcs.call(target, input)
+            if err then return nil, tostring(err) end
+            return raw, nil
+        end
+    end
+    local resume: Resume
+    if resume_override then
+        resume = resume_override
+    else
+        resume = hooks.resume
+    end
     local previous, invalid = continuation.inspect_window(function(target: string, input: unknown): (unknown, string?)
-        local raw, err = funcs.call(target, input)
+        local raw, err = raw_call(target, input)
         if err then return nil, tostring(err) end
         return raw, nil
     end, request, false)
@@ -46,12 +64,12 @@ function M.recover(request: continuation.Request): (boolean, string?)
     -- or a copied checkpoint cannot establish process exit.
     local reconcile_target = placement_target(request, "reconcile")
     if not reconcile_target then return false, "placement binding has no reconcile method" end
-    local native, native_error = call(reconcile_target, {attempt_id = request.previous_attempt_id})
+    local native, native_error = call(raw_call, reconcile_target, {attempt_id = request.previous_attempt_id})
     if not native then return false, native_error end
     if not matches(native, request) or native.execution_state ~= "exited" then
         return false, "previous native process exit is not proven"
     end
-    local claimed, claim_error = call("bee.threads.carrier:claim", {thread_id = request.thread_id,
+    local claimed, claim_error = call(raw_call, "bee.threads.carrier:claim", {thread_id = request.thread_id,
         attempt_id = request.previous_attempt_id, idempotency_key = key()})
     if not claimed then return false, claim_error end
     if claimed.attempt_id ~= request.previous_attempt_id or claimed.action_id ~= request.action_id then
@@ -63,9 +81,9 @@ function M.recover(request: continuation.Request): (boolean, string?)
         return false, "invalid recovered checkpoint: " .. tostring(decode_error)
     end
     if not point.plan_digest then return false, "recovered checkpoint has no plan digest" end
-    local state, state_error = hooks.resume({thread_id = request.thread_id, attempt_id = request.previous_attempt_id,
-        epoch = epoch, binding_ref = request.binding_ref, binding_digest = request.binding_digest,
-        profile_id = request.profile_id, profile_digest = request.profile_digest,
+    local state, state_error = resume({thread_id = request.thread_id, attempt_id = request.previous_attempt_id,
+        epoch = epoch, binding_ref = previous.point.binding_ref, binding_digest = previous.point.binding_digest,
+        profile_id = previous.point.profile_id, profile_digest = previous.point.profile_digest,
         plan_digest = point.plan_digest, session_ref = request.session_ref,
         gateway_binding = previous.binding, hooks_enabled = true, drain_ms = BUDGET_MS, decoder = records.batch}, point, revision)
     if not state then return false, state_error end
@@ -94,7 +112,7 @@ function M.recover(request: continuation.Request): (boolean, string?)
     if not draining or not hooks.finished(state) or state.unresolved then
         return false, "interrupted window hooks are not fully drained"
     end
-    local settled, settle_error = call("bee.threads.service:receipt", {thread_id = request.thread_id,
+    local settled, settle_error = call(raw_call, "bee.threads.service:receipt", {thread_id = request.thread_id,
         idempotency_key = "launch:" .. request.previous_attempt_id .. ":window:recovered:" .. tostring(epoch),
         action_id = request.action_id, attempt_id = request.previous_attempt_id, carrier_epoch = epoch,
         receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {},

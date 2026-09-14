@@ -244,9 +244,13 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
+    if launch_policy.provider_ref and not profile.private_home then
+        return nil, "selected provider configuration requires a private-home profile"
+    end
     local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
     if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
     local resume_ref: string? = nil
+    local previous_private_home: boolean? = nil
     if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
         return nil, "reauthorization requires a saved window"
     end
@@ -254,15 +258,21 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
-        local resumed, resume_error = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
+        local resumed, resume_error, private_home = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
             owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
             binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry,
             placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods, reauthorize = request.reauthorize})
         if not resumed then return nil, resume_error end
         resume_ref = resumed
+        previous_private_home = private_home
         local dispatch = binding.methods.dispatch
         if not dispatch then return nil, "driver has no continuation method" end
         prepare_target = dispatch
+    end
+    local private_home = previous_private_home
+    if private_home == nil then private_home = profile.private_home end
+    if not private_home and not launch_policy.allow_host_home then
+        return nil, "launch policy does not authorize host HOME"
     end
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
@@ -358,7 +368,12 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     end
     local environment: {[string]: string} = {}
     for name, value in pairs(request.environment) do environment[name] = value end
-    for name, value in pairs(launch_policy.environment) do environment[name] = value end
+    for name, value in pairs(launch_policy.environment) do
+        -- A resumed session keeps the configuration root in which its provider
+        -- recorded the conversation. Fresh sessions still inherit every
+        -- host-selected override from the current profile.
+        if previous_private_home ~= true or launch_policy.host_environment[name] == nil then environment[name] = value end
+    end
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
@@ -375,6 +390,9 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
     }
+    if not private_home then
+        placement_request.environment_refs.HOME = "bee:machine_home"
+    end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
 end

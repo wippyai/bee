@@ -80,6 +80,13 @@ provider's normalizer against the captured fixtures under
 
 ## Codex authentication path
 
+The default managed window inherits the host user's HOME and normal Codex
+configuration/login. Bee adds its scoped MCP connection and hooks with session
+arguments; it does not select a separate named profile or write global config.
+A host-selected provider remains an explicit configuration path, described below.
+Generated files stay in Bee's private session directory.
+
+
 The Codex launch writes the brief to stdin and Codex reads it until end of
 file, so the launch declares `stdin_eof`: placement admits it only where
 the executor can close stdin (`close_stdin`, runtime PR 698), the runner

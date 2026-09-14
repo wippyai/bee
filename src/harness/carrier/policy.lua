@@ -34,6 +34,8 @@ type Policy = {
     retain_ms: integer,
     executables: {[string]: string},
     environment: {[string]: string},
+    host_environment: {[string]: string},
+    allow_host_home: boolean,
     -- gateway_tools names the gateway tools a launch under this policy is
     -- admitted to; empty means the launch has no gateway binding.
     gateway_tools: {string},
@@ -79,12 +81,40 @@ local function decode_executable_env(value: unknown, executables: {[string]: str
     end
     return nil
 end
+local function optional_environment(ref: string): (string?, string?)
+    -- A missing OS value is ordinary; a misspelled resource or denied read is not.
+    local entry, entry_error = registry.get(ref)
+    if entry_error or not entry or entry.kind ~= "env.variable" then return nil, "environment reference unavailable" end
+    local value, value_error = env.get(ref)
+    if value_error and value_error:kind() == errors.NOT_FOUND then return "", nil end
+    if value_error then return nil, tostring(value_error) end
+    return value, nil
+end
+-- Host-selected nonsecret environment references are measured with the policy.
+-- Empty defaults mean the user has not set an override; leave that variable absent.
+local function decode_environment_refs(value: unknown, environment: {[string]: string}, host_environment: {[string]: string}, resolve: EnvironmentResolver): string?
+    if value == nil then return nil end
+    local refs, refs_error = decode_map(value, "environment_refs")
+    if not refs then return refs_error end
+    for name, ref in pairs(refs) do
+        if not name:match("^[A-Za-z_][A-Za-z0-9_]*$") or not bounds.id(ref) then return "environment_refs must name environment variables and registry references" end
+        if environment[name] ~= nil then return "environment_refs." .. name .. " overlaps environment" end
+        local resolved, resolve_error = resolve(ref)
+        if type(resolved) ~= "string" or resolve_error then return "environment_refs." .. name .. " unavailable from " .. ref end
+        if #resolved > 4096 or resolved:find("%z") then return "environment_refs." .. name .. " has an invalid value" end
+        if resolved ~= "" then
+            environment[name] = resolved
+            host_environment[name] = resolved
+        end
+    end
+    return nil
+end
 function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -108,6 +138,13 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if executable_env_error then return nil, ref .. ": " .. executable_env_error end
     local environment, environment_error = decode_map(data.environment, "environment")
     if not environment then return nil, ref .. ": " .. tostring(environment_error) end
+    local host_environment: {[string]: string} = {}
+    local refs_error = decode_environment_refs(data.environment_refs, environment, host_environment, resolver or optional_environment)
+    if refs_error then return nil, ref .. ": " .. refs_error end
+    if data.allow_host_home ~= nil and type(data.allow_host_home) ~= "boolean" then
+        return nil, ref .. ": allow_host_home must be a boolean"
+    end
+    local allow_host_home = data.allow_host_home == true
     local fixture = data.fixture == true
     if observation == "eof_gated" and not fixture then return nil, ref .. ": eof_gated execution is permitted only in a fixture policy" end
     local exchange: PermissionExchange? = nil
@@ -129,6 +166,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local digest_input: {[string]: unknown} = {}
     for key, value in pairs(data) do digest_input[key] = value end
     digest_input.executables = executables
+    digest_input.environment = environment
     local encoded, encode_error = canonical.encode(digest_input)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -214,7 +252,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
     return decoded, nil
 end
 function M.load(ref: string): (Policy?, string?)

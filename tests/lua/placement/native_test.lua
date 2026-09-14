@@ -293,6 +293,7 @@ local function define_tests()
                     local request = retained_launch(OWNER, session_ref, "must-not-run")
                     request.required_cleanup = required
                     local prepared = attempt_of(call(OWNER, "prepare", request))
+                    test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, true)
                     local foreign = call("bee.test.other", "stop", {attempt_id = prepared.attempt_id})
                     test.is_false(foreign.ok)
                     local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
@@ -339,6 +340,81 @@ local function define_tests()
                 local successor = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "after-race")))
                 test.eq(attempt_of(call(OWNER, "stop", {attempt_id = successor.attempt_id})).cleanup_state, "complete")
             end
+        end)
+        test.it("inherits only the host-selected user home while keeping placement files private", function()
+            local unapproved = launch({"sh", "-c", "true"}, "direct_process")
+            unapproved.environment_refs = {HOME = "bee:machine_home"}
+            local refused = call(OWNER, "prepare", unapproved)
+            test.is_false(refused.ok)
+            test.eq(refused.error and refused.error.code, "DENIED")
+            test.eq(refused.error and refused.error.message, "launch policy does not authorize host HOME")
+            local refused_db = assert(store.open())
+            test.is_nil(store.row(refused_db, tostring(unapproved.attempt_id)))
+            refused_db:release()
+            local original = registry.get("bee:machine_home")
+            if not original then error("machine home binding is missing") end
+            local changed = registry.get("bee:machine_home")
+            if not changed then error("machine home binding is missing") end
+            changed.data = {storage = "bee.placement.native:sentinel_storage",
+                variable = "BEE_TEST_INHERITED_HOME", default = "/tmp", readonly = true}
+            local changes = registry.snapshot():changes()
+            changes:update(changed)
+            local applied, apply_error = changes:apply()
+            if not applied then error(tostring(apply_error)) end
+            local ok, err = pcall(function()
+                local request = retained_launch(OWNER, fresh("inherited-session"), "unused")
+                request.launch.argv = {"-c", 'test "$HOME" = /tmp'}
+                request.environment_refs = {HOME = "bee:machine_home"}
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                test.eq(value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).private_home, false)
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                test.is_true(wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+                end, 5000))
+                local finished = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt)
+                test.eq(finished.exit and finished.exit.code, 0)
+                local db = assert(store.open())
+                local row = assert(store.row(db, prepared.attempt_id))
+                test.is_true(type(row.home_key) == "string" and row.home_key ~= "")
+                db:release()
+                test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
+            end)
+            local restore = registry.snapshot():changes()
+            restore:update(original)
+            local restored, restore_error = restore:apply()
+            if not restored then error(tostring(restore_error)) end
+            if not ok then error(tostring(err)) end
+        end)
+        test.it("rechecks host HOME authorization before materialization", function()
+            local policy_entry = assert(registry.get(POLICY))
+            local original_policy = policy_entry.data
+            local revoked: {[string]: unknown} = {}
+            for key, item in pairs(original_policy :: {[string]: unknown}) do revoked[key] = item end
+            revoked.allow_host_home = false
+            local request = retained_launch(OWNER, fresh("revoked-home-session"), "must-not-run")
+            request.environment_refs = {HOME = "bee:machine_home"}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local ok, failure = pcall(function()
+                policy_entry.data = revoked
+                local changes = registry.snapshot():changes()
+                changes:update(policy_entry)
+                local applied, apply_error = changes:apply()
+                if not applied then error(tostring(apply_error)) end
+                local refused = call(OWNER, "start", {attempt_id = prepared.attempt_id})
+                test.is_false(refused.ok)
+                test.eq(refused.error and refused.error.code, "DENIED")
+                test.eq(refused.error and refused.error.message, "launch policy does not authorize host HOME")
+                local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt
+                test.eq(current.execution_state, "intended")
+            end)
+            policy_entry.data = original_policy
+            local restoration = registry.snapshot():changes()
+            restoration:update(policy_entry)
+            local restored, restore_error = restoration:apply()
+            if not restored then error(tostring(restore_error)) end
+            local stopped = attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id}))
+            test.eq(stopped.cleanup_state, "complete")
+            if not ok then error(tostring(failure)) end
         end)
         test.it("refuses native and gateway environment collisions before intent", function()
             for _, kind in ipairs({"home", "home_ref", "gateway", "hook", "shared_token", "gateway_home"}) do

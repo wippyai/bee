@@ -17,6 +17,9 @@ session directories live under a placement-owned root.
    A host policy selecting another placement is refused before the native
    capability probe or intent, even when a direct caller omits its placement
    hint. Calling the native operation does not override host selection.
+   A request for `bee:machine_home` is admitted only when the pinned host launch
+   policy explicitly sets `allow_host_home: true`; profile metadata cannot grant
+   that filesystem authority.
    A retained session home has one holder per owner/session pair: another
    attempt is refused until the predecessor is exited and its existing cleanup
    operation has proved the required scope gone and recorded `complete`.

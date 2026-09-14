@@ -111,6 +111,20 @@ function M.request(row: Row): (types.LaunchRequest?, string?)
     retained.delivery = delivery
     return retained, nil
 end
+-- Derive the retained session's HOME choice from the original admitted
+-- request. Callers receive only the choice, never either physical path.
+function M.private_home(row: Row): (boolean?, string?)
+    if text(row.session_ref) == nil then return nil, nil end
+    local request, request_error = M.request(row)
+    if not request then return nil, request_error end
+    if request.session_ref ~= text(row.session_ref) or not request.launch.home_ref then
+        return nil, "retained placement request has another session home"
+    end
+    local selected = request.environment_refs.HOME
+    if selected == nil then return true, nil end
+    if selected == "bee:machine_home" then return false, nil end
+    return nil, "retained placement request has an unsupported HOME selection"
+end
 local function rollback(tx: sql.Transaction)
     tx:rollback()
 end

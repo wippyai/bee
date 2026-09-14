@@ -543,7 +543,7 @@ local function define_tests()
             apply(binding)
             if not ok then error(tostring(failure)) end
         end)
-        test.it("refuses an unconfigured provider before placement records a native attempt", function()
+        test.it("admits inherited Codex configuration and refuses a conflicting private provider", function()
             local definition_entry = assert(registry.get(DEFINITION))
             local policy_entry = assert(registry.get(POLICY))
             local original_definition, original_policy = definition_entry.data, policy_entry.data
@@ -567,19 +567,46 @@ local function define_tests()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure missing provider: " .. tostring(apply_error)) end
+                local unapproved = value(call("bee.harness.launch:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = ""})) :: admission.Admitted
+                local refused_plan, refusal = machine.plan(carrier_io(), unapproved.request)
+                test.is_nil(refused_plan)
+                test.eq(refusal, "launch policy does not authorize host HOME")
+                local refused_db = assert(placement_store.open())
+                test.is_nil(placement_store.row(refused_db, unapproved.attempt_id))
+                refused_db:release()
+                changed_policy.allow_host_home = true
+                policy_entry.data = changed_policy
+                apply(policy_entry)
                 local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""})) :: admission.Admitted
                 local io = carrier_io()
                 local planned, plan_error = machine.plan(io, admitted.request)
                 if not planned then error(tostring(plan_error)) end
                 local prepared, prepare_error = machine.prepare_attempt(io, planned)
-                test.is_nil(prepared)
-                test.is_true(tostring(prepare_error):find("configuration needs the selected provider", 1, true) ~= nil)
+                if not prepared then error(tostring(prepare_error)) end
                 local db = assert(placement_store.open())
                 local row, row_error = placement_store.row(db, admitted.attempt_id)
                 db:release()
                 test.is_nil(row_error)
-                test.is_nil(row)
+                if not row then error("inherited configuration attempt missing") end
+                test.eq(row.execution_state, "intended")
+                local stored, stored_error = placement_store.request(row)
+                if not stored then error(tostring(stored_error)) end
+                if not stored.delivery then error("configuration delivery missing") end
+                test.eq(#stored.delivery.files, 0)
+                changed_policy.provider_ref = "bee.harness.catalog:codex_fixture_provider"
+                policy_entry.data = changed_policy
+                apply(policy_entry)
+                local conflicted = value(call("bee.harness.launch:admit", {request_id = fresh("provider-home-conflict"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = ""})) :: admission.Admitted
+                local refused, refusal = machine.plan(io, conflicted.request)
+                test.is_nil(refused)
+                test.eq(refusal, "selected provider configuration requires a private-home profile")
+                local check_db = assert(placement_store.open())
+                local unintended = placement_store.row(check_db, conflicted.attempt_id)
+                check_db:release()
+                test.is_nil(unintended)
             end)
             definition_entry.data = original_definition
             policy_entry.data = original_policy
@@ -797,6 +824,7 @@ local function define_tests()
             local window_policy: {[string]: unknown} = {}
             for key, item in pairs(original_policy :: {[string]: unknown}) do window_policy[key] = item end
             window_policy.prepare_options = {permission_mode = "default"}
+            window_policy.allow_host_home = true
             policy_entry.data = window_policy
             apply(policy_entry)
             local origin = fresh("window-origin")

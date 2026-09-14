@@ -53,7 +53,11 @@ type desktop struct {
 	readDone <-chan struct{}
 }
 
-func newDesktop(binary, project, state, home string) (*desktop, error) {
+func newDesktop(binary, project, state, home string, extraEnv ...string) (*desktop, error) {
+	return newDesktopWithArguments(binary, project, state, home, []string{"agent"}, extraEnv...)
+}
+
+func newDesktopWithArguments(binary, project, state, home string, arguments []string, extraEnv ...string) (*desktop, error) {
 	if err := os.MkdirAll(state, 0700); err != nil {
 		return nil, fmt.Errorf("create state: %w", err)
 	}
@@ -67,9 +71,9 @@ func newDesktop(binary, project, state, home string) (*desktop, error) {
 		"PATH="+filepath.Join(project, "bin")+":/usr/bin:/bin",
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 	)
-	cmd := exec.Command(binary, "--state-dir", state, "agent")
+	cmd := exec.Command(binary, append([]string{"--state-dir", state}, arguments...)...)
 	cmd.Dir = project
-	cmd.Env = env
+	cmd.Env = append(env, extraEnv...)
 	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 30, Cols: 100})
 	if err != nil {
 		return nil, fmt.Errorf("start Bee PTY: %w", err)
@@ -92,6 +96,7 @@ func newDesktop(binary, project, state, home string) (*desktop, error) {
 func filteredEnvironment() []string {
 	remove := map[string]bool{
 		"BEE_RUNTIME": true, "USER": true,
+		"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "GROK_HOME": true,
 		"BEE_WORKSPACE_DB": true, "BEE_THREADS_DB": true, "BEE_APPROVALS_DB": true,
 		"BEE_RESOURCES_DB": true, "BEE_CREDENTIALS_DB": true, "BEE_PLACEMENT_DB": true,
 		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true,
@@ -1408,7 +1413,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 		return err
 	}
 	firstReport, secondReport := filepath.Join(root, "first-launch"), filepath.Join(root, "second-launch")
-	script := "#!/bin/sh\nset -eu\nphase=first\nif [ -f \"$HOME/bee-session-proof\" ]; then phase=second; fi\nif [ \"$phase\" = second ]; then [ \"$(cat \"$HOME/bee-session-proof\")\" = retained ]; fi\nreport=" + shellQuote(firstReport) + "\nif [ \"$phase\" = second ]; then report=" + shellQuote(secondReport) + "; fi\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > \"$report\"\nprintf '%s\\n' \"$@\" >> \"$report\"\nif [ \"$phase\" = first ]; then " + shellQuote(helper) + " hook-probe \"$@\"; fi\nprintf 'BEE_RECOVERY_AGENT_READY_%s\\n' \"$phase\"\nprintf retained > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	script := "#!/bin/sh\nset -eu\nphase=first\nif [ -f \"$HOME/bee-session-proof\" ]; then phase=second; fi\nif [ \"$phase\" = second ]; then [ \"$(cat \"$HOME/bee-session-proof\")\" = retained ]; [ -z \"${CLAUDE_CONFIG_DIR-}\" ]; fi\nreport=" + shellQuote(firstReport) + "\nif [ \"$phase\" = second ]; then report=" + shellQuote(secondReport) + "; fi\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > \"$report\"\nprintf '%s\\n' \"$@\" >> \"$report\"\nif [ \"$phase\" = first ]; then " + shellQuote(helper) + " hook-probe \"$@\"; fi\nprintf 'BEE_RECOVERY_AGENT_READY_%s\\n' \"$phase\"\nprintf retained > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
 	if err := os.WriteFile(filepath.Join(project, "bin", "claude"), []byte(script), 0700); err != nil {
 		return err
 	}
@@ -1581,7 +1586,18 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 		}
 		fmt.Fprintf(os.Stderr, "native Agent process alive after owner SIGKILL: %t\n", alive)
 	}
-	second, err = newDesktop(binary, project, state, home)
+	// The current profile may inherit a machine-level configuration override,
+	// but an older private session must stay in the configuration root where
+	// its provider recorded the conversation.
+	var secondEnvironment []string
+	if firstBinary != binary {
+		secondConfig := filepath.Join(root, "new-machine-claude-config")
+		if err = os.MkdirAll(secondConfig, 0700); err != nil {
+			return err
+		}
+		secondEnvironment = []string{"CLAUDE_CONFIG_DIR=" + secondConfig}
+	}
+	second, err = newDesktopWithArguments(binary, project, state, home, nil, secondEnvironment...)
 	if err != nil {
 		return err
 	}
@@ -1598,23 +1614,6 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 		}
 		if len(rows) != 1 || rows[0].AttemptID != old.AttemptID {
 			return errors.New("changed-plan review created a replacement attempt before confirmation")
-		}
-		// `bee agent` also opens a new picker. Focus the restored window by
-		// its visible review heading before confirming its plan.
-		frame, _, _ := second.snapshot()
-		focused := false
-		for row, line := range strings.Split(frame, "\n") {
-			if column := strings.Index(line, "Review Agent changes"); column >= 0 {
-				x, y := utf8.RuneCountInString(line[:column])+1, row+1
-				if err = second.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y, x, y)); err != nil {
-					return err
-				}
-				focused = true
-				break
-			}
-		}
-		if !focused {
-			return errors.New("changed-plan review heading is not visible for confirmation")
 		}
 		if err = second.send("\r"); err != nil {
 			return err
@@ -1764,6 +1763,31 @@ type mcpProbeReport struct {
 // headers; Claude and Codex resolve their declared environment references.
 // Credential bytes are never written to reports or diagnostics.
 func mcpProbeConfig(provider string, args []string) (string, string, bool) {
+	if provider == "codex" {
+		for index, arg := range args {
+			if (arg != "-c" && arg != "--config") || index+1 >= len(args) {
+				continue
+			}
+			const prefix = "mcp_servers.bee={url="
+			value := args[index+1]
+			if !strings.HasPrefix(value, prefix) {
+				continue
+			}
+			parts := strings.TrimPrefix(value, prefix)
+			urlValue, tokenValue, found := strings.Cut(parts, ",bearer_token_env_var=")
+			if !found || !strings.HasSuffix(tokenValue, "}") {
+				return "", "", false
+			}
+			endpoint, endpointErr := strconv.Unquote(urlValue)
+			tokenName, tokenErr := strconv.Unquote(strings.TrimSuffix(tokenValue, "}"))
+			if endpointErr != nil || tokenErr != nil || endpoint == "" || tokenName == "" {
+				return "", "", false
+			}
+			token := os.Getenv(tokenName)
+			return endpoint, token, token != ""
+		}
+		return "", "", false
+	}
 	if provider == "agy" {
 		config, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gemini", "config", "mcp_config.json"))
 		if err != nil {
@@ -2394,7 +2418,7 @@ func runHookProbe(args []string) int {
 	return 0
 }
 
-func managedLaunch(binary, provider string, machineLogin bool) (result error) {
+func managedLaunch(binary, provider string, machineLogin bool, customConfig ...bool) (result error) {
 	root, err := os.MkdirTemp("", "bee-project-launch-proof-")
 	if err != nil {
 		return err
@@ -2430,14 +2454,25 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		providerDirectory, loginFile = ".grok", "auth.json"
 		selection, label = "\x1b[B\x1b[B\x1b[B\r", "Grok"
 	}
+	loginRoot := filepath.Join(home, providerDirectory)
+	var extraEnv []string
+	configVariable := ""
+	if len(customConfig) > 0 && customConfig[0] {
+		configVariable = "CODEX_HOME"
+		if provider == "claude" {
+			configVariable = "CLAUDE_CONFIG_DIR"
+		}
+		loginRoot = filepath.Join(root, "custom-agent-config")
+		extraEnv = []string{configVariable + "=" + loginRoot}
+	}
 	if machineLogin {
-		if err := os.MkdirAll(filepath.Join(home, providerDirectory), 0700); err != nil {
+		if err := os.MkdirAll(loginRoot, 0700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(home, providerDirectory, loginFile), []byte(fixtureLogin), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(loginRoot, loginFile), []byte(fixtureLogin), 0600); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(home, providerDirectory, "machine-only-state"), []byte("not projected"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(loginRoot, "machine-only-state"), []byte("not projected"), 0600); err != nil {
 			return err
 		}
 		if provider == "agy" {
@@ -2457,6 +2492,9 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	}
 	script := "#!/bin/sh\nprintf '%s\\n%s\\n' \"$PWD\" \"$HOME\" > " + shellQuote(report) +
 		"\nif ! " + shellQuote(helper) + " mcp-probe " + shellQuote(provider) + " " + shellQuote(mcpReport) + " \"$@\"; then exit 1; fi\nprintf 'BEE_MANAGED_AGENT_READY\\n'\nprintf 'retained' > \"$HOME/bee-session-proof\"\nIFS= read -r answer\n"
+	if configVariable != "" {
+		script = strings.Replace(script, "\nif ! ", "\nprintf '%s\\n' \"$"+configVariable+"\" >> "+shellQuote(report)+"\nif ! ", 1)
+	}
 	if provider == "agy" || provider == "grok" {
 		probe := shellQuote(helper) + " command-hook-probe " + shellQuote(provider)
 		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", probe+" PreToolUse || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
@@ -2465,7 +2503,7 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
 	}
-	ui, err := newDesktop(binary, project, state, home)
+	ui, err := newDesktop(binary, project, state, home, extraEnv...)
 	if err != nil {
 		return err
 	}
@@ -2528,7 +2566,11 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 		return fmt.Errorf("read managed launch paths: %w", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(paths)), "\n")
-	if len(lines) != 2 {
+	expectedPaths := 2
+	if configVariable != "" {
+		expectedPaths = 3
+	}
+	if len(lines) != expectedPaths {
 		return fmt.Errorf("managed launch wrote malformed paths: %q", string(paths))
 	}
 	projectPath, err := filepath.EvalSymlinks(project)
@@ -2545,6 +2587,13 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	}
 	if childHome == projectPath {
 		return errors.New("managed agent HOME was the project directory")
+	}
+	inheritsHome := provider == "claude" || provider == "codex"
+	if inheritsHome {
+		expectedHome, err := filepath.EvalSymlinks(home)
+		if err != nil || childHome != expectedHome {
+			return errors.New("managed agent did not inherit the global user home")
+		}
 	}
 	if provider == "agy" {
 		data, err := os.ReadFile(filepath.Join(childHome, ".gemini", "config", "mcp_config.json"))
@@ -2577,7 +2626,14 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 			return errors.New("Agy MCP credential reached a recorded template or receipt")
 		}
 	}
-	login, loginErr := os.ReadFile(filepath.Join(childHome, providerDirectory, loginFile))
+	childLoginRoot := filepath.Join(childHome, providerDirectory)
+	if configVariable != "" {
+		if lines[2] != loginRoot {
+			return errors.New("managed agent did not inherit its custom configuration directory")
+		}
+		childLoginRoot = lines[2]
+	}
+	login, loginErr := os.ReadFile(filepath.Join(childLoginRoot, loginFile))
 	if provider == "agy" {
 		setup, setupErr := os.ReadFile(filepath.Join(childHome, providerDirectory, "cache", "onboarding.json"))
 		if machineLogin {
@@ -2590,14 +2646,18 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 	}
 	if machineLogin {
 		if loginErr != nil || string(login) != fixtureLogin {
-			return errors.New("machine login was not seeded into private home")
+			return errors.New("machine login was not available at the selected agent configuration directory")
 		}
-		if _, err := os.Stat(filepath.Join(childHome, providerDirectory, "machine-only-state")); !os.IsNotExist(err) {
+		_, stateErr := os.Stat(filepath.Join(childLoginRoot, "machine-only-state"))
+		if inheritsHome && stateErr != nil {
+			return errors.New("global agent state was not inherited")
+		}
+		if !inheritsHome && !os.IsNotExist(stateErr) {
 			return errors.New("unrelated machine state appeared in private home")
 		}
-		info, err := os.Lstat(filepath.Join(childHome, providerDirectory, loginFile))
+		info, err := os.Lstat(filepath.Join(childLoginRoot, loginFile))
 		if err != nil || !info.Mode().IsRegular() {
-			return errors.New("private login is not an independent regular file")
+			return errors.New("selected login is not a regular file")
 		}
 	} else {
 		if !os.IsNotExist(loginErr) {
@@ -2607,8 +2667,12 @@ func managedLaunch(binary, provider string, machineLogin bool) (result error) {
 			return errors.New("launch created a machine credential directory")
 		}
 	}
-	if _, err := os.Stat(filepath.Join(childHome, ".bee-retained-login-ready.json")); err != nil {
-		return fmt.Errorf("login source binding missing: %w", err)
+	_, identityErr := os.Stat(filepath.Join(childHome, ".bee-retained-login-ready.json"))
+	if inheritsHome && !os.IsNotExist(identityErr) {
+		return errors.New("Bee wrote retained-login metadata into global home")
+	}
+	if !inheritsHome && identityErr != nil {
+		return fmt.Errorf("login source binding missing: %w", identityErr)
 	}
 	marker := filepath.Join(childHome, "bee-session-proof")
 	data, err := os.ReadFile(marker)
@@ -2679,6 +2743,12 @@ func main() {
 		}
 		for _, present := range []bool{false, true} {
 			if err := managedLaunch(binary, provider, present); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+		if provider == "claude" || provider == "codex" {
+			if err := managedLaunch(binary, provider, true, true); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}

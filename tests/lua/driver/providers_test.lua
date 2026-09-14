@@ -165,7 +165,7 @@ local function define_tests()
             test.is_nil(codex_window.stdin); test.is_nil(codex_window.stdin_eof)
             local resume, resume_error = codex_launch.decode({profile_id = "window", brief = "--help", sandbox = "read-only", resume_ref = "native-session", gateway_hooks = {"SessionStart"}})
             if not resume then error(tostring(resume_error)) end
-            test.eq(quote.line(codex_launch.specification(resume).argv), "--profile bee --sandbox read-only resume native-session -- --help")
+            test.eq(quote.line(codex_launch.specification(resume).argv), "--sandbox read-only resume native-session -- --help")
             claude_request.brief = "--help"
             claude_request.resume_ref = "native-session"
             test.eq(quote.line(claude_launch.specification(claude_request).argv), "--permission-mode default --model sonnet --effort high -r native-session -- --help")
@@ -206,7 +206,7 @@ local function define_tests()
             test.eq(launch.stdin, "hello")
             test.eq(quote.line(launch.argv), "exec --json --skip-git-repo-check --sandbox workspace-write -")
             local resumed = codex_launch.specification({profile_id = "batch", brief = "next", sandbox = "read-only", resume_ref = "sess-1", gateway_hooks = true})
-            test.eq(quote.line(resumed.argv), "--profile bee --sandbox read-only exec resume sess-1 --json --skip-git-repo-check -")
+            test.eq(quote.line(resumed.argv), "--sandbox read-only exec resume sess-1 --json --skip-git-repo-check -")
             local _, sandbox_error = codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "danger-full-access"})
             test.eq(sandbox_error, "sandbox is not one Bee admits")
             local reply = funcs.call("bee.driver.codex:normalize", {index = 1, envelope = {type = "thread.started", thread_id = "t1"}})

@@ -20,7 +20,8 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     if not result.ok then return false, result.message end
     return true, nil
 end
--- Native placement owns HOME; an admitted gateway owns its token names.
+-- Native placement selects either its private home or the host's user home.
+-- Arbitrary HOME values remain refused; an admitted gateway owns its tokens.
 -- Check before intent and again when materializing a retained request.
 function M.environment_conflict(request: types.LaunchRequest): string?
     local owners: {[string]: string} = {HOME = "native placement"}
@@ -34,7 +35,9 @@ function M.environment_conflict(request: types.LaunchRequest): string?
         end
     end
     for name, owner in pairs(owners) do
-        if request.environment[name] ~= nil or request.environment_refs[name] ~= nil then
+        local inherited_home = name == "HOME" and request.environment[name] == nil
+            and request.environment_refs[name] == "bee:machine_home"
+        if not inherited_home and (request.environment[name] ~= nil or request.environment_refs[name] ~= nil) then
             return "environment destination " .. name .. " is owned by " .. owner
         end
     end
@@ -48,7 +51,14 @@ local function resolve_environment(request: types.LaunchRequest, home: string): 
         if err or type(value) ~= "string" then return nil, "environment " .. name .. " unavailable from " .. ref end
         values[name] = value
     end
-    values.HOME = home
+    if request.environment_refs.HOME == "bee:machine_home" then
+        local selected = values.HOME
+        if not selected or selected:sub(1, 1) ~= "/" or selected:find("[%z\r\n]") then
+            return nil, "host user home is unavailable"
+        end
+    else
+        values.HOME = home
+    end
     return values, nil
 end
 local function resolve_work_dir(request: types.LaunchRequest, home: string): (string?, string?)

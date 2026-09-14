@@ -2,6 +2,41 @@
 
 ## Current checkpoint — September 13
 
+**Agent configuration inheritance, candidate only:** default managed Claude and
+Codex launches use the host user's HOME and honor `CLAUDE_CONFIG_DIR` / `CODEX_HOME`
+when set. The host resolves only its declared environment references; unset
+values are omitted, denied reads fail, and resolved values enter the policy
+digest. These default launches request no login-file copies. Bee configuration
+and cleanup stay in private session storage. Claude keeps normal settings/MCP
+sources; Codex receives session flags without selecting a separate named profile.
+
+Native launch fixtures pass for both harnesses with absent login, ordinary login,
+and a custom configuration directory, including scoped MCP calls and shutdown.
+The Claude owner-restart fixture preserves application, conversation and HOME
+while replacing the attempt and gateway. The real Codex CLI accepts all five
+production-generated hooks as trusted, retains an existing user hook, and calls
+SessionStart through authenticated MCP without changing its fixture config. A
+separate real-CLI probe preserves both global and session hook trust. These
+probes use isolated settings and a dummy provider, not real-provider conversations.
+Host HOME inheritance now requires an explicit `allow_host_home` decision in the
+host-selected launch policy. The decision changes the measured policy digest;
+carrier planning, native preparation and pre-materialization authorization all
+enforce it. Direct native requests and policy revocation before start create no
+child, while the approved Claude/Codex policies pass. Strict lint and all 883
+Lua tests pass, as do the rebuilt candidate's native selector, offline boot,
+Codex hook/MCP, installed-upgrade recovery, same-build recovery and pack
+exclusion checks. The final exact-source repository regression is pending;
+global installation is unchanged.
+Agy/Grok inheritance, Docker profile delivery and real-provider cold recovery
+remain unfinished. Explicit Codex developer-instruction overrides are not yet
+merged with an existing global developer-instructions value.
+
+**Native Docker PTY proof:** `make docker-exec-pty-check` runs a registered
+`exec.docker` resource through terminal input/output, resize, close and container
+removal. Discovery is limited to the fixture's unique bind mount and image.
+This proves the native terminal path without the userspace Docker component;
+it does not complete managed Docker placement or restart recovery.
+
 **Changed-plan Agent recovery, verified source:** restore resolves the current
 plan before admission. A changed plan stays paused for explicit review; Enter
 submits the exact current digest, and a stale review never retries automatically.

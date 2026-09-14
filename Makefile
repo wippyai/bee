@@ -110,6 +110,11 @@ docker-exec-pty-check:
 	test -n "$(DOCKER_IMAGE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_exec_pty.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_exec_pty.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -image "$(DOCKER_IMAGE)"
+.PHONY: codex-native-hooks-check
+codex-native-hooks-check:
+	test -n "$(CODEX)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_codex_hooks.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 .PHONY: docker-sandbox-check
 docker-sandbox-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go

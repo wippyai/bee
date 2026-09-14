@@ -950,6 +950,7 @@ entries:
   meta: {type: test, suite: bee}
   security:
     policies: [bee:carrier_policy]
+  modules: [channel, time, uuid]
   imports:
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
@@ -960,6 +961,8 @@ entries:
     claude: bee.driver.claude:launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
+    hooks: bee.harness.window:hooks
+    interrupted: bee.harness.window:interrupted
 - name: scope_probe_allow
   kind: security.policy
   meta: {type: test_support}

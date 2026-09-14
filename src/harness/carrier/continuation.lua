@@ -66,7 +66,7 @@ end
 -- Explicit interactive resume is not another successful structured turn.
 -- The old process must be gone; its committed observations identify the
 -- conversation, while the new attempt supplies fresh admission and grants.
-type PreviousWindow = {stored: {[string]: unknown}, point: checkpoint.Checkpoint, attempt: {[string]: unknown}, binding: string}
+type PreviousWindow = {stored: {[string]: unknown}, point: checkpoint.Checkpoint, attempt: {[string]: unknown}, binding: string, private_home: boolean}
 function M.inspect_window(call: Call, request: Request, ended: boolean): (PreviousWindow?, string?)
     local missing_placement = placement_error(request)
     if missing_placement then return nil, missing_placement end
@@ -84,8 +84,11 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if (ended and stored.attempt_state ~= "ended") or stored.open_turn_id ~= nil then return nil, "previous window attempt has not ended" end
     local point, point_error = checkpoint.decode(stored.checkpoint)
     if not point then return nil, "previous checkpoint: " .. tostring(point_error) end
-    if point.binding_ref ~= request.binding_ref or point.binding_digest ~= request.binding_digest or point.profile_id ~= request.profile_id or point.profile_digest ~= request.profile_digest then
+    if point.binding_ref ~= request.binding_ref or point.profile_id ~= request.profile_id then
         return nil, "previous attempt used another driver or profile"
+    end
+    if request.reauthorize ~= true and (point.binding_digest ~= request.binding_digest or point.profile_digest ~= request.profile_digest) then
+        return nil, "previous attempt used another driver or profile implementation"
     end
     if point.retained_session_ref ~= request.session_ref then return nil, "previous attempt did not use this retained session" end
     local binding = point.gateway_binding
@@ -102,10 +105,11 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if attempt.cleanup_state ~= "complete" and attempt.cleanup_state ~= "pending" and attempt.cleanup_state ~= "uncertain" then
         return nil, "previous native process cleanup state is invalid"
     end
+    if type(status.private_home) ~= "boolean" then return nil, "previous native process has no durable HOME selection" end
 
-    return {stored = stored, point = point, attempt = attempt, binding = binding}, nil
+    return {stored = stored, point = point, attempt = attempt, binding = binding, private_home = status.private_home :: boolean}, nil
 end
-function M.resolve_window(call: Call, request: Request): (string?, string?)
+function M.resolve_window(call: Call, request: Request): (string?, string?, boolean?)
     local previous, inspect_error = M.inspect_window(call, request, true)
     if not previous then return nil, inspect_error end
     local attempt, binding = previous.attempt, previous.binding
@@ -185,7 +189,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?)
                     return nil, "previous native process cleanup is not complete"
                 end
             end
-            return conversation_session_id, nil
+            return conversation_session_id, nil, previous.private_home
         end
     end
     return nil, "continuation scan exceeds the thread bound"

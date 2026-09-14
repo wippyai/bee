@@ -207,4 +207,48 @@ function M.hook_files(gateway: Gateway, home_directory: string): ({Projection}?,
     if not trust_file then return nil, trust_error end
     return {hooks_file, trust_file}, nil
 end
+-- Session flags add Bee integration to Codex's ordinary user configuration.
+-- No user config, hook file, login file or named profile is replaced.
+function M.session_arguments(gateway: Gateway?, instructions: string?): ({string}?, string?)
+    local arguments: {string} = {}
+    local function option(value: string)
+        arguments[#arguments + 1] = "-c"
+        arguments[#arguments + 1] = value
+    end
+    if instructions then option("developer_instructions=" .. toml_string(instructions)) end
+    if not gateway then return arguments, nil end
+    local function server(name: string, path: string, token: string, hidden: boolean)
+        local value = "mcp_servers." .. name .. "={url=" .. toml_string("http://" .. gateway.endpoint .. path)
+            .. ",bearer_token_env_var=" .. toml_string(token)
+        if hidden then value = value .. ',omit_tools_from=["direct","deferred","code_mode"]' end
+        option(value .. "}")
+    end
+    server("bee", "/mcp/" .. gateway.action_id, gateway.token_environment, false)
+    if #gateway.hooks == 0 then return arguments, nil end
+    if not gateway.hook_token_environment then return nil, "Codex hooks require their own token environment" end
+    server("bee_hooks", "/hook/" .. gateway.action_id .. "/mcp", gateway.hook_token_environment, true)
+    local trust: {string} = {}
+    for _, event in ipairs(gateway.hooks) do
+        local template, label = HOOK_TEMPLATES[event], HOOK_LABELS[event]
+        if not template or not label then return nil, "Codex does not support gateway hook event " .. event end
+        local names: {string} = {}
+        for name in pairs(template) do names[#names + 1] = name end
+        table.sort(names)
+        local input: {string} = {}
+        for _, name in ipairs(names) do input[#input + 1] = toml_string(name) .. "=" .. toml_string(template[name]) end
+        local handler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = 2}
+        local identity, identity_error = canonical.encode({event_name = label, hooks = {handler}})
+        if not identity then return nil, identity_error end
+        local digest, digest_error = hash.sha256(identity)
+        if not digest or digest_error then return nil, "hook trust digest failed" end
+        option("hooks." .. event .. '=[{hooks=[{type="mcp_tool",server="bee_hooks",tool="hook",timeout=2,input={'
+            .. table.concat(input, ",") .. "}}]}]")
+        -- Supply the whole table: CLI dotted-key parsing does not preserve
+        -- dots within a quoted source-path key.
+        local key = "/<session-flags>/config.toml:" .. label .. ":0:0"
+        trust[#trust + 1] = toml_string(key) .. "={trusted_hash=" .. toml_string("sha256:" .. digest) .. "}"
+    end
+    option("hooks.state={" .. table.concat(trust, ",") .. "}")
+    return arguments, nil
+end
 return M

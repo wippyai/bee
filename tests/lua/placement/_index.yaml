@@ -176,6 +176,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
+    allow_host_home: true
     provider_ref: bee.placement.native:codex_test_provider
 - name: test_launch_policy_without_provider
   kind: registry.entry

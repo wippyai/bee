@@ -413,8 +413,33 @@ Claude receives Bee MCP and hook JSON through additive `--mcp-config` and
 `--settings` arguments. It no longer disables the harness's normal settings or
 other MCP sources. An unconfigured launch supplies no configuration arguments.
 A fresh attempt can select current endpoints without replacing settings files.
-Placement still selects a private home in this checkpoint; automatic global
-home/configuration inheritance remains unfinished.
+Claude and Codex native-window profiles request the host user home through their
+`isolation_env.private_home: false` declaration. That metadata grants nothing:
+the host-selected launch policy must separately set `allow_host_home: true`.
+Carrier planning refuses the request without that decision, and native placement
+independently reads the pinned host policy and refuses a direct request without
+it. The decision is part of the policy digest. An authorized launch selects the
+host-owned `bee:machine_home` environment reference.
+Placement keeps generated files and cleanup in its private attempt/session
+directory; it does not publish Bee settings into the user home. Arbitrary HOME
+values and other HOME references remain refused. Default Claude/Codex launches
+read their existing login directly and request no credential copies. Host policy
+`environment_refs` carries `CODEX_HOME` / `CLAUDE_CONFIG_DIR` when set, omits empty
+defaults, and fences resolved values in its digest. This source change is under
+acceptance testing; native launch fixtures pass for default and custom config
+directories, and Agy/Grok still require inheritance work.
+
+The default Codex launch adds Bee MCP servers and inline hooks with session
+`-c` options. Hook trust uses the exact session-source key and measured handler
+hash. Real Codex acceptance retains an existing user hook and executes the
+SessionStart MCP hook with its separate credential. It does not select a
+replacement named profile or write the global
+`config.toml`. Explicit profile guidance overrides Codex's developer-instructions
+setting. Ordinary launch leaves it as configured by the user. A deliberately
+selected provider configuration still uses the generated provider files below;
+that path requires a private-home profile, and planning refuses a conflicting
+inherited-home profile before placement. Structured batch profiles retain their
+private home for explicit provider and credential configuration.
 
 Codex renders `.codex/config.toml` from the selected `bee.codex_provider`
 (name, base URL, model, and optional bounded `developer_instructions`; plain

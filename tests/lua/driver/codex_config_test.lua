@@ -8,6 +8,20 @@ local function provider(data: {[string]: unknown}): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Codex configuration", function()
+        test.it("adds scoped session MCP and trusted hooks without selecting a replacement user profile", function()
+            local args, err = configuration.session_arguments({endpoint = "127.0.0.1:4312", action_id = "action-one",
+                tools = {"thread_read"}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"}, nil)
+            if not args then error(tostring(err)) end
+            test.eq(#args, 8)
+            test.eq(args[1], "-c")
+            test.is_true(args[2]:find("mcp_servers.bee=", 1, true) == 1)
+            test.is_true(args[6]:find("hooks.SessionStart=", 1, true) == 1)
+            test.is_true(args[8]:find('"/<session-flags>/config.toml:session_start:0:0"', 1, true) ~= nil)
+            test.is_true(args[8]:find("sha256:ab1e5b255471b1fe97946ffec67fda9804e802a644677734d45bef4e0d86113e", 1, true) ~= nil)
+            local ordinary, ordinary_error = configuration.session_arguments(nil, nil)
+            if not ordinary then error(tostring(ordinary_error)) end
+            test.eq(#ordinary, 0)
+        end)
         test.it("renders only the reviewed fields for a host provider and measures them", function()
             local decoded, err = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee", base_url = "https://gateway.example.net/v1", model = "gpt-5", reasoning_effort = "high", developer_instructions = "Answer tersely. Keep the \"host\" boundary.\n"}))
             if not decoded then error(tostring(err)) end

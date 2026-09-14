@@ -516,6 +516,8 @@ entries:
     executables: {}
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
+    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    allow_host_home: true
     gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
@@ -537,7 +539,8 @@ entries:
     executables: {}
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
-    provider_ref: bee.driver.codex:default_provider
+    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    allow_host_home: true
     gateway_tools: [thread_read, thread_wait, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
@@ -598,10 +601,10 @@ entries:
 - name: carrier_environment_policy
   kind: security.policy
   meta:
-    comment: The managed harness boundary may read only its four declared nonsecret executable variables while resolving host launch policy
+    comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables while resolving host launch policy
   policy:
     actions: [env.get]
-    resources: [bee.driver.claude:executable, bee.driver.codex:executable, bee.driver.agy:executable, bee.driver.grok:executable]
+    resources: [bee.driver.claude:executable, bee.driver.codex:executable, bee.driver.agy:executable, bee.driver.grok:executable, bee.driver.claude:config_home, bee.driver.codex:config_home]
     effect: allow
 - name: machine_home
   kind: env.variable

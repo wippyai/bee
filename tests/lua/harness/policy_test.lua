@@ -28,6 +28,25 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("inherits only selected nonempty environment values and fences changes", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = raw.data :: Entry
+            data.environment_refs = {CODEX_HOME = "test:config_home", CLAUDE_CONFIG_DIR = "test:absent"}
+            local first, first_error = policy.decode("test:policy", raw, resolve({["test:config_home"] = "/custom/codex", ["test:absent"] = ""}))
+            if not first then error(tostring(first_error)) end
+            test.eq(first.environment.CODEX_HOME, "/custom/codex")
+            test.is_nil(first.environment.CLAUDE_CONFIG_DIR)
+            test.eq(first.host_environment.CODEX_HOME, "/custom/codex")
+            test.is_nil(first.host_environment.CLAUDE_CONFIG_DIR)
+            local changed, changed_error = policy.decode("test:policy", raw, resolve({["test:config_home"] = "/other/codex", ["test:absent"] = ""}))
+            if not changed then error(tostring(changed_error)) end
+            test.neq(first.digest, changed.digest)
+            local missing = policy.decode("test:policy", raw, resolve({}))
+            test.is_nil(missing)
+            data.environment = {CODEX_HOME = "/literal"}
+            local collision = policy.decode("test:policy", raw, resolve({["test:config_home"] = "/custom/codex", ["test:absent"] = ""}))
+            test.is_nil(collision)
+        end)
         test.it("pins component options with the explicitly selected placement", function()
             local raw = entry({sh = "/bin/sh"})
             local data = raw.data :: Entry
@@ -48,6 +67,23 @@ local function define_tests()
             data.placement_options = "untyped"
             local invalid = policy.decode("test:policy", raw)
             test.is_nil(invalid)
+        end)
+        test.it("makes host HOME an explicit measured host decision", function()
+            local raw = entry({sh = "/bin/sh"})
+            local denied, denied_error = policy.decode("test:policy", raw)
+            if not denied then error(tostring(denied_error)) end
+            test.eq(denied.allow_host_home, false)
+            local denied_digest = denied.digest
+            local data = raw.data :: Entry
+            data.allow_host_home = true
+            local allowed, allowed_error = policy.decode("test:policy", raw)
+            if not allowed then error(tostring(allowed_error)) end
+            test.eq(allowed.allow_host_home, true)
+            test.neq(allowed.digest, denied_digest)
+            data.allow_host_home = "true"
+            local invalid, invalid_error = policy.decode("test:policy", raw)
+            test.is_nil(invalid)
+            test.eq(invalid_error, "test:policy: allow_host_home must be a boolean")
         end)
 
         test.it("keeps the host authority digest while applying admitted preferences", function()

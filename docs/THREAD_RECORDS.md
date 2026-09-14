@@ -173,7 +173,7 @@ Each profile represents one tested mode/protocol combination. Defaults below are
 | `answer_path` | `{strategy:terminal_field|accumulate|transcript|runner, adapter_ref:string}`; required. A JSON path alone cannot express all thirteen. |
 | `resume` | `{strategy:per-process|in-process|none, portable:boolean}`; default `none,false`. |
 | `inbound` | `(next_turn|mcp_pull|stream_stdin|steering|acp|rpc|runner)[]`; default `[]`. |
-| `isolation_env` | `{variables:string[], private_home:boolean}`; default `[],true`. Values come from placement, never metadata. |
+| `isolation_env` | `{variables:string[], private_home:boolean}`; default `[],true`. Metadata requests the shape; host policy authorizes it and placement supplies the values. |
 | `trust_preanswer` | `{supported:boolean, adapter_ref:string|null}`; default `false,null`. Applying it requires an admitted trust decision. |
 | `exit_codes_trustworthy` | boolean; default `false`. Means process pass/fail evidence, never unconditional logical success. |
 | `input_ready` | `{strategy:protocol|hook|probe|none, adapter_ref:string|null, timeout_ms:integer}`; default `none,null,15000`. No readiness means no automatic PTY typing. |

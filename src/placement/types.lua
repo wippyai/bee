@@ -97,7 +97,10 @@ type Evidence = {sequence: integer, at: string, kind: string, detail: string}
 type EvidencePage = {attempt_id: string, evidence: {Evidence}, next_after: integer?}
 -- One live observation, separate from the recorded state.
 type Liveness = {observed: boolean, alive: boolean?, at: string, detail: string}
-type Status = {attempt: Attempt, liveness: Liveness}
+-- private_home is derived by placement from its persisted, typed request for a
+-- retained session. It carries the session's HOME choice across a continuation
+-- without exposing either the host path or placement's private directory.
+type Status = {attempt: Attempt, liveness: Liveness, private_home: boolean?}
 local M = {}
 -- The host launch policy entry type; placement authorizes a request's
 -- host-selected parts against the policy the request names.

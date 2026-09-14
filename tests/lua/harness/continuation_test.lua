@@ -7,6 +7,8 @@ local codex = require("codex")
 local claude = require("claude")
 local machine = require("machine")
 local catalog = require("catalog")
+local hooks = require("hooks")
+local interrupted = require("interrupted")
 local placement_fixture = require("placement_fixture")
 local PLACEMENT = placement_fixture.resolve()
 local PLACEMENT_METHODS = PLACEMENT.methods
@@ -103,7 +105,7 @@ local function define_tests()
             local cleanup_reply: unknown = {ok = false, error = {code = "CONFLICT"}}
             local function call(target: string, input: unknown): (unknown, string?)
                 if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
-                if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt}}, nil end
+                if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt, private_home = true}}, nil end
                 if target == PLACEMENT_METHODS.cleanup then
                     test.eq((input :: {[string]: unknown}).attempt_id, "previous")
                     cleanup_calls = cleanup_calls + 1
@@ -140,7 +142,10 @@ local function define_tests()
             stored.open_turn_id = nil
             stored.attempt_state = "ended"
             attempt.execution_state = "exited"
-            test.eq(continuation.resolve_window(call, request), "provider-session")
+            local initial_resume, initial_error, initial_private_home = continuation.resolve_window(call, request)
+            test.eq(initial_resume, "provider-session")
+            test.is_nil(initial_error)
+            test.eq(initial_private_home, true)
             test.eq(reads, 2)
             -- Reviewing a new implementation never rewrites historical pins.
             -- Automatic restore still refuses that same changed preparation.
@@ -164,7 +169,19 @@ local function define_tests()
             test.is_nil(continuation.resolve_window(call, request))
             attempt.session_ref = "session"
             request.profile_digest = "other-profile"
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            request.reauthorize = false
             test.is_nil(continuation.resolve_window(call, request))
+            request.reauthorize = true
+            request.profile_id = "other-window"
+            test.is_nil(continuation.resolve_window(call, request))
+            request.profile_id = "window"
+            request.binding_digest = "other-binding-digest"
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            request.binding_ref = "other:binding"
+            test.is_nil(continuation.resolve_window(call, request))
+            request.binding_ref = "driver:binding"
+            request.binding_digest = "binding-digest"
             request.profile_digest = "profile-digest"
             request.reauthorize = false
             stored.placement_binding_digest = PLACEMENT.binding_digest
@@ -174,6 +191,16 @@ local function define_tests()
             stored.attempt_outcome = "uncertain"
             test.eq(continuation.resolve_window(call, request), "provider-session")
             test.eq(stored.attempt_outcome, "uncertain")
+            local saved_private_home = true
+            local original_call = call
+            local function missing_home(target: string, input: unknown): (unknown, string?)
+                if target == PLACEMENT_METHODS.status and saved_private_home then
+                    return {ok = true, value = {attempt = attempt}}, nil
+                end
+                return original_call(target, input)
+            end
+            test.is_nil(continuation.resolve_window(missing_home, request))
+            saved_private_home = false
             rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
                 observation(1026, "different-session", "old-binding", true, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
@@ -245,6 +272,56 @@ local function define_tests()
             rows = {observation(1028, "provider-session", "old-binding", false, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
         end)
+        test.it("resumes interrupted hooks with historical pins after implementation review", function()
+            local point = checkpoint.new({binding_ref = "driver:binding", binding_digest = "historical-binding",
+                profile_id = "window", profile_digest = "historical-profile", plan_digest = "historical-plan",
+                gateway_binding = "historical-gateway"}, 1)
+            point.retained_session_ref = "session"
+            local stored: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "running",
+                placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}
+            local attempt: {[string]: unknown} = {attempt_id = "previous", action_id = "action", owner_id = "alice",
+                session_ref = "session", execution_state = "exited", cleanup_state = "complete"}
+            local receipt: {[string]: unknown}? = nil
+            local captured: hooks.Config? = nil
+            local function fake_call(target: string, input: unknown): (unknown, string?)
+                if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
+                if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt, private_home = true}}, nil end
+                if target == PLACEMENT_METHODS.reconcile then return {ok = true, value = attempt}, nil end
+                if target == "bee.threads.carrier:claim" then
+                    return {ok = true, value = {attempt_id = "previous", action_id = "action", carrier_epoch = 2,
+                        checkpoint_revision = 1, checkpoint = point}}, nil
+                end
+                if target == "bee.threads.service:receipt" then
+                    receipt = input :: {[string]: unknown}
+                    return {ok = true, value = {}}, nil
+                end
+                return nil, "unexpected recovery target " .. target
+            end
+            local function fake_resume(config: hooks.Config, recovered: checkpoint.Checkpoint?, revision: integer): (hooks.State?, string?)
+                captured = config
+                local disabled: hooks.Config = {thread_id = config.thread_id, attempt_id = config.attempt_id, epoch = config.epoch,
+                    binding_ref = config.binding_ref, binding_digest = config.binding_digest, profile_id = config.profile_id,
+                    profile_digest = config.profile_digest, plan_digest = config.plan_digest, session_ref = config.session_ref,
+                    gateway_binding = nil, hooks_enabled = false, drain_ms = config.drain_ms, decoder = config.decoder}
+                local state = hooks.new(disabled)
+                state.started = true
+                return state, nil
+            end
+            local recovered, recover_error = interrupted.recover({thread_id = "thread", action_id = "action", attempt_id = "next",
+                    owner_id = "alice", previous_attempt_id = "previous", session_ref = "session", binding_ref = "driver:binding",
+                    binding_digest = "current-binding", profile_id = "window", profile_digest = "current-profile",
+                    placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
+                    placement_methods = PLACEMENT_METHODS, reauthorize = true}, fake_call, fake_resume)
+            if not recovered then error(tostring(recover_error)) end
+            if not captured then error("hooks.resume was not called") end
+            test.eq(captured.binding_ref, "driver:binding")
+            test.eq(captured.binding_digest, "historical-binding")
+            test.eq(captured.profile_id, "window")
+            test.eq(captured.profile_digest, "historical-profile")
+            test.eq(captured.plan_digest, "historical-plan")
+            test.eq(captured.gateway_binding, "historical-gateway")
+            test.eq(receipt and (receipt :: {[string]: unknown}).attempt_id, "previous")
+        end)
         test.it("forms native resume argv with no prompt or stdin replay", function()
             local codex_request, codex_error = codex.decode({profile_id = "window", brief = "", resume_ref = "provider-session"})
             if not codex_request then error(tostring(codex_error)) end
@@ -285,7 +362,7 @@ local function define_tests()
                     if target == "bee.threads.carrier:checkpoint" then
                         return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled", placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}}, nil
                     elseif target == PLACEMENT_METHODS.status then
-                        return {ok = true, value = {attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
+                        return {ok = true, value = {private_home = true, attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
                             session_ref = "session", execution_state = "exited", cleanup_state = "complete"}}}, nil
                     elseif target == "bee.threads.service:read_after" then
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil

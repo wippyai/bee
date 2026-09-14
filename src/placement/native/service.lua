@@ -51,7 +51,7 @@ local function owned(attempt: types.Attempt): Reply?
     if caller ~= attempt.owner_id then return fail("FORBIDDEN", "the attempt belongs to another owner") end
     return nil
 end
-local function load(attempt_id: unknown): (types.Attempt?, Reply?)
+local function load(attempt_id: unknown): (types.Attempt?, Reply?, store.Row?)
     local id = bounds.id(attempt_id)
     if not id then return nil, fail("INVALID", "attempt_id is not an identifier") end
     local db, open_error = store.open()
@@ -66,7 +66,7 @@ local function load(attempt_id: unknown): (types.Attempt?, Reply?)
     end
     local denied = owned(attempt)
     if denied then return nil, denied end
-    return attempt, nil
+    return attempt, nil, row
 end
 -- Requests that name only an attempt: {attempt_id}.
 local function named(value: unknown): (string?, Reply?)
@@ -229,10 +229,34 @@ local function recheck_grants(row: store.Row, request: types.LaunchRequest): (Re
     end
     return nil, nil
 end
+-- Host HOME is a policy decision, not a property of the caller's request.
+-- Check the pinned policy at every native authorization boundary so a policy
+-- update cannot turn an already-recorded request into an unapproved launch.
+local function host_home_authorization(pinned: registry.Snapshot, request: types.LaunchRequest): string?
+    if request.environment_refs.HOME ~= "bee:machine_home" then return nil end
+    local policy_entry = resolver.entry(pinned, request.policy_ref)
+    local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
+    local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
+    if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not policy_data or policy_data.allow_host_home ~= true then
+        return "launch policy does not authorize host HOME"
+    end
+    return nil
+end
 -- Authorizes one concrete execution path after its recorded grants have been
 -- rechecked.  Both the ordinary runner and the native window use this seam;
 -- callers never supply a gateway materialization key as authority.
 function M.authorize_materialization(attempt: types.Attempt, row: store.Row, request: types.LaunchRequest, gateway_binding: string?): (string?, Reply?)
+    if request.environment_refs.HOME == "bee:machine_home" then
+        local pinned, pin_error = resolver.pin()
+        if not pinned then
+            return nil, fail("UNAVAILABLE", pin_error or "pin registry for HOME authorization")
+        end
+        local home_authorization_error = host_home_authorization(pinned, request)
+        if home_authorization_error then
+            transition(attempt.attempt_id, {evidence = {kind = "environment.refused", detail = "at start: " .. home_authorization_error}})
+            return nil, fail("DENIED", home_authorization_error)
+        end
+    end
     local refused, subject = recheck_grants(row, request)
     if refused then
         transition(attempt.attempt_id, {evidence = {kind = tostring(subject) .. ".refused", detail = "at start: " .. tostring(refused.error and refused.error.code) .. ": " .. tostring(refused.error and refused.error.message)}})
@@ -372,6 +396,8 @@ function M.prepare(value: unknown): Reply
     end
     local configuration, configure_target, configuration_error = configuration_input(prepare_pinned, request)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
+    local home_authorization_error = host_home_authorization(prepare_pinned, request)
+    if home_authorization_error then return fail("DENIED", home_authorization_error) end
     local measured = capability.measure()
     if not types.satisfies(measured.capability, request.required_cleanup) then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime offers " .. measured.capability .. " (" .. measured.detail .. "); the launch requires " .. request.required_cleanup)
@@ -537,7 +563,7 @@ end
 function M.status(value: unknown): Reply
     local id, invalid = named(value)
     if not id then return invalid :: Reply end
-    local attempt, denied = load(id)
+    local attempt, denied, row = load(id)
     if not attempt then return denied :: Reply end
     local liveness: types.Liveness = {observed = false, alive = nil, at = store.now(), detail = "no execution identity recorded"}
     local recorded = recorded_identity(attempt.attempt_id)
@@ -545,7 +571,14 @@ function M.status(value: unknown): Reply
         local observation = identity.observe(recorded)
         liveness = {observed = observation.observed, alive = observation.alive, at = store.now(), detail = observation.detail}
     end
-    return succeed({attempt = attempt, liveness = liveness})
+    local private_home: boolean? = nil
+    if attempt.session_ref then
+        if not row then return fail("STORAGE", "retained placement row is unavailable") end
+        local selected, selection_error = store.private_home(row)
+        if selected == nil then return fail("STORAGE", selection_error or "read retained placement HOME selection") end
+        private_home = selected
+    end
+    return succeed({attempt = attempt, liveness = liveness, private_home = private_home})
 end
 -- stop: the runner signals when it lives; otherwise the identified leader's
 -- group is signalled, and an unidentified attempt becomes uncertain.

@@ -23,6 +23,16 @@ entries:
   variable: codex
   default: ''
   readonly: true
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: config_home
+  kind: env.variable
+  storage: bee.driver.codex:environment
+  variable: CODEX_HOME
+  default: ''
+  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -152,7 +162,7 @@ entries:
         resume: {strategy: none, portable: false}
         isolation_env:
           variables: [HOME, CODEX_HOME]
-          private_home: true
+          private_home: false
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
@@ -174,7 +184,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: [codex_login]
+    credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 
 - name: credential_format

@@ -71,12 +71,6 @@ function M.specification(request: Request): types.Launch
     else
         argv = {"exec", "--json", "--skip-git-repo-check", "--sandbox", request.sandbox, "-"}
     end
-    if request.gateway_hooks then
-        -- The bee profile layer carries the hook trust state the runner
-        -- writes under the private home; without it no hook runs.
-        table.insert(argv, 1, "bee")
-        table.insert(argv, 1, "--profile")
-    end
     if request.effort then
         -- Keep options before any resume subcommand or prompt delimiter.
         table.insert(argv, 1, 'model_reasoning_effort="' .. request.effort .. '"')

@@ -10,6 +10,7 @@ package these same pages with status and version, not maintain a second copy.
 | Contributions, reviews and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | What exists and who owns it | [Foundation status](FOUNDATION_STATUS.md) |
+| Ordered path from the current checkpoint to Bee v1 | [Finish plan](FINISH_PLAN.md) |
 | Code style and placement | [Development conventions](DEVELOPMENT.md) |
 | App admission, launch, messages and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |

@@ -105,6 +105,11 @@ docker-agent-picker-check:
 	test -n "$(DOCKER_IMAGE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
+.PHONY: docker-exec-pty-check
+docker-exec-pty-check:
+	test -n "$(DOCKER_IMAGE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_exec_pty.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_exec_pty.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -image "$(DOCKER_IMAGE)"
 .PHONY: docker-sandbox-check
 docker-sandbox-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/docker_sandbox.go

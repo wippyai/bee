@@ -77,13 +77,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             hits[#hits + 1] = {kind = "thread", index = next_offset + slot, key = summary.thread_id, x = 1, y = y, width = width, height = 1}
         end
         if height >= 4 then
-            button("open", " Open ", picker.selected ~= nil)
-            button("more", " More ", picker.next_after ~= nil)
+            local available = picker.unavailable == nil
+            button("open", " Open ", available and picker.selected ~= nil)
+            button("more", " More ", available and picker.next_after ~= nil)
             button("refresh", " Refresh ", true)
             button("technical", state.technical and " Less " or " Details ", true)
         end
         local message = status
         if message == "" then message = state.notice end
+        if message == "" then message = "↑↓ select · Enter open · M more · R refresh" end
         line(height, message, theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
     end
@@ -145,6 +147,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local message = status
     if message == "" then message = state.notice end
     if message == "" and state.unavailable ~= "" and state.phase == "attached" then message = "Owner unavailable: " .. state.unavailable end
+    if message == "" then message = "↑↓ select · F follow · B threads · R refresh · T details" end
     line(height, message, theme.muted)
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
 end

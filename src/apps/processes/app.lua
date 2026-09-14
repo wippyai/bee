@@ -126,7 +126,7 @@ local function main(value: unknown)
                     if key == "enter" and broker then
                         pending = uuid.v7(); pending_ticks = 0
                         process.send(broker, "bee.application.control", {version = 1, request_id = pending, op = "stop", execution_pid = selected})
-                        confirming = false; status = "Ending application…"; dirty = true
+                        confirming = false; status = "Stopping application…"; dirty = true
                     elseif key == "esc" or key == "escape" then confirming = false; dirty = true end
                 elseif key == "tab" then
                     services = not services; selected = ""; offset = 0; status = ""; order(); dirty = true
@@ -146,7 +146,8 @@ local function main(value: unknown)
                 elseif data.action == "press" and data.button == "left" then
                     if y == 1 and x >= width - 10 and width >= 38 then toggle_pause()
                     elseif y == 1 and x <= 24 then
-                        services = x >= 14; selected = ""; offset = 0; status = ""; confirming = false; order(); dirty = true
+                        if width < 26 then services = not services else services = x >= 14 end
+                        selected = ""; offset = 0; status = ""; confirming = false; order(); dirty = true
                     elseif y == height and not confirming then
                         if x < width - 11 then by_steps = not by_steps; order(); reveal(); dirty = true else end_app() end
                     elseif y >= first and y < first + capacity then

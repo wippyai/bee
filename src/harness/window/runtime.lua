@@ -474,15 +474,20 @@ local function main(value: unknown, constructors: {[string]: Open})
                             cancel_restore()
                         elseif data.key_type == "enter" or data.key == "enter" then
                             if phase == "review" and reviewed then
-                                local confirmed_id, confirmed_error = uuid.v7()
-                                if not confirmed_id then
-                                    status = "Recovery admission refused: " .. tostring(confirmed_error)
-                                    phase = "refused"
-                                else
-                                    request = recovery_request(confirmed_id, reviewed.plan_digest, true)
-                                    status = "Authorizing reviewed launch plan…"
+                                if not restore_view.reviewable(width, height) then
+                                    status = "Resize to at least 32 × 13 before continuing"
                                     dirty = true
-                                    start_admission(request)
+                                else
+                                    local confirmed_id, confirmed_error = uuid.v7()
+                                    if not confirmed_id then
+                                        status = "Recovery admission refused: " .. tostring(confirmed_error)
+                                        phase = "refused"
+                                    else
+                                        request = recovery_request(confirmed_id, reviewed.plan_digest, true)
+                                        status = "Authorizing reviewed launch plan…"
+                                        dirty = true
+                                        start_admission(request)
+                                    end
                                 end
                             end
                         end

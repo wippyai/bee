@@ -1,6 +1,18 @@
 version: '1.0'
 namespace: bee.processes
 entries:
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    appearance: bee.desktop:appearance
+    probe: bee.processes:probe
+    view: bee.processes:view
 - name: probe_test
   kind: function.lua
   source: file://probe_test.lua

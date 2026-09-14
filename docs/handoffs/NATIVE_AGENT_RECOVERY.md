@@ -73,6 +73,8 @@ the same admission operation with its exact `expected_plan_digest` and
 `continuation.reauthorize = true`. This does not skip current-plan resolution or
 grant checks. A stale digest still refuses admission before recovery effects.
 The Agent resolves before admission and keeps a changed plan paused until Enter.
+If the terminal is smaller than the bounded review surface, it asks for a resize
+and refuses Enter until every review row can be shown.
 The installed-to-new Claude fixture passes: no replacement attempt or harness
 report before confirmation, then the original application, thread, conversation
 and HOME with a fresh attempt and gateway. Unchanged same-build recovery also

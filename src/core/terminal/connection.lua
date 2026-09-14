@@ -89,14 +89,14 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
     if rows < 13 then
         pair(2, "HIVE", info.hive)
         pair(3, "NODE", info.node)
-        pair(4, "ATTACH", info.attachments)
+        pair(4, "CONTROL", info.attachments)
         put(5, "WORKSPACE  " .. names.label(info.workspace), normal)
         put(6, "DISPLAY    " .. names.label(info.display), normal)
         put(7, tostring(width) .. " × " .. tostring(height) .. "  ·  " .. (ready and "Ready" or "Loading"), muted)
     else
         pair(2, "HIVE", info.hive)
         pair(3, "NODE", info.node)
-        pair(4, "ATTACH", info.attachments)
+        pair(4, "CONTROL", info.attachments)
         rule(5)
         pair(6, "WORKSPACE", ready and "Ready" or "Loading")
         put(7, names.label(info.workspace), normal)
@@ -111,7 +111,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         if info.details and rows >= 16 then put(12, info.display, muted) end
     end
     if rows >= 10 then
-        local footer = "F9 / Esc close"
+        local footer = "F9 / Esc to close"
         if details_available(height) then
             footer = (info.details and "‹ Less [D]" or "› Details [D]") .. "     " .. footer
         end

@@ -24,6 +24,11 @@ Four focused passes prepare the desktop for the next foundation phase.
    state, window geometry, input isolation and prompt shutdown. Registry audits
    exclude legacy code, fixtures and test entries from the production package.
 
+New floating windows fill each available cascade position before a position is
+reused. Process Manager disambiguates equal process names with a short process
+identity and calls its destructive action Stop consistently. The F9 connection
+card names controller state directly and uses explicit close wording.
+
 Live presenter replacement preserves application producers, window state and
 appearance. Local SQLite migrations and opt-in application checkpoint/restore
 now preserve workspace state across full restarts, as described
@@ -197,3 +202,16 @@ burst, 40-event down burst and resumed-keyboard checks against global `bee`. It
 targets the visible Terminal body while Settings remains behind it. Evidence:
 `/tmp/bee-global-scroll-check-2.log`. These are terminal protocol events; actual
 hardware trackpad behavior and a live Codex conversation still need observation.
+
+## Final terminal UX audit
+
+The 2026-09-14 production audit covered all 416 Lua source files with separate
+Promptmap passes for consistency, layout and input, visual language, repetitive
+implementation patterns, and accessibility. Verified fixes keep unavailable
+Timeline rows from offering stale actions, add keyboard guidance to Timeline and
+Approvals, preserve Process Manager mode and health at narrow widths, bound its
+native sampler text, and make profile action styling match the accepted action.
+Window cascades now fill each grid slot once, compact recovery plans cannot be
+accepted before they can be reviewed, and Hive, connection, picker and process
+copy use the same direct platform language. The review introduced no new UI
+framework or presentation vocabulary.

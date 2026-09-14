@@ -66,6 +66,7 @@ local function define_tests()
             local picker = table.concat(view.draw(120, 20, appearance.defaults(), picking, 0, "").rows, "\n")
             test.is_true(picker:find("TIMELINE  choose a thread", 1, true) ~= nil)
             test.is_true(picker:find("One  [31m", 1, true) ~= nil)
+            test.is_true(picker:find("↑↓ select · Enter open", 1, true) ~= nil)
         end)
         test.it("shows an unavailable owner, a required resume and unshown records without inventing rows", function()
             local state = model.new("bee.timeline.i1")
@@ -84,6 +85,15 @@ local function define_tests()
             local marked = table.concat(view.draw(160, 40, appearance.defaults(), gapped, 0, "").rows, "\n")
             test.is_true(marked:find("(records between 30 and 41 not shown)", 1, true) ~= nil)
             test.is_true(marked:find("earlier records through 5 not shown", 1, true) ~= nil)
+        end)
+        test.it("disables stale picker actions while the thread list is unavailable", function()
+            local state = model.new("bee.timeline.i3")
+            model.apply_list(state, ok({threads = {{thread_id = "t-1", title = "One", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}, next_after = "page-2"}))
+            state.picker.unavailable = "the owner cannot be reached"
+            local frame = view.draw(100, 20, appearance.defaults(), state, 0, "")
+            for _, hit in ipairs(frame.hits) do
+                test.is_false(hit.kind == "open" or hit.kind == "more")
+            end
         end)
     end)
 end

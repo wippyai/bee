@@ -116,7 +116,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         elseif selected.status == "reachable" then
             head = head .. "  ·  Ready"
             if state.technical then head = head .. "  cluster " .. tostring(selected.cluster_size) .. "  sampled " .. selected.sampled_at end
-        elseif selected.status == "unavailable" then head = head .. "  Bee service unavailable: " .. selected.detail end
+        elseif selected.status == "unavailable" then head = head .. "  ·  Service unavailable: " .. selected.detail end
         if state.technical and not selected.client_only then
             head = head .. "  Raft role " .. (selected.role ~= "" and selected.role or "unknown")
             head = head .. "  heap " .. bytes(selected.heap) .. "  goroutines " .. (selected.goroutines and tostring(selected.goroutines) or "-")
@@ -125,7 +125,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         lines[#lines + 1] = head
         keys[#keys + 1] = ""
         if selected.client_only then
-            lines[#lines + 1] = "Presents a desktop; does not host a Bee service"
+            lines[#lines + 1] = "Display client · no Bee service on this node"
             keys[#keys + 1] = ""
         elseif not catalog then
             lines[#lines + 1] = "Open the node to list its desktops"
@@ -134,7 +134,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             lines[#lines + 1] = "Desktops unavailable: " .. catalog.reason
             keys[#keys + 1] = ""
         elseif #catalog.desktops == 0 then
-            lines[#lines + 1] = "The owner lists no desktops"
+            lines[#lines + 1] = "No desktops on this node"
             keys[#keys + 1] = ""
         else
             local workspace_ids: {string} = {}
@@ -159,11 +159,14 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 local workspace_label = workspace_labels[desktop.workspace_id] or names.label(desktop.workspace_id)
                 local display_label = desktop.label ~= "" and desktop.label or (display_labels[desktop.desktop_id] or names.label(desktop.desktop_id))
                 local item = display_label .. "  workspace " .. workspace_label
-                if desktop.controller == nil then item = item .. "  control status unknown"
+                if desktop.controller == nil then item = item .. "  controller unknown"
                 elseif desktop.controller ~= "" then item = item .. "  controlled by " .. desktop.controller
-                else item = item .. "  no controller" end
+                else item = item .. "  available to control" end
                 if desktop.observers ~= nil and desktop.observers > 0 then item = item .. "  observers " .. tostring(desktop.observers) end
-                if session then item = item .. "  your " .. session.mode .. " session " .. session.session_id end
+                if session then
+                    item = item .. "  your " .. session.mode .. " session"
+                    if state.technical then item = item .. " " .. session.session_id end
+                end
                 if state.technical then item = item .. "  workspace " .. desktop.workspace_id .. "  display " .. desktop.desktop_id end
                 lines[#lines + 1] = item
                 keys[#keys + 1] = key
@@ -195,13 +198,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         button("control", " Control ", desktop ~= nil and idle and model.can_control(state))
         button("observe", " Observe ", desktop ~= nil and idle)
         button("refresh", " Refresh ", idle)
-        button("technical", state.technical and " Less " or " Details ", true)
+        button("technical", state.technical and " Hide details " or " Details ", true)
     end
     local message = status
     if message == "" then message = state.outcome end
     if message == "" and state.pending then message = "Waiting for the desktop owner…" end
     if message == "" and state.membership_detail ~= "" then message = "Membership: " .. state.membership_detail end
-    if message == "" then message = "↑↓ Choose node   Enter Open   Tab Displays   R Refresh" end
+    if message == "" then message = "↑↓ Select node · Enter open · Tab desktops · R refresh" end
     line(height, message, theme.muted)
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
 end

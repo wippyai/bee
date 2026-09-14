@@ -45,14 +45,14 @@ def exercise(binary):
             first.window_control('□')
             first.wait('display', timeout=10)
             first.key(b'\r')
-            first.wait('control status unknown', timeout=10)
+            first.wait('controller unknown', timeout=10)
             assert 'Desktops unavailable:' not in first.text(), first.text()
             first.key(b't')  # Details exposes exact identities for comparison.
             for row in rows:
                 first.wait(row[1], timeout=5)
             assert catalog() == before, 'Reading the directory allocated or removed a display'
             first.key(b'\x1b[24~')
-            first.wait('control status unknown', timeout=10)
+            first.wait('controller unknown', timeout=10)
             assert catalog() == before, 'Presenter replacement changed durable display identities'
             first.quit()
             second.quit()

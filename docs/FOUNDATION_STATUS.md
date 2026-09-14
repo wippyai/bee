@@ -162,7 +162,8 @@ it does not complete managed Docker placement or restart recovery.
 
 **Changed-plan Agent recovery, verified source:** restore resolves the current
 plan before admission. A changed plan stays paused for explicit review; Enter
-submits the exact current digest, and a stale review never retries automatically.
+submits the exact current digest only when the review surface is large enough to
+show every review row, and a stale review never retries automatically.
 The previous placement, driver/profile, owner and retained session must agree,
 and exit, cleanup and the hook conversation are still verified. No historical
 digest is fabricated and no runtime API was added. Installed-to-new Claude

@@ -4,6 +4,8 @@ local tty = require("tty")
 local appearance = require("appearance")
 local M = {}
 local RESET = "\27[0m"
+local MIN_REVIEW_WIDTH = 32
+local MIN_REVIEW_HEIGHT = 13
 
 type ReviewPlan = {
     title: string,
@@ -40,6 +42,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     return {rows = canvas:rows()}
 end
 
+function M.reviewable(width: integer, height: integer): boolean
+    return width >= MIN_REVIEW_WIDTH and height >= MIN_REVIEW_HEIGHT
+end
+
 -- A changed checkpoint is held for an explicit user decision. Keep the
 -- displayed values presentation-safe and bounded: this surface never renders
 -- provider configuration, grants or executable details.
@@ -50,6 +56,11 @@ function M.review(width: integer, height: integer, preferences: appearance.Prefe
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
     line(canvas, width, height, 1, "AGENT", theme.text, theme.surface)
     line(canvas, width, height, 3, "Review Agent changes", theme.text, theme.surface)
+    if not M.reviewable(width, height) then
+        line(canvas, width, height, 5, "Resize to at least 32 × 13 to review safely", theme.accent, theme.surface)
+        line(canvas, width, height, height - 1, "Esc or Ctrl+Q cancels", theme.muted, theme.surface)
+        return {rows = canvas:rows()}
+    end
     line(canvas, width, height, 5, "Definition: " .. plan.definition_ref, theme.text, theme.surface)
     line(canvas, width, height, 6, "Title: " .. plan.title, theme.text, theme.surface)
     line(canvas, width, height, 7, "Profile: " .. plan.profile_id, theme.text, theme.surface)

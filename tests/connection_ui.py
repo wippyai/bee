@@ -21,7 +21,7 @@ def exercise(packed=False):
             ui.key(b'\x1b[20~')  # F9
             ui.wait('CONNECTION')
             assert 'drag to select' not in ui.text(), ui.text()
-            for label in ('HIVE', 'NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
+            for label in ('HIVE', 'NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
             assert not re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text()), ui.text()
@@ -56,10 +56,10 @@ def exercise(packed=False):
             Path('/tmp/bee-connection-dropdown-frame.txt').write_text(ui.text())
             ui.resize(42, 12)
             ui.pump(.3)
-            for label in ('HIVE', 'NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
+            for label in ('HIVE', 'NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Details [D]' not in ui.text(), ui.text()
-            assert 'F9 / Esc close' in ui.text(), ui.text()
+            assert 'F9 / Esc to close' in ui.text(), ui.text()
             assert all(len(row) <= 42 for row in ui.screen.display), ui.text()
             ui.resize(100, 30)
             ui.pump(.3)

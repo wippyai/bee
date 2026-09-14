@@ -119,6 +119,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             message = "Workspace " .. label .. " unavailable: " .. unavailable
         end
     end
+    if message == "" then message = "↑↓ select · Enter open · A approve · D deny · W withdraw · R refresh" end
     line(footer, message, theme.muted)
     return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
 end

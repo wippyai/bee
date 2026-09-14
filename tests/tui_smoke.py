@@ -561,7 +561,7 @@ def process_manager(packed):
             assert ui.screen.display[0].count("Process Manager") == 1, ui.text()
             row = next(y for y, text in enumerate(ui.screen.display, 1) if "bee.settings:app" in text)
             ui.mouse(0, 5, row); ui.mouse(0, 5, row, True)
-            ui.key(b"\x1b[3~"); ui.wait("End selected app?")
+            ui.key(b"\x1b[3~"); ui.wait("Stop selected app?")
             ui.key(b"\r"); ui.wait("Application ended")
             assert "Settings" not in ui.screen.display[0], ui.text()
             ui.key(b"\x1b[24~"); ui.wait("Heap")

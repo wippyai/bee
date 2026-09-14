@@ -49,7 +49,7 @@ local function define_tests()
             end
             test.is_true(card(5):find("CONNECTION", 1, true) ~= nil)
             test.is_true(card(5):find("Details [D]", 1, true) == nil)
-            test.is_true(card(12):find("F9 / Esc close", 1, true) ~= nil)
+            test.is_true(card(12):find("F9 / Esc to close", 1, true) ~= nil)
             test.is_true(card(17):find("Details [D]", 1, true) == nil)
             test.is_true(card(18):find("Details [D]", 1, true) ~= nil)
         end)

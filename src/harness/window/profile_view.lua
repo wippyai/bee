@@ -123,7 +123,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         canvas:put(2, y, style .. tty.text.truncate(text.bound(value, 4096), width - 2, "…") .. reset, width - 2)
     end
     line(1, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE", false)
-    line(2, "Tab fields · Type/Paste · Ctrl+U clear", false)
+    line(2, "Tab fields · Ctrl+S save · Ctrl+D remove · Esc cancel", false)
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local first = math.floor(math.max(1, state.selected - capacity + 1))
@@ -141,10 +141,18 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     line(height - 3, state.confirming_remove and "Remove this profile? Enter confirms; Esc keeps it." or
         (state.form.pending and "Request submitted. Retry uses the same values." or "Instructions append to the harness. Saving does not launch."), false)
     local x = 2
-    for _, button in ipairs({{action = "save", label = " Save "}, {action = "remove", label = " Remove "}, {action = "cancel", label = " Cancel "}}) do
+    local save_enabled = not state.confirming_remove and state.form.pending ~= "remove"
+    local remove_enabled = state.form.revision > 0 and state.form.pending ~= "save"
+    local remove_label = state.confirming_remove and " Confirm " or " Remove "
+    for _, button in ipairs({
+        {action = "save", label = " Save ", enabled = save_enabled},
+        {action = "remove", label = remove_label, enabled = remove_enabled},
+        {action = "cancel", label = " Cancel ", enabled = true}
+    }) do
         if (button.action ~= "remove" or state.form.revision > 0) and height >= 3 and x + #button.label <= width then
-            canvas:put(x, height - 1, appearance.style(appearance.selection_text(theme), theme.accent) .. button.label .. reset, #button.label)
-            hits[#hits + 1] = {action = button.action, index = 0, x = x, y = height - 1, width = #button.label}
+            canvas:put(x, height - 1, appearance.style(button.enabled and appearance.selection_text(theme) or theme.muted,
+                button.enabled and theme.accent or theme.surface) .. button.label .. reset, #button.label)
+            if button.enabled then hits[#hits + 1] = {action = button.action, index = 0, x = x, y = height - 1, width = #button.label} end
             x = x + #button.label + 1
         end
     end

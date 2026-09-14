@@ -51,6 +51,25 @@ local function define_tests()
                 end
             end
         end)
+        test.it("shows only actions that the current profile state accepts", function()
+            local s = state()
+            s.form.pending = "save"
+            local pending = view.draw(60, 16, appearance.defaults(), s)
+            local actions: {[string]: boolean} = {}
+            for _, hit in ipairs(pending.hits) do actions[hit.action] = true end
+            test.is_true(actions.save)
+            test.is_nil(actions.remove)
+            test.is_true(actions.cancel)
+            s.form.pending = nil
+            s.confirming_remove = true
+            local confirming = view.draw(60, 16, appearance.defaults(), s)
+            actions = {}
+            for _, hit in ipairs(confirming.hits) do actions[hit.action] = true end
+            test.is_nil(actions.save)
+            test.is_true(actions.remove)
+            test.is_true(actions.cancel)
+            test.is_true(table.concat(confirming.rows, "\n"):find("Confirm", 1, true) ~= nil)
+        end)
     end)
 end
 return test.run_cases(define_tests)

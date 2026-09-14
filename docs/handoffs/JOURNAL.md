@@ -6762,3 +6762,24 @@ The fixture shell-driver Docker picker regression and the component linker both
 remain green. Tests stay outside production packs. The image is local evidence,
 not a published artifact; Docker restart recovery, the other three harness
 components, Hub publication and global installation remain open.
+
+### September 14 — full terminal UX/UI audit and polish
+
+Five Promptmap passes audited all 416 production Lua files for UX consistency,
+terminal layout and input, visual language, repetitive implementation patterns,
+and accessibility. Source inspection rejected geometry and typed-boundary false
+positives rather than adding abstractions. The accepted fixes correct cascade
+placement, prevent confirmation of an unreadable changed Agent plan, disable
+stale Timeline actions, add Timeline and Approvals keyboard guidance, keep
+Process Manager mode and health visible when narrow, bound its native text, and
+align profile action styling with the actions it accepts. Connection, Hive
+Manager, process, and Agent surfaces now use shorter consistent platform copy;
+technical Hive session IDs remain behind Details.
+
+Strict lint passes with the existing `desktop_lifecycle` fixpoint warning, all
+900 Lua tests pass, and pack, Process Manager, connection, Hive Manager, retained
+Hive catalog, standalone binary, Modules, About and four-profile Agent picker
+acceptance pass. The bundle excludes tests, fixtures, `.local`, and Promptmap
+artifacts. The verified standalone was atomically installed at
+`~/.local/bin/bee`; installed SHA-256 is
+`4afec2120b3cad0ae2a32d714046f255b6fbbdf3bda92a02b8ee5af7ce980a57`.

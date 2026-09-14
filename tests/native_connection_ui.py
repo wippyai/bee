@@ -10,11 +10,11 @@ from native_client import owner_handle, stop_owner
 
 
 def attachment(ui):
-    rows = [row for row in ui.text().splitlines() if 'ATTACH' in row]
+    rows = [row for row in ui.text().splitlines() if 'CONTROL' in row]
     if not rows:
         return None
     assert len(rows) == 1, ui.text()
-    return rows[0].split('ATTACH', 1)[1].rsplit('│', 1)[0].strip()
+    return rows[0].split('CONTROL', 1)[1].rsplit('│', 1)[0].strip()
 
 
 def wait_attachment(ui, expected, timeout=5):
@@ -66,7 +66,7 @@ def exercise(binary):
             ui.key(b'\x1b[20~')
             ui.wait('CONNECTION')
             ui.wait('Supervisor ready')
-            for label in ('NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
+            for label in ('NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             before = ui.text().splitlines()
             display = next(before[i + 1].strip() for i, row in enumerate(before) if 'DISPLAY' in row)

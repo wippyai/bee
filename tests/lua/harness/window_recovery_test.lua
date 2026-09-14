@@ -85,6 +85,15 @@ local function define_tests()
             test.is_true(rows:find(old_digest, 1, true) ~= nil)
             test.is_true(rows:find(current_digest, 1, true) ~= nil)
             test.is_true(rows:find("Enter confirms", 1, true) ~= nil)
+
+            local compact = restore_view.review(31, 12, appearance.defaults(), {
+                title = "Docker Agent", definition_ref = "bee.agent:docker", profile_id = "window",
+                placement_binding_ref = "bee.placement.docker:binding", plan_digest = current_digest}, old_digest)
+            local compact_rows = table.concat(compact.rows)
+            test.is_false(restore_view.reviewable(31, 12))
+            test.is_true(restore_view.reviewable(32, 13))
+            test.is_true(compact_rows:find("Resize to at least", 1, true) ~= nil)
+            test.is_nil(compact_rows:find("Enter confirms", 1, true))
         end)
     end)
 end

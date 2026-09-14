@@ -22,7 +22,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if width > 2 then canvas:put(2, y, style .. tty.text.truncate(text.bound(value, 512), width - 2, "…") .. reset, width - 2) end
     end
     line(1, "AGENT", false, false)
-    if height >= 5 then line(2, "Choose a profile", false, true) end
+    if height >= 5 then
+        line(2, width >= 54 and "Choose a profile · ↑↓ select · Enter open · N new · E edit · R refresh" or "Choose a profile", false, true)
+    end
     local show_summary = height >= 10
     local capacity = math.floor(math.max(0, height - (show_summary and 6 or 5)))
     if width <= 2 then capacity = 0 end

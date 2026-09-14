@@ -28,7 +28,7 @@ It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
 The integration branch is `feat/docker-harness-delivery-20260913`; this execution
-queue was reconciled against committed checkpoint `1660b7d`. The worktree also
+queue was reconciled against current HEAD `2967021`. The worktree also
 contains an uncommitted Grok B1.1 candidate; those files are not a release source
 until the focused acceptance below passes and the result is committed.
 
@@ -46,14 +46,20 @@ Completed on this branch:
 
 The uncommitted Grok B1.1 candidate now replaces the invalid provider-owned
 `managed_config.toml` path with a private composition base and structural TOML
-insertion. Review found two implementation defects that must be closed before
-acceptance: credential definition digests do not yet cover the normalized setup
-descriptor, and Grok currently receives the Bee MCP `--allow` argument twice.
-The placement proof must also show that only the base produced by the current
-credential initializer can be composed. It remains unlandable until those fixes,
-the Bee regression and real Grok 1.0.30 prove the generated private
-configuration while leaving global and project trees unchanged. Global Bee must
-not be built from this dirty worktree.
+insertion. Credential definition and use-time digests now cover the normalized
+setup descriptor without hashing setup contents, and the launch specification
+is the sole owner of Grok's Bee MCP permission. The first full behavioral run
+reports 890 passed tests and two focused assertions failed: structural TOML
+insertion is a runtime acceptance failure against runtime PR #746, while the
+retained-configuration expectation is a Bee-owned acceptance contract/test
+failure around the authorized retained base. The runtime candidate must prove
+the reusable insertion operation independently; Bee must define the retained-base
+lifecycle and correct its own expectation. The placement proof must still show
+that only the base produced by the current credential initializer can be
+composed. The candidate remains unlandable until those owners close their
+failures, the placement refusal matrix passes, and real Grok 1.0.30 proves the
+generated private configuration while leaving global and project trees
+unchanged. Global Bee must not be built from this dirty worktree.
 
 ### Reusable runtime gates
 
@@ -144,7 +150,7 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Close Grok B1.1: bind setup metadata into credential digests, emit one MCP permission, enforce initializer-owned composition bases, correct the stale docs and complete placement refusal tests | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
+| 1 | Agents | Close Grok B1.1: fix the two focused failures, enforce initializer-owned composition bases, correct the stale docs and complete the placement refusal matrix | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
 | 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass remote viewport/rejoin |
@@ -159,6 +165,22 @@ advances only at the named promotion.
 The integration owner keeps the critical path on orders 1 through 3 while the
 topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
 adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
+
+### Delivery windows
+
+These are focused engineering windows after their named runtime prerequisites
+exist. They are planning ranges, not release claims.
+
+| Promotion | Remaining focused work | External gate |
+|---|---:|---|
+| Native Agents | 1–2 days | selected state root and TOML insertion runtime cuts |
+| Connected Bee | 3–5 days after Native Agents | remote lifecycle and registry compare-and-set runtime cuts |
+| Docker Agents | 2–3 days after Native Agents; may overlap Connected Bee | none beyond the Native Agents runtime base |
+| Editable Bee v1 | 4–7 days after Connected Bee and Docker Agents | stable two-node package transfer and released registry compare-and-set |
+
+Every window ends at an installed executable and user journey. A lane that misses
+its acceptance proof does not consume release time through polishing or unrelated
+cleanup; its failing boundary becomes the next bounded work unit.
 
 ## Work plan
 

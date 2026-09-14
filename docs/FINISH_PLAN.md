@@ -30,13 +30,46 @@ including the user's retained owner, exited gracefully afterward; no state file
 or database was removed. Installed offline fresh/restart/reconnect acceptance
 passes.
 
-The active implementation queue is now B1 through B4:
+The active implementation queue is now B1 through B4. B1 command routing is
+complete at `7ea6d05`: `bee claude`, `bee codex`, `bee agy` and `bee grok`
+resolve the same managed definitions as the picker, while duplicate aliases and
+raw argument bypasses refuse before admission. The next unit is Agy/Grok global
+configuration inheritance and recovery parity.
+
+The four active lanes are:
 
 1. finish the clean-install four-harness Agent product and durable thread/title
    behavior;
 2. complete native `exec.docker` parity under the same profile and carrier;
 3. correct folder/node/workspace/display selection and two-node Hive behavior;
 4. finish local Hub install/update/remove and protected admission.
+
+## Definition of finished
+
+Bee v1 is finished when these six user journeys pass from one tagged executable:
+
+1. **Open locally:** `bee` starts offline in the current folder without waiting
+   for Hive, restores the selected project workspace and gives each client an
+   independent display.
+2. **Run an Agent:** the picker and all four CLI aliases run ordinary installed
+   Claude, Codex, Agy and Grok with their normal global configuration, additive
+   Bee instructions/hooks/MCP, a durable thread and predictable recovery.
+3. **Change isolation:** the same Agent profile runs locally or through native
+   `exec.docker`; only isolation changes, while identity, thread, tools, terminal
+   behavior and recovery remain the same.
+4. **Join a Hive:** two real Bees find and attach through the existing native
+   mesh, show clear node/workspace/display state, retain applications through a
+   client loss and support controller transfer plus observers.
+5. **Install a component:** Modules can plan, review, install, update, recover
+   and remove an immutable app or separately packaged harness locally, then
+   deliver admitted immutable content to another Bee.
+6. **Edit safely:** an Agent or user can stage an exact-revision overlay, inspect
+   source and permission changes, submit it to the correct governance owner,
+   apply it once and roll it back from a durable receipt.
+
+Anything that cannot be exercised through one of these journeys remains a
+foundation or proposal. It does not delay a checkpoint unless that checkpoint's
+acceptance requires it.
 
 ## Execution board
 
@@ -137,9 +170,9 @@ and promotion remain sequential.
 
 ### B1 — finish native managed Agents
 
-1. Finish canonical command routing so the four CLI aliases resolve the same
-   measured launch definitions as the Agent picker. Duplicate aliases and raw
-   argument bypasses must refuse before admission.
+1. **Done at `7ea6d05`:** canonical command routing makes the four CLI aliases
+   resolve the same measured launch definitions as the Agent picker. Duplicate
+   aliases and raw argument bypasses refuse before admission.
 2. Make all four clean-install defaults launchable and give Agy and Grok safe
    access to their ordinary global configuration without writing generated Bee
    MCP or hook files into the user's global configuration directories.
@@ -155,6 +188,35 @@ and promotion remain sequential.
 Merge gate: UI and CLI acceptance for all four providers, raw-bypass refusal,
 offline boot, cancellation/close, restart recovery, and no credentials or test
 fixtures in the pack.
+
+### Critical path from the current commit
+
+Work these units in order. B2, B3 and B4 may develop beside B1 only in separate
+worktrees with disjoint ownership; integration follows this table.
+
+| Unit | Concrete result | Depends on | Proof that closes it |
+|---|---|---|---|
+| B1.1 | Agy and Grok retain ordinary global settings/login while Bee files remain attempt-owned and additive | current HEAD | real executable clean-start, cancel and restart probes; global config trees unchanged |
+| B1.2 | Saved profile UI exposes only harness, isolation, options and MCP scope; instructions and dynamic context remain admitted inputs | B1.1 | create/edit/select/restart journeys from source and pack |
+| B1.3 | Every provider has one durable thread, committed title activity, cold recovery and surviving-child reconciliation | B1.1 | four-provider replacement/restart matrix and Timeline cursor proof |
+| B1 release | Native four-provider candidate | B1.1–B1.3 | full `make check`, standalone checks, pack inspection and atomic rollback-capable install |
+| B2.1 | Native Docker placement implements start, stop, reconcile and cleanup under the existing placement owner | B1 contracts stable | daemon-backed lifecycle and restart tests with attempt labels |
+| B2.2 | Local/Docker is one profile switch with the same carrier, project, MCP, hooks and credentials behavior | B2.1 | four-provider Local/Docker parity matrix on Engine and Desktop/WSL |
+| Agent Bee release | First complete Agent checkpoint installed globally | B1 + B2 | checkpoint matrix passes twice from one immutable commit |
+| B3.1 | Folder-derived state selects all databases; explicit `--state-dir` wins; local boot never waits on Hive | B1 release | two-folder restart and offline startup/cancel timing acceptance |
+| B3.2 | Node, workspace, display and attachment identities drive launch, restore, observers and `Send to display` | B3.1 | multi-client/multi-display acceptance with stale lease retirement |
+| B3.3 | Compact switcher and F9 view operate over two real native-mesh Bees | B3.2 | sleep/rejoin, remote viewport, approval and retained-app acceptance |
+| B4.1 | Local Hub install/update/remove is immutable, admitted and rollback-safe | Train A | clean-store and populated-store lifecycle with injected failure recovery |
+| B4.2 | Each harness is an independently installed Hub component | B1 + B4.1 | catalog gains/updates/removes one driver without a core edit |
+| Connected Bee release | Folder, displays, Hive and local Hub are installed globally | B3 + B4 | two-node and Hub matrices plus the release gates |
+| C | Destination Bee installs one app and one harness from immutable admitted content | B3.3 + B4.2 | cross-node transfer/retry/restart proof with no authority or credential transfer |
+| D | One stage → review → apply → rollback overlay path serves UI and scoped Agent MCP | C + released registry CAS | conflict, stale-review, protected-core and rollback acceptance |
+| E | Dead paths removed and one cross-platform candidate released | all above | Linux, WSL, macOS, Docker and two-host Hive matrix twice |
+
+The current coding order is therefore B1.1, B1.2 and B1.3; then the B1 release
+gate. Docker and local Hub may advance in parallel, but neither may invent a
+second carrier, installer, registry or authority model. Topology work consumes
+the native mesh only after local folder/display semantics pass.
 
 ### B2 — make Docker an isolation choice
 

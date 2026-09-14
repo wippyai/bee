@@ -1,5 +1,46 @@
 # Global Bee build — September 13, 2026
 
+## Current install: Train A native Agent foundation
+
+Production `414c03b`, binary
+`4692e26713fa848bbe4c2dae32feb9a9e86778fb2d9b870eb552ffc5b85d455a`,
+is installed globally. Runtime `291f5c6b` and native
+`v0.0.0-20260913153139-79a1cd97446b` are unchanged. The exact composed-runtime
+`make check` passed all 883 Lua tests and the complete storage, source/pack
+desktop, client, recovery and bundled application acceptance. Its retained
+supervisor suite passed every additional-presenter activation/replacement case,
+so the preceding mixed-source diagnostic failure is not a release failure.
+
+The exact rebuilt candidate passed native executable, Modules, About and four
+default Agent profile selection; offline fresh boot, restart and retained-client
+reconnect; installed-to-candidate and same-build managed Agent recovery; real
+Codex additive hooks and scoped MCP without a model/API call; and pack exclusion
+inspection. Installed offline acceptance reports a 0.102-second warm client.
+
+Receipt: `train-a-414c03b-global-install.json`. All six global files match the
+candidate byte-for-byte. Backup: `global-before-train-a-c78b764d`. The installer
+first passed a disposable injected rollback. A receipt-serialization defect in
+its first real attempt then caused the same rollback path to restore every old
+file byte-for-byte; evidence is retained in
+`global-before-train-a-c78b764d-attempt1`. The corrected retry succeeded. Four
+old executable instances, including the retained user owner, were terminated by
+exact executable identity after installation; all exited on SIGTERM and none
+required SIGKILL. Databases, profiles, conversations, workspaces, displays,
+credentials and migration ledgers were not removed or rewritten by installation.
+
+Evidence:
+
+- `bee-native-agent-exact-414c03b-full-check.log`
+- `bee-train-a-414c03b-build.log`
+- `bee-train-a-414c03b-native.log`
+- `bee-train-a-414c03b-offline.log`
+- `bee-train-a-414c03b-installed-recovery.log`
+- `bee-train-a-414c03b-same-build-recovery.log`
+- `bee-train-a-414c03b-codex-hooks.log`
+- `bee-train-a-414c03b-pack-exclusions.log`
+- `bee-train-a-414c03b-installed-offline.log`
+- `train-a-414c03b-global-install-retry.log`
+
 ## Current install: visible Agent launch failures and unstarted-session cleanup
 
 Production `1a0ae17`, binary

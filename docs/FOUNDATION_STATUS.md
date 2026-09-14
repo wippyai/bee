@@ -1,8 +1,26 @@
 # Foundation status
 
+The September 13 Train A build is installed globally from production commit
+`414c03b` with executable SHA `4692e267`. The exact pinned `make check` passed
+883 Lua tests plus storage, source/pack desktop, recovery and bundled-app
+acceptance. The rebuilt executable passed native Modules/About/four-profile
+selection, offline fresh/restart/reconnect, installed-to-candidate and same-build
+Agent recovery, real Codex additive hooks/MCP without a model call, and pack
+exclusion inspection. The formerly observed additional-presenter failure did
+not reproduce on the exact source.
+
+The six-file installer proved an injected rollback. Its first real attempt then
+failed while serializing the receipt and restored the preceding six files
+byte-for-byte; the corrected retry installed and verified the candidate. Four
+old executable instances exited gracefully afterward, with no forced exit or
+state deletion. Receipt:
+`bee-evidence/0912/train-a-414c03b-global-install.json`. Train B remains open:
+complete all four harnesses, Docker parity, coherent folder/display/Hive
+behavior and the local Hub lifecycle.
+
 ## Current checkpoint — September 13
 
-**Agent configuration inheritance, candidate only:** default managed Claude and
+**Agent configuration inheritance, installed:** default managed Claude and
 Codex launches use the host user's HOME and honor `CLAUDE_CONFIG_DIR` / `CODEX_HOME`
 when set. The host resolves only its declared environment references; unset
 values are omitted, denied reads fail, and resolved values enter the policy
@@ -25,8 +43,8 @@ enforce it. Direct native requests and policy revocation before start create no
 child, while the approved Claude/Codex policies pass. Strict lint and all 883
 Lua tests pass, as do the rebuilt candidate's native selector, offline boot,
 Codex hook/MCP, installed-upgrade recovery, same-build recovery and pack
-exclusion checks. The final exact-source repository regression is pending;
-global installation is unchanged.
+exclusion checks. The exact-source repository regression and global installation
+now pass as recorded above.
 Agy/Grok inheritance, Docker profile delivery and real-provider cold recovery
 remain unfinished. Explicit Codex developer-instruction overrides are not yet
 merged with an existing global developer-instructions value.
@@ -45,7 +63,7 @@ and exit, cleanup and the hook conversation are still verified. No historical
 digest is fabricated and no runtime API was added. Installed-to-new Claude
 fixture recovery and automatic same-build recovery pass with stable app/thread,
 conversation and HOME, fresh attempt and gateway. Combined lint passes; full
-regression remains pending. Global installation is unchanged.
+regression and installed recovery now pass.
 
 **Docker Agent source checkpoint, not installed:** the production picker, broker
 and managed window now pass container PTY input/output, resize and close/removal

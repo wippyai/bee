@@ -14,39 +14,29 @@ The external `bee-legacy` tree is a reference and never a dependency.
 
 ## Current execution point
 
-The active release branch is `feat/docker-harness-delivery-20260913`. Its next
-release is deliberately smaller than the whole roadmap: it makes native Claude
-and Codex dependable with the user's ordinary configuration, Bee's additive
-hooks and MCP, and durable recovery. The historical-pin recovery regression and
-the focused native acceptance are complete. The global executable has not been
-updated from this branch.
+Train A is complete on branch `feat/docker-harness-delivery-20260913`. Source
+commit `414c03b` produced global executable SHA `4692e267`. The exact pinned
+repository check passed all 883 Lua tests and the full desktop, storage,
+recovery and application acceptance. The earlier mixed-source presenter failure
+did not reproduce. The rebuilt six-file candidate passed native selection,
+offline boot, scoped Codex MCP/hooks, installed-to-candidate recovery,
+same-build recovery and production-pack inspection.
 
-The host HOME release blocker is corrected in committed and pushed source
-`b9d1487`. A profile may request host HOME only when the host-selected launch
-policy explicitly authorizes it. The decision participates in the policy digest
-and is enforced at carrier planning, native preparation, and again before
-materialization.
-Registry profile metadata continues to describe the requested isolation; it
-never grants host filesystem authority. Strict lint, all 883 Lua tests,
-native/offline acceptance, Codex hook/MCP acceptance, both recovery paths, and
-pack exclusion inspection pass on the pre-commit candidate. A broad diagnostic
-run that crossed the final source change failed in `desktop-check` because an
-additional presenter was not replaced. That run is useful evidence but cannot
-qualify or reject the exact commit. The exact-source repository check, focused
-reproduction if it fails, and committed rebuild remain before global
-installation.
+The installer proved rollback with an injected post-replacement failure. Its
+first real attempt then exercised that rollback when receipt serialization was
+invalid; all six old files were restored byte-for-byte. The corrected retry
+installed and verified all six candidate files. Four old executable instances,
+including the user's retained owner, exited gracefully afterward; no state file
+or database was removed. Installed offline fresh/restart/reconnect acceptance
+passes.
 
-The remaining immediate queue is fixed:
+The active implementation queue is now B1 through B4:
 
-1. record the composed runtime hash, then run one captured `make check` with
-   that explicit `WIPPY` on the clean release HEAD containing `b9d1487`;
-2. if the presenter-replacement failure repeats, reduce and fix that lifecycle
-   defect, then repeat the exact-source check once;
-3. rebuild the executable and its five release sidecars from the clean
-   qualifying commit;
-4. repeat native selection, offline boot, hooks/MCP, recovery and pack-exclusion
-   gates against those exact artifacts;
-5. atomically install them with a tested rollback and verify installed hashes.
+1. finish the clean-install four-harness Agent product and durable thread/title
+   behavior;
+2. complete native `exec.docker` parity under the same profile and carrier;
+3. correct folder/node/workspace/display selection and two-node Hive behavior;
+4. finish local Hub install/update/remove and protected admission.
 
 ## Execution board
 
@@ -55,7 +45,7 @@ start gate is satisfied, but only a release train may update global Bee.
 
 | Train | Deliverable | Status | Next irreversible fact | Exit proof |
 |---|---|---|---|---|
-| A | Daily-use native Agent Bee | Release candidate | Exact `make check`, clean rebuild, atomic global install | Offline `bee`, `bee claude`, `bee codex`, additive hooks/MCP, recovery and installed hashes |
+| A | Daily-use native Agent Bee | Complete: global SHA `4692e267` | Begin the four B lanes | Offline aliases, managed Claude/Codex hooks/MCP, recovery and installed hashes passed |
 | B1 | Four managed native harnesses | Partly implemented | Finish Agy/Grok inheritance and clean-install picker profiles | UI and CLI launch all four; each owns a durable thread and resumes |
 | B2 | Docker isolation | PTY foundation implemented | Route the same carrier/profile through native `exec.docker` | Local/Docker differ only by isolation; lifecycle and MCP proofs are identical |
 | B3 | Folder/display/Hive model | Foundation implemented, public behavior incomplete | Make folder launch select the correct node/workspace/display without blocking offline boot | Multi-display local acceptance and two real nodes on the native mesh |
@@ -122,7 +112,7 @@ Passing a model test, fixture or source-only check does not complete a public
 feature. Full regression runs once per integration candidate rather than after
 every small change. Focused checks carry intermediate development.
 
-## Milestone 0: release the current native Agent foundation
+## Milestone 0: release the current native Agent foundation — complete
 
 Finish the active `feat/docker-harness-delivery-20260913` checkpoint before
 starting another integration branch.

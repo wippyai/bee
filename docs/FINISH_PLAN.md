@@ -175,7 +175,7 @@ advances only at the named promotion.
 | 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
-| 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One app and each harness can enter and leave the catalog without a core edit or authority leak |
+| 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One independently packaged app can enter and leave the catalog without a core edit or authority leak; harness definitions remain separate for extraction in order 8 |
 | 6 | Release | Promote **Local Components** | Correct folder/display behavior and admitted local Hub components pass together from a clean executable |
 | 7 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
 | 8 | Automation | Prove the native runner/dataflow path, freeze accepted schemas and extract independently mounted packages | One headless runner turn and two-node settle pass; host and standalone package closures behave identically with no duplicate IDs |
@@ -188,6 +188,12 @@ advances only at the named promotion.
 The integration owner keeps the critical path on orders 1 through 3 while the
 topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
 adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
+The existing host/client and single-controller acceptance is a retained
+prerequisite for Native Agents: every Agent promotion reruns it and may not
+regress independent display state, stale-controller fencing or retained apps.
+Governed overlay implementation may start as soon as local Hub admission and
+released registry compare-and-set are stable; only overlay replication waits for
+Connected Bee.
 
 ### Current bounded unit
 
@@ -257,6 +263,13 @@ default state root for all Bee databases and retained resources. Explicit
 folders remain isolated, and profiles, conversations, threads, Hub receipts,
 workspaces and displays survive restart and a binary upgrade.
 
+Write one store-selection matrix before changing paths. For every store it names
+the owner, whether it is project-selected, user-shared or explicitly overridden,
+its import source and its restart/upgrade rule. Shared registry history and
+authorized overlays must not silently become empty merely because a project
+folder changes. Every database declaration follows the matrix; no service derives
+an alternate private root.
+
 Exit proof: the installed executable opens the intended folder offline and every
 store resolves beneath the selected root or its explicit override.
 
@@ -291,7 +304,9 @@ build.
 4. Give every attempt an OS-assigned MCP endpoint and a per-attempt secret. The
    callable surface is the intersection of saved profile scope, host policy and
    the request's dynamic `ctx`; ports, secrets, grants and `ctx` are never durable
-   profile data. Hooks and MCP bind to the same attempt and thread.
+   profile data. Hooks and MCP bind to the same attempt and thread. Prove two
+   simultaneous attempts get distinct endpoints and secrets, cross-attempt calls
+   refuse, and a retired attempt cannot call after restart.
 5. Bind every provider window to one durable thread, committed activity/title
    state and subscription cursor. The disconnected surface keeps the last
    confirmed value; Timeline resumes its cursor; Inbox distinguishes empty from
@@ -302,11 +317,14 @@ build.
    refusals remain visible provider outcomes.
 
 Maintain a four-row provider matrix. Each row requires a real installed binary,
-real configuration composition, MCP/hook delivery, close/cancel and restart. When
-credentials exist it also requires an authenticated startup and turn; otherwise
-the row records the provider's explicit login/account refusal and remains
-unqualified for authenticated use. Fixture-only evidence never marks a provider
-working.
+real configuration composition, MCP/hook delivery, close/cancel and restart. It
+tests present and absent user configuration, preserves provider-specific login
+state and user hooks, and fingerprints the provider's global and project trees
+before and after. When credentials exist it also requires an authenticated
+startup and turn; otherwise the row records the provider's explicit login/account
+refusal and remains unqualified for authenticated use. No secret, endpoint or
+grant may appear in argv, records, logs, retained homes or the pack. Fixture-only
+evidence never marks a provider working.
 
 Exit proof: UI and CLI launch all four real harnesses; global settings remain
 intact; scoped MCP and hooks reach the bound thread; cancel, close, restart and
@@ -341,6 +359,10 @@ resume work; pack inspection finds no credentials or fixtures.
 8. Prove two actual Bee runtimes over the existing native TLS mesh, including
    sleep/rejoin, remote viewport, resize/input, approval and retained apps.
 
+Public Hive activation waits for the reusable remote-lifecycle gate. Internal
+loopback fixtures may develop the UI and protocol earlier, but they do not make
+enrollment, discovery or remote attachment callable in a promoted executable.
+
 Exit proof: offline folder boot is immediate, several clients/displays behave
 predictably, stale records retire, and the two-node native-mesh journey passes.
 
@@ -368,12 +390,15 @@ predictably, stale records retire, and the two-node native-mesh journey passes.
 7. Preserve service-owned application configuration and state across update and
    restart. Registry metadata remains declarative; app data remains in its owning
    database.
-8. Keep Claude, Codex, Agy and Grok as independent components. Prove one harness
-   can be installed, updated and removed through Hub without editing Bee core;
-   run the same packaging acceptance for all four before the final release.
+8. Keep Claude, Codex, Agy and Grok as independent declarative components. This
+   local Hub milestone proves one already extracted app package end to end. The
+   four harnesses retain separate definitions and namespaces here; their
+   independent package install/update/remove proof follows package extraction in
+   Plan 5 rather than being inferred from their embedded source layout.
 
-Exit proof: clean and populated stores pass app and harness install/update/remove,
-injected failure recovery, admission/revocation, restart and pack inspection.
+Exit proof: clean and populated stores pass one independently packaged app's
+install/update/remove, injected failure recovery, admission/revocation, restart
+and pack inspection. Harness package parity remains an explicit Plan 5 gate.
 
 ### 4. Complete Docker as a profile choice
 
@@ -398,6 +423,11 @@ injected failure recovery, admission/revocation, restart and pack inspection.
    owner restart, container removal and absence of secrets from argv, records,
    logs and the production pack on Linux Engine and Docker Desktop/WSL.
 
+Run the same four-provider configuration matrix as native placement: ordinary
+installed harness behavior and login state remain available through only the
+admitted mounts/projections, provider trees remain unchanged, and a local profile
+switches to Docker without changing its thread or MCP/hook scope.
+
 Exit proof: changing only `isolation` from Local to Docker preserves the Agent's
 identity, project, thread, tools, hooks, terminal and recovery behavior for all
 four providers.
@@ -421,10 +451,14 @@ four providers.
 5. The destination independently resolves policy, reviews capability changes,
    admits and installs. Transfer package bytes and declared filesystem resources;
    never transfer credentials, grants, PIDs, live mounts or database ownership.
-6. Add retry/restart recovery around content chunks and install receipts. A fat
+6. Transfer a saved Agent profile only with its definition/profile revision,
+   options and declared MCP scope. The destination re-resolves its own harness,
+   policy, credentials and dynamic context; source login state, human identity and
+   authority never ride with the profile.
+7. Add retry/restart recovery around content chunks and install receipts. A fat
    storage Bee is a role expressed by installed components and admitted
    interfaces, not a special topology.
-7. Prove one app and one harness move to a second node, install, launch, restart
+8. Prove one app and one harness move to a second node, install, launch, restart
    and update while the source can disappear after transfer.
 
 Exit proof: independently mounted packages behave the same as the host assembly;
@@ -457,6 +491,12 @@ Use one path for user edits, Agent edits and installed overlay content:
 7. Replicate approved declarative overlays through the same package/content path.
    Service-owned databases and thread data keep their existing owners.
 
+Acceptance includes two concurrent apply attempts against one base revision,
+replayed and stale approvals, a direct Agent publication attempt, owner restart
+between commit and reply, and rollback of supported migration effects. A running
+owner keeps its admitted old code until the documented authorized restart or
+rejoin loads the new revision.
+
 Exit proof: an Agent prepares an ordinary edit, the user reviews it, the owner
 applies it once, protected changes require the configured approver, stale edits
 refuse, and rollback restores the measured prior definitions.
@@ -483,7 +523,9 @@ Each promotion runs:
    `tests/native_binary.py`, `tests/recovery.py` and the detached lifecycle gate;
 4. a fresh standalone build and offline/restart/recovery checks;
 5. production-pack inspection for tests, fixtures, credentials and local state;
-6. an atomic six-file install with a recorded rollback receipt.
+6. an installed upgrade that preserves registry history, admitted overlays and
+   every owned database, then proves a fresh owner loaded the new executable;
+7. an atomic six-file install with a recorded rollback receipt.
 
 The six installed files are `bee`, `bee.LICENSES.txt`, `bee.go.mod`,
 `bee.go.sum`, `bee.provenance.json` and `bee.runtime-patches.tar.gz`.

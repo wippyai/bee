@@ -85,6 +85,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
     local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
+    local picker_started = time.now():unix_nano()
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.harness.window:app", arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
@@ -96,6 +97,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         end
     end
     assert(opened.error_code == "", "managed app did not become ready: " .. tostring(opened.error))
+    if selected then
+        assert(time.now():unix_nano() - picker_started < 1500000000,
+            "Agent picker readiness waited for profile discovery")
+    end
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-one", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local mounted = ""
@@ -119,6 +124,14 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             error("Agent did not show " .. label)
         end
+        local function wait_without(label: string)
+            for _ = 1, 100 do
+                local snapshot = view:snapshot()
+                if snapshot and not table.concat(snapshot.rows):find(label, 1, true) then return end
+                time.sleep("25ms")
+            end
+            error("Agent did not clear " .. label)
+        end
         wait_for("No agent profiles")
         -- An empty picker remains interactive and owns no attempt.
         apply(original_definition)
@@ -138,6 +151,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         local refused = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(refused.records :: {{[string]: unknown}}) == 0, "stale selection created work")
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
+        wait_without("selected launch plan")
         wait_for("Selected agent fixture")
         assert(view:send({type = "mouse", x = 3, y = 9, button = "left", action = "press"}))
     end

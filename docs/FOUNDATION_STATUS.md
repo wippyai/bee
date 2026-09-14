@@ -44,6 +44,17 @@ selector proves the application definition, provider profile, thread, carrier,
 placement and scoped gateway retain one identity. The remaining B1 provider and
 recovery work plus the complete release gate must pass before global Bee changes.
 
+**B1 Agent picker responsiveness, source complete and not installed (September 14):**
+the picker presents a loading frame and announces readiness before reading saved
+profiles. One serialized, generation-fenced worker performs initial discovery and
+refresh, so resize, Escape and negotiated close remain available and late results
+cannot revive a closed picker. A fixture delays the real profile service for two
+seconds and proves broker readiness within 1.5 seconds before completing refresh,
+launch and terminal input. Empty and too-small selectors no longer expose New,
+Edit or Open actions for an invisible choice. Strict lint, 894/894 Lua tests, the
+managed-window journey and source-free native picker pass. Standalone SHA-256 is
+`d5304bc03bfa61b7e6c6fac6ed613dabbd558635a9b58e303c51d3b98d96d7fb`.
+
 **B1 Agy inheritance source complete, not installed (September 14):** the
 default Agy window keeps the authorized OS-user HOME and loads Bee's scoped MCP,
 hooks and appended instructions from a retained session-owned `.agents` root

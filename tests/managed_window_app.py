@@ -17,6 +17,19 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")
     activation["data"]["bindings"].append("bee.managed_window_fixture:binding")
     host.write_text(yaml.safe_dump(document, sort_keys=False))
+    profiles_index = folder / "src/harness/profiles/_index.yaml"
+    profiles_document = yaml.safe_load(profiles_index.read_text())
+    profile_service = next(entry for entry in profiles_document["entries"] if entry["name"] == "service")
+    profile_service["modules"].append("time")
+    profiles_index.write_text(yaml.safe_dump(profiles_document, sort_keys=False))
+    profiles_service = folder / "src/harness/profiles/service.lua"
+    profile_source = profiles_service.read_text().replace(
+        'local system = require("system")',
+        'local system = require("system")\nlocal time = require("time")').replace(
+        'function M.call(raw: unknown): Result\n',
+        'function M.call(raw: unknown): Result\n'
+        '    if type(raw) == "table" and raw.operation == "list" and raw.workspace_id == string.rep("a", 32) then time.sleep("2s") end\n')
+    profiles_service.write_text(profile_source)
     environment = workspace.database_environment(folder)
     subprocess.run([str(workspace.RUNTIME), "lint"], cwd=folder, env=environment, check=True, timeout=60)
     subprocess.run([str(workspace.RUNTIME), "test", "--host", "bee:terminal"], cwd=folder, env=environment, check=True, timeout=60)

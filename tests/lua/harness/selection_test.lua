@@ -131,10 +131,22 @@ local function define_tests()
             local small = view.draw(20, 3, appearance.defaults(), listed, 1, "")
             test.eq(#small.rows, 3)
             test.eq(small.capacity, 0)
-            for _, hit in ipairs(small.hits) do test.is_true(hit.action ~= "open") end
+            for _, hit in ipairs(small.hits) do
+                test.is_true(hit.action ~= "open" and hit.action ~= "new" and hit.action ~= "edit")
+            end
             local thin = view.draw(2, 10, appearance.defaults(), listed, 1, "")
             test.eq(thin.capacity, 0)
-            for _, hit in ipairs(thin.hits) do test.is_true(hit.action ~= "open") end
+            for _, hit in ipairs(thin.hits) do
+                test.is_true(hit.action ~= "open" and hit.action ~= "new" and hit.action ~= "edit")
+            end
+            local empty = view.draw(80, 12, appearance.defaults(), {items = {}, unavailable = 0}, 0, "")
+            for _, hit in ipairs(empty.hits) do
+                test.is_true(hit.action ~= "open" and hit.action ~= "new" and hit.action ~= "edit")
+            end
+            local loading = table.concat(view.draw(80, 12, appearance.defaults(),
+                {items = {}, unavailable = 0}, 0, "Loading profiles…").rows)
+            test.is_true(loading:find("Loading profiles", 1, true) ~= nil)
+            test.is_true(loading:find("No agent profiles", 1, true) == nil)
         end)
         isolated_it("returns an empty eligible list when only hidden or batch definitions exist", function()
             local entries = {

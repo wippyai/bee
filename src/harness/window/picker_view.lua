@@ -35,7 +35,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             line(row + 2, label, index == selected, choice.unavailable ~= nil)
         end
     end
-    if #choices.items == 0 and height >= 5 then line(3, "No agent profiles are configured on this node", false, true) end
+    if #choices.items == 0 and status == "" and height >= 5 then
+        line(3, "No agent profiles are configured on this node", false, true)
+    end
     local choice = choices.items[selected]
     if show_summary and choice and choice.summary then line(height - 3, choice.summary, false, true) end
     if height >= 3 then
@@ -43,7 +45,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for _, action in ipairs({{name = "open", label = " Open "}, {name = "new", label = " New "}, {name = "edit", label = " Edit "}, {name = "refresh", label = " Refresh "}, {name = "close", label = " Close "}}) do
             local size = #action.label
             if x + size - 1 <= width then
-                local enabled = action.name ~= "open" or (choice ~= nil and not choice.unavailable and capacity > 0)
+                local selection_action = action.name == "open" or action.name == "new" or action.name == "edit"
+                local enabled = not selection_action or (choice ~= nil and capacity > 0
+                    and (action.name ~= "open" or not choice.unavailable))
                 canvas:put(x, height - 1, appearance.style(enabled and appearance.selection_text(theme) or theme.muted,
                     enabled and theme.accent or theme.surface) .. action.label .. reset, size)
                 if enabled then hits[#hits + 1] = {action = action.name, x = x, y = height - 1, width = size} end

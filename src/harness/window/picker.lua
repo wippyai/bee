@@ -49,7 +49,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     closes: Channel<process.Message>): (admission.Admitted?, string?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local output = assert(tty.surface())
+    local running = true
+    local load_serial = 0
+    local loads = channel.new(1)
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
+        running = false
+        load_serial = load_serial + 1
         process.unlisten(states)
         local closed, close_error = output:close()
         if not closed then return nil, "Close profile screen: " .. tostring(close_error) end
@@ -57,11 +62,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local choices, load_error = selection.snapshot(launch.workspace_id)
     local listed: selection.Choices = {items = {}, unavailable = 0}
-    if choices then listed = choices end
-    local selected: integer = #listed.items > 0 and 1 or 0
-    local status = load_error or ""
+    local selected: integer = 0
+    local status = "Loading profiles…"
+    local loading = false
     local request_id: string? = nil
     local request_definition, request_plan = "", ""
     local editing: profile_view.State? = nil
@@ -69,6 +73,22 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local announced = false
     local dirty = true
     local frame: view.Frame = {rows = {}, first = 1, capacity = 0, hits = {}}
+    local function load()
+        if loading then return end
+        load_serial = load_serial + 1
+        local serial = load_serial
+        loading = true
+        listed = {items = {}, unavailable = 0}
+        selected = 0
+        status = "Loading profiles…"
+        dirty = true
+        coroutine.spawn(function()
+            local choices, load_error = selection.snapshot(launch.workspace_id)
+            if running and serial == load_serial then
+                loads:send({serial = serial, choices = choices, error = load_error})
+            end
+        end)
+    end
     process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
     while true do
         if dirty then
@@ -84,7 +104,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if not announced then client.ready(launch, {negotiate_close = true}); announced = true end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(), states:case_receive()})
+        if load_serial == 0 then load() end
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(),
+            states:case_receive(), loads:case_receive()})
         if not event.ok then return finish(nil, nil) end
         local activate, refresh = false, false
         local edit, duplicate = false, false
@@ -98,6 +120,16 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 local payload: unknown = event.value:payload():data()
                 local decoded = appearance.decode(payload)
                 if decoded and type(payload) == "table" and payload.version == 1 then preferences = decoded; dirty = true end
+            end
+        elseif event.channel == loads then
+            local result = event.value :: {serial: integer, choices: selection.Choices?, error: string?}
+            if result.serial == load_serial then
+                loading = false
+                listed = {items = {}, unavailable = 0}
+                if result.choices then listed = result.choices end
+                selected = #listed.items > 0 and 1 or 0
+                status = result.error or ""
+                dirty = true
             end
         else
             local data = input_event.decode(event.value)
@@ -119,16 +151,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     dirty = true
                 elseif data.type == "key" and data.action == "press" then
                     if data.key_type == "escape" or data.key_type == "esc" then return finish(nil, nil)
-                    elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
-                    elseif data.key_type == "down" then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
+                    elseif data.key_type == "up" and selected > 0 then selected = math.floor(math.max(1, selected - 1)); dirty = true
+                    elseif data.key_type == "down" and selected > 0 then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" then activate = true
                     elseif data.key == "r" and not data.ctrl and not data.alt then refresh = true
                     elseif data.key == "e" and not data.ctrl and not data.alt then edit = true
                     elseif data.key == "n" and not data.ctrl and not data.alt then edit = true; duplicate = true end
                 elseif data.type == "mouse" then
                     if data.action == "wheel" then
-                        local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
-                        selected = math.floor(math.max(1, math.min(#listed.items, selected + delta))); dirty = true
+                        if selected > 0 then
+                            local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                            selected = math.floor(math.max(1, math.min(#listed.items, selected + delta))); dirty = true
+                        end
                     elseif data.action == "press" and data.button == "left" then
                         for _, hit in ipairs(frame.hits) do
                             if data.y == hit.y and data.x >= hit.x and data.x < hit.x + hit.width then
@@ -156,7 +190,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         end
-        if activate and frame.capacity > 0 then
+        if activate and not loading and frame.capacity > 0 then
             local choice = listed.items[selected]
             if choice and not choice.unavailable then
                 if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then
@@ -192,11 +226,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         end
         if refresh then
-            local next_choices, next_error = selection.snapshot(launch.workspace_id)
-            listed = {items = {}, unavailable = 0}
-            if next_choices then listed = next_choices end
-            selected = #listed.items > 0 and 1 or 0
-            status = next_error or ""; dirty = true
+            load()
         end
     end
 end

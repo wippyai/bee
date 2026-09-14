@@ -61,6 +61,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local admissions = listen("bee.host.admitted")
         local copy_results = listen("bee.selection.copied")
         local launch_requests = listen("bee.client.launch")
+        local attachment_updates = listen("bee.desktop.attachments")
         local presentations = listen("bee.host.presentation")
         local catalogs = listen("bee.host.catalog")
         local views = listen("bee.host.views")
@@ -131,6 +132,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         local initial_opened = false
         local initial_request = ""
         local launch_pending: {request_id: string, desktop_id: string, fullscreen: boolean}? = nil
+        local attachment_state: unknown = nil
         local self = tostring(process.pid())
         local function send(recipient: string, topic: string, value: unknown)
             local sent, err = process.send(recipient, topic, value)
@@ -462,7 +464,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(), launch_requests:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
                     question_results:case_receive(), answers:case_receive(), appearance_requests:case_receive(),
-                    supervisor_controls:case_receive(), copy_results:case_receive()}
+                    supervisor_controls:case_receive(), copy_results:case_receive(), attachment_updates:case_receive()}
                 -- Once saved for local shutdown, retain the physical display but
                 -- stop consuming app removals and scene edits. Host cleanup must
                 -- not overwrite the layout that will be restored on next boot.
@@ -550,6 +552,11 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             end
                             send(owner, "bee.client.copied", {version = 1, request_id = result.request_id,
                                 selected = result.selected, text = result.text, error = result.error})
+                        end
+                    elseif selected.channel == attachment_updates and sender == owner and bootstrap.quit_mode == "supervisor" then
+                        attachment_state = data
+                        if active and not paused and not waiting_presenter then
+                            send(presenter, "bee.desktop.attachments", data)
                         end
                     elseif selected.channel == admissions and sender == host and connection_id == "" then
                         if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then error("Invalid client admission") end
@@ -687,6 +694,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                             elseif data.op == "ready" then
                                 if waiting_presenter and not paused then
                                     waiting_presenter = false
+                                    if attachment_state ~= nil then send(presenter, "bee.desktop.attachments", attachment_state) end
                                     send(owner, "bee.client.renderer", {version = 1, workspace_id = workspace_id,
                                         connection_id = connection_id, renderer = presenter})
                                 end

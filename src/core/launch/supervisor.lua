@@ -110,6 +110,13 @@ local function run_supervisor(client: string, database_resource: string?, retain
             local sent, err = process.send(recipient, topic, value)
             if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
         end
+        local function publish_attachments(resource: desktops.Desktop, id: string?)
+            if not id then return end
+            local observers = 0
+            for _ in pairs(resource.grants.observers) do observers = observers + 1 end
+            send(resource.pid, "bee.desktop.attachments", {version = 1, display_id = id,
+                controller = resource.grants.controller ~= nil, observers = observers})
+        end
         local function forward_catalog_readers()
             local snapshot = reader_snapshot
             if retained_owner and workspace_id ~= "" and snapshot then
@@ -211,6 +218,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     if desktop then
                         local detached = attachments.detach(desktop.grants, tostring(event.from))
                         if detached.error_code ~= "" then error("Desktop detach failed: " .. detached.error) end
+                        publish_attachments(desktop, desktop_id)
                     end
                 elseif event.kind == process.event.EXIT then
                     if retained_owner and tostring(event.from) == retained_owner then return end
@@ -234,6 +242,7 @@ local function run_supervisor(client: string, database_resource: string?, retain
                     if desktop then
                         local detached = attachments.detach(desktop.grants, tostring(event.from))
                         if detached.error_code ~= "" then error("Desktop detach failed: " .. detached.error) end
+                        publish_attachments(desktop, desktop_id)
                     end
                     local failure = decode.exit_error(event.result)
                     if tostring(event.from) == host and (failure ~= nil or (phase ~= "finishing" and phase ~= "stopping")) then
@@ -416,6 +425,9 @@ local function run_supervisor(client: string, database_resource: string?, retain
                         elseif result.error_code == "" and request.recipient ~= retained_owner
                             and request.recipient ~= client and request.recipient ~= host and not has_attachment(request.recipient) then
                             process.unmonitor(request.recipient)
+                        end
+                        if result.error_code == "" then
+                            publish_attachments(selected_desktop, requested_id)
                         end
                         send(sender, "bee.retained.result", {version = 1, workspace_id = workspace_id, desktop_id = requested_id,
                             request_id = request.request_id, mount = result.mount, error_code = result.error_code, error = result.error})

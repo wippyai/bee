@@ -7,6 +7,7 @@ local render = require("render")
 local bindings = require("bindings")
 local menu = require("menu")
 local selection = require("selection")
+local connection = require("connection")
 local appearance = require("appearance")
 local surface = require("surface")
 local names = require("names")
@@ -17,6 +18,22 @@ local catalog: {menu.Descriptor} = {
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("accepts only exact aggregate attachment state for its display", function()
+            local info = connection.new("{Antares@bee.client:main|one}", string.rep("a", 32),
+                string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
+            test.eq(info.hive, "Supervisor ready")
+            test.eq(info.attachments, "Not reported")
+            test.is_true(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = true, observers = 2}))
+            test.eq(info.attachments, "Controlled · 2 observers")
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("c", 32),
+                controller = false, observers = 0}))
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = false, observers = 17}))
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = false, observers = 0, recipient = "private"}))
+            test.eq(info.attachments, "Controlled · 2 observers")
+        end)
         test.it("keeps Classic terminals dark without changing application panels", function()
             local theme = appearance.theme("classic")
             local terminal = appearance.page(theme, true)

@@ -532,9 +532,12 @@ stopped default refuses before a controlling attachment reactivates it.
 
 ### Connection card
 
-F9 or the workspace label opens the compact connection card. Hive service status
-and the executing node precede the friendly workspace and display names. The
+F9 or the workspace label opens the compact connection card. Hive supervisor status,
+the executing node and the retained supervisor's aggregate controller/observer
+state precede the friendly workspace and display names. Attachment recipients and
+mount references never enter presentation. The
 workspace readiness and display dimensions remain visible. Full durable IDs are
 behind Details (click or D); Escape/F9 closes the card, clicks within it stay
-inside the card, and F12 still replaces the presenter. This view uses the trusted
-desktop bootstrap; it does not infer peer health from the local service status.
+inside the card, and F12 still replaces the presenter. This view uses trusted
+desktop bootstrap plus authenticated push updates from the attachment owner; it
+does not poll clients or infer peer health from supervisor readiness.

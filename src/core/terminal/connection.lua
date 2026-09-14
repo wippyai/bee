@@ -4,7 +4,8 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
-type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?, details: boolean?}
+type Info = {node: string, workspace: string, display: string, hive: string, supervisor: string?,
+    attachments: string, details: boolean?}
 local M = {}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or value == "" or #value > limit or value:find("%c") then return nil end
@@ -14,7 +15,22 @@ function M.new(owner: string, workspace: string, display: unknown, supervisor: u
     local node = owner:match("^{([^@|}]+)@[^|}]+|[^}]+}$") or "Local node"
     local selected = line(supervisor, 160)
     return {node = node, workspace = workspace, display = line(display, 64) or "Current session",
-        hive = selected and "Service running" or "Not reported", supervisor = selected}
+        hive = selected and "Supervisor ready" or "Not reported", supervisor = selected,
+        attachments = "Not reported"}
+end
+function M.observe(info: Info, value: unknown): boolean
+    if type(value) ~= "table" or value.version ~= 1 or value.display_id ~= info.display then return false end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "display_id" and key ~= "controller" and key ~= "observers" then return false end
+    end
+    if type(value.controller) ~= "boolean" or type(value.observers) ~= "number"
+        or value.observers ~= math.floor(value.observers) or value.observers < 0 or value.observers > 16 then return false end
+    local status = value.controller and "Controlled" or "Uncontrolled"
+    if value.observers > 0 then
+        status = status .. " · " .. tostring(value.observers) .. (value.observers == 1 and " observer" or " observers")
+    end
+    info.attachments = status
+    return true
 end
 function M.toggle_details(info: Info)
     info.details = not info.details
@@ -22,7 +38,7 @@ end
 type Geometry = {left: integer, size: integer, rows: integer}
 local function geometry(width: integer, height: integer, details: boolean?): Geometry
     local size = math.floor(math.min(44, width - 2))
-    local rows = math.floor(math.min(details and 15 or 13, height - 2))
+    local rows = math.floor(math.min(details and 16 or 14, height - 2))
     return {left = width - size, size = size, rows = rows}
 end
 function M.contains(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
@@ -71,24 +87,26 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
     if rows < 13 then
         pair(2, "HIVE", info.hive)
         pair(3, "NODE", info.node)
-        put(4, "WORKSPACE  " .. names.label(info.workspace), normal)
-        put(5, "DISPLAY    " .. names.label(info.display), normal)
-        put(6, tostring(width) .. " × " .. tostring(height) .. "  ·  " .. (ready and "Ready" or "Loading"), muted)
+        pair(4, "ATTACH", info.attachments)
+        put(5, "WORKSPACE  " .. names.label(info.workspace), normal)
+        put(6, "DISPLAY    " .. names.label(info.display), normal)
+        put(7, tostring(width) .. " × " .. tostring(height) .. "  ·  " .. (ready and "Ready" or "Loading"), muted)
     else
         pair(2, "HIVE", info.hive)
         pair(3, "NODE", info.node)
-        rule(4)
-        pair(5, "WORKSPACE", ready and "Ready" or "Loading")
-        put(6, names.label(info.workspace), normal)
+        pair(4, "ATTACH", info.attachments)
+        rule(5)
+        pair(6, "WORKSPACE", ready and "Ready" or "Loading")
+        put(7, names.label(info.workspace), normal)
         local shift = 0
-        if info.details and rows >= 15 then
-            put(7, info.workspace, muted)
+        if info.details and rows >= 16 then
+            put(8, info.workspace, muted)
             shift = 1
         end
-        rule(7 + shift)
-        pair(8 + shift, "DISPLAY", tostring(width) .. " × " .. tostring(height))
-        put(9 + shift, names.label(info.display), normal)
-        if info.details and rows >= 15 then put(11, info.display, muted) end
+        rule(8 + shift)
+        pair(9 + shift, "DISPLAY", tostring(width) .. " × " .. tostring(height))
+        put(10 + shift, names.label(info.display), normal)
+        if info.details and rows >= 16 then put(12, info.display, muted) end
     end
     put(rows - 2, (info.details and "‹ Less [D]" or "› Details [D]") .. "     F9 / Esc close", muted)
 end

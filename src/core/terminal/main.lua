@@ -41,6 +41,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local clipboard_results = assert(process.listen("bee.clipboard.result", {message = true}))
     local transfer_updates = assert(process.listen("bee.display.transfers", {message = true}))
     local transfer_results = assert(process.listen("bee.display.transfer_result", {message = true}))
+    local attachment_updates = assert(process.listen("bee.desktop.attachments", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     assert(tty.mouse(true))
@@ -378,7 +379,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     while running do
         local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
             replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
-            transfer_updates:case_receive(), transfer_results:case_receive(), dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive()})
+            transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
+            dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
@@ -438,6 +440,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     dirty = true
                 end
             end
+        elseif selected.channel == attachment_updates then
+            local message = selected.value
+            if tostring(message:from()) == owner and connection.observe(connection_info, message:payload():data()) then dirty = true end
         elseif selected.channel == transfer_updates then
             local message = selected.value
             if message:from() == owner then
@@ -886,6 +891,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     process.unlisten(clipboard_results)
     process.unlisten(transfer_updates)
     process.unlisten(transfer_results)
+    process.unlisten(attachment_updates)
     if not rejoining then process.send(owner, "bee.workspace.control", {version = 1, op = "quit"}) end
     delivery.shutdown()
     output:close()

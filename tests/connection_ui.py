@@ -13,7 +13,7 @@ def exercise(packed=False):
             ui.wait(' BEE ')
             ui.key(b'\x1b[20~')  # F9
             ui.wait('CONNECTION')
-            for label in ('HIVE', 'NODE', 'WORKSPACE', 'DISPLAY'):
+            for label in ('HIVE', 'NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
             assert not re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text()), ui.text()
@@ -23,8 +23,8 @@ def exercise(packed=False):
             ui.mouse(0, 60, 3, True)
             ui.pump(.1)
             assert 'CONNECTION' in ui.text(), ui.text()
-            ui.mouse(0, 60, 13)
-            ui.mouse(0, 60, 13, True)
+            ui.mouse(0, 60, 14)
+            ui.mouse(0, 60, 14, True)
             ui.wait('Less [D]')
             identities = re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text())
             assert len(set(identities)) >= 2, 'Full workspace/display IDs were clipped: ' + ui.text()
@@ -48,7 +48,7 @@ def exercise(packed=False):
             Path('/tmp/bee-connection-dropdown-frame.txt').write_text(ui.text())
             ui.resize(42, 12)
             ui.pump(.3)
-            for label in ('HIVE', 'NODE', 'WORKSPACE', 'DISPLAY'):
+            for label in ('HIVE', 'NODE', 'ATTACH', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert all(len(row) <= 42 for row in ui.screen.display), ui.text()
             ui.resize(100, 30)

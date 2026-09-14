@@ -36,6 +36,7 @@ entries:
     bindings: bee.terminal:bindings
     menu: bee.terminal:menu
     selection: bee.terminal:selection
+    connection: bee.terminal:connection
     appearance: bee.desktop:appearance
     surface: bee.application:status_surface
     names: bee.desktop:names

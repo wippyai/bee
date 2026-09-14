@@ -22,6 +22,12 @@ local function send(recipient: string, topic: string, value: unknown): boolean
     local sent, err = process.send(recipient, topic, value)
     return sent == true and err == nil
 end
+local function publish_attachments(child: Child)
+    local observers = 0
+    for _ in pairs(child.resource.grants.observers) do observers = observers + 1 end
+    send(child.resource.pid, "bee.desktop.attachments", {version = 1, display_id = child.id,
+        controller = child.resource.grants.controller ~= nil, observers = observers})
+end
 local function answer(state: State, id: string, request: string, code: string, message: string)
     send(state.owner, "bee.retained.activated", {version = 1, workspace_id = state.workspace_id,
         desktop_id = id, request_id = request, error_code = code, error = message:sub(1, 400)})
@@ -200,6 +206,7 @@ function M.event(state: State, event: process.Event)
         else
             local result = attachments.detach(child.resource.grants, sender)
             if result.error_code ~= "" then fail(state, child, "Desktop attachment revocation failed") end
+            publish_attachments(child)
         end
     end
 end

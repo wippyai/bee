@@ -6739,3 +6739,26 @@ the focused check pass. Repository strict lint passes with the existing
 `desktop_lifecycle` fixpoint warning, and all 895 Lua tests pass. The component
 has no published dependency lock or accepted immutable Codex image yet, so it
 does not claim real provider execution, Hub publication or global installation.
+
+### September 14 — real Codex Docker picker acceptance
+
+The optional Codex Docker component now owns a small Docker-specific binding and
+window profile whose isolation contract selects a retained private HOME. It
+reuses the production Codex prepare, dispatch, normalize and configure methods.
+This corrects the first real-run refusal caused by reusing the native Codex
+window profile, which deliberately selects the host HOME.
+
+`make codex-docker-picker-check` composes the component with the Docker daemon
+adapter and userspace client, links image and numeric-user requirements, binds
+the existing gateway to a Docker-reachable private interface on a random port,
+and opens the profile through the production Agent picker. Against local Codex
+0.154.0 image `sha256:8d9790250520b91e33fb283d2193c43fa828e0103e77fdd76250c81530b5cf9b`,
+it proves actual TUI startup, unsubmitted input, exact `91 x 27` PTY resize,
+private retained HOME, optional `codex_login` projection, distinct scoped MCP
+and hook credentials, all three declared MCP tools, ordinary close and exact
+container removal. It performs no model turn and emits no credential bytes.
+
+The fixture shell-driver Docker picker regression and the component linker both
+remain green. Tests stay outside production packs. The image is local evidence,
+not a published artifact; Docker restart recovery, the other three harness
+components, Hub publication and global installation remain open.

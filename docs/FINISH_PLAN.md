@@ -599,9 +599,10 @@ refuse. Harness package parity remains an explicit Plan 5 gate.
    Docker reports a precise readiness state without hiding the local profile.
    The first component source now exists for Codex outside the default pack. It
    contributes `codex-docker` through the ordinary definition catalog and has
-   mandatory Hub parameters for an immutable image and non-root user. Its linker
-   and catalog acceptance passes; publishing dependency pins, a real Codex image,
-   readiness reporting and the other three harness components remain.
+   mandatory Hub parameters for an immutable image and non-root user. Its linker,
+   catalog and real local-image picker acceptance pass. Publishing dependency
+   pins, a distributable immutable image, restart recovery and the other three
+   harness components remain.
 2. Route the existing carrier and managed-window lifecycle through the native
    `exec.docker` placement binding. Keep the same attempt owner, sweeper, thread,
    driver and gateway. Do not depend on the optional userspace Docker component.

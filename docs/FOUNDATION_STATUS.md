@@ -148,9 +148,11 @@ Lua tests pass, as do the rebuilt candidate's native selector, offline boot,
 Codex hook/MCP, installed-upgrade recovery, same-build recovery and pack
 exclusion checks. The exact-source repository regression and global installation
 now pass as recorded above.
-Agy/Grok inheritance, Docker profile delivery and real-provider cold recovery
-remain unfinished. Explicit Codex developer-instruction overrides are not yet
-merged with an existing global developer-instructions value.
+Agy/Grok inheritance and real-provider cold recovery are recorded below. The
+first Codex Docker profile now has real picker/container acceptance; the other
+three Docker harness components and restart recovery remain unfinished. Explicit
+Codex developer-instruction overrides are not yet merged with an existing global
+developer-instructions value.
 
 **Native Docker PTY proof:** `make docker-exec-pty-check` runs a registered
 `exec.docker` resource through terminal input/output, resize, close and container

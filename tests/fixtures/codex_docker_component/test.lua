@@ -36,13 +36,20 @@ local function run()
             local raw_launch = entry("bee.driver.codex.docker:launch")
             local launch, launch_error = definitions.decode("bee.driver.codex.docker:launch", raw_launch)
             if not launch then error(tostring(launch_error)) end
-            test.eq(launch.binding_ref, "bee.driver.codex:binding")
+            test.eq(launch.binding_ref, "bee.driver.codex.docker:binding")
             test.eq(launch.policy_ref, "bee.driver.codex.docker:policy")
             test.eq(launch.workdir_policy.kind, "declared_resource")
             test.eq(launch.workdir_policy.resource_ref, "project")
             test.eq(launch.session_resource, "session")
             test.eq(#launch.credentials, 1)
             test.eq(launch.credentials[1], "codex_login")
+
+            local raw_profiles = entry("bee.driver.codex.docker:profiles")
+            local driver = (raw_profiles.data :: {[string]: unknown}).driver :: {[string]: unknown}
+            local profiles = driver.profiles :: {{[string]: unknown}}
+            test.eq(#profiles, 1)
+            local isolation = profiles[1].isolation_env :: {[string]: unknown}
+            test.eq(isolation.private_home, true)
 
             local command, command_error = selection.command("codex-docker")
             if not command then error(tostring(command_error)) end

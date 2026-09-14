@@ -1,9 +1,11 @@
 # wolfy-j/bee-driver-codex-docker
 
 This optional component adds one Codex window profile backed by Bee's existing
-Docker placement binding. It owns only a launch definition and its launch
-policy. The Codex driver, Agent picker, thread, gateway, credential, resource
-and Docker lifecycle contracts stay with their existing components.
+Docker placement binding. It owns a launch definition, launch policy and the
+small binding/profile declaration that selects Docker's retained private HOME.
+That binding delegates to the existing Codex prepare, dispatch, normalize and
+configure methods. The Agent picker, thread, gateway, credential, resource and
+Docker lifecycle contracts stay with their existing components.
 
 The installing host must provide both package requirements:
 
@@ -24,7 +26,8 @@ requires exact Host checks, and scopes MCP and hook tokens to the attempt. A
 loopback-only gateway makes real container launch unavailable; this component
 does not weaken that boundary with host networking or synthetic hostnames.
 
-The component is outside Bee's default `src/` pack. Its manifest does not claim
-a runnable production image or publication until the driver and Docker package
-dependencies are pinned and the immutable Codex image passes the full managed
-Agent acceptance.
+The component is outside Bee's default `src/` pack. A local immutable Codex
+0.154.0 image passes the real managed-picker, PTY, retained-HOME, credential,
+MCP and removal acceptance without a model turn. The manifest still claims no
+distributable production image or publication until its package dependencies
+and image artifact are published and pinned.

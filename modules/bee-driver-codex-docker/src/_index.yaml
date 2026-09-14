@@ -55,6 +55,44 @@ entries:
       home_target: /home/bee
       mounts:
       - {resource: project, target: /workspace, access: write}
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.codex:prepare
+      dispatch: bee.driver.codex:dispatch
+      normalize: bee.driver.codex:normalize
+      configure: bee.driver.codex:configure
+  meta:
+    type: harness.driver
+    driver_id: codex-docker
+    profiles_ref: bee.driver.codex.docker:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.codex.docker:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Codex CLI · Docker
+      implementation_version: 0.154.0
+      default_profile: window
+      profiles:
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME, CODEX_HOME]
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}
 - name: launch
   kind: registry.entry
   meta:
@@ -65,7 +103,7 @@ entries:
     launch_id: codex-docker
     title: Codex · Docker
     command_names: [codex-docker]
-    binding_ref: bee.driver.codex:binding
+    binding_ref: bee.driver.codex.docker:binding
     profile_id: window
     policy_ref: bee.driver.codex.docker:policy
     default_mode: window

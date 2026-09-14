@@ -105,6 +105,13 @@ docker-agent-picker-check:
 	test -n "$(DOCKER_IMAGE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(DOCKER_IMAGE)"
+.PHONY: codex-docker-picker-check
+codex-docker-picker-check:
+	test -n "$(DOCKER_COMPONENT)"
+	test -n "$(CODEX_DOCKER_IMAGE)"
+	test -n "$(GATEWAY_INTERFACE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_agent_picker.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/docker_agent_picker.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -docker-source "$(DOCKER_COMPONENT)" -image "$(CODEX_DOCKER_IMAGE)" -interface "$(GATEWAY_INTERFACE)" -codex-component
 .PHONY: docker-profile-component-check
 docker-profile-component-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/docker_profile_component.go

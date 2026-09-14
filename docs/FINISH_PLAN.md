@@ -27,10 +27,10 @@ The installed Train A executable has SHA-256 `4692e267` and source `414c03b`.
 It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
-The integration branch is `feat/docker-harness-delivery-20260913`. Its current
-immutable head is `380d288`; the worktree is clean. This plan is the only finish
-queue for that branch. Older handoff queues provide evidence and history but do
-not reorder this plan.
+The integration branch is `feat/docker-harness-delivery-20260913`. Grok B1.1 is
+the immutable implementation base at `380d288`; later finish evidence builds on
+it in bounded commits. This plan is the only finish queue for that branch. Older
+handoff queues provide evidence and history but do not reorder this plan.
 
 Completed on this branch:
 
@@ -41,7 +41,8 @@ Completed on this branch:
 - saved profiles are workspace-scoped, database-backed and revisioned; create,
   edit, select, tombstone, restart persistence and receipt replay pass;
 - an exact-source standalone passes the four-provider selector, real Grok 1.0.30
-  authenticated and clean/login/cancel/restart paths, and owner-restart recovery;
+  authenticated and clean/login/cancel/restart paths, graceful and abrupt
+  fixture owner recovery, and real Agy cold conversation continuation;
 - the direct native Docker PTY and lower placement foundations pass;
 - the Hub already implements most of its local immutable
   install/update/remove, migration, receipt and recovery backend;
@@ -58,12 +59,14 @@ existing `desktop_lifecycle` fixpoint warning, native window acceptance passes,
 and global/project Grok trees remain unchanged. This is branch evidence, not a
 global installation.
 
-The immediate gap is the real-provider recovery matrix. Fixture Claude now
-proves stable application, thread and retained HOME plus a fresh attempt and
-gateway binding across owner restart. Abrupt owner death, real Claude/Codex
-recovery, and a durable checked-in Agy recovery proof remain to be completed and
-reconciled with Grok. Native Agents also remains blocked from global promotion
-until the selected-state-root runtime gate is released and consumed.
+The immediate gap is the rest of the real-provider recovery matrix. Fixture
+Claude now proves stable application, thread and retained HOME plus a fresh
+attempt and gateway binding across graceful and abrupt owner restart. A durable
+real-Agy acceptance proves exact tool-free recall after its source file is
+deleted, with stable conversation/HOME/application/thread and fresh attempt and
+gateway identities. Real Claude/Codex recovery and Grok reconciliation remain.
+Native Agents also remains blocked from global promotion until the selected-state-root
+runtime gate is released and consumed.
 
 ### Reusable runtime gates
 
@@ -204,16 +207,12 @@ Connected Bee.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. run the exact-source abrupt-owner recovery gate without rebuilding its already
-   accepted executable;
-2. turn the historical real Agy cold-continuation proof into a durable checked-in
-   acceptance and rerun it against the same exact source;
-3. complete the real Claude and Codex cold-recovery rows, preserving global and
+1. complete the real Claude and Codex cold-recovery rows, preserving global and
    project configuration fingerprints and proving that recovery never replays the
    original prompt;
-4. reconcile Grok into the same matrix, including normal close, owner restart,
+2. reconcile Grok into the same matrix, including normal close, owner restart,
    abrupt restart and fresh attempt/secret/gateway fencing;
-5. fix only defects exposed by the matrix, rerun affected focused checks, then
+3. fix only defects exposed by the matrix, rerun affected focused checks, then
    commit and push the bounded recovery unit.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.

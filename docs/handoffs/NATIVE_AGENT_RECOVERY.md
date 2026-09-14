@@ -157,12 +157,23 @@ orphan before observing the recovery outcome. Both use fixture providers and
 verify retained HOME, conversation/app/view identity, fresh attempt and binding,
 and absence of fabricated success or prompt replay.
 
+`make native-agy-recovery-live-check BEE_BINARY=... AGY_BIN=...
+AGY_LOGIN_FILE=...` runs an installed Agy provider twice through the same public
+managed window. It reads a random token on the first turn, stops and restarts Bee,
+deletes the source file, then requires exact tool-free recall through the
+provider's recorded conversation. It also proves the same application, thread
+and private HOME, a retired predecessor, a fresh attempt and gateway binding,
+consistent first-turn tool/Stop hooks, no fabricated Bee turn success, unchanged
+source login and no project provider writes. The test copies only the explicit
+login file into disposable state and removes that state on every outcome.
+
 Agy's corrected MCP delivery declares private JSON credential fields. Placement
 fills those after minting the admitted binding; the persisted template retains
 only field paths and environment names. Source now republishes these admitted
 configuration files with fresh binding credentials in the retained home; login
-and conversation bytes are not configuration targets. Real Agy cold recovery
-still needs an actual provider continuation proof.
+and conversation bytes are not configuration targets. The live recovery target
+now provides the actual provider continuation proof. It does not prove recovery
+of an interactive Agy TUI or an arbitrary surviving orphan process tree.
 
 See [the verified filesystem boundary](RETAINED_CONFIGURATION_FS.md).
 Lua already exposes file sync;

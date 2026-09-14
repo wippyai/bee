@@ -40,9 +40,13 @@ installed Agy 1.2.2 without a model prompt and observes it loading the added
 hooks root before a prompt detach. A separate managed read task commits tool and Stop observations.
 An actual managed MCP task also commits one bound-thread message when the two
 fixture tools are explicitly allowed in its private permissions file. Production
-retains the harness permission prompts; this is not automatic approval or cold
-conversation recovery. The host selects the executable and
-grants; the component declaration alone gives no execution authority.
+retains the harness permission prompts; this is not automatic approval. The
+opt-in cold-recovery acceptance runs two real print-mode turns around a Bee owner
+restart and deleted source token. It requires exact tool-free recall, the same
+provider conversation, HOME, application and thread, a fresh attempt and gateway,
+and unchanged source login/project state. It does not prove interactive-TUI or
+arbitrary orphan-tree recovery. The host selects the executable and grants; the
+component declaration alone gives no execution authority.
 
 Strict lint, all 886 unit cases, packaged native selection, installed-Agy startup
 and loopback-only boot checks pass for this source. The current global Train A

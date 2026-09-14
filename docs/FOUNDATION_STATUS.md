@@ -39,7 +39,10 @@ absent global login, ordinary global state visibility, private session-root
 containment, scoped gateway calls, hook delivery, prompt detach and retention
 across owner exit. An opt-in test launches installed Agy 1.2.2 without a model
 prompt and observes it loading the added hook root while leaving the seeded
-global marker and project unchanged. Grok global-configuration parity passes
+global marker and project unchanged. The checked-in opt-in cold-recovery target
+runs two real Agy turns and proves exact tool-free recall after source deletion,
+stable conversation/HOME/application/thread, fresh attempt/gateway identities,
+and first-turn tool/Stop hook delivery. Grok global-configuration parity passes
 the focused real-Grok 1.0.30 acceptance against exact-source standalone
 `64679b3f`. Source now snapshots the host-approved Grok
 `config.toml` into a private retained composition base independently of optional
@@ -48,8 +51,8 @@ collision and passes the additive MCP permission as a literal argument; hooks
 remain separate. The authenticated path preserves user hooks and configuration,
 and the clean path preserves the private composition through cancel and owner
 restart. The full Lua suite passes 893/893, strict production lint and native
-window acceptance pass, and Go vet is clean. Final diff review and commit remain
-before B1.1 is complete; global Bee remains Train A.
+window acceptance pass, and Go vet is clean. Grok B1.1 is committed at `380d288`;
+global Bee remains Train A.
 
 ## Current checkpoint — September 13
 

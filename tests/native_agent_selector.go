@@ -95,8 +95,13 @@ func newDesktopWithArguments(binary, project, state, home string, arguments []st
 
 func filteredEnvironment() []string {
 	remove := map[string]bool{
-		"BEE_RUNTIME": true, "USER": true,
+		"BEE_RUNTIME": true, "BEE_BINARY": true, "USER": true,
 		"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "GROK_HOME": true,
+		"AGY_BIN": true, "AGY_LOGIN_FILE": true, "AGY_MODEL": true,
+		"GEMINI_API_KEY": true, "GOOGLE_API_KEY": true,
+		"GOOGLE_APPLICATION_CREDENTIALS": true, "GOOGLE_GENAI_USE_VERTEXAI": true,
+		"XDG_CACHE_HOME": true, "XDG_DATA_HOME": true,
+		"XDG_RUNTIME_DIR": true, "XDG_STATE_HOME": true,
 		"BEE_WORKSPACE_DB": true, "BEE_THREADS_DB": true, "BEE_APPROVALS_DB": true,
 		"BEE_RESOURCES_DB": true, "BEE_CREDENTIALS_DB": true, "BEE_PLACEMENT_DB": true,
 		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true,

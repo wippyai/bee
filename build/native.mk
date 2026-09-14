@@ -126,7 +126,7 @@ native-managed-agent-check:
 	test -n "$(AGENT_PROVIDER)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go managed "$(AGENT_PROVIDER)" "$(abspath $(BEE_BINARY))"
 
-.PHONY: native-agy-live-check native-grok-live-check
+.PHONY: native-agy-live-check native-agy-recovery-live-check native-grok-live-check
 .PHONY: native-agent-picker-check
 native-agent-picker-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go picker "$(abspath $(BEE_BINARY))"
@@ -134,6 +134,11 @@ native-agent-picker-check:
 native-agy-live-check:
 	test -n "$(AGY_BIN)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" AGY_BIN="$(abspath $(AGY_BIN))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go -run TestActualAgyManagedStartup -count=1 -v
+
+native-agy-recovery-live-check:
+	test -n "$(AGY_BIN)" -a -n "$(AGY_LOGIN_FILE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_agy_recovery_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" AGY_BIN="$(abspath $(AGY_BIN))" AGY_LOGIN_FILE="$(abspath $(AGY_LOGIN_FILE))" AGY_MODEL="$(AGY_MODEL)" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_agy_recovery_test.go -run '^TestActualAgyManagedColdRecovery$$' -count=1 -v
 
 native-grok-live-check:
 	test -n "$(GROK_BIN)" -a -n "$(GROK_LOGIN_FILE)"

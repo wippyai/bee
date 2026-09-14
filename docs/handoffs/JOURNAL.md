@@ -6676,3 +6676,20 @@ continuation, real Claude/Codex recovery and Grok reconciliation. The next globa
 promotion follows only after that unit and the executable-selected state-root
 cut pass. Hub, topology and Docker retain their parallel lanes; global Bee remains
 unchanged.
+
+### September 14 — abrupt fixture recovery and durable real Agy acceptance
+
+Exact-source standalone `64679b3f...` passes the fixture owner-SIGKILL gate: the
+recorded old native identity remained stable for inspection, the process was gone,
+and Bee continued the saved Agent with a fresh attempt and gateway without
+inventing a successful turn.
+
+The historical real-Agy cold-continuation probe is now a checked-in opt-in Go
+acceptance, `native-agy-recovery-live-check`. Against Agy 1.2.2 it reads a random
+token, stops and restarts Bee, removes the source file, and recalls the exact token
+without a tool call or original-prompt replay. It also checks the same provider
+conversation, HOME, application and thread, first-turn tool/Stop hooks, clean
+predecessor retirement, a fresh attempt/gateway, no fabricated Bee success and
+unchanged source login/project state. Disposable credential-bearing state is
+always removed. Real Claude/Codex recovery and Grok matrix reconciliation remain;
+global Bee is unchanged.

@@ -17,11 +17,12 @@ managed route shared by the Agent picker and `bee claude|codex|agy|grok`. Claude
 Codex and Agy add Bee configuration to their admitted normal user configuration.
 Grok snapshots the approved global TOML into private retained state, structurally
 inserts only Bee MCP and keeps Bee hooks separate. The exact-source standalone
-passes the four-provider selector plus real Grok authenticated and clean/restart
-acceptance. Global Bee is still the Train A rollback point. Saved-profile editing,
-durable four-provider session recovery, Docker and complete authenticated provider
-turns remain open; the lower-level step proofs below do not imply those workflows
-are complete. Source also supports a
+passes the four-provider selector, real Grok authenticated and clean/restart
+acceptance, fixture graceful/SIGKILL recovery and real Agy cold continuation.
+Global Bee is still the Train A rollback point. Saved-profile storage is built;
+the complete four-provider recovery matrix, Docker and complete authenticated
+provider turns remain open. The lower-level step proofs below do not imply those
+workflows are complete. Source also supports a
 host-selected instruction function with inherited actor/context and frozen
 launch delivery; the picker does not yet edit that policy field. See
 [Agent integration](handoffs/AGENT_INTEGRATION.md) and

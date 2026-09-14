@@ -11,6 +11,7 @@ local M = {}
 M.ATTEMPTS = "attempts"
 M.SESSIONS = "sessions"
 M.MAX_REPLAY_BYTES = 16384
+M.MAX_CONFIGURATION_BASE_BYTES = 131072
 M.REPLAY_CHUNK_BYTES = 4096
 -- Login bytes are opaque provider state. They have a separate, larger bound
 -- from declarative configuration and are never compared on retained reuse:
@@ -243,9 +244,10 @@ function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     end
     return {path = format.file.path, identity_path = marker, source = source, format = format}, nil
 end
-local function read_bounded(vol: fs.FS, path: string, bound: integer): (string?, string?)
+local function read_bounded(vol: fs.FS, path: string, bound: integer, label: string?): (string?, string?)
+    local what = label or "retained file"
     local file, open_error = vol:open(path, "r")
-    if not file then return nil, "read retained login identity: " .. tostring(open_error) end
+    if not file then return nil, "read " .. what .. ": " .. tostring(open_error) end
     local found = ""
     while #found <= bound do
         local chunk, read_error = file:read(math.min(M.REPLAY_CHUNK_BYTES, bound + 1 - #found))
@@ -253,26 +255,50 @@ local function read_bounded(vol: fs.FS, path: string, bound: integer): (string?,
             -- fs reports EOF as its ordinary final read result.
             if read_error and tostring(read_error) ~= "EOF" then
                 file:close()
-                return nil, "read retained login identity: " .. tostring(read_error)
+                return nil, "read " .. what .. ": " .. tostring(read_error)
             end
             break
         end
         if type(chunk) ~= "string" then
             file:close()
-            return nil, "read retained login identity returned invalid data"
+            return nil, "read " .. what .. " returned invalid data"
         end
         if chunk == "" then break end
         found = found .. (chunk :: string)
     end
     local closed, close_error = file:close()
-    if closed == false then return nil, "close retained login identity: " .. tostring(close_error) end
-    if #found > bound then return nil, "retained login identity exceeds bound" end
+    if closed == false then return nil, "close " .. what .. ": " .. tostring(close_error) end
+    if #found > bound then return nil, what .. " exceeds bound" end
     return found, nil
+end
+-- Read a composition base from this retained private home and compare the bytes
+-- read in this call with the durable initializer digest. Provider state is
+-- writable, so path admission alone is never composition authority. An empty
+-- file is a valid empty base; a missing or changed file refuses the launch.
+function M.read_configuration(home_path: string, relative: string, expected_digest: string): (string?, string?)
+    if not formats.path(relative) then return nil, "configuration base path escapes the home" end
+    if #expected_digest ~= 64 or not expected_digest:match("^[0-9a-f]+$") then return nil, "configuration base digest is invalid" end
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error end
+    local target = home_path .. "/home/" .. relative
+    if not vol:exists(target) then return nil, "configuration base is missing" end
+    local content, read_error = read_bounded(vol, target, M.MAX_CONFIGURATION_BASE_BYTES, "configuration base")
+    if content == nil then return nil, read_error end
+    local digest, digest_error = hash.sha256(content)
+    if not digest then return nil, "digest configuration base: " .. tostring(digest_error) end
+    if digest ~= expected_digest then return nil, "configuration base differs from admitted content" end
+    return content, nil
 end
 local function write_exclusive(vol: fs.FS, path: string, content: string): string?
     local file, open_error = vol:open(path, "wx")
     if not file then return "create retained login: " .. tostring(open_error) end
-    local written, write_error = file:write(content)
+    -- Exclusive creation is the complete write for an admitted empty setup
+    -- file. The runtime file API rejects write("") as missing data.
+    local written: boolean = true
+    local write_error: unknown = nil
+    if content ~= "" then written, write_error = file:write(content) end
     local closed, close_error = file:close()
     -- The pinned Lua fs API returns a success boolean, rather than a byte
     -- count. A false result is its only exposed short-write/error signal.
@@ -295,6 +321,32 @@ local function create_login_parents(vol: fs.FS, root: string, relative: string, 
         end
     end
     return nil
+end
+-- Inspect the retained login commit marker without changing the home. Placement
+-- uses this before binding setup-file digests, so a new marker can never become
+-- visible before the external binding that makes its configuration reusable.
+function M.login_replayed(home_path: string, value: unknown): (boolean?, string?)
+    local destination, decode_error = M.decode_login_source(value)
+    if not destination then return nil, decode_error end
+    local identity, identity_error = canonical.encode(destination.source)
+    if not identity then return nil, "encode retained login identity: " .. tostring(identity_error) end
+    if #identity > M.MAX_LOGIN_IDENTITY_BYTES then return nil, "retained login identity exceeds bound" end
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error end
+    local root = home_path .. "/home"
+    local target = root .. "/" .. destination.path
+    local identity_target = root .. "/" .. destination.identity_path
+    if not vol:exists(identity_target) then
+        if vol:exists(target) then return nil, "retained login is incomplete" end
+        return false, nil
+    end
+    local found, read_error = read_bounded(vol, identity_target, M.MAX_LOGIN_IDENTITY_BYTES, "retained login identity")
+    if not found then return nil, read_error end
+    if found ~= identity then return nil, "retained login source changed" end
+    if not vol:exists(target) and destination.source.optional ~= true then return nil, "retained login is incomplete" end
+    return true, nil
 end
 -- Seeds one admitted login destination. On later resumes it verifies
 -- the non-secret source identity and leaves the destination untouched: the
@@ -319,7 +371,7 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
     local target_exists = vol:exists(target)
     local identity_exists = vol:exists(identity_target)
     if identity_exists then
-        local found, read_error = read_bounded(vol, identity_target, M.MAX_LOGIN_IDENTITY_BYTES)
+        local found, read_error = read_bounded(vol, identity_target, M.MAX_LOGIN_IDENTITY_BYTES, "retained login identity")
         if not found then return nil, read_error end
         if found ~= identity then return nil, "retained login source changed" end
         if not target_exists and destination.source.optional ~= true then return nil, "retained login is incomplete" end
@@ -334,9 +386,13 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
     if opaque ~= nil then
         local write_error = write_exclusive(vol, target, opaque)
         if write_error then return nil, write_error end
-        local file = destination.format.file
-        if not file then return nil, "login format has no file" end
-        for _, item in ipairs(file.initialize) do
+    end
+    -- Host setup may be admitted independently from optional login bytes. The
+    -- component's ordinary initializers still run only with a present login.
+    local file = destination.format.file
+    if not file then return nil, "login format has no file" end
+    for _, item in ipairs(file.initialize) do
+        if opaque ~= nil or item.on_missing_login == true then
             local setup_parent_error = create_login_parents(vol, root, item.path, parents)
             if setup_parent_error then return nil, setup_parent_error end
             local setup_error = write_exclusive(vol, root .. "/" .. item.path, item.content)

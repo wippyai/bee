@@ -8,7 +8,7 @@ local configure = require("configure")
 
 local function define_tests()
     test.describe("Grok configuration", function()
-        test.it("renders gateway TOML with permission rules and MCP server", function()
+        test.it("renders only the scoped MCP subtree", function()
             local gateway: configuration.Gateway = {
                 endpoint = "127.0.0.1:4321",
                 action_id = "act-test-123",
@@ -17,8 +17,8 @@ local function define_tests()
                 token_environment = "BEE_GATEWAY_TOKEN",
             }
             local toml = configuration.render_gateway(gateway)
-            test.is_true(toml:find("[permission]", 1, true) ~= nil)
-            test.is_true(toml:find('"MCPTool(bee__*)"', 1, true) ~= nil)
+            test.is_nil(toml:find("[permission]", 1, true))
+            test.is_nil(toml:find('"MCPTool(bee__*)"', 1, true))
             test.is_true(toml:find("[mcp_servers.bee]", 1, true) ~= nil)
             test.is_true(toml:find('url = "http://127.0.0.1:4321/mcp/act-test-123"', 1, true) ~= nil)
             test.is_true(toml:find("enabled = true", 1, true) ~= nil)
@@ -39,6 +39,10 @@ local function define_tests()
             test.eq(proj.revision, "bee.grok-config@1")
             test.eq(proj.path, ".grok/config.toml")
             test.eq(proj.provider_ref, "bee:gateway_endpoint")
+            test.eq(proj.composition.kind, "toml_insert")
+            test.eq(proj.composition.base_path, ".grok/.bee-global-config.toml")
+            test.eq(proj.composition.path[1], "mcp_servers")
+            test.eq(proj.composition.path[2], "bee")
             test.eq(#proj.digest, 64)
 
             -- Deterministic digest
@@ -87,6 +91,14 @@ local function define_tests()
             test.eq(files[1].path, ".grok/config.toml")
             test.eq(files[1].revision, "bee.grok-config@1")
             test.eq(files[1].provider_ref, "bee:gateway_endpoint")
+            local composition = files[1].composition :: {[string]: unknown}
+            test.eq(composition.kind, "toml_insert")
+            test.eq(composition.base_path, ".grok/.bee-global-config.toml")
+            local path = composition.path :: {string}
+            test.eq(path[1], "mcp_servers")
+            test.eq(path[2], "bee")
+            local arguments = delivery.arguments :: {string}
+            test.eq(#arguments, 0)
 
             -- Empty delivery when gateway is nil
             local empty_req = {fixture = false}
@@ -121,6 +133,17 @@ local function define_tests()
             local hooks_reply = configure.handle(hooks_req)
             test.is_false(hooks_reply.ok)
             test.eq(hooks_reply.error, "grok hooks require the host-selected hook command")
+        end)
+        test.it("leaves MCP permission to the launch specification and appends instructions", function()
+            local reply = configure.handle({fixture = false, instructions = "Keep the Bee thread current.", gateway = {
+                endpoint = "127.0.0.1:9090", action_id = "action-instructions", tools = {"thread_read"}, hooks = {},
+                token_environment = "BEE_TOKEN",
+            }})
+            test.is_true(reply.ok)
+            local arguments = (reply.delivery :: {[string]: unknown}).arguments :: {string}
+            test.eq(#arguments, 2)
+            test.eq(arguments[1], "--rules")
+            test.eq(arguments[2], "Keep the Bee thread current.")
         end)
         test.it("delivers command hooks without enabling an unused MCP server", function()
             local reply = configure.handle({fixture = false, gateway = {

@@ -4,6 +4,7 @@
 -- after a proven exit.
 local test = require("test")
 local funcs = require("funcs")
+local sql = require("sql")
 local security = require("security")
 local process = require("process")
 local channel = require("channel")
@@ -13,14 +14,19 @@ local exec = require("exec")
 local service = require("service")
 local identity = require("identity")
 local configuration = require("configuration")
+local grok_configuration = require("grok_configuration")
+local grok_launch = require("grok_launch")
 local configuration_protocol = require("configuration_protocol")
 local hash = require("hash")
 local json = require("json")
 local store = require("store")
+local materialization = require("materialization")
+local request_codec = require("request_codec")
 local protocol = require("protocol")
 local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
+type PreparedConfiguration = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
 local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
@@ -82,6 +88,26 @@ local function admit_login_source(source: string)
     changes:update(file_policy)
     local applied, apply_error = changes:apply()
     if not applied then error("admit login source: " .. tostring(apply_error)) end
+end
+local function admit_grok_login_source(source: string)
+    local entry = registry.get("bee:credential_sources")
+    if not entry then error("credential sources entry") end
+    local data = entry.data :: {[string]: unknown}
+    local list = data.sources :: {{[string]: unknown}}
+    for _, item in ipairs(list) do
+        if item.ref == source and item.provider == "grok" and item.audience == OWNER then return end
+    end
+    list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "grok", projection_kinds = {"file"},
+        path = ".grok/auth.json", setup_path = ".grok/config.toml",
+        setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque"}
+    local file_policy = registry.get("bee:credential_file_policy")
+    if not file_policy then error("credential file policy entry") end
+    file_policy.data.policy.resources = {source}
+    local changes = registry.snapshot():changes()
+    changes:update(entry)
+    changes:update(file_policy)
+    local applied, apply_error = changes:apply()
+    if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
 end
 local function resource_mode(mode: string)
     local entry = registry.get("bee.placement.native:resource_mode")
@@ -173,6 +199,47 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     resources[#resources + 1] = {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
     request.configuration_digest = provider_configuration_digest()
     return request
+end
+local function grok_composition_request(attempt_id: string, session_ref: string, projection_id: string,
+    base_path: string): types.LaunchRequest
+    local decoded_launch, launch_error = grok_launch.decode({profile_id = "window", brief = "", permission_mode = "default",
+        gateway_tools = {"thread_read"}, gateway_hooks = {}})
+    if not decoded_launch then error(tostring(launch_error)) end
+    local launch_spec = grok_launch.specification(decoded_launch)
+    launch_spec.home_ref = "session"
+    launch_spec.working_directory_ref = "project"
+    local gateway_file, gateway_error = grok_configuration.projection({endpoint = "127.0.0.1:4312",
+        action_id = "grok-placement", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"})
+    if not gateway_file then error(tostring(gateway_error)) end
+    gateway_file.composition.base_path = base_path
+    local value: types.LaunchRequest = {
+        idempotency_key = fresh("grok-key"), owner_id = OWNER, owner_incarnation = 1,
+        action_id = fresh("grok-action"), attempt_id = attempt_id,
+        binding_ref = "bee.driver.grok:binding", policy_ref = POLICY, profile_id = "window",
+        binding_digest = DIGEST, profile_digest = DIGEST, launch = launch_spec,
+        session_ref = session_ref,
+        resources = {
+            {name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"},
+            {name = "session", grant_ref = "session-grant", root_ref = ROOT, subpath = "", access = "write", purpose = "session"},
+        },
+        environment = {}, environment_refs = {}, projections = {projection_id},
+        required_cleanup = "direct_process", required_exit_observation = "eof_gated",
+        timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
+        delivery = {arguments = {}, files = {gateway_file}},
+    }
+    return value
+end
+local function claim_materialization(db, request: types.LaunchRequest)
+    local digest, digest_error = request_codec.digest(request)
+    if not digest then error(tostring(digest_error)) end
+    local encoded, encode_error = json.encode(request)
+    if not encoded then error(tostring(encode_error)) end
+    local intended = store.intend(db, request, digest, encoded,
+        {capability = "direct_process", exit_observation = "eof_gated"})
+    if not intended.ok then error(tostring(intended.message)) end
+    local claimed = store.transition(db, request.attempt_id, {expected_execution = "intended", execution = "starting",
+        fields = {runner_pid = process.pid()}, evidence = {kind = "test.claimed", detail = "Grok composition materialization"}})
+    if not claimed.ok then error(tostring(claimed.message)) end
 end
 local READONLY = "bee.placement.native:readonly_fixture"
 local function admit_root(ref: string)
@@ -1232,6 +1299,36 @@ local function define_tests()
                 {provider = "codex", format = CODEX_LOGIN_FORMAT, definition_id = "bee.test.required_login", definition_revision = 1}, nil)
             test.eq(required_error, "required login bytes missing")
         end)
+        test.it("publishes admitted setup when an optional login is absent", function()
+            local session_key = assert(homes.session_key(OWNER, fresh("optional-login-setup")))
+            local session_path = assert(homes.ensure_session(session_key))
+            local format = {schema_revision = "bee.credential-format@1", file = {
+                path = ".grok/auth.json", content_format = "json",
+                initialize = {{path = ".grok/.bee-global-config.toml", content = "[ui]\ntheme = \"system\"\n", on_missing_login = true}}}}
+            local source = {provider = "grok", format = format, definition_id = "bee.test.grok_login", definition_revision = 1, optional = true}
+            local created: {[string]: boolean} = {}
+            local target, seed_error, replayed = homes.retain_login(session_path, source, nil, created)
+            test.not_nil(target)
+            test.is_nil(seed_error)
+            test.is_false(replayed == true)
+            local home = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("test ! -e " .. home .. "/.grok/auth.json && printf absent"), "absent")
+            test.eq(shell("cat " .. home .. "/.grok/.bee-global-config.toml"), "[ui]\ntheme = \"system\"\n")
+            local setup_digest = assert(hash.sha256("[ui]\ntheme = \"system\"\n"))
+            local base, base_error = homes.read_configuration(session_path, ".grok/.bee-global-config.toml", setup_digest)
+            test.eq(base, "[ui]\ntheme = \"system\"\n")
+            test.is_nil(base_error)
+            local absent, absent_error = homes.read_configuration(session_path, ".grok/missing.toml", setup_digest)
+            test.is_nil(absent)
+            test.eq(absent_error, "configuration base is missing")
+            test.is_nil(homes.read_configuration(session_path, "../escape.toml", setup_digest))
+            local changed, changed_error = homes.read_configuration(session_path, ".grok/.bee-global-config.toml", string.rep("a", 64))
+            test.is_nil(changed)
+            test.eq(changed_error, "configuration base differs from admitted content")
+            local _, replay_error, replay = homes.retain_login(session_path, source, nil, {})
+            test.is_nil(replay_error)
+            test.is_true(replay == true)
+        end)
         test.it("refuses changed or incomplete retained login state without exposing bytes", function()
             local session_key = assert(homes.session_key(OWNER, fresh("login-reject-session")))
             local session_path = assert(homes.ensure_session(session_key))
@@ -1580,6 +1677,199 @@ local function define_tests()
             test.eq(refused.error and refused.error.code, "UNAVAILABLE")
             test.is_true(has(kinds(changed_id), "credential.refused"))
             test.is_nil(shell("cat " .. home .. "/marker"):find("changed-login", 1, true))
+        end)
+        test.it("composes Grok configuration only from the current admitted initializer", function()
+            local source = "bee.credentials:codex_login_fixture"
+            local source_root = ".wippy/codex-login-fixture"
+            admit_grok_login_source(source)
+
+            local function projection(attempt_id: string): ({[string]: unknown}, {[string]: unknown}, string)
+                local workspace = fresh("grok-composition-workspace")
+                local definition = credential_call("define", {workspace_id = workspace, name = "login", provider = "grok",
+                    source = {kind = "fs_directory", ref = source}, optional = true})
+                local issued = credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = OWNER,
+                    attempt_id = attempt_id, profile_id = "window", profile_digest = DIGEST, binding_digest = DIGEST,
+                    launch_policy_digest = DIGEST, idempotency_key = fresh("grok-composition-projection")})
+                return definition, issued, workspace
+            end
+            local function session_path(session_ref: string): (string, string)
+                local key, key_error = homes.session_key(OWNER, session_ref)
+                if not key then error(tostring(key_error or "Grok composition session key")) end
+                local path, path_error = homes.ensure_session(key)
+                if not path then error(tostring(path_error or "Grok composition session path")) end
+                local os_home, os_error = homes.os_path(path .. "/home")
+                if not os_home then error(tostring(os_error or "Grok composition OS home")) end
+                return path, os_home
+            end
+            local function preseed(session_ref: string, definition: {[string]: unknown}, initialize: {unknown})
+                local path = session_path(session_ref)
+                if type(definition.definition_id) ~= "string" or type(definition.revision) ~= "number" then
+                    error("Grok credential definition has invalid identity")
+                end
+                local target, seed_error = homes.retain_login(path, {provider = "grok",
+                    definition_id = definition.definition_id, definition_revision = math.floor(definition.revision :: number),
+                    optional = true, format = {schema_revision = "bee.credential-format@1", file = {
+                        path = ".grok/auth.json", content_format = "json", initialize = initialize}}}, nil, {})
+                if not target then error(tostring(seed_error or "preseed Grok retained identity")) end
+                local db, db_error = store.open()
+                if not db then error(tostring(db_error or "open placement store for retained base binding")) end
+                for _, raw in ipairs(initialize) do
+                    local item = raw :: {[string]: unknown}
+                    local item_path, content = item.path, item.content
+                    if type(item_path) ~= "string" or type(content) ~= "string" then error("invalid preseed initializer") end
+                    local digest, digest_error = hash.sha256(content)
+                    if not digest then error(tostring(digest_error or "digest preseed initializer")) end
+                    local bind_error = store.bind_session_file(db, OWNER, session_ref, item_path, digest)
+                    if bind_error then error(bind_error) end
+                end
+                db:release()
+            end
+            local function evidence_has_no_start_or_publication(db, attempt_id: string)
+                local page, page_error = store.evidence(db, attempt_id, 0, 64)
+                if not page then error(tostring(page_error or "read Grok composition evidence")) end
+                for _, item in ipairs(page.evidence) do
+                    test.is_true(item.kind ~= "child.started")
+                    test.is_true(item.kind ~= "configuration.materialized")
+                end
+            end
+            local function retire(db, attempt_id: string)
+                local retired = store.transition(db, attempt_id, {execution = "exited",
+                    fields = {runner_pid = "", exit_source = "runner"},
+                    evidence = {kind = "child.not_started", detail = "composition acceptance did not create a child"}})
+                if not retired.ok then error(tostring(retired.message or "retire Grok composition attempt")) end
+            end
+            local function prepare(request: types.LaunchRequest): (PreparedConfiguration?, string?, sql.DB)
+                local db, db_error = store.open()
+                if not db then error(tostring(db_error or "open placement store")) end
+                claim_materialization(db, request)
+                local prepared, prepare_error = materialization.prepare(db, request, request.attempt_id, 0)
+                return prepared, prepare_error, db
+            end
+
+            -- The external digest binding commits before any setup file or
+            -- ready marker. A failed binding therefore leaves a retryable empty
+            -- retained home instead of a permanently unbound ready session.
+            test.eq(shell("printf 'crash_safe = true\\n' > " .. source_root .. "/.grok/config.toml"), "")
+            local binding_attempt, binding_session = fresh("grok-binding-attempt"), fresh("grok-binding-session")
+            local _, binding_projection = projection(binding_attempt)
+            local binding_request = grok_composition_request(binding_attempt, binding_session,
+                binding_projection.projection_id :: string, grok_configuration.BASE_PATH)
+            local original_bind_session_file = store.bind_session_file
+            store.bind_session_file = function(_db: sql.DB, _owner_id: string, _session_ref: string, _path: string, _digest: string): string?
+                return "injected retained configuration binding failure"
+            end
+            local binding_prepared, binding_error, binding_db = prepare(binding_request)
+            store.bind_session_file = original_bind_session_file
+            if binding_prepared then error("Grok configuration survived a failed external binding") end
+            test.eq(binding_error, "injected retained configuration binding failure")
+            local _, binding_home = session_path(binding_session)
+            test.eq(shell("test ! -e " .. quote.posix(binding_home .. "/.bee-retained-login-ready.json")
+                .. " && test ! -e " .. quote.posix(binding_home .. "/.grok/.bee-global-config.toml") .. " && printf absent"), "absent")
+            evidence_has_no_start_or_publication(binding_db, binding_attempt)
+            retire(binding_db, binding_attempt)
+            binding_db:release()
+            attempt_of(call(OWNER, "cleanup", {attempt_id = binding_attempt}))
+
+            -- A retained file that exists beside the admitted base is not an
+            -- authority source. Only the initializer path can be composed.
+            test.eq(shell("mkdir -p " .. source_root .. "/.grok && rm -f " .. source_root .. "/auth.json " .. source_root .. "/.grok/config.toml"), "")
+            local arbitrary_attempt, arbitrary_session = fresh("grok-arbitrary-attempt"), fresh("grok-arbitrary-session")
+            local arbitrary_definition, arbitrary_projection = projection(arbitrary_attempt)
+            preseed(arbitrary_session, arbitrary_definition, {{path = ".grok/.bee-global-config.toml", content = "", on_missing_login = true}})
+            local _, arbitrary_home = session_path(arbitrary_session)
+            test.eq(shell("printf 'untrusted = true\\n' > " .. quote.posix(arbitrary_home .. "/.grok/arbitrary.toml")), "")
+            local arbitrary_request = grok_composition_request(arbitrary_attempt, arbitrary_session,
+                arbitrary_projection.projection_id :: string, ".grok/arbitrary.toml")
+            local arbitrary_prepared, arbitrary_error, arbitrary_db = prepare(arbitrary_request)
+            if arbitrary_prepared then error("arbitrary retained Grok base was accepted") end
+            test.eq(arbitrary_error, "configuration base is not admitted by credential setup")
+            evidence_has_no_start_or_publication(arbitrary_db, arbitrary_attempt)
+            test.eq(shell("test ! -e " .. quote.posix(arbitrary_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
+            retire(arbitrary_db, arbitrary_attempt)
+            arbitrary_db:release()
+            attempt_of(call(OWNER, "cleanup", {attempt_id = arbitrary_attempt}))
+
+            -- A retained identity cannot turn a missing admitted base into an
+            -- implicit empty document. Replay skips seeding and must refuse.
+            local missing_attempt, missing_session = fresh("grok-missing-attempt"), fresh("grok-missing-session")
+            local missing_definition, missing_projection = projection(missing_attempt)
+            preseed(missing_session, missing_definition, {})
+            local _, missing_home = session_path(missing_session)
+            local missing_request = grok_composition_request(missing_attempt, missing_session,
+                missing_projection.projection_id :: string, grok_configuration.BASE_PATH)
+            local missing_prepared, missing_error, missing_db = prepare(missing_request)
+            if missing_prepared then error("missing admitted Grok base was accepted") end
+            test.eq(missing_error, "retained configuration binding is missing")
+            evidence_has_no_start_or_publication(missing_db, missing_attempt)
+            test.eq(shell("test ! -e " .. quote.posix(missing_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
+            retire(missing_db, missing_attempt)
+            missing_db:release()
+            attempt_of(call(OWNER, "cleanup", {attempt_id = missing_attempt}))
+
+            -- Structural insertion refuses a semantic Bee subtree already in
+            -- the user's source, before publishing the final configuration.
+            for _, collision in ipairs({
+                "[mcp_servers.bee]\nurl = \"http://existing.invalid\"\n",
+                "[mcp_servers]\nbee = { url = \"http://existing.invalid\" }\n",
+                "mcp_servers.bee = { url = \"http://existing.invalid\" }\n",
+                "[\"mcp_servers\".\"bee\"]\nurl = \"http://existing.invalid\"\n",
+                "[mcp_servers.'bee']\nurl = \"http://existing.invalid\"\n",
+            }) do
+                test.eq(shell("printf %s " .. quote.posix(collision) .. " > " .. source_root .. "/.grok/config.toml"), "")
+                local collision_attempt, collision_session = fresh("grok-collision-attempt"), fresh("grok-collision-session")
+                local _, collision_projection = projection(collision_attempt)
+                local collision_request = grok_composition_request(collision_attempt, collision_session,
+                    collision_projection.projection_id :: string, grok_configuration.BASE_PATH)
+                local collision_prepared, collision_error, collision_db = prepare(collision_request)
+                if collision_prepared then error("colliding Grok MCP subtree was accepted") end
+                test.is_true(tostring(collision_error):find("compose TOML configuration", 1, true) ~= nil)
+                evidence_has_no_start_or_publication(collision_db, collision_attempt)
+                local _, collision_home = session_path(collision_session)
+                test.eq(shell("test ! -e " .. quote.posix(collision_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
+                retire(collision_db, collision_attempt)
+                collision_db:release()
+                attempt_of(call(OWNER, "cleanup", {attempt_id = collision_attempt}))
+            end
+
+            -- An absent admitted source is an explicit empty base. It composes
+            -- once, publishes once and preserves exactly one MCP allow pair.
+            test.eq(shell("rm -f " .. source_root .. "/.grok/config.toml"), "")
+            local empty_attempt, empty_session = fresh("grok-empty-attempt"), fresh("grok-empty-session")
+            local _, empty_projection, empty_workspace = projection(empty_attempt)
+            local empty_request = grok_composition_request(empty_attempt, empty_session,
+                empty_projection.projection_id :: string, grok_configuration.BASE_PATH)
+            local empty_prepared, empty_error, empty_db = prepare(empty_request)
+            if not empty_prepared then error(tostring(empty_error or "compose admitted empty Grok base")) end
+            test.eq(#empty_prepared.arguments, 2)
+            test.eq(empty_prepared.arguments[1], "--allow")
+            test.eq(empty_prepared.arguments[2], "MCPTool(bee__*)")
+            local _, empty_home = session_path(empty_session)
+            local final = shell("cat " .. quote.posix(empty_home .. "/.grok/config.toml"))
+            local sections = 0
+            for _ in final:gmatch("%[mcp_servers%.bee%]") do sections = sections + 1 end
+            test.eq(sections, 1)
+            test.is_true(final:find("http://127.0.0.1:4312/mcp/grok-placement", 1, true) ~= nil)
+            retire(empty_db, empty_attempt)
+            empty_db:release()
+            attempt_of(call(OWNER, "cleanup", {attempt_id = empty_attempt}))
+
+            -- A later attempt may reuse only the exact bytes first admitted for
+            -- this session. Provider-writable retained state is never authority
+            -- to replace a composition base.
+            test.eq(shell("printf 'changed = true\\n' > " .. quote.posix(empty_home .. "/.grok/.bee-global-config.toml")), "")
+            local changed_attempt = fresh("grok-changed-base-attempt")
+            local changed_projection = credential_call("issue_projection", {workspace_id = empty_workspace, name = "login", audience = OWNER,
+                attempt_id = changed_attempt, profile_id = "window", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("grok-composition-projection")})
+            local changed_request = grok_composition_request(changed_attempt, empty_session,
+                changed_projection.projection_id :: string, grok_configuration.BASE_PATH)
+            local changed_prepared, changed_error, changed_db = prepare(changed_request)
+            if changed_prepared then error("changed retained Grok base was accepted") end
+            test.eq(changed_error, "configuration base differs from admitted content")
+            evidence_has_no_start_or_publication(changed_db, changed_attempt)
+            retire(changed_db, changed_attempt)
+            changed_db:release()
+            attempt_of(call(OWNER, "cleanup", {attempt_id = changed_attempt}))
         end)
         test.it("fences a retained login reply after the attempt is stopped during credential materialization", function()
             local source = "bee.credentials:codex_login_fixture"

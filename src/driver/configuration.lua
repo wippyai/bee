@@ -19,7 +19,8 @@ M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type SecretField = {path: {string}, environment: string, prefix: string}
-type Configuration = {secret_fields: {SecretField}?, revision: string, path: string, content: string, digest: string, provider_ref: string}
+type Composition = {kind: "toml_insert", base_path: string, path: {string}}
+type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
@@ -150,7 +151,7 @@ end
 function M.decode_file(value: unknown): (Configuration?, string?)
     local item = bounds.object(value)
     if not item then return nil, "configuration must be an object" end
-    local unexpected = bounds.fields(item, {"revision", "path", "content", "digest", "provider_ref", "secret_fields"})
+    local unexpected = bounds.fields(item, {"revision", "path", "content", "digest", "provider_ref", "secret_fields", "composition"})
     if unexpected then return nil, "configuration: " .. unexpected end
     local revision = bounds.id(item.revision)
     if not revision then return nil, "configuration.revision is not an identifier" end
@@ -167,6 +168,25 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     local provider_ref = bounds.id(item.provider_ref)
     if not provider_ref then return nil, "configuration.provider_ref is not an identifier" end
     local result: Configuration = {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}
+    if item.composition ~= nil then
+        local composition = bounds.object(item.composition)
+        if not composition or bounds.fields(composition, {"kind", "base_path", "path"}) or composition.kind ~= "toml_insert" then
+            return nil, "invalid configuration composition"
+        end
+        local base_path, base_error = bounds.subpath(composition.base_path)
+        if base_error or not base_path or base_path == "" or base_path == path then
+            return nil, "configuration composition base_path must be a distinct safe relative path"
+        end
+        local raw_path, path_error = sequence(composition.path, "configuration composition path", 8)
+        if not raw_path or #raw_path == 0 then return nil, path_error or "configuration composition path is empty" end
+        local selected_path: {string} = {}
+        for index, key in ipairs(raw_path) do
+            local selected = bounds.text(key, 128)
+            if not selected or selected == "" then return nil, "configuration composition path key " .. tostring(index) .. " is invalid" end
+            selected_path[index] = selected
+        end
+        result.composition = {kind = "toml_insert", base_path = base_path, path = selected_path}
+    end
     if item.secret_fields ~= nil then
         local fields, fields_error = sequence(item.secret_fields, "configuration.secret_fields", 8)
         if not fields or #fields == 0 then return nil, fields_error or "configuration.secret_fields is empty" end

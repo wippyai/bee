@@ -6,7 +6,7 @@ entries:
   source: file://configuration_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [hash, funcs, security, json]
+  modules: [hash, funcs, security, json, toml]
   security:
     policies: [bee:resource_resolve_policy, bee:placement_store_policy]
   imports:

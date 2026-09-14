@@ -358,3 +358,19 @@ The preceding candidate failed this unconfigured-boot probe, so this is a
 regression proof, not an inferred guarantee. `make docker-boot-check` runs the
 probe outside production packs. Managed Docker placement and gateway wiring
 remain unfinished; this candidate is not a global installation.
+
+## September 14: Grok structural TOML candidate
+
+Grok's private additive configuration uses the reusable runtime operation
+`toml.insert(document, path, source)` from the compatibility patch with SHA-256
+`4cfe05ca1f9a377398b9086d50b00bf4c5e96eaf75d3f2e2c89118001fab090d`.
+It inserts only the measured `mcp_servers.bee` subtree and refuses a semantic
+collision. Bee carries no TOML parser and publishes no general TOML API.
+
+The exact-source standalone `/tmp/bee-grok-b11-final/bee` was built from runtime
+`291f5c6b708c80afe5da07f3223767573b4d183f` with seven patches and has SHA-256
+`64679b3f081689b4cc5fecd5b5bfecebea5d15a44aa82a62c1a7f91b0c4187f2`.
+Its provenance records the patch and current Bee packs. The four-provider native
+selector, authenticated Grok 1.0.30, clean login/cancel/restart path and Go vet
+pass against that executable. This is candidate evidence for B1.1, not a runtime
+main cutover or global Bee installation.

@@ -1,5 +1,5 @@
--- The terminal exit-source rebuild carries existing placement rows and the
--- evidence foreign key without losing references.
+-- Placement migrations carry existing attempts and evidence through the
+-- terminal rebuild, Docker columns and retained configuration bindings.
 local test = require("test")
 local sql = require("sql")
 local persist = require("persist")
@@ -11,7 +11,7 @@ type Row = {[string]: unknown}
 local function reset()
     local db, err = sql.get(RESOURCE)
     if not db then error(tostring(err)) end
-    for _, statement in ipairs({"DROP TABLE IF EXISTS bee_placement_evidence", "DROP TABLE IF EXISTS bee_placement_attempts",
+    for _, statement in ipairs({"DROP TABLE IF EXISTS bee_placement_session_files", "DROP TABLE IF EXISTS bee_placement_evidence", "DROP TABLE IF EXISTS bee_placement_attempts",
         "DROP TABLE IF EXISTS bee_placement_attempts_next", "DROP TABLE IF EXISTS " .. LEDGER.table}) do
         local _, drop_error = db:execute(statement)
         if drop_error then db:release(); error(statement .. ": " .. tostring(drop_error)) end
@@ -61,6 +61,34 @@ local function run()
     local _, terminal_error = upgraded:execute("UPDATE bee_placement_attempts SET exit_source = 'terminal' WHERE attempt_id = 'migration-attempt'")
     test.is_nil(terminal_error)
     upgraded:release()
+
+    local execution = open_with(3)
+    local carried = one(execution, "SELECT attempt_id, exit_source, placement_kind, placement_spec_json, placement_identity_json FROM bee_placement_attempts WHERE attempt_id = 'migration-attempt'")
+    test.eq(carried.attempt_id, "migration-attempt")
+    test.eq(carried.exit_source, "terminal")
+    test.is_nil(carried.placement_kind)
+    test.is_nil(carried.placement_spec_json)
+    test.is_nil(carried.placement_identity_json)
+    execution:release()
+
+    local retained = open_with(4)
+    local _, binding_error = retained:execute([[INSERT INTO bee_placement_session_files
+        (owner_id, session_ref, path, digest, created_at)
+        VALUES ('migration-owner', 'migration-session', '.grok/.bee-global-config.toml',
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'after')]])
+    if binding_error then retained:release(); error(tostring(binding_error)) end
+    retained:release()
+
+    local reopened = open_with(4)
+    local final_attempt = one(reopened, "SELECT attempt_id, exit_source FROM bee_placement_attempts WHERE attempt_id = 'migration-attempt'")
+    test.eq(final_attempt.attempt_id, "migration-attempt")
+    test.eq(final_attempt.exit_source, "terminal")
+    local binding = one(reopened, [[SELECT owner_id, session_ref, path, digest
+        FROM bee_placement_session_files WHERE owner_id = 'migration-owner' AND session_ref = 'migration-session']])
+    test.eq(binding.path, ".grok/.bee-global-config.toml")
+    test.eq(binding.digest, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    test.eq(#(reopened:query("PRAGMA foreign_key_check") :: {{[string]: unknown}}), 0)
+    reopened:release()
 end
 
 return {run = run}

@@ -80,6 +80,49 @@ local function define_tests()
             content, err = placement_configuration.render(decoded, {BEE_GATEWAY_TOKEN = string.rep("x", 8192)}, selected)
             test.is_nil(content); test.eq(err, "materialized configuration exceeds its encoding bound")
         end)
+        test.it("decodes and structurally composes a bounded TOML subtree", function()
+            local body = '[mcp_servers.bee]\nurl = "http://127.0.0.1:4312/mcp/action"\nenabled = true\n'
+            local item: {[string]: unknown} = {
+                revision = "fixture.toml@1", path = ".grok/config.toml", content = body,
+                digest = assert(hash.sha256(body)), provider_ref = configuration.GATEWAY_PROVIDER_REF,
+                composition = {kind = "toml_insert", base_path = ".grok/.bee-global-config.toml", path = {"mcp_servers", "bee"}},
+            }
+            local decoded, decode_error = configuration.decode_file(item)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq(decoded.composition and decoded.composition.base_path, ".grok/.bee-global-config.toml")
+            local base = '[ui]\ntheme = "dark"\n[mcp_servers.existing]\nurl = "https://example.test/mcp"\n'
+            local rendered, render_error = placement_configuration.render(decoded, {}, nil, base)
+            if not rendered then error(tostring(render_error)) end
+            test.is_true(rendered:find("theme%s*=%s*['\"]dark['\"]") ~= nil)
+            test.is_true(rendered:find('[mcp_servers.existing]', 1, true) ~= nil)
+            test.is_true(rendered:find('[mcp_servers.bee]', 1, true) ~= nil)
+            local collision = placement_configuration.render(decoded, {}, nil,
+                '[mcp_servers.bee]\nurl = "https://user.example/mcp"\n')
+            test.is_nil(collision)
+            test.is_nil(placement_configuration.render(decoded, {}, nil, "[broken"))
+            test.is_nil(placement_configuration.render(decoded, {}, nil, string.rep("x", 131073)))
+            test.is_nil(placement_configuration.render(decoded, {}, nil))
+        end)
+        test.it("rejects malformed configuration composition metadata", function()
+            local body = '[mcp_servers.bee]\nurl = "http://127.0.0.1/mcp"\n'
+            local function composed(value: unknown): {[string]: unknown}
+                return {revision = "fixture.toml@1", path = ".grok/config.toml", content = body,
+                    digest = assert(hash.sha256(body)), provider_ref = configuration.GATEWAY_PROVIDER_REF,
+                    composition = value}
+            end
+            for _, invalid in ipairs({
+                true,
+                {kind = "json_merge", base_path = ".grok/base.toml", path = {"mcp_servers", "bee"}},
+                {kind = "toml_insert", base_path = ".grok/config.toml", path = {"mcp_servers", "bee"}},
+                {kind = "toml_insert", base_path = "../config.toml", path = {"mcp_servers", "bee"}},
+                {kind = "toml_insert", base_path = ".grok/base.toml", path = {}},
+                {kind = "toml_insert", base_path = ".grok/base.toml", path = {[2] = "bee"}},
+                {kind = "toml_insert", base_path = ".grok/base.toml", path = {"mcp_servers", true}},
+                {kind = "toml_insert", base_path = ".grok/base.toml", path = {"mcp_servers"}, extra = true},
+            }) do
+                test.is_nil(configuration.decode_file(composed(invalid)))
+            end
+        end)
 
         test.it("renders observation-only Agy command hooks with quoted host inputs", function()
             local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},

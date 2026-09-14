@@ -20,6 +20,7 @@ local function handle(value: unknown): {[string]: unknown}
             content = projected.content,
             digest = projected.digest,
             provider_ref = projected.provider_ref,
+            composition = projected.composition,
         }
     end
     if request.gateway and #request.gateway.hooks > 0 then
@@ -29,7 +30,10 @@ local function handle(value: unknown): {[string]: unknown}
     end
 
     local arguments: {string} = {}
-    if request.instructions then arguments = {"--rules", request.instructions} end
+    if request.instructions then
+        arguments[#arguments + 1] = "--rules"
+        arguments[#arguments + 1] = request.instructions
+    end
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 

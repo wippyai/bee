@@ -3,6 +3,7 @@
 local real = require("real")
 local M = {publications = 0, creations = 0}
 M.decode_login_source = real.decode_login_source
+M.login_replayed = real.login_replayed
 M.retain_login = real.retain_login
 M.write_protected = real.write_protected
 M.attempt_key = real.attempt_key
@@ -20,6 +21,9 @@ function M.ensure_session(key: string): (string?, string?)
 end
 function M.os_path(path: string): (string?, string?) return path, nil end
 function M.check_private_root(): string? return nil end
+function M.read_configuration(_: string, _: string, _: string): (string?, string?)
+    return nil, "fixture has no admitted configuration base"
+end
 function M.publish_configuration(home: string, path: string, content: string, created: {[string]: boolean}?): (string?, string?, boolean?)
     M.publications = M.publications + 1
     return nil, "configuration published; durability requires inspection", true

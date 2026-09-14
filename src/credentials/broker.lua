@@ -149,10 +149,10 @@ local function read_source_file(volume: fs.FS, path: string, content_format: str
 end
 -- Resolve one host-selected setup file into a fresh in-memory format value.
 -- The frozen format in the definition and projection is never mutated.
-local function append_setup(format: formats.Format, path: string, content: string): (formats.Format?, string?)
+local function append_setup(format: formats.Format, destination: string, content: string): (formats.Format?, string?)
     local file = format.file
     if not file then return nil, "credential setup requires a file format" end
-    file.initialize[#file.initialize + 1] = {path = path, content = content}
+    file.initialize[#file.initialize + 1] = {path = destination, content = content, on_missing_login = true}
     local decoded, decode_error = formats.decode(format)
     if not decoded then return nil, decode_error or "credential setup format is invalid" end
     return decoded, nil
@@ -271,8 +271,10 @@ function M.define(value: unknown): Reply
         destination = sources.destination(selected_format, "file")
         local path, path_error = sources.file_path(admitted, source_ref, workspace_id, provider, nil, selected_format)
         if not path then return fail("FORBIDDEN", path_error or "file source path unavailable") end
+        local setup, setup_error = sources.setup(admitted, source_ref, workspace_id, provider, nil)
+        if setup_error then return fail("FORBIDDEN", setup_error) end
         digest_payload = {provider = provider, source_kind = source_kind, source_ref = source_ref, directory = directory,
-            path = path, projection_kind = projection_kind, destination = destination, optional = optional}
+            path = path, setup = setup, projection_kind = projection_kind, destination = destination, optional = optional}
     end
 
     if not destination then return fail("INVALID", "no destination for provider " .. provider) end
@@ -422,7 +424,7 @@ function M.issue_projection(value: unknown): Reply
 end
 -- Recheck the host-selected file source against the definition before using
 -- its capability. Host edits cannot retarget an already-issued projection.
-local function file_binding(definition: Row, workspace_id: string, audience: string?): (string?, Reply?, string?)
+local function file_binding(definition: Row, workspace_id: string, audience: string?): (string?, Reply?, sources.Setup?)
     local admitted, admitted_error = sources.host_sources()
     if not admitted then return nil, fail("STORAGE", admitted_error or "host sources") end
     local ref, provider = text(definition.source_ref) or "", text(definition.provider) or ""
@@ -436,15 +438,15 @@ local function file_binding(definition: Row, workspace_id: string, audience: str
     end
     local path, path_error = sources.file_path(admitted, ref, workspace_id, provider, audience, selected_format)
     if not path then return nil, fail("FORBIDDEN", path_error or "file source unavailable") end
-    local setup_path, setup_error = sources.setup_path(admitted, ref, workspace_id, provider, audience)
+    local setup, setup_error = sources.setup(admitted, ref, workspace_id, provider, audience)
     if setup_error then return nil, fail("FORBIDDEN", setup_error) end
     local directory, directory_error = sources.directory(ref)
     if not directory then return nil, fail("INVALID", directory_error or "file source unavailable") end
     local digest_payload: {[string]: unknown} = {provider = provider, source_kind = "fs_directory", source_ref = ref, directory = directory,
-        path = path, projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1}
+        path = path, setup = setup, projection_kind = "file", destination = definition.destination, optional = integer(definition.optional) == 1}
     local digest = digest_of(digest_payload)
     if not digest or digest ~= definition.digest then return nil, fail("CONFLICT", "credential source changed; redefine before use") end
-    return path, nil, setup_path
+    return path, nil, setup
 end
 -- The checks every use of a projection repeats; nil means it holds.
 local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
@@ -709,16 +711,24 @@ function M.materialize(value: unknown): Reply
             db:release()
             return fail("CONFLICT", "projection destination does not match credential format")
         end
-        local path, binding_error, setup_path = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
+        local path, binding_error, setup = file_binding(definition, text(projection.workspace_id) or "", text(projection.audience))
         if not path then db:release(); return binding_error or fail("INVALID", "file source unavailable") end
         local volume = fs.get(source_ref)
         db:release()
         if not volume then return fail("UNAVAILABLE", "source root " .. source_ref .. " unavailable") end
         local resolved_format = frozen_format
-        if setup_path then
-            local setup_content, setup_status, setup_error = read_source_file(volume, setup_path, "json", 4096, "setup file")
+        if setup then
+            local setup_bound = setup.content_format == "json" and 4096 or 65536
+            local setup_content, setup_status, setup_error = read_source_file(volume, setup.path, setup.content_format, setup_bound, "setup file")
             if setup_status == "PRESENT" and setup_content then
-                local appended, append_error = append_setup(resolved_format, setup_path, setup_content)
+                local appended, append_error = append_setup(resolved_format, setup.destination, setup_content)
+                if not appended then return fail("CONFLICT", append_error or "credential setup format is invalid") end
+                resolved_format = appended
+            elseif setup_status == "MISSING" and setup.content_format == "opaque" then
+                -- An absent opaque setup is a measured empty base. Returning
+                -- its admitted destination lets placement authorize an empty
+                -- first-use composition without reading another retained file.
+                local appended, append_error = append_setup(resolved_format, setup.destination, "")
                 if not appended then return fail("CONFLICT", append_error or "credential setup format is invalid") end
                 resolved_format = appended
             elseif setup_status ~= "MISSING" then

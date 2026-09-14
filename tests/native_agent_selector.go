@@ -1991,17 +1991,40 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 			inBeeHeaders = line == "[mcp_servers.bee.headers]"
 			continue
 		}
-		if inBeeServer && strings.HasPrefix(line, "url = \"") && strings.HasSuffix(line, "\"") {
-			url = strings.TrimSuffix(strings.TrimPrefix(line, "url = \""), "\"")
+		if value, ok := tomlStringAssignment(line, "url"); inBeeServer && ok {
+			url = value
 		}
-		if inBeeServer && strings.HasPrefix(line, "bearer_token_env_var = \"") && strings.HasSuffix(line, "\"") {
-			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "bearer_token_env_var = \""), "\"")
+		if value, ok := tomlStringAssignment(line, "bearer_token_env_var"); inBeeServer && ok {
+			tokenName = value
 		}
-		if provider == "grok" && inBeeHeaders && strings.HasPrefix(line, "Authorization = \"Bearer ${") && strings.HasSuffix(line, "}\"") {
-			tokenName = strings.TrimSuffix(strings.TrimPrefix(line, "Authorization = \"Bearer ${"), "}\"")
+		if value, ok := tomlStringAssignment(line, "Authorization"); provider == "grok" && inBeeHeaders && ok &&
+			strings.HasPrefix(value, "Bearer ${") && strings.HasSuffix(value, "}") {
+			tokenName = strings.TrimSuffix(strings.TrimPrefix(value, "Bearer ${"), "}")
 		}
 	}
 	return url, os.Getenv(tokenName), url != "" && os.Getenv(tokenName) != ""
+}
+
+// Pelletier's canonical encoder may choose TOML literal strings. This probe
+// reads only exact scalar assignments in the already-selected Bee table.
+func tomlStringAssignment(line, key string) (string, bool) {
+	prefix := key + " ="
+	if !strings.HasPrefix(line, prefix) {
+		return "", false
+	}
+	raw := strings.TrimSpace(line[len(prefix):])
+	if len(raw) < 2 {
+		return "", false
+	}
+	if raw[0] == '\'' && raw[len(raw)-1] == '\'' {
+		value := raw[1 : len(raw)-1]
+		return value, !strings.Contains(value, "'")
+	}
+	if raw[0] != '"' || raw[len(raw)-1] != '"' {
+		return "", false
+	}
+	value, err := strconv.Unquote(raw)
+	return value, err == nil
 }
 
 func optionValue(args []string, name string) (string, bool) {
@@ -2598,6 +2621,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	}
 	fixtureLogin := `{"fixture":"machine-login"}`
 	fixtureOnboarding := `{"consumerOnboardingComplete":true,"onboardingComplete":true,"fixture":"machine-setup"}`
+	fixtureGrokConfig := "[ui]\ntheme = \"dark\"\n[permission]\ndefault = \"ask\"\n[mcp_servers.user_fixture]\nurl = \"http://127.0.0.1:9/mcp\"\n"
 	if provider == "agy" {
 		providerDirectory, loginFile = filepath.Join(".gemini", "antigravity-cli"), "antigravity-oauth-token"
 		selection, label = "\r", "Antigravity"
@@ -2636,6 +2660,14 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			if err := os.WriteFile(filepath.Join(cache, "onboarding.json"), []byte(fixtureOnboarding), 0600); err != nil {
 				return err
 			}
+		}
+	}
+	if provider == "grok" {
+		if err := os.MkdirAll(filepath.Join(home, ".grok"), 0700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(home, ".grok", "config.toml"), []byte(fixtureGrokConfig), 0600); err != nil {
+			return err
 		}
 	}
 	cli := filepath.Join(project, "bin", provider)
@@ -2826,6 +2858,21 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			}
 		}
 	}
+	if provider == "grok" {
+		base, err := os.ReadFile(filepath.Join(childHome, ".grok", ".bee-global-config.toml"))
+		if err != nil || string(base) != fixtureGrokConfig {
+			return errors.New("Grok global configuration was not snapshotted into the private composition base")
+		}
+		beeConfig, err := os.ReadFile(filepath.Join(childHome, ".grok", "config.toml"))
+		if err != nil || !strings.Contains(string(beeConfig), "[mcp_servers.bee]") || !strings.Contains(string(beeConfig), "[mcp_servers.user_fixture]") ||
+			(!strings.Contains(string(beeConfig), "theme = 'dark'") && !strings.Contains(string(beeConfig), `theme = "dark"`)) {
+			return errors.New("Grok private configuration did not compose global settings with the Bee MCP subtree")
+		}
+		global, err := os.ReadFile(filepath.Join(home, ".grok", "config.toml"))
+		if err != nil || string(global) != fixtureGrokConfig {
+			return errors.New("Bee changed the global Grok configuration")
+		}
+	}
 	childLoginRoot := filepath.Join(childHome, providerDirectory)
 	if configVariable != "" {
 		if lines[2] != loginRoot {
@@ -2863,8 +2910,10 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		if !os.IsNotExist(loginErr) {
 			return errors.New("absent machine login unexpectedly produced a login file")
 		}
-		if _, err := os.Stat(filepath.Join(home, providerDirectory)); !os.IsNotExist(err) {
-			return errors.New("launch created a machine credential directory")
+		if provider != "grok" {
+			if _, err := os.Stat(filepath.Join(home, providerDirectory)); !os.IsNotExist(err) {
+				return errors.New("launch created a machine credential directory")
+			}
 		}
 	}
 	_, identityErr := os.Stat(filepath.Join(childHome, ".bee-retained-login-ready.json"))
@@ -2922,6 +2971,16 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if agyCustomizationRoot != "" {
 		if _, err := os.Stat(filepath.Join(agyCustomizationRoot, ".agents", "mcp_config.json")); err != nil {
 			return fmt.Errorf("Agy session customization did not survive node exit: %w", err)
+		}
+	}
+	if provider == "grok" {
+		global, err := os.ReadFile(filepath.Join(home, ".grok", "config.toml"))
+		if err != nil || string(global) != fixtureGrokConfig {
+			return errors.New("Grok launch or shutdown changed the global configuration")
+		}
+		base, err := os.ReadFile(filepath.Join(childHome, ".grok", ".bee-global-config.toml"))
+		if err != nil || string(base) != fixtureGrokConfig {
+			return errors.New("Grok private composition base did not survive node exit")
 		}
 	}
 	return nil

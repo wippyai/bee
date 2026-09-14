@@ -86,6 +86,38 @@ function M.by_key(db: sql.DB, owner_id: string, key: string): (Row?, string?)
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+-- Immutable composition-base identity is stored outside the provider-writable
+-- retained HOME. A later attempt reuses this digest instead of adopting current
+-- host configuration or whatever bytes happen to occupy the retained path.
+function M.session_file_digest(db: sql.DB, owner_id: string, session_ref: string, path: string): (string?, string?)
+    local rows, err = db:query([[SELECT digest FROM bee_placement_session_files
+        WHERE owner_id = ? AND session_ref = ? AND path = ?]], {owner_id, session_ref, path})
+    if err or not rows then return nil, "read retained configuration binding" end
+    if #rows == 0 then return nil, nil end
+    local digest = text((rows[1] :: Row).digest)
+    if not digest or not digest:match("^[0-9a-f]+$") or #digest ~= 64 then
+        return nil, "retained configuration binding is invalid"
+    end
+    return digest, nil
+end
+function M.bind_session_file(db: sql.DB, owner_id: string, session_ref: string, path: string, digest: string): string?
+    local existing, read_error = M.session_file_digest(db, owner_id, session_ref, path)
+    if read_error then return read_error end
+    if existing then
+        if existing ~= digest then return "retained configuration binding changed" end
+        return nil
+    end
+    local result, insert_error = db:execute([[INSERT INTO bee_placement_session_files
+        (owner_id, session_ref, path, digest, created_at) VALUES (?, ?, ?, ?, ?)]],
+        {owner_id, session_ref, path, digest, M.now()})
+    if not result or insert_error then
+        local raced, race_error = M.session_file_digest(db, owner_id, session_ref, path)
+        if race_error then return race_error end
+        if raced == digest then return nil end
+        return raced and "retained configuration binding changed" or "write retained configuration binding"
+    end
+    return nil
+end
 function M.request(row: Row): (types.LaunchRequest?, string?)
     local encoded = text(row.request_json)
     if not encoded then return nil, "attempt request is missing" end

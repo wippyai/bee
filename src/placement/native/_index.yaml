@@ -185,7 +185,7 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [json]
+  modules: [json, toml]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -193,7 +193,7 @@ entries:
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
-  modules: [env, funcs, sql, process]
+  modules: [env, funcs, sql, process, hash]
   imports:
     store: bee.placement.native:store
     resources: bee.placement.native:resources

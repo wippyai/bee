@@ -36,12 +36,14 @@ local function define_tests()
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "state", content = "a"}, {path = "state", content = "b"}}}))
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = {[2] = {path = "state", content = "a"}}}))
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = {unexpected = true}}))
-            test.is_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "state", content = string.rep("x", 4097)}}}))
+            test.not_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "state", content = string.rep("x", 65536)}}}))
+            test.is_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "state", content = string.rep("x", 65537)}}}))
+            test.is_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "state", content = "x", on_missing_login = "yes"}}}))
             local files: {{path: string, content: string}} = {}
             for index = 1, 5 do files[index] = {path = "state" .. tostring(index), content = ""} end
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = files}))
             local large: {{path: string, content: string}} = {}
-            for index = 1, 3 do large[index] = {path = "state" .. tostring(index), content = string.rep("x", 4096)} end
+            for index = 1, 3 do large[index] = {path = "state" .. tostring(index), content = string.rep("x", 22000)} end
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = large}))
         end)
         test.it("refuses file and directory collisions in either declaration order", function()

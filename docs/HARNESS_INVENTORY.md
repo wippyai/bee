@@ -38,7 +38,9 @@ Rules the carriers learned the hard way, all still true:
 - Generated Bee configuration lives in the retained Agent session home. Default
   Claude, Codex and Agy windows can read an explicitly authorized host HOME;
   Agy receives the session home as an additional customization root. Grok keeps
-  a private `GROK_HOME` until its additive global-configuration path is proven.
+  a private home and imports only the host-approved global `config.toml` as a
+  private composition base. Placement inserts Bee MCP into the generated private
+  `config.toml`; Bee hooks remain a separate private file.
 - Sessions are one process per turn, resumed by id. A long-lived stdin stream parks the actor and can never receive thread messages.
 - Window carriers hold typed input until the first hook arrives; keystrokes before the TUI is up are lost.
 - Harnesses without admitted hooks are observed only through output and MCP.

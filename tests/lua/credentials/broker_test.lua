@@ -24,8 +24,12 @@ local MISSING_LOGIN_SOURCE = "bee.credentials:missing_login_fixture"
 local UNPRIVILEGED_LOGIN_SOURCE = "bee.credentials:unprivileged_login_fixture"
 local AGY_ONBOARDING = ".gemini/antigravity-cli/cache/onboarding.json"
 local ONBOARDING_SENTINEL = "agy-onboarding-sentinel-42"
+local GROK_CONFIG = ".grok/config.toml"
+local GROK_PRIVATE_BASE = ".grok/.bee-global-config.toml"
+local GROK_CONFIG_SENTINEL = "[ui]\ntheme = \"grok-config-sentinel-23\"\n[permission]\ndefault = \"ask\"\n"
 local CODEX_FILE_SENTINEL = '{"access_token":"sentinel-codex-tok-123","auth_mode":"chatgpt"}'
 local CLAUDE_FILE_SENTINEL = '{"sessionKey":"sentinel-claude-key-456"}'
+local GROK_FILE_SENTINEL = '{"access_token":"sentinel-grok-token-789"}'
 local MANAGER, USER, OTHER, RUNNER = "bee.test.cred.manager", "bee.test.cred.user", "bee.test.cred.other", "bee.test.cred.runner"
 local DIGEST = string.rep("c", 64)
 local counter = 0
@@ -73,6 +77,8 @@ local function clean(reply: broker.Reply)
     if encoded:find("chatgpt", 1, true) then error("codex login auth_mode leaked into a reply that must not carry it") end
     if encoded:find("sessionKey", 1, true) then error("claude login sessionKey leaked into a reply that must not carry it") end
     if encoded:find(ONBOARDING_SENTINEL, 1, true) then error("Agy onboarding leaked into a reply that must not carry it") end
+    if encoded:find("grok-config-sentinel-23", 1, true) then error("Grok setup leaked into a reply that must not carry it") end
+    if encoded:find("sentinel-grok-token-789", 1, true) then error("Grok login leaked into a reply that must not carry it") end
 end
 local function write_file(ref: string, path: string, content: string)
     local volume, err = fs.get(ref)
@@ -100,7 +106,9 @@ local function admit_sources(workspace: string)
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
-        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING}}
+        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
+        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "grok", projection_kinds = {"file"},
+            path = ".grok/auth.json", setup_path = GROK_CONFIG, setup_destination = GROK_PRIVATE_BASE, setup_content_format = "opaque"}}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local file_policy = registry.get("bee:credential_file_policy")
@@ -512,9 +520,11 @@ local function define_tests()
             changes:update(entry)
             local applied, apply_error = changes:apply()
             if not applied then error("remove setup admission: " .. tostring(apply_error)) end
-            local revoked_setup = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
-                attempt_id = attempt, generation_key = "agy-setup-revoked"}))
-            test.eq(#revoked_setup.format.file.initialize, 0)
+            local revoked_setup = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "agy-setup-revoked"})
+            test.eq(code(revoked_setup), "CONFLICT")
+            test.is_true(tostring(revoked_setup.error and revoked_setup.error.message):find("credential source changed", 1, true) ~= nil)
+            clean(revoked_setup)
             local listed = value(call(manager, "list", {workspace_id = ws}))
             local definitions = listed.definitions :: {{[string]: unknown}}
             local persisted: {[string]: unknown}? = nil
@@ -524,6 +534,86 @@ local function define_tests()
             if not persisted then error("Agy setup definition disappeared") end
             test.eq(persisted.digest, digest)
             test.eq(persisted.revision, revision)
+        end)
+        test.it("imports Grok configuration as an opaque private composition base with or without login", function()
+            local ws = fresh("grok-setup")
+            admit_sources(ws)
+            write_file(CODEX_LOGIN_SOURCE, ".grok/auth.json", GROK_FILE_SENTINEL)
+            write_file(CODEX_LOGIN_SOURCE, GROK_CONFIG, GROK_CONFIG_SENTINEL)
+            local definition_reply = call(manager, "define", {workspace_id = ws, name = "grok_login", provider = "grok",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}, optional = true})
+            clean(definition_reply)
+            local definition = value(definition_reply)
+            local attempt = fresh("attempt")
+            local projection_reply = call(user, "issue_projection", {workspace_id = ws, name = "grok_login", audience = USER,
+                attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("grok-key")})
+            clean(projection_reply)
+            local projection = value(projection_reply)
+            clean(call(runner, "check", {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
+            local present = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = "grok-present"}))
+            test.eq(present.value, GROK_FILE_SENTINEL)
+            test.eq(present.format.file.initialize[1].path, GROK_PRIVATE_BASE)
+            test.eq(present.format.file.initialize[1].content, GROK_CONFIG_SENTINEL)
+
+            local volume = fs.get(CODEX_LOGIN_SOURCE)
+            if not volume then error("Grok source volume unavailable") end
+            local removed, remove_error = volume:remove(".grok/auth.json")
+            if not removed then error("remove Grok login: " .. tostring(remove_error)) end
+            local absent = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = "grok-absent"}))
+            test.eq(absent.present, false)
+            test.is_nil(absent.value)
+            test.eq(absent.format.file.initialize[1].path, GROK_PRIVATE_BASE)
+            test.eq(absent.format.file.initialize[1].content, GROK_CONFIG_SENTINEL)
+            local removed_config, removed_config_error = volume:remove(GROK_CONFIG)
+            if not removed_config then error("remove Grok config: " .. tostring(removed_config_error)) end
+            local empty_base = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = "grok-empty-base"}))
+            test.eq(empty_base.present, false)
+            test.eq(empty_base.format.file.initialize[1].path, GROK_PRIVATE_BASE)
+            test.eq(empty_base.format.file.initialize[1].content, "")
+            clean(call(manager, "list", {workspace_id = ws}))
+        end)
+        test.it("fences every changed setup descriptor field until explicit redefinition", function()
+            local mutations = {
+                {field = "setup_path", value = ".grok/other-config.toml"},
+                {field = "setup_destination", value = ".grok/.other-private-base.toml"},
+                {field = "setup_content_format", value = "json"},
+            }
+            for _, mutation in ipairs(mutations) do
+                local ws = fresh("grok-setup-digest")
+                admit_sources(ws)
+                write_file(CODEX_LOGIN_SOURCE, ".grok/auth.json", GROK_FILE_SENTINEL)
+                write_file(CODEX_LOGIN_SOURCE, GROK_CONFIG, GROK_CONFIG_SENTINEL)
+                local definition = value(call(manager, "define", {workspace_id = ws, name = "grok_login", provider = "grok",
+                    source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}, optional = true}))
+                local attempt = fresh("attempt")
+                local projection = issue(user, ws, "grok_login", attempt)
+
+                local entry = registry.get("bee:credential_sources")
+                if not entry then error("credential sources entry") end
+                local changed = false
+                for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+                    if item.provider == "grok" and item.workspace_id == ws then
+                        item[mutation.field] = mutation.value
+                        changed = true
+                    end
+                end
+                if not changed then error("Grok setup source was not found") end
+                local changes = registry.snapshot():changes()
+                changes:update(entry)
+                local applied, apply_error = changes:apply()
+                if not applied then error("change setup descriptor: " .. tostring(apply_error)) end
+
+                local refused = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                    audience = USER, attempt_id = attempt, generation_key = fresh("grok-mutated-setup")})
+                test.eq(code(refused), "CONFLICT")
+                test.is_true(tostring(refused.error and refused.error.message):find("credential source changed", 1, true) ~= nil)
+                test.eq(definition.revision, 1)
+                clean(refused)
+            end
         end)
         test.it("fails closed on missing, invalid, empty or oversized login files", function()
             local ws = fresh("ws")
@@ -721,6 +811,8 @@ local function define_tests()
                     test.is_nil(encoded:find("chatgpt", 1, true))
                     test.is_nil(encoded:find("sessionKey", 1, true))
                     test.is_nil(encoded:find(ONBOARDING_SENTINEL, 1, true))
+                    test.is_nil(encoded:find("grok-config-sentinel-23", 1, true))
+                    test.is_nil(encoded:find("sentinel-grok-token-789", 1, true))
                 end
             end
             db:release()

@@ -1,7 +1,8 @@
 -- MIT. Linked references of the credential broker: the store and the host's
 -- source allowlist, the ceiling every definition stays under. Providers map
 -- to their declared destinations; a file source may additionally name one
--- host-selected setup path.
+-- host-selected setup file. Its source path, retained destination and content
+-- format are one admission decision.
 local registry = require("registry")
 local bounds = require("bounds")
 local formats = require("formats")
@@ -9,7 +10,8 @@ local M = {}
 M.DATABASE_REF = "bee.credentials:database_ref"
 M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER = "bee.placement.native:binding"
-type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup_path: string?}
+type Setup = {path: string, destination: string, content_format: string}
+type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup: Setup?}
 type SourceSet = {sources: {Source}, formats: {[string]: string}}
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
@@ -56,10 +58,16 @@ function M.host_sources(): (SourceSet?, string?)
                 path = formats.path(declared.path)
                 if not path then return nil, "host credential path is invalid" end
             end
-            local setup_path: string? = nil
+            local setup: Setup? = nil
             if declared.setup_path ~= nil then
-                setup_path = formats.path(declared.setup_path)
-                if not setup_path then return nil, "host credential setup path is invalid" end
+                local setup_path = formats.path(declared.setup_path)
+                local setup_destination = declared.setup_destination == nil and setup_path or formats.path(declared.setup_destination)
+                local setup_format = declared.setup_content_format == nil and "json" or bounds.member(declared.setup_content_format, {"json", "opaque"})
+                if not setup_path or not setup_destination then return nil, "host credential setup path or destination is invalid" end
+                if not setup_format then return nil, "host credential setup content format is invalid" end
+                setup = {path = setup_path, destination = setup_destination, content_format = setup_format}
+            elseif declared.setup_destination ~= nil or declared.setup_content_format ~= nil then
+                return nil, "host credential setup destination and format require setup_path"
             end
             local kinds: {string} = {}
             if type(declared.projection_kinds) == "table" then
@@ -73,7 +81,7 @@ function M.host_sources(): (SourceSet?, string?)
             local audience = bounds.id(declared.audience)
             if ref and workspace_id and audience and provider then
                 sources.sources[#sources.sources + 1] = {ref = ref, workspace_id = workspace_id, audience = audience,
-                    provider = provider, projection_kinds = kinds, path = path, setup_path = setup_path}
+                    provider = provider, projection_kinds = kinds, path = path, setup = setup}
             end
         end
     end
@@ -82,8 +90,8 @@ end
 -- An optional provider setup file is a host-selected path paired with a file
 -- source. It is metadata only; the file policy still authorizes fs.get/read.
 -- Ambiguous declarations refuse rather than choosing one path.
-function M.setup_path(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (string?, string?)
-    local selected: string? = nil
+function M.setup(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (Setup?, string?)
+    local selected: Setup? = nil
     local matched = false
     local selected_set = false
     for _, source in ipairs(sources.sources) do
@@ -93,10 +101,14 @@ function M.setup_path(sources: SourceSet, ref: string, workspace_id: string, pro
                 if kind == "file" then
                     matched = true
                     if not selected_set then
-                        selected = source.setup_path
+                        selected = source.setup
                         selected_set = true
-                    elseif selected ~= source.setup_path then
-                        return nil, "host credential setup paths are ambiguous"
+                    else
+                        local candidate = source.setup
+                        local same = (selected == nil and candidate == nil) or (selected ~= nil and candidate ~= nil
+                            and selected.path == candidate.path and selected.destination == candidate.destination
+                            and selected.content_format == candidate.content_format)
+                        if not same then return nil, "host credential setup files are ambiguous" end
                     end
                 end
             end

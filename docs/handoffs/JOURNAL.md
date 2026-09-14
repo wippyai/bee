@@ -6639,3 +6639,24 @@ delivery passes 888 Lua tests, but real Grok 1.0.30 removes its
 `.grok/managed_config.toml`; that destination and its documentation claims must
 be replaced before B1.1 can commit. Global Bee remains Train A SHA `4692e267`.
 No global installation was performed.
+
+### September 14 — Grok B1.1 exact-source acceptance
+
+The invalid provider-owned `managed_config.toml` destination is replaced. The
+credential broker snapshots the host-approved global `config.toml` into retained
+private `.grok/.bee-global-config.toml`; placement uses the reusable structural
+TOML insertion operation to add only Bee's MCP subtree to the private final
+configuration. A semantic Bee MCP collision or changed retained base refuses
+before child start. Bee hooks remain in the private hooks directory.
+
+Independent review found a crash window where retained setup could be published
+before its digest binding. Initializer digests now bind before the ready marker,
+replayed sessions require the binding, and an injected binding failure proves no
+setup or marker is published. Strict production lint, all 893 Lua cases and the
+native-window gate pass after the correction.
+
+Fresh manifest `b6ac538e...` embeds the current source and the TOML patch SHA
+`4cfe05ca...`. Standalone `64679b3f...` passes the four-provider selector, real
+authenticated Grok 1.0.30 with preserved user hooks/configuration, the clean
+login/cancel/restart path, global/project tree fingerprints and Go vet. Final
+bounded-diff review and commit remain; global Bee is unchanged.

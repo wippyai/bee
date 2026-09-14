@@ -15,11 +15,17 @@ mode preserves interactive permission defaults and refuses `max_turns`.
 Prompts and resume references cannot become command-line options.
 
 The default window requests the optional `grok_login` credential. Its component
-declares `.grok/auth.json`; the host separately admits that exact machine file.
-The existing credential broker seeds only the new private HOME and preserves
-subsequent harness refreshes. A missing login leaves normal Grok sign-in
-available. Machine settings, trusted folders, sessions and MCP credentials are
-not included. This uses the login path documented by Grok 1.0.24.
+declares `.grok/auth.json`; the host separately admits that exact machine file
+and may admit `.grok/config.toml` as setup. The broker snapshots that one ordinary
+configuration file into retained private `.grok/.bee-global-config.toml` once,
+including when login is absent. At materialization, placement parses that
+snapshot and structurally inserts only Bee's `mcp_servers.bee` subtree into the
+private `.grok/config.toml`. An existing subtree with that name refuses before
+the child starts. Bee adds `MCPTool(bee__*)` through Grok's `--allow` argument;
+it does not replace the user's permission configuration. The user's global tree
+remains unchanged. Other machine files, trusted folders, sessions and MCP
+credentials are not copied. A missing login leaves normal Grok sign-in available
+in the private retained home.
 
 The normalizer retains the first valid session identity, validates persisted
 state and bounds accumulated answers to 12,288 bytes. Larger answers remain in
@@ -36,8 +42,12 @@ selects the existing Bee `hook-post` executable. Generated `.grok/hooks/bee.json
 uses the separate hook credential environment; hook-only configuration creates
 no MCP server. The helper reports observations and emits no permission decisions.
 
-A real Grok 1.0.24 TUI startup delivered an authenticated SessionStart through
-that helper to a private loopback fixture, with no user prompt or model turn.
+The B1.1 acceptance launches real Grok 1.0.30 and checks `inspect --json` for the
+preserved user settings, existing user MCP, Bee MCP, user hooks and Bee hooks.
+It also requires an authenticated SessionStart through the helper without a
+user prompt or model turn. The current standalone composition candidate passes
+this acceptance; the runtime-module review and complete release gate remain
+pending.
 Its payload carries both camelCase and snake_case aliases. The gateway accepts
 matching aliases, rejects conflicts, preserves bounded session/turn/tool claims,
 and hashes content instead of retaining it. Unit checks cover the captured

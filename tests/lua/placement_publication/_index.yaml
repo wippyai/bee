@@ -11,7 +11,7 @@ entries:
   kind: library.lua
   source: file://../../placement/native/materialization.lua
   meta: {type: test_support}
-  modules: [env, funcs, sql, process]
+  modules: [env, funcs, sql, process, hash]
   imports:
     store: bee.placement.native:store
     resources: bee.placement.native:resources

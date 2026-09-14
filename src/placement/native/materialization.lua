@@ -7,6 +7,7 @@ local env = require("env")
 local funcs = require("funcs")
 local sql = require("sql")
 local process = require("process")
+local hash = require("hash")
 local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
@@ -150,6 +151,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
     local file_projection = false
+    local composition_bases: {[string]: string} = {}
     for index, projection_id in ipairs(request.projections) do
         local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
@@ -187,14 +189,43 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local protected: {string} = {login_path}
             local login_file = source.format.file
             if not login_file then return refused("file login format unavailable") end
-            for _, item in ipairs(login_file.initialize) do protected[#protected + 1] = item.path end
+            for _, item in ipairs(login_file.initialize) do
+                protected[#protected + 1] = item.path
+            end
             if configuration.overlaps(delivery.files, protected) then
                 evidence(db, attempt_id, "configuration.refused", "configuration overlaps provider login state", {execution = "exited"})
                 return refused("configuration overlaps provider login state")
             end
-            local _, login_error, replayed = homes.retain_login(selected_home_path, {provider = source.source.provider, definition_id = source.source.definition_id,
-                definition_revision = source.source.definition_revision, optional = source.source.optional, format = source.format}, projected.value, created_parents)
-            if login_error then
+            local session_ref = request.session_ref
+            if not session_ref then return refused("file login session unavailable") end
+            local login_value = {provider = source.source.provider, definition_id = source.source.definition_id,
+                definition_revision = source.source.definition_revision, optional = source.source.optional, format = source.format}
+            local replayed, replay_error = homes.login_replayed(selected_home_path, login_value)
+            if replayed == nil then
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
+                return refused(replay_error or "file login projection refused")
+            end
+            -- Bind every admitted setup file before retain_login can publish
+            -- the ready marker. A crash after the marker must never leave a
+            -- reusable session whose immutable composition base has no digest.
+            for _, item in ipairs(login_file.initialize) do
+                local expected: string? = nil
+                local binding_error: string? = nil
+                if replayed then
+                    expected, binding_error = store.session_file_digest(db, request.owner_id, session_ref, item.path)
+                    if not expected and not binding_error then binding_error = "retained configuration binding is missing" end
+                else
+                    expected, binding_error = hash.sha256(item.content)
+                    if expected then binding_error = store.bind_session_file(db, request.owner_id, session_ref, item.path, expected) end
+                end
+                if not expected or binding_error then
+                    evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding", {execution = "exited"})
+                    return refused(binding_error or "retained configuration binding")
+                end
+                composition_bases[item.path] = expected
+            end
+            local _, login_error, retained_replay = homes.retain_login(selected_home_path, login_value, projected.value, created_parents)
+            if login_error or retained_replay ~= replayed then
                 evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
                 return refused("file login projection refused")
             end
@@ -250,7 +281,25 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "gateway.materialized", "binding " .. materialized.binding.binding_id .. " credential generation " .. tostring(materialized.generation) .. " under carrier epoch " .. tostring(generation) .. " into " .. gateway.destination .. "; driver configuration frozen at admission")
     end
     for _, file in ipairs(delivery.files) do
-        local content, content_error = configuration.render(file, environment, request.gateway)
+        local base: string? = nil
+        if file.composition then
+            if not retained_home then
+                evidence(db, attempt_id, "configuration.refused", "configuration composition requires a retained home", {execution = "exited"})
+                return refused("configuration composition requires a retained home")
+            end
+            local admitted_digest = composition_bases[file.composition.base_path]
+            if not admitted_digest then
+                evidence(db, attempt_id, "configuration.refused", "configuration base is not admitted by credential setup", {execution = "exited"})
+                return refused("configuration base is not admitted by credential setup")
+            end
+            local base_error: string? = nil
+            base, base_error = homes.read_configuration(selected_home_path, file.composition.base_path, admitted_digest)
+            if base == nil then
+                evidence(db, attempt_id, "configuration.refused", base_error or "configuration base", {execution = "exited"})
+                return refused(base_error or "configuration base")
+            end
+        end
+        local content, content_error = configuration.render(file, environment, request.gateway, base)
         if not content then
             evidence(db, attempt_id, "configuration.refused", content_error or "configuration", {execution = "exited"})
             return refused(content_error or "configuration")

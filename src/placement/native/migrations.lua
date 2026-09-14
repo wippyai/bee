@@ -95,6 +95,20 @@ ALTER TABLE bee_placement_attempts ADD COLUMN placement_kind TEXT CHECK (placeme
 ALTER TABLE bee_placement_attempts ADD COLUMN placement_spec_json TEXT;
 ALTER TABLE bee_placement_attempts ADD COLUMN placement_identity_json TEXT;
 ]], rebuild = false},
+    -- A retained session may reuse provider-owned writable state, but immutable
+    -- configuration composition bases stay bound to the bytes first admitted by
+    -- the credential initializer. The digest is nonsecret and lives outside the
+    -- provider-writable home.
+    {id = 4, name = "retained_configuration_bases", sql = [[
+CREATE TABLE bee_placement_session_files (
+    owner_id TEXT NOT NULL,
+    session_ref TEXT NOT NULL,
+    path TEXT NOT NULL,
+    digest TEXT NOT NULL CHECK (length(digest) = 64),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (owner_id, session_ref, path)
+);
+]], rebuild = false},
 }
 function M.all(): {Migration}
     return list

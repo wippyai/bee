@@ -44,10 +44,13 @@ Agy declares an opaque file. File sources name a host-selected `fs.directory`
 using `source.kind: fs_directory`. The host source row selects the source path;
 when omitted, it uses the declared login basename.
 Callers cannot choose a path, filename or mount. A file source may also carry one
-host-selected `setup_path`; materialization reads that optional path from the same
-source (bounded to 4 KiB) and appends its JSON bytes to the transient returned
-format as an initializer. The setup path and its contents are never stored in a
-definition or projection, and a missing setup file is allowed. The host's `bee:credential_file_policy`
+host-selected setup declaration: `setup_path`, an optional retained
+`setup_destination`, and `setup_content_format` (`json` or `opaque`).
+Materialization reads that optional path from the same source. JSON setup is
+bounded to 4 KiB; opaque setup is bounded to 64 KiB. It appends the bytes to the
+transient returned format as an initializer that may be installed even when an
+optional login is absent. The setup declaration and its contents are never
+stored in a definition or projection, and a missing setup file is allowed. The host's `bee:credential_file_policy`
 grants filesystem access separately from source metadata and is attached to
 availability for a stat-only check and to materialization for bounded reads.
 Registry source metadata in `bee:credential_sources` alone cannot grant filesystem
@@ -67,8 +70,9 @@ hold secret bytes. Only the admitted placement materializer holding
 `bee:credential_materialize_policy` receives bytes once per generation key in a
 transient RPC reply that nothing persists.
 
-Login file reads stop after 64 KiB plus one byte; supplemental setup reads stop
-after 4 KiB plus one byte. Both reject empty or oversized content.
+Login file reads stop after 64 KiB plus one byte; supplemental JSON and opaque
+setup reads stop after 4 KiB and 64 KiB plus one byte respectively. Both reject
+empty or oversized content.
 JSON formats additionally require a JSON object or array; opaque formats preserve
 arbitrary bytes and report encoding `bytes`. Both return bytes only in the
 authorized transient materialization reply.
@@ -119,15 +123,18 @@ for the delivery and filesystem guarantees. File contents never enter the
 environment projection route.
 
 First-use harness setup can create definition-declared credential names from
-host-selected source configuration, without reading the secret. Default Claude, Codex
-and Agy window definitions select optional machine-login files under the
+host-selected source configuration, without reading the secret. Default Claude,
+Codex, Agy and Grok window definitions select optional machine-login files under the
 host's existing home directory. An absent provider directory/file permits normal
 CLI sign-in in the private retained home; host credential directories are never
-created. The host allowlist owns the relative source path; callers cannot supply
+created. Agy may import its onboarding JSON, and Grok may import only
+`.grok/config.toml` into retained `.grok/.bee-global-config.toml`. Placement
+structurally inserts Bee's scoped MCP subtree into the private
+`.grok/config.toml`; it never writes the machine or project trees. The host allowlist owns the relative source path; callers cannot supply
 it. Source metadata and path are bound in the definition digest and rechecked
 before availability or projection use. A changed source requires explicit
 redefinition. Existing definitions with an older digest are refused rather than
-silently retargeted. Source-free executable acceptance proves Claude/Codex/Agy present and absent
+silently retargeted. Source-free executable acceptance proves Claude/Codex/Agy/Grok present and absent
 login with disposable host homes and fixture CLIs. Real authenticated provider
 turns remain unverified.
 Docker delivery is unimplemented. Broker `refresh` and

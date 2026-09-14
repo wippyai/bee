@@ -252,23 +252,21 @@ writers; owner restart with durable layout; and retention of unavailable remote
 targets. Existing same-runtime fixtures cover parts of this, not public named
 desktop selection or automatic client reconnect.
 
-## Public launch selection: proposed default
+## Public launch selection
 
-The default under consideration is an independent desktop when another physical
-client already controls the current desktop. This follows the multiple-monitor
-model above; it is not implemented by the current single-desktop admission
-fixture. Explicitly selecting an existing controlled desktop may offer observation,
-but must never silently displace its controller or label an observer as interactive.
+An ordinary native client reuses the first available durable desktop in its
+single selected workspace. If every listed desktop has another controller, it
+allocates and activates a fresh durable desktop before attaching. It retries
+only a definite `DESKTOP_CONTROLLED` refusal. Unknown outcomes and other errors
+stop without allocating, while explicit selections remain exact.
 
 Transport attachment, desktop selection and creating a desktop are separate
-steps. An ordinary second `bee` should reuse the running node through native
-rendezvous, then resolve a desktop under destination-owned permissions. One
-available retained desktop can be resumed directly. Multiple candidates need a
-selector; no directory scan, node name or discovery order establishes ownership.
-Creating another layout requires another durable desktop identity and one store
-writer. It must not start a second writer against the existing client database
-binding. The public allocation operation and its storage owner still need
-implementation; `bee.desktop:list`, `attach` and `detach` do not provide creation.
+steps. An ordinary second `bee` reuses the running node through native rendezvous,
+then resolves a desktop under destination-owned permissions. Automatic choice is
+limited to displays inside one already selected project workspace; multiple
+workspaces still require explicit selection. Creating another layout uses the
+existing `bee.desktop:create` operation and single client-store writer.
+Allocation grants no viewport or controller authority.
 
 Acceptance must exercise two concurrent physical clients with independent layouts,
 retained applications after each display exits, explicit observation of an existing
@@ -417,11 +415,10 @@ to its still-running Terminal.
 Source/pack normal and slow-storage retained-desktop probes pass: forged activation
 is ignored, repeated activation reuses the identity, separate desktops run separate
 Terminals, additional F12 replaces its presenter, save/reactivation retains its
-live shell, and the first desktop remains usable. This does not yet expose public
-creation, automatic selection on a controller conflict or Hive Manager control.
-The source Hive-facing owner now publishes allocated identities and qualifies
-its sessions by desktop, as described below. The native launch choice remains
-the next integration boundary.
+live shell, and the first desktop remains usable. Public native creation and
+automatic selection on a controller conflict now use this foundation. Hive
+Manager control remains separate. The Hive-facing owner publishes allocated
+identities and qualifies its sessions by desktop, as described below.
 
 ### Desktop interruption and concurrent presenter recovery (source)
 

@@ -30,11 +30,20 @@ including the user's retained owner, exited gracefully afterward; no state file
 or database was removed. Installed offline fresh/restart/reconnect acceptance
 passes.
 
-The active implementation queue is now B1 through B4. B1 command routing is
-complete at `7ea6d05`: `bee claude`, `bee codex`, `bee agy` and `bee grok`
-resolve the same managed definitions as the picker, while duplicate aliases and
-raw argument bypasses refuse before admission. The next unit is Agy/Grok global
-configuration inheritance and recovery parity.
+The active implementation queue is now B1 through B4. The integration branch is
+at `df31a70`. B1 command routing is complete at `7ea6d05`: `bee claude`,
+`bee codex`, `bee agy` and `bee grok` resolve the same managed definitions as
+the picker, while duplicate aliases and raw argument bypasses refuse before
+admission. Agy additive configuration inheritance is complete at `df31a70`.
+
+The only active uncommitted implementation is the Grok half of B1.1 in
+`src/credentials/sources.lua`, `src/credentials/broker.lua` and
+`src/_index.yaml`. It imports the user's ordinary Grok configuration into the
+retained private harness home while Bee keeps its generated MCP configuration
+at the higher private layer. This work is not complete until its typed boundary,
+fixtures, real `grok inspect` proof, restart behavior and global-tree
+non-mutation checks pass. B1.2 must not begin on top of a partially validated
+B1.1.
 
 The four active lanes are:
 
@@ -43,6 +52,33 @@ The four active lanes are:
 2. complete native `exec.docker` parity under the same profile and carrier;
 3. correct folder/node/workspace/display selection and two-node Hive behavior;
 4. finish local Hub install/update/remove and protected admission.
+
+### How the plan is operated
+
+The execution board below is the only forward-looking status board. Dated
+sections in `FOUNDATION_STATUS.md` are evidence history and can describe older
+global executables; they do not change the current queue. Every work unit has
+one owner, one branch or worktree and one bounded diff. Agents may perform
+read-only audits in parallel, but only the unit owner edits its surface.
+
+For each unit, work proceeds in this order:
+
+1. state the public behavior and the existing authority boundary it uses;
+2. add or repair the smallest typed implementation at that boundary;
+3. run focused model and executable acceptance;
+4. update the implementation contract and foundation status;
+5. commit and hand the immutable commit plus evidence to the integration lane.
+
+The integration lane accepts commits only after focused evidence. It resolves
+cross-lane conflicts, runs the complete release gate once, builds the exact
+standalone candidate and performs the atomic global install. It never installs
+from a dirty worktree. Tests and fixtures remain outside `src/`, no new Python
+fixture is added, and no architecture-count test is used as a completion gate.
+
+At most four implementation lanes run concurrently: B1 Agent product, B2
+Docker, B3 topology and B4 Hub. C package distribution waits for B3 and B4;
+D overlay activation waits for C and the released registry compare-and-set
+primitive. Work that does not close an exit proof is deferred.
 
 ## Definition of finished
 

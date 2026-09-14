@@ -88,6 +88,23 @@ func (*Host) DependsOn() []string {
 	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName, bootsystem.EnvironmentName}
 }
 
+// DefaultStateDir selects one application state directory per canonical launch
+// folder. cmd/app invokes it only when the user did not supply --state-dir.
+func (h *Host) DefaultStateDir() (string, error) {
+	if h.initErr != nil {
+		return "", h.initErr
+	}
+	root, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	directory, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return launch.ProjectStateDir(filepath.Join(root, "bee"), directory)
+}
+
 // Launch is the cmd/app entry selected by Bee's executable. It is deliberately
 // separate from boot.Component: runtime launch callbacks do not use components
 // as an adapter interface.

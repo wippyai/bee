@@ -99,10 +99,11 @@ Executable acceptance is pending; these commands are not in the global build yet
 
 `cmd/app` resolves its state directory before calling `Host.Launch`, so the
 native callback cannot redirect it. `ProjectStateDir` provides the canonical
-`projects/<SHA256 of canonical directory>` selection for Bee's executable entry:
-the entry must apply that default before `cmd/app.Run`, while explicit
-`--state-dir` remains authoritative. Until that executable wiring lands, this
-source does not claim separate project stores or concurrent project nodes.
+`projects/<SHA256 of canonical directory>` selection for Bee's executable entry.
+The native host exposes it through `DefaultStateDir`; `cmd/app` and Builder must
+wire that resolver before `Run`, while explicit `--state-dir` remains
+authoritative. Until that complete executable wiring passes, this source does
+not claim separate project stores or concurrent project nodes.
 
 `bee client` is an explicit attachment-only route, optionally taking a workspace
 and display ID pair. It refuses if the selected state has no running Bee.

@@ -87,8 +87,15 @@ in separate PRs assigned to `skhaz`:
    assigned to `skhaz`; its candidate is pinned at `ce0c3e9d3b` with SHA-256
    `8d36335263418328f8a5c2ca117ce2fe612d890b3d5c74062eb69cb15408b240`.
    Bee does not expose general TOML parsing or carry a private copy of the codec.
+5. **Authoritative OS-assigned HTTP address.** Managed MCP binds port zero and
+   receives the actual listener address from the runtime owner; Bee never probes
+   and races on a guessed free port.
+6. **Exact Docker attempt mounts.** Native Docker execution accepts the measured
+   per-attempt project, private HOME and admitted input mounts and supports
+   reconciliation without granting Docker authority to Agent code.
 
-The next global promotion requires gates 1 and 4. Connected Bee requires gate 3.
+The next global promotion requires gates 1, 4 and 5. Docker Agents additionally
+requires gate 6. Connected Bee requires gate 3 and supervisor-host admission.
 Hub admission and governed activation require gate 2. Candidate binaries may be
 used for acceptance, but Bee does not merge these runtime PRs.
 
@@ -179,7 +186,7 @@ advances only at the named promotion.
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
 | 1 | Agents | Finish the durable four-provider recovery matrix, starting with exact-source abrupt-owner recovery and a checked-in real Agy continuation proof | Claude, Codex, Agy and Grok each have one evidence row covering configuration, hooks/MCP, normal close, owner restart, abrupt restart, no prompt replay and fresh attempt/gateway fencing |
-| 2 | State | Consume the released selected-state-root primitive and apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, and upgrade preserves profiles, conversations, threads, receipts, workspaces and displays |
+| 2 | Runtime integration | Consume the released selected-state-root, structural TOML insertion and OS-assigned listener primitives; apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, upgrade preserves all owned data, and the four-provider matrix passes again on the released runtime |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish durable displays, asynchronous Hive rejoin, F9 topology and controller transfer on the selected state model | Same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
 | 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One independently packaged app can enter and leave the catalog without a core edit or authority leak; harness definitions remain separate for extraction in order 8 |
@@ -210,7 +217,7 @@ status and handoff documents.
 
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
-| Agents / integration | active | Make real Claude reach managed readiness, then prove source-file recall across owner restart; complete the equivalent Codex row and reconcile Grok close/restart fencing | released selected state root and structural TOML insertion only for global promotion |
+| Agents / integration | active | Make real Claude reach managed readiness, then prove source-file recall across owner restart; add a checked-in Codex recovery target and reconcile Grok close/restart fencing | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
 | State | external gate | Consume one released runtime state-root pin and prove the documented store-selection matrix from two folders and an explicit override | runtime PR #726 and its builder release |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
@@ -282,7 +289,7 @@ delay it.
 
 ## Work plan
 
-### 0. Freeze state selection
+### 0. Freeze state selection and release runtime pins
 
 Before the next global promotion, make the executable-selected folder derive one
 default state root for all Bee databases and retained resources. Explicit
@@ -298,7 +305,10 @@ folder changes. Every database declaration follows the matrix; no service derive
 an alternate private root.
 
 Exit proof: the installed executable opens the intended folder offline and every
-store resolves beneath the selected root or its explicit override.
+store resolves beneath the selected root or its explicit override. The accepted
+runtime also supplies structural TOML insertion and the authoritative port-zero
+listener address, and the complete provider matrix passes again against those
+exact released pins.
 
 ### 1. Finish native Agents
 
@@ -334,6 +344,10 @@ build.
    the provider's durable conversation identity without replaying the original
    prompt. Login, subscription and account refusals remain visible provider
    outcomes and do not count as authenticated qualification.
+6. Give every row a checked-in live recovery target. Agy and Claude have named
+   targets; add equivalent Codex and Grok targets before promotion. Rerun all four
+   after consuming the released state-root/runtime cut, because moving retained
+   stores can invalidate earlier recovery evidence.
 
 Maintain a four-row provider matrix. Each row requires a real installed binary,
 real configuration composition, MCP/hook delivery, close/cancel and restart. It
@@ -341,7 +355,8 @@ tests present and absent user configuration, preserves provider-specific login
 state and user hooks, and fingerprints the provider's global and project trees
 before and after. When credentials exist it also requires an authenticated
 startup and turn; otherwise the row records the provider's explicit login/account
-refusal and remains unqualified for authenticated use. No secret, endpoint or
+refusal and remains unqualified. Native Agents promotion requires all four rows
+to be authenticated and qualified. No secret, endpoint or
 grant may appear in argv, records, logs, retained homes or the pack. Fixture-only
 evidence never marks a provider working.
 
@@ -360,6 +375,9 @@ resume work; pack inspection finds no credentials or fixtures.
      according to explicit controller rules;
    - explicit client/observe commands attach to a selected existing display and
      do not change the project selection.
+   Distinct folders retain distinct project-node and workspace identities. A
+   selected remote destination creates state there; losing it reports unavailable
+   and never creates a local clone with the same identity.
 3. Present the local desktop immediately. Hive join and rejoin run asynchronously.
    A remote node may remain connectable for 60 seconds, while local input, cancel
    and exit stay responsive.
@@ -377,6 +395,9 @@ resume work; pack inspection finds no credentials or fixtures.
    result create two input controllers.
 8. Prove two actual Bee runtimes over the existing native TLS mesh, including
    sleep/rejoin, remote viewport, resize/input, approval and retained apps.
+9. Prove the built-in headless node profile: start without a TTY, complete work
+   without a client, attach a display later, detach it, and continue running.
+   This uses supervisor admission and the same workspace owner as interactive use.
 
 Public Hive activation waits for the reusable remote-lifecycle gate. Internal
 loopback fixtures may develop the UI and protocol earlier, but they do not make
@@ -429,7 +450,8 @@ and pack inspection. Harness package parity remains an explicit Plan 5 gate.
    structured ACP or RPC behavior.
 3. Record creation intent before dispatch and label containers with exact
    owner/action/attempt identity. Implement start, stop, inspect, reconcile and
-   cleanup, including surviving-container recovery.
+   cleanup, including surviving-container recovery, daemon restart and explicit
+   daemon-unavailable behavior.
 4. Run the normal installed harness command. Mount the selected project and the
    minimum approved configuration/credential inputs. Keep Bee material and
    writable harness state in attempt/session storage. AppArmor is optional.
@@ -440,7 +462,8 @@ and pack inspection. Harness package parity remains an explicit Plan 5 gate.
    bounded resources and only their admitted mounts.
 7. Prove PTY input/output/resize, close, cancellation, create/start failures,
    owner restart, container removal and absence of secrets from argv, records,
-   logs and the production pack on Linux Engine and Docker Desktop/WSL.
+   logs, container inspection and the production pack on Linux Engine and Docker
+   Desktop/WSL.
 
 Run the same four-provider configuration matrix as native placement: ordinary
 installed harness behavior and login state remain available through only the
@@ -460,6 +483,8 @@ four providers.
    independently mounted packages. The host assembly and minimal standalone host
    must behave identically; reject missing requirements and duplicate definition
    IDs. Production `src` consumes packages through declared dependencies.
+   Claude, Codex, Agy and Grok must each install, update, remove and pass their
+   qualified native launch journey as an independent Hub component.
 3. Complete destination admission and remote placement for child, carrier,
    gateway and PTY. Prove destination restart, same-name rejoin, Mac sleep,
    revoked attachments, lost launch acknowledgments and remote approvals without
@@ -486,7 +511,10 @@ immutable admitted content with no core edit or authority leakage.
 
 ### 6. Finish governed overlays and self-edit
 
-Use one path for user edits, Agent edits and installed overlay content:
+Use the existing governed `bee:publish` interface for user edits, Agent edits and
+installed overlay content. Its callable operations remain `stage`, `validate`,
+`activate`, `status` and `rollback`; UI and narrow Agent MCP tools project the
+review and decision state around those owner operations:
 
 `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback`
 
@@ -528,10 +556,10 @@ branches.
 
 | Checkpoint | User-visible result | Required work |
 |---|---|---|
-| Native Agents | Correct offline folder state plus four working managed harnesses, profiles, threads and recovery | Plans 0 and 1 |
+| Native Agents | Correct offline folder state plus four authenticated managed harnesses, profiles, threads and recovery | Plans 0 and 1; released state-root, TOML insertion and listener-address pins; post-cut provider rerun |
 | Local Components | Correct folders/displays and admitted local Hub components | Plans 2 and 3 |
 | Docker Agents | The same four profiles work through native Docker | Plans 1 and 4 |
-| Connected Bee | Public two-node Hive, remote Agent placement and cross-node app/harness delivery | Plans 2, 3 and 5 |
+| Connected Bee | Public two-node Hive, remote Agent placement and cross-node app/harness delivery | Plans 2, 3 and 5; released remote-lifecycle and supervisor-host admission pins |
 | Editable Bee v1 | Cross-node component delivery and governed overlays | Plans 1–6 |
 
 Each promotion runs:
@@ -545,6 +573,14 @@ Each promotion runs:
 6. an installed upgrade that preserves registry history, admitted overlays and
    every owned database, then proves a fresh owner loaded the new executable;
 7. an atomic six-file install with a recorded rollback receipt.
+
+Before the first promotion, add one milestone-aware `make promotion-check` target
+that invokes the required focused and installed-executable gates rather than
+assuming `make check` includes them. Native Agents includes native binary,
+detached lifecycle and all four live provider recovery targets. Later milestones
+add Docker lifecycle/profile, Hub lifecycle/admission, two-runtime Hive, package
+distribution and governed publication gates. The target writes the exact commit,
+runtime pins, provider versions and invoked commands into the promotion receipt.
 
 The six installed files are `bee`, `bee.LICENSES.txt`, `bee.go.mod`,
 `bee.go.sum`, `bee.provenance.json` and `bee.runtime-patches.tar.gz`.

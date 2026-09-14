@@ -1,0 +1,2 @@
+# Dependency artifacts are intentionally not guessed here. Publication must
+# pin the Bee Codex driver and Docker placement component versions and digests.

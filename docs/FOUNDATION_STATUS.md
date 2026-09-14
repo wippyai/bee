@@ -180,7 +180,16 @@ refuses unsupported options. All 895 unit tests pass, as do
 actual Docker restart, inspection-failure and stop-during-create/start checks.
 The production picker also passes a real grant-backed project mount, PTY resize
 and exact container removal. This does not establish real harness credential/MCP
-delivery or supply an installable Docker profile.
+delivery. A separate optional `wolfy-j/bee-driver-codex-docker` source package now
+supplies the first installable harness declaration without entering the default
+pack. Its two mandatory Hub requirements fill the immutable image ID and non-root
+`uid:gid`; the linked policy reuses the Codex driver, saved-profile schema,
+attempt-bound project resource, private session HOME, optional `codex_login`,
+scoped gateway and Docker placement binding. A disposable composition proves
+the linked policy and definition decode, `codex-docker` resolves through the
+ordinary Agent command catalog, and native `codex` remains unchanged. The package
+does not yet have published dependency pins or an accepted immutable image that
+contains Codex, so real provider execution and publication remain open.
 AppArmor is not required. The changed-plan recovery refusal is addressed by the
 following source review workflow; release validation is still underway.
 

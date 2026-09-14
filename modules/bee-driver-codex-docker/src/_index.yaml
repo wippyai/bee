@@ -1,0 +1,77 @@
+version: '1.0'
+namespace: bee.driver.codex.docker
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver-codex-docker
+  readme: |
+    Optional Docker launch profile for Bee's Codex driver. The host supplies
+    the immutable image and non-root user; existing Bee components own launch,
+    credentials, gateway admission, threads and Docker lifecycle.
+  meta:
+    title: Bee Codex Docker profile
+    comment: Optional component-owned Codex launch declaration over the existing Docker placement contract
+- name: image
+  kind: ns.requirement
+  meta:
+    comment: Host-selected full immutable image ID containing /usr/local/bin/codex
+  targets:
+  - entry: bee.driver.codex.docker:policy
+    path: .data.placement_options.image
+- name: user
+  kind: ns.requirement
+  meta:
+    comment: Host-selected non-root numeric uid:gid implemented by the immutable image
+  targets:
+  - entry: bee.driver.codex.docker:policy
+    path: .data.placement_options.user
+- name: policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Docker Codex policy; image and non-root user are mandatory Hub requirements
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: contained_tree
+    required_exit_observation: independent
+    start_ms: 30000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    runner_drain_ms: 5000
+    fixture: false
+    executables: {codex: /usr/local/bin/codex}
+    environment: {}
+    gateway_tools: [thread_read, thread_wait, thread_message]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {}
+    placement_binding: bee.placement.docker:binding
+    placement_options:
+      network: bridge
+      memory: 2147483648
+      nano_cpus: 2000000000
+      pids_limit: 256
+      home_target: /home/bee
+      mounts:
+      - {resource: project, target: /workspace, access: write}
+- name: launch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Independently installable Docker-backed Codex window using the shared Codex driver
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-docker
+    title: Codex · Docker
+    command_names: [codex-docker]
+    binding_ref: bee.driver.codex:binding
+    profile_id: window
+    policy_ref: bee.driver.codex.docker:policy
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: [codex_login]
+    presentation: {start_menu: true, fullscreen: true, reuse: never}

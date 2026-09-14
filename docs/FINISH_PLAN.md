@@ -597,6 +597,11 @@ refuse. Harness package parity remains an explicit Plan 5 gate.
 1. Install one default Docker profile per available harness component and expose
    it in the Agent picker, saved-profile editor and CLI selection. Unavailable
    Docker reports a precise readiness state without hiding the local profile.
+   The first component source now exists for Codex outside the default pack. It
+   contributes `codex-docker` through the ordinary definition catalog and has
+   mandatory Hub parameters for an immutable image and non-root user. Its linker
+   and catalog acceptance passes; publishing dependency pins, a real Codex image,
+   readiness reporting and the other three harness components remain.
 2. Route the existing carrier and managed-window lifecycle through the native
    `exec.docker` placement binding. Keep the same attempt owner, sweeper, thread,
    driver and gateway. Do not depend on the optional userspace Docker component.

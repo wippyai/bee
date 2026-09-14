@@ -6713,3 +6713,29 @@ is `1820bfe4b2154b668d4780d7356e2646a474c561ba00c82accda7a4ccf0b5559`.
 The optional userspace Docker package is
 still unpublished, and no installable Docker harness image/profile is supplied.
 Global Bee is unchanged.
+
+### September 14 — first optional Docker harness component
+
+`modules/bee-driver-codex-docker` now contains the first component-owned Docker
+Agent declaration and remains outside production `src/`. It adds one Codex
+window definition and one launch policy while reusing the existing Codex driver,
+profile store, resource/credential setup, gateway, thread, carrier and Docker
+placement contracts. It creates no second schema, runner, Docker control plane
+or host-path configuration.
+
+The host must fill two typed package requirements: the full immutable image ID
+and its non-root numeric `uid:gid`. The policy fixes Codex at
+`/usr/local/bin/codex`, mounts the already admitted `project` resource at
+`/workspace`, keeps retained HOME private at `/home/bee`, and requests the
+existing optional `codex_login` projection. Its bridge must reach a host-selected
+private Bee gateway interface; random port assignment, exact Host checks and
+attempt-scoped MCP/hook tokens remain the existing gateway's responsibility.
+
+`make docker-profile-component-check` composes production Bee with this exact
+module in a disposable source root, links the two requirements, decodes the
+shared policy and definition, resolves `codex-docker` through the normal Agent
+command catalog, and proves the native `codex` route is unchanged. Go vet and
+the focused check pass. Repository strict lint passes with the existing
+`desktop_lifecycle` fixpoint warning, and all 895 Lua tests pass. The component
+has no published dependency lock or accepted immutable Codex image yet, so it
+does not claim real provider execution, Hub publication or global installation.

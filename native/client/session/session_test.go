@@ -8,12 +8,33 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 )
+
+type desktopScript struct {
+	attachErrors []error
+	attached     []Selection
+	created      []Selection
+}
+
+func (s *desktopScript) Create(_ context.Context, workspace, desktop string) (hive.DesktopSelection, error) {
+	s.created = append(s.created, Selection{Workspace: workspace, Desktop: desktop})
+	return hive.DesktopSelection{Execution: strings.Repeat("e", 32), Workspace: workspace, Desktop: desktop}, nil
+}
+
+func (s *desktopScript) Attach(_ context.Context, _ string, workspace, desktop string, _ hive.DesktopMode) (hive.DesktopMount, error) {
+	s.attached = append(s.attached, Selection{Workspace: workspace, Desktop: desktop})
+	index := len(s.attached) - 1
+	if index < len(s.attachErrors) && s.attachErrors[index] != nil {
+		return hive.DesktopMount{}, s.attachErrors[index]
+	}
+	return hive.DesktopMount{}, nil
+}
 
 func TestDesktopSelectionNeverUsesDiscoveryOrder(t *testing.T) {
 	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{
@@ -38,6 +59,46 @@ func TestDesktopSelectionNeverUsesDiscoveryOrder(t *testing.T) {
 	}
 	if _, err := selectDesktop(hive.DesktopCatalog{}, Selection{}); err == nil {
 		t.Fatal("empty catalog accepted")
+	}
+}
+
+func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *testing.T) {
+	workspace := strings.Repeat("a", 32)
+	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
+	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: workspace, Desktops: []hive.DesktopDescription{{ID: first}, {ID: second}}}}}
+	controlled := &hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED", Message: "another controller"}}
+
+	reuse := &desktopScript{attachErrors: []error{controlled, nil}}
+	if _, err := attachDesktop(context.Background(), reuse, catalog, Selection{}, hive.Control); err != nil {
+		t.Fatal(err)
+	}
+	if len(reuse.attached) != 2 || reuse.attached[1] != (Selection{Workspace: workspace, Desktop: second}) || len(reuse.created) != 0 {
+		t.Fatalf("free display was not reused: %+v", reuse)
+	}
+
+	allocate := &desktopScript{attachErrors: []error{controlled, controlled, nil}}
+	if _, err := attachDesktop(context.Background(), allocate, catalog, Selection{}, hive.Control); err != nil {
+		t.Fatal(err)
+	}
+	if len(allocate.created) != 1 || len(allocate.attached) != 3 || allocate.created[0].Workspace != workspace ||
+		len(allocate.created[0].Desktop) != 32 || allocate.attached[2] != allocate.created[0] {
+		t.Fatalf("new durable display was not allocated and attached: %+v", allocate)
+	}
+}
+
+func TestAutomaticDisplaySelectionNeverRetriesUnknownOrExplicitRefusal(t *testing.T) {
+	workspace := strings.Repeat("a", 32)
+	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
+	catalog := hive.DesktopCatalog{Workspaces: []hive.WorkspaceDesktops{{ID: workspace, Desktops: []hive.DesktopDescription{{ID: first}, {ID: second}}}}}
+	unknown := errors.New("transport lost")
+	script := &desktopScript{attachErrors: []error{unknown}}
+	if _, err := attachDesktop(context.Background(), script, catalog, Selection{}, hive.Control); err != unknown || len(script.attached) != 1 || len(script.created) != 0 {
+		t.Fatalf("unknown result was retried: calls=%+v created=%+v err=%v", script.attached, script.created, err)
+	}
+	explicit := &desktopScript{attachErrors: []error{&hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED"}}}}
+	selected := Selection{Workspace: workspace, Desktop: second}
+	if _, err := attachDesktop(context.Background(), explicit, catalog, selected, hive.Control); err == nil || len(explicit.attached) != 1 || explicit.attached[0] != selected || len(explicit.created) != 0 {
+		t.Fatalf("explicit selection widened: %+v err=%v", explicit, err)
 	}
 }
 

@@ -8,6 +8,8 @@ package session
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +24,9 @@ import (
 	stackpkg "github.com/wippyai/runtime/cluster"
 )
 
-// Selection is explicit when more than one desktop is available. Empty selects
-// the sole desktop only; discovery order must never choose a user's workspace.
+// Selection pins an existing durable display. Empty lets an ordinary local Bee
+// reuse the first uncontrolled display or allocate a new one in its sole
+// project workspace. Discovery order never chooses among workspaces.
 type Selection struct{ Workspace, Desktop string }
 
 // Physical detach must not wait for the normal operation deadline. If the
@@ -60,6 +63,59 @@ func selectDesktop(catalog hive.DesktopCatalog, selection Selection) (Selection,
 		return Selection{}, errors.New("multiple desktops available; select a workspace and desktop")
 	}
 	return found, nil
+}
+
+type desktopOperations interface {
+	Create(context.Context, string, string) (hive.DesktopSelection, error)
+	Attach(context.Context, string, string, string, hive.DesktopMode) (hive.DesktopMount, error)
+}
+
+func randomDesktopID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value[:]), nil
+}
+
+// attachDesktop makes ordinary local launch useful with several terminals. It
+// only retries after the owner definitively says an existing display already
+// has another controller. Unknown outcomes and every other refusal return
+// immediately. Explicit selections remain exact and never allocate.
+func attachDesktop(ctx context.Context, client desktopOperations, catalog hive.DesktopCatalog, selection Selection, mode hive.DesktopMode) (hive.DesktopMount, error) {
+	if selection.Workspace != "" || selection.Desktop != "" {
+		selected, err := selectDesktop(catalog, selection)
+		if err != nil {
+			return hive.DesktopMount{}, err
+		}
+		return client.Attach(ctx, "session-attach", selected.Workspace, selected.Desktop, mode)
+	}
+	if len(catalog.Workspaces) != 1 {
+		return hive.DesktopMount{}, errors.New("multiple workspaces available; select a workspace and desktop")
+	}
+	workspace := catalog.Workspaces[0]
+	for index, desktop := range workspace.Desktops {
+		mounted, err := client.Attach(ctx, fmt.Sprintf("session-attach-%d", index), workspace.ID, desktop.ID, mode)
+		if err == nil {
+			return mounted, nil
+		}
+		var rejected *hive.Rejected
+		if mode != hive.Control || !errors.As(err, &rejected) || rejected.Fault.Code != "DESKTOP_CONTROLLED" {
+			return hive.DesktopMount{}, err
+		}
+	}
+	if mode != hive.Control {
+		return hive.DesktopMount{}, errors.New("selected owner has no display to observe")
+	}
+	desktop, err := randomDesktopID()
+	if err != nil {
+		return hive.DesktopMount{}, err
+	}
+	created, err := client.Create(ctx, workspace.ID, desktop)
+	if err != nil {
+		return hive.DesktopMount{}, err
+	}
+	return client.Attach(ctx, "session-attach-created", created.Workspace, created.Desktop, mode)
 }
 
 // Join runs until local detach, cancellation or an operation failure. The caller
@@ -108,11 +164,7 @@ func present(ctx context.Context, foreground context.Context, actor *mesh.Actor,
 	if err != nil {
 		return err
 	}
-	selected, err := selectDesktop(catalog, cfg.Selection)
-	if err != nil {
-		return err
-	}
-	mounted, err := client.Attach(operations, "session-attach", selected.Workspace, selected.Desktop, cfg.Mode)
+	mounted, err := attachDesktop(operations, client, catalog, cfg.Selection, cfg.Mode)
 	if err != nil {
 		return err
 	}

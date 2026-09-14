@@ -2,13 +2,17 @@
 
 `Join(ctx, Config, stdin, stdout)` composes the existing SameAccount native mesh,
 Hive desktop binding and physical presenter. It is gated by `meshclient` and
-`physicalclient`; public launch does not call it yet. It creates no owner,
+`physicalclient`; ordinary public launch calls it after selecting or starting the
+project owner. It creates no owner,
 workspace database, transport implementation or registry deployment.
 
 The host selects a protected discovery directory, an explicit control/observe
-mode, and optionally an exact workspace/desktop pair. With no pair, precisely
-one desktop must exist. Empty and ambiguous catalogs are errors; discovery order
-never selects a workspace. Each call owns a fresh actor and one mount. Attachment requests
+mode, and optionally an exact workspace/desktop pair. With no pair, one workspace
+must exist. Control mode reuses the first display without a controller and
+allocates a fresh durable identity only after definite `DESKTOP_CONTROLLED`
+refusals. Observe mode uses the first listed display. An explicit pair is exact
+and never allocates. Discovery order never selects a workspace. Each call owns a
+fresh actor and one mount. Attachment requests
 and input are never replayed. Supervisor discovery and catalog readiness share
 a 15-second deadline. Only definite UNAVAILABLE catalog refusals trigger another
 read, after 50 ms with a fresh key; all other failures return immediately. Cleanup requests supervisor detach within a bounded

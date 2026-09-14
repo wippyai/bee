@@ -79,6 +79,23 @@ func (d *Desktop) List(ctx context.Context, key string) (DesktopCatalog, error) 
 	}
 	return DecodeDesktopCatalog(reply, d.execution)
 }
+func (d *Desktop) Create(ctx context.Context, workspace, desktop string) (DesktopSelection, error) {
+	if d == nil {
+		return DesktopSelection{}, errors.New("desktop client unavailable")
+	}
+	selected := DesktopSelection{Execution: d.execution, Workspace: workspace, Desktop: desktop}
+	if !selected.valid() {
+		return DesktopSelection{}, errors.New("invalid desktop allocation")
+	}
+	reply, err := d.call(ctx, DesktopCreate, desktop, selected)
+	if err != nil {
+		return DesktopSelection{}, err
+	}
+	if err := DecodeDesktopCreated(reply, selected); err != nil {
+		return DesktopSelection{}, &UnknownOutcome{Operation: DesktopCreate, Key: desktop, Cause: err}
+	}
+	return selected, nil
+}
 func (d *Desktop) Attach(ctx context.Context, key, workspace, desktop string, mode DesktopMode) (DesktopMount, error) {
 	if d == nil {
 		return DesktopMount{}, errors.New("desktop client unavailable")

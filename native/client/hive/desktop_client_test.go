@@ -72,6 +72,33 @@ func TestDesktopBindingCarriesExactIdentityAndUsesOneSendPerOperation(t *testing
 	}
 }
 
+func TestDesktopBindingCreatesExactDurableIdentityBeforeAttachment(t *testing.T) {
+	d, s := desktopBinding(t)
+	calls := make(chan wireCall, 1)
+	go func() {
+		calls <- answerDesktop(s, map[string]any{
+			"owner_execution": selection.Execution,
+			"workspace_id":    selection.Workspace,
+			"desktop_id":      selection.Desktop,
+		}, nil)
+	}()
+	created, err := d.Create(context.Background(), selection.Workspace, selection.Desktop)
+	if err != nil || created != selection {
+		t.Fatalf("creation=%+v error=%v", created, err)
+	}
+	call := <-calls
+	if call.Key != selection.Desktop || call.Target.Ref != DesktopCreate || call.Owner.Node != "owner" || call.Owner.Service != DesktopService {
+		t.Fatalf("wrong creation operation: %+v", call)
+	}
+	var input DesktopSelection
+	if json.Unmarshal(call.Input, &input) != nil || input != selection {
+		t.Fatalf("wrong creation input: %s", call.Input)
+	}
+	if _, err := d.Create(context.Background(), "foreign", selection.Desktop); err == nil || s.sent.Load() != 1 {
+		t.Fatal("invalid creation was sent")
+	}
+}
+
 const desktopTimeLayout = "2006-01-02T15:04:05.000Z"
 
 func TestDesktopBindingDistinguishesRefusalFromUnknownSuccessfulGrant(t *testing.T) {

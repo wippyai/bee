@@ -13,6 +13,7 @@ import (
 
 const DesktopService = "bee.desktop"
 const DesktopList = "bee.desktop:list"
+const DesktopCreate = "bee.desktop:create"
 const DesktopAttach = "bee.desktop:attach"
 const DesktopDetach = "bee.desktop:detach"
 
@@ -129,6 +130,20 @@ func DecodeDesktopCatalog(reply Reply, execution string) (DesktopCatalog, error)
 		return DesktopCatalog{}, ErrDesktopReply
 	}
 	return result, nil
+}
+
+// DecodeDesktopCreated validates allocation independently of attachment.
+// Allocation retains an identity but grants no viewport or controller rights.
+func DecodeDesktopCreated(reply Reply, selected DesktopSelection) error {
+	if !selected.valid() || !desktopValue(reply) {
+		return ErrDesktopReply
+	}
+	var wire DesktopSelection
+	if !exactDesktopFields(reply.Value, "owner_execution", "workspace_id", "desktop_id") ||
+		strict(reply.Value, &wire) != nil || wire != selected || !live(reply.lifetime) {
+		return ErrDesktopReply
+	}
+	return nil
 }
 func desktopList(raw json.RawMessage, into any) bool {
 	if !present(raw) {

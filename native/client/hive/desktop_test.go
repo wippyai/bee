@@ -111,6 +111,31 @@ func TestDesktopCatalogPreservesIndependentWorkspaceIdentities(t *testing.T) {
 		t.Fatal("Lua empty list refused", err)
 	}
 }
+func TestDesktopCreatedRequiresExactAllocationReceipt(t *testing.T) {
+	value := map[string]any{"owner_execution": selection.Execution, "workspace_id": selection.Workspace, "desktop_id": selection.Desktop}
+	if err := DecodeDesktopCreated(desktopReply(t, value), selection); err != nil {
+		t.Fatal(err)
+	}
+	for field, wrong := range map[string]any{
+		"owner_execution": strings.Repeat("d", 32),
+		"workspace_id":    strings.Repeat("d", 32),
+		"desktop_id":      strings.Repeat("d", 32),
+		"extra":           true,
+	} {
+		changed := map[string]any{"owner_execution": selection.Execution, "workspace_id": selection.Workspace, "desktop_id": selection.Desktop}
+		changed[field] = wrong
+		if DecodeDesktopCreated(desktopReply(t, changed), selection) == nil {
+			t.Fatalf("accepted changed %s", field)
+		}
+	}
+	closed := make(chan struct{})
+	close(closed)
+	reply := desktopReply(t, value)
+	reply.lifetime = closed
+	if DecodeDesktopCreated(reply, selection) == nil {
+		t.Fatal("accepted creation after owner lifetime ended")
+	}
+}
 func TestDesktopDetachRequiresExactSelectionAndPositiveAcknowledgment(t *testing.T) {
 	value := map[string]any{"owner_execution": selection.Execution, "workspace_id": selection.Workspace, "desktop_id": selection.Desktop, "detached": true}
 	if err := DecodeDesktopDetached(desktopReply(t, value), selection); err != nil {

@@ -21,35 +21,102 @@ hooks and MCP, and durable recovery. The historical-pin recovery regression and
 the focused native acceptance are complete. The global executable has not been
 updated from this branch.
 
-The host HOME release blocker is corrected in the active source. A profile may
-request host HOME only when the host-selected launch policy explicitly
-authorizes it. The decision participates in the policy digest and is enforced
-at carrier planning, native preparation, and again before materialization.
+The host HOME release blocker is corrected in committed and pushed source
+`b9d1487`. A profile may request host HOME only when the host-selected launch
+policy explicitly authorizes it. The decision participates in the policy digest
+and is enforced at carrier planning, native preparation, and again before
+materialization.
 Registry profile metadata continues to describe the requested isolation; it
-never grants host filesystem authority. Strict lint, all 883 Lua tests, exact
+never grants host filesystem authority. Strict lint, all 883 Lua tests,
 native/offline acceptance, Codex hook/MCP acceptance, both recovery paths, and
-pack exclusion inspection pass on the rebuilt candidate. The final exact-source
-repository check and committed rebuild remain before global installation.
+pack exclusion inspection pass on the pre-commit candidate. A broad diagnostic
+run that crossed the final source change failed in `desktop-check` because an
+additional presenter was not replaced. That run is useful evidence but cannot
+qualify or reject the exact commit. The exact-source repository check, focused
+reproduction if it fails, and committed rebuild remain before global
+installation.
 
 The remaining immediate queue is fixed:
 
-1. finish one captured `make check` on the exact source;
-2. commit and push the coherent checkpoint;
-3. rebuild from the commit and atomically install the six global artifacts with
-   a tested rollback.
+1. record the composed runtime hash, then run one captured `make check` with
+   that explicit `WIPPY` on the clean release HEAD containing `b9d1487`;
+2. if the presenter-replacement failure repeats, reduce and fix that lifecycle
+   defect, then repeat the exact-source check once;
+3. rebuild the executable and its five release sidecars from the clean
+   qualifying commit;
+4. repeat native selection, offline boot, hooks/MCP, recovery and pack-exclusion
+   gates against those exact artifacts;
+5. atomically install them with a tested rollback and verify installed hashes.
+
+## Execution board
+
+This board is the operational order. A lane may develop in parallel once its
+start gate is satisfied, but only a release train may update global Bee.
+
+| Train | Deliverable | Status | Next irreversible fact | Exit proof |
+|---|---|---|---|---|
+| A | Daily-use native Agent Bee | Release candidate | Exact `make check`, clean rebuild, atomic global install | Offline `bee`, `bee claude`, `bee codex`, additive hooks/MCP, recovery and installed hashes |
+| B1 | Four managed native harnesses | Partly implemented | Finish Agy/Grok inheritance and clean-install picker profiles | UI and CLI launch all four; each owns a durable thread and resumes |
+| B2 | Docker isolation | PTY foundation implemented | Route the same carrier/profile through native `exec.docker` | Local/Docker differ only by isolation; lifecycle and MCP proofs are identical |
+| B3 | Folder/display/Hive model | Foundation implemented, public behavior incomplete | Make folder launch select the correct node/workspace/display without blocking offline boot | Multi-display local acceptance and two real nodes on the native mesh |
+| B4 | Local Hub lifecycle | Planner/catalog foundation implemented | Complete immutable install/update/remove with admission and rollback | Installed app or harness enters its catalog without core edits |
+| C | Hub distribution and harness packaging | Waiting on B1, B3 and B4 | Transfer one immutable admitted harness package to a second node | Destination installs and launches it without transferring authority or credentials |
+| D | Governed overlays and self-edit | Authoring foundation implemented; activation incomplete | Implement exact-revision stage, review, apply and rollback through registry ownership | Agent prepares an edit, user reviews it, authorized owner applies or rejects it safely |
+| E | Release hardening | Waiting on B-D integration | Produce one immutable cross-platform candidate | Full matrix passes twice and documentation matches the executable |
+
+The integration order is `A → (B1 + B2 + B3 + B4) → C → D → E`. B1 through
+B4 share contracts but do not share mutable implementation files without an
+explicit handoff. B3 consumes the existing native mesh; it does not invent a
+Bee transport. C transfers immutable package content after destination
+admission. D is the only path that mutates live definitions.
+
+### Lane ownership
+
+Each lane owns one narrow surface and hands typed results to the next layer:
+
+- **Agent product:** harness catalog, profiles, carrier, drivers, hooks, MCP and
+  thread binding. Each provider driver stays an independently installable
+  component.
+- **Docker:** Docker placement and its native executor adapter. The carrier and
+  thread owner remain unchanged.
+- **Topology:** supervisor admission, folder/workspace selection, attachments,
+  display presentation and Hive UI. Cluster/Raft remains owned by the runtime
+  cluster lane.
+- **Hub:** package resolution, immutable inventory, migrations, admission and
+  rollback receipts. Hub does not publish directly into the registry.
+- **Overlays:** authoring workspace, review proposal, governance decision and
+  registry-owner activation.
+- **Release:** integration, executable acceptance, documentation, atomic install
+  and rollback. Only this lane updates global Bee.
+
+Any required runtime semantic change is isolated in a runtime PR assigned to
+`skhaz`. Bee proceeds against a pinned candidate and never merges the runtime
+PR or carries a private replacement API.
+
+The six installed files are `bee`, `bee.LICENSES.txt`, `bee.go.mod`,
+`bee.go.sum`, `bee.provenance.json` and `bee.runtime-patches.tar.gz`. The
+provenance document is the canonical manifest for source, runtime, native,
+builder and patch pins. Every executable gate uses the runtime selected by that
+manifest explicitly; ambient `.wippy` state is not release evidence.
 
 ## Completion rules
 
-Each milestone ends with one immutable candidate and these gates:
+Each implementation milestone ends with one isolated immutable candidate and
+these gates:
 
 1. strict lint and focused behavioral tests;
 2. the relevant source and packed-application user journey;
 3. standalone executable and restart/recovery acceptance;
 4. inspection proving tests, fixtures, credentials and local state are absent
-   from the production pack;
-5. one full `make check` on the exact candidate;
-6. an atomic six-artifact global install with rollback, preserving all existing
-   databases, profiles, conversations, workspaces and displays.
+   from the production pack.
+
+A release train additionally requires one full `make check` with the exact
+pinned `WIPPY`, followed by an atomic six-file global install with rollback.
+Only the release lane installs globally. Train A installs immediately; a
+completed B, C or D integration may be promoted as an explicit daily-use
+checkpoint through the same release gates, and E installs the final candidate.
+Every install preserves all existing databases, profiles, conversations,
+workspaces and displays.
 
 Passing a model test, fixture or source-only check does not complete a public
 feature. Full regression runs once per integration candidate rather than after
@@ -69,18 +136,22 @@ starting another integration branch.
 - Prove that carrier planning rejects an unauthorized host HOME request, direct
   native placement rejects the same request, and the authorized Claude/Codex
   policies succeed.
-- Preserve the result of the already-running broad regression as evidence for
-  the pre-fix slice, then run the final broad regression on the corrected exact
-  source. Build one fresh standalone candidate and run installed-to-candidate
-  and same-build recovery.
+- Preserve the failed mixed-source broad regression as diagnostic evidence,
+  then run the final broad regression on the clean release HEAD containing
+  `b9d1487`. Reproduce and fix the presenter-replacement failure only if it
+  occurs on that exact source and pinned runtime.
+- Build one fresh standalone candidate from the qualifying clean commit and run
+  installed-to-candidate and same-build recovery.
 - Prove offline boot, native Agent selection, Claude/Codex inherited HOME and
   custom configuration directories, scoped MCP, additive hooks, cancellation,
   and responsive close on that candidate.
-- Commit and push one coherent checkpoint, then atomically refresh global Bee.
+- Atomically refresh global Bee only after the rebuilt artifact hashes and
+  rollback path are recorded.
 
 Exit: `bee`, `bee claude`, and `bee codex` start without network access to Bee
-services; normal global harness login/settings remain available; Bee's MCP and
-hooks are additive; an interrupted conversation reopens with the same durable
+services, and the direct aliases preserve normal global harness login/settings.
+Claude and Codex launched through the managed picker receive Bee's additive MCP
+and hooks; an interrupted managed conversation reopens with the same durable
 session and a fresh attempt. This is the next daily-use global build.
 
 ## Milestone 1: complete the managed Agent product
@@ -183,23 +254,39 @@ application runs and where it is being displayed.
 ## Milestone 4: finish Hub installation and component distribution
 
 The existing Hub catalog, planning, migration and Modules work is the base. Do
-not build another installer or import Keeper.
+not build another installer or import Keeper. This milestone has three ordered
+owners so local package work never waits on Hive and Hive transfer never changes
+the local installer.
+
+### Local lifecycle
 
 - Complete install, update and remove with immutable versions, transitive
   requirements, provenance, migrations, recovery receipts and rollback.
 - Connect installation to protected application admission so an installed app
   can appear in Tools only after reviewed permissions are admitted.
+- Add update discovery and preserve module values/configuration across updates.
+
+Exit: a clean local Bee can find, preview, install, authorize, launch, update,
+recover and remove an ordinary application.
+
+### Harness packaging
+
 - Package the four harness drivers independently and prove installing or
   updating one changes the Agent catalog without editing Bee core.
-- Add update discovery and preserve module values/configuration across updates.
+
+Exit: a clean local Bee installs one harness component and gains its Agent
+catalog entry without a Bee core edit or restart-dependent authority shortcut.
+
+### Hive distribution
+
 - Transfer package definitions and immutable files through Hive with destination
   admission. Never replicate credentials, grants, live PIDs, mounts or database
   ownership merely because a component exists on another node.
 - Keep filesystem synchronization as an explicit component-owned resource
   contract for packages such as WASM or future GPU workers.
 
-Exit: a clean Bee can find, preview, install, authorize, launch, update, recover
-and remove an app or harness, locally and on an admitted Hive node.
+Exit: an admitted destination Bee receives, installs and launches the immutable
+application or harness package with the same local lifecycle and receipts.
 
 ## Milestone 5: governed overlays and self-edit
 

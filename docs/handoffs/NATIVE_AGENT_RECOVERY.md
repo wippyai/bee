@@ -169,17 +169,20 @@ source login and no project provider writes. The test copies only the explicit
 login file into disposable state and removes that state on every outcome.
 
 `make native-claude-recovery-live-check BEE_BINARY=... CLAUDE_BIN=...
-CLAUDE_LOGIN_FILE=...` is the equivalent checked real-Claude gate. Its first turn
+CLAUDE_CREDENTIAL_ENV=ANTHROPIC_API_KEY` is the equivalent checked real-Claude gate. Its first turn
 must call the bound `thread_read` MCP tool and use Claude's Read tool on a random
 fixture; the fixture is deleted before owner restart and the resumed turn must
 recall it without tools. The target also fences application, thread, HOME,
-attempt, gateway, hook, prompt-replay, process and source-login identity. It
-removes ambient provider credential variables and every disposable credential
-copy on all outcomes. Installed Claude 2.1.270 currently reaches this managed
-launch but the copied machine OAuth is refused before a turn completes; a direct
-ordinary-HOME probe reports unavailable account credit. This is an unqualified
-provider row, not recovery evidence. The provider version also differs from the
-current 2.1.265 manifest metadata and must be reconciled before promotion.
+attempt, gateway, hook, prompt-replay and process identity. The host API key is
+available only to Bee's credential source; the broker materializes it into the
+exact attempt, and the gate scans disposable state for the literal before
+cleanup. With the variable absent, a clean source-free selector still launches
+Claude through its ordinary HOME/login path. Installed Claude 2.1.270 and the
+host API key reach the first-party provider, but both the managed gate and a
+direct invocation return HTTP 400 `Credit balance is too low` before inference.
+This is a provider-account blocker and an unqualified row, not recovery evidence.
+The provider version remains at the current 2.1.265 manifest value until both
+turns qualify, then must be reconciled before promotion.
 
 `make native-codex-recovery-live-check BEE_BINARY=... CODEX_BIN=...
 CODEX_LOGIN_FILE=... CODEX_CONFIG_FILE=...` runs the equivalent real-Codex

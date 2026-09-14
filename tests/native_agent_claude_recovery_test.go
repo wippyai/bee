@@ -3,9 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,17 +158,24 @@ func waitActualClaudeReady(ui *desktop, marker, resultPath string, timeout time.
 func TestActualClaudeManagedColdRecovery(t *testing.T) {
 	binary := os.Getenv("BEE_BINARY")
 	executable := os.Getenv("CLAUDE_BIN")
-	loginFile := os.Getenv("CLAUDE_LOGIN_FILE")
-	if binary == "" || executable == "" || loginFile == "" {
-		t.Fatal("BEE_BINARY, CLAUDE_BIN and CLAUDE_LOGIN_FILE are required")
+	credentialEnv := os.Getenv("CLAUDE_CREDENTIAL_ENV")
+	if binary == "" || executable == "" || credentialEnv == "" {
+		t.Fatal("BEE_BINARY, CLAUDE_BIN and CLAUDE_CREDENTIAL_ENV are required")
 	}
-	if err := actualClaudeColdRecovery(binary, executable, loginFile); err != nil {
+	if credentialEnv != "ANTHROPIC_API_KEY" {
+		t.Fatal("CLAUDE_CREDENTIAL_ENV must select ANTHROPIC_API_KEY")
+	}
+	credential, present := os.LookupEnv(credentialEnv)
+	if !present || credential == "" || len(credential) > 8192 || strings.ContainsAny(credential, "\x00\r\n") {
+		t.Fatal("selected Claude credential environment variable is absent or invalid")
+	}
+	if err := actualClaudeColdRecovery(binary, executable, credentialEnv, credential); err != nil {
 		t.Fatal(err)
 	}
 	t.Log("real Claude recalled an exact token with stable conversation/HOME/application/thread, a fresh attempt and gateway, and no prompt replay")
 }
 
-func actualClaudeColdRecovery(binary, executable, loginFile string) (result error) {
+func actualClaudeColdRecovery(binary, executable, credentialEnv, credential string) (result error) {
 	root, err := os.MkdirTemp("", "bee-real-claude-recovery-")
 	if err != nil {
 		return err
@@ -185,17 +194,10 @@ func actualClaudeColdRecovery(binary, executable, loginFile string) (result erro
 		}
 	}()
 	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
-	for _, dir := range []string{filepath.Join(project, "bin"), state, filepath.Join(home, ".claude")} {
+	for _, dir := range []string{filepath.Join(project, "bin"), state, home} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
 		}
-	}
-	loginBefore, err := os.ReadFile(loginFile)
-	if err != nil {
-		return errors.New("real Claude login unavailable")
-	}
-	if err := os.WriteFile(filepath.Join(home, ".claude", ".credentials.json"), loginBefore, 0600); err != nil {
-		return err
 	}
 	firstReport, secondReport := filepath.Join(root, "first-launch"), filepath.Join(root, "second-launch")
 	firstResult, secondResult := filepath.Join(root, "first-result.json"), filepath.Join(root, "second-result.json")
@@ -238,7 +240,7 @@ func actualClaudeColdRecovery(binary, executable, loginFile string) (result erro
 			result = fmt.Errorf("clean real Claude acceptance processes: %w", cleanupErr)
 		}
 	}()
-	first, err = newDesktop(binary, project, state, home)
+	first, err = newDesktop(binary, project, state, home, credentialEnv+"="+credential)
 	if err != nil {
 		return err
 	}
@@ -332,7 +334,7 @@ func actualClaudeColdRecovery(binary, executable, loginFile string) (result erro
 	retained = nil
 	first.close()
 	first = nil
-	second, err = newDesktop(binary, project, state, home)
+	second, err = newDesktop(binary, project, state, home, credentialEnv+"="+credential)
 	if err != nil {
 		return err
 	}
@@ -411,10 +413,6 @@ func actualClaudeColdRecovery(binary, executable, loginFile string) (result erro
 	if err != nil || turns != 0 || successes != 0 {
 		return fmt.Errorf("real Claude recovery invented Bee turn facts: turns=%d successes=%d err=%v", turns, successes, err)
 	}
-	loginAfter, err := os.ReadFile(loginFile)
-	if err != nil || string(loginAfter) != string(loginBefore) {
-		return errors.New("real Claude recovery changed the source login")
-	}
 	retained, err = ownerChild(second.cmd.Process.Pid, binary, state, 10*time.Second)
 	if err != nil {
 		return err
@@ -439,5 +437,33 @@ func actualClaudeColdRecovery(binary, executable, loginFile string) (result erro
 	if projectAfter != projectBefore {
 		return errors.New("real Claude recovery changed the project tree")
 	}
+	leaked, leakErr := firstFileContaining(root, []byte(credential))
+	if leakErr != nil {
+		return leakErr
+	}
+	if leaked != "" {
+		return fmt.Errorf("real Claude credential persisted under disposable state in %s", leaked)
+	}
 	return nil
+}
+
+func firstFileContaining(root string, needle []byte) (string, error) {
+	var found string
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if found != "" || !entry.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if bytes.Contains(data, needle) {
+			found, _ = filepath.Rel(root, path)
+		}
+		return nil
+	})
+	return found, err
 }

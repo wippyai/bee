@@ -97,7 +97,7 @@ func filteredEnvironment() []string {
 	remove := map[string]bool{
 		"BEE_RUNTIME": true, "BEE_BINARY": true, "USER": true,
 		"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "GROK_HOME": true,
-		"CLAUDE_BIN": true, "CLAUDE_LOGIN_FILE": true,
+		"CLAUDE_BIN": true, "CLAUDE_LOGIN_FILE": true, "CLAUDE_CREDENTIAL_ENV": true,
 		"AGY_BIN": true, "AGY_LOGIN_FILE": true, "AGY_MODEL": true,
 		"ANTHROPIC_API_KEY": true, "ANTHROPIC_AUTH_TOKEN": true,
 		"ANTHROPIC_CUSTOM_HEADERS": true, "CLAUDE_CODE_OAUTH_TOKEN": true,

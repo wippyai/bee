@@ -59,18 +59,44 @@ existing `desktop_lifecycle` fixpoint warning, native window acceptance passes,
 and global/project Grok trees remain unchanged. This is branch evidence, not a
 global installation.
 
-The immediate Agent gap is one row: real Claude recovery. Fixture Claude proves
-stable application, thread and retained HOME plus a fresh attempt and gateway
-binding across graceful and abrupt owner restart. Durable real-Agy, real-Codex
-and real-Grok acceptance proves exact tool-free recall after source deletion,
-with stable conversation/HOME/application/thread and fresh attempt and gateway
-identities. Codex also proves its command read and scoped MCP/hook pairing; Grok
+The immediate Agent gap is one row: real Claude recovery. Its checked target now
+uses an optional host environment credential projection: absence preserves the
+ordinary HOME/login path, while presence materializes `ANTHROPIC_API_KEY` only
+into the admitted attempt and persists no bytes. The source-free selector and
+the full 893-test suite pass. Installed Claude 2.1.270 reaches the first-party
+provider, but the current account returns HTTP 400 `Credit balance is too low`
+before inference, so the row remains externally blocked and unqualified.
+Fixture Claude proves stable application, thread and retained HOME plus a fresh
+attempt and gateway binding across graceful and abrupt owner restart. Durable
+real-Agy, real-Codex and real-Grok acceptance proves exact tool-free recall after
+source deletion, with stable conversation/HOME/application/thread and fresh
+attempt and gateway identities. Codex also proves its command read and scoped
+MCP/hook pairing; Grok
 proves matching provider/hook conversation identity and scoped MCP. Their global
 configuration remains unchanged. Codex and Grok declare their tested versions
 and must be rerun after the runtime cut; Claude metadata is reconciled only when
 its authenticated row qualifies.
 Native Agents also remains blocked from global promotion until the selected-state-root
 runtime gate is released and consumed.
+
+### Release plan at a glance
+
+Bee advances through five installed checkpoints. Each checkpoint is a clean,
+immutable commit with its own rollback receipt; work from later checkpoints may
+run in parallel but cannot widen an earlier promotion diff.
+
+| Checkpoint | User-visible result | Bee-owned work | External prerequisite |
+|---|---|---|---|
+| Native Agents | Offline project launch plus Claude, Codex, Agy and Grok from the picker or CLI with durable threads, scoped hooks/MCP and recovery | Seal the Claude projection gate, consume the state model, rerun the four-provider matrix and install atomically | released selected state root, TOML insertion and listener address; Claude account able to complete two turns |
+| Local Components | Predictable folder/workspace/display behavior and one independently installed Hub app | finish local topology, extract one app package, close install/update/remove and protected admission | released registry compare-and-set for admission |
+| Docker Agents | The same four saved profiles run through native `exec.docker` by changing only isolation | compose exact mounts, reconcile containers and rerun terminal/hook/MCP/recovery checks | released exact-attempt Docker mounts |
+| Connected Bee | Two Bees discover, attach, observe, transfer control and install admitted packages through the native mesh | finish public supervisor admission, remote placement and package transfer/recovery | released remote actor lifecycle |
+| Editable Bee v1 | User or Agent stages, reviews, approves, applies and rolls back registry overlays, including replicated approved changes | finish governance effects, receipts, rollback, overlay UI and replication; harden and tag | released registry compare-and-set and Connected Bee |
+
+The active critical-path unit is to commit and push the already tested Claude
+projection/gate, then consume the selected-state-root runtime release. The
+Claude account refusal is tracked as a promotion blocker; it does not stop state,
+topology, Hub or package work.
 
 ### Reusable runtime gates
 
@@ -88,9 +114,10 @@ in separate PRs assigned to `skhaz`:
    same-name rejoin without a Bee remote-monitor subsystem.
 4. **Narrow structural TOML insertion.** Grok private configuration uses the
    reusable `toml.insert(document, path, source)` operation. Runtime PR #746 is
-   assigned to `skhaz`; its candidate is pinned at `ce0c3e9d3b` with SHA-256
-   `8d36335263418328f8a5c2ca117ce2fe612d890b3d5c74062eb69cb15408b240`.
-   Bee does not expose general TOML parsing or carry a private copy of the codec.
+   assigned to `skhaz`. The finish branch and runtime handoff currently name
+   different candidate digests; the runtime owner must provide one accepted
+   commit, patch digest and proof command before promotion. Bee does not expose
+   general TOML parsing or carry a private copy of the codec.
 5. **Authoritative OS-assigned HTTP address.** Managed MCP binds port zero and
    receives the actual listener address from the runtime owner; Bee never probes
    and races on a guessed free port.
@@ -107,6 +134,13 @@ Before implementation claims depend on these gates, copy each accepted runtime
 pin, digest, proof command and remaining limitation into
 `docs/handoffs/STATUS_RUNTIME_GATE.md`. The finish plan orders work; that handoff
 is the canonical runtime evidence.
+
+Supervisor-host admission is a Bee-owned integration seam over the existing
+native mesh, not another runtime API. Its connected-release gate is
+`make hive-supervisor-check hive-desktop-admission-check native-hive-catalog-check`
+against the accepted remote-lifecycle runtime pin, followed by the public
+enrollment journey below. Any newly reproduced runtime gap remains a separate PR
+assigned to `skhaz`.
 
 ## Definition of finished
 
@@ -189,7 +223,7 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents before runtime cut | Finish real Claude cold recovery and reconcile its provider version metadata; retain the committed Agy, Codex and Grok evidence without claiming promotion | All four providers have named recovery targets; Claude is authenticated and qualified; pre-cut evidence and exact provider versions are recorded |
+| 1 | Agents before runtime cut | Commit and push the tested Claude credential projection and live gate; retain the committed Agy, Codex and Grok evidence and record Claude's external account refusal without claiming qualification | The pre-cut branch is clean, immutable and reviewable; every provider has a named recovery target and exact evidence or one named external blocker |
 | 2 | Runtime integration | Consume the released selected-state-root, structural TOML insertion and OS-assigned listener primitives; reconcile the manifest and runtime handoff, then apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, legacy state imports once, and upgrade preserves all owned data |
 | 3 | Agents after runtime cut / release | Build one immutable candidate, rerun the complete four-provider matrix on the released runtime, then promote **Native Agents** | Full check, standalone, offline/restart/recovery, aggregate provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Local topology | Finish folder selection, durable displays, immediate offline presentation, F9 local topology and controller transfer on the selected state model | Same-folder clients get predictable displays, distinct folders get distinct project state, local boot never waits for Hive, and retained applications survive client replacement |
@@ -204,8 +238,9 @@ advances only at the named promotion.
 | 13 | Release | Replicate approved overlays, promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
 
 The integration owner keeps the critical path on orders 1 through 3 while the
-topology, Hub and Docker lanes work independently on orders 4, 5 and 7. No lane
-adds a replacement mesh, registry, Docker service or Bee-specific runtime API.
+topology, Hub/package and Docker lanes work independently on orders 4, 5, 6 and
+8. No lane adds a replacement mesh, registry, Docker service or Bee-specific
+runtime API.
 The existing host/client and single-controller acceptance is a retained
 prerequisite for Native Agents: every Agent promotion reruns it and may not
 regress independent display state, stale-controller fencing or retained apps.
@@ -221,7 +256,7 @@ status and handoff documents.
 
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
-| Agents / integration | active | Make real Claude reach managed readiness and prove source-file recall; reconcile provider versions and run the combined matrix while retaining the passing Agy/Codex/Grok rows | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
+| Agents / integration | active | Commit the completed Claude projection/gate with its exact provider-account blocker, then consume the runtime cuts and rerun the combined matrix; qualify Claude when account credit is available | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion; funded Claude account for its row |
 | State | external gate | Consume one released runtime state-root pin and prove the documented store-selection matrix from two folders and an explicit override | runtime PR #726 and its builder release |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
@@ -230,28 +265,30 @@ status and handoff documents.
 | Overlays | queued | Complete governed `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | local Hub admission and released registry compare-and-set |
 
 The first usable global update is deliberately smaller than finished Bee: it is
-the Native Agents checkpoint. Its remaining local work is committing the Grok
-unit, Claude recovery, provider-version reconciliation, the runtime/state cut
-and the clean post-cut promotion gate. The current real Claude
-acceptance opens its managed window, delivers the scoped MCP/hooks configuration
-and promptly reports the provider's authentication refusal; its row remains
+the Native Agents checkpoint. Its remaining local work is committing the Claude
+credential/recovery gate, the runtime/state cut, provider-version reconciliation
+after qualification and the clean post-cut promotion gate. The current real
+Claude acceptance opens its managed window and reaches the first-party provider,
+which refuses inference because the account balance is too low; its row remains
 unqualified until the account completes both turns. Agy, Codex and Grok real
 cold-recovery rows pass. No Hive, Hub, Docker or overlay work is
 allowed to enlarge this integration diff.
 
 ### Current bounded unit
 
-Work stays on this unit until it either passes or produces one named external
-blocker:
+The implementation part of this unit passes and real Claude has produced one
+named external blocker. Close the unit without waiting for account state:
 
 1. retain the committed Grok cold-recovery row, including normal close, owner
    restart, fresh attempt/secret/gateway fencing and unchanged user state;
-2. complete and commit the real Claude cold-recovery row while retaining the
-   passing Agy, Codex and Grok evidence, preserving global and project
-   configuration fingerprints and proving that recovery never replays the
-   original prompt;
-3. record exact provider versions, fix only defects exposed by these rows, rerun
-   affected focused checks, then commit and push the bounded pre-cut unit.
+2. commit the real Claude credential projection and cold-recovery gate while
+   retaining the passing Agy, Codex and Grok evidence; record the exact external
+   account refusal without treating it as recovery evidence;
+3. retain the exact provider versions and completed focused/full evidence, polish
+   the status text, then commit and push the bounded pre-cut unit;
+4. move immediately to the selected-state-root runtime integration. Rerun Claude
+   when account credit becomes available, and change its provider metadata only
+   after both real turns qualify.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
 Afterward the selected-state-root cut is the only work admitted before the Native
@@ -395,9 +432,13 @@ resume work; pack inspection finds no credentials or fixtures.
 3. Present the local desktop immediately. Hive join and rejoin run asynchronously.
    A remote node may remain connectable for 60 seconds, while local input, cancel
    and exit stay responsive.
-4. Implement public enrollment, discovery and selection. `bee hive` and the
-   workspace/display switcher use supervisor admission over the native mesh; they
-   expose no transport-derived user authority.
+4. Implement public enrollment, discovery and selection. `bee hive init` creates
+   the first protected machine configuration and one bounded invitation;
+   `bee hive join <invitation>` consumes it once and persists the admitted trust
+   decision; `bee hive key` mints a later bounded invitation. Expired, replayed,
+   foreign and unauthorized invitations refuse. Trust updates take effect
+   without treating LAN discovery or transport identity as user authority. The
+   workspace/display switcher uses supervisor admission over the native mesh.
 5. Stop representing physical clients as durable Hive nodes. Displays have stable
    friendly identities, attachments have leases and generations, stale displays
    retire gradually, and retained applications/layout survive client loss.
@@ -455,30 +496,36 @@ lifecycle gate.
    Plan 5 rather than being inferred from their embedded source layout.
 
 Exit proof: clean and populated stores pass one independently packaged app's
-install/update/remove, injected failure recovery, admission/revocation, restart
-and pack inspection. Harness package parity remains an explicit Plan 5 gate.
+install/update/remove, migration execution, interrupted-operation recovery,
+admission/revocation, restart and pack inspection. The Modules UI plans, reviews,
+confirms and applies the exact operation. A host-selected approver can decide a
+protected install; absent approver policy and requester self-approval both
+refuse. Harness package parity remains an explicit Plan 5 gate.
 
 ### 4. Complete Docker as a profile choice
 
-1. Route the existing carrier and managed-window lifecycle through the native
+1. Install one default Docker profile per available harness component and expose
+   it in the Agent picker, saved-profile editor and CLI selection. Unavailable
+   Docker reports a precise readiness state without hiding the local profile.
+2. Route the existing carrier and managed-window lifecycle through the native
    `exec.docker` placement binding. Keep the same attempt owner, sweeper, thread,
    driver and gateway. Do not depend on the optional userspace Docker component.
-2. Keep session mode and interactive-window mode explicit. One request owns
+3. Keep session mode and interactive-window mode explicit. One request owns
    exactly one measured execution/container identity; a PTY does not imply
    structured ACP or RPC behavior.
-3. Record creation intent before dispatch and label containers with exact
+4. Record creation intent before dispatch and label containers with exact
    owner/action/attempt identity. Implement start, stop, inspect, reconcile and
    cleanup, including surviving-container recovery, daemon restart and explicit
    daemon-unavailable behavior.
-4. Run the normal installed harness command. Mount the selected project and the
+5. Run the normal installed harness command. Mount the selected project and the
    minimum approved configuration/credential inputs. Keep Bee material and
    writable harness state in attempt/session storage. AppArmor is optional.
-5. Expose the same randomized authenticated MCP/hook endpoint to the container;
+6. Expose the same randomized authenticated MCP/hook endpoint to the container;
    intersect profile scope, host policy and dynamic context at admission.
-6. Refuse when a profile's required hardening is unavailable; portable profiles
+7. Refuse when a profile's required hardening is unavailable; portable profiles
    use non-root execution, dropped capabilities, the daemon's seccomp policy,
    bounded resources and only their admitted mounts.
-7. Prove PTY input/output/resize, close, cancellation, create/start failures,
+8. Prove PTY input/output/resize, close, cancellation, create/start failures,
    owner restart, container removal and absence of secrets from argv, records,
    logs, container inspection and the production pack on Linux Engine and Docker
    Desktop/WSL.
@@ -525,7 +572,9 @@ four providers.
 
 Exit proof: independently mounted packages behave the same as the host assembly;
 another Bee remotely runs an admitted Agent and gains usable components from
-immutable admitted content with no core edit or authority leakage.
+immutable admitted content with no core edit or authority leakage. Inspected
+content and receipts contain no source credentials, grants, PIDs, live mounts or
+database ownership, and the destination derives none of them from membership.
 
 ### 6. Finish governed overlays and self-edit
 
@@ -537,6 +586,14 @@ review and decision state around those owner operations. Until this section's
 acceptance passes, these operations remain proposals rather than published APIs:
 
 `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback`
+
+Freeze the exact operation schemas before implementation. In the journey,
+`stage` creates the candidate; `inspect` reads `validate` plus `status` without
+authority; `submit` creates the exact approval request; `decide` belongs to the
+governance owner; `apply` invokes registry-owner `activate`; `receipt` is the
+durable committed result returned by `status`; and `rollback` is a new authorized
+compare-and-set effect. UI labels and MCP tools may use the journey verbs, but
+they do not create additional owners or publication paths.
 
 1. Store the staged candidate durably with base registry revision, entry digests,
    exact dependency/artifact closure, parameter bindings, source, migration

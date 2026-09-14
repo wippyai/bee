@@ -232,26 +232,33 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             file_projection = true
             evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "retained" or (login.present == true and "seeded" or "unseeded")))
         else
+            local environment_projection = reply.value :: {destination: string, value: string?, projection_kind: string, encoding: unknown, optional: unknown, present: unknown}
             local secret = projected.value
-            if secret == nil then
-                evidence(db, attempt_id, "credential.refused", "missing environment value", {execution = "exited"})
-                return refused("missing environment value")
-            end
             if projected.projection_kind ~= "environment" or type(projected.destination) ~= "string"
             or #projected.destination > 128 or not projected.destination:match("^[A-Z_][A-Z0-9_]*$")
-            or type(secret) ~= "string" or #secret == 0 or #secret > 8192
-            or secret:find("[%z\r\n]") then
+            or environment_projection.encoding ~= "utf-8" or type(environment_projection.optional) ~= "boolean"
+            or type(environment_projection.present) ~= "boolean" then
                 evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
                 return refused("invalid environment projection")
             end
-            local gateway = request.gateway
-            if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
-                local conflict = "environment destination " .. projected.destination .. " is already assigned"
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
-                return refused(conflict)
+            local absent = secret == nil and environment_projection.optional == true and environment_projection.present == false
+            if absent then
+                evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " optional environment absent")
+            else
+                if environment_projection.present ~= true or type(secret) ~= "string" or #secret == 0 or #secret > 8192
+                or secret:find("[%z\r\n]") then
+                    evidence(db, attempt_id, "credential.refused", "invalid environment projection", {execution = "exited"})
+                    return refused("invalid environment projection")
+                end
+                local gateway = request.gateway
+                if environment[projected.destination] ~= nil or (gateway and (projected.destination == gateway.destination or projected.destination == gateway.hook_destination)) then
+                    local conflict = "environment destination " .. projected.destination .. " is already assigned"
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. conflict, {execution = "exited"})
+                    return refused(conflict)
+                end
+                environment[projected.destination] = secret :: string
+                evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
             end
-            environment[projected.destination] = secret
-            evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " into " .. projected.destination)
         end
     end
     local arguments: {string} = {}

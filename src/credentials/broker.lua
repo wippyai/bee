@@ -240,7 +240,6 @@ function M.define(value: unknown): Reply
     local format_json: string
 
     if source_kind == "env_variable" then
-        if optional then return fail("INVALID", "optional credentials require a file source") end
         projection_kind = "environment"
         if object.projection_kind ~= nil and object.projection_kind ~= "environment" then
             return fail("INVALID", "env_variable sources only support environment projections")
@@ -698,11 +697,17 @@ function M.materialize(value: unknown): Reply
     if proj_kind == "environment" then
         local secret, secret_error = env.get(source_ref)
         db:release()
-        if secret_error or type(secret) ~= "string" or secret == "" then return fail("UNAVAILABLE", "source " .. source_ref .. " yields no value") end
+        if secret_error or type(secret) ~= "string" or secret == "" then
+            if optional and (not secret_error or secret_error:kind() == errors.NOT_FOUND) then
+                return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "environment", encoding = "utf-8",
+                    generation = generation, generation_key = generation_key, format = frozen_format, present = false, optional = true})
+            end
+            return fail("UNAVAILABLE", "source " .. source_ref .. " yields no value")
+        end
         if #secret > M.MAX_SECRET_BYTES then return fail("INVALID", "source " .. source_ref .. " exceeds " .. tostring(M.MAX_SECRET_BYTES) .. " bytes") end
         if secret:find("\0", 1, true) or secret:find("[\r\n]") then return fail("INVALID", "source " .. source_ref .. " holds bytes an environment value cannot carry") end
         return succeed({projection_id = projection.projection_id, destination = destination, projection_kind = "environment", encoding = "utf-8",
-            generation = generation, generation_key = generation_key, format = frozen_format, value = secret})
+            generation = generation, generation_key = generation_key, format = frozen_format, present = true, optional = optional, value = secret})
     elseif proj_kind == "file" then
         local file_object = frozen_format.file
         local content_format = file_object and file_object.content_format or nil

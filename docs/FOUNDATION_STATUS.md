@@ -182,9 +182,14 @@ their loaded code; newly started nodes use this build.
 **Remaining agent workflow work:** real Claude cold-recovery
 qualification, managed Docker execution, surviving orphan cleanup, and
 policy-controlled sharing. Real Agy, Codex and Grok recovery pass. The checked real Claude
-target reaches the admitted managed launch with scoped hooks/MCP, then records a
-provider authentication refusal; it does not count as a recovered turn. Native
-Docker module composition is present, but Docker is not yet
+target now projects an optional host `ANTHROPIC_API_KEY` through the credential
+broker into only the admitted attempt; absence preserves Claude's ordinary
+HOME/login path, and the source-free selector plus 893/893 units pass. Installed
+Claude 2.1.270 reaches the first-party provider, where both the managed gate and
+a direct invocation return HTTP 400 `Credit balance is too low` before inference.
+It does not count as a recovered turn, and provider metadata remains unchanged
+until both turns qualify. Native Docker module composition is present, but
+Docker is not yet
 selectable or usable in the Agent UI. See [global build](handoffs/GLOBAL_BUILD.md)
 for release evidence and provider limitations.
 

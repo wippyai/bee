@@ -141,9 +141,9 @@ native-agy-recovery-live-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" AGY_BIN="$(abspath $(AGY_BIN))" AGY_LOGIN_FILE="$(abspath $(AGY_LOGIN_FILE))" AGY_MODEL="$(AGY_MODEL)" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_agy_recovery_test.go -run '^TestActualAgyManagedColdRecovery$$' -count=1 -v
 
 native-claude-recovery-live-check:
-	test -n "$(CLAUDE_BIN)" -a -n "$(CLAUDE_LOGIN_FILE)"
+	test -n "$(CLAUDE_BIN)" -a -n "$(CLAUDE_CREDENTIAL_ENV)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_claude_recovery_test.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" CLAUDE_BIN="$(abspath $(CLAUDE_BIN))" CLAUDE_LOGIN_FILE="$(abspath $(CLAUDE_LOGIN_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_claude_recovery_test.go -run '^TestActualClaudeManagedColdRecovery$$' -count=1 -v
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" CLAUDE_BIN="$(abspath $(CLAUDE_BIN))" CLAUDE_CREDENTIAL_ENV="$(CLAUDE_CREDENTIAL_ENV)" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_claude_recovery_test.go -run '^TestActualClaudeManagedColdRecovery$$' -count=1 -v
 
 native-codex-recovery-live-check:
 	test -n "$(CODEX_BIN)" -a -n "$(CODEX_LOGIN_FILE)" -a -n "$(CODEX_CONFIG_FILE)"

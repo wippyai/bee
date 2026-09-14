@@ -311,6 +311,7 @@ entries:
   data:
     roots: {project: bee:workspace_root, session: bee.placement.native:root}
     credentials:
+      claude_api_key: {provider: claude, source: {kind: env_variable, ref: 'bee.driver.claude:api_key'}, optional: true}
       codex_login: {provider: codex, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
       agy_login: {provider: agy, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
       grok_login: {provider: grok, source: {kind: fs_directory, ref: 'bee:machine_login_source'}, optional: true}
@@ -631,6 +632,7 @@ entries:
       agy: bee.driver.agy:credential_format
       grok: bee.driver.grok:credential_format
     sources:
+    - {ref: 'bee.driver.claude:api_key', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [environment]}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: codex, projection_kinds: [file], path: .codex/auth.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: claude, projection_kinds: [file], path: .claude/.credentials.json}
     - {ref: 'bee:machine_login_source', workspace_id: '*', audience: '*', provider: agy, projection_kinds: [file], path: .gemini/antigravity-cli/antigravity-oauth-token, setup_path: .gemini/antigravity-cli/cache/onboarding.json}

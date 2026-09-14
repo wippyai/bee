@@ -14,6 +14,12 @@ entries:
   variable: claude
   default: ''
   readonly: true
+- name: api_key
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: ANTHROPIC_API_KEY
+  default: ''
+  readonly: true
 - name: environment
   kind: env.storage.os
   lifecycle:
@@ -217,7 +223,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: []
+    credentials: [claude_api_key]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 
 - name: credential_format

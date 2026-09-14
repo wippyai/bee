@@ -205,8 +205,11 @@ those writes uncertain; the recipient must not write them again on its own.
 A launch names credential projection ids. `prepare` checks each binding
 through `bee.credentials:check` for the owner it admitted with the attempt
 as scope. Environment projections materialize right before the child starts
-at the provider's fixed environment destination. A file projection requires
-the selected retained session home, validates its frozen declared login
+at the provider's fixed environment destination. An absent optional environment
+projection is validated and omitted; placement never creates an empty variable.
+A populated projection must explicitly report `present: true`, its optional flag
+and UTF-8 encoding before placement adds it to the exact child environment. A
+file projection requires the selected retained session home, validates its frozen declared login
 destination and nonsecret definition identity, then writes its opaque bytes
 before immutable driver configuration. One file projection may select a
 retained home; matching later resumes preserve provider-refreshed bytes.

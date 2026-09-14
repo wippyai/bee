@@ -45,7 +45,6 @@ local function credential(value: unknown): Credential?
     local projection = kind == "fs_directory" and "file" or "environment"
     if object.projection_kind ~= nil and object.projection_kind ~= projection then return nil end
     if object.optional ~= nil and type(object.optional) ~= "boolean" then return nil end
-    if object.optional == true and projection ~= "file" then return nil end
     return {provider = provider, source = {kind = kind, ref = ref}, projection_kind = projection, optional = object.optional == true}
 end
 local function same_credential(value: unknown, chosen: Credential): boolean

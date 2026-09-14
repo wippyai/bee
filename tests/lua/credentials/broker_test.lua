@@ -15,6 +15,7 @@ local migrations = require("migrations")
 local cred_sources = require("cred_sources")
 local SENTINEL = "sentinel-secret-7f3a9c"
 local SOURCE = "bee.credentials:sentinel_key"
+local MISSING_SOURCE = "bee.credentials:missing_key"
 local OTHER_SOURCE = "bee.credentials:other_key"
 local BROKEN_SOURCE = "bee.credentials:broken_key"
 local CODEX_LOGIN_SOURCE = "bee.credentials:codex_login_fixture"
@@ -99,6 +100,7 @@ local function admit_sources(workspace: string)
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     data.sources = {{ref = SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
+        {ref = MISSING_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
         {ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}},
         {ref = BROKEN_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
@@ -162,7 +164,18 @@ local function define_tests()
             test.eq(code(call(manager, "define", request)), "INVALID")
             request.expected_revision = 0.5
             test.eq(code(call(manager, "define", request)), "INVALID")
-            test.eq(code(call(manager, "define", {workspace_id = workspace, name = fresh("optional-env"), provider = "claude", source = {kind = "env_variable", ref = SOURCE}, optional = true})), "INVALID")
+            local optional_name = fresh("optional-env")
+            local optional = value(call(manager, "define", {workspace_id = workspace, name = optional_name, provider = "claude", source = {kind = "env_variable", ref = MISSING_SOURCE}, optional = true}))
+            test.eq(optional.optional, true)
+            local optional_attempt = fresh("attempt")
+            local optional_projection = issue(user, workspace, optional_name, optional_attempt)
+            local absent = value(call(runner, "materialize", {projection_id = optional_projection.projection_id, subject = USER, audience = USER,
+                attempt_id = optional_attempt, generation_key = fresh("generation")}))
+            test.eq(absent.projection_kind, "environment")
+            test.eq(absent.destination, "ANTHROPIC_API_KEY")
+            test.eq(absent.optional, true)
+            test.eq(absent.present, false)
+            test.is_nil(absent.value)
             test.eq(code(call(manager, "define", {workspace_id = workspace, name = fresh("optional-type"), provider = "claude", source = {kind = "env_variable", ref = SOURCE}, optional = "true"})), "INVALID")
         end)
         test.it("issues projections to the authenticated subject and materializes bytes once for the admitted materializer only", function()

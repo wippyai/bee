@@ -29,13 +29,14 @@ refused without being echoed. Materializer authentication is entry-scoped:
 the materialize action is attached to the placement service and runner
 entries and to no caller-selectable scope.
 
-`define` accepts `optional: true` for file sources only. A missing provider
-login file then consumes the generation and returns its definition metadata
+`define` accepts `optional: true` for file and environment sources. A missing
+optional source consumes the generation and returns its definition metadata
 with `present: false` and no `value`; the next generation can try again.
-Populated files return `present: true` and the optional flag alongside their
-bounded bytes. Missing required files, permission failures, invalid JSON and
-other source failures remain errors. Environment definitions always have
-`optional: false`.
+Populated projections return `present: true` and the optional flag alongside
+their bounded bytes. Optional environment absence also carries its fixed
+destination and UTF-8 encoding so placement can validate the reply before
+omitting the variable. Missing required sources, permission failures, invalid
+JSON and other source failures remain errors.
 
 The host's `data.formats` map selects reviewed component-owned registry entries
 whose data declares an environment destination or a relative login layout.

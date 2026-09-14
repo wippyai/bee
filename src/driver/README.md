@@ -193,8 +193,10 @@ login state that could take precedence. `tests/lua/harness/claude_runner_test.lu
 proves the selection through the runner when `BEE_CLAUDE_BIN` names the
 executable: the controlled endpoint records `x-api-key: <sentinel>` at
 `/v1/messages` and answers 400, so the proof covers path selection only;
-`launch.CLAUDE_AUTHENTICATION` stays `unproven` until the pinned build
-runs it, and no real credential is enabled.
+`launch.CLAUDE_AUTHENTICATION` stays `unproven` until the checked real recovery
+gate completes both turns. The current installed Claude and host API key reach
+the first-party provider through this projection, where the account is refused
+for insufficient credit before inference.
 
 ## Claude permission exchange
 

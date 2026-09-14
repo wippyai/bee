@@ -196,6 +196,7 @@ promotion-native-agents-check:
 	$(MAKE) offline-boot-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-client-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-independent-desktops-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-desktop-selection-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-agent-recovery-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-agent-crash-recovery-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-upgrade-check BEE_BINARY="$(abspath $(BEE_BINARY))" PREVIOUS_BEE="$(abspath $(PREVIOUS_BEE))"

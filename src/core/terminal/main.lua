@@ -654,7 +654,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
             elseif active_selection and event.type ~= "resize" and event.type ~= "close" then
                 local body = selection_body(active_selection)
                 if event.type == "key" and kind == "f9" and event.action ~= "release"
-                    and event.alt ~= true and event.ctrl ~= true and event.shift ~= true then
+                    and event.alt ~= true and event.ctrl ~= true and event.shift ~= true
+                    and connection.available(width, height) then
                     toggle_connection()
                     captured_releases[kind] = true
                 elseif not body then
@@ -694,7 +695,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 handled = true
                 dirty = true
             elseif event.type == "key" and kind == "f9" and event.action ~= "release"
-                and event.alt ~= true and event.ctrl ~= true and event.shift ~= true then
+                and event.alt ~= true and event.ctrl ~= true and event.shift ~= true
+                and connection.available(width, height) then
                 toggle_connection()
                 captured_releases[kind] = true
                 handled = true; dirty = true
@@ -747,6 +749,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 elseif event.type == "resize" then
                     width, height = event.width, event.height
                     cancel_selection()
+                    if connection_open and not connection.available(width, height) then connection_open = false end
                     if capture then captured_mouse = true end
                     capture, preview = nil, nil; awaiting_place = false
                     dirty = true

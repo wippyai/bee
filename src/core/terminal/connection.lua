@@ -40,19 +40,21 @@ local function geometry(width: integer, height: integer, details: boolean?): Geo
     local rows = math.floor(math.min(details and 16 or 14, height - 2))
     return {left = width - size, size = size, rows = rows}
 end
+local function details_available(height: integer): boolean return height >= 18 end
+function M.available(width: integer, height: integer): boolean return width >= 12 and height >= 4 end
 function M.contains(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
     local rect = geometry(width, height, info.details)
     local left, size, rows = rect.left, rect.size, rect.rows
-    return width >= 12 and height >= 4 and x >= left and x < left + size and y >= 2 and y < 2 + rows
+    return M.available(width, height) and x >= left and x < left + size and y >= 2 and y < 2 + rows
 end
 function M.details_hit(width: integer, height: integer, info: Info, x: integer, y: integer): boolean
     local rect = geometry(width, height, info.details)
     local left, rows = rect.left, rect.rows
-    return rows >= 3 and M.contains(width, height, info, x, y)
+    return details_available(height) and M.contains(width, height, info, x, y)
         and y == rows and x >= left + 2 and x < left + 15
 end
 function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences, info: Info, ready: boolean)
-    if width < 12 or height < 4 then return end
+    if not M.available(width, height) then return end
     local theme = appearance.theme(preferences.theme)
     local rect = geometry(width, height, info.details)
     local left, size, rows = rect.left, rect.size, rect.rows
@@ -108,6 +110,12 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         put(10 + shift, names.label(info.display), normal)
         if info.details and rows >= 16 then put(12, info.display, muted) end
     end
-    put(rows - 2, (info.details and "‹ Less [D]" or "› Details [D]") .. "     F9 / Esc close", muted)
+    if rows >= 10 then
+        local footer = "F9 / Esc close"
+        if details_available(height) then
+            footer = (info.details and "‹ Less [D]" or "› Details [D]") .. "     " .. footer
+        end
+        put(rows - 2, footer, muted)
+    end
 end
 return M

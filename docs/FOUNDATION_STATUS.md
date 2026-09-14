@@ -1056,9 +1056,11 @@ mount. The client accepts updates only from its authenticated owner and flushes
 the latest value after presenter activation. It exposes no recipient or
 mount identity and performs no polling. Identical projections do not redraw the
 desktop. Plain F9 cancels an active text selection before opening the card, and
-the Details hit target is absent when its row cannot be drawn. `make test` passes
-894/894, source/pack connection acceptance passes, and standalone SHA-256
-`73ae9395cfce80f7a11ec3c0854fc04d76c0af457949c334adef7f51d5f2ae59`
+compact terminals preserve status rows and advertise Details only when expanded
+identities fit. Shrinking below the card's minimum closes it so an invisible
+overlay cannot capture application input. `make test` passes 894/894, source/pack
+connection acceptance passes, and standalone SHA-256
+`4639f4bb866bcaa98cf2b5d2ab17bbe1817424fd81aaac8f878b46efa21f3963`
 proves reconnect, one real observer visible on both clients, and return to the
 controlled state after detach. This bounded source feature is not installed globally.
 

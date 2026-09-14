@@ -135,9 +135,10 @@ live PIDs or mounts. Legacy drivers are source references outside the repository
 never runtime dependencies. The `bee claude/codex/agy/grok` aliases and the
 managed Agent picker use the same reviewed definitions, profiles, admission and
 scoped gateway configuration; provider hooks feed their bound threads. Fixture acceptance
-proves saved-conversation continuation, while real-provider cold recovery remains
-unverified. Read [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending
-this path.
+proves saved-conversation continuation. Real Agy, Codex and Grok cold-recovery
+rows pass against the selected-state candidate; real Claude recovery remains
+unqualified because the provider account refuses inference. Read [saved
+profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending this path.
 
 Use `make check` for production changes. `tests/lifecycle.py::detached` is the
 named-owner/revocation gate; `tests/recovery.py` covers durable identity and state;

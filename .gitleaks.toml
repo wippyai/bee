@@ -1,0 +1,12 @@
+title = "Bee secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic credential sentinel used by the credential broker fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/lua/credentials/broker_test\.lua$''']
+regexTarget = "line"
+regexes = ['''(CODEX|CLAUDE)_FILE_SENTINEL = .*sentinel-''']

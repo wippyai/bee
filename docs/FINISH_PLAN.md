@@ -31,10 +31,11 @@ The integration branch is `feat/docker-harness-delivery-20260913`. Grok B1.1 is
 the immutable implementation base at `380d288`; later finish evidence builds on
 it in bounded commits. This plan is the only finish queue for that branch. Older
 handoff queues provide evidence and history but do not reorder this plan.
-The current pushed integration head is `3d8bd19`. It includes the bounded Claude
-credential projection, the selected-state manifest composition and the native
-legacy-root preservation cut. Candidate artifacts remain evidence until the
-promotion gate passes; they are not installed as global Bee.
+The current pushed integration head is `daec47c`. It includes the bounded Claude
+credential projection, the selected-state manifest composition, the native
+legacy-root preservation cut and the promotion handoff. Candidate artifacts
+remain evidence until the promotion gate passes; they are not installed as
+global Bee.
 
 Completed on this branch:
 
@@ -77,10 +78,11 @@ source deletion, with stable conversation/HOME/application/thread and fresh
 attempt and gateway identities. Codex also proves its command read and scoped
 MCP/hook pairing; Grok
 proves matching provider/hook conversation identity and scoped MCP. Their global
-configuration remains unchanged. Codex and Grok declare their tested versions
-and must be rerun after the runtime cut; Claude metadata is reconciled only when
-its authenticated row qualifies.
-Native Agents now awaits its post-cut provider rerun and complete promotion gate.
+configuration remains unchanged. Agy, Codex and Grok now pass against the
+selected-state candidate and need another live rerun only if the final promotion
+commit, runtime or provider version differs. Claude metadata is reconciled only
+when its authenticated row qualifies. Native Agents now awaits Claude and the
+complete promotion gate.
 
 The selected-state implementation has a composed, executable candidate:
 runtime PR #747 (`6b40cb0`) adds the executable-selected default state directory,
@@ -102,9 +104,9 @@ executable proof passes and its result is committed on the integration branch.
 
 | Now | Parallel after the next promotion | Later dependency |
 |---|---|---|
-| Rerun real Agy, Codex and Grok recovery against the selected-state candidate; run Claude when the provider account permits a turn | Finish the local folder/display decision table and local topology UI | Public Hive waits for the released remote-lifecycle boundary |
-| Add and pass `make promotion-check MILESTONE=native-agents` | Extract one app as an independent Hub package and close its local lifecycle | Protected Hub publication and overlays wait for released registry compare-and-set |
-| Run full check, standalone, pack inspection, installed upgrade and atomic installer; promote Native Agents | Compose saved profiles through native `exec.docker` with the same driver, thread and gateway | Connected distribution waits for local package extraction and connected topology |
+| Finish and independently audit `make promotion-check MILESTONE=native-agents` | Finish the local folder/display decision table and local topology UI | Public Hive waits for the released remote-lifecycle boundary |
+| Run the immutable full check, standalone, pack inspection and installed-upgrade gates; run Claude when the provider account permits a turn | Extract one app as an independent Hub package and close its local lifecycle | Protected Hub publication and overlays wait for released registry compare-and-set |
+| Atomically promote Native Agents after every required row passes | Compose saved profiles through native `exec.docker` with the same driver, thread and gateway | Connected distribution waits for local package extraction and connected topology |
 
 No new feature enters the Native Agents promotion. Account refusal is reported
 as a provider result; it does not send the implementation back into redesign,
@@ -118,15 +120,15 @@ run in parallel but cannot widen an earlier promotion diff.
 
 | Checkpoint | User-visible result | Bee-owned work | External prerequisite |
 |---|---|---|---|
-| Native Agents | Offline project launch plus Claude, Codex, Agy and Grok from the picker or CLI with durable threads, scoped hooks/MCP and recovery | Seal the Claude projection gate, consume the state model, rerun the four-provider matrix and install atomically | released selected state root, TOML insertion and listener address; Claude account able to complete two turns |
+| Native Agents | Offline project launch plus Claude, Codex, Agy and Grok from the picker or CLI with durable threads, scoped hooks/MCP and recovery | Seal the Claude projection gate, consume the state model, revalidate provider evidence against the final inputs and install atomically | released selected state root, TOML insertion and listener address; Claude account able to complete two turns |
 | Local Components | Predictable folder/workspace/display behavior and one independently installed Hub app | finish local topology, extract one app package, close install/update/remove and protected admission | released registry compare-and-set for admission |
 | Docker Agents | The same four saved profiles run through native `exec.docker` by changing only isolation | compose exact mounts, reconcile containers and rerun terminal/hook/MCP/recovery checks | released exact-attempt Docker mounts |
-| Connected Bee | Two Bees discover, attach, observe, transfer control and install admitted packages through the native mesh | finish public supervisor admission, remote placement and package transfer/recovery | released remote actor lifecycle |
+| Connected Bee | Two Bees discover, attach, observe, transfer control, install admitted packages and transfer a saved profile through the native mesh | finish public supervisor admission, remote placement, package/profile transfer and recovery | released remote actor lifecycle |
 | Editable Bee v1 | User or Agent stages, reviews, approves, applies and rolls back registry overlays, including replicated approved changes | finish governance effects, receipts, rollback, overlay UI and replication; harden and tag | released registry compare-and-set and Connected Bee |
 
-The active critical-path unit is the post-cut Native Agents qualification and
-promotion. The state-root cutover, legacy preservation proof and Claude
-projection gate are committed at `3d8bd19`. The Claude account refusal remains
+The active critical-path unit is the Native Agents qualification and promotion.
+The state-root cutover, legacy preservation proof and Claude projection gate are
+present at the pushed integration head. The Claude account refusal remains
 an external qualification result; it does not stop the deterministic promotion
 checks or the topology, Hub, Docker and package lanes. It does stop the final
 Native Agents installation while that checkpoint promises four authenticated
@@ -147,10 +149,11 @@ Docker, Hub or overlay changes to this candidate.
 3. Build from one clean integration commit. Run offline two-folder launch,
    explicit state override, same-folder reuse, multi-display/client, source and
    packed Agent selection, and cold/restart/crash recovery.
-4. Run the real Agy, Codex and Grok rows. Run Claude's full fixture row and its
-   real authenticated row when account access is available; otherwise record the
-   exact provider refusal without treating it as a Bee regression or claiming
-   the four-provider checkpoint.
+4. Retain the exact-commit Agy, Codex and Grok evidence, rerunning a row if the
+   final commit, runtime or provider version differs. Run Claude's full fixture
+   row and its real authenticated row when account access is available;
+   otherwise record the exact provider refusal without treating it as a Bee
+   regression or claiming the four-provider checkpoint.
 5. Add the milestone-aware promotion target described below, then run full
    lint/check, pack inspection, old-global upgrade and atomic-install
    acceptance. Install globally only from the tested commit and write its six-file
@@ -293,17 +296,17 @@ advances only at the named promotion.
 |---|---|---|---|
 | 1 | Agents before runtime cut — complete | Retain pushed commit `1254ba4`, the passing Agy, Codex and Grok evidence, and Claude's exact external account refusal without claiming qualification | The pre-cut branch stays immutable and every provider keeps a named recovery target and exact evidence or one named external blocker |
 | 2 | Runtime integration — complete candidate | Retain the proven legacy-root cutover and selected-state composition; reconcile accepted upstream pins without changing the state model | Offline launch from two folders isolates project state, explicit `--state-dir` wins, legacy state binds once, and upgrade plus rollback preserve all owned data |
-| 3 | Agents after runtime cut / active | Build one immutable candidate, rerun the complete provider matrix, add the milestone promotion target, then promote **Native Agents** | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
+| 3 | Agents after runtime cut / active | Finish the milestone promotion target, revalidate provider rows whose commit/runtime/version inputs changed, qualify Claude, then promote **Native Agents** | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Local topology | Finish folder selection, durable displays, immediate offline presentation, F9 local topology and controller transfer on the selected state model | Same-folder clients get predictable displays, distinct folders get distinct project state, local boot never waits for Hive, and retained applications survive client replacement |
 | 5 | Package foundation | Prove the native runner/dataflow path, freeze accepted schemas and complete Plan 5's local package-extraction slice | One headless runner turn passes; host and standalone app/harness closures behave identically with no duplicate IDs |
 | 6 | Hub | Close local immutable install/update/remove for an extracted app, then protected admission using released registry compare-and-set | One independent app package can enter and leave the catalog without a core edit or authority leak |
 | 7 | Release | Promote **Local Components** | Correct local folder/display behavior and admitted local Hub components pass together from a clean executable |
 | 8 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
 | 9 | Release | Promote **Docker Agents** | All four real providers pass native and Docker profile acceptance from one executable |
-| 10 | Local overlays | Complete local `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` over released registry compare-and-set | Exact-revision apply, protected approval, stale refusal and rollback pass for user and Agent edits |
-| 11 | Connected topology and distribution | Finish public enrollment/discovery, remote display attachment and placement, then transfer admitted immutable app/harness packages through the native mesh and Hub receipt model | Two real runtimes pass selection, controller/observer rejoin, remote child/carrier/gateway/PTY and package install/restart/update after sleep, lost acknowledgments and destination restart |
-| 12 | Release | Promote **Connected Bee** | Public enrollment/discovery, remote selection, placement, approvals, retained apps and package delivery pass between two real Bees |
-| 13 | Release | Replicate approved overlays, promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
+| 10a | Local overlays | Complete local `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` over released registry compare-and-set | Exact-revision apply, protected approval, stale refusal and rollback pass for user and Agent edits |
+| 10b | Connected topology and distribution | In parallel with local overlays, finish public enrollment/discovery, remote display attachment and placement, then transfer admitted immutable app/harness packages and saved profiles through the native mesh and Hub receipt model | Two real runtimes pass selection, controller/observer rejoin, remote child/carrier/gateway/PTY, destination policy re-resolution, and package/profile install/restart/update after sleep, lost acknowledgments and destination restart |
+| 11 | Release | Promote **Connected Bee** | Public enrollment/discovery, remote selection, placement, approvals, retained apps, package delivery and saved-profile transfer pass between two real Bees |
+| 12 | Release | Replicate approved overlays, promote **Editable Bee v1**, then harden and tag | All six finished journeys pass twice on the target platform matrix and the website/docs match the tagged executable |
 
 The integration owner keeps the critical path on orders 1 through 3 while the
 topology, Hub/package and Docker lanes work independently on orders 4, 5, 6 and
@@ -324,7 +327,7 @@ status and handoff documents.
 
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
-| Agents / integration | active after state cut | Retain `3d8bd19`, rerun the combined matrix and qualify Claude when account access is available | accepted selected state root, structural TOML insertion and OS-assigned listener address for global promotion; usable Claude account for its row |
+| Agents / integration | active after state cut | Finish the exact promotion receipt and immutable gate; qualify Claude when account access is available | accepted selected state root, structural TOML insertion and OS-assigned listener address for global promotion; usable Claude account for its row |
 | State | executable candidate complete | Preserve native `bd63538` and the passing current-global upgrade gate while upstream pins are reviewed | runtime #747 is green; builder #9 has local race/vet proof and hosted billing blockage |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
@@ -333,10 +336,10 @@ status and handoff documents.
 | Overlays | queued | Complete governed `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | local Hub admission and released registry compare-and-set |
 
 The first usable global update is deliberately smaller than finished Bee: it is
-the Native Agents checkpoint. Its remaining local work is provider-version
-reconciliation and the clean post-cut promotion gate. The runtime/state cut,
-legacy-state preservation and Claude credential/recovery gate are pushed at
-`3d8bd19`. The current real
+the Native Agents checkpoint. Its remaining local work is the clean post-cut
+promotion gate. The runtime/state cut, legacy-state preservation and Claude
+credential/recovery gate are pushed at `daec47c`. Real Agy 1.2.2, Codex 0.154.0
+and Grok 1.0.30 cold recovery pass against the selected-state candidate. The current real
 Claude acceptance opens its managed window and reaches the first-party provider,
 which refuses inference because the account balance is too low; its row remains
 unqualified until the account completes both turns. Agy, Codex and Grok real
@@ -345,16 +348,17 @@ allowed to enlarge this integration diff.
 
 ### Current bounded unit
 
-The selected-state unit is complete at `3d8bd19`; real Claude has one named
-external blocker. The current unit is only Native Agents qualification and
-promotion:
+The selected-state unit and the post-cut Agy, Codex and Grok rows are complete;
+real Claude has one named external blocker. The current unit is only Native
+Agents qualification and promotion:
 
-1. rerun Agy, Codex and Grok against `/tmp/bee-state-legacy/bee` and preserve
-   their global/project configuration fingerprints;
-2. rerun Claude's fixture recovery now and its authenticated two-turn row when
+1. finish `make promotion-check MILESTONE=native-agents` as a thin composition
+   of existing named gates with an exact, reproducible receipt;
+2. independently verify that the receipt binds the build manifest, provenance,
+   runtime, provider inputs and actual packed registry contents to one clean
+   commit;
+3. run Claude's fixture recovery now and its authenticated two-turn row when
    account access is available;
-3. implement `make promotion-check MILESTONE=native-agents` as a thin composition
-   of the existing named gates, with an exact receipt rather than new test logic;
 4. run the full repository, standalone, pack, upgrade and atomic-installer gates
    from one clean commit, then install it as the new rollback point.
 
@@ -665,7 +669,7 @@ immutable admitted content with no core edit or authority leakage. Inspected
 content and receipts contain no source credentials, grants, PIDs, live mounts or
 database ownership, and the destination derives none of them from membership.
 
-### 6. Finish governed overlays and self-edit
+### 6. Finish governed overlays and Agent-authored edits
 
 Implement the public governed `bee:publish` owner interface for user edits, Agent
 edits and installed overlay content over the existing authoring, approvals and
@@ -707,6 +711,9 @@ they do not create additional owners or publication paths.
 Editable Bee v1 admits declarative registry/package changes. Untrusted execution
 against authoring filesystem mounts remains disabled until the existing symlink
 containment failure has a passing host-directory acceptance proof.
+Autonomous in-app source modification remains a later milestone; v1 lets an
+Agent prepare and submit a declarative edit but never bypasses review,
+governance or the registry owner.
 
 Acceptance exercises the same candidate through the Modules UI and narrow Agent
 MCP tools. It includes two concurrent apply attempts against one base revision,
@@ -728,10 +735,10 @@ branches.
 
 | Checkpoint | User-visible result | Required work |
 |---|---|---|
-| Native Agents | Correct offline folder state plus four authenticated managed harnesses, profiles, threads and recovery | Plans 0 and 1; released state-root, TOML insertion and listener-address pins; post-cut provider rerun |
+| Native Agents | Correct offline folder state plus four authenticated managed harnesses, profiles, threads and recovery | Plans 0 and 1; released state-root, TOML insertion and listener-address pins; final-input provider evidence |
 | Local Components | Correct folders/displays and admitted local Hub components | Plan 2 local topology slice and Plan 3 |
 | Docker Agents | The same four profiles work through native Docker | Plans 1 and 4 |
-| Connected Bee | Public two-node Hive, remote Agent placement and cross-node app/harness delivery | Plan 2 connected topology slice, Plan 3 and Plan 5; released remote-lifecycle and supervisor-host admission pins |
+| Connected Bee | Public two-node Hive, remote Agent placement, saved-profile transfer and cross-node app/harness delivery | Plan 2 connected topology slice, Plan 3 and Plan 5; released remote-lifecycle and supervisor-host admission pins |
 | Editable Bee v1 | Cross-node component delivery and governed overlays | Plans 1–6 |
 
 Each promotion runs:
@@ -753,6 +760,11 @@ detached lifecycle and all four live provider recovery targets. Later milestones
 add Docker lifecycle/profile, Hub lifecycle/admission, two-runtime Hive, package
 distribution and governed publication gates. The target writes the exact commit,
 runtime pins, provider versions and invoked commands into the promotion receipt.
+The target fails closed on a dirty or changed commit, missing or mismatched
+runtime pins, missing required provider evidence, provenance/manifest mismatch
+or an incomplete production-pack audit. It never installs or stops the global
+Bee; installation is a separate step allowed only after the complete receipt
+has been written and independently checked.
 
 The six installed files are `bee`, `bee.LICENSES.txt`, `bee.go.mod`,
 `bee.go.sum`, `bee.provenance.json` and `bee.runtime-patches.tar.gz`.

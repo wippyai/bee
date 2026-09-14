@@ -172,3 +172,16 @@ separate build manifest; `make standalone` passes it to the pinned builder.
 `make pack` continues producing the single source/pack acceptance snapshot.
 These are different artifacts with different ownership requirements. See
 `NATIVE_DISTRIBUTION.md`; bundled modules are not independently published packages.
+
+The release owner runs `make promotion-check MILESTONE=native-agents` from a
+clean immutable commit with the exact runtime, rollback executable and four
+provider inputs named on the command line. The target rebuilds the candidate,
+composes existing source, pack, native, recovery, display, project-upgrade and
+real-provider gates, and writes `dist/promotion-native-agents.json` only after
+they all pass. The receipt records hashes and versions, never credential bytes,
+and states that installation was not performed. Global installation remains a
+separate explicit operation after reviewing that receipt.
+Each real-provider recovery target fingerprints its admitted login/configuration
+inputs before and after the run and refuses mutation. The receipt hashes those
+preserved inputs after all live gates; it records only the presence and selector
+for Claude's environment credential, never its bytes or a reusable digest.

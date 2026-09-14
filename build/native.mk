@@ -4,9 +4,12 @@ NATIVE_WIPPY ?= .wippy/bin/bee-wippy
 BEE_BINARY ?= dist/bee
 BEE_BUILD_MANIFEST ?= wippy.build.json
 BEE_BUNDLE_MANIFEST ?= dist/bee.bundle.build.json
+AGY_MODEL ?= gemini-3.8-flash
+MILESTONE ?=
+PROMOTION_RECEIPT ?= dist/promotion-$(MILESTONE).json
 .PHONY: native-tools native-check native-bootstrap-check native-pack standalone native-binary-check
 native-tools:
-	$(BUILDER) toolchain wippy.build.json --output "$(NATIVE_WIPPY)"
+	$(BUILDER) toolchain "$(BEE_BUILD_MANIFEST)" --output "$(NATIVE_WIPPY)"
 
 native-bootstrap-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -race build/bootstrap.go build/bootstrap_test.go
@@ -158,3 +161,65 @@ native-grok-recovery-live-check:
 	test -n "$(GROK_BIN)" -a -n "$(GROK_LOGIN_FILE)" -a -n "$(GROK_CONFIG_FILE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_grok_recovery_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" GROK_BIN="$(abspath $(GROK_BIN))" GROK_LOGIN_FILE="$(abspath $(GROK_LOGIN_FILE))" GROK_CONFIG_FILE="$(abspath $(GROK_CONFIG_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_grok_recovery_test.go -run '^TestActualGrokManagedColdRecovery$$' -count=1 -v
+
+# A promotion check is read-only with respect to the installed Bee. It builds a
+# fresh candidate, exercises the public journeys for one milestone, and writes a
+# machine-readable evidence receipt only after every gate succeeds. Installation
+# remains a separate, explicit operation.
+.PHONY: promotion-check promotion-native-agents-check
+promotion-check:
+	@test "$(MILESTONE)" = native-agents || { echo "unsupported MILESTONE: $(MILESTONE)" >&2; exit 2; }
+	@test -z "$$(git status --porcelain --untracked-files=all)" || { echo "promotion requires a clean immutable commit" >&2; exit 2; }
+	$(MAKE) promotion-native-agents-check PROMOTION_COMMIT="$$(git rev-parse HEAD)"
+
+promotion-native-agents-check:
+	@test -n "$(PROMOTION_COMMIT)" -a "$$(git rev-parse HEAD)" = "$(PROMOTION_COMMIT)" || { echo "promotion commit is absent or changed" >&2; exit 2; }
+	@test -x "$(PREVIOUS_BEE)" || { echo "PREVIOUS_BEE must name the executable rollback build" >&2; exit 2; }
+	@test -x "$(AGY_BIN)" -a -f "$(AGY_LOGIN_FILE)" || { echo "Agy executable/login inputs are required" >&2; exit 2; }
+	@test -x "$(CLAUDE_BIN)" -a "$(CLAUDE_CREDENTIAL_ENV)" = ANTHROPIC_API_KEY || { echo "Claude executable and ANTHROPIC_API_KEY selector are required" >&2; exit 2; }
+	@test -x "$(CODEX_BIN)" -a -f "$(CODEX_LOGIN_FILE)" -a -f "$(CODEX_CONFIG_FILE)" || { echo "Codex executable/login/config inputs are required" >&2; exit 2; }
+	@test -x "$(GROK_BIN)" -a -f "$(GROK_LOGIN_FILE)" -a -f "$(GROK_CONFIG_FILE)" || { echo "Grok executable/login/config inputs are required" >&2; exit 2; }
+	@test -z "$$(git status --porcelain --untracked-files=all)" || { echo "promotion requires a clean immutable commit" >&2; exit 2; }
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -race ./cmd/promotion-receipt
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet ./cmd/promotion-receipt
+	$(MAKE) repository-check
+	$(MAKE) native-tools NATIVE_WIPPY="$(abspath $(NATIVE_WIPPY))"
+	@test -x "$(NATIVE_WIPPY)" || { echo "native-tools did not produce the exact promotion runtime" >&2; exit 2; }
+	$(MAKE) check WIPPY="$(abspath $(NATIVE_WIPPY))"
+	$(MAKE) native-check NATIVE_WIPPY="$(abspath $(NATIVE_WIPPY))"
+	$(MAKE) standalone NATIVE_WIPPY="$(abspath $(NATIVE_WIPPY))" BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-agy-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" AGY_BIN="$(abspath $(AGY_BIN))" AGY_LOGIN_FILE="$(abspath $(AGY_LOGIN_FILE))" AGY_MODEL="$(AGY_MODEL)"
+	$(MAKE) native-claude-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" CLAUDE_BIN="$(abspath $(CLAUDE_BIN))" CLAUDE_CREDENTIAL_ENV="$(CLAUDE_CREDENTIAL_ENV)"
+	$(MAKE) native-codex-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" CODEX_BIN="$(abspath $(CODEX_BIN))" CODEX_LOGIN_FILE="$(abspath $(CODEX_LOGIN_FILE))" CODEX_CONFIG_FILE="$(abspath $(CODEX_CONFIG_FILE))"
+	$(MAKE) native-grok-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" GROK_BIN="$(abspath $(GROK_BIN))" GROK_LOGIN_FILE="$(abspath $(GROK_LOGIN_FILE))" GROK_CONFIG_FILE="$(abspath $(GROK_CONFIG_FILE))"
+	$(MAKE) native-binary-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) offline-boot-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-client-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-independent-desktops-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-agent-recovery-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-agent-crash-recovery-check BEE_BINARY="$(abspath $(BEE_BINARY))"
+	$(MAKE) native-upgrade-check BEE_BINARY="$(abspath $(BEE_BINARY))" PREVIOUS_BEE="$(abspath $(PREVIOUS_BEE))"
+	$(MAKE) native-project-nodes-check BEE_BINARY="$(abspath $(BEE_BINARY))" PREVIOUS_BEE="$(abspath $(PREVIOUS_BEE))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run ./cmd/promotion-receipt \
+		-milestone native-agents \
+		-expected-commit "$(PROMOTION_COMMIT)" \
+		-binary "$(abspath $(BEE_BINARY))" \
+		-runtime "$(abspath $(NATIVE_WIPPY))" \
+		-previous "$(abspath $(PREVIOUS_BEE))" \
+		-build-manifest "$(abspath $(BEE_BUILD_MANIFEST))" \
+		-bundle-manifest "$(abspath $(BEE_BUNDLE_MANIFEST))" \
+		-agy "$(abspath $(AGY_BIN))" \
+		-agy-login "$(abspath $(AGY_LOGIN_FILE))" \
+		-agy-model "$(AGY_MODEL)" \
+		-builder-command "$(BUILDER)" \
+		-bee-version "$(BEE_VERSION)" \
+		-bee-mode "$(BEE_MODE)" \
+		-claude "$(abspath $(CLAUDE_BIN))" \
+		-claude-credential-env "$(CLAUDE_CREDENTIAL_ENV)" \
+		-codex "$(abspath $(CODEX_BIN))" \
+		-codex-login "$(abspath $(CODEX_LOGIN_FILE))" \
+		-codex-config "$(abspath $(CODEX_CONFIG_FILE))" \
+		-grok "$(abspath $(GROK_BIN))" \
+		-grok-login "$(abspath $(GROK_LOGIN_FILE))" \
+		-grok-config "$(abspath $(GROK_CONFIG_FILE))" \
+		-output "$(abspath $(PROMOTION_RECEIPT))"

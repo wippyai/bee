@@ -27,41 +27,43 @@ The installed Train A executable has SHA-256 `4692e267` and source `414c03b`.
 It is the rollback point. It passed offline boot, native Agent selection, scoped
 Codex MCP/hooks, recovery, pack inspection and atomic installation.
 
-The integration branch is `feat/docker-harness-delivery-20260913`; this execution
-queue was reconciled against implementation base `2cc4e1f`. The worktree also
-contains an uncommitted Grok B1.1 candidate; those files are not a release source
-until the focused acceptance below passes and the result is committed.
+The integration branch is `feat/docker-harness-delivery-20260913`. Its current
+immutable head is `380d288`; the worktree is clean. This plan is the only finish
+queue for that branch. Older handoff queues provide evidence and history but do
+not reorder this plan.
 
 Completed on this branch:
 
 - all four CLI aliases resolve the same managed definitions as the Agent picker;
 - raw-argument and duplicate-alias bypasses refuse before admission;
 - Claude and Codex inherit their normal global configuration additively;
-- Agy additive configuration inheritance is complete;
+- Agy and Grok additive configuration inheritance is complete;
+- saved profiles are workspace-scoped, database-backed and revisioned; create,
+  edit, select, tombstone, restart persistence and receipt replay pass;
+- an exact-source standalone passes the four-provider selector, real Grok 1.0.30
+  authenticated and clean/login/cancel/restart paths, and owner-restart recovery;
 - the direct native Docker PTY and lower placement foundations pass;
 - the Hub already implements most of its local immutable
   install/update/remove, migration, receipt and recovery backend;
 - workspace host/client, display, Hive, thread, gateway, governance and
   authoring foundations exist, but their final public journeys do not.
 
-The uncommitted Grok B1.1 candidate now replaces the invalid provider-owned
-`managed_config.toml` path with a private composition base and structural TOML
-insertion. Credential definition and use-time digests now cover the normalized
-setup descriptor without hashing setup contents, and the launch specification
-is the sole owner of Grok's Bee MCP permission. The placement authority matrix
-and full Lua suite now pass: 893/893 behavioral tests. Real Grok 1.0.30 also
-passes the clean/login/cancel/restart path, and authenticated startup commits its
-SessionStart record with user hooks and Bee MCP visible. An independent review
-found a crash window between publishing retained setup and binding its digest;
-the candidate now binds every initializer before publishing its ready marker and
-has a regression proving a failed binding publishes neither setup nor readiness.
-The remaining B1.1 work is to build a fresh manifest containing the current
-source and the pinned TOML compatibility patch, rerun both real Grok paths and
-tree fingerprints against that exact executable, review the bounded diff and
-commit it. Global Bee must not be built from this dirty worktree.
-`docs/BUILD_SEQUENCE.md` still describes the earlier Claude/Codex-only launch
-checkpoint; update it with the four-provider callable status when B1.1 lands so
-the implementation map and this operational plan agree.
+Grok B1.1 is committed. Its private retained configuration snapshots only an
+approved user base, structurally inserts Bee's MCP section and refuses semantic
+collisions or changed retained bases. Initializer digests bind before setup or a
+ready marker becomes visible. The exact-source executable is
+`/tmp/bee-grok-b11-final/bee` (SHA-256 `64679b3f...`) and uses runtime
+`291f5c6b...`; the full Lua suite passes 893/893, strict lint passes with the one
+existing `desktop_lifecycle` fixpoint warning, native window acceptance passes,
+and global/project Grok trees remain unchanged. This is branch evidence, not a
+global installation.
+
+The immediate gap is the real-provider recovery matrix. Fixture Claude now
+proves stable application, thread and retained HOME plus a fresh attempt and
+gateway binding across owner restart. Abrupt owner death, real Claude/Codex
+recovery, and a durable checked-in Agy recovery proof remain to be completed and
+reconciled with Grok. Native Agents also remains blocked from global promotion
+until the selected-state-root runtime gate is released and consumed.
 
 ### Reusable runtime gates
 
@@ -127,7 +129,7 @@ installed-executable acceptance passes; source code or a fixture alone is
 | Journey | State | Remaining release boundary |
 |---|---|---|
 | Open locally | partial | executable-selected state root for every store; offline folder and multi-display installed proof |
-| Run an Agent | partial | land Grok B1.1, saved-profile UI, durable four-provider session/recovery proof |
+| Run an Agent | partial | durable four-provider cancel/restart/crash recovery matrix and selected-state-root promotion gate |
 | Change isolation | foundation | compose the same saved profiles through native `exec.docker`; reconcile and recover containers |
 | Join a Hive | partial | public enrollment/discovery, project-node selection, controller transfer, remote placement and two-real-runtime recovery |
 | Install a component | partial | close local Hub lifecycle, protected admission and independently packaged app/harness proofs |
@@ -173,10 +175,10 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Close Grok B1.1: build the fresh current-source standalone, rerun both real-provider paths and tree fingerprints, review and land the bounded diff | Real Grok 1.0.30 passes clean/login/cancel/restart against the exact source; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
-| 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
-| 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
-| 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
+| 1 | Agents | Finish the durable four-provider recovery matrix, starting with exact-source abrupt-owner recovery and a checked-in real Agy continuation proof | Claude, Codex, Agy and Grok each have one evidence row covering configuration, hooks/MCP, normal close, owner restart, abrupt restart, no prompt replay and fresh attempt/gateway fencing |
+| 2 | State | Consume the released selected-state-root primitive and apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, and upgrade preserves profiles, conversations, threads, receipts, workspaces and displays |
+| 3 | Release | Promote **Native Agents** from one clean immutable commit | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
+| 4 | Topology | Finish durable displays, asynchronous Hive rejoin, F9 topology and controller transfer on the selected state model | Same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
 | 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One independently packaged app can enter and leave the catalog without a core edit or authority leak; harness definitions remain separate for extraction in order 8 |
 | 6 | Release | Promote **Local Components** | Correct folder/display behavior and admitted local Hub components pass together from a clean executable |
 | 7 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
@@ -202,20 +204,21 @@ Connected Bee.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. add the pinned TOML compatibility patch to the fresh current-source bundle
-   manifest and build a new standalone executable;
-2. rerun the four-provider selector plus authenticated and clean Grok 1.0.30
-   against that exact executable, including global/project `.grok` fingerprints;
-3. rerun Go vet, diff checks and the managed Grok fixture; retain the already
-   passing 893/893 Lua and native-window evidence unless implementation changes;
-4. review the Grok B1.1 authority, configuration and lifecycle diff as one unit;
-5. update implementation status, `docs/BUILD_SEQUENCE.md` and the runtime gate,
-   commit the bounded diff, then continue directly to saved profiles and durable
-   sessions.
+1. run the exact-source abrupt-owner recovery gate without rebuilding its already
+   accepted executable;
+2. turn the historical real Agy cold-continuation proof into a durable checked-in
+   acceptance and rerun it against the same exact source;
+3. complete the real Claude and Codex cold-recovery rows, preserving global and
+   project configuration fingerprints and proving that recovery never replays the
+   original prompt;
+4. reconcile Grok into the same matrix, including normal close, owner restart,
+   abrupt restart and fresh attempt/secret/gateway fencing;
+5. fix only defects exposed by the matrix, rerun affected focused checks, then
+   commit and push the bounded recovery unit.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
-Once the Native Agents journey passes from a clean commit, install it globally
-before continuing broader cleanup.
+Afterward the selected-state-root cut is the only work admitted before the Native
+Agents promotion. Install globally as soon as that clean promotion gate passes.
 
 ### Execution discipline
 
@@ -279,22 +282,9 @@ store resolves beneath the selected root or its explicit override.
 This is the immediate lane and the shortest route to the next useful global
 build.
 
-1. Complete the Grok private composition against runtime PR #746:
-   - snapshot the approved user `config.toml` once into private retained state;
-   - structurally insert only Bee's scoped `mcp_servers.bee` subtree;
-   - refuse an existing semantic `mcp_servers.bee` collision;
-   - bind the normalized setup descriptor into credential definition and
-     projection digests;
-   - compose only a base returned by the current authorized credential
-     initializer, and refuse before publication or child start otherwise;
-   - emit `--allow MCPTool(bee__*)` exactly once and keep Bee hooks in the
-     private `.grok/hooks/bee.json`;
-   - do not write into the project or global `.grok` tree.
-2. Prove real Grok clean start, authenticated start, cancel and restart. Hash the
-   user's global and project trees before and after. The selected private config
-   must remain present after Grok exits.
-3. Complete clean-install defaults and saved profile create/edit/select. The
-   public profile remains:
+1. Retain the completed Grok private composition and saved-profile storage as
+   prerequisites. Do not reopen them unless the provider matrix reproduces a
+   defect. The public profile remains:
 
    `profile = harness + isolation + options + MCP scope`
 
@@ -302,20 +292,25 @@ build.
    function-built instruction text are resolved at admission and never become
    stored authority. Bee adds instructions to provider behavior; it does not
    replace the provider's built-in system prompt.
-4. Give every attempt an OS-assigned MCP endpoint and a per-attempt secret. The
+2. Complete clean-install default-profile acceptance through both the picker and
+   CLI. Existing create/edit/select, revision CAS, tombstone, restart and replay
+   behavior remains a regression gate.
+3. Give every attempt an OS-assigned MCP endpoint and a per-attempt secret. The
    callable surface is the intersection of saved profile scope, host policy and
    the request's dynamic `ctx`; ports, secrets, grants and `ctx` are never durable
    profile data. Hooks and MCP bind to the same attempt and thread. Prove two
    simultaneous attempts get distinct endpoints and secrets, cross-attempt calls
    refuse, and a retired attempt cannot call after restart.
-5. Bind every provider window to one durable thread, committed activity/title
+4. Bind every provider window to one durable thread, committed activity/title
    state and subscription cursor. The disconnected surface keeps the last
    confirmed value; Timeline resumes its cursor; Inbox distinguishes empty from
    unreachable. Prove presenter replacement, client reattachment and owner/host
    restart separately.
-6. Prove cold recovery where provider credentials permit it. Reconcile a
-   surviving child before starting a replacement. Login, subscription and account
-   refusals remain visible provider outcomes.
+5. Prove cold recovery for all four installed providers. Reconcile a surviving
+   child before starting a replacement; otherwise start a fresh attempt against
+   the provider's durable conversation identity without replaying the original
+   prompt. Login, subscription and account refusals remain visible provider
+   outcomes and do not count as authenticated qualification.
 
 Maintain a four-row provider matrix. Each row requires a real installed binary,
 real configuration composition, MCP/hook delivery, close/cancel and restart. It

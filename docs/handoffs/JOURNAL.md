@@ -6660,3 +6660,19 @@ Fresh manifest `b6ac538e...` embeds the current source and the TOML patch SHA
 authenticated Grok 1.0.30 with preserved user hooks/configuration, the clean
 login/cancel/restart path, global/project tree fingerprints and Go vet. Final
 bounded-diff review and commit remain; global Bee is unchanged.
+
+### September 14 — Finish queue advanced to provider recovery
+
+Grok B1.1 and its documentation are committed at `380d288`. Saved profiles also
+pass workspace-scoped database persistence across two real boots, revision and
+tombstone behavior, cross-actor read and historical-receipt non-resurrection.
+The fixture owner-restart acceptance now passes against exact-source standalone
+`64679b3f...`, retaining the application, thread and private HOME while issuing
+a fresh attempt and gateway binding.
+
+`docs/FINISH_PLAN.md` now makes the actual next bounded unit the durable
+four-provider recovery matrix: abrupt-owner recovery, checked-in real Agy cold
+continuation, real Claude/Codex recovery and Grok reconciliation. The next global
+promotion follows only after that unit and the executable-selected state-root
+cut pass. Hub, topology and Docker retain their parallel lanes; global Bee remains
+unchanged.

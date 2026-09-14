@@ -1,23 +1,25 @@
 # Launch routing, topology and lifecycle
 
-Status: design contract agreed on 2026-09-08 between Claude and Astra (Codex CLI
-design thread `01a077f7-3266-7280-8dd5-a6c7b1cf35ea`), fifth round. It replaces
-the hard-coded harness commands on the Terminal descriptor with one canonical
-route: `bee claude`, the Start menu, `thread_launch` over MCP and another agent
-all resolve a launch definition, which selects an admitted driver profile and a
-placement; the resulting action owns the work and a window is only an
-attachment to it. Nothing here is implemented.
+Status: the local window route is implemented. `bee claude`, `bee codex`,
+`bee agy` and `bee grok` discover component-owned `command_names`, open
+`bee.harness.window:app`, resolve the current measured launch plan, run resource
+setup and submit the same admission request as the Agent picker. Terminal owns
+only the `terminal` command. Raw arguments on a managed alias are refused; users
+can still run an ordinary executable with arbitrary arguments inside Native
+Terminal. Duplicate valid command claims refuse rather than following registry
+order. Registry metadata selects a candidate and grants no launch authority.
 
-Today's route, for reference: `bee.console` declares
-`meta.application.commands: [{name: claude, arguments: [claude], fullscreen: true}, ...]`
-and runs the binary in a PTY through `exec.native`. That stays only as a facade
-over launch ids during migration.
+The Start menu/picker and these CLI aliases now share the managed window,
+profile, carrier, thread, hook and MCP path. Remote node selection, MCP
+`thread_launch` and another Agent starting work remain proposals in this
+document until their acceptance checks exist.
 
 ## Astra's proposal in full
 
-**Make `bee claude` resolve to a launch definition, not a Terminal command alias.** The definition selects an admitted driver profile and placement; the resulting action owns the work. A desktop window is an attachment to that action.
+**`bee claude` resolves to a launch definition, not a Terminal command alias.** The definition selects an admitted driver profile and placement; the resulting action owns the work. A desktop window is an attachment to that action.
 
-All additions below remain proposed until accepted.
+Sections describing remote placement and unimplemented callers remain proposed
+until accepted.
 
 ## 1. Canonical routing
 

@@ -85,6 +85,7 @@ local function define_tests()
 
         test.it("constrains desktop_policy to worker host while retaining nonhost actions", function()
             evaluate_host_policy("bee:desktop_policy", "tty.mount", "screen")
+            test.is_true(call_can({"bee:desktop_policy"}, "registry.find", "bee.launch_definition"))
         end)
 
         test.it("constrains host_policy to worker host while retaining nonhost actions", function()

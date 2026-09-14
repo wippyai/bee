@@ -149,6 +149,39 @@ local function define_tests()
             end)
         end)
 
+        isolated_it("resolves component command names without requiring Start-menu visibility", function()
+            local entries = {
+                definition("command", "Command window", "selection-command", "window", false),
+            }
+            with_entries(entries, function()
+                local command, err = selection.command("selection-command")
+                if not command then error(tostring(err)) end
+                test.eq(command.definition_ref, PREFIX .. "command")
+                test.is_false(command.fullscreen)
+                local missing, missing_error = selection.command("selection-missing")
+                test.is_nil(missing)
+                test.is_nil(missing_error)
+            end)
+        end)
+
+        isolated_it("refuses ambiguous and non-window command claims", function()
+            local duplicates = {
+                definition("command-first", "First", "selection-duplicate", "window", false),
+                definition("command-second", "Second", "selection-duplicate", "window", false),
+            }
+            with_entries(duplicates, function()
+                local command, err = selection.command("selection-duplicate")
+                test.is_nil(command)
+                test.eq(err, "Ambiguous Bee command: selection-duplicate")
+            end)
+            local batch = {definition("command-batch", "Batch", "selection-batch-command", "batch", false)}
+            with_entries(batch, function()
+                local command, err = selection.command("selection-batch-command")
+                test.is_nil(command)
+                test.eq(err, "Bee command selection-batch-command does not select a window profile")
+            end)
+        end)
+
         isolated_it("sorts valid window definitions and measures independent plans", function()
             local entries = {
                 definition("zulu", "Zulu window", "selection-zulu", "window", true),

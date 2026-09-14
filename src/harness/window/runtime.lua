@@ -191,6 +191,7 @@ local function main(value: unknown, constructors: {[string]: Open})
     end
     local restoring = launch.resume_state ~= ""
     local selected = not restoring and #launch.arguments == 0
+    local direct = not restoring and #launch.arguments == 1 and launch.arguments[1]:sub(1, 1) ~= "{"
     local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil
     local ready_announced = false
@@ -470,6 +471,14 @@ local function main(value: unknown, constructors: {[string]: Open})
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             error("Managed window recovery surface: " .. tostring(output_error))
         end
+    elseif direct then
+        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1])
+        if not choice then
+            show_failure("Managed window admission: " .. tostring(direct_error))
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            return
+        end
+        admitted = choice
     else
         local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
         if not body then

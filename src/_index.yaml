@@ -54,6 +54,7 @@ entries:
     expression: 'action != "process.host" || resource == "bee:workers"'
     actions:
     - registry.get
+    - registry.find
     - tty.mount
     - tty.observe
     - tty.input

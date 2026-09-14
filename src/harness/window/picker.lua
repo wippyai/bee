@@ -16,6 +16,35 @@ local forms = require("forms")
 local profile_view = require("profile_view")
 local M = {}
 type Channel = channel.Channel
+local function fault(reply: admission.Reply?): string
+    local value = reply and reply.error
+    if not value then return "Agent launch was not admitted" end
+    return value.code .. ": " .. value.message
+end
+
+-- A CLI definition route uses the same setup and admission operations as an
+-- explicit picker choice. The command resolver supplies only a definition
+-- reference; this actor obtains and fences the current measured plan.
+function M.direct(workspace_id: string, definition_ref: string): (admission.Admitted?, string?)
+    local plan, refused = admission.resolve(definition_ref, "window", workspace_id)
+    if not plan then return nil, fault(refused) end
+    local setup, setup_error = funcs.call("bee.harness.launch:setup", {
+        workspace_id = workspace_id, definition_ref = definition_ref,
+        expected_plan_digest = plan.plan_digest})
+    local prepared = bounds.object(setup)
+    if setup_error or not prepared or prepared.ok ~= true then
+        return nil, setup_error and tostring(setup_error) or
+            (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")
+    end
+    local request_id, request_error = uuid.v7()
+    if not request_id then return nil, "Agent request identity: " .. tostring(request_error) end
+    local admitted, admission_error = admission.admit_request({request_id = request_id,
+        definition_ref = definition_ref, expected_plan_digest = plan.plan_digest,
+        workspace_id = workspace_id, brief = "", mode = "window"})
+    if not admitted then return nil, fault(admission_error) end
+    return admitted, nil
+end
+
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
     closes: Channel<process.Message>): (admission.Admitted?, string?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))

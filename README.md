@@ -23,13 +23,16 @@ bee
 bee claude
 bee codex
 bee agy
+bee grok
 ```
 
-Agent commands open fullscreen and receive the arguments you pass after their
-name. They must already be installed on PATH. These commands run native terminal
-sessions. Managed Agent profiles additionally provide scoped MCP and
-driver-specific thread hooks; see [saved profiles](docs/handoffs/SAVED_AGENT_PROFILES.md)
-for setup and verified harness support. Managed Docker launch remains unfinished.
+Agent commands open the corresponding managed profile fullscreen through the
+same admission path as the Agent picker. They must already be available under
+the host launch policy. Raw trailing arguments are refused; configure reviewed
+options in a saved profile, or run an arbitrary command inside Native Terminal.
+Managed profiles provide scoped MCP and driver-specific thread hooks; see
+[saved profiles](docs/handoffs/SAVED_AGENT_PROFILES.md) for setup and verified
+harness support. Managed Docker launch remains unfinished.
 
 Run `bee observe` in another terminal to view the running Bee read-only. It shares
 the retained desktop; typing cannot control its apps. Ctrl+Q or Ctrl+] detaches

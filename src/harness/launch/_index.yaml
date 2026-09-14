@@ -48,7 +48,7 @@ entries:
 - name: selection
   kind: library.lua
   source: file://selection.lua
-  modules: [funcs]
+  modules: [funcs, registry]
   imports:
     catalog: bee.harness.catalog:catalog
     definitions: bee.harness.launch:definitions

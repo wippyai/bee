@@ -149,12 +149,15 @@ arguments take precedence over a saved checkpoint for that initial launch.
 
 ### Registered CLI handlers
 
-`bee claude [arguments...]`, `bee codex [arguments...]` and
-`bee agy [arguments...]` open the native Terminal fullscreen. The executables must already
-be on the caller's PATH. These are native program launches, not agent drivers or
-MCP integrations. The standalone binary preserves the caller's working directory.
-Native options such as `--state-dir` precede the alias;
-arguments after the alias belong to the application.
+`bee claude`, `bee codex`, `bee agy` and `bee grok` resolve the component-owned
+managed launch definition and open the Agent window fullscreen. They use the
+same measured plan, setup, admission, carrier, thread, hook and MCP path as a
+selection from the Agent picker. The executable must already be available under
+the host-selected launch policy. The standalone binary preserves the caller's
+working directory. Native options such as `--state-dir` precede the alias.
+Managed aliases accept no trailing raw arguments because those arguments could
+bypass reviewed profile options; arbitrary harness commands remain available
+inside Native Terminal with its OS-user authority.
 If an existing native state directory still selects an older installed pack,
 use `bee --base codex` to run the rebuilt embedded application. This selects
 base code without deleting workspace databases; it does not upgrade the installed
@@ -169,8 +172,8 @@ considers only host-admitted applications; metadata grants no execution authorit
 Prefix arguments and caller arguments share the existing bounded argument decoder.
 Fullscreen is an idempotent initial presentation request after successful open.
 
-Terminal declares `terminal`, `claude`, `codex` and `agy` handlers. Its named
-executor can run explicit native argument vectors with OS-user authority; empty
+Terminal declares only the `terminal` handler. Its named executor can run
+explicit native argument vectors with OS-user authority; empty
 arguments start `/bin/bash -i`. Quoting preserves empty strings, whitespace and
 shell metacharacters without shell evaluation. Other applications gain no native
 execution permissions from declaring a handler.

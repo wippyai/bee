@@ -839,6 +839,42 @@ func countThreadWork(state string) error {
 	return nil
 }
 
+func rawManagedAliasRefusal(binary string) error {
+	root, err := os.MkdirTemp("", "bee-native-agent-raw-alias-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
+	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
+		return err
+	}
+	ui, err := newDesktopWithArguments(binary, project, state, home,
+		[]string{"codex", "--dangerously-bypass-profile"})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ui.close()
+		_ = stopFixtureOwners(binary, state)
+	}()
+	select {
+	case <-ui.wait:
+	case <-time.After(5 * time.Second):
+		return errors.New("managed alias with raw arguments did not refuse promptly")
+	}
+	_, _, log := ui.snapshot()
+	if !strings.Contains(string(log), "Managed Bee command does not accept raw arguments: codex") {
+		return fmt.Errorf("managed raw-argument refusal was not visible:\n%s", string(log))
+	}
+	if _, err := os.Stat(filepath.Join(state, "threads.db")); err == nil {
+		return countThreadWork(state)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func defaultPicker(binary string) error {
 	root, err := os.MkdirTemp("", "bee-native-agent-")
 	if err != nil {
@@ -1114,6 +1150,8 @@ type recoveryWorkspace struct {
 type recoverySaved struct {
 	PreviousAttemptID string `json:"previous_attempt_id"`
 	ThreadID          string `json:"thread_id"`
+	DefinitionRef     string `json:"definition_ref"`
+	OriginRequestID   string `json:"origin_request_id"`
 }
 
 type recoveryPlacement struct {
@@ -1278,6 +1316,97 @@ func readRecoveryBinding(state, attemptID string) (string, error) {
 		return "", errors.New("carrier checkpoint has no gateway binding")
 	}
 	return binding, nil
+}
+
+func assertManagedRoute(state, provider string) error {
+	workspace, err := readRecoveryWorkspace(state)
+	if err != nil {
+		return fmt.Errorf("read managed workspace route: %w", err)
+	}
+	var app recoveryApplication
+	var saved recoverySaved
+	for _, candidate := range workspace.Applications {
+		if candidate.DefinitionID != "bee.harness.window:app" || candidate.ResumeState == "" {
+			continue
+		}
+		var value recoverySaved
+		if json.Unmarshal([]byte(candidate.ResumeState), &value) == nil && value.PreviousAttemptID != "" {
+			app, saved = candidate, value
+			break
+		}
+	}
+	expectedDefinition := "bee.driver." + provider + ":default_window"
+	if app.DefinitionID != "bee.harness.window:app" || saved.DefinitionRef != expectedDefinition ||
+		saved.ThreadID == "" || saved.PreviousAttemptID == "" || saved.OriginRequestID == "" {
+		return fmt.Errorf("managed route identity mismatch: app=%+v checkpoint=%+v, expected definition %s", app, saved, expectedDefinition)
+	}
+	placements, err := readRecoveryPlacement(state)
+	if err != nil {
+		return fmt.Errorf("read managed placement route: %w", err)
+	}
+	var placement recoveryPlacement
+	for _, candidate := range placements {
+		if candidate.AttemptID == saved.PreviousAttemptID {
+			placement = candidate
+			break
+		}
+	}
+	if placement.AttemptID == "" || placement.ActionID == "" {
+		return errors.New("managed route has no matching placement attempt")
+	}
+	threads, err := openRecoveryDB(filepath.Join(state, "threads.db"))
+	if err != nil {
+		return err
+	}
+	var carrierThread, preparedJSON string
+	err = threads.QueryRow("SELECT thread_id FROM bee_thread_carriers WHERE attempt_id = ?", placement.AttemptID).Scan(&carrierThread)
+	if err == nil {
+		err = threads.QueryRow(`SELECT record_json FROM bee_thread_records
+            WHERE thread_id = ? AND action_id = ? AND attempt_id = ? AND kind = 'attempt.prepared'
+            ORDER BY sequence DESC LIMIT 1`, saved.ThreadID, placement.ActionID, placement.AttemptID).Scan(&preparedJSON)
+	}
+	threads.Close()
+	if err != nil {
+		return fmt.Errorf("read managed carrier route: %w", err)
+	}
+	if carrierThread != saved.ThreadID {
+		return fmt.Errorf("carrier thread %q differs from application thread %q", carrierThread, saved.ThreadID)
+	}
+	var record struct {
+		Body struct {
+			BindingRef       string `json:"binding_ref"`
+			ProfileID        string `json:"profile_id"`
+			PlacementBinding string `json:"placement_binding"`
+		} `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(preparedJSON), &record); err != nil {
+		return fmt.Errorf("decode managed prepared record: %w", err)
+	}
+	expectedBinding := "bee.driver." + provider + ":binding"
+	if record.Body.BindingRef != expectedBinding || record.Body.ProfileID != "window" ||
+		record.Body.PlacementBinding != "bee.placement.native:binding" {
+		return fmt.Errorf("managed prepared route = binding %q, profile %q, placement %q",
+			record.Body.BindingRef, record.Body.ProfileID, record.Body.PlacementBinding)
+	}
+	bindingID, err := readRecoveryBinding(state, placement.AttemptID)
+	if err != nil {
+		return err
+	}
+	gateway, err := openRecoveryDB(filepath.Join(state, "gateway.db"))
+	if err != nil {
+		return err
+	}
+	var gatewayThread, gatewayAction, gatewayAttempt string
+	err = gateway.QueryRow("SELECT thread_id, action_id, attempt_id FROM bee_gateway_bindings WHERE binding_id = ?", bindingID).
+		Scan(&gatewayThread, &gatewayAction, &gatewayAttempt)
+	gateway.Close()
+	if err != nil {
+		return fmt.Errorf("read managed gateway route: %w", err)
+	}
+	if gatewayThread != saved.ThreadID || gatewayAction != placement.ActionID || gatewayAttempt != placement.AttemptID {
+		return errors.New("managed MCP gateway does not belong to the application thread and placement")
+	}
+	return nil
 }
 
 func recoveryHookCommitted(state, threadID, sessionID string) (bool, error) {
@@ -2503,7 +2632,12 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
 		return err
 	}
-	ui, err := newDesktop(binary, project, state, home, extraEnv...)
+	directAlias := machineLogin && !(len(customConfig) > 0 && customConfig[0])
+	arguments := []string{"agent"}
+	if directAlias {
+		arguments = []string{provider}
+	}
+	ui, err := newDesktopWithArguments(binary, project, state, home, arguments, extraEnv...)
 	if err != nil {
 		return err
 	}
@@ -2513,25 +2647,27 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		_ = retained.stop()
 		_ = stopFixtureOwners(binary, state)
 	}()
-	if err := ui.waitFor(label, 25*time.Second); err != nil {
-		return err
-	}
-	for step := 0; step < strings.Count(selection, "\x1b[B"); step++ {
-		_, before, _ := ui.snapshot()
-		if err := ui.send("\x1b[B"); err != nil {
+	if !directAlias {
+		if err := ui.waitFor(label, 25*time.Second); err != nil {
 			return err
 		}
-		if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
-			return fmt.Errorf("select profile step %d: %w", step+1, err)
+		for step := 0; step < strings.Count(selection, "\x1b[B"); step++ {
+			_, before, _ := ui.snapshot()
+			if err := ui.send("\x1b[B"); err != nil {
+				return err
+			}
+			if err := ui.waitForAfter("Choose a profile", before, 5*time.Second); err != nil {
+				return fmt.Errorf("select profile step %d: %w", step+1, err)
+			}
 		}
-	}
-	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
-		if err := ui.waitFor(detail, 5*time.Second); err != nil {
-			return fmt.Errorf("selected profile summary: %w", err)
+		for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
+			if err := ui.waitFor(detail, 5*time.Second); err != nil {
+				return fmt.Errorf("selected profile summary: %w", err)
+			}
 		}
-	}
-	if err := ui.send("\r"); err != nil {
-		return err
+		if err := ui.send("\r"); err != nil {
+			return err
+		}
 	}
 	if err := ui.waitFor("BEE_MANAGED_AGENT_READY", 25*time.Second); err != nil {
 		// This report contains only HTTP status codes and Boolean checks. Keep
@@ -2543,6 +2679,9 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			}
 		}
 		return err
+	}
+	if err := assertManagedRoute(state, provider); err != nil {
+		return fmt.Errorf("managed %s route proof: %w", provider, err)
 	}
 	mcpData, err := os.ReadFile(mcpReport)
 	if err != nil {
@@ -2687,7 +2826,14 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		if provider == "agy" {
 			activity = "Activity uncertain"
 		}
-		if err := ui.waitFor(activity, 5*time.Second); err != nil {
+		titleEvidence := activity
+		if directAlias {
+			titleEvidence = "Grok CLI · Using"
+			if provider == "agy" {
+				titleEvidence = "Antigravity CLI · Act"
+			}
+		}
+		if err := ui.waitFor(titleEvidence, 5*time.Second); err != nil {
 			return fmt.Errorf("committed %s hook title: %w", provider, err)
 		}
 	}
@@ -2821,6 +2967,10 @@ func main() {
 	}
 	if err := savedProfileLaunch(binary); err != nil {
 		fmt.Fprintf(os.Stderr, "saved profile launch acceptance failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := rawManagedAliasRefusal(binary); err != nil {
+		fmt.Fprintf(os.Stderr, "managed alias raw-argument refusal failed: %v\n", err)
 		os.Exit(1)
 	}
 	for _, provider := range []string{"codex", "claude", "agy", "grok"} {

@@ -18,6 +18,18 @@ state deletion. Receipt:
 complete all four harnesses, Docker parity, coherent folder/display/Hive
 behavior and the local Hub lifecycle.
 
+**B1 command-routing source complete, not installed (September 14):** Terminal's raw Claude, Codex and Agy
+aliases have been removed. All four component-owned command names now resolve to
+the managed Agent window, which obtains the current plan and uses the same setup
+and admission path as the picker. Duplicate claims and trailing raw arguments
+refuse before admission. The desktop receives read-only registry discovery for
+this declaration lookup; admission still establishes all authority. Strict lint,
+Go vet and 886 unit tests pass. Source/pack command journeys and the exact
+standalone binary, Modules, About and four-provider selector checks pass. The
+selector proves the application definition, provider profile, thread, carrier,
+placement and scoped gateway retain one identity. The remaining B1 provider and
+recovery work plus the complete release gate must pass before global Bee changes.
+
 ## Current checkpoint — September 13
 
 **Agent configuration inheritance, installed:** default managed Claude and

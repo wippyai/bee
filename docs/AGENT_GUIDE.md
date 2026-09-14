@@ -132,9 +132,9 @@ The registry owns definitions/configuration/history. Workspace application state
 journal events and exported application data retain their respective owners.
 Transfer declarative content and explicitly supported state, not local credentials,
 live PIDs or mounts. Legacy drivers are source references outside the repository,
-never runtime dependencies. The `bee codex/claude/agy` aliases launch native
-programs. The managed Agent picker uses reviewed profiles and scoped gateway
-configuration; Claude/Codex hooks feed their bound threads. Fixture acceptance
+never runtime dependencies. The `bee claude/codex/agy/grok` aliases and the
+managed Agent picker use the same reviewed definitions, profiles, admission and
+scoped gateway configuration; provider hooks feed their bound threads. Fixture acceptance
 proves saved-conversation continuation, while real-provider cold recovery remains
 unverified. Read [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending
 this path.

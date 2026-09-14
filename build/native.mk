@@ -126,7 +126,7 @@ native-managed-agent-check:
 	test -n "$(AGENT_PROVIDER)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go managed "$(AGENT_PROVIDER)" "$(abspath $(BEE_BINARY))"
 
-.PHONY: native-agy-live-check native-agy-recovery-live-check native-claude-recovery-live-check native-grok-live-check
+.PHONY: native-agy-live-check native-agy-recovery-live-check native-claude-recovery-live-check native-codex-recovery-live-check native-grok-live-check
 .PHONY: native-agent-picker-check
 native-agent-picker-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go picker "$(abspath $(BEE_BINARY))"
@@ -144,6 +144,11 @@ native-claude-recovery-live-check:
 	test -n "$(CLAUDE_BIN)" -a -n "$(CLAUDE_LOGIN_FILE)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_claude_recovery_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" CLAUDE_BIN="$(abspath $(CLAUDE_BIN))" CLAUDE_LOGIN_FILE="$(abspath $(CLAUDE_LOGIN_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_claude_recovery_test.go -run '^TestActualClaudeManagedColdRecovery$$' -count=1 -v
+
+native-codex-recovery-live-check:
+	test -n "$(CODEX_BIN)" -a -n "$(CODEX_LOGIN_FILE)" -a -n "$(CODEX_CONFIG_FILE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_codex_recovery_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" CODEX_BIN="$(abspath $(CODEX_BIN))" CODEX_LOGIN_FILE="$(abspath $(CODEX_LOGIN_FILE))" CODEX_CONFIG_FILE="$(abspath $(CODEX_CONFIG_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_codex_recovery_test.go -run '^TestActualCodexManagedColdRecovery$$' -count=1 -v
 
 native-grok-live-check:
 	test -n "$(GROK_BIN)" -a -n "$(GROK_LOGIN_FILE)"

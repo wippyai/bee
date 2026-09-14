@@ -54,6 +54,19 @@ restart. The full Lua suite passes 893/893, strict production lint and native
 window acceptance pass, and Go vet is clean. Grok B1.1 is committed at `380d288`;
 global Bee remains Train A.
 
+**B1 Codex cold recovery source complete, not installed (September 14):** the
+checked `native-codex-recovery-live-check` runs installed Codex 0.154.0 twice
+through the public managed window. Its first turn calls Bee `thread_read` and
+reads a random project fixture through a completed command; after source deletion
+and owner restart, the resumed turn recalls the exact token without tools. The
+conversation, project, HOME, CODEX_HOME, application and thread remain stable;
+the attempt and gateway binding are fresh. Required command/MCP hooks pair
+successfully, the old attempt retires, the final process exits, and the source
+`auth.json`, global `config.toml` and project tree remain unchanged. The target
+passes against exact-source standalone `64679b3f`. Manifest version 0.153.4 and
+the installed 0.154.0 still need reconciliation, and the row must rerun after the
+released runtime cut before promotion. Global Bee remains Train A.
+
 ## Current checkpoint — September 13
 
 **Agent configuration inheritance, installed:** default managed Claude and
@@ -152,9 +165,9 @@ installed artifacts match the candidate byte-for-byte; the preceding build is
 backed up. Databases and running nodes were preserved. Existing nodes retain
 their loaded code; newly started nodes use this build.
 
-**Remaining agent workflow work:** real Claude, Codex and Grok cold-recovery
+**Remaining agent workflow work:** real Claude and Grok cold-recovery
 qualification, managed Docker execution, surviving orphan cleanup, and
-policy-controlled sharing. Real Agy recovery passes. The checked real Claude
+policy-controlled sharing. Real Agy and Codex recovery pass. The checked real Claude
 target reaches the admitted managed launch with scoped hooks/MCP, then records a
 provider authentication refusal; it does not count as a recovered turn. Native
 Docker module composition is present, but Docker is not yet

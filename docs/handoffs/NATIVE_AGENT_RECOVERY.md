@@ -7,7 +7,7 @@ fresh continuation request on restore. Source acceptance now proves graceful
 continuation, interrupted-window recovery, cancellation during recovery, and
 whole-node restart with a fixture Claude executable. Controlled node SIGKILL
 also passes when the independently inspected native process is gone. Real-provider
-cold recovery passes for Agy; Claude, Codex and Grok plus surviving orphan
+cold recovery passes for Agy and Codex; Claude, Grok and surviving orphan
 process trees remain unverified. The installed
 revision is tracked separately in [global build](GLOBAL_BUILD.md).
 
@@ -181,6 +181,19 @@ ordinary-HOME probe reports unavailable account credit. This is an unqualified
 provider row, not recovery evidence. The provider version also differs from the
 current 2.1.265 manifest metadata and must be reconciled before promotion.
 
+`make native-codex-recovery-live-check BEE_BINARY=... CODEX_BIN=...
+CODEX_LOGIN_FILE=... CODEX_CONFIG_FILE=...` runs the equivalent real-Codex
+gate. The first turn must call bound `thread_read` and complete a command read of
+a random fixture. After deletion and owner restart, `codex exec resume` must
+recall the exact token without tools or prompt replay. The gate checks stable
+provider conversation, application, thread, project, HOME and CODEX_HOME; fresh
+attempt and gateway identities; paired MCP hooks; unchanged source login/global
+configuration and project tree; explicit provider exit status; and final native
+process cleanup. It removes ambient provider credential variables and deletes
+all disposable credential-bearing state. Installed Codex 0.154.0 passes this
+gate against exact-source standalone `64679b3f`; the manifest still declares
+0.153.4 and the full row must rerun after the released runtime cut.
+
 Agy's corrected MCP delivery declares private JSON credential fields. Placement
 fills those after minting the admitted binding; the persisted template retains
 only field paths and environment names. Source now republishes these admitted
@@ -218,9 +231,7 @@ acceptance and the existing Claude fixture restart gate. Its 851 unit cases pass
 full combined source/pack acceptance passes and global `7d9182cb` is installed. See the
 current journal and global-build handoff for installed revision status.
 
-The separate actual Codex TUI probe now reaches directory consent and records its
-exact first user prompt in the private provider transcript. A minimal invocation
-outside Bee then reproduced the provider account's usage-limit refusal. This is
-not evidence of a completed model turn or cold Codex recovery; that acceptance
-remains pending available provider quota. No Bee production workaround or login
-change was made for the refusal.
+The earlier actual Codex TUI probe stopped at an account usage-limit refusal.
+The checked cold-recovery gate described above now supersedes that limitation
+with two completed real turns; no Bee production workaround or login change was
+needed.

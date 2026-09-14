@@ -42,7 +42,7 @@ Completed on this branch:
   edit, select, tombstone, restart persistence and receipt replay pass;
 - an exact-source standalone passes the four-provider selector, real Grok 1.0.30
   authenticated and clean/login/cancel/restart paths, graceful and abrupt
-  fixture owner recovery, and real Agy cold conversation continuation;
+  fixture owner recovery, and real Agy and Codex cold conversation continuation;
 - the direct native Docker PTY and lower placement foundations pass;
 - the Hub already implements most of its local immutable
   install/update/remove, migration, receipt and recovery backend;
@@ -64,7 +64,11 @@ Claude now proves stable application, thread and retained HOME plus a fresh
 attempt and gateway binding across graceful and abrupt owner restart. A durable
 real-Agy acceptance proves exact tool-free recall after its source file is
 deleted, with stable conversation/HOME/application/thread and fresh attempt and
-gateway identities. Real Claude/Codex recovery and Grok reconciliation remain.
+gateway identities. The checked real-Codex acceptance now proves the same cold
+recall plus its command read, scoped MCP/hook pairing and unchanged global
+configuration. Real Claude recovery and Grok reconciliation remain; Codex must
+also be rerun after the runtime cut and its 0.154.0 installed version reconciled
+with the 0.153.4 manifest.
 Native Agents also remains blocked from global promotion until the selected-state-root
 runtime gate is released and consumed.
 
@@ -185,11 +189,11 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Finish the durable four-provider recovery matrix, starting with exact-source abrupt-owner recovery and a checked-in real Agy continuation proof | Claude, Codex, Agy and Grok each have one evidence row covering configuration, hooks/MCP, normal close, owner restart, abrupt restart, no prompt replay and fresh attempt/gateway fencing |
+| 1 | Agents | Finish real Claude cold recovery and reconcile Grok close/restart fencing; retain the passing Agy and Codex rows as regression gates | Claude, Codex, Agy and Grok each have one evidence row covering configuration, hooks/MCP, normal close, owner restart, abrupt restart, no prompt replay and fresh attempt/gateway fencing |
 | 2 | Runtime integration | Consume the released selected-state-root, structural TOML insertion and OS-assigned listener primitives; apply one documented store-selection matrix to every Bee database and retained resource | Offline launch from two folders isolates project state, explicit `--state-dir` wins, upgrade preserves all owned data, and the four-provider matrix passes again on the released runtime |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit | Full check, standalone, offline/restart/recovery, provider matrix, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish durable displays, asynchronous Hive rejoin, F9 topology and controller transfer on the selected state model | Same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
-| 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One independently packaged app can enter and leave the catalog without a core edit or authority leak; harness definitions remain separate for extraction in order 8 |
+| 5 | Hub | Close local immutable install/update/remove first, then protected admission using released registry compare-and-set | One candidate app closure can enter and leave the catalog without a core edit or authority leak; independent package extraction and harness parity remain order 8 |
 | 6 | Release | Promote **Local Components** | Correct folder/display behavior and admitted local Hub components pass together from a clean executable |
 | 7 | Docker | Route the same four saved profiles through native `exec.docker` and the existing carrier/gateway | Local and Docker differ only by isolation; lifecycle, terminal, hook, MCP, recovery and secret checks match on Linux and Docker Desktop/WSL |
 | 8 | Automation | Prove the native runner/dataflow path, freeze accepted schemas and extract independently mounted packages | One headless runner turn and two-node settle pass; host and standalone package closures behave identically with no duplicate IDs |
@@ -217,7 +221,7 @@ status and handoff documents.
 
 | Lane | State | Next bounded result | Dependency |
 |---|---|---|---|
-| Agents / integration | active | Make real Claude reach managed readiness, then prove source-file recall across owner restart; add a checked-in Codex recovery target and reconcile Grok close/restart fencing | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
+| Agents / integration | active | Make real Claude reach managed readiness and prove source-file recall across owner restart; reconcile Grok close/restart fencing and retain the passing Agy/Codex rows | released selected state root, structural TOML insertion and OS-assigned listener address for global promotion |
 | State | external gate | Consume one released runtime state-root pin and prove the documented store-selection matrix from two folders and an explicit override | runtime PR #726 and its builder release |
 | Topology | ready in parallel | Prove immediate offline presentation, independent durable displays and asynchronous Hive rejoin before extending the two-node journey | released state root for promotion; remote actor lifecycle for public connected use |
 | Hub | ready in parallel | Close one local immutable app install/update/remove journey with protected admission and recovery | released registry compare-and-set for final publication |
@@ -226,12 +230,12 @@ status and handoff documents.
 | Overlays | queued | Complete governed `stage -> inspect -> submit -> decide -> apply -> receipt -> rollback` | local Hub admission and released registry compare-and-set |
 
 The first usable global update is deliberately smaller than finished Bee: it is
-the Native Agents checkpoint. Its remaining local work is Claude, Codex and Grok
-recovery qualification plus the clean promotion gate. The current real Claude
+the Native Agents checkpoint. Its remaining local work is Claude recovery, Grok
+recovery reconciliation and the clean promotion gate. The current real Claude
 acceptance opens its managed window, delivers the scoped MCP/hooks configuration
 and promptly reports the provider's authentication refusal; its row remains
-unqualified until the account completes both turns. Agy's real cold-recovery row
-already passes. No Hive, Hub, Docker or overlay work is
+unqualified until the account completes both turns. Agy and Codex real
+cold-recovery rows pass. No Hive, Hub, Docker or overlay work is
 allowed to enlarge this integration diff.
 
 ### Current bounded unit
@@ -239,9 +243,9 @@ allowed to enlarge this integration diff.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. complete the real Claude and Codex cold-recovery rows, preserving global and
-   project configuration fingerprints and proving that recovery never replays the
-   original prompt;
+1. complete the real Claude cold-recovery row while retaining the passing Codex
+   row, preserving global and project configuration fingerprints and proving
+   that recovery never replays the original prompt;
 2. reconcile Grok into the same matrix, including normal close, owner restart,
    abrupt restart and fresh attempt/secret/gateway fencing;
 3. fix only defects exposed by the matrix, rerun affected focused checks, then
@@ -345,8 +349,8 @@ build.
    the provider's durable conversation identity without replaying the original
    prompt. Login, subscription and account refusals remain visible provider
    outcomes and do not count as authenticated qualification.
-6. Give every row a checked-in live recovery target. Agy and Claude have named
-   targets; add equivalent Codex and Grok targets before promotion. Rerun all four
+6. Give every row a checked-in live recovery target. Agy, Claude and Codex have
+   named targets; add the equivalent Grok target before promotion. Rerun all four
    after consuming the released state-root/runtime cut, because moving retained
    stores can invalidate earlier recovery evidence.
 

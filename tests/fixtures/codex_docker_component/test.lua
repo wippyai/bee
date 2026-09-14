@@ -50,6 +50,19 @@ local function run()
             local native, native_error = selection.command("codex")
             if not native then error(tostring(native_error)) end
             test.eq(native.definition_ref, "bee.driver.codex:default_window")
+
+            local listed, list_error = selection.snapshot()
+            if not listed then error(tostring(list_error)) end
+            local native_item: {[string]: unknown}? = nil
+            local docker_item: {[string]: unknown}? = nil
+            for _, item in ipairs(listed.items) do
+                if item.definition_ref == "bee.driver.codex:default_window" then native_item = item end
+                if item.definition_ref == "bee.driver.codex.docker:launch" then docker_item = item end
+            end
+            test.not_nil(native_item)
+            test.not_nil(docker_item)
+            local unavailable = docker_item and docker_item.unavailable
+            test.is_true(type(unavailable) == "string" and (unavailable :: string):find("placement", 1, true) ~= nil)
         end)
     end)
 end

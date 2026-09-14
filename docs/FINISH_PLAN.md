@@ -51,12 +51,14 @@ setup descriptor without hashing setup contents, and the launch specification
 is the sole owner of Grok's Bee MCP permission. The placement authority matrix
 and full Lua suite now pass: 893/893 behavioral tests. Real Grok 1.0.30 also
 passes the clean/login/cancel/restart path, and authenticated startup commits its
-SessionStart record with user hooks and Bee MCP visible. The remaining B1.1 issue
-is a Go assertion that expects Grok's inspected hook event and source path in the
-wrong spelling/form; the observed event is `session_start` and the hook source is
-the private hooks directory. After correcting that assertion, the authenticated
-run must finish its global/project tree fingerprints and the 27-file bounded diff
-must receive one review. Global Bee must not be built from this dirty worktree.
+SessionStart record with user hooks and Bee MCP visible. An independent review
+found a crash window between publishing retained setup and binding its digest;
+the candidate now binds every initializer before publishing its ready marker and
+has a regression proving a failed binding publishes neither setup nor readiness.
+The remaining B1.1 work is to build a fresh manifest containing the current
+source and the pinned TOML compatibility patch, rerun both real Grok paths and
+tree fingerprints against that exact executable, review the bounded diff and
+commit it. Global Bee must not be built from this dirty worktree.
 `docs/BUILD_SEQUENCE.md` still describes the earlier Claude/Codex-only launch
 checkpoint; update it with the four-provider callable status when B1.1 lands so
 the implementation map and this operational plan agree.
@@ -171,7 +173,7 @@ advances only at the named promotion.
 
 | Order | Lane | Work unit | Ends when |
 |---|---|---|---|
-| 1 | Agents | Close Grok B1.1: normalize the final real-provider inspection assertion, finish tree fingerprints, review and land the bounded diff | Real Grok 1.0.30 passes clean/login/cancel/restart; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
+| 1 | Agents | Close Grok B1.1: build the fresh current-source standalone, rerun both real-provider paths and tree fingerprints, review and land the bounded diff | Real Grok 1.0.30 passes clean/login/cancel/restart against the exact source; final private TOML is correct; global and project trees are byte-identical; no child starts or configuration publishes after refusal |
 | 2 | Agents | Finish saved profiles and durable provider sessions for Claude, Codex, Agy and Grok | Picker and CLI use the same profile; each window owns one thread; title/activity/hooks/MCP and cold recovery pass across presenter, client and owner replacement |
 | 3 | Release | Promote **Native Agents** from one clean immutable commit after runtime gates 1 and 4 | Full check, standalone, offline/restart/recovery, pack inspection and atomic install pass; this becomes the new rollback point |
 | 4 | Topology | Finish folder-to-state selection, durable displays, asynchronous Hive rejoin, F9 topology and controller transfer | New folders isolate state, same-folder clients get predictable displays, local boot never waits for Hive, and two real runtimes pass enrollment, selection and viewport rejoin |
@@ -200,17 +202,16 @@ Connected Bee.
 Work stays on this unit until it either passes or produces one named external
 blocker:
 
-1. normalize Grok inspection events by case and separator, require the private
-   hooks directory and its `user` source type, and retain the user Stop hook's
-   `configToml` source proof;
-2. rerun authenticated real Grok 1.0.30 and finish the global/project `.grok`
-   tree fingerprints;
-3. rerun Go vet/compile and the managed Grok fixture; retain the already-passing
-   893/893 Lua and clean-start evidence unless the implementation changes;
-4. review all 27 Grok B1.1 files as one authority/configuration/lifecycle unit;
-5. update its implementation status and `docs/BUILD_SEQUENCE.md`, commit the
-   bounded diff separately from this plan update, then continue directly to saved
-   profiles and durable sessions.
+1. add the pinned TOML compatibility patch to the fresh current-source bundle
+   manifest and build a new standalone executable;
+2. rerun the four-provider selector plus authenticated and clean Grok 1.0.30
+   against that exact executable, including global/project `.grok` fingerprints;
+3. rerun Go vet, diff checks and the managed Grok fixture; retain the already
+   passing 893/893 Lua and native-window evidence unless implementation changes;
+4. review the Grok B1.1 authority, configuration and lifecycle diff as one unit;
+5. update implementation status, `docs/BUILD_SEQUENCE.md` and the runtime gate,
+   commit the bounded diff, then continue directly to saved profiles and durable
+   sessions.
 
 No unrelated refactor, UI polish or new provider abstraction enters this unit.
 Once the Native Agents journey passes from a clean commit, install it globally

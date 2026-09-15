@@ -30,10 +30,11 @@ import (
 // Options are selected by the compiled host, never registry activation metadata.
 // Node names this same-machine mesh; external Hive enrollment remains separate.
 type Options struct {
-	Node          string
-	Lifetime      time.Duration
-	Application   string
-	HiveDirectory string
+	Node            string
+	Lifetime        time.Duration
+	Application     string
+	HiveDirectory   string
+	ConfigDirectory string
 }
 
 type Host struct {
@@ -46,7 +47,7 @@ type Host struct {
 }
 
 func New(options Options) (*Host, error) {
-	owner, err := localowner.New(localowner.Options{Node: options.Node, Lifetime: options.Lifetime, HiveDirectory: options.HiveDirectory})
+	owner, err := localowner.New(localowner.Options{Node: options.Node, Lifetime: options.Lifetime, HiveDirectory: options.HiveDirectory, ConfigDirectory: options.ConfigDirectory})
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func Component() *Host {
 	if err != nil {
 		return &Host{initErr: err}
 	}
-	host, err := New(Options{Node: node, Lifetime: 30 * 24 * time.Hour, HiveDirectory: filepath.Join(root, "bee", "local-hive")})
+	host, err := New(Options{Node: node, Lifetime: 30 * 24 * time.Hour, HiveDirectory: filepath.Join(root, "bee", "local-hive"), ConfigDirectory: filepath.Join(root, "bee")})
 	if err != nil {
 		return &Host{initErr: err}
 	}

@@ -90,9 +90,6 @@ func local(ctx context.Context, config LocalConfig, run func(context.Context, *s
 	if err != nil || !transport.Addr().IsLoopback() {
 		return errors.New("mesh client: local owner must advertise loopback transport")
 	}
-	if endpoint.Addr().Is4() != transport.Addr().Is4() {
-		return errors.New("mesh client: owner address families differ")
-	}
 	if sameAccount {
 		credentials, err := localtls.Load(ctx, config.Directory, descriptor.Execution)
 		if err != nil {
@@ -219,11 +216,7 @@ func awaitOwner(ctx context.Context, stack *stackpkg.Stack, expected rendezvous.
 				if member.ID != expected.Node {
 					continue
 				}
-				actual, err := rendezvous.Capture(member, expected.Execution)
-				if err != nil {
-					return err
-				}
-				if actual != expected {
+				if !expected.MatchesNode(member) {
 					return rendezvous.ErrOwnerChanged
 				}
 				return nil

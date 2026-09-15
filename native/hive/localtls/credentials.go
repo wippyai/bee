@@ -38,6 +38,7 @@ type Credentials struct {
 
 const maxBytes = 8192
 const maxLifetime = 30 * 24 * time.Hour
+const maxJoinedDocumentBytes = 128 * 1024
 
 var ErrCredentials = errors.New("Bee local TLS credentials invalid or unavailable")
 var ErrExecution = errors.New("Bee local TLS credentials belong to another execution")
@@ -104,9 +105,22 @@ func load(ctx context.Context, directory, execution string, now time.Time) (Cred
 	if err != nil {
 		return Credentials{}, err
 	}
-	data, err := file.Read(ctx, maxBytes)
+	data, err := file.Read(ctx, maxJoinedDocumentBytes)
 	if err != nil {
 		return Credentials{}, err
+	}
+	if hasJoinedMarker(data) {
+		snapshot, err := decodeJoinedSnapshot(data)
+		if err != nil {
+			return Credentials{}, err
+		}
+		if err := validateJoinedSnapshot(snapshot, execution, now); err != nil {
+			return Credentials{}, err
+		}
+		return config(directory, execution, snapshot.expires), nil
+	}
+	if len(data) > maxBytes {
+		return Credentials{}, ErrCredentials
 	}
 	certificate, err := decode(data)
 	if err != nil {

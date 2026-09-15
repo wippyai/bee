@@ -6,7 +6,10 @@ package localowner
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +22,7 @@ import (
 
 	hiveclient "github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/mesh"
+	machineconfig "github.com/wippyai/bee/native/hive/config"
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/runtime/api/boot"
@@ -257,12 +261,109 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 	_ = listener.Close()
 }
 
+func TestJoinedApplicationBootAdmitsSameMachinePhysicalClient(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "state")
+	configuration := privateDirectory(t)
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		t.Fatal(err)
+	}
+	certPath, keyPath, caPath := joinedProfileTLS(t)
+	store, err := machineconfig.New(configuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Update(context.Background(), 0, func(document machineconfig.Document) (machineconfig.Document, error) {
+		document.Hive = machineconfig.HiveProfile{
+			Mode: machineconfig.HiveModeJoined, HiveID: "joined-proof", NodeID: "owner-proof",
+			Seeds: []string{"127.0.0.1:1"}, MembershipSecret: machineconfig.Secret(base64.StdEncoding.EncodeToString(secret)),
+			InternodePrivateKey: machineconfig.Secret(base64.StdEncoding.EncodeToString(private)),
+			PeerPublicKeys:      map[string]string{"owner-proof": base64.StdEncoding.EncodeToString(public)},
+			TLSCertPath:         certPath, TLSKeyPath: keyPath, TLSCAPath: caPath,
+			MembershipBindAddress: "127.0.0.1", InternodeBindAddress: "127.0.0.1",
+		}
+		return document, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, cancelParent := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelParent()
+	processContext, stopProcess := context.WithCancel(parent)
+	command := exec.CommandContext(processContext, executable, "-test.run=^TestLocalOwnerApplicationSubprocess$")
+	command.Env = append(os.Environ(), "BEE_OWNER_TEST_STATE="+state, "BEE_OWNER_TEST_CONFIG="+configuration)
+	var output bytes.Buffer
+	command.Stdout, command.Stderr = &output, &output
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- command.Wait() }()
+	t.Cleanup(func() {
+		stopProcess()
+		select {
+		case <-exited:
+		case <-time.After(5 * time.Second):
+			_ = command.Process.Kill()
+		}
+	})
+	directory := filepath.Join(state, DirectoryName)
+	rendezvousStore, err := rendezvous.New(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptor rendezvous.Descriptor
+	for descriptor.Execution == "" {
+		descriptor, err = rendezvousStore.Read(parent)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		select {
+		case processErr := <-exited:
+			t.Fatalf("joined owner exited before rendezvous: %v\n%s", processErr, output.String())
+		case <-parent.Done():
+			t.Fatal(parent.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if descriptor.Node != "owner-proof" {
+		t.Fatalf("joined owner identity = %q", descriptor.Node)
+	}
+	if err := mesh.SameAccount(parent, directory, func(_ context.Context, stack *stackpkg.Stack, actual rendezvous.Descriptor) error {
+		if actual != descriptor || len(stack.ConnMgr.ConnectedNodes()) != 1 {
+			return errors.New("physical client did not attach to exact joined owner")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("joined physical attachment failed: %v\n%s", err, output.String())
+	}
+	stopProcess()
+}
+
 func TestLocalOwnerApplicationSubprocess(t *testing.T) {
 	state := os.Getenv("BEE_OWNER_TEST_STATE")
 	if state == "" {
 		t.Skip("subprocess helper")
 	}
-	owner, err := New(Options{Node: "owner-proof", Lifetime: 8 * time.Second})
+	lifetime := 8 * time.Second
+	if configured := os.Getenv("BEE_OWNER_TEST_LIFETIME"); configured != "" {
+		var err error
+		lifetime, err = time.ParseDuration(configured)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner, err := New(Options{Node: "owner-proof", Lifetime: lifetime, ConfigDirectory: os.Getenv("BEE_OWNER_TEST_CONFIG")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +371,9 @@ func TestLocalOwnerApplicationSubprocess(t *testing.T) {
 		{ID: wapp.NewID("bee.proof", "definition"), Kind: "ns.definition"},
 		{ID: wapp.NewID("bee.proof", "terminal"), Kind: "terminal.host", Data: map[string]any{"hide_logs": true, "lifecycle": map[string]any{"auto_start": true}}},
 		{ID: wapp.NewID("bee.proof", "name_policy"), Kind: "security.policy", Data: map[string]any{
-			"policy": map[string]any{"actions": []string{"process.registry.register.eventual"}, "resources": []string{"bee.proof/sender", "bee.hive.supervisor/owner-proof"}, "effect": "allow"},
+			"policy": map[string]any{"actions": []string{"process.registry.register.eventual"}, "resources": []string{
+				"bee.proof/sender", "bee.proof/sender/owner-proof", "bee.proof/sender/seed-proof", "bee.proof/sender/joiner-proof", "bee.hive.supervisor/owner-proof",
+			}, "effect": "allow"},
 		}},
 		{ID: wapp.NewID("bee.proof", "reply_policy"), Kind: "security.policy", Data: map[string]any{
 			"policy": map[string]any{"actions": []string{"process.send"}, "resources": []string{"*"}, "effect": "allow"},
@@ -326,6 +429,10 @@ local M = {}
 function M.main()
     local registered, registration_error = process.registry.register("bee.proof/sender", nil, process.registry.EVENTUAL)
     if not registered then error(tostring(registration_error)) end
+	local node = tostring(process.pid()):match("^{([^@|}]*)@")
+	assert(node and node ~= "")
+	local qualified, qualified_error = process.registry.register("bee.proof/sender/" .. node, nil, process.registry.EVENTUAL)
+	if not qualified then error(tostring(qualified_error)) end
     local inbox, inbox_error = process.listen("bee.proof.request", {message = true})
     if not inbox then error(tostring(inbox_error)) end
     local message = inbox:receive()
@@ -351,7 +458,11 @@ return M`,
 	data := packed.Bytes()
 	bundle := app.Bundle{Root: "bee/proof", Packs: []app.Pack{{Module: "bee/proof", Version: "1.0.0", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data}}}
 	launcher := testLauncher{owner}
-	err = app.Run(context.Background(), app.Options{Name: "bee-owner-proof", Mode: "base", Command: "owner-proof", Bundle: bundle, Launch: launcher.Launch, Components: []boot.Component{launcher}}, []string{"--state-dir", state})
+	components := []boot.Component{launcher}
+	if report := os.Getenv("BEE_OWNER_TEST_CONNECTIVITY_REPORT"); report != "" {
+		components = append(components, &joinedConnectivityProbe{report: report})
+	}
+	err = app.Run(context.Background(), app.Options{Name: "bee-owner-proof", Mode: "base", Command: "owner-proof", Bundle: bundle, Launch: launcher.Launch, Components: components}, []string{"--state-dir", state})
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}

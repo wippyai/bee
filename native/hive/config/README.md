@@ -2,8 +2,9 @@
 
 This native store persists remembered workspace locations and a typed Hive
 profile in protected `config.json`, using the stable `.config.lock` companion.
-The host supplies the directory. The public launcher does not consume this
-profile yet.
+The host supplies the directory. The public launcher reads this profile before
+native cluster assembly. A missing document keeps the local-only launch path;
+malformed saved configuration fails visibly and is never replaced.
 
 `New` creates no files. `Read` returns a validated document; missing configuration
 returns `os.ErrNotExist` without creating anything. `Update` checks an expected
@@ -43,3 +44,17 @@ local/joined profile validation, bounds, reopened state, independent snapshots
 and multiple workspaces sharing a runtime.
 OS-user protection and directory-sync limitations are those of
 [`privatefile`](../../internal/privatefile/README.md).
+
+Joined startup retains the saved runtime node ID, signing key, membership secret,
+peer keys, seed addresses and bind/advertise settings. Seed joining retries under
+the runtime membership lifecycle, so an unavailable seed does not delay local
+startup. The owner snapshots its selected TLS files into the execution-specific
+rendezvous directory and publishes loopback aliases for same-machine physical
+clients; those clients still need supervisor admission. Tests boot two ordinary
+owner subprocesses from saved profiles, start the seed late, prove membership and
+internode name propagation, restart the joiner without changing its identity, and
+attach a separate local display through the same native mesh.
+
+There is no public invitation or profile-writing command yet. Version 1 also has
+one runtime node identity per saved machine profile, so it does not yet model
+several simultaneous joined project runtimes on one machine.

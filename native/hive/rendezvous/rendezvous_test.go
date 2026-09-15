@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,5 +164,31 @@ func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) 
 	external, err := Capture(m.node, d.Execution)
 	if err != nil || external.Transport != "192.168.1.10:45000" {
 		t.Fatalf("override: %v %v", external, err)
+	}
+}
+
+func TestLocalAliasMatchesExternallyAdvertisedOwner(t *testing.T) {
+	publicKey := base64.RawStdEncoding.EncodeToString(make([]byte, 32))
+	node := cluster.NodeInfo{ID: "joined-node", Addr: "192.0.2.20:4400", Meta: cluster.NodeMeta{
+		internode.MetadataPort:          "4401",
+		internode.MetadataPublicKey:     publicKey,
+		internode.MetadataAdvertiseAddr: "192.0.2.20",
+		internode.MetadataAdvertisePort: "4501",
+	}}
+	descriptor, err := CaptureLocal(node, strings.Repeat("c", 32), netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("::1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if descriptor.Gossip != "127.0.0.1:4400" || descriptor.Transport != "[::1]:4401" || !descriptor.MatchesNode(node) {
+		t.Fatalf("local alias did not match live owner: %#v", descriptor)
+	}
+	changed := node
+	changed.Meta = cluster.NodeMeta{}
+	for key, value := range node.Meta {
+		changed.Meta[key] = value
+	}
+	changed.Meta[internode.MetadataPort] = "4402"
+	if descriptor.MatchesNode(changed) {
+		t.Fatal("local alias accepted a different listener")
 	}
 }

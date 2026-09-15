@@ -440,7 +440,7 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     if not gateway then return nil, nil end
     local request = plan.request
     local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
-        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms})
+        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = plan.policy.gateway_surface})
     if admit_error then return nil, "gateway admit: " .. admit_error end
     local binding = bounds.object((bounds.object(admitted) or {}).binding) or {}
     local binding_id = bounds.id(binding.binding_id)

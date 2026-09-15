@@ -6783,3 +6783,27 @@ acceptance pass. The bundle excludes tests, fixtures, `.local`, and Promptmap
 artifacts. The verified standalone was atomically installed at
 `~/.local/bin/bee`; installed SHA-256 is
 `4afec2120b3cad0ae2a32d714046f255b6fbbdf3bda92a02b8ee5af7ce980a57`.
+
+### September 15 — configurable MCP milestone in progress
+
+Worktree: `bee-global-persisted-hive-20260915`, PR #11. Protected launch policies
+now pass bounded tool/trait configuration into binding-owned MCP state. Dynamic
+trait selection stays within the independent tool ceiling; fixed native context
+cannot be overwritten. The real HTTP probe proves two active traits, native
+context delivery, denied gateway-store/scope creation, isolated bindings,
+revocation, and concurrent selection with one winner and one revision conflict.
+A stable `call_tool` route supports harnesses that cache tool discovery.
+
+The managed-carrier fixture now exercises trait activation and dispatch using
+its actual projected MCP credentials; the new case passes its focused rerun.
+The HTTP proof also passes credential rotation with retained selection/context.
+The corrected full suite passes all 1010 cases; all 17 focused carrier cases,
+HTTP fixture lint (471 entries), production lint (466 entries), real HTTP,
+pack and 11 bundle checks pass. Native policy inspection found compiled policy
+updates are asynchronous to registry entries, so a Lua digest check cannot
+pin them safely. Default behavior preserves native live policy references;
+the same-binding HTTP proof and native policy-reference characterization pass.
+The broader foundation rerun is still in progress. No milestone-complete,
+provider inference or global-install claim is made. Existing inbox approvals
+remain the change authority: exact staged changes are reviewed before apply,
+and retries reuse their receipts. Ordinary admitted tools need no extra prompt.

@@ -4,11 +4,14 @@
 local hash = require("hash")
 local registry = require("registry")
 local env = require("env")
+local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local placement_types = require("placement_types")
 local configuration = require("configuration")
 local preferences = require("preferences")
+local mcp = require("mcp")
+local surface = require("surface")
 local M = {}
 M.SCHEMA = "bee.launch-policy@2"
 M.TYPE = placement_types.LAUNCH_POLICY_TYPE
@@ -39,6 +42,7 @@ type Policy = {
     -- gateway_tools names the gateway tools a launch under this policy is
     -- admitted to; empty means the launch has no gateway binding.
     gateway_tools: {string},
+    gateway_surface: {[string]: unknown}?,
     -- gateway_ttl_ms bounds a gateway binding's life from admission.
     gateway_ttl_ms: integer,
     -- gateway_hooks names the hook events the launch reports to the gateway.
@@ -114,7 +118,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -245,6 +249,18 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         hook_command_ref = bounds.id(data.hook_command_ref)
         if not hook_command_ref or #gateway_hooks == 0 then return nil, ref .. ": hook_command_ref requires hooks and an env.variable identifier" end
     end
+    local gateway_surface: {[string]: unknown}? = nil
+    if data.gateway_surface ~= nil then
+        gateway_surface = bounds.object(data.gateway_surface)
+        if not gateway_surface then return nil, ref .. ": gateway_surface must be an object" end
+        local configured, _, surface_error = surface.prepare(gateway_surface, mcp.TOOLS, gateway_tools)
+        if not configured then return nil, ref .. ": gateway_surface: " .. tostring(surface_error) end
+        local encoded_surface, encode_error = json.encode(gateway_surface)
+        if not encoded_surface or encode_error then return nil, ref .. ": cannot copy gateway_surface" end
+        local copied, copy_error = json.decode(encoded_surface)
+        gateway_surface = bounds.object(copied)
+        if not gateway_surface or copy_error then return nil, ref .. ": cannot copy gateway_surface" end
+    end
     local gateway_ttl_ms = 3600000
     if data.gateway_ttl_ms ~= nil then
         local declared = bounds.integer(data.gateway_ttl_ms)
@@ -252,7 +268,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
     return decoded, nil
 end
 function M.load(ref: string): (Policy?, string?)

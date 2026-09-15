@@ -1,7 +1,7 @@
 -- MIT. The MCP tool protocol as JSON-RPC 2.0 over one HTTP request, pure:
 -- requests are decoded strictly, replies are built as the protocol shapes
--- them, and the tool catalog is a closed table. Nothing here executes a
--- tool or reads a store; the handler maps a call to one owner operation.
+-- them, with the built-in tool descriptions. Configured component tools join
+-- these at admission. Nothing here executes a tool or reads a store.
 local bounds = require("bounds")
 local message = require("message")
 local workspace_protocol = require("workspace_protocol")

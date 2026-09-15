@@ -22,6 +22,9 @@ local migrations = require("migrations")
 local registry = require("registry")
 local configuration = require("configuration")
 local hooks = require("hooks")
+local mcp = require("mcp")
+local surface = require("surface")
+local surface_store = require("surface_store")
 local M = {}
 function M.accepts_host(value: unknown): boolean
     local current = configuration.current()
@@ -46,7 +49,6 @@ M.MAX_HOOK_CLAIM = 32
 M.DEFAULT_MATERIALIZATION_MS = 60000
 M.MAX_MATERIALIZATION_MS = 600000
 M.MAX_TOOLS = 16
-M.TOOL_NAMES = {"thread_read", "thread_wait", "thread_message", "workspace"}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
@@ -54,6 +56,7 @@ type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
     tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean}
 type Generation = {epoch: integer, restarts: integer}
+type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer}
 type Drain = {draining: boolean, past_deadline: boolean}
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function fail(code: string, message: string): Reply
@@ -247,7 +250,7 @@ end
 function M.admit(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key"})
+    local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key", "surface"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local subject, action_id, attempt_id, thread_id = bounds.id(object.subject), bounds.id(object.action_id), bounds.id(object.attempt_id), bounds.id(object.thread_id)
     if not subject then return fail("INVALID", "subject is not an identifier") end
@@ -261,11 +264,14 @@ function M.admit(value: unknown): Reply
     local tools, tools_error = bounds.ids(object.tools, true)
     if not tools then return fail("INVALID", "tools: " .. tostring(tools_error)) end
     if #tools > M.MAX_TOOLS then return fail("INVALID", "tools exceeds " .. tostring(M.MAX_TOOLS) .. " tools") end
-    local known: {[string]: boolean} = {}
-    for _, name in ipairs(M.TOOL_NAMES) do known[name] = true end
-    for _, name in ipairs(tools) do
-        if not known[name] then return fail("INVALID", "tool " .. name .. " is not in the gateway catalog") end
+    local selected_surface: unknown = object.surface
+    if selected_surface == nil then
+        selected_surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
     end
+    local prepared, initial, surface_error = surface.prepare(selected_surface, mcp.TOOLS, tools)
+    if not prepared or not initial then return fail("INVALID", surface_error or "invalid MCP surface") end
+    local surface_json, surface_encode_error = json.encode(selected_surface)
+    if not surface_json or surface_encode_error or #surface_json > 131072 then return fail("INVALID", "MCP surface exceeds storage bound") end
     table.sort(tools)
     -- Hook events the binding admits, from the closed catalog; a binding
     -- without them gets no hook credential.
@@ -295,7 +301,7 @@ function M.admit(value: unknown): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.ADMIT, action_id) then return fail("DENIED", "caller may not admit gateway bindings for action " .. action_id) end
-    local request_digest, digest_error = digest_of({subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation, carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks})
+    local request_digest, digest_error = digest_of({subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation, carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, surface = selected_surface})
     if not request_digest then return fail("INVALID", digest_error or "request is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
@@ -360,6 +366,8 @@ function M.admit(value: unknown): Reply
         epoch, credential_generation, expires_at, revoked_at, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?)]],
         {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created)})
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
+    local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
+    if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end
     local _, commit_error = tx:commit()
     db:release()
     if commit_error then return fail("STORAGE", "commit admission") end
@@ -808,6 +816,52 @@ end
 -- kind in the binding's current generation, the binding must name that
 -- action, and it must be valid now. A hook credential never opens the tool
 -- endpoint and a tool credential never opens the hook endpoint.
+function M.surface(binding: Binding): (BoundSurface?, Reply?)
+    local db, open_failure = open()
+    if not db then return nil, open_failure end
+    local tx, tx_error = db:begin()
+    if not tx or tx_error then db:release(); return nil, fail("STORAGE", "open surface read") end
+    local stored, read_error = surface_store.read(tx, binding.binding_id)
+    tx:rollback()
+    db:release()
+    if not stored then return nil, fail("STORAGE", read_error and read_error.message or "read surface") end
+    local raw, raw_error = json.decode(stored.surface_json)
+    local active, active_error = json.decode(stored.active_json)
+    local dynamic, dynamic_error = json.decode(stored.context_json)
+    if raw_error or active_error or dynamic_error then return nil, fail("STORAGE", "binding surface JSON is corrupt") end
+    local configured, _, config_error = surface.prepare(raw, mcp.TOOLS, binding.tools)
+    if not configured then return nil, fail("STORAGE", config_error or "binding surface is invalid") end
+    local selected, selection_error = surface.select(configured, active, dynamic)
+    if not selected then return nil, fail("STORAGE", selection_error or "binding selection is invalid") end
+    return {configuration = configured, selection = selected, revision = stored.revision}, nil
+end
+-- Only the authenticated HTTP handler invokes this library operation. The
+-- binding row is rechecked inside the transaction before changing selection.
+function M.select_surface(binding: Binding, expected_revision: integer, active: unknown, dynamic: unknown): Reply
+    local current, current_error = M.surface(binding)
+    if not current then return current_error or fail("STORAGE", "read surface") end
+    local selected, selected_error = surface.select(current.configuration, active, dynamic)
+    if not selected then return fail("INVALID", selected_error or "invalid selection") end
+    local active_json, active_error = json.encode(selected.active)
+    local context_json, context_error = json.encode(selected.context)
+    if not active_json or active_error or not context_json or context_error then return fail("INVALID", "selection is not JSON") end
+    local db, open_failure = open()
+    if not db then return open_failure or fail("STORAGE", "open surface") end
+    local tx, tx_error = db:begin()
+    if not tx or tx_error then db:release(); return fail("STORAGE", "open surface mutation") end
+    local rows, read_error = tx:query("SELECT credential_generation, revoked_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    if not rows or read_error or #rows ~= 1 then tx:rollback(); db:release(); return fail("STORAGE", "read binding") end
+    local row = bounds.object(rows[1])
+    if not row or row.revoked_at ~= nil or integer(row.credential_generation) ~= binding.credential_generation then
+        tx:rollback(); db:release(); return fail("DENIED", "binding was revoked or credential replaced")
+    end
+    local updated, update_error = surface_store.replace(tx, binding.binding_id, expected_revision, active_json, context_json)
+    if not updated then tx:rollback(); db:release(); return fail(update_error and update_error.code or "STORAGE", update_error and update_error.message or "update surface") end
+    local _, commit_error = tx:commit()
+    db:release()
+    if commit_error then return fail("STORAGE", "commit surface selection") end
+    return succeed({revision = updated.revision, active_traits = selected.active, context = selected.context})
+end
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end
     local sum, hash_error = token_hash(token)

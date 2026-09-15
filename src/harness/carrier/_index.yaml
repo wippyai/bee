@@ -19,13 +19,15 @@ entries:
 - name: policy
   kind: library.lua
   source: file://policy.lua
-  modules: [hash, registry, env]
+  modules: [hash, registry, env, json]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
     placement_resolver: bee.placement:resolver
     configuration: bee.driver:configuration
+    mcp: bee.gateway:mcp
+    surface: bee.gateway:surface
     preferences: bee.driver:preferences
 - name: continuation
   kind: library.lua

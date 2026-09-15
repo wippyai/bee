@@ -1,5 +1,18 @@
 # Foundation status
 
+The configurable MCP checkpoint adds protected launch-policy tool/trait
+configuration, binding-owned selection with revision CAS, and bounded fixed and
+dynamic native context. Real HTTP checks prove multiple traits, stable dispatch,
+context delivery, denial boundaries, credential rotation/revocation and
+concurrent selection. A managed harness child uses the same projected MCP
+credentials; all 17 carrier cases and the 1010-case suite pass. The subsequent
+native policy-reference characterization also passes. Shared native policies
+remain live references: a governed host replacement affects subsequent calls;
+no frozen-policy or filesystem-isolation guarantee is added. Production and HTTP
+fixture lint, pack and bundle checks pass; the broader foundation rerun is in
+progress. This checkpoint is not installed globally and does not yet prove the
+Gemini performance dashboard. See [MCP configuration](MCP_CONFIGURATION.md).
+
 The September 15 integration candidate combines the latest Agent, MCP, Docker,
 display and Hub work with private application delivery and ordinary persisted
 Hive profile consumption. Strict lint and all 999 Lua tests pass. A race-enabled

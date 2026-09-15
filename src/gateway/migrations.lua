@@ -172,11 +172,21 @@ ALTER TABLE bee_gateway_bindings ADD COLUMN sealed_at TEXT;
 local NATIVE_LISTENER_SQL = [[
 ALTER TABLE bee_gateway_listener ADD COLUMN native_key TEXT;
 ]]
+local SURFACE_SQL = [[
+CREATE TABLE bee_gateway_surfaces (
+    binding_id TEXT PRIMARY KEY REFERENCES bee_gateway_bindings(binding_id),
+    surface_json TEXT NOT NULL CHECK(length(CAST(surface_json AS BLOB)) BETWEEN 1 AND 131072),
+    active_json TEXT NOT NULL CHECK(length(CAST(active_json AS BLOB)) BETWEEN 1 AND 8192),
+    context_json TEXT NOT NULL CHECK(length(CAST(context_json AS BLOB)) BETWEEN 1 AND 16384),
+    revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991)
+);
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
         {id = 5, name = "hooks", sql = HOOKS_SQL, rebuild = true}, {id = 6, name = "intake", sql = INTAKE_SQL, rebuild = true},
         {id = 7, name = "seal", sql = SEAL_SQL, rebuild = false},
-        {id = 8, name = "native_listener", sql = NATIVE_LISTENER_SQL, rebuild = false}}
+        {id = 8, name = "native_listener", sql = NATIVE_LISTENER_SQL, rebuild = false},
+        {id = 9, name = "binding_surface", sql = SURFACE_SQL, rebuild = false}}
 end
 return M

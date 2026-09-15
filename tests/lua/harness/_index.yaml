@@ -212,6 +212,35 @@ entries:
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
     gateway_tools: [thread_read, thread_wait]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+- name: gateway_surface_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The fixture policy with gateway tools admitted; bound to the fixture executable by the suite at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    gateway_surface:
+      tools: []
+      traits:
+      - {id: 'research:read', title: Read research, prompt: Read the current research thread., tools: [thread_read]}
+      - {id: 'research:wait', title: Wait for research, prompt: Wait for research changes., tools: [thread_wait]}
+      base_tools: [thread_read]
+      active_traits: []
+      fixed_context: {project: managed-project}
+      dynamic_keys: [experiment]
 - name: gateway_expiring_policy
   kind: registry.entry
   meta:

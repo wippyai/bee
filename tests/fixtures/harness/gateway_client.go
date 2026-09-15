@@ -259,6 +259,9 @@ func runGateway(mcpLiteral string) int {
 	report["read"] = readReply.status
 	readValue := outcome(readReply)
 	report["read_ok"] = readValue != nil && readValue["ok"] == true
+	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
+		reportSurface(client, url, authorization, report)
+	}
 	if waitMS, err := strconv.Atoi(os.Getenv("BEE_FIXTURE_GATEWAY_WAIT")); err == nil && waitMS > 0 {
 		reportWait(client, url, authorization, report, readValue, waitMS)
 	}
@@ -278,6 +281,22 @@ func runGateway(mcpLiteral string) int {
 	}
 	writeReport("gateway", report)
 	return 0
+}
+
+// Exercise configurable MCP through the same projected credentials as the harness.
+func reportSurface(client *httpClient, url, authorization string, report object) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	report["surface_before"] = call("session", object{"operation": "read"}, 20)
+	inactive := rpc(client, url, authorization, "tools/call", object{"name": "thread_wait", "arguments": object{"after_sequence": 0, "wait_ms": 1}}, 21)
+	report["surface_inactive"] = inactive.body["error"]
+	report["surface_selected"] = call("session", object{"operation": "select", "expected_revision": 1,
+		"active_traits": []string{"research:read", "research:wait"}, "context": object{"experiment": "managed-one"}}, 22)
+	report["surface_after"] = call("session", object{"operation": "read"}, 23)
+	report["surface_dispatch"] = call("call_tool", object{"name": "thread_wait", "arguments": object{"after_sequence": 0, "wait_ms": 1}}, 24)
+	report["surface_overwrite"] = call("session", object{"operation": "select", "expected_revision": 2,
+		"active_traits": []string{"research:read"}, "context": object{"project": "foreign"}}, 25)
 }
 
 func reportWait(client *httpClient, url string, authorization string, report object, readValue object, waitMS int) {

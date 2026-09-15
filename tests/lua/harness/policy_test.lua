@@ -28,6 +28,23 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("measures MCP context and traits without retaining mutable host tables", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = raw.data :: Entry
+            local fixed = {project = "one"}
+            data.gateway_tools = {"thread_read"}
+            data.gateway_surface = {tools = {}, traits = {{id = "docs:reader", title = "Reader", prompt = "Read first", tools = {"thread_read"}}},
+                base_tools = {}, active_traits = {"docs:reader"}, fixed_context = fixed, dynamic_keys = {"experiment"}}
+            local first, err = policy.decode("test:policy", raw)
+            if not first or not first.gateway_surface then error(tostring(err)) end
+            fixed.project = "two"
+            test.eq((first.gateway_surface.fixed_context :: Entry).project, "one")
+            local changed = policy.decode("test:policy", raw)
+            if not changed then error("changed surface") end
+            test.neq(first.digest, changed.digest)
+            data.gateway_tools = {}
+            test.is_nil(policy.decode("test:policy", raw))
+        end)
         test.it("inherits only selected nonempty environment values and fences changes", function()
             local raw = entry({sh = "/bin/sh"})
             local data = raw.data :: Entry

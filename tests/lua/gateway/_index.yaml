@@ -1,6 +1,28 @@
 version: '1.0'
 namespace: bee.gateway
 entries:
+- name: surface_test_db
+  kind: db.sql.sqlite
+  file: .wippy/surface-test.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: surface_test_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: [bee.gateway:surface_test_db], effect: allow}
+- name: surface_store_test
+  kind: function.lua
+  source: file://surface_store_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gateway:surface_test_policy]}
+  imports: {test: wippy.test:test, persist: bee.persist:database, migrations: bee.gateway:migrations, store: bee.gateway:surface_store}
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, catalog: bee.gateway:catalog}
 - name: upgrade_db_path
   kind: env.variable
   meta: {type: test_support}
@@ -54,6 +76,14 @@ entries:
     test: wippy.test:test
     mcp: bee.gateway:mcp
     gateway: bee.gateway:gateway
+- name: context_test
+  kind: function.lua
+  source: file://context_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    context: bee.gateway:context
 - name: ephemeral_listener
   kind: http.service
   meta: {type: test_support}
@@ -113,3 +143,27 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.gateway:configuration
+- name: policy_reference_admin
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [security.policy.get, registry.apply, registry.update.registry.entry, registry.get]
+    resources: ['*']
+    effect: allow
+- name: policy_reference_target
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway_probe:policy_reference_other]
+    effect: allow
+- name: policy_reference_test
+  kind: function.lua
+  source: file://policy_reference_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security, json, time]
+  security:
+    policies: [bee.gateway:policy_reference_admin]
+  imports:
+    test: wippy.test:test

@@ -120,6 +120,78 @@ local function prove_endpoint_call_scope()
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
 end
+local function configurable_surface(token_a: string)
+    local configurable = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "configurable", attempt_id = "configurable-attempt",
+        thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "measure_context"}, ttl_ms = 60000,
+        surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read scoped context",
+            policies = {"bee.gateway_probe:context_tool_policy", "bee.gateway_probe:replacement_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
+            traits = {{id = "research:measure", title = "Measure", prompt = "Collect a baseline", tools = {"measure_context"}},
+                {id = "research:compare", title = "Compare", prompt = "Compare measurements", tools = {"measure_context"}}},
+            base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "project-a"}, dynamic_keys = {"experiment"}}}), "configurable admission")
+    local configurable_binding = tostring((configurable.binding :: Object).binding_id)
+    local configurable_token = tostring(ok(materialize("configurable-attempt", 1, configurable_binding), "configurable credential").token)
+    local _, disabled = rpc("configurable", configurable_token, "tools/call", {name = "measure_context", arguments = {}})
+    assert(disabled and disabled.error ~= nil, "inactive trait exposed its tool")
+    local selected = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 1,
+        active_traits = {"research:measure", "research:compare"}, context = {experiment = "baseline"}})
+    assert(selected.ok == true, "two-trait selection failed")
+    local measured = tool("configurable", configurable_token, "call_tool", {name = "measure_context", arguments = {}})
+    local measured_value = measured.value :: Object
+    assert(measured.ok == true and measured_value.project == "project-a" and measured_value.experiment == "baseline", "native context was not delivered: " .. tostring(json.encode(measured)))
+    assert(measured_value.can_read_gateway == false and measured_value.can_create_scope == false, "tool gained gateway authority")
+    local rejected_context = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
+        active_traits = {"research:measure"}, context = {project = "foreign"}})
+    assert(rejected_context.ok == false, "caller replaced host context")
+    local rejected_trait = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
+        active_traits = {"foreign:trait"}, context = {}})
+    assert(rejected_trait.ok == false, "caller activated foreign trait")
+    local stale_selection = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 1,
+        active_traits = {}, context = {}})
+    assert(stale_selection.ok == false, "stale selection overwrote current state")
+    local independent = tool("act-a", token_a, "session", {operation = "read"})
+    assert(next((independent.value :: Object).context :: Object) == nil, "binding context leaked")
+    local left = funcs.async("bee.gateway_probe:concurrent_call", endpoint(), configurable_token, "left")
+    local right = funcs.async("bee.gateway_probe:concurrent_call", endpoint(), configurable_token, "right")
+    assert(left and right, "concurrent calls did not start")
+    local left_reply = left:response():receive()
+    local right_reply = right:response():receive()
+    local left_value = left_reply:data()
+    local right_value = right_reply:data()
+    assert(left_value.ok ~= right_value.ok, "concurrent selection had zero or two winners")
+    local loser = left_value.ok and right_value or left_value
+    assert(loser.error.code == "CONFLICT", "concurrent loser was not a revision conflict")
+    local winner = tool("configurable", configurable_token, "session", {operation = "read"})
+    assert((winner.value :: Object).revision == 3, "concurrent update advanced twice")
+    ok(call("bee.gateway:reissue", {binding_id = configurable_binding, expected_generation = 1}), "rotate configurable credential")
+    local old_status = rpc("configurable", configurable_token, "tools/call", {name = "session", arguments = {operation = "read"}})
+    assert(old_status == 401, "rotated token retained selection access")
+    configurable_token = tostring(ok(materialize("configurable-attempt", 1, configurable_binding), "renew configurable credential").token)
+    local retained = tool("configurable", configurable_token, "session", {operation = "read"})
+    local retained_value, winner_value = retained.value :: Object, winner.value :: Object
+    assert(retained_value.revision == winner_value.revision, "credential rotation changed selection revision")
+    assert((retained_value.context :: Object).experiment == (winner_value.context :: Object).experiment, "credential rotation lost dynamic context")
+    assert(json.encode(retained_value.active_traits) == json.encode(winner_value.active_traits), "credential rotation lost active traits")
+    local after_rotation = tool("configurable", configurable_token, "measure_context", {})
+    assert(after_rotation.ok == true and (after_rotation.value :: Object).project == "project-a", "credential rotation lost fixed context or dispatch")
+    assert((after_rotation.value :: Object).replacement_granted == false, "ungranted replacement action was allowed")
+    local policy_entry = registry.get("bee.gateway_probe:replacement_policy")
+    if not policy_entry then error("replacement fixture policy missing") end
+    policy_entry.data = {policy = {actions = {"bee.probe.replacement"}, resources = {"sentinel"}, effect = "allow"}}
+    local changes = registry.snapshot():changes()
+    changes:update(policy_entry)
+    local applied, apply_error = changes:apply()
+    assert(applied, "fixture policy replacement failed: " .. tostring(apply_error))
+    local observed = false
+    for _ = 1, 100 do
+        local current = tool("configurable", configurable_token, "measure_context", {})
+        if current.ok == true and (current.value :: Object).replacement_granted == true then observed = true; break end
+        time.sleep("10ms")
+    end
+    assert(observed, "same binding did not observe native policy replacement")
+    ok(call("bee.gateway:revoke", {binding_id = configurable_binding}), "revoke configurable binding")
+    local revoked_status = rpc("configurable", configurable_token, "tools/call", {name = "measure_context", arguments = {}})
+    assert(revoked_status == 401, "revoked configurable binding executed")
+end
 local function main()
     prove_endpoint_call_scope()
     ADDRESS = endpoint()
@@ -138,7 +210,8 @@ local function main()
     local status, init = rpc("act-a", token_a, "initialize")
     assert(status == 200 and init and (init.result :: Object).protocolVersion ~= nil, "initialize")
     local _, listed = rpc("act-a", token_a, "tools/list")
-    assert(listed and #((listed.result :: Object).tools :: {unknown}) == 2, "two tools advertised")
+    assert(listed and #((listed.result :: Object).tools :: {unknown}) == 4, "two admitted tools and MCP controls advertised")
+    configurable_surface(token_a)
     local page = tool("act-a", token_a, "thread_read", {cursor = 0})
     assert(page.ok == true, "thread_read refused: " .. tostring(json.encode(page)))
     assert(#((page.value :: Object).records :: {unknown}) == 3, "thread_read returned the three records: " .. tostring(json.encode(page)))
@@ -229,11 +302,11 @@ local function main()
     -- A tool outside the binding's admitted set is refused at the call, whatever a client allows for itself.
     local token_h = admit("act-h", nil, 1)
     local narrow_status, narrow_reply = rpc("act-h", token_h, "tools/list")
-    assert(narrow_status == 200 and #(((narrow_reply :: Object).result :: Object).tools :: {Object}) == 2, "the probe admits both tools")
+    assert(narrow_status == 200 and #(((narrow_reply :: Object).result :: Object).tools :: {Object}) == 4, "the probe admits both tools and MCP controls")
     local admitted_only = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "act-i", attempt_id = "act-i-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000}), "admit read only")
     local token_i = tostring(ok(materialize("act-i-attempt", 1, tostring((admitted_only.binding :: Object).binding_id)), "materialize read only").token)
     local listed_status, listed = rpc("act-i", token_i, "tools/list")
-    assert(listed_status == 200 and #(((listed :: Object).result :: Object).tools :: {Object}) == 1, "only the admitted tool is advertised")
+    assert(listed_status == 200 and #(((listed :: Object).result :: Object).tools :: {Object}) == 3, "only the admitted tool and MCP controls are advertised")
     local refused_status, refused = rpc("act-i", token_i, "tools/call", {name = "thread_wait", arguments = {after_sequence = 0, wait_ms = 10}})
     assert(refused_status == 200 and refused and refused.error ~= nil and tostring(((refused :: Object).error :: Object).message):find("not admitted", 1, true), "a tool outside the binding is refused")
     local refused_message_status, refused_message = rpc("act-i", token_i, "tools/call", {name = "thread_message", arguments = {idempotency_key = "read-only-message", message_id = "read-only-message", message_kind = "notification", recipient_ids = {}, content = {text = "no"}}})

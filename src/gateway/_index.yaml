@@ -52,6 +52,20 @@ entries:
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [json]
+  imports: {bounds: bee.threads.records:bounds}
+- name: surface_store
+  kind: library.lua
+  source: file://surface_store.lua
+  modules: [sql]
+  imports: {bounds: bee.threads.records:bounds}
+- name: surface
+  kind: library.lua
+  source: file://surface.lua
+  imports: {bounds: bee.threads.records:bounds, catalog: bee.gateway:catalog, context: bee.gateway:context}
 - name: mcp
   kind: library.lua
   source: file://mcp.lua
@@ -59,6 +73,12 @@ entries:
     bounds: bee.threads.records:bounds
     message: bee.threads.records:message
     workspace_protocol: bee.governance:workspace_protocol
+- name: context
+  kind: library.lua
+  source: file://context.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: address
   kind: function.lua
   source: file://address_method.lua
@@ -101,6 +121,9 @@ entries:
     migrations: bee.gateway:migrations
     configuration: bee.gateway:configuration
     hooks: bee.gateway:hooks
+    mcp: bee.gateway:mcp
+    surface: bee.gateway:surface
+    surface_store: bee.gateway:surface_store
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -271,5 +294,8 @@ entries:
   imports:
     gateway: bee.gateway:gateway
     mcp: bee.gateway:mcp
+    catalog: bee.gateway:catalog
+    context: bee.gateway:context
+    bounds: bee.threads.records:bounds
   security:
     policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_workspace_policy]

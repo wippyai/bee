@@ -42,6 +42,7 @@ package these same pages with status and version, not maintain a second copy.
 | Carrier contract: provenance, checkpoint, lifecycle order, control records, epochs, crash points | [Carrier](CARRIER.md) |
 | Gateway: authenticated loopback thread port for harness children, bindings, delivery-minted credentials, readiness, drain, real-harness acceptance | [Gateway](GATEWAY.md) |
 | Gateway hooks: contract, endpoint adapters, intake lifecycle and carrier integration | [Gateway hooks](GATEWAY_HOOKS.md) |
+| Configurable MCP tools, multiple traits, native context and remaining acceptance | [MCP configuration](MCP_CONFIGURATION.md) |
 | Agent profiles, per-profile environment and system prompt, Docker placement with the full UI: scheduling proposal | [Profiles and Docker proposal](handoffs/PROFILES_DOCKER_PROPOSAL.md) |
 | Step 8: native placement, attempt runner, receipts, homes, measured cleanup capability | [Native placement](../src/placement/native/README.md) |
 | Step 6: resource authority, associations under the host ceiling, exactly bound grants, resolve for placements | [Resources module](../src/resources/README.md) |

@@ -1,6 +1,25 @@
 version: '1.0'
 namespace: bee.gateway_probe
 entries:
+- name: concurrent_call
+  kind: function.lua
+  source: file://concurrent_call.lua
+  method: handle
+  modules: [http_client, json]
+- name: context_tool
+  kind: function.lua
+  source: file://context_tool.lua
+  method: handle
+  modules: [ctx, security]
+- name: context_tool_policy
+  kind: security.policy
+  policy: {actions: [funcs.call], resources: [bee.gateway_probe:context_tool], effect: allow}
+- name: replacement_policy
+  kind: security.policy
+  policy: {actions: [bee.probe.replacement], resources: [other], effect: allow}
+- name: replacement_admin
+  kind: security.policy
+  policy: {actions: [registry.apply, registry.update.registry.entry], resources: ['*'], effect: allow}
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -12,7 +31,7 @@ entries:
       security:
         actor: {id: bee.test.gateway}
   security:
-    policies: [bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
+    policies: [bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
 - name: policy
   kind: security.policy
   policy:

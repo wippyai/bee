@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import yaml
 from workspace import ROOT, RUNTIME, configure_managed_gateway, database_environment
 
 
@@ -25,6 +26,13 @@ def gateway_workspace():
                 continue
             shutil.copytree(child, folder / "src" / child.name)
         address = "native" if os.environ.get("BEE_GATEWAY_NATIVE") == "1" else configure_managed_gateway(folder)
+        # Host admission is separate from the component's tool description.
+        gateway_index = folder / "src/gateway/_index.yaml"
+        gateway = yaml.safe_load(gateway_index.read_text())
+        for entry in gateway["entries"]:
+            if entry["name"] == "mcp_http":
+                entry["security"]["policies"].append("bee.gateway_probe:context_tool_policy")
+        gateway_index.write_text(yaml.safe_dump(gateway, sort_keys=False))
         yield folder, address
 
 
@@ -58,10 +66,10 @@ def main():
                     except subprocess.TimeoutExpired:
                         run.kill()
                         run.wait()
-    print("Gateway slices 1, 2 and hook endpoints: authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
+    print("Gateway slices 1, 2 and hook endpoints: configurable traits with stable dispatch, fixed/dynamic native context, binding isolation, concurrent selection CAS and revocation; authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
           "ambiguity per delivery, allowlisted queue fields, Codex metadata classification, payload and queue bounds; authenticated loopback readiness with epoch and restart generation, admission without bytes, materialize once per credential generation, "
           "reissue as compare-and-set, supersession and revoke_attempt fenced by carrier epoch, cross-attempt and expiry and revocation refused, thread_read as the bound subject, "
-          "bounded read-only thread_wait with no delivery mark, drain releasing an in-flight wait with an explicit outcome and refusing admissions, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; actor/context inheritance remains outside this scope-only proof")
+          "bounded read-only thread_wait with no delivery mark, drain releasing an in-flight wait with an explicit outcome and refusing admissions, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; ambient actor/context inheritance remains outside that separate renderer scope-only proof")
 
 
 if __name__ == "__main__":

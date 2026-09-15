@@ -252,8 +252,8 @@ github.com/tree-sitter/tree-sitter-rust v0.23.2/go.mod h1:hfeGWic9BAfgTrc7Xf6FaO
 github.com/tree-sitter/tree-sitter-typescript v0.23.2 h1:/Odvphn18PniVixb9e97X0DbNVsU6Qocv9mfkyzdXwU=
 github.com/tree-sitter/tree-sitter-typescript v0.23.2/go.mod h1:zjzMXT/Ulffel2xfOcAkQQkiAkmgnbtPGlFQw/5X4xA=
 github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqriFuLhtthL60Sar/7RFoluCcXsuvEwTV5KM=
-github.com/wippyai/go-lua v1.5.19 h1:z8D+PujogG+ky/60qDj9wBh5bkR569Rdj9O+v/QSZEs=
-github.com/wippyai/go-lua v1.5.19/go.mod h1:cwD+390gJgx9cs+Zamby/lch5csqPV9RN1aDEfx/27M=
+github.com/wippyai/go-lua v1.5.21 h1:7KybKJYQh8mCST4nD404EBmsY8bUeEcanpuXBzB+PZo=
+github.com/wippyai/go-lua v1.5.21/go.mod h1:cwD+390gJgx9cs+Zamby/lch5csqPV9RN1aDEfx/27M=
 github.com/wippyai/runtime v0.1.14-0.20260907210421-055505effbb0 h1:kWvKhKi8/Mfi8Z2dwnEZFZ1xR88nFK60iAg4Vq5wtBk=
 github.com/wippyai/runtime v0.1.14-0.20260907210421-055505effbb0/go.mod h1:W5FkfJrfSWWjLkKLQW61bq+0EzPrgWwgNfaBjBfmH9U=
 github.com/wippyai/tree-sitter-markdown v0.0.3 h1:u6e53+hzPSS848Xhm+I48SwtvWQHrC21wDrogdwCwuc=

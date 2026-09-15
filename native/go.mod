@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
-	github.com/wippyai/go-lua v1.5.19
+	github.com/wippyai/go-lua v1.5.21
 	github.com/wippyai/runtime v0.1.14-0.20260907210421-055505effbb0
 )
 

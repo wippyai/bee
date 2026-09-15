@@ -109,35 +109,25 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 		return "", fmt.Errorf("pick random loopback port: %w", err)
 	}
 
-	// 6. Patch src/_index.yaml with checked anchors
-	hostFile := filepath.Join(tempDir, "src", "_index.yaml")
-	hostBytes, err := os.ReadFile(hostFile)
-	if err != nil {
-		return "", fmt.Errorf("read _index.yaml: %w", err)
+	// Patch the owning indexes in the disposable fixture, with exact anchors.
+	patches := []struct{ path, from, to string }{
+		{"gateway/host/_index.yaml", "address: 127.0.0.1:0", "address: " + endpointAddress},
+		{"security/gateway/_index.yaml", `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`, `resource == "http://` + endpointAddress + `/ready"`},
+		{"harness/host/_index.yaml", "    - bee.driver.grok:binding\n", "    - bee.driver.grok:binding\n    - bee.window_hooks_fixture:binding\n"},
+		{"_index.yaml", "hide_logs: true", "hide_logs: false"},
 	}
-	hostContent := string(hostBytes)
-
-	addrAnchor := "address: 127.0.0.1:0"
-	if !strings.Contains(hostContent, addrAnchor) {
-		return "", fmt.Errorf("missing anchor %q in _index.yaml", addrAnchor)
-	}
-	hostContent = strings.Replace(hostContent, addrAnchor, "address: "+endpointAddress, 1)
-
-	readyAnchor := `resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$"`
-	if !strings.Contains(hostContent, readyAnchor) {
-		return "", fmt.Errorf("missing anchor %q in _index.yaml", readyAnchor)
-	}
-	hostContent = strings.Replace(hostContent, readyAnchor, `resource == "http://`+endpointAddress+`/ready"`, 1)
-
-	bindAnchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
-	if !strings.Contains(hostContent, bindAnchor) {
-		return "", fmt.Errorf("missing anchor %q in _index.yaml", bindAnchor)
-	}
-	hostContent = strings.Replace(hostContent, bindAnchor, strings.TrimSuffix(bindAnchor, "]")+", bee.window_hooks_fixture:binding]", 1)
-	hostContent = strings.Replace(hostContent, "hide_logs: true", "hide_logs: false", 1)
-
-	if err := os.WriteFile(hostFile, []byte(hostContent), 0644); err != nil {
-		return "", fmt.Errorf("write _index.yaml: %w", err)
+	for _, patch := range patches {
+		path := filepath.Join(tempDir, "src", filepath.FromSlash(patch.path))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		if strings.Count(string(data), patch.from) != 1 {
+			return "", fmt.Errorf("expected one anchor %q in %s", patch.from, patch.path)
+		}
+		if err := os.WriteFile(path, []byte(strings.Replace(string(data), patch.from, patch.to, 1)), 0644); err != nil {
+			return "", err
+		}
 	}
 
 	gatewayFile := filepath.Join(tempDir, "src", "gateway", "_index.yaml")

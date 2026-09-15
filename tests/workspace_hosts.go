@@ -119,7 +119,7 @@ func run() error {
 
 	// Step 1: Strict Lua lint
 	fmt.Println("=== Step 1: Strict Lua Lint ===")
-	lintCtx, lintCancel := context.WithTimeout(context.Background(), 35*time.Second)
+	lintCtx, lintCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer lintCancel()
 
 	lintOut, err := runCommand(lintCtx, root, nil, runtime, "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")

@@ -156,12 +156,24 @@ func run() error {
 	if err := os.MkdirAll(filepath.Join(root, ".wippy"), 0700); err != nil {
 		return err
 	}
-	manifestPath := filepath.Join(root, "src/_index.yaml")
+	manifestPath := filepath.Join(root, "src/gateway/host/_index.yaml")
 	manifest, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return err
 	}
 	changed := strings.ReplaceAll(string(manifest), "127.0.0.1:0", *address+":0")
+	if strings.Count(string(manifest), "127.0.0.1:0") != 2 {
+		return fmt.Errorf("gateway listener fixture seam changed")
+	}
+	if err := os.WriteFile(manifestPath, []byte(changed), 0600); err != nil {
+		return err
+	}
+	manifestPath = filepath.Join(root, "src/security/gateway/_index.yaml")
+	manifest, err = os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	changed = string(manifest)
 	readinessExpression := func(ip string) string {
 		return fmt.Sprintf(`(action == "http_client.private_ip" && resource == %q) || (action == "http_client.request" && resource matches %q)`, ip, "^http://"+regexp.QuoteMeta(ip)+":[0-9]+/ready$")
 	}

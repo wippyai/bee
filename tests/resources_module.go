@@ -196,8 +196,8 @@ func resourcesModuleBase(folder string) error {
 	return nil
 }
 
-func resourcesModuleNamed(root, name string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(filepath.Join(root, "src", "_index.yaml"))
+func resourcesModuleNamed(root, index, name string) (map[string]interface{}, error) {
+	data, err := os.ReadFile(filepath.Join(root, "src", filepath.FromSlash(index), "_index.yaml"))
 	if err != nil {
 		return nil, fmt.Errorf("read source index: %w", err)
 	}
@@ -241,13 +241,17 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 			return err
 		}
 	}
+	// This standalone probe supplies its own host bindings.
+	if err := os.RemoveAll(filepath.Join(folder, "src", "resources", "host")); err != nil {
+		return err
+	}
 	if err := resourcesModuleBase(folder); err != nil {
 		return err
 	}
 	resourcePolicyNames := []string{"resource_store_policy", "resource_environment_policy", "resource_manage_policy", "resource_grant_policy", "resource_resolve_policy"}
 	hostEntries := make([]map[string]interface{}, 0, len(resourcePolicyNames)+1)
 	for _, name := range resourcePolicyNames {
-		entry, err := resourcesModuleNamed(root, name)
+		entry, err := resourcesModuleNamed(root, "security/resources", name)
 		if err != nil {
 			return err
 		}
@@ -286,13 +290,17 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 			return err
 		}
 	}
+	// This standalone probe supplies its own host bindings.
+	if err := os.RemoveAll(filepath.Join(folder, "src", "credentials", "host")); err != nil {
+		return err
+	}
 	if err := resourcesModuleBase(folder); err != nil {
 		return err
 	}
 	policyNames := []string{"credential_store_policy", "credential_file_policy", "credential_manage_policy", "credential_issue_policy", "credential_materialize_policy"}
 	hostEntries := make([]map[string]interface{}, 0, len(policyNames)+3)
 	for _, name := range policyNames {
-		entry, err := resourcesModuleNamed(root, name)
+		entry, err := resourcesModuleNamed(root, "security/credentials", name)
 		if err != nil {
 			return err
 		}
@@ -302,7 +310,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 		map[string]interface{}{"name": "module_storage", "kind": "env.storage.memory"},
 		map[string]interface{}{"name": "module_secret", "kind": "env.variable", "storage": "bee:module_storage", "variable": "BEE_MODULE_SECRET", "default": "module-secret-9c2e"},
 	)
-	sources, err := resourcesModuleNamed(root, "credential_sources")
+	sources, err := resourcesModuleNamed(root, "credentials/host", "credential_sources")
 	if err != nil {
 		return err
 	}

@@ -328,13 +328,13 @@ func run() error {
 	if err := os.WriteFile(indexPath, indexData, 0600); err != nil {
 		return err
 	}
-	hostPath := filepath.Join(dir, "src", "_index.yaml")
+	hostPath := filepath.Join(dir, "src", "harness", "host", "_index.yaml")
 	host, err := os.ReadFile(hostPath)
 	if err != nil {
 		return err
 	}
-	const activation = "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
-	updated := strings.Replace(string(host), activation, strings.TrimSuffix(activation, "]")+", bee.managed_window_fixture:binding]", 1)
+	const activation = "    - bee.driver.grok:binding\n"
+	updated := strings.Replace(string(host), activation, activation+"    - bee.managed_window_fixture:binding\n", 1)
 	if updated == string(host) {
 		return fmt.Errorf("host activation anchor missing")
 	}

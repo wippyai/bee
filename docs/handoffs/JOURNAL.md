@@ -6807,3 +6807,24 @@ The broader foundation rerun is still in progress. No milestone-complete,
 provider inference or global-install claim is made. Existing inbox approvals
 remain the change authority: exact staged changes are reviewed before apply,
 and retries reuse their receipts. Ordinary admitted tools need no extra prompt.
+
+### September 15 — foundation fixture repair after MCP checkpoint
+
+Checkpoint `7070137` is pushed to PR #11. Its full Lua run passes 1011 cases.
+Hosted CI could not start because of the account billing/spending limit.
+The local foundation run exposed stale acceptance-fixture assumptions from the
+host/security index split. Managed-window and hook fixtures now patch the owning
+indexes; the resource/credential standalone probe uses their policy indexes and
+supplies its own host bindings without copying Bee's defaults. Native gateway
+readiness uses the gateway host and security indexes. The managed-window failure
+fixture has the same activation-path correction. A workspace-host fixture lint
+was killed at its 35-second compilation deadline; its lint budget is now two
+minutes, with runtime behavior deadlines unchanged.
+
+Managed-window (five cases), hooks, standalone resources/credentials, native
+random-port readiness, and source/pack workspace hosts pass after these repairs.
+Thread storage/module, harness source/pack, Governance workspace restart, About,
+headless source/pack, and Hub migration-service gates also pass. Remaining
+foundation gates continue in the existing run; no full-pass or global-install
+claim is made yet. The pending live Gemini unit needs an Agy caller-thread batch
+definition/policy over its existing structured batch profile, not a new carrier.

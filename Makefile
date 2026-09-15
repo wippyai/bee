@@ -50,7 +50,10 @@ sync-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/sync_unit.py
 .PHONY: sync-hive-check
 sync-hive-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(WIPPY))" go test -race -count=1 -v tests/hive_remote.go tests/hive_supervisor_test.go -run '^TestHiveSupervisorFeeds$$'
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(WIPPY))" go test -race -count=1 -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_replica_test.go -run '^TestHiveSupervisorFeeds$$'
+.PHONY: governance-hive-delivery-check
+governance-hive-delivery-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(WIPPY))" go test -race -count=1 -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_replica_test.go -run '^TestHiveSupervisorReplica$$'
 .PHONY: governance-runtime-check
 governance-runtime-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/governance_runtime.py

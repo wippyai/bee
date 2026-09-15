@@ -7,6 +7,41 @@ local view = require("view")
 local contents = require("contents")
 local function define_tests()
     test.describe("Modules frame", function()
+        test.it("keeps Hub installations separate from the explicit authored publication flow", function()
+            local state = model.new()
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "acme/app", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+                {component = "acme/lib", version = "1.0.0", source = "hub", direct = false, used_by = {"acme/app"}},
+            }, roots = {}}})
+            model.select(state, "acme/app")
+            model.show(state, "installed")
+            local installed = view.draw(80, 18, appearance.defaults(), state, 0, "")
+            for _, hit in ipairs(installed.hits) do test.is_true(hit.kind ~= "publish") end
+            model.show(state, "authoring")
+            test.is_nil(model.set_publication_field(state, "component", "acme/app"))
+            test.is_nil(model.set_publication_field(state, "version", "1.0.0"))
+            test.is_nil(model.set_publication_field(state, "snapshot_digest", string.rep("a", 64)))
+            for _, width in ipairs({24, 48, 80}) do
+                local frame = view.draw(width, 18, appearance.defaults(), state, 0, "")
+                local has_prepare, has_publish = false, false
+                local rendered = table.concat(frame.rows, "\n")
+                test.is_true(rendered:find("App Delivery", 1, true) ~= nil)
+                test.is_true(rendered:find("Private authored", 1, true) ~= nil or width < 24)
+                for _, hit in ipairs(frame.hits) do
+                    if hit.kind == "prepare_publication" then has_prepare = true end
+                    if hit.kind == "publish_publication" then has_publish = true end
+                    test.is_true(hit.x + hit.width - 1 <= width)
+                end
+                test.is_true(has_prepare)
+                test.is_false(has_publish)
+            end
+            model.apply_publication_prepare(state, {ok = true, replayed = false, value = {component = "acme/app", version = "1.0.0",
+                descriptor = {digest = string.rep("b", 64)}}})
+            local frame = view.draw(80, 18, appearance.defaults(), state, 0, "")
+            local has_publish = false
+            for _, hit in ipairs(frame.hits) do if hit.kind == "publish_publication" then has_publish = true end end
+            test.is_true(has_publish)
+        end)
         test.it("keeps configuration dialogs inside the canvas and captures clicks", function()
             for _, width in ipairs({28, 40, 100}) do
                 local frame = view.draw(width, 18, appearance.defaults(), model.new(), 0, "", false,

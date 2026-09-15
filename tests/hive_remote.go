@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,39 @@ type safeBuffer struct {
 	buf       []byte
 	maxBytes  int
 	truncated bool
+}
+
+func beeDataEnv(directory string) []string {
+	files := map[string]string{
+		"BEE_APPROVALS_DB":   "approvals.db",
+		"BEE_CREDENTIALS_DB": "credentials.db",
+		"BEE_GATEWAY_DB":     "gateway.db",
+		"BEE_GOVERNANCE_DB":  "governance.db",
+		"BEE_NODE_DB":        "node.db",
+		"BEE_PLACEMENT_DB":   "placement.db",
+		"BEE_RESOURCES_DB":   "resources.db",
+		"BEE_SYNC_DB":        "sync.db",
+		"BEE_THREADS_DB":     "threads.db",
+		"BEE_WORKSPACE_DB":   "workspace.db",
+	}
+	names := make([]string, 0, len(files)+1)
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]string, 0, len(names)+1)
+	for _, name := range names {
+		result = append(result, name+"="+filepath.Join(directory, files[name]))
+	}
+	return append(result, "BEE_PLACEMENT_ROOT="+filepath.Join(directory, "placement"))
+}
+
+func shellEnvironment(assignments []string) string {
+	quoted := make([]string, len(assignments))
+	for index, assignment := range assignments {
+		quoted[index] = shellQuote(assignment)
+	}
+	return strings.Join(quoted, " ")
 }
 
 func newSafeBuffer(maxBytes int) *safeBuffer {
@@ -584,7 +618,10 @@ func run() (retErr error) {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Full source boot can spend close to a minute validating and loading each
+	// independent node. Keep enough total time for both nodes and the actual
+	// network/stall assertions; individual protocol operations remain bounded.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	if cfg.sshTarget != "" {
@@ -825,16 +862,12 @@ func run() (retErr error) {
 	if cfg.sshTarget == "" {
 		cmdA = exec.CommandContext(ctx, cfg.runtimePath, "run", "--verbose", "hive-remote-host")
 		cmdA.Dir = folderA
-		cmdA.Env = append(os.Environ(),
-			"GOMAXPROCS=2",
-			"BEE_WORKSPACE_DB="+filepath.Join(folderA, "workspace.db"),
-			"BEE_THREADS_DB="+filepath.Join(folderA, "threads.db"),
-		)
+		cmdA.Env = append(os.Environ(), append([]string{"GOMAXPROCS=2"}, beeDataEnv(folderA)...)...)
 	} else {
-		remoteCmd := fmt.Sprintf("cd %s && echo $$ > host.pid && sed 's/^.*) //' /proc/$$/stat | awk '{print $20}' > host.starttime && exec env GOMAXPROCS=2 BEE_WORKSPACE_DB=%s/workspace.db BEE_THREADS_DB=%s/threads.db %s run --verbose hive-remote-host",
+		remoteEnv := append([]string{"GOMAXPROCS=2"}, beeDataEnv(remoteFolderA)...)
+		remoteCmd := fmt.Sprintf("cd %s && echo $$ > host.pid && sed 's/^.*) //' /proc/$$/stat | awk '{print $20}' > host.starttime && exec env %s %s run --verbose hive-remote-host",
 			shellQuote(remoteFolderA),
-			shellQuote(remoteFolderA),
-			shellQuote(remoteFolderA),
+			shellEnvironment(remoteEnv),
 			shellQuote(cfg.remoteRuntimePath),
 		)
 		cmdA = exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "--", cfg.sshTarget, remoteCmd)
@@ -897,11 +930,7 @@ func run() (retErr error) {
 		hostPID, workspaceID, supervisorPID, destToken, proofFileName,
 		strconv.FormatBool(cfg.stallProbe), strconv.FormatBool(cfg.presenterStall), strconv.FormatBool(cfg.desktopProbe))
 	cmdB.Dir = folderB
-	cmdB.Env = append(os.Environ(),
-		"GOMAXPROCS=2",
-		"BEE_WORKSPACE_DB="+filepath.Join(folderB, "workspace.db"),
-		"BEE_THREADS_DB="+filepath.Join(folderB, "threads.db"),
-	)
+	cmdB.Env = append(os.Environ(), append([]string{"GOMAXPROCS=2"}, beeDataEnv(folderB)...)...)
 
 	runnerB, err = newProcRunner(cmdB, "node B")
 	if err != nil {
@@ -920,6 +949,7 @@ func run() (retErr error) {
 		return fmt.Errorf("unexpected client_ready format: %q", clientLine)
 	}
 	clientPID := clientFields[2]
+	clientDisplayID := "d15a1a00000000000000000000000001"
 
 	if cfg.desktopProbe {
 		if _, err := io.WriteString(runnerA.stdin, fmt.Sprintf("desktop %s\n", clientPID)); err != nil {
@@ -939,7 +969,7 @@ func run() (retErr error) {
 		}
 	} else {
 		// Step 1: Supervisor on Node A admits client B
-		if _, err := io.WriteString(runnerA.stdin, fmt.Sprintf("admit %s\n", clientPID)); err != nil {
+		if _, err := io.WriteString(runnerA.stdin, fmt.Sprintf("admit %s %s\n", clientPID, clientDisplayID)); err != nil {
 			return fmt.Errorf("send admit command to supervisor: %w", err)
 		}
 		if _, err := waitMarker(runnerA.collector, "node A", "supervisor admission", "BEE_HIVE_REMOTE admitted "+clientPID); err != nil {
@@ -1008,7 +1038,7 @@ func run() (retErr error) {
 		if _, err := waitMarker(runnerB.collector, "node B", "client stale control", "BEE_HIVE_REMOTE client_stale_done"); err != nil {
 			return fmt.Errorf("client stale control verification: %w", err)
 		}
-		if _, err := io.WriteString(runnerA.stdin, fmt.Sprintf("admit %s\n", clientPID)); err != nil {
+		if _, err := io.WriteString(runnerA.stdin, fmt.Sprintf("admit %s %s\n", clientPID, clientDisplayID)); err != nil {
 			return err
 		}
 		if _, err := waitMarker(runnerA.collector, "node A", "supervisor re-admission", "BEE_HIVE_REMOTE admitted "+clientPID); err != nil {

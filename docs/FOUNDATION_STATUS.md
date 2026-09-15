@@ -1,5 +1,24 @@
 # Foundation status
 
+The September 15 integration candidate combines the latest Agent, MCP, Docker,
+display and Hub work with private application delivery and ordinary persisted
+Hive profile consumption. Strict lint and all 995 Lua tests pass. A race-enabled
+two-runtime gate publishes private application versions through generic Sync;
+the destination stages, reviews, selects, approves and applies v1, retains it
+across restart while v2 remains merely available, then explicitly updates to v2
+and rolls back to v1. The receiving Bee remains the authority for every review
+and activation decision.
+
+Native Bee now consumes a strict saved joined-Hive profile containing the stable
+node identity, membership secret, seeds, signing identity, pinned peer keys and
+TLS paths. Missing configuration remains local-only, corrupt configuration fails
+visibly, late seeds converge asynchronously, restart preserves identity and a
+physical client reconnects through the existing mesh. Public invitation/profile
+creation is still missing. One joined runtime identity per machine profile is the
+current limit; simultaneous joined project identities are not generalized yet.
+The exact standalone build and global installation are still pending in this
+candidate, so the dated installation records below remain historical.
+
 The September 14 selected-state integration candidate now passes the missing
 old-global upgrade boundary. Runtime PR #747 (`6b40cb0fb9a0`), builder PR #9
 (`c1e6df6bf346`) and Bee native `bd63538ef916` compose a source-free executable

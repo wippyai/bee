@@ -1,7 +1,7 @@
 # Native launch and local configuration
 
-Design for the next Hive slice. Native listener and launch-hook prerequisites
-exist; public setup, host reuse and remote enrollment remain unimplemented.
+Native persisted joined-profile consumption is implemented. Public setup,
+invitation issuance/redemption and live trust changes remain unimplemented.
 The rejected SQL setup catalog and its unshipped adapter have been removed.
 No workspace database or applied workspace migration was changed.
 
@@ -82,18 +82,22 @@ transform leaves the document unchanged. Existing insecure or malformed identity
 files are not repaired or replaced. The machine identity owner uses this helper
 without changing its identity format or `.identity.lock` name.
 
-`native/hive/config` now supplies a versioned machine configuration store over
-that primitive. It holds an optional enrollment reference and a bounded index of
-workspace IDs, project directories and runtime state directories. Concurrent
-updates compare the expected revision under the file lock; stale writers receive
-a conflict. Strict decoding rejects malformed documents without replacement.
+`native/hive/config` supplies a versioned machine configuration store over that
+primitive. Its Hive profile is explicitly local or joined. A joined profile
+contains the stable Hive/runtime node identities, membership secret, seeds,
+signing identity, pinned peer keys, TLS paths and bind/advertise settings. It also
+retains the bounded workspace/project/runtime-state index. Concurrent updates
+compare the expected revision under the file lock; stale writers receive a
+conflict. Strict decoding rejects malformed documents without replacement.
 Several workspaces can share one runtime directory. See the
 [store contract](../native/hive/config/README.md).
 
-The public launcher does not consume this store yet. Enrollment credentials,
-invitation redemption and public setup commands remain unimplemented. The native
-supervisor activation component still receives explicit host-selected
-configuration rather than reading a saved machine profile.
+The public launcher consumes this profile before native cluster assembly.
+Missing configuration keeps the local-only path, while corrupt configuration
+fails visibly. Joined startup snapshots the selected TLS files, starts locally
+without waiting for absent seeds, reconnects asynchronously and exposes only
+loopback aliases to same-machine physical clients. Invitation redemption and
+public profile-writing commands remain unimplemented.
 
 Linux race tests and vet cover the helper and identity consumer through
 `make -C native check`. `make -C native privatefile-windows-check` compiles the
@@ -123,10 +127,10 @@ unreachable. A stale activation result must not override a newer revocation.
 
 ## Starting or reusing a host
 
-Current ordinary launches still use the same per-user runtime state directory
-regardless of the working directory. A second invocation therefore reports that
-the application lock is busy. This is an unfinished reuse path, not a reason to
-delete the lock or select another directory to bypass it.
+Ordinary launches select their protected remembered runtime state by canonical
+project directory, while explicit `--state-dir` takes precedence. An occupied
+workspace follows the existing physical-client admission path instead of
+starting a competing writer.
 
 The intended ordinary launch becomes a client node when the selected workspace
 owner is already running. On the same machine this is automatic: ordinary `bee`

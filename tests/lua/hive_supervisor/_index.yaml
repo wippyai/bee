@@ -68,6 +68,25 @@ entries:
     test: wippy.test:test
     types: bee.hive:types
     client: bee.hive:client
+- name: replica_admission_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, system.read]
+    resources: [node, bee.hive.supervisor:admit_replica]
+    effect: allow
+- name: replica_admission_test
+  kind: function.lua
+  source: file://replica_admission_test.lua
+  method: run
+  modules: [funcs, system, time, uuid, hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.hive.supervisor:replica_admission_test_policy]}
+  imports:
+    test: wippy.test:test
+    types: bee.hive:types
+    catalog: bee.hive:catalog
+    version: bee.sync:version
 - name: local_name_policy
   kind: security.policy
   meta: {type: test_support}

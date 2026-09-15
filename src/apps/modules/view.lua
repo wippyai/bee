@@ -65,6 +65,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     local x = 2
     x = button(x, 2, "catalog", " Catalog ", true)
     x = button(x, 2, "installed", " Installed ", true)
+    x = button(x, 2, "authoring", " Authored ", true)
     x = button(x, 2, "operations", " Operations ", true)
     if state.phase ~= "catalog" and state.phase ~= "installed" then
         x = button(x, 2, "details", " Package ", state.selected ~= nil)
@@ -143,9 +144,31 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             end
             hits[#hits + 1] = {kind = "component", key = item.component, x = 1, y = y, width = width, height = stride}
         end
-        button(2, height - 1, "refresh", " Refresh ", true)
-        line(height, status ~= "" and status or "↑↓ select · Enter details · R refresh", theme.muted)
+        local actions = button(2, height - 1, "refresh", " Refresh ", true)
+        line(height, status ~= "" and status or "↑↓ select · Enter details · R refresh · A authored version", theme.muted)
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+    end
+    if state.phase == "authoring" then
+        line(3, "Private authored application version", theme.muted)
+        line(4, "Component: " .. (state.publication_component ~= "" and state.publication_component or "(set with C)"), theme.text)
+        line(5, "Version: " .. (state.publication_version ~= "" and state.publication_version or "(set with V)"), theme.text)
+        local frozen = state.publication_snapshot_digest ~= "" and state.publication_snapshot_digest or "(freeze first; set with S)"
+        line(6, "Frozen snapshot: " .. frozen, theme.text)
+        line(8, "Freeze the actor-owned authoring workspace, then enter its digest.", theme.muted)
+        line(9, "Prepare stores this exact version locally; it does not distribute it.", theme.muted)
+        line(11, "App Delivery: Stage → Review → Select → Approvals → Apply.", theme.text)
+        line(12, "Return here to publish only after this exact version is applied.", theme.text)
+        if state.publication_prepared then
+            line(14, "Prepared descriptor " .. state.publication_prepared.descriptor_digest, theme.muted)
+        end
+        local actions = 2
+        actions = button(actions, height - 1, "prepare_publication", " Prepare locally ", true)
+        button(actions, height - 1, "publish_publication", " Publish applied version ", model.publication_ready(state))
+        line(height, status ~= "" and status or "C component · V version · S frozen digest · P prepare · U publish", theme.muted)
+        if height >= 4 then hits[#hits + 1] = {kind = "author_component", key = "", x = 1, y = 4, width = width, height = 1} end
+        if height >= 5 then hits[#hits + 1] = {kind = "author_version", key = "", x = 1, y = 5, width = width, height = 1} end
+        if height >= 6 then hits[#hits + 1] = {kind = "author_snapshot", key = "", x = 1, y = 6, width = width, height = 1} end
+        return {rows = canvas:rows(), hits = hits, capacity = 1, offset = 0, operation_detail_offset = 0}
     end
     if state.phase == "operations" then
         line(3, "Actor-owned operation history", theme.muted)
@@ -476,7 +499,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     canvas:put(left, top, appearance.style(theme.accent, theme.surface) .. "╭" .. string.rep("─", w - 2) .. "╮" .. RESET, w)
     for y = top + 1, top + h - 2 do row(y, "") end
-    local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword" or "Configure package")
+    local publication_editor = editor.field == "publication_component" or editor.field == "publication_version"
+        or editor.field == "publication_snapshot_digest"
+    local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
+        or (publication_editor and "Authored application version" or "Configure package"))
     row(top + 1, title, theme.accent)
     row(top + 3, editor.name or (editor.field == "parameter_name" and "Parameter name (namespace:name)" or title), theme.muted)
     local remaining = editor.buffer
@@ -495,7 +521,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if first + slot - 1 == maximum(1, #lines) then value = value .. "▏" end
         row(top + 3 + slot, value)
     end
-    local hint = editor.field == "parameter_value" and "JSON: text, number, true/false, object or array" or "Type to edit; Escape keeps the previous value"
+    local hint = editor.field == "parameter_value" and "JSON: text, number, true/false, object or array"
+        or (editor.field == "publication_snapshot_digest" and "64 lowercase hex characters from Governance Freeze"
+        or "Type to edit; Escape keeps the previous value")
     if status:find("not JSON", 1, true) or status:find("required", 1, true) or status:find("cannot", 1, true) then hint = status end
     row(top + h - 3, hint, theme.muted)
     row(top + h - 2, " Enter Save     Esc Cancel", theme.accent)

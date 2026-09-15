@@ -1,33 +1,208 @@
 version: '1.0'
 namespace: bee.governance
 entries:
-- name: authoring_call_only_policy
+- name: destination_public_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call]
-    resources: [bee.governance:workspace_call]
-    effect: allow
-- name: authoring_exact_read_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [bee.governance.workspace.read]
-    resources: [governance-scoped-read]
-    effect: allow
-- name: authoring_client_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [funcs.call, bee.governance.workspace.read, bee.governance.workspace.write]
+    actions: [funcs.call, bee.governance.delivery.read, bee.governance.delivery.activate]
     resources: '*'
     effect: allow
-- name: direct_store_probe
+- name: destination_public_test
   kind: function.lua
-  source: file://direct_store_probe.lua
-  method: handle
-  modules: [sql]
+  source: file://destination_public_test.lua
+  method: run
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:destination_public_test_policy]}
+  imports: {test: wippy.test:test}
+- name: destination_service_test
+  kind: function.lua
+  source: file://destination_service_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    destination_service: bee.governance:destination_service
+- name: publication_service_test
+  kind: function.lua
+  source: file://publication_service_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [base64]
+  imports:
+    test: wippy.test:test
+    artifact: bee.governance:artifact
+    publication_service: bee.governance:publication_service
+- name: plan_test_db
+  kind: db.sql.sqlite
   meta: {type: test_support}
+  file: .wippy/governance-plan-test.db
+  lifecycle: {auto_start: true}
+- name: destination_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/governance-destination-test.db
+  lifecycle: {auto_start: true}
+- name: destination_refusal_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/governance-destination-refusal-test.db
+  lifecycle: {auto_start: true}
+- name: destination_replica_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/governance-destination-replica-test.db
+  lifecycle: {auto_start: true}
+- name: activation_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/governance-activation-test.db
+  lifecycle: {auto_start: true}
+- name: plan_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.governance:plan_test_db, bee.governance:destination_test_db, bee.governance:destination_refusal_test_db, bee.governance:destination_replica_test_db, bee.governance:activation_test_db, bee.sync:sync_test_db]
+    effect: allow
+- name: plan_store_test
+  kind: function.lua
+  source: file://plan_store_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    plan_store: bee.governance:plan_store
+- name: activation_store_test
+  kind: function.lua
+  source: file://activation_store_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    activation_store: bee.governance:activation_store
+- name: activation_measure_test
+  kind: function.lua
+  source: file://activation_measure_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    activation_measure: bee.governance:activation_measure
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+    canonical: bee.sync:canonical
+- name: migration_work_test
+  kind: function.lua
+  source: file://migration_work_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    migration_work: bee.governance:migration_work
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    preflight: bee.governance:preflight
+- name: activation_owner_test
+  kind: function.lua
+  source: file://activation_owner_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    canonical: bee.sync:canonical
+    artifact: bee.governance:artifact
+    plan_store: bee.governance:plan_store
+    activation_store: bee.governance:activation_store
+    activation_owner: bee.governance:activation_owner
+    preflight: bee.governance:preflight
+- name: artifact_test
+  kind: function.lua
+  source: file://artifact_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    artifact: bee.governance:artifact
+- name: materializer_test
+  kind: function.lua
+  source: file://materializer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    materializer: bee.governance:materializer
+    artifact: bee.governance:artifact
+- name: approval_test
+  kind: function.lua
+  source: file://approval_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    approval: bee.governance:approval
+    canonical: bee.sync:canonical
+- name: destination_test
+  kind: function.lua
+  source: file://destination_test.lua
+  method: run
+  modules: [hash, base64]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    destination: bee.governance:destination
+    plan_store: bee.governance:plan_store
+    replicas: bee.sync:replicas
+    delivery: bee.governance:delivery
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+    version: bee.sync:version
+    canonical: bee.sync:canonical
+- name: delivery_test
+  kind: function.lua
+  source: file://delivery_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    delivery: bee.governance:delivery
+    artifact: bee.governance:artifact
+    version: bee.sync:version
+- name: publisher_test
+  kind: function.lua
+  source: file://publisher_test.lua
+  method: run
+  modules: [uuid]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    publisher: bee.governance:publisher
+    delivery: bee.governance:delivery
+    artifact: bee.governance:artifact
+    replicas: bee.sync:replicas
+    sync: bee.sync:store
+    staging: bee.governance:staging
+- name: plan_protocol_test
+  kind: function.lua
+  source: file://plan_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    plan_protocol: bee.governance:plan_protocol
 - name: workspace_protocol_test
   kind: function.lua
   source: file://workspace_protocol_test.lua
@@ -52,13 +227,33 @@ entries:
   imports:
     test: wippy.test:test
     workspace: bee.governance:workspace
-- name: authoring_test
+- name: candidate_test
   kind: function.lua
-  source: file://authoring_test.lua
+  source: file://candidate_test.lua
   method: run
-  modules: [funcs, security]
-  security:
-    policies: [bee.governance:authoring_client_policy]
+  modules: [hash]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    candidate: bee.governance:candidate
+    workspace: bee.governance:workspace
+- name: hub_resolver_test
+  kind: function.lua
+  source: file://hub_resolver_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    artifact: bee.governance:artifact
+    hub_resolver: bee.governance:hub_resolver
+- name: overlay_resolver_test
+  kind: function.lua
+  source: file://overlay_resolver_test.lua
+  method: run
+  modules: [hash]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    artifact: bee.governance:artifact
+    overlay_resolver: bee.governance:overlay_resolver

@@ -1,0 +1,65 @@
+# MIT. Minimal host composition for the real two-runtime replica acceptance.
+version: '1.0'
+namespace: bee
+entries:
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: workers
+  kind: process.host
+  host: {max_processes: 64, workers: 2}
+  lifecycle: {auto_start: true}
+- name: hive_supervisor_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: hive_catalog_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find]
+    resources: '*'
+    effect: allow
+- name: hive_policy_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.sync:replica_receive]
+    effect: allow
+- name: hive_thread_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.threads.service:send, bee.threads.service:send_status]
+    effect: allow
+- name: hive_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.open]
+    resources: [bee.hive.telemetry:presence]
+    effect: allow
+- name: policy_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.sync:replica_receive]
+    effect: allow
+- name: hive_dispatch_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.telemetry:presence]
+    effect: allow
+- name: hive_telemetry_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: hive_sync_store_policy
+  kind: security.policy
+  policy:
+    actions: [db.get, registry.get]
+    resources: [bee.sync:db, bee.sync:database_ref]
+    effect: allow

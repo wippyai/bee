@@ -14,7 +14,7 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
         entries = entries,
-        applied = {}, grants = {}, modules = {}, guarded_publication = true, exact_expansion = true, migration_barrier = false}
+        applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false}
     return candidate, context
 end
 local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
@@ -57,13 +57,13 @@ local function define_tests()
         end)
         test.it("fails closed on missing runtime gates and changed destination base", function()
             local candidate, context = fixture()
-            context.guarded_publication, context.exact_expansion = false, false
+            context.exact_expansion = false
             context.registry_revision = 8
             local report = checked(candidate, context)
             test.is_false(report.ready)
             test.is_true(has(report, "RUNTIME_GATE"))
             test.is_true(has(report, "STALE_BASE"))
-            context.guarded_publication, context.exact_expansion = true, true
+            context.exact_expansion = true
             context.registry_revision = 7
             context.registry_digest = string.rep("b", 64)
             test.is_true(has(checked(candidate, context), "STALE_BASE"))
@@ -116,6 +116,21 @@ local function define_tests()
             test.is_true(has(report, "NAMESPACE_DENIED"))
             test.is_true(has(report, "GRANT_DENIED"))
             test.is_true(has(report, "MODULE_DENIED"))
+        end)
+        test.it("round trips canonical source evidence without granting readiness", function()
+            local candidate, context = fixture()
+            local report = checked(candidate, context)
+            local bytes, digest = preflight.encode_report(report)
+            test.is_true(bytes ~= nil and digest ~= nil)
+            local decoded = assert(preflight.decode_report(bytes, digest))
+            test.eq(decoded.plan_digest, report.plan_digest)
+            test.is_nil(preflight.decode_report((bytes :: string) .. " ", digest))
+            local forged = {schema_revision = report.schema_revision, plan_digest = report.plan_digest,
+                destination_node = report.destination_node, base_revision = report.base_revision,
+                policy_digest = report.policy_digest, ready = true,
+                diagnostics = {{code = "DENIED", target = "x", message = "x", remedy = "x"}},
+                pending_migrations = report.pending_migrations}
+            test.is_nil(preflight.encode_report(forged))
         end)
     end)
 end

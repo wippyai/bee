@@ -12,6 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 
+def registry_entries(folder, names):
+    """Find uniquely named production entries across the split manifests."""
+    wanted = set(names)
+    found = {}
+    documents = {}
+    for index in (folder / "src").rglob("_index.yaml"):
+        document = yaml.safe_load(index.read_text())
+        documents[index] = document
+        for entry in document.get("entries", []):
+            name = entry.get("name")
+            if name not in wanted:
+                continue
+            assert name not in found, f"duplicate registry entry {name}"
+            found[name] = (index, entry)
+    assert set(found) == wanted, f"missing registry entries {sorted(wanted - set(found))}"
+    return found, documents
+
+
 def managed_gateway_address():
     """Select an available ephemeral loopback address for one composition."""
     # http.service accepts an address rather than a pre-bound socket, so the
@@ -27,18 +45,17 @@ def managed_gateway_address():
 def configure_managed_gateway(folder, address=None):
     """Point this copied managed composition at one isolated loopback address."""
     selected = address or managed_gateway_address()
-    host = folder / "src/_index.yaml"
-    document = yaml.safe_load(host.read_text())
-    endpoint = next((entry for entry in document["entries"] if entry["name"] == "gateway_endpoint"), None)
-    readiness = next((entry for entry in document["entries"] if entry["name"] == "gateway_readiness_policy"), None)
-    assert endpoint is not None and readiness is not None
+    found, documents = registry_entries(folder, {"gateway_endpoint", "gateway_readiness_policy"})
+    endpoint = found["gateway_endpoint"][1]
+    readiness = found["gateway_readiness_policy"][1]
     endpoint["data"]["address"] = selected
     assert readiness["kind"] == "security.policy.expr"
     readiness["policy"]["expression"] = (
         '(action == "http_client.private_ip" && resource == "127.0.0.1") || '
         f'(action == "http_client.request" && resource == "http://{selected}/ready")'
     )
-    host.write_text(yaml.safe_dump(document, sort_keys=False))
+    for index in {found["gateway_endpoint"][0], found["gateway_readiness_policy"][0]}:
+        index.write_text(yaml.safe_dump(documents[index], sort_keys=False))
     gateway = folder / "src/gateway/_index.yaml"
     gateway_document = yaml.safe_load(gateway.read_text())
     target = next(entry for entry in gateway_document["entries"] if entry["name"] == "target_listener")
@@ -114,10 +131,11 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         host = folder / "src/_index.yaml"
         document = yaml.safe_load(host.read_text())
         document["entries"].append({"name": "test_dependency", "kind": "ns.dependency", "component": "wippy/test", "version": "0.4.17"})
-        for entry in document["entries"]:
-            if entry["name"] == "application_admission":
-                entry["bindings"] += [{"definition_id": identity, "policies": ["bee:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette"]]
         host.write_text(yaml.safe_dump(document, sort_keys=False))
+        found, documents = registry_entries(folder, {"application_admission"})
+        admission_index, admission = found["application_admission"]
+        admission["bindings"] += [{"definition_id": identity, "policies": ["bee:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette"]]
+        admission_index.write_text(yaml.safe_dump(documents[admission_index], sort_keys=False))
         if missing_dependency:
             subprocess.run([str(RUNTIME), "install"], cwd=folder, check=True)
         yield folder

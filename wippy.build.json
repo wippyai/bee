@@ -41,6 +41,14 @@
       {
         "path": "build/patches/runtime-toml-insert-candidate.patch",
         "sha256": "4cfe05ca1f9a377398b9086d50b00bf4c5e96eaf75d3f2e2c89118001fab090d"
+      },
+      {
+        "path": "build/patches/runtime-registry-reviewed-preview.patch",
+        "sha256": "b4b4f5f6138c61c867070690c99d8a6824286337cd39ac64ab3f47fe4133aad8"
+      },
+      {
+        "path": "build/patches/runtime-membership-async-join.patch",
+        "sha256": "6698b1c0425521b5546fcc665d2937abde81e8ea0a4f56b08a049ccab0ef1839"
       }
     ]
   },
@@ -58,7 +66,8 @@
       "BEE_GATEWAY_DB": "gateway.db",
       "BEE_PLACEMENT_DB": "placement.db",
       "BEE_PLACEMENT_ROOT": "placement",
-      "BEE_GOVERNANCE_DB": "governance.db"
+      "BEE_GOVERNANCE_DB": "governance.db",
+      "BEE_SYNC_DB": "sync.db"
     },
     "packs": [
       {
@@ -73,7 +82,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260914120651-bd63538ef916",
+      "version": "v0.0.0-20260915183420-48df9c2981b4",
       "package": "github.com/wippyai/bee/native/desktop",
       "factory": "Component",
       "private": true,
@@ -81,7 +90,7 @@
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260914120651-bd63538ef916",
+      "version": "v0.0.0-20260915183420-48df9c2981b4",
       "package": "github.com/wippyai/bee/native/docker",
       "factory": "ConfiguredComponent",
       "private": true

@@ -26,3 +26,12 @@ projection values are intentionally separate. Adapters may include an
 authorization `scope_revision` in page and snapshot envelopes. Consumers pin
 it through a snapshot/catch-up stream and reset their cached projection when it
 changes.
+
+Immutable replica blobs and source discovery cursors have separate lifecycles.
+Finishing a version transfer only makes that version available; its descriptor's
+`source_cursor` is provenance and never advances the source checkpoint. A
+catch-up owner reads `replicas.cursor` and calls `replicas.advance_cursor` with
+the expected and completed cursor only after it has handled every descriptor in
+the discovered range. The compare-and-set rejects a stale concurrent checkpoint.
+The replica receiver cannot infer whether a discovery page contained additional
+descriptors, so transfer completion alone must never be treated as catch-up.

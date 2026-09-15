@@ -2,6 +2,7 @@
 -- neither resolves packages nor grants authority or publishes registry changes.
 local canonical = require("canonical")
 local hash = require("hash")
+local json = require("json")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}}
@@ -13,8 +14,8 @@ type Candidate = {destination_node: string, source_node: string, base_revision: 
 type Context = {node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
     packages: {[string]: boolean}, namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean},
-    entries: {[string]: Entry}, applied: {[string]: Migration}, guarded_publication: boolean,
-    exact_expansion: boolean, migration_barrier: boolean}
+    entries: {[string]: Entry}, applied: {[string]: Migration}, exact_expansion: boolean,
+    migration_barrier: boolean}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
 type Report = {schema_revision: string, plan_digest: string, destination_node: string,
     base_revision: integer, policy_digest: string, ready: boolean, diagnostics: {Diagnostic}, pending_migrations: {string}}
@@ -27,6 +28,81 @@ end
 local function migration_key(item: Migration): string
     return item.target_db .. "\n" .. item.id
 end
+local function normalize_report(raw: unknown): (Report?, string?)
+    if type(raw) ~= "table" then return nil, "preflight report must be an object" end
+    local value = raw :: {[string]: unknown}
+    local allowed: {[string]: boolean} = {schema_revision = true, plan_digest = true, destination_node = true,
+        base_revision = true, policy_digest = true, ready = true, diagnostics = true, pending_migrations = true}
+    for name in pairs(value) do if type(name) ~= "string" or not allowed[name] then return nil, "preflight report has an unknown field" end end
+    if value.schema_revision ~= "bee.governance-preflight@1" or type(value.plan_digest) ~= "string" or not digest(value.plan_digest)
+        or not identifier(value.destination_node :: string) or type(value.base_revision) ~= "number"
+        or value.base_revision ~= math.floor(value.base_revision :: number) or (value.base_revision :: number) < 0
+        or type(value.policy_digest) ~= "string" or not digest(value.policy_digest)
+        or type(value.ready) ~= "boolean" or type(value.diagnostics) ~= "table" or type(value.pending_migrations) ~= "table" then
+        return nil, "preflight report is malformed"
+    end
+    local diagnostics: {Diagnostic} = {}
+    local diagnostic_count = 0
+    for key in pairs(value.diagnostics :: table) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "preflight diagnostics must be a dense list" end
+        diagnostic_count = diagnostic_count + 1
+    end
+    if diagnostic_count > 128 then return nil, "preflight diagnostics exceed bound" end
+    for index = 1, diagnostic_count do
+        local raw_diagnostic = (value.diagnostics :: table)[index]
+        if type(raw_diagnostic) ~= "table" then return nil, "preflight diagnostic is malformed" end
+        local item = raw_diagnostic :: {[string]: unknown}
+        for name in pairs(item) do if name ~= "code" and name ~= "target" and name ~= "message" and name ~= "remedy" then return nil, "preflight diagnostic has an unknown field" end end
+        if type(item.code) ~= "string" or not identifier(item.code) or type(item.target) ~= "string" or #item.target > 512
+            or type(item.message) ~= "string" or #item.message > 2048 or type(item.remedy) ~= "string" or #item.remedy > 2048 then
+            return nil, "preflight diagnostic is malformed"
+        end
+        diagnostics[index] = {code = item.code, target = item.target, message = item.message, remedy = item.remedy}
+    end
+    if value.ready ~= (diagnostic_count == 0) then return nil, "preflight readiness does not match diagnostics" end
+    local pending: {string} = {}
+    local pending_count = 0
+    for key in pairs(value.pending_migrations :: table) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "pending migrations must be a dense list" end
+        pending_count = pending_count + 1
+    end
+    if pending_count > 128 then return nil, "pending migrations exceed bound" end
+    local prior = ""
+    for index = 1, pending_count do
+        local item = (value.pending_migrations :: table)[index]
+        if type(item) ~= "string" or #item == 0 or #item > 400 or item <= prior then return nil, "pending migrations are malformed" end
+        pending[index], prior = item, item
+    end
+    return {schema_revision = "bee.governance-preflight@1", plan_digest = value.plan_digest :: string,
+        destination_node = value.destination_node :: string, base_revision = math.floor(value.base_revision :: number),
+        policy_digest = value.policy_digest :: string, ready = value.ready :: boolean,
+        diagnostics = diagnostics, pending_migrations = pending}, nil
+end
+
+function M.encode_report(raw: unknown): (string?, string?, string?)
+    local report, report_error = normalize_report(raw)
+    if not report then return nil, nil, report_error end
+    local bytes, encode_error = canonical.encode(report, 131072)
+    if not bytes or #bytes > 131072 then return nil, nil, encode_error or "preflight report exceeds bound" end
+    local measured, measure_error = hash.sha256(bytes)
+    if not measured then return nil, nil, tostring(measure_error) end
+    return bytes, measured, nil
+end
+
+function M.decode_report(bytes_raw: unknown, digest_raw: unknown): (Report?, string?)
+    if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > 131072 then return nil, "preflight report bytes exceed bound" end
+    if type(digest_raw) ~= "string" or not digest(digest_raw) then return nil, "preflight report digest is malformed" end
+    local bytes: string = bytes_raw :: string
+    local measured, measure_error = hash.sha256(bytes)
+    if not measured or measure_error or measured ~= digest_raw then return nil, "preflight report digest does not match bytes" end
+    local decoded, decode_error = json.decode(bytes)
+    if decode_error then return nil, "preflight report bytes are not JSON" end
+    local report, report_error = normalize_report(decoded)
+    if not report then return nil, report_error end
+    local canonical_bytes, encode_error = canonical.encode(report, 131072)
+    if not canonical_bytes or canonical_bytes ~= bytes then return nil, encode_error or "preflight report bytes are not canonical" end
+    return report, nil
+end
 -- Context is supplied by an authorized destination adapter, never decoded from
 -- a remote plan as authority. Every suggested remedy requires a NEW candidate.
 function M.check(candidate: Candidate, context: Context): (Report?, string?)
@@ -36,7 +112,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         or candidate.base_revision < 0 or candidate.base_revision > 9007199254740991
         or not digest(candidate.base_digest) or not digest(context.registry_digest)
         or not digest(context.policy_digest) then return nil, "invalid candidate or host measurement" end
-    local encoded, encode_error = canonical.encode(candidate)
+    local encoded, encode_error = canonical.encode(candidate, 262144)
     if not encoded or #encoded > 262144 then return nil, encode_error or "candidate exceeds encoded bound" end
     local diagnostics: {Diagnostic} = {}
     local function issue(code: string, target: string, message: string, remedy: string)
@@ -45,7 +121,6 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if candidate.destination_node ~= context.node_id then issue("WRONG_DESTINATION", candidate.destination_node, "plan is for another owner", "replan at the destination") end
     if candidate.base_revision ~= context.registry_revision then issue("STALE_BASE", tostring(candidate.base_revision), "registry changed since resolution", "resolve again and request new approval") end
     if candidate.base_digest ~= context.registry_digest then issue("STALE_BASE", "composed-registry", "registry content or overlays changed since resolution", "resolve again against the current composed registry") end
-    if not context.guarded_publication then issue("RUNTIME_GATE", "publication", "runtime lacks atomic expected-base publication", "install a verified runtime capability") end
     if not context.exact_expansion then issue("RUNTIME_GATE", "resolution", "runtime has not measured the exact publishable closure", "resolve through a verified expansion adapter") end
     local artifacts: {[string]: Artifact} = {}
     local namespace_owners: {[string]: string} = {}
@@ -153,7 +228,8 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if a.target ~= b.target then return a.target < b.target end
         return a.message < b.message
     end)
-    local measurement = canonical.encode({candidate = candidate, policy_digest = context.policy_digest, applied = context.applied})
+    local measurement = canonical.encode({candidate = candidate, policy_digest = context.policy_digest,
+        applied = context.applied}, 262144)
     if not measurement then return nil, "cannot measure plan" end
     local measured, measure_error = hash.sha256(measurement)
     if not measured then return nil, tostring(measure_error) end

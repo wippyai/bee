@@ -22,9 +22,46 @@ in snapshots. Retry receipts have a hard capacity: new writes fail rather than
 silently forgetting old idempotency keys. This is not an unlimited audit archive.
 
 Approval feeds adapt the approval owner's existing transactional inbox ledger;
-they do not copy decisions into another database. Future overlay/app descriptions
-can supply another typed adapter, but no overlay activation or generic remote
-append API is implemented here.
+they do not copy decisions into another database. Generic Sync distribution now
+pages explicitly exported local feeds, transfers only configured opaque content
+kinds, and keeps a durable cursor for each destination. Governance supplies the
+application-version envelope and owns activation; Sync does not decode or grant
+authority to those bytes. There is intentionally no generic remote append API.
+
+## Component-owned distributed stores
+
+A skill notepad is a representative consumer: the component owns its note schema
+and migrations, while `bee.sync` supplies owner-qualified projections, revisions,
+ordered events, retry receipts, snapshot/catch-up envelopes and an opaque durable
+replica cache. Each content kind still needs a domain adapter that validates its
+payload and decides what local actions it permits. Components must not expose the
+low-level store's generic append/open operations or take database IDs and owner
+identities from remote callers.
+
+The first model is one authoritative owner per notebook, with read replicas on
+explicitly admitted nodes. Mutations route to the owner and use expected revisions
+and caller-scoped retry identities. Offline replicas may display their last
+confirmed state with its cursor and freshness, but must not report locally queued
+edits as committed. Multi-writer offline editing requires a separately reviewed
+merge/conflict protocol; replaying SQL or last-write-wins timestamps is not an
+implicit default. Owner reassignment likewise requires an explicit fenced
+handover, not treating a disconnected owner as abandoned.
+
+Separate content authorship, notebook edit/read grants, replica cache custody and
+destination activation authority. Each receiver validates its component payload
+schema, owner/feed identity, epoch/scope and cursor before storing a replica;
+snapshot replacement, tombstones and cursor advancement commit together. Policy
+revocation purges inaccessible cached projections and requires fresh admission.
+Bounded retention may require a full snapshot; receipt exhaustion must remain an
+explicit refusal. Payload schema upgrades must be supported by both ends before
+new-format content is accepted, using each component's migration lifecycle.
+
+Sharing a skill note does not authorize execution, and sharing an app or overlay
+does not authorize installation. Destination governance plans against immutable
+content and local policy, then the existing approval owner/inbox commits the
+required decision. A distributed notebook's optional sharing/review approvals use
+that same owner-qualified inbox, not an independent replicated decision table.
+Large WASM/assets use verified content transfer, not unbounded ledger records.
 
 ## Node metadata
 

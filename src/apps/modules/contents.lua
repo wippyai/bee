@@ -33,7 +33,7 @@ local function list(raw: unknown, limit: integer): {unknown}?
     end
     return result
 end
-local function clean(raw: unknown, bound: integer): string? 
+local function clean(raw: unknown, bound: integer): string?
     if type(raw) ~= "string" or #raw == 0 or #raw > bound or raw:find("%c") then return nil end
     return raw
 end

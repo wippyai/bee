@@ -5,9 +5,10 @@ This fixture exercises the actual broker, app process, presenter and keyboard.
 """
 import tempfile
 from pathlib import Path
+import yaml
 
 from tui_smoke import Desktop
-from workspace import fixture_workspace, pack_fixture
+from workspace import fixture_workspace, pack_fixture, registry_entries
 
 
 FACADE = '''
@@ -224,6 +225,164 @@ def exercise(project, packed, pack):
             ui.close()
 
 
+def exercise_real_facade(project, packed, pack):
+    """Use the production Modules -> Hub facade -> service path.
+
+    The public package is read from Hub, while its dependency root and receipt
+    are written only to Desktop's disposable local registry. Opening a plan or
+    its confirmation screen must leave local inventory unchanged.
+    """
+    with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
+        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+                     apps=("bee.modules:app",))
+        try:
+            def click(label):
+                for y, line in enumerate(ui.screen.display, 1):
+                    if label in line:
+                        x = line.index(label) + 1
+                        ui.mouse(0, x, y)
+                        ui.mouse(0, x, y, True)
+                        return
+                raise AssertionError(f"Missing click target {label!r}\n{ui.text()}")
+
+            def search_test():
+                ui.key(b"/")
+                ui.wait("Search packages")
+                ui.key(b"\x7f" * 32)
+                ui.key(b"test")
+                ui.wait("test")
+                ui.key(b"\r")
+                ui.wait("Search: test")
+                ui.wait("Test Framework", timeout=30)
+
+            ui.wait("MODULES", timeout=20)
+            ui.wait("Keyword: bee")
+            ui.key(b"K")
+            ui.wait("Filter by keyword")
+            ui.key(b"\x7f\x7f\x7f\r")
+            ui.wait("Keyword: all")
+            search_test()
+            click("wippy/test")
+            ui.wait("Test Framework")
+            ui.key(b"v")
+            ui.wait("0.4.17", timeout=30)
+            click("0.4.17")
+            ui.key(b"i")
+            ui.key(b"p")
+            ui.wait("Ready for confirmation", timeout=30)
+            ui.wait("install  wippy/test  0.4.17")
+            assert "Completed:" not in ui.text(), "planning published the local dependency root"
+
+            # Review is a presentation step. Confirm opens a second screen;
+            # querying the real installed inventory still shows no local root.
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            assert "Completed:" not in ui.text(), "review applied the local dependency root"
+            click("Installed")
+            ui.wait("No installed Hub modules", timeout=20)
+
+            # Return through the real catalog, prepare a fresh measured plan,
+            # and explicitly confirm it. This publishes only to the isolated
+            # local registry; no Hive replica or destination activation path is
+            # called by the Modules facade.
+            click("Catalog")
+            ui.wait("MODULES  CATALOG")
+            search_test()
+            click("wippy/test")
+            ui.wait("Test Framework")
+            ui.key(b"v")
+            ui.wait("0.4.17", timeout=30)
+            click("0.4.17")
+            ui.key(b"i")
+            ui.key(b"p")
+            ui.wait("Ready for confirmation", timeout=30)
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            ui.key(b"\r")
+            ui.wait("Completed:", timeout=30)
+            ui.wait("Receipt state: complete")
+            click("Installed")
+            ui.wait("wippy/test", timeout=20)
+            ui.wait("0.4.17")
+            # Authored publication is separate from a selected Hub installation.
+            # This host has no matching authoring profile, so Governance must
+            # refuse the explicit prepare request instead of inferring a source.
+            click("Authored")
+            ui.wait("MODULES  AUTHORING")
+            ui.key(b"c")
+            ui.wait("Authored application version")
+            ui.key(b"bee/example\r")
+            ui.key(b"v")
+            ui.key(b"1.0.0\r")
+            ui.key(b"s")
+            ui.key(b"a" * 64 + b"\r")
+            ui.key(b"p")
+            ui.wait("BLOCKED: host has no publication profile", timeout=20)
+            ui.quit()
+        except Exception:
+            Path("/tmp/bee-modules-real-hub-failure.raw").write_bytes(ui.raw)
+            raise
+        finally:
+            ui.close()
+
+
+def exercise_authored_publication(project, packed, pack):
+    """Prove Modules sends explicit prepare then publish requests through Governance."""
+    with tempfile.TemporaryDirectory(prefix="bee-modules-authored-") as directory:
+        ui = Desktop(directory, packed=packed, project=project, pack_file=pack,
+                     apps=("bee.modules:app",))
+        try:
+            ui.wait("MODULES", timeout=20)
+            ui.key(b"a")
+            ui.wait("MODULES  AUTHORING")
+            ui.wait("Freeze the actor-owned authoring workspace")
+            ui.key(b"c")
+            ui.key(b"acme/authored\r")
+            ui.key(b"v")
+            ui.key(b"2.4.0\r")
+            ui.key(b"s")
+            ui.key(b"a" * 64 + b"\r")
+            ui.key(b"u")
+            ui.wait("prepare this authored version first")
+            ui.key(b"p")
+            ui.wait("Prepared locally acme/authored 2.4.0", timeout=20)
+            ui.wait("App Delivery: Stage")
+            ui.wait("Return here to publish only")
+            ui.key(b"u")
+            ui.wait("Published acme/authored 2.4.0", timeout=20)
+            ui.quit()
+        except Exception:
+            Path("/tmp/bee-modules-authored-failure.raw").write_bytes(ui.raw)
+            raise
+        finally:
+            ui.close()
+
+
+PUBLICATION_METHOD = r'''
+local prepared: {[string]: unknown}? = nil
+local function handle(raw: unknown): {[string]: unknown}
+    assert(type(raw) == "table", "publication request must be an object")
+    local request = raw :: {[string]: unknown}
+    assert(type(request.workspace_id) == "string" and #request.workspace_id == 32, "Modules must use its admitted workspace")
+    assert(request.component == "acme/authored" and request.version == "2.4.0", "authored identity must be explicit")
+    if request.operation == "prepare" then
+        assert(request.snapshot_digest == string.rep("a", 64), "prepare must include the explicit frozen snapshot digest")
+        prepared = {workspace_id = request.workspace_id, component = request.component, version = request.version}
+        return {ok = true, replayed = false, value = {component = request.component, version = request.version,
+            descriptor = {digest = string.rep("c", 64)}}}
+    elseif request.operation == "publish" then
+        assert(request.snapshot_digest == nil, "publish must use the reviewed applied version, not caller content")
+        assert(prepared ~= nil and prepared.workspace_id == request.workspace_id
+            and prepared.component == request.component and prepared.version == request.version,
+            "publish must follow preparation of the same authored version")
+        return {ok = true, replayed = false, value = {component = request.component, version = request.version}}
+    end
+    error("unsupported Governance publication operation")
+end
+return {handle = handle}
+'''
+
+
 def main():
     with fixture_workspace(unit_tests=False) as project:
         (project / "src/hub/facade.lua").write_text(FACADE)
@@ -231,7 +390,29 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
-    print("Modules source/pack: filters, README, JSON input, plan/review/cancel/confirm, completed receipt, cold recovery review/cancel/confirm/status, rollback policy/review/confirm, F12, resize and shutdown pass")
+    with fixture_workspace(unit_tests=False) as project:
+        # The test workspace adds wippy/test as a local source dependency for
+        # unrelated fixture apps. Remove that root so this scenario proves the
+        # Modules flow fetches the public Hub artifact and installs it only on
+        # explicit local confirmation.
+        found, _ = registry_entries(project, {"test_dependency"})
+        index, _ = found["test_dependency"]
+        document = yaml.safe_load(index.read_text())
+        document["entries"] = [entry for entry in document["entries"]
+                              if entry.get("name") != "test_dependency"]
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
+        pack = project / "modules-real-hub-test.wapp"
+        pack_fixture(project, pack)
+        exercise_real_facade(project, False, pack)
+        exercise_real_facade(project, True, pack)
+    with fixture_workspace(unit_tests=False) as project:
+        (project / "src/hub/facade.lua").write_text(FACADE)
+        (project / "src/governance/publication_method.lua").write_text(PUBLICATION_METHOD)
+        pack = project / "modules-authored-test.wapp"
+        pack_fixture(project, pack)
+        exercise_authored_publication(project, False, pack)
+        exercise_authored_publication(project, True, pack)
+    print("Modules source/pack: Hub install is separate from explicit authored-version preparation; unprofiled preparation is refused")
 
 
 if __name__ == "__main__":

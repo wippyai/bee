@@ -1,0 +1,134 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: gateway_store_policy
+  kind: security.policy
+  meta:
+    comment: The gateway authority's store, its linked references, the host endpoint and the listener service state; no network
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - system.read
+    resources:
+    - bee.gateway:db
+    - bee.gateway:database_ref
+    - bee.gateway:listener_ref
+    - bee:gateway_endpoint
+    - supervisor
+    effect: allow
+- name: gateway_readiness_policy
+  kind: security.policy.expr
+  meta:
+    comment: Internal readiness only; the function pins the host-selected native address and authenticates its nonce response. No agent receives this network policy.
+  policy:
+    actions:
+    - http_client.request
+    - http_client.private_ip
+    resources: '*'
+    expression: '(action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/ready$")'
+    effect: allow
+- name: gateway_admit_policy
+  kind: security.policy
+  meta:
+    comment: A carrier admits and revokes gateway bindings for the actions it runs
+  policy:
+    actions:
+    - bee.gateway.admit
+    resources: '*'
+    effect: allow
+- name: gateway_materialize_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement runner entries only; the runner receives a binding's token bytes once for the attempt it
+      runs
+  policy:
+    actions:
+    - bee.gateway.materialize
+    - funcs.call
+    resources:
+    - '*'
+    - bee.gateway:materialize
+    - bee.gateway:check
+    - bee.gateway:revoke
+    - bee.gateway:seal
+    effect: allow
+- name: gateway_supervision_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service entries and the sweeper only; placement checks and retires the bindings of the
+      attempts it supervises, independently of any carrier
+  policy:
+    actions:
+    - bee.gateway.manage
+    - funcs.call
+    resources:
+    - bindings
+    - bee.gateway:check
+    - bee.gateway:revoke_attempt
+    - bee.gateway:authorize_materialization
+    effect: allow
+- name: gateway_manage_policy
+  kind: security.policy
+  meta:
+    comment: The managed host opens and drains the listener and may revoke any binding
+  policy:
+    actions:
+    - bee.gateway.manage
+    resources:
+    - listener
+    - bindings
+    effect: allow
+- name: gateway_execute_policy
+  kind: security.policy
+  meta:
+    comment: The MCP endpoint constructs the bound subject and its host-selected scope; exact thread call permissions are attached separately
+  policy:
+    actions:
+    - funcs.security
+    - security.scope.create
+    - security.actor.create
+    - security.policy.get
+    resources: ['*']
+    effect: allow
+- name: gateway_tool_read_policy
+  kind: security.policy
+  meta:
+    comment: The scope a bound subject runs thread_read and thread_wait under; membership is still checked by the thread owner
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.service:read_after
+    - bee.threads.delivery:watch
+    effect: allow
+- name: gateway_address_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    - system.read
+    resources:
+    - bee.gateway:listener_ref
+    - bee:gateway_endpoint
+    - supervisor
+    effect: allow
+- name: gateway_address_call_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.gateway:address
+    effect: allow
+- name: gateway_tool_message_policy
+  kind: security.policy
+  meta:
+    comment: The bound MCP subject may append only a decoded message through the thread authority; the endpoint
+      supplies thread and action/attempt context
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.service:record
+    effect: allow

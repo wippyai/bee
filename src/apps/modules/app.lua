@@ -74,6 +74,7 @@ local function main(value: unknown)
     local requested: RequestedRead? = nil
     local generation = 0
     local apply_pending = false
+    local publication_pending = false
     local editor: Editor? = nil
     local status = ""
     local announced, running, dirty = false, true, true
@@ -229,6 +230,43 @@ local function main(value: unknown)
         changed()
     end
 
+    local function publication_call(operation: "prepare" | "publish")
+        if publication_pending then status = "Publication is still pending"; changed(); return end
+        local intent: model.Intent? = nil
+        local problem: string? = nil
+        if operation == "prepare" then intent, problem = model.publication_prepare_intent(state, launch.workspace_id)
+        else intent, problem = model.publication_publish_intent(state, launch.workspace_id) end
+        if not intent or not intent.request then status = problem or "Authored version is not ready"; changed(); return end
+        local future, err = funcs.new():async(model.PUBLICATION, intent.request)
+        if not future or err then
+            local failure: Reply = {ok = false, replayed = false, code = "UNCERTAIN",
+                message = tostring(err or "publication dispatch unavailable"), value = nil}
+            if operation == "prepare" then model.apply_publication_prepare(state, failure)
+            else model.apply_publication_publish(state, failure) end
+            changed()
+            return
+        end
+        local response = future:response()
+        if not response then
+            future:cancel()
+            local failure: Reply = {ok = false, replayed = false, code = "UNCERTAIN",
+                message = "publication response channel unavailable", value = nil}
+            if operation == "prepare" then model.apply_publication_prepare(state, failure)
+            else model.apply_publication_publish(state, failure) end
+            changed()
+            return
+        end
+        publication_pending = true
+        status = operation == "prepare" and "Preparing frozen authored version locally…"
+            or "Publishing the locally applied authored version…"
+        pending[#pending + 1] = {future = future, response = response, operation = "publication_" .. operation,
+            generation = 0, apply = false}
+        changed()
+    end
+
+    local function prepare_publication() publication_call("prepare") end
+    local function publish_publication() publication_call("publish") end
+
     local function choose(name: string, show_details: boolean)
         local previous_phase = state.phase
         model.select(state, name)
@@ -299,6 +337,15 @@ local function main(value: unknown)
             model.set_keyword(state, active.buffer)
             invalidate()
             catalog()
+        elseif active.field == "publication_component" or active.field == "publication_version"
+            or active.field == "publication_snapshot_digest" then
+            local field = active.field == "publication_component" and "component"
+                or active.field == "publication_version" and "version" or "snapshot_digest"
+            local problem = model.set_publication_field(state, field, active.buffer)
+            if problem then status = problem; changed(); return end
+            editor = nil
+            status = "Authored version details saved"
+            changed()
         elseif active.field == "parameter_name" then
             if active.buffer == "" then status = "Parameter name is required"; changed(); return end
             editor = {field = "parameter_value", buffer = "", name = active.buffer}
@@ -315,8 +362,16 @@ local function main(value: unknown)
     end
 
     local function begin_editor(field: string)
+        if publication_pending and field:find("^publication_") then
+            status = "Wait for the current Governance request to finish before editing this version"
+            changed()
+            return
+        end
         if field == "query" then editor = {field = field, buffer = state.query}; status = "Search: " .. state.query
         elseif field == "keyword" then editor = {field = field, buffer = state.keyword}; status = "Keyword (empty is all): " .. state.keyword
+        elseif field == "publication_component" then editor = {field = field, buffer = state.publication_component}; status = "Component (namespace/name): " .. state.publication_component
+        elseif field == "publication_version" then editor = {field = field, buffer = state.publication_version}; status = "Explicit version: " .. state.publication_version
+        elseif field == "publication_snapshot_digest" then editor = {field = field, buffer = state.publication_snapshot_digest}; status = "Frozen snapshot SHA-256: " .. state.publication_snapshot_digest
         else editor = {field = "parameter_name", buffer = ""}; status = "Parameter name (namespace:name): " end
         changed()
     end
@@ -378,6 +433,13 @@ local function main(value: unknown)
             end
             changed()
         elseif kind == "installed" then invalidate(); installed()
+        elseif kind == "authoring" then
+            content.open = false; model.show(state, "authoring"); offset = 0; changed()
+        elseif kind == "author_component" then begin_editor("publication_component")
+        elseif kind == "author_version" then begin_editor("publication_version")
+        elseif kind == "author_snapshot" then begin_editor("publication_snapshot_digest")
+        elseif kind == "prepare_publication" then prepare_publication()
+        elseif kind == "publish_publication" then publish_publication()
         elseif kind == "requirements" then requirements()
         elseif kind == "reset_requirement" then
             local row = state.requirements[state.selected_requirement]
@@ -466,6 +528,11 @@ local function main(value: unknown)
                     apply_pending = false
                     status = ""
                     model.apply_result(state, value)
+                elseif found.operation == "publication_prepare" or found.operation == "publication_publish" then
+                    publication_pending = false
+                    status = ""
+                    if found.operation == "publication_prepare" then model.apply_publication_prepare(state, value)
+                    else model.apply_publication_publish(state, value) end
                 end
                 changed()
                 else
@@ -524,15 +591,22 @@ local function main(value: unknown)
                         elseif letter == "/" then begin_editor("query")
                         elseif letter == "K" then begin_editor("keyword")
                         elseif letter == "j" and state.phase == "details" then begin_editor("parameter_name")
+                        elseif letter == "a" then handle_hit("authoring", "")
+                        elseif letter == "c" and state.phase == "authoring" then begin_editor("publication_component")
+                        elseif letter == "v" and state.phase == "authoring" then begin_editor("publication_version")
+                        elseif letter == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
                         elseif letter == "i" and state.phase == "details" then handle_hit("install", "")
                         elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
                         elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
                         elseif letter == "p" and state.phase == "details" then plan()
+                        elseif letter == "p" and state.phase == "authoring" then prepare_publication()
+                        elseif letter == "u" and state.phase == "authoring" then publish_publication()
                         elseif letter == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
                         elseif key == "esc" or key == "escape" then
                             if state.phase == "confirm" then cancel_confirmation()
                             elseif state.phase == "details" then model.show(state, "catalog"); changed()
                             elseif state.phase == "result" then model.show(state, "catalog"); changed()
+                            elseif state.phase == "authoring" then model.show(state, "catalog"); changed()
                             else running = false end
                         end
                     end

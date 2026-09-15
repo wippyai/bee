@@ -12,10 +12,10 @@ local bounds = require("bounds")
 local peers = require("peers")
 local admission = require("admission")
 local thread_admission = require("thread_admission")
-local feed_admission = require("feed_admission")
+local policy_admission = require("policy_admission")
+local replica_admission = require("replica_admission")
 local catalog = require("catalog")
 local desktop_owner = require("desktop_owner")
-local desktop_reader = require("desktop_reader")
 local desktop_protocol = require("desktop_protocol")
 local MAX_ROUTES = 64
 local MAX_EXECUTIONS = 8
@@ -94,7 +94,22 @@ local function main(configuration: unknown)
     local last_discovery = -5000
     local distributed_name = types.SUPERVISOR_NAME .. "/" .. node
     local advertised = false
+    local advertising: funcs.Future? = nil
+    local advertising_response: Channel<unknown>? = nil
+    local last_advertisement = -5000
     local registered = false
+    local function advertise(now_ms: integer)
+        if native_node == "" or #nodes == 0 or advertised or advertising then return end
+        local future, future_error = funcs.async("bee.hive.supervisor:advertise", {name = distributed_name, pid = self})
+        if not future or future_error then
+            log:warn("Hive name publication unavailable")
+            last_advertisement = now_ms
+            return
+        end
+        advertising = future
+        advertising_response = future:response()
+        last_advertisement = now_ms
+    end
     local function release(route: Route)
         routes[route.id] = nil
         origins[route.origin] = nil
@@ -145,10 +160,6 @@ local function main(configuration: unknown)
         end
     end
     local function admit(message: process.Message)
-        if desktop and desktop_reader.handles(message:payload():data()) then
-            desktop_reader.request(desktop, tostring(message:from()), message:payload():data(), elapsed())
-            return
-        end
         if desktop and desktop_owner.handles(desktop, message) then
             desktop_owner.request(desktop, message, elapsed())
             return
@@ -199,7 +210,7 @@ local function main(configuration: unknown)
                 resolved, resolution_error = catalog.apply_interface(snapshot, call.target.interface_ref, call.input)
             end
             if not resolved then failed(sender, id, "DENIED", resolution_error or "operation unavailable"); return end
-            if resolved.operation.mode ~= "open" and not (resolved.operation.mode == "policy" and feed_admission.OPERATIONS[resolved.operation.operation_ref]) then
+            if resolved.operation.mode ~= "open" and not (resolved.operation.mode == "policy" and policy_admission.admits(resolved.operation.operation_ref)) then
                 failed(sender, id, "UNSUPPORTED_CAPABILITY", "operation has no admitted forwarding route"); return
             end
             local fault: types.Fault? = nil
@@ -233,8 +244,13 @@ local function main(configuration: unknown)
             -- the verified principal to; everything else takes the open
             -- dispatch. A local caller never reaches the thread path here.
             local worker = "bee.hive.supervisor:execute"
-            if sender_node ~= native_node and thread_admission.OPERATIONS[request.operation_ref] then worker = "bee.hive.supervisor:admit_thread" end
-            if feed_admission.OPERATIONS[request.operation_ref] then worker = "bee.hive.supervisor:admit_feed" end
+            if sender_node ~= native_node and request.operation_ref == replica_admission.OPERATION then
+                worker = "bee.hive.supervisor:admit_replica"
+            elseif sender_node ~= native_node and thread_admission.OPERATIONS[request.operation_ref] then
+                worker = "bee.hive.supervisor:admit_thread"
+            elseif policy_admission.admits(request.operation_ref) then
+                worker = "bee.hive.supervisor:admit_policy"
+            end
             local future, err = funcs.async(worker, request)
             if not future or err then failed(sender, id, "UNAVAILABLE", "operation dispatch unavailable"); return end
             route.future = future
@@ -254,25 +270,27 @@ local function main(configuration: unknown)
     end
     local function run()
         if desktop_config then desktop = desktop_owner.start(desktop_config, node) end
-        if native_node ~= "" and (#nodes > 0 or desktop ~= nil) then
-            local named, name_error = process.registry.register(distributed_name, self, process.registry.EVENTUAL)
-            if not named then error("Publish supervisor name: " .. tostring(name_error)) end
-            advertised = true
-        end
         local named, name_error = process.registry.register(types.SUPERVISOR_NAME)
         if not named then error("Register local supervisor: " .. tostring(name_error)) end
         registered = true
+        -- Local clients discover the retained desktop through this private
+        -- loopback mesh. Optional external Hive publication must not delay it.
+        if native_node ~= "" and desktop ~= nil then
+            local published, publish_error = process.registry.register(distributed_name, self, process.registry.EVENTUAL)
+            if not published then error("Publish local desktop supervisor: " .. tostring(publish_error)) end
+            advertised = true
+        else
+            advertise(elapsed())
+        end
         local desktop_ready = desktop and desktop.ready
         local desktop_results = desktop and desktop.results
         local desktop_copies = desktop and desktop.copies
         local desktop_launches = desktop and desktop.launches
         local desktop_catalogs = desktop and desktop.catalogs
-        local desktop_readers = desktop and desktop.reader_updates
         local desktop_activations = desktop and desktop.activations
         while true do
             local cases = {requests:case_receive(), replies:case_receive(), hellos:case_receive(), events:case_receive(), ticks:case_receive()}
             if desktop_catalogs then cases[#cases + 1] = desktop_catalogs:case_receive() end
-            if desktop_readers then cases[#cases + 1] = desktop_readers:case_receive() end
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
             if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
@@ -280,6 +298,7 @@ local function main(configuration: unknown)
                 cases[#cases + 1] = desktop_ready:case_receive()
                 cases[#cases + 1] = desktop_results:case_receive()
             end
+            if advertising_response then cases[#cases + 1] = advertising_response:case_receive() end
             for _, route in pairs(routes) do
                 if route.response then cases[#cases + 1] = route.response:case_receive() end
             end
@@ -308,10 +327,19 @@ local function main(configuration: unknown)
                     end
                 end
                 if now_ms - last_discovery >= 5000 then discover(now_ms); last_discovery = now_ms end
+                if now_ms - last_advertisement >= 5000 then advertise(now_ms) end
+            elseif advertising_response and selected.channel == advertising_response and advertising then
+                local value, result_error = advertising:result()
+                local data: unknown = value and value:data() or nil
+                local result = type(data) == "table" and data :: {ok: boolean, error: string} or nil
+                advertised = result_error == nil and result ~= nil and result.ok == true
+                if not advertised then
+                    log:warn("Hive name publication deferred", {error = result and result.error or tostring(result_error)})
+                end
+                advertising = nil
+                advertising_response = nil
             elseif desktop_catalogs and selected.channel == desktop_catalogs and desktop then
                 desktop_owner.catalog_result(desktop, selected.value, now_ms)
-            elseif desktop_readers and selected.channel == desktop_readers and desktop then
-                desktop_owner.catalog_readers(desktop, selected.value)
             elseif desktop_activations and selected.channel == desktop_activations and desktop then
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then
@@ -383,6 +411,7 @@ local function main(configuration: unknown)
     local ok, err = pcall(run)
     tick:stop()
     if desktop then desktop_owner.close(desktop) end
+    if advertising then advertising:cancel() end
     for _, route in pairs(routes) do
         if route.future then route.future:cancel() end
         if not route.abandoned then expire_route(route, "UNAVAILABLE", "supervisor is stopping; outcome may be unknown") end

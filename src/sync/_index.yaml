@@ -10,6 +10,7 @@ entries:
     comment: Owner-local bounded ledger and projection reads; feed adapters select authority and transport
 - name: target_db
   kind: ns.requirement
+  default: bee.sync:db
   meta:
     comment: SQLite resource selected by the host for this owner-local sync store
   targets:
@@ -20,6 +21,19 @@ entries:
   meta:
     type: bee.resource_ref
     comment: Linked SQL resource; empty until a host selects target_db
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: db_path
+  kind: env.variable
+  storage: bee.sync:environment
+  variable: BEE_SYNC_DB
+  default: .wippy/sync.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.sync:db_path}
+  lifecycle: {auto_start: true}
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
@@ -36,6 +50,13 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.sync:bounds
+- name: version
+  kind: library.lua
+  source: file://version.lua
+  modules: [hash]
+  imports:
+    bounds: bee.sync:bounds
+    canonical: bee.sync:canonical
 - name: database
   kind: library.lua
   source: file://database.lua
@@ -57,3 +78,130 @@ entries:
     database: bee.sync:database
     transaction: bee.persist:transaction
     resources: bee.sync:resources
+- name: replicas
+  kind: library.lua
+  source: file://replicas.lua
+  modules: [json, sql, hash, base64]
+  imports:
+    bounds: bee.sync:bounds
+    database: bee.sync:database
+    transaction: bee.persist:transaction
+    version: bee.sync:version
+- name: replica_protocol
+  kind: library.lua
+  source: file://replica_protocol.lua
+  imports:
+    bounds: bee.sync:bounds
+    version: bee.sync:version
+- name: replica_receive
+  kind: function.lua
+  source: file://replica_method.lua
+  method: handle
+  modules: [security]
+  security:
+    policies: [bee.sync:replica_store_policy]
+  imports:
+    protocol: bee.sync:replica_protocol
+    replicas: bee.sync:replicas
+    resources: bee.sync:resources
+    transaction: bee.persist:transaction
+  meta:
+    hive: policy
+    hive_operation:
+      revision: '1'
+      title: Receive immutable synchronized content
+      limits: {max_input_bytes: 65536, max_output_bytes: 4096}
+      input:
+        type: object
+        additionalProperties: false
+        required: [action]
+        properties:
+          action: {type: string, enum: [begin, put, finish, status]}
+          source_owner: {type: string, minLength: 1, maxLength: 160}
+          feed: {type: string, minLength: 1, maxLength: 160}
+          version_key: {type: string, minLength: 1, maxLength: 160}
+          descriptor_digest: {type: string, minLength: 64, maxLength: 64}
+          descriptor: {type: object}
+          source_cursor: {type: integer, minimum: 0}
+          offset: {type: integer, minimum: 0, maximum: 16777216}
+          content_base64: {type: string, maxLength: 43692}
+      output:
+        type: object
+        additionalProperties: false
+        required: [ok, replayed]
+        properties:
+          ok: {type: boolean}
+          code: {type: string}
+          message: {type: string}
+          value: {}
+          replayed: {type: boolean}
+          commit: {type: boolean}
+- name: replica_sender
+  kind: library.lua
+  source: file://replica_sender.lua
+  modules: [hash, base64]
+  imports:
+    hive: bee.hive:client
+    version: bee.sync:version
+    transaction: bee.persist:transaction
+    bounds: bee.sync:bounds
+- name: distribution_store
+  kind: library.lua
+  source: file://distribution_store.lua
+  modules: [sql]
+  imports:
+    bounds: bee.sync:bounds
+    database: bee.sync:database
+    transaction: bee.persist:transaction
+- name: exports
+  kind: registry.entry
+  meta:
+    type: bee.sync.exports
+    comment: Host-selected immutable feeds exported to connected non-client Hive nodes
+  data:
+    exports:
+    - feed: governance.application_versions
+      content_kinds: [bee.governance-application-version@2]
+- name: distributor
+  kind: library.lua
+  source: file://distributor.lua
+  modules: [registry, system]
+  imports:
+    bounds: bee.sync:bounds
+    version: bee.sync:version
+    sync: bee.sync:store
+    replicas: bee.sync:replicas
+    cursors: bee.sync:distribution_store
+    sender: bee.sync:replica_sender
+    resources: bee.sync:resources
+    transaction: bee.persist:transaction
+- name: distribution_worker
+  kind: process.lua
+  source: file://distribution_worker.lua
+  method: main
+  modules: [process, channel, time]
+  imports: {distributor: bee.sync:distributor}
+- name: distribution_service
+  kind: process.service
+  process: bee.sync:distribution_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.sync.distribution}
+      policies: [bee.sync:distribution_policy]
+- name: distribution_policy
+  kind: security.policy
+  meta:
+    comment: Generic immutable feed delivery to connected non-client Hive members
+  policy:
+    actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
+      process.listen, process.unlisten, process.send]
+    resources: '*'
+    effect: allow
+- name: replica_store_policy
+  kind: security.policy
+  policy:
+    actions: [db.get, registry.get]
+    resources: [bee.sync:db, bee.sync:database_ref]
+    effect: allow

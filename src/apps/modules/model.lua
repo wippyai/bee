@@ -1,6 +1,6 @@
--- MIT. Modules is a presentation model. It never calls Hub or the registry:
--- the application sends these intents to bee.hub:call and folds its typed
--- transaction replies back here.
+-- MIT. Modules is a presentation model. It never calls Hub, Governance or the
+-- registry: the application sends typed intents to public facades and folds
+-- their transaction replies back here.
 local json = require("json")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -12,11 +12,12 @@ M.MAX_PARAMETERS = 128
 M.MAX_ITEMS = 100
 M.MAX_ROOTS = 16384
 M.HUB = "bee.hub:call"
+M.PUBLICATION = "bee.governance:publication_call"
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
 type Intent = {operation: string, request: Object?, expected_digest: string?}
-type Phase = "catalog" | "installed" | "details" | "operations" | "plan" | "confirm" | "result"
+type Phase = "catalog" | "installed" | "authoring" | "details" | "operations" | "plan" | "confirm" | "result"
 type Item = {component: string, title: string, description: string, latest_version: string}
 type Version = {version: string, yanked: boolean}
 type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
@@ -28,11 +29,13 @@ type Plan = {digest: string, ready: boolean, base_revision: integer, modules: {O
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
 type Operation = {digest: string, component: string, action: string, state: string, message: string, baseline_revision: integer, request: Object?, migration_work: {Object}}
 type Recovery = {digest: string, request: Object, operation: Operation}
+type Publication = {component: string, version: string, snapshot_digest: string, descriptor_digest: string}
 type State = {
     phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, total: integer,
     installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error", selected: string?, detail: Detail?, selected_version: string?,
     requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
     action: string, policy: string, parameters: {Parameter}, parameter_touched: {[string]: boolean}, plan: Plan?, result: Result?, notice: string,
+    publication_component: string, publication_version: string, publication_snapshot_digest: string, publication_prepared: Publication?,
     operation_page: integer, operation_total: integer, operation_page_size: integer, operation_detail_offset: integer, operations: {Operation}, selected_operation: Operation?, recovery: Recovery?,
 }
 
@@ -209,7 +212,9 @@ function M.new(): State
     return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, total = 0,
         installed = {}, installed_roots = {}, installed_read = "unknown", selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
         requirements_open = false, requirements = {}, requirements_digest = nil, selected_requirement = 1,
-        parameters = {}, parameter_touched = {}, plan = nil, result = nil, notice = "", operation_page = 1, operation_total = 0,
+        parameters = {}, parameter_touched = {}, plan = nil, result = nil, notice = "",
+        publication_component = "", publication_version = "", publication_snapshot_digest = "", publication_prepared = nil,
+        operation_page = 1, operation_total = 0,
         operation_page_size = 25, operation_detail_offset = 0, operations = {}, selected_operation = nil, recovery = nil}
 end
 
@@ -230,6 +235,103 @@ function M.catalog_intent(state: State): Intent
 end
 
 function M.installed_intent(_: State): Intent return {operation = "installed"} end
+
+-- Publication identities are entered explicitly. Freeze remains with the
+-- caller-owned authoring workspace; host profiles retain source-workspace and
+-- overlay authority, and Governance returns only a prepared descriptor.
+function M.set_publication_field(state: State, field: string, raw: unknown): string?
+    if type(raw) ~= "string" then return "publication value must be text" end
+    local value = raw:match("^%s*(.-)%s*$") or ""
+    if field == "component" then
+        if value ~= "" and not component(value) then return "component must use namespace/name form" end
+        state.publication_component = value
+    elseif field == "version" then
+        if value ~= "" and not version(value) then return "version is invalid" end
+        state.publication_version = value
+    elseif field == "snapshot_digest" then
+        if value ~= "" and not digest(value) then return "snapshot digest must be a lowercase SHA-256 value" end
+        state.publication_snapshot_digest = value
+    else
+        return "unknown publication field"
+    end
+    state.publication_prepared = nil
+    state.notice = ""
+    return nil
+end
+
+local function publication_identity(state: State, workspace_id: unknown): (string?, string?)
+    local workspace = type(workspace_id) == "string" and workspace_id or nil
+    if not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then
+        return nil, "workspace identity is unavailable"
+    end
+    if state.phase ~= "authoring" then
+        return nil, "open the Authored workspace first"
+    end
+    if not component(state.publication_component) then return nil, "enter a component in namespace/name form" end
+    if not version(state.publication_version) then return nil, "enter an explicit version" end
+    return workspace :: string, nil
+end
+
+function M.publication_prepare_intent(state: State, workspace_id: unknown): (Intent?, string?)
+    local workspace, problem = publication_identity(state, workspace_id)
+    if not workspace then return nil, problem end
+    if not digest(state.publication_snapshot_digest) then
+        return nil, "freeze the owned authoring workspace and enter its snapshot digest"
+    end
+    return {operation = "prepare", request = {operation = "prepare", workspace_id = workspace,
+        component = state.publication_component, version = state.publication_version,
+        snapshot_digest = state.publication_snapshot_digest}}, nil
+end
+
+function M.apply_publication_prepare(state: State, reply: Reply)
+    if not reply.ok then
+        state.publication_prepared = nil
+        state.notice = M.text((reply.code or "FAILED") .. ": " .. (reply.message or "application preparation failed"))
+        return
+    end
+    local value = object(reply.value)
+    local descriptor = object(value.descriptor)
+    local name, selected_version = component(value.component), version(value.version)
+    local descriptor_digest = digest(descriptor.digest)
+    if name ~= state.publication_component or selected_version ~= state.publication_version or not descriptor_digest then
+        state.publication_prepared = nil
+        state.notice = "UNCERTAIN: preparation receipt did not match the selected authored version"
+        return
+    end
+    state.publication_prepared = {component = name, version = selected_version,
+        snapshot_digest = state.publication_snapshot_digest, descriptor_digest = descriptor_digest}
+    state.notice = (reply.replayed and "Already prepared " or "Prepared locally ") .. name .. " " .. selected_version
+        .. "; open App Delivery to stage it for local review"
+end
+
+function M.publication_ready(state: State): boolean
+    local prepared = state.publication_prepared
+    return prepared ~= nil and prepared.component == state.publication_component
+        and prepared.version == state.publication_version and prepared.snapshot_digest == state.publication_snapshot_digest
+end
+
+function M.publication_publish_intent(state: State, workspace_id: unknown): (Intent?, string?)
+    local workspace, problem = publication_identity(state, workspace_id)
+    if not workspace then return nil, problem end
+    if not M.publication_ready(state) then return nil, "prepare this authored version first" end
+    return {operation = "publish", request = {operation = "publish", workspace_id = workspace,
+        component = state.publication_component, version = state.publication_version}}, nil
+end
+
+function M.apply_publication_publish(state: State, reply: Reply)
+    if not reply.ok then
+        state.notice = M.text((reply.code or "FAILED") .. ": " .. (reply.message or "application publication failed"))
+        return
+    end
+    local value = object(reply.value)
+    local name, selected_version = component(value.component), version(value.version)
+    if name ~= state.publication_component or selected_version ~= state.publication_version or not M.publication_ready(state) then
+        state.notice = "UNCERTAIN: publication receipt did not match the prepared authored version"
+        return
+    end
+    state.notice = (reply.replayed and "Already published " or "Published ") .. name .. " " .. selected_version
+        .. "; destinations still make their own review and approval decisions"
+end
 
 function M.operation_history_intent(state: State): Intent
     return {operation = "status", request = {page = math.max(1, math.min(10000, state.operation_page))}}

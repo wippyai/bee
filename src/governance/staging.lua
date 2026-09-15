@@ -14,6 +14,7 @@ local M = {}
 type Result = shared.Result
 type Store = {db: sql.DB, node: string, closed: boolean,
     call: (Store, string, protocol.Request) -> Result,
+    read_frozen: (Store, string, string, string) -> Result,
     close: (Store) -> (boolean, string?)}
 type WorkspaceRow = {actor: string, revision: integer}
 type File = {path: string, content: string, content_base64: string, digest: string, bytes: integer}
@@ -29,7 +30,7 @@ local MAX_FILE_BYTES = 4 * 1024 * 1024
 local MAX_TOTAL_BYTES = 16 * 1024 * 1024
 local MAX_BASE64_BYTES = 5592408
 -- Files are encoded independently, so each can carry up to two padding bytes
--- before its four-byte base64 quantum.  This is the tight aggregate ceiling
+-- before its four-byte base64 quantum. This is the tight aggregate ceiling
 -- for the decoded byte and file-count limits, not the encoding of one blob.
 local MAX_BASE64_TOTAL_BYTES = math.floor((MAX_TOTAL_BYTES + (2 * MAX_FILES) + 2) / 3) * 4
 local MAX_REVISION = 9007199254740991
@@ -436,6 +437,37 @@ local function read(store: Store, tx: sql.Transaction, actor: string, input: pro
     if not file then return decode_error or failure("INTERNAL", "workspace file is corrupt") end
     return shared.success(value(store, input.workspace_id, current.revision, {path = file.path, content_base64 = file.content_base64, bytes = file.bytes, digest = file.digest}), false)
 end
+
+-- Host services may read one exact immutable file after selecting the source
+-- workspace themselves. This does not expose mutable authoring state and does
+-- not impersonate the actor that owns the workspace.
+function M.read_frozen(store: Store, workspace_raw: string, path_raw: string, digest_raw: string): Result
+    if store.closed then return failure("CLOSED", "workspace store is closed") end
+    local workspace_id = bounds.id(workspace_raw)
+    local path = bounds.text(path_raw, MAX_PATH_BYTES)
+    local snapshot_digest = bounds.id(digest_raw)
+    if not workspace_id or not path or #path == 0 or not snapshot_digest
+        or #snapshot_digest ~= 64 or not snapshot_digest:match("^[0-9a-f]+$") then
+        return failure("INVALID", "frozen workspace file identity is invalid")
+    end
+    local selected_workspace: string = workspace_id :: string
+    local selected_digest: string = snapshot_digest :: string
+    return shared.read(store.db, "governance", function(tx: sql.Transaction): Result
+        local current, workspace_error = load_workspace(store, tx, selected_workspace)
+        if not current then return workspace_error or failure("NOT_FOUND", "workspace does not exist") end
+        local snapshot, stored, snapshot_error = load_verified_snapshot(store, tx, selected_workspace, selected_digest)
+        if not snapshot or not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
+        for _, file in ipairs(stored) do
+            if file.path == path then
+                return shared.success(value(store, selected_workspace, snapshot.revision, {path = file.path,
+                    content_base64 = file.content_base64, bytes = file.bytes, digest = file.digest,
+                    snapshot_digest = snapshot.digest, files_digest = snapshot.files_digest,
+                    file_count = snapshot.file_count, total_bytes = snapshot.total_bytes}), false)
+            end
+        end
+        return failure("NOT_FOUND", "workspace snapshot file does not exist")
+    end)
+end
 function M.call(store: Store, actor_raw: string, input: protocol.Request): Result
     if store.closed then return failure("CLOSED", "workspace store is closed") end
     local actor = bounds.id(actor_raw)
@@ -469,6 +501,7 @@ function M.open(resource: string, node_raw: string): (Store?, string?)
     local db, err = database.open({resource = resource,
         ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
     if not db then return nil, err end
-    return {db = db, node = node, closed = false, call = M.call, close = M.close}, nil
+    return {db = db, node = node, closed = false, call = M.call,
+        read_frozen = M.read_frozen, close = M.close}, nil
 end
 return M

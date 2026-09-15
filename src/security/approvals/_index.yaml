@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: approval_store_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner's store, its linked references, node identity and the wake it sends its worker
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - system.read
+    - process.send
+    resources:
+    - bee.approvals:db
+    - bee.approvals:database_ref
+    - bee.approvals:policies_ref
+    - bee.approvals:approver_policies
+    - node
+    - '*'
+    effect: allow
+- name: approval_owner_policy
+  kind: security.policy
+  meta:
+    comment: Held by the approval owner's worker only; reconciles expiry and retention and registers the worker name
+  policy:
+    actions:
+    - bee.approvals.own
+    - process.registry.register
+    - funcs.call
+    resources:
+    - '*'
+    effect: allow
+- name: approval_request_policy
+  kind: security.policy
+  meta:
+    comment: Operation owners that may ask for approval in a workspace
+  policy:
+    actions:
+    - bee.approvals.request
+    resources: '*'
+    effect: allow
+- name: approval_decide_policy
+  kind: security.policy
+  meta:
+    comment: Principals that may decide and read the inbox; the approver policy still has to list them
+  policy:
+    actions:
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: approval_consume_policy
+  kind: security.policy
+  meta:
+    comment: Effect owners that consume approved decisions in a workspace before acting on them
+  policy:
+    actions:
+    - bee.approvals.consume
+    resources: '*'
+    effect: allow
+- name: approval_manage_policy
+  kind: security.policy
+  meta:
+    comment: Workspace managers read any request and return exhausted deliveries to the queue
+  policy:
+    actions:
+    - bee.approvals.manage
+    resources: '*'
+    effect: allow

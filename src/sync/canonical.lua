@@ -50,10 +50,12 @@ local function encode(value: unknown, depth: integer): (string?, string?)
     end
     return "{" .. table.concat(parts, ",") .. "}", nil
 end
-function M.encode(value: unknown): (string?, string?)
+function M.encode(value: unknown, maximum_raw: unknown?): (string?, string?)
+    local maximum = bounds.capacity(maximum_raw, bounds.MAX_JSON_BYTES, 16777216)
+    if not maximum then return nil, "encoded size bound is invalid" end
     local encoded, encode_error = encode(value, 1)
     if not encoded then return nil, encode_error end
-    if #encoded > bounds.MAX_JSON_BYTES then return nil, "value is too large" end
+    if #encoded > maximum then return nil, "value is too large" end
     return encoded, nil
 end
 return M

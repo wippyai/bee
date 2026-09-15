@@ -21,18 +21,26 @@ entries:
   source: file://main.lua
   method: main
   modules: [process, channel, time, uuid, funcs, logger]
-  security: {policies: [bee:hive_feed_exposure_policy]}
+  security: {policies: [bee:hive_policy_exposure_policy]}
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
     peers: bee.hive.supervisor:peers
     admission: bee.hive.supervisor:admission
     thread_admission: bee.hive.supervisor:thread_admission
-    feed_admission: bee.hive.supervisor:feed_admission
+    policy_admission: bee.hive.supervisor:policy_admission
+    replica_admission: bee.hive.supervisor:replica_admission
     desktop_owner: bee.hive.desktop:owner
-    desktop_reader: bee.hive.desktop:reader
     desktop_protocol: bee.hive.desktop:protocol
     catalog: bee.hive:catalog
+- name: advertise
+  kind: function.lua
+  source: file://advertise_method.lua
+  method: handle
+  modules: [process]
+  security: {policies: [bee:hive_names_policy, bee:hive_advertise_policy]}
+  imports:
+    types: bee.hive:types
 - name: principals
   kind: library.lua
   source: file://principals.lua
@@ -40,9 +48,9 @@ entries:
   imports:
     types: bee.hive:types
     bounds: bee.hive:bounds
-- name: feed_admission
+- name: policy_admission
   kind: library.lua
-  source: file://feed_admission.lua
+  source: file://policy_admission.lua
   modules: [funcs, security, registry, system, time, logger]
   imports:
     dispatch: bee.hive.supervisor:dispatch
@@ -51,13 +59,13 @@ entries:
     catalog: bee.hive:catalog
     principals: bee.hive.supervisor:principals
     canonical: bee.threads.records:canonical
-- name: admit_feed
+- name: admit_policy
   kind: function.lua
-  source: file://feed_admission.lua
+  source: file://policy_admission.lua
   method: handle
   modules: [funcs, security, registry, system, time, logger]
   security:
-    policies: [bee.hive.supervisor:feed_identity_policy, bee.hive.supervisor:feed_actor_policy, bee:feed_admission_policy, bee:hive_feed_exposure_policy]
+    policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee:policy_admission_policy, bee:hive_policy_exposure_policy]
   imports:
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
@@ -65,18 +73,35 @@ entries:
     catalog: bee.hive:catalog
     principals: bee.hive.supervisor:principals
     canonical: bee.threads.records:canonical
-- name: feed_identity_policy
+- name: policy_identity_policy
   kind: security.policy
   policy:
     actions: [funcs.security, security.scope.create, security.policy.get]
     resources: '*'
     effect: allow
-- name: feed_actor_policy
+- name: policy_actor_policy
   kind: security.policy
   policy:
     actions: [security.actor.create]
     resources: ['bee.hive.member.*']
     effect: allow
+- name: replica_admission
+  kind: library.lua
+  source: file://replica_admission.lua
+  modules: [funcs, security, system]
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+    catalog: bee.hive:catalog
+    version: bee.sync:version
+    dispatch: bee.hive.supervisor:dispatch
+    canonical: bee.threads.records:canonical
+- name: admit_replica
+  kind: function.lua
+  source: file://admit_replica.lua
+  method: handle
+  imports: {admission: bee.hive.supervisor:replica_admission}
+  security: {policies: [bee:hive_replica_admission_policy]}
 - name: principal_mappings
   kind: registry.entry
   meta:

@@ -1,0 +1,45 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: governance_destination_service_policy
+  kind: security.policy
+  meta:
+    comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action
+  policy:
+    actions: [db.get, registry.get, registry.preview, system.read, funcs.call, funcs.security, security.actor.create,
+      security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply,
+      registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    resources: '*'
+    effect: allow
+- name: governance_publication_service_policy
+  kind: security.policy
+  meta:
+    comment: Private host resources for publishing one configured local overlay as immutable Sync content
+  policy:
+    actions: [registry.get, registry.overlay.get, db.get, system.read]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_read_policy
+  kind: security.policy
+  policy:
+    actions: [bee.governance.delivery.read]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_manage_policy
+  kind: security.policy
+  policy:
+    actions: [bee.governance.delivery.manage]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_activate_policy
+  kind: security.policy
+  policy:
+    actions: [bee.governance.delivery.activate]
+    resources: '*'
+    effect: allow
+- name: governance_delivery_publish_policy
+  kind: security.policy
+  policy:
+    actions: [bee.governance.delivery.publish]
+    resources: '*'
+    effect: allow

@@ -11,7 +11,7 @@ entries:
 - name: preflight
   kind: library.lua
   source: file://preflight.lua
-  modules: [hash]
+  modules: [hash, json]
   imports:
     canonical: bee.sync:canonical
 - name: workspace
@@ -20,6 +20,90 @@ entries:
   modules: [hash]
   imports:
     canonical: bee.sync:canonical
+- name: candidate
+  kind: library.lua
+  source: file://candidate.lua
+  modules: [hash, json]
+  imports:
+    canonical: bee.sync:canonical
+    workspace: bee.governance:workspace
+- name: artifact
+  kind: library.lua
+  source: file://artifact.lua
+  modules: [hash, json]
+  imports:
+    canonical: bee.sync:canonical
+- name: materializer
+  kind: library.lua
+  source: file://materializer.lua
+  modules: [registry]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: approval
+  kind: library.lua
+  source: file://approval.lua
+  imports:
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: destination
+  kind: library.lua
+  source: file://destination.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    approval: bee.governance:approval
+    plan_store: bee.governance:plan_store
+    replicas: bee.sync:replicas
+    delivery: bee.governance:delivery
+    preflight: bee.governance:preflight
+    transaction: bee.persist:transaction
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [json, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    artifact: bee.governance:artifact
+    version: bee.sync:version
+- name: publisher
+  kind: library.lua
+  source: file://publisher.lua
+  modules: [base64]
+  imports:
+    bounds: bee.threads.records:bounds
+    delivery: bee.governance:delivery
+    replicas: bee.sync:replicas
+    sync: bee.sync:store
+    transaction: bee.persist:transaction
+- name: publication_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.publication_profiles
+    comment: Host-selected source workspaces and overlay owners available for immutable publication
+  data: {profiles: []}
+- name: publication_service
+  kind: library.lua
+  source: file://publication_service.lua
+  modules: [registry, security, system, base64]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    publisher: bee.governance:publisher
+    staging: bee.governance:staging
+    activation_store: bee.governance:activation_store
+    resources: bee.governance:staging_resources
+    sync_resources: bee.sync:resources
+    transaction: bee.persist:transaction
+- name: publication_call
+  kind: function.lua
+  source: file://publication_method.lua
+  method: handle
+  imports: {service: bee.governance:publication_service}
+  security: {policies: [bee:governance_publication_service_policy]}
 - name: workspace_protocol
   kind: library.lua
   source: file://workspace_protocol.lua
@@ -51,6 +135,133 @@ entries:
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
+- name: plan_protocol
+  kind: library.lua
+  source: file://plan_protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: plan_store
+  kind: library.lua
+  source: file://plan_store.lua
+  modules: [sql, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance:migrations
+    plan_protocol: bee.governance:plan_protocol
+- name: activation_store
+  kind: library.lua
+  source: file://activation_store.lua
+  modules: [sql, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance:migrations
+- name: activation_measure
+  kind: library.lua
+  source: file://activation_measure.lua
+  modules: [hash]
+  imports:
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: migration_work
+  kind: library.lua
+  source: file://migration_work.lua
+  modules: [hash, json]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    preflight: bee.governance:preflight
+- name: hub_resolver
+  kind: library.lua
+  source: file://hub_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: overlay_resolver
+  kind: library.lua
+  source: file://overlay_resolver.lua
+  modules: [registry, hash]
+  imports:
+    artifact: bee.governance:artifact
+    canonical: bee.sync:canonical
+    bounds: bee.threads.records:bounds
+- name: activation_owner
+  kind: library.lua
+  source: file://activation_owner.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    transaction: bee.persist:transaction
+    plan_store: bee.governance:plan_store
+    activation_store: bee.governance:activation_store
+    activation_measure: bee.governance:activation_measure
+    approval: bee.governance:approval
+    preflight: bee.governance:preflight
+- name: activation_profiles
+  kind: registry.entry
+  meta:
+    type: bee.governance.activation_profiles
+    comment: Host-selected destination mappings and capability ceilings; remote artifacts cannot edit this entry
+  data: {profiles: []}
+- name: destination_service
+  kind: library.lua
+  source: file://destination_service.lua
+  modules: [registry, security, system, funcs, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    transaction: bee.persist:transaction
+    resources: bee.governance:staging_resources
+    sync_resources: bee.sync:resources
+    replicas: bee.sync:replicas
+    plan_store: bee.governance:plan_store
+    activation_store: bee.governance:activation_store
+    activation_owner: bee.governance:activation_owner
+    hub_resolver: bee.governance:hub_resolver
+    overlay_resolver: bee.governance:overlay_resolver
+    delivery: bee.governance:delivery
+    destination: bee.governance:destination
+    materializer: bee.governance:materializer
+- name: delivery_contract
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Discover, stage, review, select and locally activate application versions for one destination workspace
+- name: delivery_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.governance:delivery_contract
+    methods: {call: bee.governance:destination_call}
+- name: destination_call
+  kind: function.lua
+  source: file://destination_method.lua
+  method: handle
+  imports: {service: bee.governance:destination_service}
+  security: {policies: [bee:governance_destination_service_policy]}
+- name: activation_recovery
+  kind: process.lua
+  source: file://activation_recovery.lua
+  method: main
+  modules: [process]
+  imports: {service: bee.governance:destination_service}
+- name: activation_recovery_service
+  kind: process.service
+  process: bee.governance:activation_recovery
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.governance.activation}
+      policies: [bee:governance_destination_service_policy]
 - name: staging_resources
   kind: library.lua
   source: file://staging_resources.lua

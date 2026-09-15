@@ -5,9 +5,10 @@ local hash = require("hash")
 local state = require("state")
 local contract = require("contract")
 local binding = require("binding")
+type DesktopIdentity = {desktop_id: string, is_default: boolean}
 type Row = {client_id: string, generation: integer, value: state.State?, workspace_id: string, receipt: string}
 type Store = {
-    db: sql.DB, closed: boolean, client_id: string, generation: integer,
+    db: sql.DB, closed: boolean, client_id: string, generation: integer, desktop_id: string?,
 }
 local M = {}
 type Migration = {id: integer, name: string, sql: string}
@@ -23,7 +24,19 @@ CREATE TABLE client_state (
 INSERT INTO client_state (singleton, client_id, generation)
 VALUES (1, lower(hex(randomblob(16))), 0)
 ]]
-local migrations: {Migration} = {{id = 1, name = "client_layout_v1", sql = SCHEMA}}
+local DESKTOPS = [[
+CREATE TABLE client_desktops (
+    client_id TEXT NOT NULL PRIMARY KEY CHECK (length(client_id) = 32 AND client_id NOT GLOB '*[^0-9a-f]*'),
+    generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    value TEXT CHECK (value IS NULL OR length(CAST(value AS BLOB)) <= 2097152),
+    import_workspace TEXT NOT NULL DEFAULT '',
+    import_receipt TEXT NOT NULL DEFAULT ''
+)
+]]
+local migrations: {Migration} = {
+    {id = 1, name = "client_layout_v1", sql = SCHEMA},
+    {id = 2, name = "independent_desktops_v1", sql = DESKTOPS},
+}
 local LEDGER = [[
 CREATE TABLE IF NOT EXISTS client_schema_migrations (
     id INTEGER PRIMARY KEY CHECK (id > 0),
@@ -62,9 +75,16 @@ local function migrate(db: sql.DB): (boolean, string?)
     if commit_error then return fail(tostring(commit_error)) end
     return true, nil
 end
-local function row(db: sql.DB): (Row?, string?)
-    local rows, err = db:query("SELECT singleton, client_id, generation, value, import_workspace, import_receipt FROM client_state")
+local function row(db: sql.DB, desktop_id: string?): (Row?, string?)
+    local query = "SELECT singleton, client_id, generation, value, import_workspace, import_receipt FROM client_state"
+    local params: {string} = {}
+    if desktop_id then
+        query = "SELECT 1 AS singleton, client_id, generation, value, import_workspace, import_receipt FROM client_desktops WHERE client_id = ?"
+        params = {desktop_id}
+    end
+    local rows, err = db:query(query, params)
     if not rows then return nil, tostring(err) end
+    if #rows == 0 and desktop_id then return nil, "Desktop identity not found" end
     if #rows ~= 1 then return nil, "Client identity row is corrupt" end
     local value = rows[1]
     local identity = contract.workspace_id(value.client_id)
@@ -89,7 +109,7 @@ local function row(db: sql.DB): (Row?, string?)
 end
 function M.read(store: Store): (state.State?, string?)
     if store.closed then return nil, "Client store is closed" end
-    local current, err = row(store.db)
+    local current, err = row(store.db, store.desktop_id)
     if not current then return nil, err end
     if current.client_id ~= store.client_id then return nil, "Client identity changed" end
     store.generation = current.generation
@@ -107,21 +127,23 @@ function M.write(store: Store, value: state.State): (boolean, string?)
     if store.closed then return false, "Client store is closed" end
     local encoded, validation_error = encode(value)
     if not encoded then return false, validation_error end
-    local current, read_error = row(store.db)
+    local current, read_error = row(store.db, store.desktop_id)
     if not current then return false, read_error end
     if current.client_id ~= store.client_id or current.generation ~= store.generation then return false, "Client state changed since it was read" end
     if store.generation >= 9007199254740990 then return false, "Client generation exhausted" end
-    local result, err = store.db:execute("UPDATE client_state SET value = ?, generation = generation + 1 WHERE singleton = 1 AND client_id = ? AND generation = ?",
+    local table_name = store.desktop_id and "client_desktops" or "client_state"
+    local result, err = store.db:execute("UPDATE " .. table_name .. " SET value = ?, generation = generation + 1 WHERE client_id = ? AND generation = ?",
         {encoded, store.client_id, store.generation})
     if not result then return false, tostring(err) end
     if result.rows_affected ~= 1 then return false, "Client state changed since it was read" end
     store.generation = store.generation + 1
     return true, nil
 end
-function M.import_legacy(store: Store, workspace_id: string, desktop: unknown): (string?, string?)
+function M.import_legacy(store: Store, workspace_id: string, desktop: unknown, appearance_mode: state.AppearanceMode?): (string?, string?)
+    if store.desktop_id then return nil, "Only the default desktop imports legacy layout" end
     if store.closed then return nil, "Client store is closed" end
     if not contract.workspace_id(workspace_id) then return nil, "Invalid import workspace" end
-    local current, read_error = row(store.db)
+    local current, read_error = row(store.db, store.desktop_id)
     if not current then return nil, read_error end
     if current.client_id ~= store.client_id then return nil, "Client identity changed" end
     if current.receipt ~= "" then
@@ -129,8 +151,10 @@ function M.import_legacy(store: Store, workspace_id: string, desktop: unknown): 
         return current.receipt, nil
     end
     if current.value then return nil, "Existing client layout cannot be replaced by legacy import" end
-    local imported, import_error = state.import_desktop(workspace_id, desktop)
-    if not imported then return nil, import_error end
+    local decoded, import_error = state.import_desktop(workspace_id, desktop)
+    if not decoded then return nil, import_error end
+    local imported: state.State = decoded
+    if appearance_mode then imported.appearance_mode = appearance_mode end
     local encoded, encode_error = encode(imported)
     if not encoded then return nil, encode_error end
     -- The layout and receipt become durable in the same SQLite statement.
@@ -141,7 +165,7 @@ function M.import_legacy(store: Store, workspace_id: string, desktop: unknown): 
         {encoded, workspace_id, store.client_id, store.generation})
     if not result then return nil, tostring(err) end
     if result.rows_affected ~= 1 then return nil, "Client state changed during import; read before retrying" end
-    local committed, commit_error = row(store.db)
+    local committed, commit_error = row(store.db, store.desktop_id)
     if not committed then return nil, commit_error end
     if committed.client_id ~= store.client_id or committed.workspace_id ~= workspace_id or committed.receipt == "" then return nil, "Client import receipt missing after commit" end
     -- Do not adopt another writer's generation if it edited after our commit.
@@ -154,7 +178,48 @@ function M.close(store: Store): (boolean, string?)
     local released, err = store.db:release()
     return released == true, err and tostring(err) or nil
 end
-function M.open(resource: string?): (Store?, string?)
+-- A durable catalog, not live availability or an admission grant. One bounded
+-- query supplies a coherent snapshot without reading any desktop's layout.
+function M.catalog(store: Store): ({DesktopIdentity}?, string?)
+    if store.closed then return nil, "Client store is closed" end
+    if store.desktop_id then return nil, "Desktop catalog requires the default store" end
+    local rows, err = store.db:query([[SELECT client_id, 1 AS is_default FROM client_state
+        UNION ALL SELECT client_id, 0 AS is_default FROM client_desktops
+        ORDER BY is_default DESC, client_id LIMIT 34]])
+    if not rows then return nil, tostring(err) end
+    if #rows < 1 or #rows > 33 then return nil, "Desktop catalog is corrupt" end
+    local result: {DesktopIdentity} = {}
+    local seen: {[string]: boolean} = {}
+    for index, value in ipairs(rows) do
+        local id = contract.workspace_id(value.client_id)
+        if not id or seen[id] then return nil, "Desktop catalog identity is corrupt" end
+        if (index == 1 and (value.is_default ~= 1 or id ~= store.client_id))
+            or (index > 1 and value.is_default ~= 0) then return nil, "Desktop catalog default is corrupt" end
+        seen[id] = true
+        result[#result + 1] = {desktop_id = id, is_default = index == 1}
+    end
+    return result, nil
+end
+-- The supervisor allocates opaque identities explicitly; opening a missing
+-- identity never silently creates a replacement for a lost desktop.
+function M.allocate(store: Store, desktop_id: string): (boolean, string?)
+    if store.closed then return false, "Client store is closed" end
+    if store.desktop_id then return false, "Desktop allocation requires the default store" end
+    if not contract.workspace_id(desktop_id) then return false, "Invalid desktop identity" end
+    if desktop_id == store.client_id then return false, "Desktop identity already selected" end
+    local existing, read_error = store.db:query("SELECT client_id FROM client_desktops WHERE client_id = ?", {desktop_id})
+    if not existing then return false, tostring(read_error) end
+    if #existing == 1 then return true, nil end
+    local result, err = store.db:execute("INSERT INTO client_desktops (client_id) SELECT ? WHERE (SELECT count(*) FROM client_desktops) < 32 ON CONFLICT(client_id) DO NOTHING", {desktop_id})
+    if not result then return false, tostring(err) end
+    if result.rows_affected == 1 then return true, nil end
+    local raced, race_error = store.db:query("SELECT client_id FROM client_desktops WHERE client_id = ?", {desktop_id})
+    if not raced then return false, tostring(race_error) end
+    if #raced == 1 then return true, nil end
+    return false, "Desktop capacity reached"
+end
+function M.open(resource: string?, desktop_id: string?): (Store?, string?)
+    if desktop_id ~= nil and not contract.workspace_id(desktop_id) then return nil, "Invalid desktop identity" end
     local database_id = binding.database("client", resource)
     if not database_id then return nil, "Invalid client database binding" end
     local db, err = sql.get(database_id)
@@ -168,9 +233,9 @@ function M.open(resource: string?): (Store?, string?)
     if wal_error then return fail(tostring(wal_error)) end
     local migrated, migration_error = migrate(db)
     if not migrated then return fail(migration_error or "Client migration failed") end
-    local current, read_error = row(db)
+    local current, read_error = row(db, desktop_id)
     if not current then return fail(read_error or "Client state read failed") end
-    local store: Store = {db = db, closed = false, client_id = current.client_id, generation = current.generation}
+    local store: Store = {db = db, closed = false, client_id = current.client_id, generation = current.generation, desktop_id = desktop_id}
     return store, nil
 end
 return M

@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.driver.transport
+entries:
+- name: stream_json
+  kind: library.lua
+  source: file://stream_json.lua
+  modules: [json]
+  imports:
+    framing: bee.driver.kit:framing

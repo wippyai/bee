@@ -49,6 +49,12 @@ function M.present(value: Display): boolean
     value.last_rows = snapshot.rows
     return true
 end
+-- This is a one-shot physical request, never part of the retained frame.
+function M.clipboard(value: Display, text: string): (boolean, string?)
+    local ok, err = value.output:clipboard(text)
+    if not ok then return false, tostring(err or "Clipboard output unavailable") end
+    return true, nil
+end
 function M.paused(value: Display, emergency: boolean?)
     local canvas = tty.canvas(value.width, value.height)
     canvas:clear(" ")

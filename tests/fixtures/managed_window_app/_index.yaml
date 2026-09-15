@@ -1,0 +1,222 @@
+version: '1.0'
+namespace: bee.managed_window_fixture
+entries:
+- name: policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {sh: /bin/sh}
+    environment: {}
+- name: binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: managed_window_fixture
+    test_support: true
+    profiles_ref: bee.managed_window_fixture:profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.managed_window_fixture:prepare
+      dispatch: bee.managed_window_fixture:dispatch
+      normalize: bee.managed_window_fixture:normalize
+      configure: bee.managed_window_fixture:configure
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.managed_window_fixture:binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Managed window fixture
+      implementation_version: 0.1.0
+      default_profile: window
+      profiles:
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: fixture-pty-1
+        answer_path: {strategy: none}
+- name: definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: managed-window-fixture
+    title: Managed window fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: prepare
+  kind: function.lua
+  source: file://driver.lua
+  method: prepare
+- name: dispatch
+  kind: function.lua
+  source: file://driver.lua
+  method: dispatch
+- name: normalize
+  kind: function.lua
+  source: file://driver.lua
+  method: normalize
+- name: configure
+  kind: function.lua
+  source: file://driver.lua
+  method: configure
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+
+- name: natural_completion_test
+  kind: function.lua
+  source: file://main.lua
+  method: natural
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: checkpoint_ack_test
+  kind: function.lua
+  source: file://main.lua
+  method: checkpoint_ack
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee.managed_window_fixture:checkpoint_admission_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: checkpoint_admission_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: [bee:application_admission]
+    effect: allow
+- name: checkpoint_app
+  kind: process.lua
+  source: file://checkpoint_app.lua
+  method: main
+  modules: [process, channel]
+  imports:
+    client: bee.application:client
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Checkpoint fixture
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      resume_schema: checkpoint-fixture.v1
+      restart_policy: automatic
+- name: selector_definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: selected-window-fixture
+    title: Selected agent fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: named, thread_ref: managed_window_selector}
+    credentials: []
+    presentation: {start_menu: true, fullscreen: false, reuse: never}
+- name: selector_test
+  kind: function.lua
+  source: file://main.lua
+  method: select
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee.managed_window_fixture:selection_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: selection_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+
+- name: session_root
+  kind: fs.directory
+  directory: .
+  auto_init: false
+- name: retained_definition
+  kind: registry.entry
+  meta: {type: bee.launch_definition, test_support: true}
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: retained-window-fixture
+    title: Retained window fixture
+    command_names: []
+    binding_ref: bee.managed_window_fixture:binding
+    profile_id: window
+    policy_ref: bee.managed_window_fixture:policy
+    default_mode: window
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: caller}
+    session_resource: retained
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: retained_test
+  kind: function.lua
+  source: file://main.lua
+  method: retained
+  modules: [process, channel, time, security, tty, funcs, json, registry, fs]
+  imports:
+    appearance: bee.desktop:appearance
+    admission: bee.harness.launch:admission
+    homes: bee.placement.native:homes
+  security:
+    policies: [bee:desktop_policy, bee:core_spawn_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:resource_manage_policy, bee.managed_window_fixture:selection_policy, bee.managed_window_fixture:retained_read_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: retained_read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get]
+    resources: [bee.placement.native:root]
+    effect: allow

@@ -1,0 +1,91 @@
+version: '1.0'
+namespace: bee.harness.launch
+entries:
+- name: definitions
+  kind: library.lua
+  source: file://definition.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules: [hash, registry, funcs, process, security, time]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    definition: bee.harness.launch:definitions
+    carrier: bee.harness.carrier:machine
+    placement_types: bee.placement:types
+    placement_resolver: bee.placement:resolver
+    continuation: bee.harness.carrier:continuation
+    interrupted: bee.harness.window:interrupted
+    profiles: bee.harness.profiles:protocol
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.threads.records:bounds
+- name: admit
+  kind: function.lua
+  source: file://admit_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+- name: start
+  kind: function.lua
+  source: file://start_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee:launch_spawn_policy]
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  modules: [funcs, registry]
+  imports:
+    catalog: bee.harness.catalog:catalog
+    definitions: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    bounds: bee.threads.records:bounds
+    policy: bee.harness.carrier:policy
+    profiles: bee.harness.profiles:protocol
+- name: setup_backend
+  kind: function.lua
+  source: file://setup_backend.lua
+  method: handle
+  modules: [funcs, registry, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    definition: bee.harness.launch:definitions
+- name: setup
+  kind: function.lua
+  source: file://setup_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    admission: bee.harness.launch:admission
+  security:
+    policies: [bee.harness.launch:setup_facade_policy]
+- name: setup_execution_policy
+  kind: security.policy.expr
+  groups: [harness_setup_execution_scope]
+  policy:
+    expression: '(action == "funcs.call" && (resource == "bee.resources:associate" || resource == "bee.resources:list" || resource == "bee.credentials:define" || resource == "bee.credentials:list")) || action == "bee.resources.manage" || action == "bee.credentials.manage" || action == "registry.get"'
+    actions: [funcs.call, bee.resources.manage, bee.credentials.manage, registry.get]
+    resources: '*'
+    effect: allow
+- name: setup_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend") || action == "registry.snapshot"'
+    actions: [funcs.security, security.policy_group.get, funcs.call, registry.snapshot]
+    resources: '*'
+    effect: allow

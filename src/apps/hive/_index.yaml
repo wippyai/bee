@@ -1,0 +1,67 @@
+version: '1.0'
+namespace: bee.hive_manager
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, uuid, registry, system]
+  imports:
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    model: bee.hive_manager:model
+    names: bee.desktop:names
+    view: bee.hive_manager:view
+    directory: bee.hive_manager:directory
+    hive: bee.hive:client
+    types: bee.hive:types
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Hive Manager
+      icon: H
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: hive
+      resume_schema: hive_manager.v1
+      restart_policy: manual
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules: [json]
+  imports:
+    text: bee.application:text
+    directory: bee.hive_manager:directory
+    names: bee.desktop:names
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    model: bee.hive_manager:model
+    names: bee.desktop:names
+- name: directory
+  kind: library.lua
+  source: file://directory.lua
+  imports:
+    types: bee.hive:types
+    bounds: bee.hive:bounds
+- name: names
+  kind: registry.entry
+  meta:
+    type: bee.hive_node_names
+    comment: Friendly names the host gives node identities for display and selection; a name authenticates nothing and changes no identity
+  data:
+    names: {}
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: The manager reads runtime membership and its own host entries; every Hive answer comes from the supervisor under the owner's exposure, and no desktop authority is granted here
+  policy:
+    actions: [registry.get, system.read]
+    resources: [bee.hive_manager:names, cluster]
+    effect: allow

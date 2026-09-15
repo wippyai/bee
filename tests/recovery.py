@@ -209,9 +209,10 @@ def run(packed):
         finally:
             ui.close()
         with sqlite3.connect(folder / "workspace.db") as db:
-            migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations").fetchall()
-            assert len(migrations) == 2
-        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, two migrations")
+            migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
+            assert [row[0] for row in migrations] == [1, 2, 3], migrations
+            assert migrations[2][1] == "workspace_display_assignments_v1", migrations
+        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, three migrations")
 
 if __name__ == "__main__":
     run(False)

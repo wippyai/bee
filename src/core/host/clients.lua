@@ -10,30 +10,71 @@ local questions = require("questions")
 local interaction = require("interaction")
 local recovery = require("recovery")
 local records = require("records")
+local transfer = require("transfer")
 type Route = {recipient: string, connection_id: string, request_id: string, op: contract.RequestOp, completed: boolean,
-    renderer_generation: string, fingerprint: string, resume: recovery.Resume?}
+    renderer_generation: string, fingerprint: string, resume: recovery.Resume?, display_id: string}
 type ChangeOp = "render" | "detach"
 type Change = {op: ChangeOp, recipient: string, connection_id: string, request_id: string, renderer: string}
-type AppearanceOp = "state" | "set"
+type AppearanceOp = "state" | "set" | "inherit"
 type AppearanceRoute = {request_id: string, action: AppearanceOp, recipient: string, connection_id: string,
     renderer: string, renderer_generation: string, theme: string, background: string, taskbar: string}
+type Assignment = {view_id: string, instance_id: string, display_id: string, revision: integer}
+type AssignmentResult = {assignment: Assignment, intent: unknown?}
+type AssignmentEntries = {AssignmentResult}
+-- The client router runs inside the host actor. It may read assignment fences
+-- and claim the initial display for a newly opened identity; all persistence
+-- remains host-owned, so tests can provide a narrow fail-on-use adapter.
+type Assignments = {
+    get: (Assignments, unknown) -> (AssignmentResult?, string?),
+    reconcile: (Assignments) -> (AssignmentEntries?, string?),
+    claim: (Assignments, unknown) -> (Assignment?, string?),
+}
 type State = {owner: string, broker: string, workspace_id: string, self: string,
+    assignments: Assignments,
     inventory: inventory.State,
     questions: questions.State,
     admitted: {[string]: clients.Client}, count: integer, routes: {[string]: Route}, route_count: integer,
     completed: {string}, changes: {[string]: Change}, queued_detaches: {[string]: string},
-    appearance_routes: {[string]: AppearanceRoute}}
+    appearance_routes: {[string]: AppearanceRoute}, assignment_revision: integer}
 local M = {}
-function M.new(owner: string, broker: string, workspace_id: string): State
-    return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()),
+function M.new(owner: string, broker: string, workspace_id: string, assignments: Assignments): State
+    return {owner = owner, broker = broker, workspace_id = workspace_id, self = tostring(process.pid()), assignments = assignments,
         inventory = inventory.new(workspace_id),
         questions = questions.new(workspace_id),
         admitted = {}, count = 0, routes = {}, route_count = 0, completed = {}, changes = {}, queued_detaches = {},
-        appearance_routes = {}}
+        appearance_routes = {}, assignment_revision = 0}
+end
+function M.assignment_access(
+    get: (unknown) -> (AssignmentResult?, string?),
+    reconcile: () -> (AssignmentEntries?, string?),
+    claim: (unknown) -> (Assignment?, string?)
+): Assignments
+    return {
+        get = function(_: Assignments, value: unknown): (AssignmentResult?, string?) return get(value) end,
+        reconcile = function(_: Assignments): (AssignmentEntries?, string?) return reconcile() end,
+        claim = function(_: Assignments, value: unknown): (Assignment?, string?) return claim(value) end,
+    }
+end
+function M.assignments(state: State)
+    local entries, read_error = state.assignments:reconcile()
+    if read_error or not entries then error("Reconcile display assignments: " .. tostring(read_error)) end
+    state.assignment_revision = state.assignment_revision + 1
+    for _, client in pairs(state.admitted) do
+        local items: {unknown}, displays: {unknown} = {}, {}
+        for _, entry in ipairs(entries) do items[#items + 1] = {view_id = entry.assignment.view_id, instance_id = entry.assignment.instance_id,
+            display_id = entry.assignment.display_id, revision = entry.assignment.revision, pending = entry.intent ~= nil} end
+        for _, candidate in pairs(state.admitted) do displays[#displays + 1] = {display_id = candidate.display_id,
+            available = not candidate.detaching and candidate.renderer ~= "", control = candidate.permissions.control} end
+        process.send(client.recipient, "bee.host.assignments", {version = 1, workspace_id = state.workspace_id,
+            connection_id = client.connection_id, display_id = client.display_id, revision = state.assignment_revision,
+            items = items, displays = displays})
+    end
 end
 local function result(state: State, id: string, op: string, recipient: string, connection_id: string, code: string, message: string)
     assert(process.send(state.owner, "bee.host.client_result", {version = 1, request_id = id, op = op,
-        workspace_id = state.workspace_id, recipient = recipient, connection_id = connection_id, error_code = code, error = message}))
+        workspace_id = state.workspace_id, recipient = recipient, connection_id = connection_id,
+        display_id = state.admitted[recipient] and state.admitted[recipient].display_id or "",
+        error_code = code, error = message}))
 end
 
 local function appearance_result(state: State, request_id: string, action: AppearanceOp,
@@ -140,6 +181,15 @@ local function reserved(state: State, recipient: string, except: string): boolea
     end
     return false
 end
+local function display_reserved(state: State, display_id: string): boolean
+    -- Detaching admissions remain in state.admitted until revocation and
+    -- monitor removal complete, so the durable display writer stays fenced
+    -- throughout cleanup and any failed cleanup retry.
+    for _, client in pairs(state.admitted) do
+        if client.display_id == display_id then return true end
+    end
+    return false
+end
 local function forget(state: State, connection_id: string)
     for id, route in pairs(state.routes) do
         if route.connection_id == connection_id then state.routes[id] = nil; state.route_count = state.route_count - 1 end
@@ -171,11 +221,14 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
     elseif control.op == "render" then
         if not client then code, failure = "not_found", "Client is not admitted"
         elseif client.detaching or pending(state, client) then code, failure = "busy", "Client grants are changing"
-        elseif not client.permissions.control then code, failure = "permission_denied", "Client control is not granted"
         elseif reserved(state, control.renderer, client.connection_id) then code, failure = "permission_denied", "Renderer belongs to another owner"
         else render(state, client, control.renderer, control.request_id); return nil end
     elseif control.permissions then
-        if client and (client.detaching or not clients.same_permissions(client.permissions, control.permissions)) then
+        if client and control.display_id ~= client.display_id then
+            code, failure = "identity_conflict", "Client is already admitted under another display"
+        elseif not client and display_reserved(state, control.display_id) then
+            code, failure = "identity_conflict", "Display is already admitted"
+        elseif client and (client.detaching or not clients.same_permissions(client.permissions, control.permissions)) then
             code, failure = "busy", "Detach the current admission before replacing its permissions"
         elseif not client and (state.count >= 8 or reserved(state, control.recipient, "")) then
             code, failure = "busy", "Client recipient or capacity is unavailable"
@@ -186,7 +239,7 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
                 else
                     local joined: clients.Client = {recipient = control.recipient, connection_id = uuid.v7(),
                         permissions = control.permissions, detaching = false, renderer = control.recipient,
-                        renderer_generation = uuid.v7(), rendering = false}
+                        renderer_generation = uuid.v7(), rendering = false, display_id = control.display_id}
                     client = joined
                     state.admitted[control.recipient] = joined
                     state.count = state.count + 1
@@ -195,9 +248,10 @@ function M.control(state: State, caller: string, data: unknown, ready: boolean):
             if client and code == "" then
                 local sent, send_error = process.send(client.recipient, "bee.host.admitted", {version = 1,
                     workspace_id = state.workspace_id, connection_id = client.connection_id, permissions = client.permissions,
-                    renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering})
+                    renderer = client.renderer, renderer_generation = client.renderer_generation, renderer_pending = client.rendering,
+                    display_id = client.display_id})
                 if not sent then code, failure = "delivery_failed", tostring(send_error); detach(state, client, "")
-                else joined_recipient = client.recipient end
+                else joined_recipient = client.recipient; M.assignments(state) end
             end
         end
     end
@@ -228,26 +282,51 @@ local function reject(state: State, client: clients.Client, request: contract.Re
     reply.workspace_id = state.workspace_id
     deliver_reply(state, client, reply)
 end
+local function live_identity(state: State, view_id: string, instance_id: string): boolean
+    for _, view in ipairs(state.inventory.views) do
+        if view.view_id == view_id and view.instance_id == instance_id then return true end
+    end
+    return false
+end
 function M.request(state: State, caller: string, request: contract.Request, data: unknown, ready: boolean, saved: {records.Record}): boolean
     local client = state.admitted[caller]
     if not client then return false end
     local code = ""
     if type(data) ~= "table" or data.connection_id ~= client.connection_id or client.detaching then code = "permission_denied"
-    elseif request.op == "bind" and client.permissions.control and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
-    elseif request.op == "bind" and client.permissions.control and client.rendering then code = "busy"
-    elseif request.op == "bind" and client.permissions.control and client.renderer == "" then code = "unavailable"
+    elseif request.op == "bind" and data.renderer_generation ~= client.renderer_generation then code = "stale_renderer"
+    elseif request.op == "bind" and client.rendering then code = "busy"
+    elseif request.op == "bind" and client.renderer == "" then code = "unavailable"
     elseif not clients.allowed(client, request) then code = "permission_denied"
     elseif request.workspace_id ~= state.workspace_id then code = "workspace_mismatch"
     elseif not ready then code = "busy" end
+    if code == "" and request.op == "bind" and request.observer ~= true and client.permissions.control then
+        local assigned, assignment_error = state.assignments:get({view_id = request.id, instance_id = request.instance_id})
+        if assignment_error then error("Read display assignment: " .. tostring(assignment_error)) end
+        if not assigned then
+            -- Recovered and pre-admission applications can be live before any
+            -- client opened them through this router. The first authenticated
+            -- controller claims only that exact live incarnation; a dormant or
+            -- mismatched identity cannot create an assignment through bind.
+            if not live_identity(state, request.id, request.instance_id) then code = "permission_denied"
+            else
+                local claimed, claim_error = state.assignments:claim({view_id = request.id, instance_id = request.instance_id,
+                    display_id = client.display_id})
+                if not claimed then code = "persistence_failed"
+                elseif claimed.display_id ~= client.display_id then code = "permission_denied"
+                else M.assignments(state) end
+            end
+        elseif assigned.intent or assigned.assignment.display_id ~= client.display_id then code = "permission_denied" end
+    end
     if code ~= "" then
         reject(state, client, request, code, code == "workspace_mismatch" and "Request targets another workspace" or "Client request rejected")
         return true
     end
+    if request.op == "bind" then request.observer = not client.permissions.control or request.observer == true end
     local generation = request.op == "bind" and client.renderer_generation or ""
     local internal, hash_error = hash.sha256(client.connection_id .. "\0" .. generation .. "\0" .. request.request_id)
     if not internal then error(tostring(hash_error)) end
     local fingerprint = contract.argument_fingerprint({request.op, request.id, request.instance_id,
-        request.definition_id, request.recipient}) .. contract.argument_fingerprint(request.arguments)
+        request.definition_id, request.thread_id or "", request.recipient, tostring(request.observer == true)}) .. contract.argument_fingerprint(request.arguments)
     local existing = state.routes[internal]
     if existing and existing.fingerprint ~= fingerprint then
         reject(state, client, request, "request_conflict", "Request ID was reused for another operation")
@@ -265,10 +344,10 @@ function M.request(state: State, caller: string, request: contract.Request, data
             for _, route in pairs(state.routes) do
                 if not route.completed and route.resume then reserved[route.resume.instance_id] = true end
             end
-            resume = recovery.select(saved, state.inventory, request.definition_id, reserved)
+            resume = recovery.select(saved, state.inventory, request.definition_id, reserved, request.thread_id)
         end
         state.routes[internal] = {recipient = client.recipient, connection_id = client.connection_id, request_id = request.request_id,
-            op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume}
+            op = request.op, completed = false, renderer_generation = generation, fingerprint = fingerprint, resume = resume, display_id = client.display_id}
         state.route_count = state.route_count + 1
     end
     -- Keep this selection on the correlation record, including after completion:
@@ -277,6 +356,7 @@ function M.request(state: State, caller: string, request: contract.Request, data
     if request.op == "open" and route and route.resume then
         request.restore_view_id, request.restore_instance_id = route.resume.view_id, route.resume.instance_id
         request.resume_schema, request.resume_state = route.resume.schema, route.resume.state
+        request.thread_id = route.resume.thread_id
     end
     request.request_id = internal
     if request.op == "bind" then request.recipient = client.renderer end
@@ -294,6 +374,43 @@ function M.request(state: State, caller: string, request: contract.Request, data
     end
     return true
 end
+-- The host derives source display authority from the admitted caller. The
+-- transfer payload never selects a source client or renderer handle.
+function M.transfer(state: State, caller: string, data: unknown, ready: boolean): (transfer.Request?, clients.Client?, string?)
+    local request = transfer.request(data)
+    local client = state.admitted[caller]
+    if not request then return nil, nil, "permission_denied" end
+    if not client then return request, nil, "permission_denied" end
+    if not ready or client.detaching or not client.permissions.control then return request, nil, "unavailable" end
+    if request.workspace_id ~= state.workspace_id or request.connection_id ~= client.connection_id
+        or request.renderer_generation ~= client.renderer_generation or client.rendering or client.renderer == "" then
+        return request, nil, "stale_renderer"
+    end
+    return request, client, nil
+end
+
+-- A new transfer requires both ends to be present at the durable owner.  This
+-- deliberately runs only for a new receipt: completed receipts must remain
+-- replayable after either display has later detached.
+function M.transfer_ready(state: State, request: transfer.Request, source: clients.Client): string?
+    local live = false
+    for _, item in ipairs(state.inventory.views) do
+        if item.view_id == request.view_id and item.instance_id == request.instance_id then live = true; break end
+    end
+    if not live then return "not_found" end
+    local current, read_error = state.assignments:get({view_id = request.view_id, instance_id = request.instance_id})
+    if read_error then error("Read display assignment before transfer: " .. tostring(read_error)) end
+    if not current or current.intent or current.assignment.display_id ~= source.display_id
+        or current.assignment.revision ~= request.expected_revision then return "stale_assignment" end
+    if request.target_display_id == source.display_id then return "invalid_target" end
+    for _, target in pairs(state.admitted) do
+        if target.display_id == request.target_display_id then
+            if target.detaching or not target.permissions.control or target.renderer == "" or target.rendering then return "unavailable" end
+            return nil
+        end
+    end
+    return "unavailable"
+end
 local function release_renderer(client: clients.Client): (boolean, string?)
     if client.renderer ~= "" and client.renderer ~= client.recipient then
         local released, err = process.unmonitor(client.renderer)
@@ -303,62 +420,10 @@ local function release_renderer(client: clients.Client): (boolean, string?)
     return true, nil
 end
 
--- Route an appearance request from the broker to the stable client owner only
--- when the broker's attachment recipient is the client's current renderer.
--- A nonempty recipient must be a currently admitted renderer. The private host
--- never interprets an unknown renderer as permission to change workspace state.
-function M.appearance(state: State, caller: string, data: unknown, ready: boolean): (boolean, clients.AppearanceRequest?)
-    if caller ~= state.broker then return false, nil end
-    local request = clients.appearance(data)
-    if not request or request.recipient == "" then return false, nil end
-
-    local client: clients.Client? = nil
-    for _, candidate in pairs(state.admitted) do
-        if candidate.renderer == request.recipient then client = candidate; break end
-    end
-    if not client then
-        appearance_result(state, request.request_id, request.action, "", request.recipient, "",
-            request.theme, request.background, request.taskbar, "stale_renderer", "Client renderer is not admitted")
-        return true, nil
-    end
-
-    local route: AppearanceRoute = {request_id = request.request_id, action = request.action,
-        recipient = client.recipient, connection_id = client.connection_id, renderer = client.renderer,
-        renderer_generation = client.renderer_generation, theme = request.theme, background = request.background,
-        taskbar = request.taskbar}
-    local code, message = "", ""
-    if not ready then code, message = "busy", "Host is not accepting clients"
-    elseif client.detaching then code, message = "unavailable", "Client is detaching"
-    elseif request.action == "set" and not client.permissions.appearance then code, message = "permission_denied", "Client appearance is not granted"
-    elseif client.renderer == "" then code, message = "unavailable", "Client renderer is unavailable"
-    elseif state.appearance_routes[request.request_id] then code, message = "request_conflict", "Appearance request ID was reused"
-    else
-        local count = 0
-        for _, pending_route in pairs(state.appearance_routes) do
-            if pending_route.connection_id == client.connection_id then count = count + 1 end
-        end
-        if count >= 16 then code, message = "busy", "Client appearance request capacity reached" end
-    end
-    if code ~= "" then
-        failed_appearance(state, route, code, message)
-        return true, nil
-    end
-
-    state.appearance_routes[request.request_id] = route
-    if client.permissions.workspace_appearance and request.action == "set" then return true, request end
-    M.forward_appearance(state, request.request_id, "", "")
-    return true, nil
-end
-
--- A workspace-scoped write reaches this point only after the host commits it.
-function M.forward_appearance(state: State, request_id: string, code: string, message: string)
+-- Forward through the currently admitted display.
+local function forward_appearance(state: State, request_id: string)
     local route = state.appearance_routes[request_id]
     if not route then error("Missing admitted appearance route") end
-    if code ~= "" then
-        state.appearance_routes[request_id] = nil
-        failed_appearance(state, route, code, message)
-        return
-    end
     local sent, err = process.send(route.recipient, "bee.client.appearance.request", {version = 1,
         request_id = route.request_id, action = route.action, workspace_id = state.workspace_id,
         connection_id = route.connection_id, renderer = route.renderer,
@@ -370,9 +435,68 @@ function M.forward_appearance(state: State, request_id: string, code: string, me
     end
 end
 
+-- Route an appearance request from the broker to the stable client owner only
+-- when the broker's attachment recipient is the client's current renderer.
+-- A nonempty recipient must be a currently admitted renderer. The private host
+-- never interprets an unknown renderer as permission to change workspace state.
+function M.appearance(state: State, caller: string, data: unknown, ready: boolean): boolean
+    if caller ~= state.broker then return false end
+    local request = clients.appearance(data)
+    if not request or request.recipient == "" then return false end
+
+    local client: clients.Client? = nil
+    for _, candidate in pairs(state.admitted) do
+        if candidate.renderer == request.recipient then client = candidate; break end
+    end
+    if not client then
+        appearance_result(state, request.request_id, request.action, "", request.recipient, "",
+            request.theme, request.background, request.taskbar, "stale_renderer", "Client renderer is not admitted")
+        return true
+    end
+
+    local route: AppearanceRoute = {request_id = request.request_id, action = request.action,
+        recipient = client.recipient, connection_id = client.connection_id, renderer = client.renderer,
+        renderer_generation = client.renderer_generation, theme = request.theme, background = request.background,
+        taskbar = request.taskbar}
+    local code, message = "", ""
+    if not ready then code, message = "busy", "Host is not accepting clients"
+    elseif client.detaching then code, message = "unavailable", "Client is detaching"
+    elseif request.action ~= "state" and not client.permissions.appearance then code, message = "permission_denied", "Client appearance is not granted"
+    elseif client.renderer == "" then code, message = "unavailable", "Client renderer is unavailable"
+    elseif state.appearance_routes[request.request_id] then code, message = "request_conflict", "Appearance request ID was reused"
+    else
+        local count = 0
+        for _, pending_route in pairs(state.appearance_routes) do
+            if pending_route.connection_id == client.connection_id then count = count + 1 end
+        end
+        if count >= 16 then code, message = "busy", "Client appearance request capacity reached" end
+    end
+    if code ~= "" then
+        failed_appearance(state, route, code, message)
+        return true
+    end
+
+    state.appearance_routes[request.request_id] = route
+    forward_appearance(state, request.request_id)
+    return true
+end
+
 -- Only the stable admitted client execution may answer a route. The renderer
 -- and connection generation must still be the exact values selected by the
 -- host when the request was delivered.
+-- An admitted display owns its committed presentation, not the workspace defaults.
+function M.appearance_changed(state: State, caller: string, data: unknown): boolean
+    local update = clients.appearance_changed(data)
+    local client = state.admitted[caller]
+    if not update or not client or client.detaching or client.rendering or not client.permissions.control
+        or update.workspace_id ~= state.workspace_id or update.connection_id ~= client.connection_id
+        or update.renderer ~= client.renderer or update.renderer_generation ~= client.renderer_generation then return false end
+    assert(process.send(state.broker, "bee.appearance.state", {version = 1, scope = "display",
+        renderer = update.renderer, revision = update.revision, theme = update.theme,
+        background = update.background, taskbar = update.taskbar}))
+    return true
+end
+
 function M.appearance_result(state: State, caller: string, data: unknown): boolean
     local response = clients.appearance_result(data)
     if not response then return false end
@@ -451,6 +575,16 @@ function M.reply(state: State, reply: contract.Reply, current: inventory.State):
         state.completed[#state.completed + 1] = reply.request_id
     end
     local client = state.admitted[route.recipient]
+    -- The initiating admitted display owns a newly opened live view before
+    -- its usable reply is delivered. A failed durable claim leaves the app
+    -- unbound from client control rather than creating an unfenced grant.
+    if route.op == "open" and reply.op == "open" and reply.error_code == "" then
+        local claimed, claim_error = state.assignments:claim({view_id = reply.id, instance_id = reply.instance_id,
+            display_id = route.display_id})
+        if not claimed then
+            reply.error_code, reply.error = "persistence_failed", tostring(claim_error)
+        else M.assignments(state) end
+    end
     if client and not client.detaching and client.connection_id == route.connection_id
         and (route.op ~= "bind" or (not client.rendering and route.renderer_generation == client.renderer_generation)) then
         reply.request_id, reply.resume_state = route.request_id, ""

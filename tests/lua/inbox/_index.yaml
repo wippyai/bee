@@ -1,0 +1,112 @@
+version: '1.0'
+namespace: bee.inbox
+entries:
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals:request, bee.approvals:decide, bee.approvals:withdraw, bee.approvals:read, bee.approvals:inbox, bee.approvals:list, bee.approvals:consume, bee.approvals:revalidate, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    model: bee.inbox:model
+    inbox: bee.inbox:client
+- name: feeds_test
+  kind: function.lua
+  source: file://feeds_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    feeds: bee.inbox:feeds
+    source_config: bee.inbox:source_config
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    model: bee.inbox:model
+    view: bee.inbox:view
+    appearance: bee.desktop:appearance
+- name: surface_test
+  kind: function.lua
+  source: file://surface_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, time, uuid, json, tty]
+  security:
+    policies: [bee.inbox:apply_test_policy, bee.inbox:client_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy]
+  imports:
+    test: wippy.test:test
+    model: bee.inbox:model
+    view: bee.inbox:view
+    inbox: bee.inbox:client
+    caller: bee.application:caller
+    appearance: bee.desktop:appearance
+- name: admission_probe
+  kind: process.lua
+  source: file://admission_probe.lua
+  method: main
+  meta: {type: test_support}
+  modules: [sql, funcs]
+- name: spawn_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.monitor, process.security, security.scope.create, security.policy.get, registry.apply, process.terminate, process.registry.lookup]
+    resources: '*'
+    effect: allow
+- name: admission_test
+  kind: function.lua
+  source: file://admission_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, process, channel, time, uuid]
+  security:
+    policies: [bee.inbox:spawn_test_policy, bee.inbox:client_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy]
+  imports:
+    test: wippy.test:test
+- name: recovery_test
+  kind: function.lua
+  source: file://recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "180s"}
+  modules: [funcs, security, registry, process, time, uuid]
+  security:
+    policies: [bee.inbox:spawn_test_policy, bee.inbox:client_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy, bee:approval_consume_policy]
+  imports:
+    test: wippy.test:test
+    model: bee.inbox:model
+    inbox: bee.inbox:client
+    caller: bee.application:caller
+    thread_harness: bee.threads:harness
+- name: changed_proposal_test
+  kind: function.lua
+  source: file://changed_proposal_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, uuid]
+  security:
+    policies: [bee.inbox:apply_test_policy, bee.inbox:client_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy, bee:approval_consume_policy]
+  imports:
+    test: wippy.test:test
+    model: bee.inbox:model
+    inbox: bee.inbox:client
+    caller: bee.application:caller

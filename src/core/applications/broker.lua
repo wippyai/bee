@@ -15,13 +15,15 @@ local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
 local shutdown = require("shutdown")
+type Admission = {revision: string, bindings: {contract.Binding}, items: {contract.Descriptor},
+    descriptors: {[string]: contract.Descriptor}, scopes: {[string]: security.Scope}}
 type Waiter = {request_id: string, recipient: string, control: boolean}
-type AppearanceOp = "state" | "set"
-type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp}
-type Checkpoint = {request_id: string, pid: string, deadline: number}
-type Instance = {view_id: string, instance_id: string, execution_pid: string, view: tty.Viewport,
-    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, launch_token: string,
-    negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
+type AppearanceOp = "state" | "set" | "inherit"
+type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
+type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
+type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
+    descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
+    client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
@@ -47,8 +49,18 @@ local function main(owner: string, initial_preferences: unknown)
     assert(process.monitor(owner))
     local ticker = assert(time.ticker("100ms"))
     local ticks = ticker:channel()
-    local bindings = catalog.bindings()
+    local admission: {current: Admission?, error: string} = {error = ""}
     local instances: {[string]: Instance} = {}
+    -- The host receives a complete snapshot after every change. A PID is only
+    -- an execution-local reader reference; it is not a durable principal.
+    local function publish_catalog_readers()
+        local readers: {string} = {}
+        for _, item in pairs(instances) do
+            if item.binding.catalog_read then readers[#readers + 1] = item.execution_pid end
+        end
+        table.sort(readers)
+        assert(process.send(owner, "bee.host.catalog_readers", {version = 1, workspace_id = workspace_id, readers = readers}))
+    end
     local dialogs = interactions.new()
     local shutdown_plan: shutdown.State? = nil
     local shutdown_dialog: interaction.Spec? = nil
@@ -67,25 +79,55 @@ local function main(owner: string, initial_preferences: unknown)
     local completed_order: {string} = {}
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
-    local appearance_revision = 0
     local preference_waiters: {[string]: PreferenceWaiter} = {}
-    local scope_cache: {[string]: security.Scope} = {}
-    local base, base_error = security.policy("bee:base_app_policy")
-    if base_error then error(tostring(base_error)) end
-    local boundary, boundary_error = security.policy("bee:app_boundary_policy")
-    if boundary_error then error(tostring(boundary_error)) end
-    local private_core, private_error = security.policy("bee:core_spawn_boundary")
-    if private_error then error(tostring(private_error)) end
-    local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
-    if storage_error then error(tostring(storage_error)) end
-    for _, binding in ipairs(bindings) do
-        local policies: {security.Policy} = {base, boundary, private_core, storage_boundary}
-        for _, name in ipairs(binding.policies) do
-            local policy, err = security.policy(name)
-            if err then error(tostring(err)) end
-            policies[#policies + 1] = policy
+    -- Reconcile the protected registry declaration without replacing live producers.
+    -- Reads use one snapshot; policy lookup must still finish at that revision.
+    local function refresh_admission(initial: boolean?)
+        local current = registry.current_version()
+        local previous = admission.current
+        if current and previous and current:string() == previous.revision then return end
+        local ok, loaded = pcall(function(): Admission
+            local pinned = assert(registry.snapshot())
+            local revision = pinned:version():string()
+            local next_bindings = catalog.bindings(pinned)
+            local next_items = catalog.items(next_bindings, pinned)
+            local next_scopes: {[string]: security.Scope} = {}
+            local base, base_error = security.policy("bee:base_app_policy")
+            if base_error then error(tostring(base_error)) end
+            local boundary, boundary_error = security.policy("bee:app_boundary_policy")
+            if boundary_error then error(tostring(boundary_error)) end
+            local scope_boundary, scope_boundary_error = security.policy("bee:scope_managing_app_boundary")
+            if scope_boundary_error then error(tostring(scope_boundary_error)) end
+            local private_core, private_error = security.policy("bee:core_spawn_boundary")
+            if private_error then error(tostring(private_error)) end
+            local storage_boundary, storage_error = security.policy("bee:workspace_storage_boundary")
+            if storage_error then error(tostring(storage_error)) end
+            for _, binding in ipairs(next_bindings) do
+                local selected_boundary: security.Policy = binding.scope_management and scope_boundary or boundary
+                local policies: {security.Policy} = {base, selected_boundary, private_core, storage_boundary}
+                for _, name in ipairs(binding.policies) do
+                    local policy, err = security.policy(name)
+                    if err then error(tostring(err)) end
+                    policies[#policies + 1] = policy
+                end
+                next_scopes[binding.definition_id] = security.new_scope(policies)
+            end
+            local checked = assert(registry.current_version())
+            if checked:string() ~= revision then error("Application admission changed during refresh") end
+            local next_descriptors: {[string]: contract.Descriptor} = {}
+            for _, item in ipairs(next_items) do next_descriptors[item.definition_id] = item end
+            return {revision = revision, bindings = next_bindings, descriptors = next_descriptors, scopes = next_scopes, items = next_items}
+        end)
+        if ok then
+            admission.current, admission.error = loaded, ""
+            assert(process.send(owner, "bee.application.catalog", {version = 1, items = loaded.items}))
+        else
+            if initial then error(tostring(loaded)) end
+            -- An invalid or unreadable replacement must not leave stale grants
+            -- available for another launch. Existing instances retain their scope.
+            admission.current, admission.error = nil, tostring(loaded):sub(1, 2000)
+            if previous then assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}})) end
         end
-        scope_cache[binding.definition_id] = security.new_scope(policies)
     end
     local function emit(reply: contract.Reply, remember: boolean?)
         reply.workspace_id = workspace_id
@@ -104,6 +146,7 @@ local function main(owner: string, initial_preferences: unknown)
         local reply = contract.reply(request_id, op, code, message)
         reply.workspace_id = workspace_id
         reply.id, reply.instance_id, reply.title, reply.mount = item.view_id, item.instance_id, item.announced_title or item.descriptor.title, attachment.reference(item.attachment)
+        reply.thread_id = item.thread_id
         reply.icon = item.descriptor.icon
         reply.definition_id, reply.resume_schema = item.descriptor.definition_id, item.descriptor.resume_schema
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
@@ -112,7 +155,7 @@ local function main(owner: string, initial_preferences: unknown)
     local function appearance_state(item: Instance, request_id: string?, code: string?, message: string?, value: appearance.Preferences?, revision: number?, scope: string?)
         local current = value or preferences
         process.send(item.execution_pid, "bee.appearance.state", {version = 1, request_id = request_id or "",
-            revision = revision or appearance_revision, theme = current.theme, background = current.background, taskbar = current.taskbar,
+            revision = revision or 0, theme = current.theme, background = current.background, taskbar = current.taskbar,
             error_code = code or "", error = message or "", scope = scope})
     end
     local function route_client_appearance(item: Instance, action: AppearanceOp, request_id: string, value: appearance.Preferences): boolean
@@ -121,13 +164,14 @@ local function main(owner: string, initial_preferences: unknown)
         -- Keep one write in flight for an app, while allowing a bind-triggered
         -- state refresh to coexist with a user click already being delivered.
         for id, waiter in pairs(preference_waiters) do
-            if waiter.recipient == item.execution_pid and (action == "set" or waiter.action == "state") then
+            if waiter.recipient == item.execution_pid and (action ~= "state" or waiter.action == "state") then
                 appearance_state(item, waiter.request_id, "superseded", "A newer appearance request replaced this one")
                 preference_waiters[id] = nil
             end
         end
         local routed_id = uuid.v7()
-        preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = action}
+        preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = action,
+            renderer = mounted.recipient, mount = mounted.mount}
         local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = action,
             request_id = routed_id, recipient = mounted.recipient, theme = value.theme, background = value.background, taskbar = value.taskbar})
         if not sent then
@@ -179,6 +223,7 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
         item.view:close()
         instances[item.view_id] = nil
+        if item.binding.catalog_read then publish_catalog_readers() end
         for id, waiter in pairs(preference_waiters) do
             if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
         end
@@ -213,7 +258,7 @@ local function main(owner: string, initial_preferences: unknown)
         if interactions.add(dialogs, spec, item.close_request_id or "", item.execution_pid, true) then publish_dialogs() end
     end
     local function transition(item: Instance, event: lifecycle.Event)
-        local next_state, effect = lifecycle.reduce(item.state, event, now())
+        local next_state, effect = lifecycle.reduce(item.state, event, now(), item.binding.close_grace_ms)
         item.state = next_state
         if effect == "opened" then
             -- Readiness belongs to the producer. A missing or failed consumer
@@ -288,7 +333,8 @@ local function main(owner: string, initial_preferences: unknown)
             emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
         else transition(item, force and "force_stop" or "stop") end
     end
-    assert(process.send(owner, "bee.application.catalog", {version = 1, items = catalog.items(bindings)}))
+    refresh_admission(true)
+    publish_catalog_readers()
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local function abort_shutdown()
         local plan = shutdown_plan
@@ -342,6 +388,7 @@ local function main(owner: string, initial_preferences: unknown)
                 if item then transition(item, "exit") end
             end
         elseif selected.channel == ticks then
+            refresh_admission()
             for id, waiter in pairs(checkpoint_waiters) do
                 if now() >= waiter.deadline then
                     process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
@@ -461,10 +508,10 @@ local function main(owner: string, initial_preferences: unknown)
                             end
                         end
                         local routed_id = uuid.v7()
-                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid, deadline = now() + 5}
+                        checkpoint_waiters[routed_id] = {request_id = request_id, pid = item.execution_pid, deadline = now() + 5,
+                            resume_state = data.resume_state}
                         local record = identified(item, "open", routed_id)
                         record.resume_state = data.resume_state
-                        item.resume_state = data.resume_state
                         process.send(owner, "bee.application.checkpoint", record)
                     end
                 end
@@ -474,6 +521,12 @@ local function main(owner: string, initial_preferences: unknown)
             if type(data) == "table" and data.version == 1 and type(data.request_id) == "string" then
                 local waiter = checkpoint_waiters[data.request_id]
                 if waiter then
+                    -- Live descriptions retain the last acknowledged state.
+                    -- A queued write, refusal or timeout cannot replace it.
+                    if data.error_code == "" and data.error == "" then
+                        local item = find_pid(waiter.pid)
+                        if item then item.resume_state = waiter.resume_state end
+                    end
                     process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
                         error_code = type(data.error_code) == "string" and data.error_code or "invalid_result",
                         error = type(data.error) == "string" and data.error or "Invalid persistence result"})
@@ -492,19 +545,24 @@ local function main(owner: string, initial_preferences: unknown)
         elseif selected.channel == appearance_states then
             local msg = selected.value
             local data: unknown = msg:payload():data()
-            if msg:from() == owner and type(data) == "table" and data.version == 1 then
+            if msg:from() == owner and type(data) == "table" and data.version == 1
+                and (data.scope == "client" or data.scope == "display") then
                 local prefs = appearance.decode(data)
-                local scoped = data.scope == "client"
-                if not scoped and prefs and type(data.revision) == "number" and data.revision >= appearance_revision then
-                    preferences, appearance_revision = prefs, math.floor(data.revision)
-                    local theme = appearance.theme(preferences.theme)
-                    for _, item in pairs(instances) do
-                        local _, err = item.view:set_page(appearance.page(theme, item.descriptor.role == "terminal"))
-                        if err then
-                            appearance_state(item, nil, "page_failed", tostring(err))
-                        elseif data.scope ~= "workspace" or not item.binding.appearance_write
-                            or not route_client_appearance(item, "state", uuid.v7(), preferences) then
-                            appearance_state(item)
+                local scoped = data.scope == "client" or data.scope == "display"
+                if data.scope == "display" and prefs and type(data.renderer) == "string"
+                    and type(data.revision) == "number" and data.revision >= 0
+                    and data.revision <= 9007199254740990 and data.revision == math.floor(data.revision) then
+                    for _, candidate in pairs(instances) do
+                        local target: Instance = candidate
+                        local control = target.attachment
+                        if control and control.recipient == data.renderer
+                            and (not target.client_appearance_revision or data.revision >= target.client_appearance_revision) then
+                            local _, page_error = target.view:set_page(appearance.page(appearance.theme(prefs.theme), target.descriptor.role == "terminal"))
+                            if page_error then appearance_state(target, "", "page_failed", tostring(page_error))
+                            else
+                                target.client_appearance_revision = data.revision
+                                appearance_state(target, "", "", "", prefs, data.revision, "client")
+                            end
                         end
                     end
                 end
@@ -514,8 +572,35 @@ local function main(owner: string, initial_preferences: unknown)
                     if item and waiter then
                         local revision: number? = nil
                         if type(data.revision) == "number" and data.revision >= 0 and data.revision == math.floor(data.revision) then revision = data.revision end
-                        appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "",
-                            type(data.error) == "string" and data.error or "", scoped and prefs or nil, revision, scoped and "client" or nil)
+                        local mounted = item.attachment
+                        if scoped and (not mounted or mounted.recipient ~= waiter.renderer or mounted.mount ~= waiter.mount) then
+                            -- The host fences renderer admission; the broker also fences
+                            -- this application's mount, which can change independently.
+                            appearance_state(item, waiter.request_id, "stale_attachment", "Application display changed")
+                        elseif scoped and data.error_code == "" and revision and item.client_appearance_revision and revision < item.client_appearance_revision then
+                            appearance_state(item, waiter.request_id, "superseded", "A newer display appearance is already applied")
+                        else
+                            if scoped and prefs and revision and data.error_code == "" then
+                                for _, candidate in pairs(instances) do
+                                    local target: Instance = candidate
+                                    local control = target.attachment
+                                    if control and control.recipient == waiter.renderer
+                                        and (waiter.action ~= "state" or target == item)
+                                        and (not target.client_appearance_revision or revision >= target.client_appearance_revision) then
+                                        local _, page_error = target.view:set_page(appearance.page(appearance.theme(prefs.theme), target.descriptor.role == "terminal"))
+                                        if page_error then
+                                            appearance_state(target, target == item and waiter.request_id or "", "page_failed", tostring(page_error))
+                                        else
+                                            target.client_appearance_revision = revision
+                                            appearance_state(target, target == item and waiter.request_id or "", "", "", prefs, revision, "client")
+                                        end
+                                    end
+                                end
+                            else
+                                appearance_state(item, waiter.request_id, type(data.error_code) == "string" and data.error_code or "",
+                                    type(data.error) == "string" and data.error or "", scoped and prefs or nil, revision, scoped and "client" or nil)
+                            end
+                        end
                     end
                     preference_waiters[data.request_id] = nil
                 end
@@ -530,7 +615,8 @@ local function main(owner: string, initial_preferences: unknown)
                     if data.op == "state" then
                         local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
                         if not route_client_appearance(item, "state", request_id, current) then appearance_state(item, request_id) end
-                    elseif data.op == "set" then
+                    elseif data.op == "set" or data.op == "inherit" then
+                        local requested: AppearanceOp = data.op == "inherit" and "inherit" or "set"
                         local prefs = appearance.decode(data)
                         if not item.binding.appearance_write then appearance_state(item, request_id, "permission_denied", "Appearance changes are not granted")
                         elseif not prefs then appearance_state(item, request_id, "invalid_argument", "Invalid appearance")
@@ -542,15 +628,8 @@ local function main(owner: string, initial_preferences: unknown)
                                     preference_waiters[id] = nil
                                 end
                             end
-                            if not route_client_appearance(item, "set", request_id, prefs) then
-                                local routed_id = uuid.v7()
-                                preference_waiters[routed_id] = {request_id = request_id, recipient = item.execution_pid, action = "set"}
-                                local sent, err = process.send(owner, "bee.appearance.request", {version = 1, op = "appearance", action = "set", request_id = routed_id,
-                                    recipient = "", theme = prefs.theme, background = prefs.background, taskbar = prefs.taskbar})
-                                if not sent then
-                                    preference_waiters[routed_id] = nil
-                                    appearance_state(item, request_id, "unavailable", tostring(err))
-                                end
+                            if not route_client_appearance(item, requested, request_id, prefs) then
+                                appearance_state(item, request_id, "unavailable", "A controlling display is required")
                             end
                         end
                     end
@@ -577,7 +656,7 @@ local function main(owner: string, initial_preferences: unknown)
                 reply.id = req.id
                 emit(reply)
             elseif req then
-                local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
+                local fingerprint = req.op .. "\0" .. req.id .. "\0" .. req.definition_id .. "\0" .. (req.thread_id or "") .. "\0" .. req.recipient .. "\0" .. req.restore_instance_id .. "\0" .. req.restore_view_id .. "\0" .. req.resume_schema .. "\0" .. tostring(#req.resume_state) .. ":" .. req.resume_state .. contract.argument_fingerprint(req.arguments)
                 fingerprint = fingerprint .. "\0" .. req.instance_id
                 local cached = completed[req.request_id]
                 if fingerprints[req.request_id] and fingerprints[req.request_id] ~= fingerprint then
@@ -606,15 +685,24 @@ local function main(owner: string, initial_preferences: unknown)
                         if req.id == "" then recipient = req.recipient end
                         local reply = contract.reply(req.request_id, "bind")
                         local function rebind(item: Instance)
+                            if req.observer then
+                                local result = attachment.observe(item.view, item.observers, req.recipient)
+                                local response = identified(item, "attached", req.request_id, result.error_code, result.error)
+                                response.mount, response.observer = result.mount, true
+                                emit(response)
+                                if result.error_code ~= "" then reply.error_code, reply.error = result.error_code, result.error end
+                                return
+                            end
                             local result = attachment.replace(item.view, item.attachment, item.opened and req.recipient or "")
                             item.attachment = result.attachment
+                            if result.error_code == "" then item.client_appearance_revision = nil end
                             if result.error ~= "" then reply.error_code, reply.error = result.error_code, result.error end
                             if result.error_code == "revoke_failed" or (req.recipient ~= "" and item.opened) then
                                 local response = identified(item, "attached", req.request_id, result.error_code, result.error)
                                 if result.error ~= "" then response.mount = "" end
                                 emit(response)
                             end
-                            if result.error_code == "" and req.recipient ~= "" and item.opened and item.binding.appearance_write then
+                            if result.error_code == "" and req.recipient ~= "" and item.opened then
                                 local current = appearance.decode({theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar}) or preferences
                                 route_client_appearance(item, "state", "", current)
                             end
@@ -636,8 +724,12 @@ local function main(owner: string, initial_preferences: unknown)
                         if recipient == req.recipient then recipient = "" end
                         local reply = contract.reply(req.request_id, "unbind")
                         local function detach(item: Instance)
-                            local result = attachment.remove_recipient(item.view, item.attachment, req.recipient)
+                            local previous = item.attachment
+                            local result = attachment.remove_recipient(item.view, previous, req.recipient)
                             item.attachment = result.attachment
+                            if previous ~= result.attachment then item.client_appearance_revision = nil end
+                            local removed, observer_error = attachment.remove_observer(item.view, item.observers, req.recipient)
+                            if not removed then reply.error_code, reply.error = "revoke_failed", observer_error or "Observer revocation failed" end
                             if result.error ~= "" then
                                 reply.error_code, reply.error = result.error_code, result.error
                             end
@@ -653,9 +745,13 @@ local function main(owner: string, initial_preferences: unknown)
                     elseif req.op == "open" and shutdown_plan then
                         emit(contract.reply(req.request_id, "open", "busy", "Quit confirmation pending"), true)
                     elseif req.op == "open" then
+                        refresh_admission()
+                        local selected_admission = admission.current
                         local binding: contract.Binding? = nil
-                        for _, candidate in ipairs(bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
-                        local descriptor = binding and catalog.descriptor(req.definition_id)
+                        if selected_admission then
+                            for _, candidate in ipairs(selected_admission.bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
+                        end
+                        local descriptor = selected_admission and binding and selected_admission.descriptors[req.definition_id]
                         local existing: Instance? = nil
                         local count = 0
                         for _, item in pairs(instances) do
@@ -663,9 +759,11 @@ local function main(owner: string, initial_preferences: unknown)
                             if descriptor and descriptor.singleton and item.descriptor.definition_id == req.definition_id then existing = item end
                         end
                         if existing then
-                            if existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
+                            if req.thread_id ~= nil and req.thread_id ~= existing.thread_id then
+                                emit(contract.reply(req.request_id, "open", "thread_conflict", "Singleton application is associated with another thread"), true)
+                            elseif existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
                             else emit(contract.reply(req.request_id, "open", "busy", "Application is changing state"), true) end
-                        elseif not binding or not descriptor then emit(contract.reply(req.request_id, "open", "not_admitted", "Application is not admitted"), true)
+                        elseif not selected_admission or not binding or not descriptor then emit(contract.reply(req.request_id, "open", "not_admitted", admission.error ~= "" and ("Application admission unavailable: " .. admission.error) or "Application is not admitted"), true)
                         elseif req.restore_instance_id ~= "" and (req.resume_schema ~= descriptor.resume_schema or descriptor.restart_policy == "never") then
                             emit(contract.reply(req.request_id, "open", "incompatible_checkpoint", "Application checkpoint schema is incompatible"), true)
                         elseif req.restore_view_id ~= "" and instances[req.restore_view_id] then
@@ -683,15 +781,16 @@ local function main(owner: string, initial_preferences: unknown)
                                 if not grant then view:close(); emit(contract.reply(req.request_id, "open", "grant_failed", tostring(grant_err)), true)
                                 else
                                     local version = assert(registry.current_version())
-                                    local pid, spawn_err = process.with_options({terminal = grant}):with_scope(scope_cache[req.definition_id])
+                                    local pid, spawn_err = process.with_options({terminal = grant}):with_scope(selected_admission.scopes[req.definition_id])
                                         :spawn_monitored(req.definition_id, "bee:workers", {version = 1, broker_pid = tostring(process.pid()), workspace_pid = owner, workspace_id = workspace_id,
                                             instance_id = instance_id, view_id = view_id, definition_id = req.definition_id,
                                             definition_revision = descriptor.definition_revision, registry_revision = version:string(), launch_token = token, resume_schema = descriptor.resume_schema, resume_state = req.resume_state, arguments = req.arguments})
                                     if not pid then view:close(); emit(contract.reply(req.request_id, "open", "spawn_failed", tostring(spawn_err)), true)
                                     else
-                                        instances[view_id] = {view_id = view_id, instance_id = instance_id, execution_pid = tostring(pid), view = view,
-                                            descriptor = descriptor, binding = binding, launch_token = token,
+                                        instances[view_id] = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = tostring(pid), view = view,
+                                            descriptor = descriptor, binding = binding, launch_token = token, observers = {},
                                             state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
+                                        if binding.catalog_read then publish_catalog_readers() end
                                     end
                                 end
                             end

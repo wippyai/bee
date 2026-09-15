@@ -1,0 +1,172 @@
+-- MIT. Grok configuration tests: projection of .grok/config.toml,
+-- strict rejection of provider configuration and unbound command hooks,
+-- and deterministic SHA-256 measurement.
+local test = require("test")
+local json = require("json")
+local configuration = require("configuration")
+local configure = require("configure")
+
+local function define_tests()
+    test.describe("Grok configuration", function()
+        test.it("renders only the scoped MCP subtree", function()
+            local gateway: configuration.Gateway = {
+                endpoint = "127.0.0.1:4321",
+                action_id = "act-test-123",
+                tools = {"read_file", "write_file"},
+                hooks = {},
+                token_environment = "BEE_GATEWAY_TOKEN",
+            }
+            local toml = configuration.render_gateway(gateway)
+            test.is_nil(toml:find("[permission]", 1, true))
+            test.is_nil(toml:find('"MCPTool(bee__*)"', 1, true))
+            test.is_true(toml:find("[mcp_servers.bee]", 1, true) ~= nil)
+            test.is_true(toml:find('url = "http://127.0.0.1:4321/mcp/act-test-123"', 1, true) ~= nil)
+            test.is_true(toml:find("enabled = true", 1, true) ~= nil)
+            test.is_true(toml:find("[mcp_servers.bee.headers]", 1, true) ~= nil)
+            test.is_true(toml:find('Authorization = "Bearer ${BEE_GATEWAY_TOKEN}"', 1, true) ~= nil)
+        end)
+
+        test.it("produces a valid, deterministic projection", function()
+            local gateway: configuration.Gateway = {
+                endpoint = "127.0.0.1:8080",
+                action_id = "act-proj-1",
+                tools = {"tool_one"},
+                hooks = {},
+                token_environment = "GATEWAY_TOKEN",
+            }
+            local proj, err = configuration.projection(gateway)
+            if not proj then error(tostring(err)) end
+            test.eq(proj.revision, "bee.grok-config@1")
+            test.eq(proj.path, ".grok/config.toml")
+            test.eq(proj.provider_ref, "bee:gateway_endpoint")
+            test.eq(proj.composition.kind, "toml_insert")
+            test.eq(proj.composition.base_path, ".grok/.bee-global-config.toml")
+            test.eq(proj.composition.path[1], "mcp_servers")
+            test.eq(proj.composition.path[2], "bee")
+            test.eq(#proj.digest, 64)
+
+            -- Deterministic digest
+            local again, err2 = configuration.projection(gateway)
+            if not again then error(tostring(err2)) end
+            test.eq(again.digest, proj.digest)
+
+            -- Different action_id changes digest
+            gateway.action_id = "act-proj-2"
+            local changed, err3 = configuration.projection(gateway)
+            if not changed then error(tostring(err3)) end
+            test.neq(changed.digest, proj.digest)
+        end)
+
+        test.it("rejects oversized configuration exceeding MAX_CONFIGURATION_BYTES", function()
+            local gateway: configuration.Gateway = {
+                endpoint = "127.0.0.1:8080",
+                action_id = string.rep("x", configuration.MAX_CONFIGURATION_BYTES + 10),
+                tools = {"t"},
+                hooks = {},
+                token_environment = "TOKEN",
+            }
+            local proj, err = configuration.projection(gateway)
+            test.is_nil(proj)
+            test.is_true(err:find("exceeds", 1, true) ~= nil)
+        end)
+
+        test.it("configure method delivers projected files and rejects provider configuration", function()
+            -- Succeeded delivery with gateway
+            local req = {
+                fixture = false,
+                gateway = {
+                    endpoint = "127.0.0.1:9090",
+                    action_id = "action-alpha",
+                    tools = {"tool_a"},
+                    hooks = {},
+                    token_environment = "BEE_TOKEN",
+                },
+            }
+            local reply = configure.handle(req)
+            test.is_true(reply.ok)
+            local delivery = reply.delivery :: {[string]: unknown}
+            test.not_nil(delivery)
+            local files = delivery.files :: {{[string]: unknown}}
+            test.eq(#files, 1)
+            test.eq(files[1].path, ".grok/config.toml")
+            test.eq(files[1].revision, "bee.grok-config@1")
+            test.eq(files[1].provider_ref, "bee:gateway_endpoint")
+            local composition = files[1].composition :: {[string]: unknown}
+            test.eq(composition.kind, "toml_insert")
+            test.eq(composition.base_path, ".grok/.bee-global-config.toml")
+            local path = composition.path :: {string}
+            test.eq(path[1], "mcp_servers")
+            test.eq(path[2], "bee")
+            local arguments = delivery.arguments :: {string}
+            test.eq(#arguments, 0)
+
+            -- Empty delivery when gateway is nil
+            local empty_req = {fixture = false}
+            local empty_reply = configure.handle(empty_req)
+            test.is_true(empty_reply.ok)
+            local empty_del = empty_reply.delivery :: {[string]: unknown}
+            test.eq(#(empty_del.files :: {unknown}), 0)
+            test.eq(#(empty_del.arguments :: {unknown}), 0)
+
+            -- Rejects provider configuration
+            local provider_req = {
+                fixture = false,
+                provider_ref = "custom:provider",
+                provider = {schema_revision = "bee.codex-provider@1"},
+            }
+            local provider_reply = configure.handle(provider_req)
+            test.is_false(provider_reply.ok)
+            test.eq(provider_reply.error, "grok accepts no provider configuration")
+
+            -- Hook delivery requires the host-selected executable.
+            local hooks_req = {
+                fixture = false,
+                gateway = {
+                    endpoint = "127.0.0.1:9090",
+                    action_id = "action-alpha",
+                    tools = {"tool_a"},
+                    hooks = {"SessionStart"},
+                    token_environment = "BEE_TOKEN",
+                    hook_token_environment = "BEE_HOOK_TOKEN",
+                },
+            }
+            local hooks_reply = configure.handle(hooks_req)
+            test.is_false(hooks_reply.ok)
+            test.eq(hooks_reply.error, "grok hooks require the host-selected hook command")
+        end)
+        test.it("leaves MCP permission to the launch specification and appends instructions", function()
+            local reply = configure.handle({fixture = false, instructions = "Keep the Bee thread current.", gateway = {
+                endpoint = "127.0.0.1:9090", action_id = "action-instructions", tools = {"thread_read"}, hooks = {},
+                token_environment = "BEE_TOKEN",
+            }})
+            test.is_true(reply.ok)
+            local arguments = (reply.delivery :: {[string]: unknown}).arguments :: {string}
+            test.eq(#arguments, 2)
+            test.eq(arguments[1], "--rules")
+            test.eq(arguments[2], "Keep the Bee thread current.")
+        end)
+        test.it("delivers command hooks without enabling an unused MCP server", function()
+            local reply = configure.handle({fixture = false, gateway = {
+                endpoint = "127.0.0.1:9090", action_id = "action-hooks", tools = {},
+                hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+                token_environment = "BEE_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN",
+                hook_command = "/private/bee tool",
+            }})
+            test.is_true(reply.ok)
+            local delivery = reply.delivery :: {files: {{path: string, content: string}}}
+            test.eq(#delivery.files, 1)
+            test.eq(delivery.files[1].path, ".grok/hooks/bee.json")
+            local decoded = json.decode(delivery.files[1].content) :: {hooks: {[string]: {{hooks: {{command: string, timeout: number}}}}}}
+            for _, event in ipairs({"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}) do
+                local handler = decoded.hooks[event][1].hooks[1]
+                test.is_true(handler.command:find("'/private/bee tool'", 1, true) ~= nil)
+                test.is_true(handler.command:find("hook-post", 1, true) ~= nil)
+                test.is_true(handler.command:find("BEE_HOOK_TOKEN", 1, true) ~= nil)
+                test.eq(handler.timeout, 3)
+            end
+        end)
+    end)
+end
+
+local cases = test.run_cases(define_tests)
+return {run = function(options) return cases(options) end}

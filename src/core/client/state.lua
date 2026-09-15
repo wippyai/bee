@@ -5,10 +5,17 @@ local model = require("model")
 local appearance = require("appearance")
 local hash = require("hash")
 type Target = {tab_id: string, workspace_id: string, instance_id: string, view_id: string}
-type State = {version: integer, scene: model.Scene, tabs: {string}, preferences: appearance.Preferences, targets: {Target}}
+type AppearanceMode = "inherit" | "custom"
+type State = {version: integer, appearance_mode: AppearanceMode, scene: model.Scene, tabs: {string}, preferences: appearance.Preferences, targets: {Target}}
 local M = {}
 function M.decode(value: unknown): State?
-    if type(value) ~= "table" or value.version ~= 1 or type(value.targets) ~= "table" then return nil end
+    if type(value) ~= "table" or (value.version ~= 1 and value.version ~= 2) or type(value.targets) ~= "table" then return nil end
+    local mode: AppearanceMode = "custom"
+    if value.version == 2 then
+        if value.appearance_mode == "inherit" then mode = "inherit"
+        elseif value.appearance_mode == "custom" then mode = "custom"
+        else return nil end
+    end
     local desktop = decode.desktop(value)
     if not desktop then return nil end
     local count = 0
@@ -38,7 +45,7 @@ function M.decode(value: unknown): State?
         windows[tab_id] = nil
         targets[#targets + 1] = {tab_id = tab_id, workspace_id = workspace_id, instance_id = instance_id, view_id = view_id}
     end
-    return {version = 1, scene = desktop.scene, tabs = desktop.tabs, preferences = desktop.preferences, targets = targets}
+    return {version = 2, appearance_mode = mode, scene = desktop.scene, tabs = desktop.tabs, preferences = desktop.preferences, targets = targets}
 end
 -- A projection can precede queued add/remove commands. Build its durable target
 -- list without pruning the owner's pending target records.
@@ -52,7 +59,7 @@ function M.project(current: State, value: unknown, targets: {[string]: Target}):
         if not target then return nil, "Session produced an unknown tab" end
         selected[#selected + 1] = target
     end
-    local result = M.decode({version = 1, scene = desktop.scene, tabs = desktop.tabs,
+    local result = M.decode({version = 2, appearance_mode = current.appearance_mode, scene = desktop.scene, tabs = desktop.tabs,
         preferences = desktop.preferences, targets = selected})
     if not result then return nil, "Session target identity mismatch" end
     return result, nil
@@ -60,7 +67,7 @@ end
 function M.empty(width: integer, height: integer): State
     local tabs: {string} = {}
     local targets: {Target} = {}
-    return {version = 1, scene = model.new(width, height), tabs = tabs, targets = targets, preferences = appearance.defaults()}
+    return {version = 2, appearance_mode = "inherit", scene = model.new(width, height), tabs = tabs, targets = targets, preferences = appearance.defaults()}
 end
 -- Stable import keys are client layout keys, not remote view IDs. Qualifying the
 -- input before hashing lets different workspaces retain identical native IDs.

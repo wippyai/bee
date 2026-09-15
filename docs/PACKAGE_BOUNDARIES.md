@@ -1,5 +1,10 @@
 # Package boundaries
 
+Native assembly is now implemented as described in [native distribution](NATIVE_DISTRIBUTION.md).
+The package extraction, in-app installation and overlay operations below remain proposals.
+[System map](SYSTEM_MAP.md) records their relationship to service-owned editable
+applications, governance, portable sharing and the distributed inbox.
+
 The shell is the current delivery boundary. Directories distinguish ownership;
 separate Hub releases and dependency manifests will follow once the contracts
 are stable. Moving a file must not change an application's registry identity.
@@ -30,8 +35,9 @@ apps and shared libraries. The edit subsystem should inspect the active source
 and dependency graph, stage a workspace overlay against a known revision, lint
 and test it, show the source/capability diff, activate the reviewed revision, and
 record a receipt with rollback information. A baseline bundled in the binary
-must remain recoverable. Being a core package must not make source uneditable;
-being an application actor must not imply core-publication permission.
+must remain recoverable. Core source changes belong to the host-selected maintenance boundary; not every
+component permits runtime editing or activation. Being an application actor must
+not imply core-publication permission.
 
 Edits to a replaceable presenter can reuse the existing live rejoin boundary.
 Apps now have an opt-in checkpoint/restore protocol; coordinated live producer
@@ -46,6 +52,26 @@ installation cannot manufacture a new Go module in an already running process.
 
 These subsystems are not implemented by the shell refinement. Their agent-facing
 operations, receipts and recovery instructions must ship with their implementation.
+
+## Isolated registry-planner component
+
+`modules/bee-registry-planner` is a private, separately published library and
+acceptance fixture for one narrow part of the future package path. Versions
+`wolfy-j/bee-registry-planner@0.1.0` and `@0.1.1` demonstrate immutable-snapshot
+harness-binding planning, durable candidate staging, an agent trait, and
+append-only install/update migrations on SQLite and PostgreSQL. The planner
+cannot publish or apply registry entries, grant permissions, activate drivers,
+or launch processes. It is outside production `src/`, is not a Bee dependency,
+and does not make Hub installation, overlays, self-edit, or activation callable
+from Bee.
+
+Migration 1 creates the staged-candidate store. Migration 2 adds a bounded
+summary with an empty default and leaves migration 1 unchanged. The standalone
+upgrade acceptance installs the published 0.1.0 artifact, writes a candidate,
+updates to the published 0.1.1 artifact, applies migration 2, and verifies the
+old candidate and migration ledger survive. A governed activation owner must
+still re-plan or recheck the exact generation and digests before consuming any
+candidate.
 
 ## Native distribution feasibility
 

@@ -1,0 +1,229 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: thread_storage_policy
+  kind: security.policy
+  policy:
+    actions:
+    - db.get
+    resources:
+    - bee.threads:db
+    effect: allow
+- name: thread_resource_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    resources:
+    - bee.threads:database_ref
+    effect: allow
+- name: thread_read_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:local
+    - read_after
+    - bee.threads:read_after
+    effect: allow
+- name: thread_write_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:local
+    - claim
+    - append
+    - bee.threads:claim
+    - bee.threads:append
+    effect: allow
+- name: thread_authority_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:authority_local
+    - create
+    - get
+    - list
+    - join
+    - leave
+    - close
+    - record
+    - read_after
+    - bee.threads.service:create
+    - bee.threads.service:get
+    - bee.threads.service:list
+    - bee.threads.service:join
+    - bee.threads.service:leave
+    - bee.threads.service:close
+    - bee.threads.service:record
+    - bee.threads.service:read_after
+    effect: allow
+- name: thread_lifecycle_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:lifecycle_local
+    - admit_action
+    - prepare_attempt
+    - start_attempt
+    - request_turn
+    - end_turn
+    - receipt
+    - bee.threads.service:admit_action
+    - bee.threads.service:prepare_attempt
+    - bee.threads.service:start_attempt
+    - bee.threads.service:request_turn
+    - bee.threads.service:end_turn
+    - bee.threads.service:receipt
+    effect: allow
+- name: thread_delivery_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:delivery_local
+    - claim
+    - dispatch
+    - ack
+    - release
+    - expire
+    - reconcile
+    - subscribe
+    - page
+    - ack_page
+    - unsubscribe
+    - resume
+    - close_subscription
+    - forget_subscription
+    - wait
+    - watch
+    - bee.threads.delivery:claim
+    - bee.threads.delivery:dispatch
+    - bee.threads.delivery:ack
+    - bee.threads.delivery:release
+    - bee.threads.delivery:expire
+    - bee.threads.delivery:reconcile
+    - bee.threads.delivery:subscribe
+    - bee.threads.delivery:page
+    - bee.threads.delivery:ack_page
+    - bee.threads.delivery:unsubscribe
+    - bee.threads.delivery:resume
+    - bee.threads.delivery:close_subscription
+    - bee.threads.delivery:forget_subscription
+    - bee.threads.delivery:wait
+    - bee.threads.delivery:watch
+    effect: allow
+- name: thread_projection_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:projection_local
+    - recap_read
+    - recap_update
+    - recap_rebuild
+    - status_read
+    - status_update
+    - status_rebuild
+    - bee.threads.projection:recap_read
+    - bee.threads.projection:recap_update
+    - bee.threads.projection:recap_rebuild
+    - bee.threads.projection:status_read
+    - bee.threads.projection:status_update
+    - bee.threads.projection:status_rebuild
+    effect: allow
+- name: thread_create_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.threads.create
+    resources: '*'
+    effect: allow
+- name: thread_observe_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.threads.observe
+    resources: '*'
+    effect: allow
+- name: thread_lifecycle_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.threads.lifecycle
+    resources: '*'
+    effect: allow
+- name: thread_carrier_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.threads.carrier
+    resources: '*'
+    effect: allow
+- name: thread_approval_policy
+  kind: security.policy
+  meta:
+    comment: Held by the approval authority's delivery worker only
+  policy:
+    actions:
+    - bee.threads.approval
+    resources: '*'
+    effect: allow
+- name: thread_approval_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:approvals_local
+    - append
+    - bee.threads.approvals:append
+    effect: allow
+- name: thread_carrier_client_policy
+  kind: security.policy
+  policy:
+    actions:
+    - contract.open
+    - contract.call
+    - funcs.call
+    resources:
+    - bee.threads:carrier_local
+    - claim
+    - commit
+    - checkpoint
+    - bee.threads.carrier:claim
+    - bee.threads.carrier:commit
+    - bee.threads.carrier:checkpoint
+    effect: allow
+- name: thread_waiter_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - process.registry.register
+    - process.send
+    resources: '*'
+    expression: action == "process.send" || resource == "bee.threads.waiter"
+    effect: allow

@@ -7,7 +7,7 @@ local workspace = "0123456789abcdef0123456789abcdef"
 local function opened(): contract.Reply
     local reply = contract.reply("open", "open")
     reply.workspace_id, reply.id, reply.instance_id = workspace, "view", "instance"
-    reply.definition_id, reply.title, reply.icon = "test:app", "Terminal", "T"
+    reply.definition_id, reply.thread_id, reply.title, reply.icon = "test:app", "thread:review", "Terminal", "T"
     reply.mount, reply.resume_state = "secret-mount", "secret-checkpoint"
     return reply
 end
@@ -28,6 +28,7 @@ local function define_tests()
             test.is_nil(encoded:find("secret", 1, true))
             local views = assert(inventory.views(inventory.views_message(live, "connection")))
             test.eq(views.items[1].workspace_id, workspace)
+            test.eq(views.items[1].thread_id, "thread:review")
             views.items[1].title = "changed by consumer"
             test.eq(live.views[1].title, "Terminal")
             test.is_nil(inventory.observe(live, opened()))
@@ -38,6 +39,7 @@ local function define_tests()
             reply.op, reply.title = "title", "Working"
             local titled = assert(inventory.observe(initial, reply))
             test.eq(titled.views[1].title, "Working")
+            test.eq(titled.views[1].thread_id, "thread:review")
             test.eq(initial.views[1].title, "Terminal")
             test.is_nil(inventory.observe(titled, reply))
             reply.op, reply.error_code = "close", "cancelled"

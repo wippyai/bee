@@ -131,9 +131,7 @@ function M.sample(): Snapshot
     if memory_error then
         add_error(errors, "memory.stats: " .. text(memory_error))
     else
-        -- heap_alloc is the runtime's live heap figure.  alloc is retained as
-        -- a compatibility fallback for runtimes with an older stats shape.
-        snapshot.heap = nonnegative(memory.heap_alloc) or nonnegative(memory.alloc)
+        snapshot.heap = nonnegative(memory.heap_alloc)
         if snapshot.heap == nil then add_error(errors, "memory.stats: heap unavailable") end
         snapshot.heap_objects = nonnegative(memory.heap_objects)
         snapshot.reserved = nonnegative(memory.sys)

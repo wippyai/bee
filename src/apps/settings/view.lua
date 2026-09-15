@@ -1,13 +1,38 @@
 -- Appearance cards and their hit rectangles. No processes or workspace authority.
 local tty = require("tty")
 local appearance = require("appearance")
-type Pane = "theme" | "background" | "taskbar"
+local build_info = require("build_info")
+type Pane = "theme" | "background" | "taskbar" | "about"
 type Hit = {kind: string, index: integer, x: integer, y: integer, width: integer, height: integer}
 type Grid = {columns: integer, rows: integer, capacity: integer, card_width: integer}
 type Frame = {rows: {string}, hits: {Hit}}
 local M = {}
 local RESET = "\27[0m"
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
+local function about_details(info: build_info.Info, width: integer): {string}
+    local details: {string} = {}
+    local function field(label: string, value: string)
+        local clean = value:gsub("%c", " ")
+        local room = maximum(1, width - 4)
+        if tty.text.width(label .. "  " .. clean) <= maximum(0, width - 2) then
+            details[#details + 1] = label .. "  " .. clean
+            return
+        end
+        details[#details + 1] = label
+        for first = 1, #clean, room do details[#details + 1] = "  " .. clean:sub(first, first + room - 1) end
+    end
+    field("Version", info.version)
+    field("Build", info.build)
+    field("Source revision", info.source_revision)
+    field("Source URL", info.source)
+    field("Runtime commit", info.runtime_commit)
+    field("Runtime URL", info.runtime)
+    field("Native version", info.native_version)
+    field("Native module", info.native)
+    field("Website", info.website)
+    return details
+end
+function M.about_count(width: integer): integer return #about_details(build_info.info(), width) end
 function M.grid(width: integer, height: integer): Grid
     local columns = maximum(1, math.floor(math.min(3, (width - 2) // 24)))
     local rows = maximum(0, (height - 6) // 6)
@@ -32,20 +57,39 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local theme = appearance.theme(preferences.theme)
     local grid = M.grid(width, height)
     local themes, backgrounds = appearance.themes(), appearance.backgrounds()
-    local count = pane == "taskbar" and 2 or (pane == "theme" and #themes or #backgrounds)
+    local count = pane == "taskbar" and 2 or (pane == "theme" and #themes or (pane == "background" and #backgrounds or 0))
     local canvas = tty.canvas(width, height)
     local hits: {Hit} = {}
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    put(canvas, 2, 1, "BEE SETTINGS", width - 2, theme.text, theme.surface)
+    put(canvas, 2, 1, pane == "about" and "BEE SETTINGS · ABOUT" or "BEE SETTINGS · DISPLAY", width - 2, theme.text, theme.surface)
+    if pane ~= "about" and width >= 18 and height >= 3 then
+        local label = width >= 48 and " Use node default (D) " or " Default (D) "
+        local x, y = width >= 48 and width - #label or 2, width >= 48 and 1 or 3
+        put(canvas, x, y, label, #label, theme.accent, theme.surface)
+        hits[#hits + 1] = {kind = "inherit", index = 0, x = x, y = y, width = #label, height = 1}
+    end
     local tab_x = 2
-    for _, kind in ipairs({"theme", "background", "taskbar"}) do
-        local text = kind == "theme" and " Themes " or (kind == "background" and " Backgrounds " or " Tabs ")
-        if width < 26 then text = kind == "theme" and " Theme " or (kind == "background" and " BG " or " Tabs ") end
+    for _, kind in ipairs({"theme", "background", "taskbar", "about"}) do
+        local text = kind == "theme" and " Themes " or (kind == "background" and " Backgrounds " or (kind == "taskbar" and " Tabs " or " About "))
+        if width < 26 then text = kind == "theme" and " Theme " or (kind == "background" and " BG " or (kind == "taskbar" and " Tabs " or " About ")) end
         local size = math.floor(math.max(0, math.min(tty.text.width(text), width - tab_x)))
         local selected = pane == kind
         put(canvas, tab_x, 2, text, size, selected and appearance.selection_text(theme) or theme.muted, selected and theme.accent or theme.surface)
         if size >= 3 and height >= 2 then hits[#hits + 1] = {kind = kind, index = 0, x = tab_x, y = 2, width = size, height = 1} end
         tab_x = tab_x + size + 1
+    end
+    if pane == "about" then
+        local info = build_info.info()
+        local details = about_details(info, width)
+        local capacity = maximum(0, height - 5)
+        local first = math.floor(math.max(0, math.min(math.max(0, #details - capacity), offset)))
+        for index = 1, math.min(capacity, #details - first) do
+            local detail = details[first + index]
+            put(canvas, 2, 4 + index - 1, tty.text.truncate(detail:gsub("%c", " "), maximum(0, width - 2), "…"), width - 2, theme.text, theme.surface)
+        end
+        local page = capacity == 0 and "Resize to read build details" or (#details > capacity and ("Details " .. tostring(first + 1) .. "–" .. tostring(math.min(#details, first + capacity)) .. "/" .. tostring(#details) .. " · PgUp/PgDn scroll") or "Build details are from the loaded Bee bundle")
+        if height >= 3 then put(canvas, 2, height - 1, message and message ~= "" and message:gsub("%c", " ") or page, width - 2, theme.muted, theme.surface) end
+        return {rows = canvas:rows(), hits = hits}
     end
     if grid.capacity == 0 or width < 12 then
         local label = pane == "taskbar" and (preferences.taskbar == "icons" and "Icons" or "Labels") or (pane == "theme" and theme.title or preferences.background)

@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.governance_wasm_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: data
+  kind: fs.directory
+  directory: ./data
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, fs.get]
+    resources: 'bee.governance_wasm_probe:*'
+    effect: allow
+- name: probe
+  kind: function.wat
+  source: file://probe.wat
+  wit: 'probe: func(mode: s32) -> s32;'
+  method: probe
+  imports: [wasi:preview1]
+  wasi:
+    mounts:
+    - fs: bee.governance_wasm_probe:data
+      guest: /data
+      read_only: true
+  pool: {type: inline}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, logger]
+  security:
+    policies: [bee.governance_wasm_probe:policy]
+  meta:
+    command:
+      name: governance-wasm-probe
+      security:
+        actor: {id: bee.governance_wasm_probe}

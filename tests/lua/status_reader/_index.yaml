@@ -1,0 +1,63 @@
+version: '1.0'
+namespace: bee.status_reader
+entries:
+- name: presentation_test
+  kind: function.lua
+  source: file://presentation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    reader: bee.application:status_reader
+    surface: bee.application:status_surface
+- name: session_test
+  kind: function.lua
+  source: file://session_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, security, channel, time]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+- name: bindings_test
+  kind: function.lua
+  source: file://bindings_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    bindings: bee.session:bindings
+    model: bee.desktop:model
+    statuses: bee.session:statuses
+    reader: bee.application:status_reader
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    reader: bee.application:status_reader
+- name: surface_test
+  kind: function.lua
+  source: file://surface_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    reader: bee.application:status_reader
+    caller: bee.application:caller
+    harness: bee.threads:harness
+- name: async_test
+  kind: function.lua
+  source: file://async_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, channel]
+  imports:
+    test: wippy.test:test
+    driver: bee.session:status
+    reader: bee.application:status_reader
+    harness: bee.threads:harness

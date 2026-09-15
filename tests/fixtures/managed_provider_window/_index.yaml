@@ -1,0 +1,133 @@
+version: '1.0'
+namespace: bee.managed_provider_fixture
+entries:
+- name: policy_claude
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+- name: policy_codex
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+    provider_ref: bee.managed_provider_fixture:codex_provider
+- name: definition_claude
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: managed-window-fixture
+    title: Open Claude Code window
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: window
+    policy_ref: bee.managed_provider_fixture:policy_claude
+    default_mode: window
+    allowed_overrides:
+    - brief
+    - thread
+    workdir_policy:
+      kind: caller_workspace
+    thread_policy:
+      kind: caller
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: definition_codex
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: managed-codex-window-fixture
+    title: Open Codex window
+    command_names: []
+    binding_ref: bee.driver.codex:binding
+    profile_id: window
+    policy_ref: bee.managed_provider_fixture:policy_codex
+    default_mode: window
+    allowed_overrides:
+    - brief
+    - thread
+    workdir_policy:
+      kind: caller_workspace
+    thread_policy:
+      kind: caller
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: codex_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    test_support: true
+  data:
+    schema_revision: bee.codex-provider@1
+    name: bee
+    base_url: http://127.0.0.1:1/v1
+    model: gpt-5
+    loopback_fixture: true
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules:
+  - process
+  - channel
+  - time
+  - security
+  - tty
+  - funcs
+  - json
+  - registry
+  imports:
+    appearance: bee.desktop:appearance
+  security:
+    policies:
+    - bee:desktop_policy
+    - bee:core_spawn_policy
+    - bee:thread_authority_client_policy
+    - bee:thread_lifecycle_client_policy
+    - bee:thread_create_policy
+  meta:
+    type: test
+    suite: bee
+    timeout: 45s
+- name: expectation
+  kind: registry.entry
+  meta:
+    test_support: true
+  data:
+    claude_marker: Let's get started.
+    codex_marker: OpenAI Codex

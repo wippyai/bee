@@ -1,0 +1,96 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: thread_waiter_policy
+  kind: security.policy.expr
+  policy:
+    actions: [process.registry.register, process.send]
+    resources: '*'
+    expression: 'action == "process.send" || resource == "bee.threads.waiter"'
+    effect: allow
+- name: thread_storage_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.threads:db]
+    effect: allow
+- name: thread_resource_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: [bee.threads:database_ref]
+    effect: allow
+- name: thread_read_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:local, read_after, bee.threads:read_after]
+    effect: allow
+- name: thread_write_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:local, claim, append, bee.threads:claim, bee.threads:append]
+    effect: allow
+- name: thread_authority_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:authority_local, create, get, list, join, leave, close, record, read_after,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:list, bee.threads.service:join,
+      bee.threads.service:leave, bee.threads.service:close, bee.threads.service:record, bee.threads.service:read_after]
+    effect: allow
+- name: thread_lifecycle_client_policy
+  kind: security.policy
+  policy:
+    actions: [contract.open, contract.call, funcs.call]
+    resources: [bee.threads:lifecycle_local, admit_action, start_attempt, request_turn, end_turn, receipt,
+      bee.threads.service:admit_action, bee.threads.service:start_attempt, bee.threads.service:request_turn,
+      bee.threads.service:end_turn, bee.threads.service:receipt]
+    effect: allow
+- name: thread_create_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.create]
+    resources: '*'
+    effect: allow
+- name: thread_observe_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.observe]
+    resources: '*'
+    effect: allow
+- name: thread_lifecycle_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.lifecycle]
+    resources: '*'
+    effect: allow
+- name: probe_registry_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find]
+    resources: '*'
+    effect: allow
+- name: workers
+  kind: process.host
+  host: {max_processes: 4, workers: 2}
+  lifecycle: {auto_start: true}
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: probe
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [registry, contract, sql, io]
+  imports:
+    journal: bee.threads:client
+  meta:
+    command:
+      name: threads-isolation
+      short: Prove the threads module closure boots without the desktop
+      security:
+        actor: {id: threads-isolation}
+        policies: [bee:thread_read_client_policy, bee:thread_write_client_policy, bee:probe_registry_policy,
+          bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy]

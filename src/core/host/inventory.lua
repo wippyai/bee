@@ -1,7 +1,7 @@
 -- MIT. Public workspace descriptions contain no execution or mount authority.
 local contract = require("contract")
 local decode = require("decode")
-type View = {workspace_id: string, view_id: string, instance_id: string, definition_id: string, title: string, icon: string?}
+type View = {workspace_id: string, view_id: string, instance_id: string, definition_id: string, thread_id: string?, title: string, icon: string?}
 type State = {workspace_id: string, catalog_revision: integer, views_revision: integer, catalog: {contract.Descriptor}, views: {View}}
 type Catalog = {version: integer, workspace_id: string, connection_id: string, revision: integer, items: {contract.Descriptor}}
 type Views = {version: integer, workspace_id: string, connection_id: string, revision: integer, items: {View}}
@@ -20,9 +20,11 @@ function M.view(value: unknown): View?
     local view_id, instance_id = contract.text(value.view_id, 80), contract.text(value.instance_id, 80)
     local definition_id, title = contract.text(value.definition_id, 160), contract.text(value.title, 80)
     local icon = contract.text(value.icon, 8)
+    local thread_id = value.thread_id == nil and nil or contract.thread_id(value.thread_id)
     if not workspace_id or not view_id or view_id == "" or not instance_id or instance_id == ""
-        or not definition_id or definition_id == "" or not title or (value.icon ~= nil and not icon) then return nil end
-    return {workspace_id = workspace_id, view_id = view_id, instance_id = instance_id, definition_id = definition_id, title = title, icon = icon}
+        or not definition_id or definition_id == "" or not title or (value.icon ~= nil and not icon)
+        or (value.thread_id ~= nil and not thread_id) then return nil end
+    return {workspace_id = workspace_id, view_id = view_id, instance_id = instance_id, definition_id = definition_id, thread_id = thread_id, title = title, icon = icon}
 end
 function M.new(workspace_id: string): State
     if not contract.workspace_id(workspace_id) then error("Invalid inventory workspace") end
@@ -43,7 +45,7 @@ function M.observe(state: State, reply: contract.Reply): State?
     local incoming: View? = nil
     if opened then
         incoming = M.view({workspace_id = state.workspace_id, view_id = reply.id, instance_id = reply.instance_id,
-            definition_id = reply.definition_id, title = reply.title, icon = reply.icon})
+            definition_id = reply.definition_id, thread_id = reply.thread_id, title = reply.title, icon = reply.icon})
         if not incoming then return nil end
     end
     local views: {View} = {}
@@ -56,7 +58,7 @@ function M.observe(state: State, reply: contract.Reply): State?
             else
                 if titled and previous.title ~= reply.title then
                     current = {workspace_id = previous.workspace_id, view_id = previous.view_id, instance_id = previous.instance_id,
-                        definition_id = previous.definition_id, title = reply.title, icon = previous.icon}
+                        definition_id = previous.definition_id, thread_id = previous.thread_id, title = reply.title, icon = previous.icon}
                     changed = true
                 end
                 views[#views + 1] = current

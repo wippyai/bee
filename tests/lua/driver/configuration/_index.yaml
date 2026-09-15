@@ -1,0 +1,50 @@
+version: '1.0'
+namespace: bee.driver
+entries:
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [hash, funcs, security, json, toml]
+  security:
+    policies: [bee:resource_resolve_policy, bee:placement_store_policy]
+  imports:
+    test: wippy.test:test
+    placement_types: bee.placement:types
+    placement_configuration: bee.placement.native:configuration
+    configuration: bee.driver:configuration
+    claude: bee.driver.claude:configure
+    codex: bee.driver.codex:configure
+    grok: bee.driver.grok:configure
+    agy: bee.driver.agy:configure
+- name: fixture_builder_ok
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_ok
+  meta: {type: test_support}
+- name: fixture_builder_bad_output
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_bad_output
+  meta: {type: test_support}
+- name: fixture_builder_control_chars
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_control_chars
+  meta: {type: test_support}
+- name: fixture_builder_oversized
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_oversized
+  meta: {type: test_support}
+- name: fixture_builder_error
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_error
+  meta: {type: test_support}
+- name: fixture_builder_empty
+  kind: function.lua
+  source: file://fixture_builder.lua
+  method: build_empty
+  meta: {type: test_support}

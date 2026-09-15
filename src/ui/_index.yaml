@@ -4,3 +4,6 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
+- name: names
+  kind: library.lua
+  source: file://names.lua

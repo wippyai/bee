@@ -2,9 +2,11 @@
 local registry = require("registry")
 local contract = require("contract")
 local M = {}
-function M.bindings(): {contract.Binding}
-    local entry, err = registry.get("bee:application_admission")
-    if err then error(tostring(err)) end
+function M.bindings(pinned: registry.Snapshot?): {contract.Binding}
+    local entry, err
+    if pinned then entry, err = pinned:get("bee:application_admission")
+    else entry, err = registry.get("bee:application_admission") end
+    if err or not entry or entry.kind ~= "registry.entry" then error("Invalid application admission: " .. tostring(err)) end
     local data: unknown = entry.data
     if type(data) ~= "table" or type(data.bindings) ~= "table" then error("Invalid application admission") end
     local result: {contract.Binding} = {}
@@ -21,15 +23,16 @@ function M.bindings(): {contract.Binding}
     end
     return result
 end
-function M.descriptor(id: string): contract.Descriptor?
-    local entry, err = registry.get(id)
+function M.descriptor(id: string, pinned: registry.Snapshot?): contract.Descriptor?
+    local entry, err
+    if pinned then entry, err = pinned:get(id) else entry, err = registry.get(id) end
     if err or not entry or entry.kind ~= "process.lua" or entry.meta.type ~= "bee.application" then return nil end
     return contract.descriptor(id, entry.meta.application)
 end
-function M.items(bindings: {contract.Binding}): {contract.Descriptor}
+function M.items(bindings: {contract.Binding}, pinned: registry.Snapshot?): {contract.Descriptor}
     local result: {contract.Descriptor} = {}
     for _, binding in ipairs(bindings) do
-        local item = M.descriptor(binding.definition_id)
+        local item = M.descriptor(binding.definition_id, pinned)
         if item then result[#result + 1] = item end
     end
     table.sort(result, function(a, b)

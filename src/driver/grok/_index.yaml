@@ -1,0 +1,194 @@
+version: '1.0'
+namespace: bee.driver.grok
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver_grok
+  readme: file://README.md
+  meta:
+    title: Bee Grok driver
+    comment: Declarative Grok CLI driver; placement owns process, credentials, and private-home materialization
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: grok
+  default: ''
+  readonly: true
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    events: bee.driver.kit:events
+    types: bee.driver:types
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    quote: bee.driver.kit:quote
+    configure_protocol: bee.driver:configuration
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: prepare
+  kind: function.lua
+  source: file://prepare_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.grok:launch
+    types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure_method.lua
+  method: handle
+  imports:
+    configuration: bee.driver.grok:configuration
+    configure_protocol: bee.driver:configuration
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.grok:launch
+    types: bee.driver:types
+- name: normalize
+  kind: function.lua
+  source: file://normalize_method.lua
+  method: handle
+  imports:
+    protocol: bee.driver.grok:protocol
+    bounds: bee.threads.records:bounds
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.grok:prepare
+      dispatch: bee.driver.grok:dispatch
+      normalize: bee.driver.grok:normalize
+      configure: bee.driver.grok:configure
+  meta:
+    type: harness.driver
+    driver_id: grok
+    profiles_ref: bee.driver.grok:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.grok:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Grok CLI
+      implementation_version: 1.0.30
+      default_profile: session
+      profiles:
+      - id: session
+        mode: session
+        hooks:
+          transports: []
+          events: []
+        inbound:
+        - next_turn
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+        protocol: stream-json
+        protocol_revision: streaming-json-1
+        answer_path: &id001
+          strategy: accumulate
+          adapter_ref: bee.driver.grok:protocol
+        resume: &id002
+          strategy: per-process
+          portable: false
+        isolation_env: &id003
+          variables:
+          - HOME
+          - GROK_HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        permission_exchange:
+          mode: none
+        input_ready: &id004
+          strategy: none
+        interrupt: &id005
+          methods:
+          - signal_group
+      - id: batch
+        mode: batch
+        hooks:
+          transports: []
+          events: []
+        inbound: []
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+        protocol: stream-json
+        protocol_revision: streaming-json-1
+        answer_path: *id001
+        resume: *id002
+        isolation_env: *id003
+        exit_codes_trustworthy: false
+        permission_exchange:
+          mode: none
+        input_ready: *id004
+        interrupt: *id005
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        hooks: {transports: [command], events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]}
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
+        isolation_env: *id003
+        exit_codes_trustworthy: false
+        permission_exchange:
+          mode: none
+        input_ready:
+          strategy: none
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Grok window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: grok-window
+    title: Grok CLI
+    command_names: [grok]
+    binding_ref: bee.driver.grok:binding
+    profile_id: window
+    policy_ref: bee:launch_policy_grok_window
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: [grok_login]
+    presentation: {start_menu: true, fullscreen: true, reuse: never}
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    file:
+      path: .grok/auth.json
+      content_format: json
+      initialize: []

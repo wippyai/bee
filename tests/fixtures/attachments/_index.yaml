@@ -81,6 +81,9 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     recovery: bee.workspace:recovery
+    persistence: bee.workspace:persistence
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
 - name: host_guest
   kind: process.lua
   source: file://host.lua
@@ -90,6 +93,9 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     recovery: bee.workspace:recovery
+    persistence: bee.workspace:persistence
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
 - name: observer_producer
   kind: process.lua
   source: file://observation.lua

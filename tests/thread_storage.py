@@ -1,4 +1,5 @@
 """Production journal: native caller scope, replay, conflicts and checked migrations."""
+from workspace import database_environment
 from pathlib import Path
 import os
 import shutil
@@ -20,7 +21,7 @@ local function main(run_name: string?)
     if run_name == "parallel" then
         local events = assert(process.events())
         for i = 1, 4 do
-            assert(process.spawn_monitored("bee.journal_probe:main", "bee.test_status:workers", "parallel-" .. tostring(i)))
+            assert(process.spawn_monitored("bee.journal_probe:main", "bee:workers", "parallel-" .. tostring(i)))
         end
         local finished = 0
         while finished < 4 do
@@ -65,6 +66,60 @@ return {main = main}
 '''
 
 
+
+# This subscription-lifecycle restart probe proves the durable cursor
+# survives a close and restart, a resume fences the old lease, and a forgotten
+# subscription stays absent after restart.
+LIFECYCLE_PROBE = r'''
+local contract = require("contract")
+local uuid = require("uuid")
+local io = require("io")
+local THREAD = "lifecycle-thread"
+local function key(): string
+    local id, err = uuid.v4()
+    if err or not id then error("uuid: " .. tostring(err)) end
+    return id
+end
+local function call(binding: any, method: string, request: {[string]: unknown}): {[string]: unknown}
+    local reply = assert(binding[method](binding, request))
+    assert(type(reply) == "table" and reply.ok == true, method .. " failed: " .. tostring(type(reply) == "table" and reply.error and reply.error.code))
+    return reply.value :: {[string]: unknown}
+end
+local function main(phase: string?, sub: string?, cursor: string?)
+    local authority = assert(contract.open("bee.threads:authority_local"))
+    local delivery = assert(contract.open("bee.threads:delivery_local"))
+    if phase == "prepare" then
+        call(authority, "create", {thread_id = THREAD, idempotency_key = key(), title = "Lifecycle"})
+        for i = 1, 5 do
+            call(authority, "record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
+                body = {message_id = "m" .. tostring(i), message_kind = "request", recipient_ids = {}, content = {text = "line " .. tostring(i)}}})
+        end
+        local created = call(delivery, "subscribe", {thread_id = THREAD, idempotency_key = key(), consumer_id = "durable", after_sequence = 0, durability = "durable"})
+        local page = call(delivery, "page", {thread_id = THREAD, subscription_id = created.subscription_id})
+        call(delivery, "ack_page", {thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id, page_id = page.page_id, scanned_through = page.scanned_through})
+        call(delivery, "close_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = created.subscription_id})
+        io.print("SUB=" .. tostring(created.subscription_id) .. " CURSOR=" .. tostring(page.scanned_through))
+    elseif phase == "resume" then
+        local expected = math.floor(tonumber(cursor) or -1)
+        local resumed = call(delivery, "resume", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
+        assert(resumed.after_sequence == expected, "cursor not preserved across restart")
+        assert(resumed.lease_generation == 2, "resume did not fence the old lease")
+        local page = call(delivery, "page", {thread_id = THREAD, subscription_id = sub})
+        assert(page.from_sequence == expected, "resumed page did not start at the preserved cursor")
+        io.print("RESUMED")
+    elseif phase == "forget" then
+        call(delivery, "close_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
+        call(delivery, "forget_subscription", {thread_id = THREAD, idempotency_key = key(), subscription_id = sub})
+        io.print("FORGOTTEN")
+    elseif phase == "verify" then
+        local reply = assert(delivery:page({thread_id = THREAD, subscription_id = sub}))
+        assert(type(reply) == "table" and reply.ok == false and reply.error.code == "NOT_FOUND", "forgotten subscription survived restart")
+        io.print("ABSENT")
+    end
+end
+return {main = main}
+'''
+
 def main():
     with tempfile.TemporaryDirectory(prefix="bee-thread-storage-") as directory:
         folder = Path(directory)
@@ -84,7 +139,7 @@ def main():
                 "actions": ["process.spawn", "process.spawn.monitored", "process.host", "process.monitor"],
                 "resources": "*", "effect": "allow"}}]}))
         database = folder / "threads.db"
-        environment = {**os.environ, "BEE_THREADS_DB": str(database), "BEE_WORKSPACE_DB": str(folder / "workspace.db")}
+        environment = database_environment(folder, BEE_THREADS_DB=str(database))
 
         def run(ok=True, run_name=None):
             registry = folder / f"registry-{run_name or 'main'}.db"
@@ -99,25 +154,58 @@ def main():
         run()
         with sqlite3.connect(database) as db:
             db.execute("INSERT INTO bee_threads VALUES ('foreign', 'foreign-actor', 'now')")
-            checksum = db.execute("SELECT checksum FROM bee_thread_schema_migrations").fetchone()[0]
+            checksum = db.execute("SELECT checksum FROM bee_thread_schema_migrations WHERE id=1").fetchone()[0]
         run()
         with sqlite3.connect(database) as db:
             assert db.execute("SELECT COUNT(*) FROM bee_thread_events").fetchone()[0] == 65
-            db.execute("UPDATE bee_thread_schema_migrations SET checksum='tampered'")
+            db.execute("UPDATE bee_thread_schema_migrations SET checksum='tampered' WHERE id=1")
         assert "checksum changed" in run(False)
         with sqlite3.connect(database) as db:
             assert db.execute("SELECT COUNT(*) FROM bee_thread_events").fetchone()[0] == 65
-            db.execute("UPDATE bee_thread_schema_migrations SET checksum=?", (checksum,))
-            db.execute("INSERT INTO bee_thread_schema_migrations VALUES (2, 'future', 'future', 'now')")
+            db.execute("UPDATE bee_thread_schema_migrations SET checksum=? WHERE id=1", (checksum,))
+            db.execute("INSERT INTO bee_thread_schema_migrations VALUES (9, 'future', 'future', 'now')")
         assert "schema is newer" in run(False)
         with sqlite3.connect(database) as db:
-            db.execute("DELETE FROM bee_thread_schema_migrations WHERE id=2")
+            db.execute("DELETE FROM bee_thread_schema_migrations WHERE id=9")
         run(run_name="parallel")
         with sqlite3.connect(database) as db:
             count, distinct_count, maximum = db.execute("SELECT COUNT(*), COUNT(DISTINCT sequence), MAX(sequence) FROM bee_thread_events").fetchone()
             assert (count, distinct_count, maximum) == (105, 105, 105)
 
-    print("Production journal: native caller SQL denial, actor spoof denial, 64-row replay, cold idempotency/conflict, invalid JSON/cursor, migration integrity, concurrent writers")
+        # Durable subscription lifecycle across restarts. The command actor
+        # can call the contracts and create only this fixture's thread.
+        lifecycle = folder / "src/lifecycle_probe"
+        lifecycle.mkdir()
+        (lifecycle / "main.lua").write_text(LIFECYCLE_PROBE)
+        (lifecycle / "_index.yaml").write_text(yaml.safe_dump({
+            "version": "1.0", "namespace": "bee.lifecycle_probe", "entries": [{
+                "name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
+                "modules": ["contract", "uuid", "io"],
+                "imports": {},
+                "meta": {"command": {"name": "lifecycle-probe", "security": {"actor": {"id": "lifecycle-test"}}}},
+                "security": {"policies": ["bee:thread_authority_client_policy", "bee:thread_delivery_client_policy", "bee.lifecycle_probe:create_policy"]},
+            }, {"name": "create_policy", "kind": "security.policy", "policy": {
+                "actions": ["bee.threads.create"], "resources": ["lifecycle-thread"], "effect": "allow"}}]}))
+        subprocess.run([str(RUNTIME), "lint", "--ns", "bee.lifecycle_probe"], cwd=folder, check=True)
+        lifecycle_db = folder / "lifecycle.db"
+        lifecycle_env = database_environment(folder, BEE_THREADS_DB=str(lifecycle_db))
+
+        def lifecycle_run(*arguments):
+            registry = folder / f"registry-lifecycle-{arguments[0]}.db"
+            result = subprocess.run([str(RUNTIME), "run", "lifecycle-probe", *arguments, "--set", f"registry.history_path={registry}"],
+                                    cwd=folder, env=lifecycle_env, capture_output=True, text=True, timeout=30)
+            output = result.stdout + result.stderr
+            assert result.returncode == 0, output
+            return output
+
+        prepared = lifecycle_run("prepare")
+        fields = dict(pair.split("=", 1) for pair in prepared.split() if "=" in pair)
+        subscription_id, cursor = fields["SUB"], fields["CURSOR"]
+        assert "RESUMED" in lifecycle_run("resume", subscription_id, cursor)
+        assert "FORGOTTEN" in lifecycle_run("forget", subscription_id)
+        assert "ABSENT" in lifecycle_run("verify", subscription_id)
+
+    print("Production journal: native caller SQL denial, actor spoof denial, 64-row replay, cold idempotency/conflict, invalid JSON/cursor, migration integrity, concurrent writers; subscription-lifecycle restart (cursor preserved, lease fenced, forgotten absent)")
 
 
 if __name__ == "__main__":

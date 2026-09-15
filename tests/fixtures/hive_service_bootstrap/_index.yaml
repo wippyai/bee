@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.hive_service_bootstrap
+entries:
+- name: names_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    effect: allow
+- name: execute_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.supervisor:execute]
+    effect: allow
+- name: probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.send, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: probe_inspect_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: probe
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [process, time, io, system]
+  imports:
+    types: bee.hive:types
+    client: bee.hive:client
+  meta:
+    type: test_support
+    command:
+      name: hive-service-probe
+      security:
+        actor: {id: bee.hive.probe}
+        policies: [bee.hive_service_bootstrap:probe_policy, bee.hive_service_bootstrap:probe_inspect_policy]

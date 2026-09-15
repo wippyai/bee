@@ -1,16 +1,17 @@
 -- MIT. Local supervisor messages describe identities, never confer authority.
 local contract = require("contract")
 local decode = require("decode")
-type Host = {workspace_id: string, desktop: decode.Desktop}
+type Host = {workspace_id: string, desktop: decode.Desktop, fresh: boolean}
 type Ready = {client_id: string, import_receipt: string}
 type Quit = {request_id: string, emergency: boolean}
 local M = {}
 function M.host(value: unknown): Host?
     if type(value) ~= "table" or value.version ~= 1 or type(value.saved) ~= "table" then return nil end
+    if value.fresh ~= nil and type(value.fresh) ~= "boolean" then return nil end
     local workspace_id = contract.workspace_id(value.workspace_id)
     local desktop = decode.desktop(value.saved.desktop)
     if not workspace_id or not desktop then return nil end
-    return {workspace_id = workspace_id, desktop = desktop}
+    return {workspace_id = workspace_id, desktop = desktop, fresh = value.fresh == true}
 end
 function M.request(value: unknown, workspace_id: string): string?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
@@ -18,10 +19,12 @@ function M.request(value: unknown, workspace_id: string): string?
     if not id or id == "" then return nil end
     return id
 end
-function M.ready(value: unknown, workspace_id: string): Ready?
+function M.ready(value: unknown, workspace_id: string, require_import: boolean): Ready?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
     local client_id = contract.workspace_id(value.client_id)
-    local receipt = contract.workspace_id(value.import_receipt)
+    local receipt: string? = nil
+    if value.import_receipt == "" and not require_import then receipt = ""
+    else receipt = contract.workspace_id(value.import_receipt) end
     if not client_id or not receipt then return nil end
     return {client_id = client_id, import_receipt = receipt}
 end

@@ -1,7 +1,38 @@
 version: '1.0'
 namespace: bee.threads.persist
 entries:
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+  imports:
+    persist: bee.persist:database
+    migrations: bee.threads.persist:migrations
+- name: legacy
+  kind: library.lua
+  source: file://legacy.lua
+  modules: [sql, json]
 - name: store
   kind: library.lua
   source: file://store.lua
-  modules: [sql, json, hash]
+  modules: [sql]
+  imports:
+    database: bee.threads.persist:database
+    legacy: bee.threads.persist:legacy
+- name: reader
+  kind: library.lua
+  source: file://reader.lua
+  modules: [sql]
+- name: transaction
+  kind: library.lua
+  source: file://transaction.lua
+  modules: [sql, time, uuid]
+  imports:
+    shared: bee.persist:transaction
+- name: owner
+  kind: library.lua
+  source: file://owner.lua
+  modules: [sql, uuid]

@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: resource_roots
+  kind: registry.entry
+  meta:
+    type: bee.resource_roots
+    comment: Host-selected roots available to first-use harness setup; driver declarations select only resource
+      names
+  data:
+    roots:
+    - root_ref: bee:workspace_root
+      access: write
+    - root_ref: bee.placement.native:root
+      access: write

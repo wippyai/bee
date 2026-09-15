@@ -4,7 +4,7 @@ local contract = require("contract")
 local json = require("json")
 local model = require("model")
 local appearance = require("appearance")
-type Record = {id: string, instance_id: string, definition_id: string, resume_schema: string,
+type Record = {id: string, instance_id: string, definition_id: string, thread_id: string?, resume_schema: string,
     restart_policy: string, resume_state: string, window: model.Window?}
 type Desktop = {scene: model.Scene, tabs: {string}, preferences: appearance.Preferences}
 type Snapshot = {version: integer, desktop: Desktop, applications: {Record}}
@@ -13,7 +13,9 @@ function M.record(value: unknown): Record?
     if type(value) ~= "table" then return nil end
     local id, instance = contract.text(value.id, 80), contract.text(value.instance_id, 80)
     local definition, schema = contract.text(value.definition_id, 160), contract.text(value.resume_schema, 80)
-    if not id or id == "" or not instance or instance == "" or not definition or definition == "" or not schema or schema == "" then return nil end
+    local thread_id = value.thread_id == nil and nil or contract.thread_id(value.thread_id)
+    if not id or id == "" or not instance or instance == "" or not definition or definition == "" or not schema or schema == ""
+        or (value.thread_id ~= nil and not thread_id) then return nil end
     if value.restart_policy ~= "automatic" and value.restart_policy ~= "manual" then return nil end
     if type(value.resume_state) ~= "string" or #value.resume_state > 65536 then return nil end
     if value.resume_state ~= "" then
@@ -26,7 +28,7 @@ function M.record(value: unknown): Record?
         if not scene or scene.windows[1].id ~= id or scene.windows[1].instance_id ~= instance then return nil end
         window = scene.windows[1]
     end
-    return {id = id, instance_id = instance, definition_id = definition, resume_schema = schema,
+    return {id = id, instance_id = instance, definition_id = definition, thread_id = thread_id, resume_schema = schema,
         restart_policy = value.restart_policy, resume_state = value.resume_state, window = window}
 end
 function M.decode(encoded: string): Snapshot?

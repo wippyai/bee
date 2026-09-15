@@ -4,7 +4,7 @@ import tempfile
 from tui_smoke import Desktop
 from workspace import fixture_workspace
 
-with fixture_workspace() as project:
+with fixture_workspace(unit_tests=False) as project:
     presenter = project / "src/core/terminal/main.lua"
     source = presenter.read_text()
     start = 'local sent, send_error = process.send(owner, "bee.desktop.command", {version = 1, op = "place", id = capture.id,'

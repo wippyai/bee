@@ -62,9 +62,38 @@ INSERT INTO workspace_identity (singleton, workspace_id)
 VALUES (1, lower(hex(randomblob(16))))
 ]]
 
+-- Workspace-owned display decisions.  These rows deliberately contain no
+-- process, viewport, mount, or client connection identifiers.  A prepared
+-- transfer remains durable after a host crash so recovery can fence a stale
+-- source layout before a controller bind is considered.
+local DISPLAY_ASSIGNMENTS_TABLE_SQL = [[
+CREATE TABLE workspace_display_assignments (
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    display_id TEXT NOT NULL CHECK (length(CAST(display_id AS BLOB)) BETWEEN 1 AND 160 AND display_id NOT GLOB '*[^ -~]*'),
+    revision INTEGER NOT NULL CHECK (revision >= 1 AND revision <= 9007199254740990),
+    PRIMARY KEY (view_id, instance_id)
+);
+CREATE TABLE workspace_display_transfer_receipts (
+    request_id TEXT PRIMARY KEY CHECK (length(CAST(request_id AS BLOB)) BETWEEN 1 AND 80 AND request_id NOT GLOB '*[^ -~]*'),
+    view_id TEXT NOT NULL CHECK (length(CAST(view_id AS BLOB)) BETWEEN 1 AND 80 AND view_id NOT GLOB '*[^ -~]*'),
+    instance_id TEXT NOT NULL CHECK (length(CAST(instance_id AS BLOB)) BETWEEN 1 AND 80 AND instance_id NOT GLOB '*[^ -~]*'),
+    source_display_id TEXT NOT NULL CHECK (length(CAST(source_display_id AS BLOB)) BETWEEN 1 AND 160 AND source_display_id NOT GLOB '*[^ -~]*'),
+    target_display_id TEXT NOT NULL CHECK (length(CAST(target_display_id AS BLOB)) BETWEEN 1 AND 160 AND target_display_id NOT GLOB '*[^ -~]*'),
+    expected_revision INTEGER NOT NULL CHECK (expected_revision >= 1 AND expected_revision <= 9007199254740990),
+    phase TEXT NOT NULL CHECK (phase IN ('prepared', 'committed', 'failed')),
+    error TEXT CHECK (error IS NULL OR length(CAST(error AS BLOB)) <= 1024),
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX workspace_display_one_prepared_transfer
+ON workspace_display_transfer_receipts (view_id, instance_id)
+WHERE phase = 'prepared';
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
+    {id = 3, name = "workspace_display_assignments_v1", sql = DISPLAY_ASSIGNMENTS_TABLE_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string

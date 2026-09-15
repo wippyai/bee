@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.gateway_probe
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, http_client, json, time, process, registry, security]
+  meta:
+    command:
+      name: gateway-probe
+      security:
+        actor: {id: bee.test.gateway}
+  security:
+    policies: [bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, http_client.private_ip, http_client.request, process.spawn, process.host, registry.get, bee.threads.lifecycle, bee.threads.carrier]
+    resources: [bee.gateway:open, bee.gateway:admit, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:materialize, bee.gateway:reissue, bee.gateway:revoke_attempt, bee.gateway:check, bee.gateway:authorize_materialization, bee.gateway:hook_queue, bee.gateway:hook_claim, bee.gateway:hook_ack, bee.gateway:hook_reject, bee.threads.carrier:claim, bee.threads.carrier:commit, bee:gateway_endpoint, 127.0.0.1, '*', bee.gateway_probe:drainer, bee:workers]
+    effect: allow
+- name: configuration_caller_policy
+  kind: security.policy
+  meta:
+    comment: Privileged fixture caller may construct a selected child scope and invoke the rendering probe
+  policy:
+    actions: [funcs.security, security.scope.create, security.policy.get]
+    resources: [security, custom, bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy]
+    effect: allow
+- name: render_configuration
+  kind: function.lua
+  source: file://render_configuration.lua
+  method: run
+  modules: [exec, funcs, security, sql]
+  imports:
+    configuration: bee.driver.codex:configuration
+- name: drainer
+  kind: process.lua
+  source: file://drainer.lua
+  method: main
+  modules: [funcs, time]
+  security:
+    policies: [bee.gateway_probe:policy, bee:gateway_manage_policy]

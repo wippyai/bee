@@ -87,10 +87,14 @@ def run():
                 ui.wait("Honey")
                 ui.key(b"\x1b[F")
                 ui.wait("Windows Classic")
-                assert stored(pair_folder)["desktop"]["preferences"]["theme"] == "classic"
+                assert stored(pair_folder)["desktop"]["preferences"]["theme"] == "honey", "Display Settings changed workspace defaults"
+                with sqlite3.connect(pair_folder / "workspace.db.client") as db:
+                    display_state = json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
+                assert display_state["preferences"]["theme"] == "classic"
+                assert display_state["appearance_mode"] == "custom"
                 ui.key(b"\x1b\t")
                 ui.pump(.3)
-                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "Existing terminal did not receive the workspace page"
+                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "Existing terminal did not receive its controlling display page"
                 ui.key(b"\x10")
                 ui.wait("Windows Classic")
                 ui.key(b"\x1b[24~")
@@ -98,26 +102,22 @@ def run():
                 ui.key(b"\x0e")
                 ui.pump(.3)
                 assert ui.screen.display[0].count("Terminal") == 2, ui.text()
-                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "New terminal did not inherit the workspace page"
+                assert sum(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()) > 200, "New terminal did not inherit its controlling display page"
                 ui.key(b"\x10")
                 ui.wait("Windows Classic")
                 ui.quit(confirm=True)
                 print(f"Explicit pair {'pack' if packed else 'source'}: initial open, Ctrl+N/Ctrl+P targets survive F12", flush=True)
             finally:
                 ui.close()
-            # Simulate a stale client projection after the host committed its
-            # theme. Reopening must recover from the canonical workspace value.
-            with sqlite3.connect(pair_folder / "workspace.db.client") as db:
-                stale = json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
-                stale["preferences"]["theme"] = "honey"
-                db.execute("UPDATE client_state SET value=?, generation=generation+1 WHERE singleton=1", (json.dumps(stale),))
+            # The custom display choice survives cold boot even though the
+            # workspace still holds its original Honey preferences.
             ui = Desktop(pair_folder, packed, project=project, pack_file=pack,
                          command_name="local-command-probe", apps=("bee.client.db:local",))
             try:
                 ui.wait("Windows Classic", timeout=12)
                 assert ui.screen.buffer[29][99].bg == "008080", ui.text()
                 ui.quit()
-                print(f"Workspace appearance {'pack' if packed else 'source'}: live/new terminal pages, F12 and stale-client cold reconciliation", flush=True)
+                print(f"Display appearance {'pack' if packed else 'source'}: live/new terminal pages, F12 and custom choice survives cold boot", flush=True)
             finally:
                 ui.close()
             argument_folder = root / ("arguments-pack" if packed else "arguments-source")
@@ -207,35 +207,6 @@ def run():
                 finally:
                     ui.close()
             print(f"Cold boot {'pack' if packed else 'source'}: recovered Settings retains its client tab and live view", flush=True)
-
-        # A rejected canonical write must not recolor chrome or producer pages.
-        host_file = project / "src/core/host/main.lua"
-        host_code = host_file.read_text()
-        theme_anchor = '    local function persist_preferences(preferences: appearance.Preferences, request_id: string): (boolean, string?)\n'
-        assert host_code.count(theme_anchor) == 1
-        host_file.write_text(host_code.replace(theme_anchor, theme_anchor
-            + '        if preferences.theme == "classic" then return false, "Injected theme save failure" end\n'))
-        subprocess.run([str(RUNTIME), "pack", str(pack)], cwd=project, check=True)
-        for packed in (False, True):
-            folder = root / ("theme-failure-pack" if packed else "theme-failure-source")
-            folder.mkdir()
-            ui = Desktop(folder, packed, project=project, pack_file=pack,
-                         command_name="local-command-probe", apps=("bee.client.db:local", "bee.console:app", "bee.settings:app"))
-            try:
-                ui.wait("Terminal", timeout=12)
-                ui.key(b"\x10")
-                ui.wait("Honey")
-                ui.key(b"\x1b[F")
-                ui.wait("Injected theme save failure")
-                assert stored(folder)["desktop"]["preferences"]["theme"] == "honey"
-                assert ui.screen.buffer[29][99].bg == "0c1119", ui.text()
-                ui.key(b"\x1b\t")
-                assert not any(cell.bg == "0c0c0c" for row in ui.screen.buffer.values() for cell in row.values()), "Failed theme changed a producer page"
-                ui.quit(confirm=True)
-                print(f"Workspace appearance failure {'pack' if packed else 'source'}: visible rejection retains chrome, producer page and stored theme", flush=True)
-            finally:
-                ui.close()
-        host_file.write_text(host_code)
 
         # Manual recovery belongs to the host, even when the client has discarded
         # its old tab. Opening from Start must receive the saved state and IDs.
@@ -429,8 +400,12 @@ def public_migration():
         shutil.copytree(ROOT / "src", project / "src")
         for name in (".wippy.yaml", "wippy.lock"):
             shutil.copy2(ROOT / name, project / name)
+        # The removed combined actor is historical test data, never production.
+        legacy = ROOT / "tests/fixtures/legacy_workspace"
+        shutil.copy2(legacy / "main.lua", project / "src/core/workspace/main.lua")
         index = project / "src/core/workspace/_index.yaml"
         document = yaml.safe_load(index.read_text())
+        document["entries"].extend(yaml.safe_load((legacy / "_index.yaml").read_text())["entries"])
         next(e for e in document["entries"] if e["name"] == "main")["meta"] = {"command": {
             "name": "legacy-desktop-probe", "short": "Migration baseline", "security": {
                 "actor": {"id": "bee.local"}, "policies": ["bee:desktop_policy", "bee:core_spawn_policy",

@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.harness.catalog
+entries:
+- name: classify
+  kind: library.lua
+  source: file://classify.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    profile: bee.driver:profile
+    driver_types: bee.driver:types
+    permission: bee.harness.permission:adapter
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    classify: bee.harness.catalog:classify
+    resolver: bee.driver:resolver

@@ -1,0 +1,99 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: launch_spawn_policy
+  kind: security.policy
+  meta:
+    comment: Launch start spawns the carrier on the workers host as the requester; the requester's own scope supplies everything
+      else
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.host
+    - process.monitor
+    - process.context
+    resources:
+    - bee.harness.carrier:process
+    - bee:workers
+    - context
+    effect: allow
+- name: carrier_policy
+  kind: security.policy
+  meta:
+    comment: A carrier process calls the thread, placement and driver facades and reads the catalog and its launch policy;
+      it holds no executor
+  policy:
+    actions:
+    - funcs.call
+    - registry.get
+    - process.send
+    - bee.threads.lifecycle
+    - bee.threads.carrier
+    - bee.threads.observe
+    - bee.gateway.admit
+    - security.scope.create
+    - funcs.security
+    resources: ['*', custom, security]
+    effect: allow
+- name: harness_setup_policy
+  kind: security.policy.expr
+  policy:
+    expression: action == "bee.harness.setup" || (action == "funcs.call" && resource == "bee.harness.launch:setup")
+    actions:
+    - bee.harness.setup
+    - funcs.call
+    resources: '*'
+    effect: allow
+- name: carrier_environment_policy
+  kind: security.policy
+  meta:
+    comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables
+      while resolving host launch policy
+  policy:
+    actions:
+    - env.get
+    resources:
+    - bee.driver.claude:executable
+    - bee.driver.codex:executable
+    - bee.driver.agy:executable
+    - bee.driver.grok:executable
+    - bee.driver.claude:config_home
+    - bee.driver.codex:config_home
+    effect: allow
+- name: profile_store_policy
+  kind: security.policy
+  meta:
+    comment: Saved profile facade storage access; callers separately require workspace read or write authority
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - system.read
+    resources:
+    - bee.node:db
+    - bee.harness.profiles:database_ref
+    - node
+    effect: allow
+- name: profile_workspace_policy
+  kind: security.policy.expr
+  meta:
+    comment: Profile facade supplies the host-inherited workspace as evaluation metadata; request fields cannot
+      select it
+  policy:
+    actions:
+    - bee.harness.profiles.read
+    - bee.harness.profiles.write
+    resources: '*'
+    expression: meta.workspace_id != "" && resource == meta.workspace_id
+    effect: allow
+- name: profile_context_boundary
+  kind: security.policy
+  meta:
+    comment: The Agent app retains its host workspace; it cannot substitute context for profile operations
+  policy:
+    actions:
+    - funcs.context
+    - process.context
+    resources: '*'
+    effect: deny

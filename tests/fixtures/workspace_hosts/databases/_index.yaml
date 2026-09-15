@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.workspace.db
+entries:
+- name: first
+  kind: db.sql.sqlite
+  file: ${env:bee:workspace_db_path}.first
+  lifecycle:
+    auto_start: true
+- name: second
+  kind: db.sql.sqlite
+  file: ${env:bee:workspace_db_path}.second
+  lifecycle:
+    auto_start: true

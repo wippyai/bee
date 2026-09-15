@@ -1,0 +1,149 @@
+version: '1.0'
+namespace: bee.hive_admission
+entries:
+- name: workers
+  kind: process.host
+  host:
+    max_processes: 8
+    workers: 2
+  lifecycle:
+    auto_start: true
+
+- name: supervisor_host
+  kind: process.host
+  host:
+    max_processes: 1
+    workers: 1
+  lifecycle:
+    auto_start: true
+
+- name: terminal
+  kind: terminal.host
+  lifecycle:
+    auto_start: true
+
+- name: attacker_entry_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.spawn.linked
+    - process.exec
+    resources:
+    - bee.hive_admission:probe
+    effect: allow
+
+- name: attacker_worker_host_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.host
+    resources:
+    - bee.hive_admission:workers
+    effect: allow
+
+- name: attacker_deny_supervisor_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.host
+    resources:
+    - bee.hive_admission:supervisor_host
+    effect: deny
+
+- name: attacker_context_policy
+  kind: security.policy
+  policy:
+    actions: [process.context]
+    resources: [context]
+    effect: allow
+
+- name: coordinator_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.spawn.linked
+    - process.exec
+    - process.host
+    - process.monitor
+    - process.unmonitor
+    - process.terminate
+    - process.cancel
+    - process.listen
+    - process.send
+    - process.security
+    - process.context
+    - security.scope.create
+    - security.policy.get
+    resources: '*'
+    effect: allow
+
+- name: probe_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.send
+    - process.listen
+    resources: '*'
+    effect: allow
+
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+
+- name: probe
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [process]
+  security:
+    policies:
+    - bee.hive_admission:probe_policy
+
+- name: attacker
+  kind: process.lua
+  source: file://attacker.lua
+  method: main
+  modules: [process]
+  imports:
+    protocol: bee.hive_admission:protocol
+  security:
+    actor:
+      id: bee.hive_admission.attacker
+    policies:
+    - bee.hive_admission:attacker_entry_policy
+    - bee.hive_admission:attacker_worker_host_policy
+    - bee.hive_admission:attacker_deny_supervisor_policy
+
+- name: coordinator
+  kind: process.lua
+  source: file://coordinator.lua
+  method: main
+  modules: [process, channel, time, io, security]
+  imports:
+    protocol: bee.hive_admission:protocol
+  security:
+    actor:
+      id: bee.hive_admission.coordinator
+    policies:
+    - bee.hive_admission:coordinator_policy
+
+- name: launcher
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, time, io]
+  imports:
+    protocol: bee.hive_admission:protocol
+  meta:
+    command:
+      name: hive-admission-proof
+      short: Prove supervisor host admission authorization
+      security:
+        actor:
+          id: bee.hive_admission.launcher
+        policies:
+        - bee.hive_admission:coordinator_policy

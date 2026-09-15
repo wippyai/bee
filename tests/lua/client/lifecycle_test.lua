@@ -11,7 +11,8 @@ local function define_tests()
             test.is_nil(lifecycle.bootstrap({version = 1, quit_mode = "shutdown"}))
             test.is_nil(lifecycle.bootstrap({version = 1, fullscreen = "yes"}))
             test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = "yes"}))
-            test.is_false(assert(lifecycle.bootstrap(nil)).workspace_appearance)
+            test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = true}))
+            test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = false}))
             test.is_nil(lifecycle.bootstrap({version = 1, arguments = {"bad\nargument"}}))
             local args = {"space ; $HOME"}
             local options = lifecycle.bootstrap({version = 1, arguments = args, fullscreen = true})
@@ -25,8 +26,28 @@ local function define_tests()
             if not secondary then error("Missing secondary launch") end
             test.eq(secondary.secondary_application, "probe:app")
         end)
+        test.it("accepts only opaque supervisor-selected desktop identities", function()
+            local selected = lifecycle.bootstrap({version = 1, desktop_id = workspace})
+            if not selected then error("Missing desktop selection") end
+            test.eq(selected.desktop_id, workspace)
+            test.is_nil(assert(lifecycle.bootstrap(nil)).desktop_id)
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = ""}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = "../other"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = 7}))
+        end)
         test.it("refuses foreign workspace and ambiguous shutdown control", function()
-            local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit"}
+            local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit", error = "Supervisor failed"}
+            local fatal = lifecycle.control(value, workspace)
+            if not fatal then error("Missing fatal exit control") end
+            test.eq(fatal.error, "Supervisor failed")
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = true}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = string.rep("x", 4097)}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = "Must not save", shutdown = {version = 1, request_id = "q", id = "application", instance_id = "instance",
+                    kind = "confirm", title = "Stop?", message = "", accept = "Stop"}}, workspace))
+            value.error = nil
             test.not_nil(lifecycle.control(value, workspace))
             value.op = "save"
             test.not_nil(lifecycle.control(value, workspace))

@@ -1,0 +1,86 @@
+version: '1.0'
+namespace: bee.inbox
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, time, uuid, json, funcs, registry]
+  imports:
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    model: bee.inbox:model
+    view: bee.inbox:view
+    inbox: bee.inbox:client
+    caller: bee.application:caller
+    feeds: bee.inbox:feeds
+    source_config: bee.inbox:source_config
+    hive: bee.hive:client
+    hive_types: bee.hive:types
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Approvals
+      icon: '!'
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: approvals
+      resume_schema: inbox.v1
+      restart_policy: manual
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules: [json]
+  imports:
+    text: bee.application:text
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  imports:
+    caller: bee.application:caller
+- name: feeds
+  kind: library.lua
+  source: file://feeds.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    sync: bee.sync:protocol
+    caller: bee.application:caller
+    source_config: bee.inbox:source_config
+- name: source_config
+  kind: library.lua
+  source: file://sources.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: sources
+  kind: registry.entry
+  meta:
+    type: bee.inbox_sources
+    comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
+  data: {sources: []}
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    model: bee.inbox:model
+    names: bee.desktop:names
+- name: workspaces
+  kind: registry.entry
+  meta:
+    type: bee.inbox_workspaces
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
+  data:
+    workspaces: []
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.approvals:inbox, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide, bee.approvals:withdraw, bee.inbox:workspaces, bee.inbox:sources]
+    effect: allow

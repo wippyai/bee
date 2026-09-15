@@ -1,0 +1,45 @@
+version: '1.0'
+namespace: bee.approvals
+entries:
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals:request, bee.approvals:decide, bee.approvals:withdraw, bee.approvals:consume, bee.approvals:revalidate, bee.approvals:read, bee.approvals:inbox, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:list, bee.approvals:deliveries, bee.approvals:reconcile, bee.approvals:capabilities, bee.threads.approvals:append, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-test.db
+  lifecycle:
+    auto_start: true
+- name: store_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.approvals:test_db]
+    effect: allow
+- name: service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, time, sql, process, uuid]
+  security:
+    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee:approval_store_policy, bee:approval_request_policy, bee:approval_decide_policy, bee:approval_consume_policy, bee:approval_owner_policy]
+  imports:
+    test: wippy.test:test
+    service: bee.approvals:service
+    outbox: bee.approvals:outbox
+    migrations: bee.approvals:migrations
+    persist: bee.persist:database
+    thread_harness: bee.threads:harness

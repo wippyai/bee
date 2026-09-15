@@ -1,0 +1,1010 @@
+version: '1.0'
+namespace: bee.harness.catalog
+entries:
+- name: configuration_probe
+  kind: function.lua
+  source: file://configuration_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    configuration: bee.driver:configuration
+- name: activation_test
+  kind: function.lua
+  source: file://activation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    activation: bee.driver:resolver
+- name: fake_binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: fake
+    test_support: true
+    profiles_ref: bee.harness.catalog:fake_profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.claude:prepare
+      dispatch: bee.driver.claude:dispatch
+      normalize: bee.driver.claude:normalize
+      configure: bee.driver.claude:configure
+- name: fake_profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.harness.catalog:fake_binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Fake harness
+      implementation_version: 0.1.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: fake-1
+        answer_path: {strategy: terminal_field, adapter_ref: bee.driver.claude:protocol}
+- name: orphan_binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: orphan
+    test_support: true
+    profiles_ref: bee.harness.catalog:missing_profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.claude:prepare
+      dispatch: bee.driver.claude:dispatch
+      normalize: bee.driver.claude:normalize
+      configure: bee.driver.claude:configure
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, process.terminate]
+    resources: '*'
+    effect: allow
+- name: classify_test
+  kind: function.lua
+  source: file://classify_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    classify: bee.harness.catalog:classify
+    permission: bee.harness.permission:adapter
+
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    classify: bee.harness.catalog:classify
+- name: carrier_pure_test
+  kind: function.lua
+  source: file://carrier_pure_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    provenance: bee.harness.carrier:provenance
+    checkpoint: bee.harness.carrier:checkpoint
+    settle: bee.harness.carrier:settle
+    driver_types: bee.driver:types
+    hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway:hooks
+    canonical: bee.threads.records:canonical
+- name: policy_test
+  kind: function.lua
+  source: file://policy_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    policy: bee.harness.carrier:policy
+- name: window_hooks_test
+  kind: function.lua
+  source: file://window_hooks_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hooks: bee.harness.window:hooks
+    checkpoint: bee.harness.carrier:checkpoint
+- name: window_recovery_test
+  kind: function.lua
+  source: file://window_recovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, tty]
+  imports:
+    test: wippy.test:test
+    recovery: bee.harness.window:recovery
+    restore_view: bee.harness.window:restore_view
+    appearance: bee.desktop:appearance
+- name: carrier_transport_test
+  kind: function.lua
+  source: file://carrier_transport_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  security:
+    policies: [bee:carrier_policy]
+  imports:
+    test: wippy.test:test
+    machine: bee.harness.carrier:machine
+    driver_types: bee.driver:types
+    policy: bee.harness.carrier:policy
+    placement_types: bee.placement:types
+    classify: bee.harness.catalog:classify
+- name: placement_fixture
+  kind: library.lua
+  source: file://placement_fixture.lua
+  meta: {type: test_support}
+  modules: [registry]
+  imports:
+    resolver: bee.placement:resolver
+- name: fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Claude protocol fixture policy; eof_gated and bound to the fixture executable by the suite at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: selection_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Selection-only policy with a harmless absolute path; no carrier test executes it
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: gateway_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The fixture policy with gateway tools admitted; bound to the fixture executable by the suite at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+- name: gateway_expiring_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The gateway fixture policy with a binding life short enough to expire while a child holds its token
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_wait]
+    gateway_ttl_ms: 2500
+- name: claude_gateway_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fixture policy for the real Claude executable with gateway tools admitted; the suite binds the executable and the loopback endpoint
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 30000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 3}
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+- name: codex_gateway_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fixture policy for the real Codex executable with gateway tools admitted through the provider configuration; the suite binds the executable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 30000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+    provider_ref: bee.harness.catalog:codex_fixture_provider
+    gateway_tools: [thread_read, thread_wait]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+- name: gateway_harness_test
+  kind: function.lua
+  source: file://gateway_harness_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "600s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, exec, base64]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    claude_launch: bee.driver.claude:launch
+    codex_launch: bee.driver.codex:launch
+    codex_configuration: bee.driver.codex:configuration
+    placement_fixture: bee.harness.catalog:placement_fixture
+    configuration: bee.driver:configuration
+    quote: bee.driver.kit:quote
+- name: gateway_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, funcs.security]
+    resources: [bee.gateway:open, bee.gateway:check, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:admit, bee.gateway:authorize_materialization, bee.gateway:materialize, bee.gateway:hook_queue, bee.placement.native:evidence, bee.placement.native:status, bee.placement.native:capabilities, bee.placement.native:measure_executable]
+    effect: allow
+- name: gateway_carrier_test
+  kind: function.lua
+  source: file://gateway_carrier_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, process, registry, env, time, channel, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: project_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/carrier-project
+  auto_init: true
+- name: fixture_bin
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_FIXTURE_BIN
+  readonly: true
+- name: codex_bin
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_CODEX_BIN
+  default: ""
+  readonly: true
+- name: fixture_streams
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_FIXTURE_STREAMS
+  readonly: true
+- name: carrier_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:create, bee.threads.service:read_after, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt,
+      bee.approvals:request, bee.approvals:read, bee.approvals:consume, bee.approvals:revalidate, bee.approvals:list,
+      bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page, bee.threads.delivery:resume, bee.threads.delivery:unsubscribe,
+      bee.threads.service:start_attempt, bee.threads.service:request_turn, bee.threads.service:end_turn, bee.threads.service:receipt,
+      bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint,
+      bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop, bee.placement.native:reconcile,
+      bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach, bee.driver.claude:prepare, bee.driver.claude:normalize, bee.driver.claude:configure,
+      bee.driver.codex:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
+    effect: allow
+- name: carrier_spawn_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.monitor, process.send, process.security, security.scope.create, security.policy.get, env.get]
+    resources: '*'
+    effect: allow
+- name: carrier_faulted
+  kind: process.lua
+  source: file://carrier_faulted.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    carrier_process: bee.harness.carrier:process
+    machine: bee.harness.carrier:machine
+  security:
+    policies: [bee:carrier_policy]
+- name: carrier_test
+  kind: function.lua
+  source: file://carrier_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "180s"}
+  modules: [funcs, security, process, registry, env, time, channel, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: launch_sentinel_storage
+  kind: env.storage.memory
+  meta: {type: test_support}
+  lifecycle:
+    auto_start: true
+- name: launch_sentinel_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:launch_sentinel_storage
+  variable: BEE_LAUNCH_SENTINEL_KEY
+  default: launch-sentinel-2b3c4d
+  readonly: true
+- name: alternate_setup_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:launch_sentinel_storage
+  variable: BEE_ALTERNATE_SETUP_KEY
+  default: alternate-setup-sentinel
+  readonly: true
+- name: fixture_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The Claude protocol fixture as a launch definition
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-fixture
+    title: Claude protocol fixture
+    command_names: [claude-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: retained_fixture_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Claude protocol fixture with a host-selected retained session resource
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-retained-fixture
+    title: Claude retained session fixture
+    command_names: [claude-retained-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: setup_empty_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Fixture with no declared setup resource
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: setup-empty-fixture
+    title: Setup empty fixture
+    command_names: [setup-empty-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: profile_alpha_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Profile-environment fixture policy selected by the alpha named definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {BEE_PROFILE_PROBE_NAME: alpha, BEE_PROFILE_PROBE_ALPHA_ONLY: alpha-selected, BEE_PROFILE_PROBE_HOLD: "1"}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: profile_beta_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Profile-environment fixture policy selected by the beta named definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {BEE_PROFILE_PROBE_NAME: beta, BEE_PROFILE_PROBE_BETA_ONLY: beta-selected, BEE_PROFILE_PROBE_HOLD: "1"}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: profile_alpha_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Named alpha definition sharing Claude's batch profile with its selected policy
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: profile-alpha-fixture
+    title: Profile alpha fixture
+    command_names: [profile-alpha-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:profile_alpha_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: profile_beta_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Named beta definition sharing Claude's batch profile with its selected policy
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: profile-beta-fixture
+    title: Profile beta fixture
+    command_names: [profile-beta-fixture]
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:profile_beta_policy
+    default_mode: batch
+    allowed_overrides: [brief]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: launch_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources:associate, bee.resources:grant,
+      bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:read_after]
+    effect: allow
+- name: setup_client_policy
+  kind: security.policy.expr
+  meta: {type: test_support}
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.harness.launch:setup") || action == "bee.harness.setup"'
+    actions: [funcs.call, bee.harness.setup]
+    resources: '*'
+    effect: allow
+- name: setup_call_only_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.launch:setup]
+    effect: allow
+- name: launch_test
+  kind: function.lua
+  source: file://launch_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "180s"}
+  modules: [funcs, security, process, channel, registry, env, time]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_store_policy]
+  imports:
+    test: wippy.test:test
+    admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    checkpoint: bee.harness.carrier:checkpoint
+    hook_records: bee.harness.carrier:hook_records
+    placement_store: bee.placement.native:store
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    selection: bee.harness.launch:selection
+    view: bee.harness.window:picker_view
+    appearance: bee.desktop:appearance
+- name: profile_environment_isolation_test
+  kind: function.lua
+  source: file://profile_environment_isolation_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "180s"}
+  modules: [funcs, security, registry, env, time, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    test: wippy.test:test
+    admission: bee.harness.launch:admission
+- name: permission_test
+  kind: function.lua
+  source: file://permission_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    adapter: bee.harness.permission:adapter
+    acceptance: bee.harness.permission:acceptance
+    events: bee.driver.kit:events
+- name: permission_fixture_adapter
+  kind: registry.entry
+  meta:
+    type: harness.permission_adapter
+    test_support: true
+    comment: The fixture's interactive permission exchange; evidence for the runner, not a description of the real harness
+  data:
+    adapter:
+      schema_revision: bee.permission-adapter@2
+      event_name: claude.control_request
+      event_revision: stream-json-2
+      request:
+        correlation: request_id
+        tool: request.tool_name
+        input: request.input
+      response:
+        envelope: {type: control_response}
+        correlation_field: request_id
+        decision_field: behavior
+        allow_value: allow
+        deny_value: deny
+        reason_field: message
+        response_field: updated_input
+      acknowledgment: {mode: correlation_echo, event_type: tool.result, field: call_id}
+      deny_acknowledgment: {mode: terminal_denial, event_type: notice, field: code, value: permission_denied}
+      cancellation: deny_before_close
+      proof_fixture: permission
+- name: acceptance_test
+  kind: function.lua
+  source: file://acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [exec, env, registry, hash]
+  security:
+    policies: [bee:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    stream_json: bee.driver.transport:stream_json
+    protocol: bee.driver.claude:protocol
+    adapter: bee.harness.permission:adapter
+    acceptance: bee.harness.permission:acceptance
+- name: permission_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The fixture policy with the interactive permission exchange enabled; the suite binds the executable, the acceptance record and the proven fixture digest at runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: permission_production_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A production-shaped exchange policy naming the real Claude adapter, to prove what a production exchange refuses on this host once the profile pin holds
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: permission_production_policy_unpinned
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A production-shaped exchange policy naming the fixture adapter no profile pins, to prove the pin refusal
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: permission_production_acceptance
+  kind: registry.entry
+  meta:
+    type: harness.permission_acceptance
+    test_support: true
+    comment: Acceptance record for the production-shaped policy; measurements are filled by the suite
+  data:
+    acceptance: {}
+- name: permission_fixture_acceptance
+  kind: registry.entry
+  meta:
+    type: harness.permission_acceptance
+    test_support: true
+    comment: Acceptance record for the fixture exchange; measurements are filled by the suite after it proves the exchange
+  data:
+    acceptance: {}
+- name: approver_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals:inbox, bee.approvals:decide, bee.approvals:read, bee.approvals:list]
+    effect: allow
+- name: permission_carrier_test
+  kind: function.lua
+  source: file://permission_carrier_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, exec, hash]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:approval_store_policy, bee:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    adapter: bee.harness.permission:adapter
+    approvals: bee.approvals:service
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: codex_auth_test
+  kind: function.lua
+  source: file://codex_auth_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [exec, env, time]
+  security:
+    policies: [bee:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.codex:launch
+    quote: bee.driver.kit:quote
+- name: codex_sentinel_storage
+  kind: env.storage.memory
+  meta: {type: test_support}
+  lifecycle:
+    auto_start: true
+- name: codex_sentinel_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:codex_sentinel_storage
+  variable: BEE_TEST_CODEX_SENTINEL
+  default: sk-sentinel-bee-000
+  readonly: true
+- name: codex_fixture_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    test_support: true
+    comment: The loopback endpoint the Codex proof records requests at; the suite sets the port
+  data:
+    schema_revision: bee.codex-provider@1
+    name: bee
+    base_url: http://127.0.0.1:1/v1
+    model: gpt-5
+    loopback_fixture: true
+- name: codex_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fixture policy for the real Codex executable with the loopback provider; the suite binds the executable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 20000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+    provider_ref: bee.harness.catalog:codex_fixture_provider
+- name: codex_fixture_policy_bare
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The same fixture policy without a provider, for the missing-configuration refusal
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 20000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {sandbox: read-only}
+- name: claude_bin
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_CLAUDE_BIN
+  default: ""
+  readonly: true
+- name: claude_sentinel_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.harness.catalog:codex_sentinel_storage
+  variable: BEE_TEST_CLAUDE_SENTINEL
+  default: sk-ant-sentinel-bee-000
+  readonly: true
+- name: claude_auth_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fixture policy for the real Claude executable; the suite binds the executable and the host-selected loopback endpoint through the policy environment
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 20000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: claude_runner_test
+  kind: function.lua
+  source: file://claude_runner_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, exec]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: claude_adapter_test
+  kind: function.lua
+  source: file://claude_adapter_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [exec, env, registry, json]
+  security:
+    policies: [bee:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    adapter: bee.harness.permission:adapter
+    stream_json: bee.driver.transport:stream_json
+    protocol: bee.driver.claude:protocol
+    events: bee.driver.kit:events
+- name: claude_control_fixture_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Fixture policy enabling the real Claude permission exchange; the suite binds the executable, the loopback endpoint, the acceptance record and the proven capture digest
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 20000
+    stop_grace_ms: 1500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: default, max_turns: 3}
+- name: claude_control_acceptance
+  kind: registry.entry
+  meta:
+    type: harness.permission_acceptance
+    test_support: true
+    comment: Acceptance record for the real Claude exchange; measurements are filled by the suite after it proves the exchange
+  data:
+    acceptance: {}
+- name: claude_control_test
+  kind: function.lua
+  source: file://claude_control_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, exec, hash]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:approval_store_policy, bee:placement_exec_policy, bee:placement_store_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    adapter: bee.harness.permission:adapter
+    approvals: bee.approvals:service
+    policy: bee.harness.carrier:policy
+    launch: bee.driver.claude:launch
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: claude_acceptance_test
+  kind: function.lua
+  source: file://claude_acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [exec, env, registry, time, channel, json]
+  security:
+    policies: [bee:placement_exec_policy]
+  imports:
+    test: wippy.test:test
+    stream_json: bee.driver.transport:stream_json
+    protocol: bee.driver.claude:protocol
+    adapter: bee.harness.permission:adapter
+    launch: bee.driver.claude:launch
+- name: codex_credential_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.credentials:define, bee.credentials:issue_projection]
+    effect: allow
+- name: codex_runner_test
+  kind: function.lua
+  source: file://codex_runner_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "300s"}
+  modules: [funcs, security, process, registry, env, time, channel, json, exec]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee:placement_exec_policy, bee:placement_store_policy, bee:credential_store_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    launch: bee.driver.codex:launch
+    placement: bee.placement.native:service
+    placement_fixture: bee.harness.catalog:placement_fixture
+- name: continuation_test
+  kind: function.lua
+  source: file://continuation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee:carrier_policy]
+  modules: [channel, time, uuid]
+  imports:
+    test: wippy.test:test
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint
+    placement_fixture: bee.harness.catalog:placement_fixture
+    hook_records: bee.harness.carrier:hook_records
+    codex: bee.driver.codex:launch
+    claude: bee.driver.claude:launch
+    machine: bee.harness.carrier:machine
+    catalog: bee.harness.catalog:catalog
+    hooks: bee.harness.window:hooks
+    interrupted: bee.harness.window:interrupted
+- name: scope_probe_allow
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.catalog:execution_scope_probe]
+    effect: allow
+- name: scope_probe_broad_store
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: '*'
+    effect: allow
+- name: execution_scope_probe
+  kind: function.lua
+  source: file://execution_scope_probe.lua
+  method: run
+  meta: {type: test_support}
+  modules: [sql]
+- name: execution_scope_test
+  kind: function.lua
+  source: file://execution_scope_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security, funcs]
+  imports:
+    test: wippy.test:test
+
+- name: saved_profiles_test
+  kind: function.lua
+  source: file://saved_profiles_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.harness.profiles:protocol
+
+- name: saved_profile_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.read, bee.harness.profiles.write, funcs.call]
+    resources: ['*']
+    effect: allow

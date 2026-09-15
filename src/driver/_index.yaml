@@ -1,0 +1,49 @@
+version: '1.0'
+namespace: bee.driver
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver
+  readme: file://README.md
+  meta:
+    title: Bee driver contract
+    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement owns execution
+- name: types
+  kind: library.lua
+  source: file://types.lua
+- name: profile
+  kind: library.lua
+  source: file://profile.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.driver:types
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash, funcs, security]
+  imports:
+    address_value: bee.gateway:address_value
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: preferences
+  kind: library.lua
+  source: file://preferences.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: driver
+  kind: contract.definition
+  methods:
+  - name: prepare
+    description: Return the declarative launch specification for a profile and a brief
+  - name: dispatch
+    description: Return the declarative input for a turn or control operation on a running attempt
+  - name: normalize
+    description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report
+  - name: configure
+    description: Return argv arguments and protected private-home files from host-selected configuration inputs

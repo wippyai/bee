@@ -58,3 +58,54 @@ entries:
     command:
       name: client-storage-probe
       short: Test client storage in an isolated database
+- name: desktop_calls
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.client:list_desktops, bee.client:allocate_desktop]
+    effect: allow
+- name: desktop_read
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.read]
+    resources: [bee:client_db]
+    effect: allow
+- name: desktop_allocate
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.allocate]
+    resources: [bee:client_db]
+    effect: allow
+- name: authority
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read, bee.client_storage_probe:desktop_allocate]
+  meta:
+    command:
+      name: client-desktop-authority
+      short: Verify scoped desktop operations without caller SQL access
+- name: reader
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read]
+  meta:
+    command:
+      name: client-desktop-reader
+      short: Verify read-only desktop catalog authority
+- name: unauthorized
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls]
+  meta:
+    command:
+      name: client-desktop-unauthorized
+      short: Function call permission grants no desktop authority

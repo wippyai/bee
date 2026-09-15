@@ -1,0 +1,50 @@
+version: '1.0'
+namespace: bee.delivery
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [tty, process, channel, uuid, funcs]
+  imports:
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    caller: bee.application:caller
+    model: bee.delivery:model
+    view: bee.delivery:view
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: App Delivery
+      icon: D
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: delivery
+      resume_schema: delivery.v1
+      restart_policy: manual
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    caller: bee.application:caller
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    model: bee.delivery:model
+    text: bee.application:text
+- name: client_policy
+  kind: security.policy
+  meta:
+    comment: App Delivery calls only the destination-owned governance facade; local review is separate from Approvals decisions
+  policy:
+    actions: [funcs.call]
+    resources: [bee.governance:destination_call]
+    effect: allow

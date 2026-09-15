@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.hive
+entries:
+- name: definition
+  kind: ns.definition
+  module: hive
+  readme: file://README.md
+  meta:
+    title: Bee hive
+    comment: Cross-node protocol envelopes, exposure catalog, interfaces and the one client every caller uses
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+- name: types
+  kind: library.lua
+  source: file://types.lua
+  modules: [hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    bounds: bee.hive:bounds
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry, security, json, hash]
+  imports:
+    canonical: bee.threads.records:canonical
+    bounds: bee.hive:bounds
+    types: bee.hive:types
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  modules: [process, channel, time, uuid]
+  imports:
+    types: bee.hive:types
+- name: supervisor_host
+  kind: process.host
+  host: {max_processes: 1, workers: 1}
+  lifecycle: {auto_start: true}
+  meta:
+    comment: Only the supervisor runs here; a sender PID on this host is this node's supervisor

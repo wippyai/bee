@@ -1,0 +1,187 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: hive_telemetry_policy
+  kind: security.policy
+  policy:
+    actions:
+    - system.read
+    resources:
+    - node
+    - cluster
+    - memory
+    - goroutines
+    effect: allow
+- name: hive_catalog_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    - registry.find
+    resources: '*'
+    effect: allow
+- name: hive_exposure_policy
+  kind: security.policy
+  meta:
+    comment: The host ceiling; telemetry and the threads capabilities report may be open in this composition, and the two
+      thread operations may reach forwarded principals under the destination's own policy
+  policy:
+    actions:
+    - hive.expose.open
+    resources:
+    - bee.hive.telemetry:presence
+    - bee.hive.telemetry:stats
+    - bee.hive.telemetry:catalog_list
+    - bee.threads:capabilities
+    effect: allow
+- name: hive_policy_exposure_policy
+  kind: security.policy
+  meta:
+    comment: Exact reviewed feed and node operations; destination principal and owner authorization still required
+  policy:
+    actions:
+    - hive.expose.policy
+    resources:
+    - bee.node:describe
+    - bee.node:update_metadata
+    - bee.node:snapshot
+    - bee.node:read_after
+    - bee.approvals:feed_snapshot
+    - bee.approvals:feed_read_after
+    - bee.approvals:read
+    - bee.approvals:decide
+    - bee.approvals:withdraw
+    - bee.sync:replica_receive
+    effect: allow
+- name: policy_admission_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    - system.read
+    - funcs.call
+    resources:
+    - node
+    - bee.hive.supervisor:principal_mappings
+    - bee.hive.supervisor:invoke_check
+    - bee.node:describe
+    - bee.node:update_metadata
+    - bee.node:snapshot
+    - bee.node:read_after
+    - bee.approvals:feed_snapshot
+    - bee.approvals:feed_read_after
+    - bee.approvals:read
+    - bee.approvals:decide
+    - bee.approvals:withdraw
+    - bee.sync:replica_receive
+    effect: allow
+- name: hive_replica_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call, funcs.security, security.actor.create,
+      security.scope.create, security.policy.get, hive.expose.policy]
+    resources: '*'
+    effect: allow
+- name: hive_replica_peer_policy
+  kind: security.policy
+  meta:
+    comment: Authenticated peer nodes may write only immutable replica bytes owned by that same node
+  policy:
+    actions: [funcs.call, bee.sync.replica.receive]
+    resources: '*'
+    effect: allow
+- name: hive_thread_invoke_policy
+  kind: security.policy
+  meta:
+    comment: What a mapped principal's own scope must carry to invoke the thread operations; the host names it in a principal
+      mapping, never in a worker
+  policy:
+    actions:
+    - hive.invoke
+    - funcs.call
+    resources:
+    - bee.threads.service:send
+    - bee.threads.service:send_status
+    - bee.hive.supervisor:invoke_check
+    effect: allow
+- name: hive_thread_exposure_policy
+  kind: security.policy
+  meta:
+    comment: The host ceiling for forwarded thread operations; the destination thread owner still decides membership and the
+      principal table still decides admission
+  policy:
+    actions:
+    - hive.expose.policy
+    resources:
+    - bee.threads.service:send
+    - bee.threads.service:send_status
+    effect: allow
+- name: hive_supervisor_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.send
+    - process.monitor
+    - process.unmonitor
+    resources: '*'
+    effect: allow
+- name: hive_dispatch_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.hive.telemetry:presence
+    - bee.hive.telemetry:stats
+    - bee.hive.telemetry:catalog_list
+    - bee.threads:capabilities
+    effect: allow
+- name: hive_supervisor_spawn_deny
+  kind: security.policy
+  meta:
+    comment: Attached by the supervisor lane to ordinary application and launch scopes
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.spawn.linked
+    - process.host
+    resources:
+    - bee.hive:supervisor
+    - bee.hive:supervisor_host
+    effect: deny
+- name: hive_names_policy
+  kind: security.policy
+  meta:
+    comment: Selected only by the native Hive supervisor host for native name publication and discovery
+  policy:
+    actions:
+    - process.registry.register
+    - process.registry.register.local
+    - process.registry.register.eventual
+    - process.registry.lookup
+    - process.registry.unregister
+    - process.registry.unregister.eventual
+    resources: '*'
+    effect: allow
+- name: hive_advertise_policy
+  kind: security.policy
+  meta:
+    comment: The isolated advertisement worker may name only a protected Hive supervisor PID; ordinary Hive scopes cannot name foreign processes
+  policy:
+    actions:
+    - process.registry.foreign
+    resources: '*'
+    effect: allow
+- name: hive_execute_policy
+  kind: security.policy
+  meta:
+    comment: The native supervisor host may call its own admitted-operation executor
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.hive.supervisor:execute
+    - bee.hive.supervisor:admit_policy
+    - bee.hive.supervisor:advertise
+    effect: allow

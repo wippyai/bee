@@ -10,3 +10,8 @@ entries:
   modules: [sql, json, hash]
   imports:
     binding: bee.storage:binding
+- name: assignments
+  kind: library.lua
+  source: file://assignments.lua
+  imports:
+    workspace_store: bee.storage:store

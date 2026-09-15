@@ -1,0 +1,153 @@
+version: '1.0'
+namespace: bee.resources
+entries:
+- name: definition
+  kind: ns.definition
+  module: resources
+  readme: file://README.md
+  meta:
+    title: Bee resources
+    comment: Owner-local resource authority; associations under a host ceiling, grants bound to subject, audience, revision, digest, scope and expiry
+- name: target_db
+  kind: ns.requirement
+  meta:
+    comment: SQL resource for associations and grants
+  default: bee.resources:db
+  targets:
+  - entry: bee.resources:database_ref
+    path: .resource_ref
+- name: target_roots
+  kind: ns.requirement
+  meta:
+    comment: The host's admitted root list, the ceiling every association stays under
+  default: bee:resource_roots
+  targets:
+  - entry: bee.resources:roots_ref
+    path: .resource_ref
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked SQL resource; target_db fills resource_ref
+- name: roots_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked host roots entry; target_roots fills resource_ref
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: db_path
+  kind: env.variable
+  storage: bee.resources:environment
+  variable: BEE_RESOURCES_DB
+  default: .wippy/resources.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.resources:db_path}
+  lifecycle:
+    auto_start: true
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry, env, system]
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  modules: [sql, hash, time, uuid, security, system]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    persist: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.resources:migrations
+    resources: bee.resources:resources
+- name: contract
+  kind: contract.definition
+  meta:
+    comment: Associations and grants for one node's workspaces; resolve is for admitted placements only
+  methods:
+  - name: associate
+    description: Bind a workspace name to an admitted root under the host ceiling; optional expected_revision supports atomic create or CAS replacement
+  - name: grant
+    description: Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest
+  - name: revoke
+    description: End one grant
+  - name: revoke_all
+    description: Advance the workspace authorization epoch so every earlier grant stops resolving
+  - name: resolve
+    description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
+  - name: list
+    description: A manager's view of associations and live grants
+- name: local
+  kind: contract.binding
+  contracts:
+  - contract: bee.resources:contract
+    methods:
+      associate: bee.resources:associate
+      grant: bee.resources:grant
+      revoke: bee.resources:revoke
+      revoke_all: bee.resources:revoke_all
+      resolve: bee.resources:resolve
+      list: bee.resources:list
+- name: associate
+  kind: function.lua
+  source: file://associate_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy, bee:resource_environment_policy]
+- name: grant
+  kind: function.lua
+  source: file://grant_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy, bee:resource_environment_policy]
+- name: revoke
+  kind: function.lua
+  source: file://revoke_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy]
+- name: revoke_all
+  kind: function.lua
+  source: file://revoke_all_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy]
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy, bee:resource_environment_policy]
+- name: list
+  kind: function.lua
+  source: file://list_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy]
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    authority: bee.resources:authority
+  security:
+    policies: [bee:resource_store_policy]

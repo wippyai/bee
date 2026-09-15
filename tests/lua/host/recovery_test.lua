@@ -5,6 +5,7 @@ local records = require("records")
 local inventory = require("inventory")
 local function record(id: string, definition: string): records.Record
     return {id = "view-" .. id, instance_id = id, definition_id = definition,
+        thread_id = id == "first" and "thread:one" or id == "second" and "thread:two" or nil,
         resume_schema = "state.v1", restart_policy = "manual", resume_state = '{"count":7}', window = nil}
 end
 local function define_tests()
@@ -28,6 +29,16 @@ local function define_tests()
             live.views = {{workspace_id = live.workspace_id, view_id = "view-first", instance_id = "replacement",
                 definition_id = "probe:app", title = "Probe"}}
             test.is_nil(recovery.select({record("first", "probe:app")}, live, "probe:app", {}))
+        end)
+        test.it("matches explicit thread associations and restores saved associations for unbound opens", function()
+            local live: inventory.State = inventory.new("0123456789abcdef0123456789abcdef")
+            local saved = {record("first", "probe:app"), record("second", "probe:app")}
+            local selected = assert(recovery.select(saved, live, "probe:app", {}, "thread:two"))
+            test.eq(selected.instance_id, "second")
+            test.eq(selected.thread_id, "thread:two")
+            test.is_nil(recovery.select(saved, live, "probe:app", {}, "thread:missing"))
+            local unbound = assert(recovery.select(saved, live, "probe:app", {}, nil))
+            test.eq(unbound.thread_id, "thread:one")
         end)
     end)
 end

@@ -1,0 +1,124 @@
+version: '1.0'
+namespace: bee.window_native
+entries:
+- name: upgrade_db
+  kind: db.sql.sqlite
+  file: .wippy/window-native-upgrade.db
+  meta: {test_support: true}
+- name: upgrade_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.window_native:upgrade_db]
+    effect: allow
+- name: launch_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+- name: launch_policy_group
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+- name: caller_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.native:prepare, bee.placement.native:status, bee.placement.native:cleanup, bee.placement.native:reconcile, bee.placement.native:stop]
+    effect: allow
+- name: child_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, process.events, db.get, registry.get, fs.get, exec.get, exec.run, env.get, system.read]
+    resources: '*'
+    effect: allow
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules: [process, channel, tty, time, security, funcs, registry]
+  imports:
+    test: wippy.test:test
+    service: bee.placement.native:service
+    placement_store: bee.placement.native:store
+    window: bee.placement.native:window
+  security:
+    policies: [bee.window_native:activation_policy, bee.window_native:caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_resolve_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: child
+  kind: process.lua
+  source: file://child.lua
+  method: main
+  modules: [process, channel, time]
+  imports:
+    window: bee.placement.native:window
+- name: migration_test
+  kind: function.lua
+  source: file://migration_test.lua
+  method: run
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    persist: bee.persist:database
+    migrations: bee.placement.native:migrations
+  security:
+    policies: [bee.window_native:upgrade_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: cas_test
+  kind: function.lua
+  source: file://cas_test.lua
+  method: run
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native:store
+  security:
+    policies: [bee:placement_store_policy]
+  meta: {type: test, suite: bee, timeout: '30s'}
+- name: activation_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.apply]
+    resources: ['*']
+    effect: allow
+- name: binding
+  kind: contract.binding
+  meta: {type: harness.driver, driver_id: shell-fixture, test_support: true}
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.window_native:unused
+      dispatch: bee.window_native:unused
+      normalize: bee.window_native:unused
+      configure: bee.window_native:configure
+- name: configure
+  kind: function.lua
+  source: file://driver.lua
+  method: configure
+- name: unused
+  kind: function.lua
+  source: file://driver.lua
+  method: unused

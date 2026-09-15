@@ -1,0 +1,156 @@
+-- MIT. The MCP tool protocol as JSON-RPC 2.0 over one HTTP request, pure:
+-- requests are decoded strictly, replies are built as the protocol shapes
+-- them, and the tool catalog is a closed table. Nothing here executes a
+-- tool or reads a store; the handler maps a call to one owner operation.
+local bounds = require("bounds")
+local message = require("message")
+local M = {}
+M.PROTOCOL = "2025-06-18"
+M.SERVER = {name = "bee", version = "1"}
+M.MAX_BODY_BYTES = 65536
+type Object = {[string]: unknown}
+type Call = {id: unknown, method: string, params: Object, notification: boolean}
+type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
+local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false}
+local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
+local TOOLS: {Tool} = {
+    {name = "thread_read", description = "Read committed records of the bound thread after a cursor", operation = "bee.threads.service:read_after",
+        policies = {"bee:gateway_tool_read_policy"},
+        schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}}}, annotations = READ_ANNOTATIONS},
+    {name = "thread_wait", description = "Wait, read-only and bounded, for the bound thread to move past a cursor; claims nothing", operation = "bee.threads.delivery:watch",
+        policies = {"bee:gateway_tool_read_policy"},
+        schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0}}}, annotations = READ_ANNOTATIONS},
+    {name = "thread_message", description = "Append one message to the bound thread as the authenticated subject", operation = "bee.threads.service:record",
+        policies = {"bee:gateway_tool_message_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content"}, properties = {
+            idempotency_key = {type = "string", minLength = 1, maxLength = 160}, message_id = {type = "string", minLength = 1, maxLength = 160},
+            message_kind = {type = "string", enum = {"request", "progress", "reply", "notification"}},
+            recipient_ids = {type = "array", maxItems = 64, items = {type = "string", minLength = 1, maxLength = 160}},
+            content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
+            in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
+            outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
+        }}},
+}
+M.TOOLS = TOOLS
+-- Each advertised tool carries its own annotations.
+M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
+function M.tool(name: string): Tool?
+    for _, tool in ipairs(TOOLS) do if tool.name == name then return tool end end
+    return nil
+end
+-- Decodes one JSON-RPC request. A batch, a notification without an id, or
+-- a wrong version is refused; the caller answers with a protocol error.
+function M.decode(value: unknown): (Call?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "request must be one JSON-RPC object" end
+    if object.jsonrpc ~= "2.0" then return nil, "jsonrpc must be 2.0" end
+    if type(object.method) ~= "string" or object.method == "" or #(object.method :: string) > 64 then return nil, "method must be a short string" end
+    local id = object.id
+    if id ~= nil and type(id) ~= "string" and type(id) ~= "number" then return nil, "id must be a string or number" end
+    -- A JSON-RPC notification carries no id and expects no reply body.
+    local notification = id == nil
+    if notification and not (object.method :: string):find("^notifications/") then return nil, "id is required" end
+    local params: Object = {}
+    if object.params ~= nil then
+        local declared = bounds.object(object.params)
+        if not declared then return nil, "params must be an object" end
+        params = declared
+    end
+    return {id = id, method = object.method :: string, params = params, notification = notification}, nil
+end
+function M.result(id: unknown, result: unknown): Object
+    return {jsonrpc = "2.0", id = id, result = result}
+end
+M.PARSE_ERROR = -32700
+M.INVALID_REQUEST = -32600
+M.METHOD_NOT_FOUND = -32601
+M.INVALID_PARAMS = -32602
+M.INTERNAL_ERROR = -32603
+function M.failure(id: unknown, code: integer, message: string): Object
+    return {jsonrpc = "2.0", id = id, error = {code = code, message = message}}
+end
+function M.initialize(): Object
+    return {protocolVersion = M.PROTOCOL, capabilities = {tools = {listChanged = false}}, serverInfo = M.SERVER}
+end
+-- The tools a binding may call: the closed catalog filtered by the
+-- binding's admitted tool names, in catalog order.
+function M.list(admitted: {string}): Object
+    local allowed: {[string]: boolean} = {}
+    for _, name in ipairs(admitted) do allowed[name] = true end
+    local tools: {Object} = {}
+    for _, tool in ipairs(TOOLS) do
+        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description, inputSchema = tool.schema, annotations = tool.annotations} end
+    end
+    return {tools = tools}
+end
+-- A tool result carries one text content block with the operation's JSON
+-- reply; a refused call is a tool error, not a protocol error.
+function M.tool_result(text: string, is_error: boolean): Object
+    return {content = {{type = "text", text = text}}, isError = is_error}
+end
+-- Tool arguments are bounded before they reach an owner operation.
+function M.read_arguments(params: Object): (Object?, string?)
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
+    local unknown_field = bounds.fields(arguments, {"cursor", "limit"})
+    if unknown_field then return nil, unknown_field end
+    local cursor = 0
+    if arguments.cursor ~= nil then
+        local declared = bounds.cursor(arguments.cursor)
+        if not declared then return nil, "cursor is out of range" end
+        cursor = declared
+    end
+    local request: Object = {cursor = cursor}
+    if arguments.limit ~= nil then
+        local limit = bounds.integer(arguments.limit)
+        if not limit or limit < 1 or limit > bounds.MAX_PAGE_RECORDS then return nil, "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS) end
+        request.limit = limit
+    end
+    return request, nil
+end
+M.TRANSPORT_BUDGET_MS = 5000
+function M.wait_arguments(params: Object): (Object?, string?)
+    local arguments: Object = {}
+    if params.arguments ~= nil then
+        local declared = bounds.object(params.arguments)
+        if not declared then return nil, "arguments must be an object" end
+        arguments = declared
+    end
+    local unknown_field = bounds.fields(arguments, {"after_sequence", "wait_ms"})
+    if unknown_field then return nil, unknown_field end
+    local after = bounds.cursor(arguments.after_sequence == nil and 0 or arguments.after_sequence)
+    if not after then return nil, "after_sequence is out of range" end
+    local wait_ms = bounds.integer(arguments.wait_ms == nil and M.TRANSPORT_BUDGET_MS or arguments.wait_ms)
+    if not wait_ms or wait_ms < 0 then return nil, "wait_ms must be a nonnegative integer" end
+    -- The transport budget bounds every wait; the owner subtracts its margin.
+    return {after_sequence = after, wait_ms = wait_ms, transport_budget_ms = M.TRANSPORT_BUDGET_MS}, nil
+end
+-- Message arguments are the public message shape without sender, thread or
+-- lifecycle context. The full message decoder remains the authority for its
+-- nested content, references and kind-specific invariants.
+function M.message_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"})
+    if unknown_field then return nil, unknown_field end
+    local key = bounds.id(arguments.idempotency_key)
+    if not key then return nil, "idempotency_key is required and must be an identifier" end
+    local candidate: Object = {}
+    for _, name in ipairs({"message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"}) do
+        if arguments[name] ~= nil then candidate[name] = arguments[name] end
+    end
+    -- message.decode requires a sender; the endpoint strips this sentinel
+    -- before calling the owner, which supplies the authenticated actor.
+    candidate.sender_id = "gateway-mcp-subject"
+    local decoded, decode_error = message.decode(candidate)
+    if not decoded then return nil, "message: " .. tostring(decode_error) end
+    local body: Object = {message_id = decoded.message_id, message_kind = decoded.message_kind, recipient_ids = decoded.recipient_ids, content = decoded.content}
+    if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
+    if decoded.outcome then body.outcome = decoded.outcome end
+    return {idempotency_key = key, body = body}, nil
+end
+return M

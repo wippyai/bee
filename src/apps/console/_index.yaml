@@ -26,9 +26,6 @@ entries:
       role: terminal
       commands:
       - {name: terminal, fullscreen: true}
-      - {name: claude, arguments: [claude], fullscreen: true}
-      - {name: codex, arguments: [codex], fullscreen: true}
-      - {name: agy, arguments: [agy], fullscreen: true}
 - name: command
   kind: library.lua
   source: file://command.lua
@@ -37,7 +34,7 @@ entries:
   default_env:
     PATH: ${env:bee.console:path}
     HOME: ${env:bee.console:home}
-    USER: ${env:bee.console:user}
+    USER: ${env:bee.console:user|}
     LANG: ${env:bee.console:lang}
     TERM: xterm-256color
 - name: executor_policy

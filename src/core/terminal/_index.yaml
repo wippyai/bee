@@ -1,18 +1,35 @@
 version: '1.0'
 namespace: bee.terminal
 entries:
+- name: connection
+  kind: library.lua
+  source: file://connection.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    names: bee.desktop:names
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  modules: [tty]
 - name: display
   kind: library.lua
   source: file://display.lua
   modules: [tty]
   imports:
     chrome: bee.terminal:chrome
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [tty]
 - name: main
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [tty, process, channel, time, uuid, ctx]
+  modules: [tty, process, channel, time, uuid, ctx, logger]
   imports:
+    connection: bee.terminal:connection
+    delivery: bee.terminal:delivery
     contract: bee.protocol:application
     title_editor: bee.terminal:title_editor
     dialog: bee.terminal:dialog
@@ -23,7 +40,11 @@ entries:
     render: bee.terminal:render
     bindings: bee.terminal:bindings
     menu: bee.terminal:menu
+    selection: bee.terminal:selection
     appearance: bee.desktop:appearance
+    names: bee.desktop:names
+    display_transfer: bee.protocol:display_transfer
+    status_surface: bee.application:status_surface
 - name: render
   kind: library.lua
   source: file://render.lua
@@ -34,10 +55,14 @@ entries:
     model: bee.desktop:model
     layout: bee.desktop:layout
     appearance: bee.desktop:appearance
+    connection: bee.terminal:connection
     chrome: bee.terminal:chrome
     bar: bee.terminal:bar
     window_chrome: bee.terminal:window_chrome
     menu: bee.terminal:menu
+    selection: bee.terminal:selection
+    surface: bee.application:status_surface
+    display_transfer: bee.protocol:display_transfer
 - name: bindings
   kind: library.lua
   source: file://bindings.lua
@@ -54,6 +79,8 @@ entries:
   imports:
     model: bee.desktop:model
     appearance: bee.desktop:appearance
+    names: bee.desktop:names
+    display_transfer: bee.protocol:display_transfer
 - name: bar
   kind: library.lua
   source: file://bar.lua
@@ -61,6 +88,7 @@ entries:
   imports:
     model: bee.desktop:model
     appearance: bee.desktop:appearance
+    surface: bee.application:status_surface
 - name: window_chrome
   kind: library.lua
   source: file://window_chrome.lua
@@ -69,6 +97,7 @@ entries:
     model: bee.desktop:model
     layout: bee.desktop:layout
     appearance: bee.desktop:appearance
+    surface: bee.application:status_surface
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua

@@ -1,4 +1,5 @@
 """Workspace storage migration and generation-CAS acceptance checks."""
+from workspace import database_environment
 from pathlib import Path
 import hashlib
 import re
@@ -11,9 +12,10 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
+RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/bee-wippy")).resolve()
 
 PROBE = r'''local storage = require("store")
+local assignments = require("assignments")
 
 local function main()
     local left, left_error = storage.open()
@@ -31,6 +33,53 @@ local function main()
         local seeded, seed_error = left:write('{"version":1,"probe":"seed"}')
         if not seeded then error(tostring(seed_error)) end
         baseline = assert(left:read())
+    end
+
+    -- This is the workspace-owned persistence slice. Host admission and the
+    -- physical revoke/mount operations remain outside this fixture.
+    local transfer = assert(assignments.open(left))
+    local existing, existing_error = transfer:get({view_id = "view-one", instance_id = "instance-one"})
+    assert(not existing_error)
+    if existing then
+        assert(existing.assignment.display_id == "display-b" and existing.assignment.revision == 2)
+    else
+        local initial = assert(transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"}))
+        assert(initial.revision == 1)
+        assert(assert(transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"})).revision == 1)
+        local foreign_claim, foreign_claim_error = transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-b"})
+        assert(not foreign_claim and foreign_claim_error and foreign_claim_error:find("another display"))
+        local prepared = assert(transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+        assert(prepared.phase == "prepared")
+        local fenced = assert(transfer:get({view_id = "view-one", instance_id = "instance-one"}))
+        assert(fenced.assignment.display_id == "display-a" and fenced.intent and fenced.intent.phase == "prepared")
+        local prepared_claim, prepared_claim_error = transfer:claim({view_id = "view-one", instance_id = "instance-one", display_id = "display-a"})
+        assert(not prepared_claim and prepared_claim_error and prepared_claim_error:find("prepared"))
+        local recovery = assert(transfer:reconcile())
+        assert(#recovery == 1 and recovery[1].intent and recovery[1].intent.phase == "prepared")
+        assert(assert(transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local conflict, conflict_error = transfer:prepare({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+        assert(not conflict and conflict_error and conflict_error:find("conflicts"))
+        local concurrent, concurrent_error = transfer:prepare({request_id = "move-two", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+        assert(not concurrent and concurrent_error and concurrent_error:find("already prepared"))
+        assert(assert(transfer:fail({request_id = "move-one", view_id = "view-one", instance_id = "instance-one", error = "revoke rejected"})).phase == "failed")
+        assert(assert(transfer:get({view_id = "view-one", instance_id = "instance-one"})).assignment.display_id == "display-a")
+        local stale, stale_error = transfer:prepare({request_id = "move-stale", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 2})
+        assert(not stale and stale_error and stale_error:find("changed"))
+        assert(assert(transfer:prepare({request_id = "move-three", view_id = "view-one", instance_id = "instance-one", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local committed = assert(transfer:commit({request_id = "move-three", view_id = "view-one", instance_id = "instance-one"}))
+        assert(committed.assignment.display_id == "display-b" and committed.assignment.revision == 2 and committed.intent and committed.intent.phase == "committed")
+        assert(assert(transfer:commit({request_id = "move-three", view_id = "view-one", instance_id = "instance-one"})).assignment.revision == 2)
+        for index = 2, 16 do
+            assert(transfer:claim({view_id = "view-" .. tostring(index), instance_id = "instance-" .. tostring(index), display_id = "display-a"}))
+        end
+        local over_limit, over_limit_error = transfer:claim({view_id = "view-17", instance_id = "instance-17", display_id = "display-a"})
+        assert(not over_limit and over_limit_error and over_limit_error:find("capacity"))
+        assert(assert(transfer:prepare({request_id = "retire-pending", view_id = "view-2", instance_id = "instance-2", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "prepared")
+        local premature_retire, premature_retire_error = transfer:retire({view_id = "view-2", instance_id = "instance-2"})
+        assert(not premature_retire and premature_retire_error and premature_retire_error:find("prepared"))
+        assert(assert(transfer:fail({request_id = "retire-pending", view_id = "view-2", instance_id = "instance-2", error = "app exited"})).phase == "failed")
+        assert(transfer:retire({view_id = "view-2", instance_id = "instance-2"}))
+        assert(transfer:claim({view_id = "view-17", instance_id = "instance-17", display_id = "display-a"}))
     end
 
     -- Both handles observed the same generation before this commit. The
@@ -75,9 +124,110 @@ end
 return {main = main}
 '''
 
+EXHAUSTION_PROBE = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfer = assert(assignments.open(workspace))
+    local prepared, prepare_error = transfer:prepare({request_id = "revision-overflow", view_id = "view-17", instance_id = "instance-17", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 9007199254740990})
+    assert(not prepared and prepare_error and prepare_error:find("exhausted"))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_PREPARE = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    assert(transfers:claim({view_id = "restart-view", instance_id = "restart-instance", display_id = "display-a"}))
+    assert(transfers:prepare({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_PREPARED = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local value = assert(assert(assignments.open(workspace)):get({view_id = "restart-view", instance_id = "restart-instance"}))
+    assert(value.assignment.display_id == "display-a" and value.assignment.revision == 1)
+    assert(value.intent and value.intent.request_id == "restart-transfer" and value.intent.phase == "prepared")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_COMMIT_FAILS = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local committed, commit_error = assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"})
+    assert(not committed and commit_error and commit_error:find("forced receipt failure"))
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_COMMIT = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local committed = assert(assert(assignments.open(workspace)):commit({request_id = "restart-transfer", view_id = "restart-view", instance_id = "restart-instance"}))
+    assert(committed.assignment.display_id == "display-b" and committed.assignment.revision == 2 and committed.intent and committed.intent.phase == "committed")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_HISTORY = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    assert(transfers:claim({view_id = "history-view", instance_id = "history-instance", display_id = "display-a"}))
+    local source, target, expected = "display-a", "display-b", 1
+    for index = 1, 65 do
+        local request_id = "history-" .. tostring(index)
+        local prepared, prepare_error = transfers:prepare({request_id = request_id, view_id = "history-view", instance_id = "history-instance", source_display_id = source, target_display_id = target, expected_revision = expected})
+        assert(prepared, "history " .. tostring(index) .. ": " .. tostring(prepare_error))
+        local committed = assert(transfers:commit({request_id = request_id, view_id = "history-view", instance_id = "history-instance"}))
+        assert(committed.assignment.revision == expected + 1)
+        source = committed.assignment.display_id
+        target = source == "display-a" and "display-b" or "display-a"
+        expected = committed.assignment.revision
+    end
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
+ASSIGNMENT_HISTORY_REPLAY = r'''local storage = require("store")
+local assignments = require("assignments")
+local function main()
+    local workspace = assert(storage.open())
+    local transfers = assert(assignments.open(workspace))
+    local before = assert(transfers:get({view_id = "history-view", instance_id = "history-instance"}))
+    local replay = assert(transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1}))
+    assert(replay.phase == "committed")
+    local conflict, conflict_error = transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-c", expected_revision = 1})
+    assert(not conflict and conflict_error and conflict_error:find("conflicts"))
+    local after = assert(transfers:get({view_id = "history-view", instance_id = "history-instance"}))
+    assert(after.assignment.display_id == before.assignment.display_id and after.assignment.revision == before.assignment.revision)
+    assert(transfers:retire({view_id = "history-view", instance_id = "history-instance"}))
+    local retired, retired_error = transfers:get({view_id = "history-view", instance_id = "history-instance"})
+    assert(not retired and not retired_error)
+    assert(assert(transfers:prepare({request_id = "history-1", view_id = "history-view", instance_id = "history-instance", source_display_id = "display-a", target_display_id = "display-b", expected_revision = 1})).phase == "committed")
+    assert(workspace:close())
+end
+return {main = main}
+'''
+
 
 def run_probe(project, folder, expect_success=True):
-    environment = {**os.environ, "BEE_WORKSPACE_DB": str(folder / "workspace.db")}
+    environment = database_environment(folder)
     result = subprocess.run(
         [str(RUNTIME), "run", "storage-probe", "--set", f"registry.history_path={folder / 'registry.db'}"],
         cwd=project,
@@ -92,6 +242,32 @@ def run_probe(project, folder, expect_success=True):
     else:
         assert result.returncode != 0, output
     return output
+
+
+def assignment_acceptance(project, probe, folder):
+    """Exercise durable fences and receipt history through the real runtime."""
+    def phase(source):
+        (probe / "main.lua").write_text(source)
+        run_probe(project, folder)
+
+    folder.mkdir()
+    phase(ASSIGNMENT_PREPARE)
+    phase(ASSIGNMENT_PREPARED)  # Reopen must retain source and prepared fence.
+    database = folder / "workspace.db"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TRIGGER fail_assignment_receipt BEFORE UPDATE OF phase ON workspace_display_transfer_receipts WHEN NEW.phase = 'committed' BEGIN SELECT RAISE(ABORT, 'forced receipt failure'); END")
+    phase(ASSIGNMENT_COMMIT_FAILS)
+    phase(ASSIGNMENT_PREPARED)  # The assignment UPDATE rolled back with receipt failure.
+    with sqlite3.connect(database) as db:
+        db.execute("DROP TRIGGER fail_assignment_receipt")
+    phase(ASSIGNMENT_COMMIT)
+    phase(ASSIGNMENT_HISTORY)
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT count(*) FROM workspace_display_transfer_receipts WHERE view_id='history-view' AND instance_id='history-instance'").fetchone()[0] == 65
+    phase(ASSIGNMENT_HISTORY_REPLAY)
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT phase FROM workspace_display_transfer_receipts WHERE request_id='history-1'").fetchone() == ("committed",)
+        assert db.execute("SELECT count(*) FROM workspace_display_assignments WHERE view_id='history-view' AND instance_id='history-instance'").fetchone() == (0,)
 
 
 def main():
@@ -114,7 +290,7 @@ def main():
                 "source": "file://main.lua",
                 "method": "main",
                 "modules": ["process"],
-                "imports": {"store": "bee.storage:store"},
+                "imports": {"store": "bee.storage:store", "assignments": "bee.storage:assignments"},
                 "meta": {"command": {"name": "storage-probe", "short": "storage probe"}},
                 "security": {"policies": ["bee:workspace_storage_policy"]},
             }],
@@ -130,7 +306,7 @@ def main():
             migration = connection.execute(
                 "SELECT id, name, checksum FROM workspace_schema_migrations"
             ).fetchall()
-            assert len(migration) == 2 and migration[0][0] == 1 and migration[1][0] == 2
+            assert len(migration) == 3 and [row[0] for row in migration] == [1, 2, 3]
             checksum = migration[0][2]
             state = connection.execute(
                 "SELECT generation, value FROM workspace_state WHERE singleton = 1"
@@ -158,12 +334,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (3, 'future_schema', 'future', 'now')"
+                "VALUES (4, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "newer than this Bee build" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 3")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 4")
             connection.commit()
         run_probe(project, folder)
 
@@ -174,6 +350,13 @@ def main():
         original_id = identity(database)
         run_probe(project, folder)
         assert identity(database) == original_id, "Reopen changed workspace identity"
+        with sqlite3.connect(database) as db:
+            assert db.execute("SELECT display_id, revision FROM workspace_display_assignments WHERE view_id='view-one' AND instance_id='instance-one'").fetchone() == ("display-b", 2)
+            assert db.execute("SELECT phase FROM workspace_display_transfer_receipts WHERE request_id='move-three'").fetchone() == ("committed",)
+            db.execute("UPDATE workspace_display_assignments SET revision = 9007199254740990 WHERE view_id='view-17' AND instance_id='instance-17'")
+        (probe / "main.lua").write_text(EXHAUSTION_PROBE)
+        run_probe(project, folder)
+        (probe / "main.lua").write_text(PROBE)
         moved = folder / "relocated"
         moved.mkdir()
         with sqlite3.connect(database) as db, sqlite3.connect(moved / "workspace.db") as target:
@@ -184,6 +367,8 @@ def main():
         fresh.mkdir()
         run_probe(project, fresh)
         assert identity(fresh / "workspace.db") != original_id, "Fresh workspaces share identity"
+
+        assignment_acceptance(project, probe, folder / "assignment-acceptance")
 
         # Upgrade a real migration-1 database. The old SQL/checksum must stay exact.
         legacy = folder / "legacy"
@@ -215,6 +400,7 @@ def main():
         with sqlite3.connect(legacy / "workspace.db") as db:
             assert db.execute("SELECT generation, value FROM workspace_state").fetchone() == (7, '{"version":1,"probe":"legacy"}')
             assert db.execute("SELECT checksum FROM workspace_schema_migrations WHERE id=1").fetchone()[0] == checksum
+            assert [row[0] for row in db.execute("SELECT id FROM workspace_schema_migrations ORDER BY id")] == [1, 2, 3]
         assert len(identity(legacy / "workspace.db")) == 32
 
         # An applied identity migration cannot silently mint another ID.
@@ -256,15 +442,28 @@ def client_storage():
             args = [str(RUNTIME), "--console", "run"] + ([str(pack)] if packed else [])
             args += [command, mode, "--set", f"registry.history_path={folder / 'registry.db'}"]
             result = subprocess.run(args, cwd=folder if packed else project, capture_output=True, text=True, timeout=30,
-                                    env={**os.environ, "BEE_CLIENT_DB": str(folder / "client.db"),
-                                         "BEE_WORKSPACE_DB": str(folder / "workspace.db"), "BEE_THREADS_DB": str(folder / "threads.db")})
+                                    env=database_environment(folder, BEE_CLIENT_DB=str(folder / "client.db")))
             output = result.stdout + result.stderr
             if failure is None:
                 assert result.returncode == 0, output
             else:
                 assert result.returncode != 0 and failure in output, output
 
+        # Seed the actual v1 schema and preserve a populated default layout.
+        # The fixed checksum prevents this proof from accepting edits to v1 SQL.
+        v1_sql = re.search(r"local SCHEMA = \[\[(.*?)\]\]", (ROOT / "src/core/client/store.lua").read_text(), re.S).group(1).removeprefix("\n")
+        v1_checksum = hashlib.sha256(("client_layout_v1\n" + v1_sql).encode()).hexdigest()
+        assert v1_checksum == "f35f913f50cfd4b0dbe6c8b448a063f2de35be2c2a469c04b26f7720faa029e6"
         for packed in (False, True):
+            authority = root / ("authority-pack" if packed else "authority-source")
+            probe(authority, "none", packed, command="client-desktop-unauthorized")
+            with sqlite3.connect(authority / "client.db") as db:
+                assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='client_state'").fetchone()[0] == 0
+            probe(authority, "seed", packed, command="client-desktop-authority")
+            probe(authority, "verify", packed, command="client-desktop-authority")
+            probe(authority, "reader", packed, command="client-desktop-reader")
+            probe(authority, "none", packed, command="client-desktop-unauthorized")
+            probe(authority, "capacity", packed, command="client-desktop-authority")
             folder = root / ("packed" if packed else "source")
             probe(folder, "seed", packed, command="client-storage-bindings")
             probe(folder, "verify", packed, command="client-storage-bindings")
@@ -279,6 +478,37 @@ def client_storage():
             # Reopen in another process, edit, and retry the original import.
             probe(folder, "edit", packed)
             probe(folder, "verify", packed)
+            probe(folder, "desktops", packed)
+            probe(folder, "verify_desktops", packed)
+            # The durable catalog must refuse an oversized or ambiguous set;
+            # only this disposable database is changed for fault injection.
+            with sqlite3.connect(database) as db:
+                db.execute("INSERT INTO client_desktops (client_id) VALUES (?)", ("c" * 32,))
+            probe(folder, "catalog", packed, "Desktop catalog is corrupt")
+            with sqlite3.connect(database) as db:
+                db.execute("DELETE FROM client_desktops WHERE client_id = ?", ("c" * 32,))
+                db.execute("UPDATE client_desktops SET client_id = ? WHERE client_id = ?", (original[0], "a" * 32))
+            probe(folder, "catalog", packed, "Desktop catalog identity is corrupt")
+            with sqlite3.connect(database) as db:
+                db.execute("UPDATE client_desktops SET client_id = ? WHERE client_id = ?", ("a" * 32, original[0]))
+            probe(folder, "verify_desktops", packed)
+            legacy = root / ("v1-packed" if packed else "v1-source")
+            legacy.mkdir()
+            with sqlite3.connect(database) as current:
+                populated = current.execute("SELECT * FROM client_state").fetchone()
+            with sqlite3.connect(legacy / "client.db") as old:
+                old.executescript(v1_sql)
+                old.execute("DELETE FROM client_state")
+                old.execute("INSERT INTO client_state VALUES (?, ?, ?, ?, ?, ?)", populated)
+                old.execute("CREATE TABLE client_schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, checksum TEXT NOT NULL)")
+                old.execute("INSERT INTO client_schema_migrations VALUES (1, 'client_layout_v1', ?)", (v1_checksum,))
+            probe(legacy, "verify", packed)
+            probe(legacy, "desktops", packed)
+            probe(legacy, "verify_desktops", packed)
+            with sqlite3.connect(legacy / "client.db") as upgraded:
+                assert upgraded.execute("SELECT * FROM client_state").fetchone() == populated
+                assert upgraded.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0] == v1_checksum
+                assert upgraded.execute("SELECT count(*) FROM client_schema_migrations").fetchone()[0] == 2
             with sqlite3.connect(database) as db:
                 assert db.execute("SELECT client_id, import_workspace, import_receipt FROM client_state").fetchone() == original
                 ledger = db.execute("SELECT checksum FROM client_schema_migrations WHERE id=1").fetchone()[0]
@@ -286,10 +516,10 @@ def client_storage():
             probe(folder, "open", packed, "migration ledger")
             with sqlite3.connect(database) as db:
                 db.execute("UPDATE client_schema_migrations SET checksum=? WHERE id=1", (ledger,))
-                db.execute("INSERT INTO client_schema_migrations VALUES (2, 'future', 'future')")
+                db.execute("INSERT INTO client_schema_migrations VALUES (3, 'future', 'future')")
             probe(folder, "open", packed, "newer")
             with sqlite3.connect(database) as db:
-                db.execute("DELETE FROM client_schema_migrations WHERE id=2")
+                db.execute("DELETE FROM client_schema_migrations WHERE id=3")
                 saved_value = db.execute("SELECT value FROM client_state").fetchone()[0]
                 db.execute("UPDATE client_state SET value='{\"version\":2}'")
             probe(folder, "open", packed, "Unsupported or corrupt client layout")
@@ -321,7 +551,7 @@ def client_storage():
             assert db.execute("SELECT count(*) FROM sqlite_master WHERE name IN ('client_state', 'client_schema_migrations')").fetchone()[0] == 0
         staged_store.write_text(healthy)
         probe(failed_migration, "seed")
-    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial")
+    print("Client storage source/pack: independent client/workspace bindings, native grant/boundary denial, stable identity, qualified layout, generation CAS, atomic import/retry after restart, existing-layout protection, ledger and corruption denial; independent desktop catalog/isolation/CAS/capacity/restart, catalog corruption denial and populated-v1 upgrade")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,148 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: application_admission
+  kind: registry.entry
+  bindings:
+  - definition_id: bee.settings:app
+    policies: [bee:ordinary_app_subsystem_boundary]
+    appearance_write: true
+  - definition_id: bee.processes:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee:processes_policy
+    application_stop: true
+  - definition_id: bee.console:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.console:executor_policy
+    - bee.console:command_policy
+  - definition_id: bee.inbox:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee:approval_decide_policy
+    - bee.inbox:client_policy
+  - definition_id: bee.hive_manager:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.hive_manager:client_policy
+    catalog_read: true
+  - definition_id: bee.timeline:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.timeline:client_policy
+  - definition_id: bee.delivery:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.delivery:client_policy
+    - bee:governance_delivery_read_policy
+    - bee:governance_delivery_manage_policy
+    - bee:governance_delivery_activate_policy
+  - definition_id: bee.modules:app
+    policies:
+    - bee:ordinary_app_subsystem_boundary
+    - bee.modules:client_policy
+    - bee.modules:hub_policy
+    - bee.modules:publication_policy
+  - definition_id: bee.harness.window:app
+    scope_management: true
+    close_grace_ms: 60000
+    policies:
+    - bee:carrier_policy
+    - bee:carrier_environment_policy
+    - bee:profile_workspace_policy
+    - bee:profile_context_boundary
+    - bee:thread_create_policy
+    - bee:harness_setup_policy
+    - bee.placement.docker:attachment_policy
+    - bee:placement_store_policy
+    - bee:placement_exec_policy
+    - bee:placement_runner_policy
+    - bee:resource_grant_policy
+    - bee:resource_resolve_policy
+    - bee:credential_issue_policy
+    - bee:credential_materialize_policy
+    - bee:gateway_materialize_policy
+    - bee:gateway_supervision_policy
+- name: base_app_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.send
+    resources: '*'
+    effect: allow
+- name: app_boundary_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.security
+    - security.scope.create
+    - security.policy.get
+    - process.context
+    - registry.apply
+    - registry.apply_version
+    - registry.overlay.apply
+    resources: '*'
+    effect: deny
+- name: scope_managing_app_boundary
+  kind: security.policy
+  meta:
+    comment: Default denial for the host-selected native execution actor, which may manage call scopes under its reviewed admission policy.
+  policy:
+    actions: [process.security, security.policy.get, process.context, registry.apply, registry.apply_version, registry.overlay.apply]
+    resources: '*'
+    effect: deny
+- name: core_spawn_boundary
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    - process.spawn.linked
+    - process.exec
+    - process.host
+    resources:
+    - bee.host:main
+    - bee.workspace:main
+    - bee.workspace:launch
+    - bee.client:main
+    - bee.client:local
+    - bee.client:local_command
+    - bee.client:local_application
+    - bee.client:desktop
+    - bee.client:application
+    - bee.launch:supervisor
+    - bee.launch:headless
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    - bee.hive:supervisor
+    - bee.hive.supervisor:main
+    - bee.hive:supervisor_host
+    effect: deny
+- name: core_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.session:main
+    - bee.applications:broker
+    - bee.terminal:main
+    effect: allow
+- name: ordinary_app_subsystem_boundary
+  kind: security.policy
+  meta:
+    comment: Host-selected boundary for ordinary applications; native execution components receive reviewed policies
+      separately
+  policy:
+    actions:
+    - db.get
+    resources:
+    - bee.placement.native:db
+    - bee.resources:db
+    - bee.credentials:db
+    - bee.governance:db
+    effect: deny

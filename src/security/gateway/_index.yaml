@@ -147,3 +147,12 @@ entries:
     - bee.governance:workspace_call
     - '*'
     effect: allow
+
+- name: gateway_access_call_policy
+  kind: security.policy
+  meta:
+    comment: Internal gateway calls to request and consume exact per-binding approvals; never an agent tool scope
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals:request, bee.approvals:read, bee.approvals:consume, bee.approvals:revalidate, bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow

@@ -163,14 +163,14 @@ func check() error {
 	if err = run(root, runtime, environment, "run", 4*time.Minute, "run", "research-live-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db")); err != nil {
 		return err
 	}
-	evidence, err := json.MarshalIndent(map[string]interface{}{"passed": true, "proof": "real Gemini selected two traits and committed the exact bound thread message", "runtime": runtime, "agy": agy}, "", "  ")
+	evidence, err := json.MarshalIndent(map[string]interface{}{"passed": true, "proof": "real Gemini requested MCP access, received test-operator inbox approval, selected two traits and committed the exact bound thread message", "runtime": runtime, "agy": agy}, "", "  ")
 	if err != nil {
 		return err
 	}
 	if err = os.WriteFile(filepath.Join(root, "evidence.json"), evidence, 0600); err != nil {
 		return err
 	}
-	fmt.Println("LIVE_AGY_MCP_PASS: actual bound thread message, two traits, native context")
+	fmt.Println("LIVE_AGY_MCP_PASS: agent access request, test-operator inbox approval, bound thread message, traits and context")
 	return nil
 }
 func main() {

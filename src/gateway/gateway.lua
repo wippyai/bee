@@ -25,6 +25,7 @@ local hooks = require("hooks")
 local mcp = require("mcp")
 local surface = require("surface")
 local surface_store = require("surface_store")
+local access = require("access")
 local M = {}
 function M.accepts_host(value: unknown): boolean
     local current = configuration.current()
@@ -56,7 +57,7 @@ type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
     tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean}
 type Generation = {epoch: integer, restarts: integer}
-type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer}
+type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
 type Drain = {draining: boolean, past_deadline: boolean}
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function fail(code: string, message: string): Reply
@@ -822,18 +823,27 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local tx, tx_error = db:begin()
     if not tx or tx_error then db:release(); return nil, fail("STORAGE", "open surface read") end
     local stored, read_error = surface_store.read(tx, binding.binding_id)
+    local granted, grant_error = surface_store.grants(tx, binding.binding_id)
     tx:rollback()
     db:release()
     if not stored then return nil, fail("STORAGE", read_error and read_error.message or "read surface") end
+    if not granted then return nil, fail("STORAGE", grant_error and grant_error.message or "read grants") end
+    local digest, digest_error = hash.sha256(stored.surface_json)
+    if not digest then return nil, fail("STORAGE", tostring(digest_error)) end
     local raw, raw_error = json.decode(stored.surface_json)
     local active, active_error = json.decode(stored.active_json)
     local dynamic, dynamic_error = json.decode(stored.context_json)
     if raw_error or active_error or dynamic_error then return nil, fail("STORAGE", "binding surface JSON is corrupt") end
     local configured, _, config_error = surface.prepare(raw, mcp.TOOLS, binding.tools)
     if not configured then return nil, fail("STORAGE", config_error or "binding surface is invalid") end
+    if #granted > 0 then
+        local extended, extend_error = surface.grant(configured, granted)
+        if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end
+        configured = extended
+    end
     local selected, selection_error = surface.select(configured, active, dynamic)
     if not selected then return nil, fail("STORAGE", selection_error or "binding selection is invalid") end
-    return {configuration = configured, selection = selected, revision = stored.revision}, nil
+    return {configuration = configured, selection = selected, revision = stored.revision, digest = digest}, nil
 end
 -- Only the authenticated HTTP handler invokes this library operation. The
 -- binding row is rechecked inside the transaction before changing selection.
@@ -861,6 +871,57 @@ function M.select_surface(binding: Binding, expected_revision: integer, active: 
     db:release()
     if commit_error then return fail("STORAGE", "commit surface selection") end
     return succeed({revision = updated.revision, active_traits = selected.active, context = selected.context})
+end
+-- These methods are called only after bearer authentication by the MCP endpoint.
+function M.request_access(binding: Binding, request: unknown): Reply
+    local current, failure = M.surface(binding)
+    if not current then return failure or fail("STORAGE", "read surface") end
+    return access.request(binding, current.configuration, current.digest, request)
+end
+function M.access_status(binding: Binding, approval_id: string): Reply
+    local current, failure = M.surface(binding)
+    if not current then return failure or fail("STORAGE", "read surface") end
+    -- An applied grant is an already completed effect, even after the approval's
+    -- request lifetime. Replaying status must not re-consume or re-activate it.
+    local receipt_db, receipt_failure = open()
+    if not receipt_db then return receipt_failure or fail("STORAGE", "read access receipt") end
+    local receipts, receipt_error = receipt_db:query("SELECT traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding.binding_id, approval_id})
+    receipt_db:release()
+    if not receipts or receipt_error then return fail("STORAGE", "read access receipt") end
+    if #receipts > 0 then
+        local receipt = bounds.object(receipts[1])
+        local encoded = receipt and bounds.text(receipt.traits_json, 8192)
+        if not encoded then return fail("STORAGE", "invalid access receipt") end
+        local raw, decode_error = json.decode(encoded)
+        local traits = bounds.ids(raw, true)
+        if not traits or decode_error then return fail("STORAGE", "invalid access receipt traits") end
+        return succeed({approval_id = approval_id, status = "granted", revision = current.revision, traits = traits})
+    end
+    local grant, pending = access.approved(binding, current.configuration, current.digest, approval_id)
+    if not grant then return pending or fail("UNAVAILABLE", "approval status missing") end
+    local encoded, encode_error = json.encode(grant.traits)
+    if not encoded or encode_error then return fail("STORAGE", "encode grant") end
+    local db, open_failure = open()
+    if not db then return open_failure or fail("STORAGE", "open grant store") end
+    local tx, tx_error = db:begin()
+    if not tx or tx_error then db:release(); return fail("STORAGE", "begin grant") end
+    local rows, read_error = tx:query("SELECT credential_generation, revoked_at, sealed_at, expires_at FROM bee_gateway_bindings WHERE binding_id = ?", {binding.binding_id})
+    local row = rows and bounds.object(rows[1])
+    local expires = row and bounds.text(row.expires_at)
+    if read_error or not row or not expires or row.revoked_at ~= nil or row.sealed_at ~= nil or expires <= stamp(now_ms())
+        or integer(row.credential_generation) ~= binding.credential_generation then
+        tx:rollback(); db:release(); return fail("DENIED", "agent binding is no longer current")
+    end
+    local stored, stored_error = surface_store.read(tx, binding.binding_id)
+    if not stored then tx:rollback(); db:release(); return fail("STORAGE", stored_error and stored_error.message or "read surface") end
+    local digest = hash.sha256(stored.surface_json)
+    if digest ~= current.digest then tx:rollback(); db:release(); return fail("CONFLICT", "MCP declaration changed") end
+    local updated, update_error = surface_store.grant(tx, binding.binding_id, grant.approval_id, grant.proposal_digest, encoded)
+    if not updated then tx:rollback(); db:release(); return fail(update_error and update_error.code or "STORAGE", update_error and update_error.message or "apply grant") end
+    local _, commit_error = tx:commit()
+    db:release()
+    if commit_error then return fail("STORAGE", "grant commit outcome unknown; retry the same approval") end
+    return succeed({approval_id = approval_id, status = "granted", revision = updated.revision, traits = grant.traits})
 end
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end

@@ -1,11 +1,24 @@
 -- MIT. Component tool declarations never grant authority by themselves.
 local test = require("test")
 local catalog = require("catalog")
+local surface = require("surface")
 local function sample()
     return {tools = {{name = "measure", operation = "research:measure", description = "Run the admitted benchmark",
         policies = {"research:measure_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}}},
         traits = {{id = "research:benchmark", title = "Benchmark", prompt = "Measure first", tools = {"measure"}},
             {id = "research:compare", title = "Compare", prompt = "Compare samples", tools = {"measure"}}}}
+end
+local function requestable_surface()
+    return {tools = {
+            {name = "measure", operation = "research:measure", description = "Measure samples",
+                policies = {"research:measure_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}},
+            {name = "export", operation = "research:export", description = "Export a report",
+                policies = {"research:export_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}}},
+        traits = {
+            {id = "research:benchmark", title = "Benchmark", prompt = "Measure first", tools = {"measure"}},
+            {id = "research:export", title = "Export", prompt = "Export after approval", tools = {"export"}}},
+        base_tools = {"measure"}, active_traits = {}, dynamic_keys = {}, fixed_context = {app = "fixed"},
+        access = {policy = "research:approval", workspace_id = "workspace-one", traits = {"research:export"}}}
 end
 local function define_tests()
     test.describe("Configurable MCP catalog", function()
@@ -47,6 +60,74 @@ local function define_tests()
             local inactive = catalog.select(decoded, {"measure"}, {}, {"research:benchmark"}, {})
             if not inactive then error("inactive") end
             test.eq(#inactive, 0)
+        end)
+        test.it("keeps requestable traits gated until a copied surface grants them", function()
+            local raw = requestable_surface()
+            local prepared, initial = surface.prepare(raw, {}, {"measure", "export"})
+            if not prepared or not initial then error("valid requestable surface refused") end
+            test.eq(#prepared.allowed_traits, 1)
+            test.eq(prepared.allowed_traits[1], "research:benchmark")
+            test.is_nil(surface.select(prepared, {"research:export"}, {}))
+            local free = surface.select(prepared, {"research:benchmark"}, {})
+            if not free then error("freely selectable trait refused") end
+            local requested = {"research:export"}
+            local granted, grant_error = surface.grant(prepared, requested)
+            if not granted then error(tostring(grant_error)) end
+            requested[1] = "research:benchmark"
+            test.eq(#prepared.allowed_traits, 1)
+            test.eq(#granted.allowed_traits, 2)
+            test.eq(granted.allowed_traits[2], "research:export")
+            local selected = surface.select(granted, {"research:export"}, {})
+            if not selected then error("granted trait refused") end
+            test.eq(#selected.active, 1)
+            test.eq(granted.fixed_context.app, "fixed")
+            test.eq(granted.fixed_context.app, prepared.fixed_context.app)
+            test.is_nil(surface.select(prepared, {"research:export"}, {}))
+            granted.allowed_traits[1] = "changed:outside"
+            test.eq(prepared.allowed_traits[1], "research:benchmark")
+            granted.access.traits[1] = "changed:outside"
+            test.eq(prepared.access.traits[1], "research:export")
+        end)
+        test.it("rejects invalid requestable declarations and grant escalation", function()
+            local raw = requestable_surface()
+            raw.access.traits = {"research:missing"}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            raw = requestable_surface()
+            raw.access.traits = {"research:export", "research:export"}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            raw = requestable_surface()
+            raw.base_tools = {"measure", "export"}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            raw = requestable_surface()
+            raw.traits[1].tools = {"measure", "export"}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            raw = requestable_surface()
+            raw.access.extra = true
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            raw = requestable_surface()
+            raw.active_traits = {"research:export"}
+            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+
+            raw = requestable_surface()
+            local prepared = surface.prepare(raw, {}, {"measure", "export"})
+            if not prepared then error("valid surface refused") end
+            test.is_nil(surface.grant(prepared, {"research:benchmark"}))
+            test.is_nil(surface.grant(prepared, {"research:missing"}))
+            test.is_nil(surface.grant(prepared, {"research:export", "research:export"}))
+
+            raw = requestable_surface()
+            prepared = surface.prepare(raw, {}, {"measure"})
+            if not prepared then error("surface with deferred tool refused") end
+            test.is_nil(surface.grant(prepared, {"research:export"}))
+        end)
+        test.it("keeps surfaces without access configuration freely selectable", function()
+            local raw = requestable_surface()
+            raw.access = nil
+            local prepared = surface.prepare(raw, {}, {"measure", "export"})
+            if not prepared then error("plain surface refused") end
+            test.eq(prepared.access, nil)
+            test.eq(#prepared.allowed_traits, 2)
+            if not surface.select(prepared, {"research:export"}, {}) then error("plain trait unavailable") end
         end)
     end)
 end

@@ -71,6 +71,8 @@ product acceptance.
 Run `make live-agy-mcp-check` for the explicit provider-backed MCP proof. It uses
 the installed `agy` executable and normal user login, stages isolated Bee stores,
 waits for the native random-port listener, and runs the real managed batch route.
+The Agent must request the gated recorder trait through MCP; the fixture operator
+approves only that exact request through the existing inbox decision API.
 Acceptance requires the exact message in the durable thread with its bound actor,
 action and attempt, plus the persisted two-trait selection and dynamic context.
 Provider prose alone cannot pass. Logs and evidence remain in a private temporary

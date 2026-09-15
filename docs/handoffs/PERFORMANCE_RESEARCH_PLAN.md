@@ -133,8 +133,12 @@ application target and requested access to the user. Approval enables only that
 Agent's access on subsequent calls, without relaunching it or changing other
 Agents. Retrying a request reuses its recorded decision; denial, revocation,
 restart and uncertain delivery must remain explicit. A shared native policy
-replacement is not an agent-specific grant. This access-request integration is
-the next MCP unit before the live dashboard, not an already implemented feature.
+replacement is not an agent-specific grant. The access-request backend now passes 1015 Lua tests and real HTTP checks,
+including isolation, decision denial, idempotent consumption/application handoff
+and fixed-context refusal. The live Gemini test requests access itself and writes
+its verified result only after a test-operator approval through the durable inbox.
+Normal profile setup, client-wide notifications and grant recovery into a
+replacement binding remain product acceptance; do not infer them from this proof.
 
 The client must eventually switch authorized Bees/workspaces/displays without
 relaunching and present cumulative pending approvals across a Hive of roughly

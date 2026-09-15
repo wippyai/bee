@@ -143,10 +143,11 @@ local function handle(): nil
     if call.method == "tools/list" then
         local listed: {Object} = {}
         for _, item in ipairs(described) do listed[#listed + 1] = item end
-        listed[#listed + 1] = {name = "session", description = "Read admitted traits and current context, or select active traits and dynamic context with the current revision. Selection grants no new authority.",
+        listed[#listed + 1] = {name = "session", description = "Read or select traits/context. Request host-declared access with request_access, then poll access_status with its approval_id; only an approved request enables access for this agent.",
             inputSchema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
-                operation = {type = "string", enum = {"read", "select"}}, expected_revision = {type = "integer", minimum = 1},
-                active_traits = {type = "array", items = {type = "string"}}, context = {type = "object"}}}}
+                operation = {type = "string", enum = {"read", "select", "request_access", "access_status"}}, expected_revision = {type = "integer", minimum = 1},
+                active_traits = {type = "array", items = {type = "string"}}, context = {type = "object"},
+                idempotency_key = {type = "string"}, traits = {type = "array", items = {type = "string"}}, reason = {type = "string", maxLength = 1024}, approval_id = {type = "string"}}}}
         listed[#listed + 1] = {name = "call_tool", description = "Call a currently active tool by name. Use session read for current schemas after changing traits; admission is checked on every call.",
             inputSchema = {type = "object", additionalProperties = false, required = {"name", "arguments"}, properties = {name = {type = "string"}, arguments = {type = "object"}}}}
         answer(response, http.STATUS.OK, mcp.result(call.id, {tools = listed})); return nil
@@ -158,12 +159,23 @@ local function handle(): nil
         local request = bounds.object(call.params.arguments)
         if not request then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "session arguments required")); return nil end
         local allowed: {string} = {"operation"}
-        if request.operation ~= "read" then allowed = {"operation", "expected_revision", "active_traits", "context"} end
+        if request.operation == "request_access" then allowed = {"operation", "idempotency_key", "traits", "reason"}
+        elseif request.operation == "access_status" then allowed = {"operation", "approval_id"}
+        elseif request.operation ~= "read" then allowed = {"operation", "expected_revision", "active_traits", "context"} end
         local extra = bounds.fields(request, allowed)
         if extra then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, extra)); return nil end
+        if request.operation == "request_access" then
+            answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(gateway.request_access(binding,
+                {idempotency_key = request.idempotency_key, traits = request.traits, reason = request.reason}), nil))); return nil
+        end
+        if request.operation == "access_status" then
+            local approval_id = bounds.id(request.approval_id)
+            if not approval_id then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "approval_id required")); return nil end
+            answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(gateway.access_status(binding, approval_id), nil))); return nil
+        end
         if request.operation == "read" then
             answer(response, http.STATUS.OK, mcp.result(call.id, reply_result({ok = true, value = {revision = bound.revision,
-                traits = config.catalog.traits, active_traits = bound.selection.active, context = bound.selection.context,
+                traits = config.catalog.traits, requestable_access = config.access, allowed_traits = config.allowed_traits, active_traits = bound.selection.active, context = bound.selection.context,
                 dynamic_keys = config.dynamic_keys, tools = described}}, nil))); return nil
         end
         local revision = bounds.count(request.expected_revision)

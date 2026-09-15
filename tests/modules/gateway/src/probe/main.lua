@@ -5,6 +5,7 @@
 -- It asserts and fails the boot; it prints nothing, so no token bytes can
 -- reach captured output.
 local funcs = require("funcs")
+local access_probe = require("access_probe")
 local http_client = require("http_client")
 local json = require("json")
 local time = require("time")
@@ -211,6 +212,7 @@ local function main()
     assert(status == 200 and init and (init.result :: Object).protocolVersion ~= nil, "initialize")
     local _, listed = rpc("act-a", token_a, "tools/list")
     assert(listed and #((listed.result :: Object).tools :: {unknown}) == 4, "two admitted tools and MCP controls advertised")
+    access_probe.run(ADDRESS)
     configurable_surface(token_a)
     local page = tool("act-a", token_a, "thread_read", {cursor = 0})
     assert(page.ok == true, "thread_read refused: " .. tostring(json.encode(page)))

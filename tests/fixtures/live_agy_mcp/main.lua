@@ -35,9 +35,16 @@ local function main()
     data.gateway_surface = {tools = {}, traits = {
         {id = "research:read", title = "Research reader", prompt = "Read this research thread.", tools = {"thread_read"}},
         {id = "research:record", title = "Research recorder", prompt = "Record results in the research thread.", tools = {"thread_message"}}},
-        base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "live-mcp-probe"}, dynamic_keys = {"experiment"}}
+        base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "live-mcp-probe"}, dynamic_keys = {"experiment"},
+        access = {workspace_id = "research-workspace", policy = "live-research", traits = {"research:record"}}}
     local changes = registry.snapshot():changes()
     changes:update(policy)
+    local approvers = registry.get("bee.approvals:approver_policies")
+    if not approvers then error("approval policies missing") end
+    local approver_data = bounds.object(approvers.data)
+    if not approver_data then error("approval policy data missing") end
+    approver_data.policies = {{name = "live-research", approvers = {actor}, max_ttl_ms = 180000}}
+    changes:update(approvers)
     local applied, apply_error = changes:apply()
     if not applied then error(tostring(apply_error)) end
     local listener: Object? = nil
@@ -52,7 +59,7 @@ local function main()
     reply("bee.harness.launch:setup", {workspace_id = "research-workspace", definition_ref = definition, expected_plan_digest = plan.plan_digest})
     call("bee.threads.service:create", {thread_id = thread, idempotency_key = "create-live", title = "Live Gemini MCP proof"})
     local args = {idempotency_key = marker, message_id = marker, message_kind = "progress", recipient_ids = {actor}, content = {text = marker}}
-    local brief = "Use only Bee MCP tools for this task. Read session, then select both research:read and research:record traits with the current revision and context {experiment: baseline}. "
+    local brief = "Use only Bee MCP tools for this task. Read session. Use session request_access to request research:record with idempotency_key live-record and reason Record the probe result. The test operator will approve it through the inbox. Call session access_status with the returned approval_id until granted. Then read session and select both research:read and research:record traits with the current revision and context {experiment: baseline}. "
         .. "Then use call_tool to call thread_message with these exact arguments: " .. tostring(json.encode(args))
         .. ". Do not use shell or change files. After the tool succeeds, answer DONE."
     local started = call("bee.harness.launch:start", {request_id = "live-agent", definition_ref = definition, workspace_id = "research-workspace", thread_id = thread, brief = brief})
@@ -62,11 +69,39 @@ local function main()
     local events = process.events()
     if not events then error("process events unavailable") end
     local deadline = time.after("180s")
+    local approved = false
+    local inbox_cursor = 0
     while true do
-        local selected = channel.select({events:case_receive(), deadline:case_receive()})
+        local tick = time.after("200ms")
+        local selected = channel.select({events:case_receive(), deadline:case_receive(), tick:case_receive()})
         if not selected.ok or selected.channel == deadline then error("live Gemini carrier exceeded 180s") end
+        if selected.channel == tick then
+            -- This is the test operator, not the MCP subject scope. It approves
+            -- only this exact live attempt's expected capability through inbox.
+            local inbox = call("bee.approvals:inbox", {workspace_id = "research-workspace", after_seq = inbox_cursor})
+            local entries = inbox.changes
+            if type(entries) ~= "table" then error("inbox changes missing") end
+            for _, raw in ipairs(entries) do
+                local change = bounds.object(raw)
+                local request = change and bounds.object(change.request)
+                local proposed = request and bounds.object(request.proposal)
+                local payload = proposed and bounds.object(proposed.payload)
+                local traits = payload and bounds.ids(payload.traits, true)
+                if request and request.state == "pending" then
+                    if approved or request.requester_id ~= actor or request.thread_id ~= thread or not proposed
+                        or proposed.action_id ~= started.action_id or proposed.ref ~= started.attempt_id
+                        or not traits or #traits ~= 1 or traits[1] ~= "research:record" then error("unexpected access request") end
+                    call("bee.approvals:decide", {approval_id = request.approval_id, expected_revision = request.revision,
+                        proposal_digest = request.proposal_digest, decision = "approved"})
+                    approved = true
+                end
+            end
+            local next_cursor = bounds.count(inbox.next_seq)
+            if not next_cursor then error("inbox cursor missing") end
+            inbox_cursor = next_cursor
+        end
         local event = selected.value
-        if event.kind == process.event.EXIT and tostring(event.from) == pid then
+        if selected.channel == events and event.kind == process.event.EXIT and tostring(event.from) == pid then
             if event.result and event.result.error then error("live carrier failed: " .. tostring(event.result.error)) end
             break
         end
@@ -95,6 +130,7 @@ local function main()
         cursor = next_cursor
     end
     if not found then error("Gemini did not commit the requested MCP message") end
+    if not approved then error("Gemini did not request access through the approval inbox") end
     local db, db_error = sql.get("bee.gateway:db")
     if not db then error(tostring(db_error)) end
     local rows, query_error = db:query("SELECT s.active_json, s.context_json FROM bee_gateway_surfaces s JOIN bee_gateway_bindings b ON b.binding_id = s.binding_id WHERE b.attempt_id = ?", {started.attempt_id})

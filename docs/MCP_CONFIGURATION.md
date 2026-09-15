@@ -78,3 +78,44 @@ directly or through `call_tool`. An unlisted trait, an unadmitted tool or a
 caller-provided `project` value is refused. This configuration belongs to the
 host's protected launch policy; passing it as ordinary tool arguments cannot
 admit it.
+
+## Agent-requested access
+
+A protected surface can declare `access: {workspace_id, policy, traits}`. These
+trait IDs are requestable, initially unavailable capabilities. They cannot also
+be initially active, in base tools, or exposed through a freely selectable trait.
+The declaration selects the approval workspace and approver policy; an agent
+cannot supply either, executable targets, tool scopes, or fixed app context.
+
+The built-in `session` tool accepts `request_access` with `idempotency_key`,
+`traits` and a bounded `reason`. It creates an ordinary durable approval request
+bound to the agent's gateway binding, action, attempt, thread, configuration
+digest and fixed context. The client Approvals inbox uses its existing owner
+feed and decision operation. The agent polls `access_status` with the returned
+`approval_id`; an approved decision is consumed under a stable effect key before
+the gateway records and activates the traits for this binding. No other binding
+changes, even when two agents share the same subject identity.
+
+The approval owner remains the decision authority. A gateway receipt records
+only the applied effect, atomically with its surface revision. Replaying a status
+read does not duplicate the grant or reactivate a later-deselected trait. If the
+owner restarts before consumption, the gateway verifies the exact proposal and
+configuration before revalidation. A crash after consumption but before applying
+can replay that same effect. Request expiry limits consumption; a completed grant
+lasts for its binding, whose revocation/credential lifecycle still governs every
+MCP call. Receipt capacity is bounded and exhaustion refuses new grants.
+
+An application target must be host-fixed in context and enforced by its tool's
+own decoder and native policy. Merely including an app identifier in context is
+not a replacement for target authorization. This integration does not grant
+arbitrary registry publication or permission for an agent to approve itself.
+Production and HTTP-fixture lint pass, as do 1015 Lua cases. The real HTTP
+fixture in two native runtimes proves pending inbox visibility, request replay,
+explicit approval, recovery of an already-consumed effect before gateway apply,
+unchanged revision on grant replay, preserved deselection, fixed-context refusal,
+and denial for another binding or a denied request. Store reopen/rollback checks
+cover durable effect receipts. The explicit live Agy gate also passes: Gemini requests the trait itself, the
+fixture operator approves the exact inbox request, and Gemini uses its grant
+to commit the verified thread message. This is not yet a full provider/client
+restart proof or the default-profile setup UI. Client-wide automatic notifications and
+discovery across approximately 100 Bees remain separate work.

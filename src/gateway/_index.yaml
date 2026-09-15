@@ -57,10 +57,15 @@ entries:
   source: file://catalog.lua
   modules: [json]
   imports: {bounds: bee.threads.records:bounds}
+- name: access
+  kind: library.lua
+  source: file://access.lua
+  modules: [funcs, security, hash]
+  imports: {bounds: bee.threads.records:bounds, canonical: bee.threads.records:canonical, surface: bee.gateway:surface}
 - name: surface_store
   kind: library.lua
   source: file://surface_store.lua
-  modules: [sql]
+  modules: [sql, json]
   imports: {bounds: bee.threads.records:bounds}
 - name: surface
   kind: library.lua
@@ -124,6 +129,7 @@ entries:
     mcp: bee.gateway:mcp
     surface: bee.gateway:surface
     surface_store: bee.gateway:surface_store
+    access: bee.gateway:access
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -298,4 +304,4 @@ entries:
     context: bee.gateway:context
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_workspace_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_workspace_policy, bee:gateway_access_call_policy]

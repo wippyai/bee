@@ -1,10 +1,18 @@
+The agent-requested MCP access backend is implemented: host-declared gated
+traits create durable approval requests for the exact binding/attempt and are
+activated only after owner-approved consumption and a gateway effect receipt.
+Production/HTTP-fixture lint, 1015 Lua tests, real HTTP isolation/replay/handoff
+checks, and the live Gemini request → fixture-operator inbox approval → tool-use
+proof pass. This does not yet include normal-profile setup, client-wide automatic
+notifications, cumulative discovery across 100 Bees or cold grant recovery to a
+replacement agent binding. Those remain product work; global Bee is unchanged.
+
 The managed Agy caller-thread batch route now has a provider-backed MCP gate:
 `make live-agy-mcp-check` passes against installed Gemini Flash with explicit
 high effort and the normal user login. It verifies the exact durable thread
 message and stored two-trait/context selection. A fixture readiness race was
 fixed by waiting for the existing native listener address before launch. This
-does not prove the performance dashboard or per-agent access-request approval
-flow. Those remain the next units; global installation is unchanged.
+does not prove the performance dashboard. That remains the next experiment unit; global installation is unchanged.
 
 # Foundation status
 

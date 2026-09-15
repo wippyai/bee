@@ -54,6 +54,43 @@ local function run()
             if not absent then error("absent") end
             test.eq(absent.code, "NOT_FOUND")
             tx:rollback()
+            tx = begin(db)
+            local granted, grant_error = store.grant(tx, "surface-a", "approval-one", string.rep("a", 64), '["research:write"]')
+            if not granted then error(tostring(grant_error and grant_error.message)) end
+            test.eq(granted.revision, 3)
+            test.eq(granted.active_json, '["research:measure","research:write"]')
+            local _, grant_commit = tx:commit()
+            if grant_commit then error(tostring(grant_commit)) end
+            db:release()
+            -- Recover a lost grant commit reply after reopening; the receipt
+            -- must neither advance the revision nor affect another binding.
+            db = open()
+            tx = begin(db)
+            local replay = store.grant(tx, "surface-a", "approval-one", string.rep("a", 64), '["research:write"]')
+            if not replay then error("grant replay missing") end
+            test.eq(replay.revision, 3)
+            local wrong, wrong_error = store.grant(tx, "surface-a", "approval-one", string.rep("b", 64), '["research:write"]')
+            test.is_nil(wrong)
+            if not wrong_error then error("expected changed receipt refusal") end
+            test.eq(wrong_error.code, "CONFLICT")
+            local own = store.grants(tx, "surface-a")
+            local other = store.grants(tx, "surface-b")
+            if not own or not other then error("grant read failed") end
+            test.eq(#own, 1)
+            test.eq(own[1], "research:write")
+            test.eq(#other, 0)
+            local before = store.read(tx, "surface-b")
+            if not before then error("other binding missing") end
+            local rolled_back = store.grant(tx, "surface-b", "approval-two", string.rep("c", 64), '["research:write"]')
+            if not rolled_back then error("prepare rolled-back grant") end
+            tx:rollback()
+            tx = begin(db)
+            local after = store.read(tx, "surface-b")
+            local absent_grants = store.grants(tx, "surface-b")
+            if not after or not absent_grants then error("read rollback") end
+            test.eq(after.revision, before.revision)
+            test.eq(#absent_grants, 0)
+            tx:rollback()
             db:release()
         end)
     end)

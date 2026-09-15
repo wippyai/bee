@@ -181,12 +181,23 @@ CREATE TABLE bee_gateway_surfaces (
     revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991)
 );
 ]]
+-- Approval decisions stay with their owner; these are gateway effect receipts.
+local ACCESS_SQL = [[
+CREATE TABLE bee_gateway_access_grants (
+    binding_id TEXT NOT NULL REFERENCES bee_gateway_bindings(binding_id),
+    approval_id TEXT NOT NULL,
+    proposal_digest TEXT NOT NULL CHECK(length(proposal_digest) = 64),
+    traits_json TEXT NOT NULL CHECK(length(CAST(traits_json AS BLOB)) BETWEEN 1 AND 8192),
+    PRIMARY KEY(binding_id, approval_id)
+);
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
         {id = 5, name = "hooks", sql = HOOKS_SQL, rebuild = true}, {id = 6, name = "intake", sql = INTAKE_SQL, rebuild = true},
         {id = 7, name = "seal", sql = SEAL_SQL, rebuild = false},
         {id = 8, name = "native_listener", sql = NATIVE_LISTENER_SQL, rebuild = false},
-        {id = 9, name = "binding_surface", sql = SURFACE_SQL, rebuild = false}}
+        {id = 9, name = "binding_surface", sql = SURFACE_SQL, rebuild = false},
+        {id = 10, name = "access_grants", sql = ACCESS_SQL, rebuild = false}}
 end
 return M

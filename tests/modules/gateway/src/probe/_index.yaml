@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.gateway_probe
 entries:
+- name: access_probe
+  kind: library.lua
+  source: file://access_probe.lua
+  modules: [funcs, http_client, json, registry]
+  imports: {bounds: bee.threads.records:bounds}
 - name: concurrent_call
   kind: function.lua
   source: file://concurrent_call.lua
@@ -23,6 +28,7 @@ entries:
 - name: main
   kind: process.lua
   source: file://main.lua
+  imports: {access_probe: bee.gateway_probe:access_probe}
   method: main
   modules: [funcs, http_client, json, time, process, registry, security]
   meta:
@@ -31,7 +37,7 @@ entries:
       security:
         actor: {id: bee.test.gateway}
   security:
-    policies: [bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
+    policies: [bee:approval_decide_policy, bee:approval_consume_policy, bee.gateway_probe:replacement_admin, bee.gateway_probe:policy, bee.gateway_probe:configuration_caller_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:gateway_manage_policy, bee:gateway_admit_policy, bee:gateway_materialize_policy, bee:thread_authority_client_policy, bee:thread_lifecycle_client_policy, bee:thread_create_policy, bee:thread_observe_policy, bee:thread_lifecycle_policy, bee:thread_carrier_policy]
 - name: policy
   kind: security.policy
   policy:

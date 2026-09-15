@@ -6875,3 +6875,40 @@ between their transactions. No shared-policy mutation or new approval authority.
 The user also requires a cumulative authorized inbox for roughly 100 Bees and
 client switching without relaunch; neither is inferred from today's 16-source
 configured inbox.
+
+
+### Per-agent MCP approval integration — September 15
+
+The gateway now exposes session request_access/access_status over host-declared
+requestable traits. The existing approval owner verifies the requesting thread
+attempt and persists its exact proposal. The gateway consumes that decision and
+records only its binding-qualified effect receipt in appended migration 10.
+Receipt/revision commit atomically; a replay never grants twice or reactivates a
+later-deselected trait. App context remains host-fixed and target authorization
+stays with the tool decoder/native policy. Shared policies are not mutated.
+
+Production lint and 1015 Lua tests pass. The real HTTP gate passes in two native
+runtimes: request appears in the existing durable inbox, pending/denied remains
+unavailable, human approval enables the exact binding, another binding with the
+same subject remains denied, retry keys remain binding-qualified, a consumed
+decision with no gateway receipt recovers, and fixed context cannot be replaced.
+The HTTP fixture itself passes typed lint. A complete provider/client restart
+proof, normal-profile configuration, automatic client notifications and the
+100-Bee cumulative inbox remain unverified product work. No global installation.
+
+The desktop foundation run reached Console, whose old root-index assumption
+failed after host/security extraction. Its two fixture admission edits now target
+the owning security index; its focused acceptance is running. Other completed
+checks are not being repeated without a relevant change.
+
+The live Gemini gate now also passes with the recorder trait initially gated.
+Gemini requests access via session.request_access; a test-only operator accepts
+only that exact attempt/trait through the durable inbox and decides it. Gemini
+then consumes its grant via access_status, selects both traits with native
+context, and commits the exact verified message. This is actual provider use;
+the scripted operator is explicit test authority, not agent self-approval.
+Pack and 11 bundle checks pass. Console source/pack now pass after both fixture
+admission paths target the owning security index. Remaining desktop checks
+continue from terminal scrolling. Current grant lifetime is one binding; cold
+transfer to a replacement binding and normal profile/client notification wiring
+are not claimed.

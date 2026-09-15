@@ -11,6 +11,7 @@ package these same pages with status and version, not maintain a second copy.
 | Code style and placement | [Development conventions](DEVELOPMENT.md) |
 | App admission, launch, messages and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
 | Database guarantees | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
+| Native machine configuration and persisted Hive profiles | [Machine configuration](../native/hive/config/README.md) |
 | Local journal, Test Status and future subscriptions | [Threads](THREADS.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |
 | Current critique and recommended next slice | [Foundation next steps](FOUNDATION_NEXT.md) |

@@ -33,6 +33,11 @@ acceptance pass. Older selected deployments retain their code until explicitly
 changed; `bee --base` selects the executable's embedded baseline and preserves
 application databases.
 
+The native `hive/config` package persists a bounded, revisioned `config.json`
+with a strict local or joined Hive profile and remembered workspace locations.
+Joined secrets stay in the owner-only machine file and are redacted in Go
+formatting. The launcher does not yet consume this profile or start a Hive join.
+
 | Owner | Responsibility | Replacement boundary |
 |---|---|---|
 | Local supervisor | Host bootstrap, client admission and coordinated local quit | Local launch restart |

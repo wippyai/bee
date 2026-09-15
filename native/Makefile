@@ -50,6 +50,11 @@ rendezvous-check:
 	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous ./internal/privatefile; \
 	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous
 
+.PHONY: hive-config-check
+hive-config-check:
+	go test -race -count=1 -timeout=60s ./hive/config
+	go vet ./hive/config
+
 # Same-account credential provisioning uses the normal native TLS configuration.
 .PHONY: local-tls-check
 local-tls-check:

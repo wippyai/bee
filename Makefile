@@ -380,6 +380,11 @@ app-admission-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py
 
 # Explicit live-provider proof: uses the installed Agy login and consumes inference.
+.PHONY: research-benchmark-check
+research-benchmark-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_benchmark.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_benchmark.go -root .. -runtime "$(abspath $(WIPPY))"
+
 .PHONY: live-agy-mcp-check live-agy-mcp-lint
 live-agy-mcp-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go

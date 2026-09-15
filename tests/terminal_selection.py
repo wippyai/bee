@@ -64,7 +64,7 @@ def exercise(packed):
             ui.pump(.5)
             ui.key(b"clear; printf 'FOREGROUND_%s\\n' SELECTABLE; (sleep 3; printf '\\033[2J\\033[HCHANGED_OWNER_OUTPUT\\n') &\r")
             ui.wait('FOREGROUND_SELECTABLE')
-            assert sum('Terminal' in line and '×' in line for line in ui.screen.display) == 2, ui.text()
+            assert ui.screen.display[0].count('Terminal') == 2, ui.text()
             # Shift-right-click remains available to the application body.
             mx, my = locate(ui, 'FOREGROUND_SELECTABLE')
             ui.mouse(6, mx, my)

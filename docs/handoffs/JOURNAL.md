@@ -6912,3 +6912,26 @@ admission paths target the owning security index. Remaining desktop checks
 continue from terminal scrolling. Current grant lifetime is one binding; cold
 transfer to a replacement binding and normal profile/client notification wiring
 are not claimed.
+
+### Research baseline prerequisite — September 15
+
+Selected an isolated copy of Bee's canonical JSON encoder for the single
+experiment. `make research-benchmark-check` now stages a minimal native fixture,
+runs an exact-output corpus and records seven real samples plus source SHA-256.
+The gate completes, but its recorded baseline verdict is **invalid**: integer
+`2^53` formats as `%!g(lua.LInteger=09007199254740992)` on the selected runtime.
+The corpus passes under plain Lua 5.4/LuaJIT, so keep native candidate acceptance.
+No production encoder optimization or runtime edit was made. Gemini still needs
+to author and publish its candidate/dashboard through the MCP Governance path.
+
+Three deliberately non-yielding functions send startup evidence before their
+futures are canceled; a subsequent benchmark and bounded runtime exit complete.
+This is only a cancellation smoke test, not individual worker-retirement proof.
+Private evidence: `/tmp/bee-research-benchmark-3400859618`; command log:
+`/tmp/bee-research-benchmark-check.log`. Fixture lint and Go vet pass.
+
+Navigation was already green (161 PTY cases). The actual next desktop failure
+was terminal_selection counting two visible title bars despite intentional
+overlap. It now checks the two header tabs, and source/pack selection pass.
+The Luna continuation for lifecycle/client_desktop failed with provider demand
+before starting either test; neither has a new passing claim. Global unchanged.

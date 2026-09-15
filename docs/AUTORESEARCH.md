@@ -78,3 +78,12 @@ action and attempt, plus the persisted two-trait selection and dynamic context.
 Provider prose alone cannot pass. Logs and evidence remain in a private temporary
 directory printed by the runner. `make live-agy-mcp-lint` validates the fixture
 without inference. Neither command runs as part of the ordinary offline checks.
+
+`make research-benchmark-check` is the offline prerequisite for the performance
+experiment. It measures an isolated copy of Bee's canonical encoder, retaining
+the source digest, seven samples and an exact-output correctness verdict in a
+private temporary directory. On the selected runtime the baseline is currently
+invalid for integer `2^53`; the gate records that failure rather than presenting
+it as a valid optimization baseline. A candidate must pass the full corpus.
+This prerequisite is not the MCP benchmark tool, authored dashboard or governed
+publication proof; those remain the active experiment milestone.

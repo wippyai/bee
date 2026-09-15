@@ -147,3 +147,33 @@ is explicit and limited to 16; automatic authorized discovery and bounded paging
 across 100 owners are unverified work. Preserve per-owner decision authority,
 show unavailable/stale sources, and do not infer an empty inbox from disconnects.
 Keep this client-scale unit separate from the immediate per-agent request flow.
+
+### Selected experiment and baseline — September 15
+
+Use an isolated copy of this repository's
+`src/threads/records/canonical.lua`, with benchmark identity `canonical-json@1`.
+Keep production source untouched while Gemini authors the candidate. The
+offline `make research-benchmark-check` prerequisite stages only a small fixture
+and the exact source, validates it with the selected native runtime, and records
+seven samples over four fixed representative values with a source SHA-256.
+The artifact includes the correctness verdict and first mismatch; measurement
+completion is not a claim that the measured implementation is valid.
+
+The native baseline fails the exact-output corpus for integer `2^53`: its `%g`
+formatting returns `%!g(lua.LInteger=09007199254740992)`. The same corpus passes
+under plain Lua 5.4/LuaJIT, so native execution is required for candidate checks.
+Keep this case. Gemini's candidate must pass the complete corpus before its
+performance can be accepted. No production encoder or runtime change was made.
+
+The fixture starts three deliberate CPU loops, observes their startup messages,
+cancels their futures and completes a baseline call; its external runner enforces
+a 15-second runtime deadline. This is a cancellation smoke test, not proof of
+per-call memory limits or individual worker retirement before runtime shutdown.
+The MCP benchmark boundary still needs end-to-end cancellation acceptance.
+
+Next: expose the selected source, benchmark contract and Bee authoring docs through
+host-admitted MCP tools/traits, then have Gemini author the candidate and dashboard
+in its Governance workspace. Use the existing measured-artifact review/apply
+flow. Do not substitute direct filesystem authoring or fixture-generated charts
+for the requested live MCP workflow. Persist actual benchmark results through
+the thread owner with trusted run attribution before rendering them.

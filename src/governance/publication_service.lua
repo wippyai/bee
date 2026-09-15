@@ -5,6 +5,7 @@ local registry = require("registry")
 local security = require("security")
 local system = require("system")
 local base64 = require("base64")
+local json = require("json")
 local bounds = require("bounds")
 local artifact = require("artifact")
 local publisher = require("publisher")
@@ -70,15 +71,17 @@ end
 function M.snapshot_artifact(raw: unknown): (unknown?, string?)
     local reply = bounds.object(raw)
     local value = reply and bounds.object(reply.value) or nil
-    if not reply or reply.ok ~= true or not value or value.path ~= "registry.json"
-        or type(value.content_base64) ~= "string" or type(value.digest) ~= "string" then
-        return nil, "authoring snapshot did not return registry.json"
+    if not reply or reply.ok ~= true or not value or value.path ~= "entries.json"
+        or type(value.content_base64) ~= "string" then
+        return nil, "authoring snapshot did not return entries.json"
     end
     local bytes, decode_error = base64.decode(value.content_base64)
-    if not bytes or decode_error then return nil, "decode authoring registry artifact" end
-    local entries, artifact_error = artifact.decode(bytes, value.digest)
-    if not entries then return nil, artifact_error or "authoring registry artifact is invalid" end
-    return {bytes = bytes, digest = value.digest, entries = entries}, nil
+    if not bytes or decode_error then return nil, "decode authored entries" end
+    local decoded, json_error = json.decode(bytes)
+    if json_error or type(decoded) ~= "table" then return nil, "authored entries are not a JSON list" end
+    local measured, artifact_error = artifact.create(decoded)
+    if not measured then return nil, artifact_error or "authored entries are invalid" end
+    return measured, nil
 end
 
 local function chosen_profile(config: Configuration, workspace_id: string, component: string): Profile?
@@ -123,7 +126,7 @@ function M.call(raw: unknown): Result
     if request.operation == "prepare" then
         local store, open_error = staging.open(governance_resource, node_id)
         if not store then return failure("UNAVAILABLE", open_error or "open authoring workspace") end
-        local read = store:read_frozen(chosen.source_workspace, "registry.json", snapshot_digest :: string)
+        local read = store:read_frozen(chosen.source_workspace, "entries.json", snapshot_digest :: string)
         store:close()
         local authored, authored_error = M.snapshot_artifact(read)
         local value = bounds.object(authored)

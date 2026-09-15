@@ -132,3 +132,17 @@ entries:
     resources:
     - bee.threads.service:record
     effect: allow
+- name: gateway_tool_workspace_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject may author only through the Governance workspace facade; the store enforces actor ownership and this grants no publication or activation authority
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.governance:workspace_call") || ((action == "bee.governance.workspace.read" || action == "bee.governance.workspace.write") && resource != "")'
+    actions:
+    - funcs.call
+    - bee.governance.workspace.read
+    - bee.governance.workspace.write
+    resources:
+    - bee.governance:workspace_call
+    - '*'
+    effect: allow

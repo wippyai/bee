@@ -41,6 +41,102 @@ entries:
   source: file://bounds.lua
 `
 
+// Keep this acceptance composition limited to the authoring boundary it boots.
+// The production governance namespace also contains delivery and activation
+// services whose host-selected dependencies deliberately are not present here.
+const governanceIndex = `version: '1.0'
+namespace: bee.governance
+entries:
+- name: workspace
+  kind: library.lua
+  source: file://workspace.lua
+  modules: [hash]
+  imports: {canonical: bee.sync:canonical}
+- name: workspace_protocol
+  kind: library.lua
+  source: file://workspace_protocol.lua
+  modules: [base64]
+  imports: {bounds: bee.threads.records:bounds}
+- name: target_db
+  kind: ns.requirement
+  default: bee.governance:db
+  targets:
+  - entry: bee.governance:database_ref
+    path: .resource_ref
+- name: database_ref
+  kind: registry.entry
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: db_path
+  kind: env.variable
+  storage: bee.governance:environment
+  variable: BEE_GOVERNANCE_DB
+  default: .wippy/governance.db
+  readonly: true
+- name: db
+  kind: db.sql.sqlite
+  file: ${env:bee.governance:db_path}
+  lifecycle: {auto_start: true}
+- name: migrations
+  kind: library.lua
+  source: file://migrations.lua
+- name: staging_resources
+  kind: library.lua
+  source: file://staging_resources.lua
+  modules: [registry]
+  imports: {bounds: bee.threads.records:bounds}
+- name: staging
+  kind: library.lua
+  source: file://staging.lua
+  modules: [sql, hash, base64]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.governance:migrations
+    protocol: bee.governance:workspace_protocol
+    workspace: bee.governance:workspace
+    bounds: bee.threads.records:bounds
+- name: workspace_backend_call
+  kind: function.lua
+  source: file://authoring.lua
+  method: call
+  modules: [security, system]
+  imports:
+    protocol: bee.governance:workspace_protocol
+    staging: bee.governance:staging
+    resources: bee.governance:staging_resources
+    transaction: bee.persist:transaction
+- name: staging_policy
+  kind: security.policy
+  groups: [workspace_execution_scope]
+  policy:
+    actions: [db.get, registry.get, system.read]
+    resources: [bee.governance:db, bee.governance:database_ref, node]
+    effect: allow
+- name: workspace_execution_policy
+  kind: security.policy
+  groups: [workspace_execution_scope]
+  policy:
+    actions: [bee.governance.workspace.execute]
+    resources: [bee.governance:workspace_backend_call]
+    effect: allow
+- name: workspace_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance:workspace_backend_call")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.governance:workspace_execution_scope, bee.governance:workspace_backend_call]
+    effect: allow
+- name: workspace_call
+  kind: function.lua
+  source: file://workspace_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports: {protocol: bee.governance:workspace_protocol, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
+  security: {policies: [bee.governance:workspace_facade_policy]}
+`
+
 func runCommand(ctx context.Context, directory, runtime string, environment []string, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, runtime, args...)
 	command.Dir = directory
@@ -72,6 +168,9 @@ func setup(root string) error {
 		if err := copyTree(filepath.Join(root, "src", name), filepath.Join("src", name)); err != nil {
 			return fmt.Errorf("copy %s source: %w", name, err)
 		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "governance", "_index.yaml"), []byte(governanceIndex), 0600); err != nil {
+		return fmt.Errorf("write bounded governance composition: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "src", "sync", "_index.yaml"), []byte(syncIndex), 0600); err != nil {
 		return fmt.Errorf("write bounded sync composition: %w", err)
@@ -129,9 +228,18 @@ func migrationLedger(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(ledger, "|")
-	if len(parts) != 4 || parts[0] != "1" || parts[1] != "governance_workspace_staging" || len(parts[2]) != 64 || parts[3] == "" {
+	expected := []string{"governance_workspace_staging", "governance_received_plans",
+		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
+		"governance_activation_intents", "governance_component_slots"}
+	rows := strings.Split(ledger, "\n")
+	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)
+	}
+	for index, row := range rows {
+		parts := strings.Split(row, "|")
+		if len(parts) != 4 || parts[0] != fmt.Sprint(index+1) || parts[1] != expected[index] || len(parts[2]) != 64 || parts[3] == "" {
+			return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)
+		}
 	}
 	return ledger, nil
 }

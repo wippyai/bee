@@ -26,18 +26,18 @@ local function define_tests()
             test.is_nil(malformed)
             test.not_nil(malformed_error)
         end)
-        test.it("decodes only an exact frozen registry artifact", function()
-            local exact = assert(artifact.create({{id = "demo:main", kind = "function.lua",
-                source = "return 'private'"}}))
-            local encoded = assert(base64.encode(exact.bytes))
+        test.it("builds an exact artifact from declarative frozen entries", function()
+            local entries = "[{\"source\":\"return 'private'\",\"kind\":\"function.lua\",\"id\":\"demo:main\"}]"
+            local exact = assert(artifact.create({{id = "demo:main", kind = "function.lua", source = "return 'private'"}}))
+            local encoded = assert(base64.encode(entries))
             local prepared, err = service.snapshot_artifact({ok = true, value = {
-                path = "registry.json", content_base64 = encoded, digest = exact.digest}})
+                path = "entries.json", content_base64 = encoded}})
             test.is_nil(err)
             test.eq((prepared :: {[string]: unknown}).digest, exact.digest)
             test.is_nil(service.snapshot_artifact({ok = true, value = {
-                path = "other.json", content_base64 = encoded, digest = exact.digest}}))
+                path = "other.json", content_base64 = encoded}}))
             test.is_nil(service.snapshot_artifact({ok = true, value = {
-                path = "registry.json", content_base64 = encoded, digest = string.rep("0", 64)}}))
+                path = "entries.json", content_base64 = assert(base64.encode("{}"))}}))
         end)
     end)
 end

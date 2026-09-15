@@ -225,6 +225,26 @@ entries:
     session_resource: session
     credentials: [claude_api_key]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned bounded Claude batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-research-batch
+    title: Claude researcher
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee:launch_policy_claude_batch
+    default_mode: batch
+    allowed_overrides: [thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: [claude_api_key]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 
 - name: credential_format
   kind: registry.entry

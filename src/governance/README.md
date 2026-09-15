@@ -29,12 +29,12 @@ merely because the helper calls them snapshots.
 The source now includes the `bee.governance:workspace_call` function and
 `bee.governance:workspace_contract` binding through `workspace_local`, with the
 `authoring_trait` agent description. This is private authoring, not activation.
-The host admits `bee.governance.workspace.read` (list/read) and
-`bee.governance.workspace.write` (create/put/remove/freeze) on exact workspace
-IDs. Every operation also checks the stored author against the authenticated
+The managed Agent gateway admits `bee.governance.workspace.read` (list/read) and
+`bee.governance.workspace.write` (create/put/remove/freeze) only through this
+facade. Every operation also checks the stored author against the authenticated
 actor; an operation grant does not transfer an existing workspace's ownership.
-There are no default authoring grants. The method's protected store policy does
-not grant callers direct database or registry/overlay access.
+The method's protected store policy does not grant callers direct database,
+publication, approval, activation or registry/overlay access.
 
 Requests use `operation` and `workspace_id`. Create uses expected revision zero;
 other mutations use the revision returned by list. Mutations and freeze require
@@ -45,12 +45,19 @@ SQLite storage without changing the edit revision. Later edits cannot change the
 stored frozen files. The same retry key and request return the original receipt,
 even after subsequent edits or restart; changing the request conflicts.
 
+For an application candidate, the author writes `entries.json` as a plain JSON
+list of complete registry entries and freezes it with the other source files.
+The publication preparation service parses that exact frozen file and uses
+`bee.governance:artifact` to create the canonical measured envelope. It executes
+no code and does not mutate the workspace or frozen snapshot.
+
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
 Checked migration 1 owns the workspace, files, frozen copies and receipt tables.
-Capacity is bounded to eight workspaces per node, two distinct snapshots and 512
-mutation receipts per workspace, in addition to the file bounds above. Exhaustion
-fails explicitly; there is no eviction, garbage collection or ownership transfer
-yet. Frozen content and receipts are durable; they do not imply activation,
+Capacity is bounded to eight workspaces per authenticated author and 64 per node,
+two distinct snapshots and 512 mutation receipts per workspace, in addition to
+the file bounds above. One Agent therefore cannot consume every authoring slot on
+the node. Exhaustion fails explicitly; there is no eviction, garbage collection
+or ownership transfer yet. Frozen content and receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
 does not mount a host directory or execute WASM. Hive transfer, inbox requests,
 plugin dispatch and application migration execution remain unimplemented.

@@ -341,6 +341,18 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     if session_resource and workdir_name == session_resource then
         return nil, fail("INVALID", "workdir resource duplicates the session resource")
     end
+    -- A caller-selected or host-named existing thread is useful for fan-out,
+    -- but it must be authorized before any session, project or credential
+    -- resource is acquired. Carrier commits check membership again; this
+    -- earlier read prevents a refused launch from leaving admission effects.
+    if thread_id and not previous then
+        local visible, thread_refused = call(M.THREADS .. ":get", {thread_id = thread_id})
+        if not visible then return nil, thread_refused or fail("DENIED", "caller is not a member of the selected thread") end
+        local membership = bounds.object(visible.membership)
+        if not membership or membership.member_id ~= requester or membership.active ~= true then
+            return nil, fail("DENIED", "caller is not an active member of the selected thread")
+        end
+    end
     -- Session authority is selected by the host definition. A retained
     -- session gets one stable digest-derived identity per launch request, while the
     -- default remains ephemeral and receives no session grant.

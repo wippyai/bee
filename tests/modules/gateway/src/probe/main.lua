@@ -43,9 +43,9 @@ local function code(reply: Object): string
     assert(reply.ok == false, "expected a refusal")
     return tostring((reply.error :: Object).code)
 end
-local function admit(action: string, ttl: integer?, carrier_epoch: integer?): (string, string)
+local function admit(action: string, ttl: integer?, carrier_epoch: integer?, tools: {string}?): (string, string)
     local value = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
-        carrier_epoch = carrier_epoch or 1, tools = {"thread_read", "thread_wait"}, ttl_ms = ttl or 60000}), "admit " .. action)
+        carrier_epoch = carrier_epoch or 1, tools = tools or {"thread_read", "thread_wait"}, ttl_ms = ttl or 60000}), "admit " .. action)
     local binding_id = tostring((value.binding :: Object).binding_id)
     assert(value.token == nil, "admit must not return token bytes")
     local authorized = ok(call("bee.gateway:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, binding_id = binding_id}), "authorize " .. action)
@@ -103,7 +103,7 @@ local function prove_configuration_scope(address: string)
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy"}) do
+    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_workspace_policy"}) do
         local selected, err = security.policy(name)
         assert(selected ~= nil and err == nil, "endpoint policy unavailable")
         policies[#policies + 1] = selected
@@ -111,9 +111,11 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:workspace_call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
+    assert(scope:evaluate(actor, "bee.governance.workspace.read", "any-workspace") == "allow", "workspace read is absent")
+    assert(scope:evaluate(actor, "bee.governance.workspace.write", "any-workspace") == "allow", "workspace write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
@@ -140,6 +142,33 @@ local function main()
     local page = tool("act-a", token_a, "thread_read", {cursor = 0})
     assert(page.ok == true, "thread_read refused: " .. tostring(json.encode(page)))
     assert(#((page.value :: Object).records :: {unknown}) == 3, "thread_read returned the three records: " .. tostring(json.encode(page)))
+    -- A managed subject authors through the same authenticated endpoint. The
+    -- workspace owner remains the subject; neither thread binding fields nor
+    -- publication/activation authority enter the request.
+    do
+    local workspace_token, workspace_binding = admit("workspace-action", nil, 1, {"workspace"})
+    local created = tool("workspace-action", workspace_token, "workspace", {operation = "create", workspace_id = "gateway-research",
+        expected_revision = 0, idempotency_key = "create"})
+    assert(created.ok == true and (created.value :: Object).revision == 1, "MCP workspace create failed")
+    local put_arguments: Object = {operation = "put", workspace_id = "gateway-research", expected_revision = 1,
+        idempotency_key = "finding", path = "findings/one.md", content = "measured evidence"}
+    local put = tool("workspace-action", workspace_token, "workspace", put_arguments)
+    assert(put.ok == true and (put.value :: Object).revision == 2, "MCP workspace put failed")
+    local put_replay = tool("workspace-action", workspace_token, "workspace", put_arguments)
+    assert(put_replay.ok == true and put_replay.replayed == true and (put_replay.value :: Object).revision == 2,
+        "MCP workspace retry was not idempotent")
+    local frozen = tool("workspace-action", workspace_token, "workspace", {operation = "freeze", workspace_id = "gateway-research",
+        expected_revision = 2, idempotency_key = "freeze"})
+    assert(frozen.ok == true and type((frozen.value :: Object).digest) == "string", "MCP workspace freeze failed")
+    local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
+        attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
+        tools = {"workspace"}, ttl_ms = 60000}), "admit foreign workspace actor")
+    local foreign_workspace_binding = tostring((foreign_admission.binding :: Object).binding_id)
+    local foreign_workspace_token = tostring(ok(materialize("foreign-workspace-attempt", 1, foreign_workspace_binding), "materialize foreign workspace actor").token)
+    local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "workspace", {operation = "list", workspace_id = "gateway-research"})
+    assert(foreign_workspace.ok == false and foreign_workspace.code == "DENIED", "foreign MCP actor read another workspace")
+    ok(call("bee.gateway:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
+    end
     -- The credential lifecycle: the same generation cannot be materialized
     -- twice, reissue is a compare-and-set that revokes the old token and
     -- opens the next generation, a stale reissue changes nothing, and the

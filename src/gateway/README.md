@@ -7,8 +7,15 @@ listener itself (`http.service`, router, endpoints) belongs to the host
 composition. The activation candidate binds native loopback port zero and reads
 the assigned address through supervisor state. The production-listener fixture
 passes real thread and credential checks on two runtimes. Candidate Agent
-profiles declare `thread_read`, `thread_wait` and the explicitly admitted
-`thread_message` write in all four default profiles. Claude/Codex also declare
+profiles declare `thread_read`, `thread_wait`, `thread_message`, and the
+caller-owned Governance `workspace` tool. The host may admit any subset. The
+workspace tool can stage and freeze files but cannot publish or activate them.
+The HTTP MCP route keeps its 64 KiB request bound. Workspace calls through MCP
+therefore accept at most 8 KiB of text or 48 KiB of canonical base64 per put;
+larger authoring files require another admitted facade rather than an oversized
+gateway request. The underlying Governance workspace keeps its own larger store
+limits for non-MCP callers.
+All four default profiles include the `thread_message` write. Claude/Codex also declare
 lifecycle hooks. Standalone Claude/Codex fixture children pass authenticated
 MCP reads, message append/replay and waits; real provider conversations remain
 a separate gate. See `docs/GATEWAY.md`.

@@ -537,7 +537,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.harness.launch:resolve, bee.harness.launch:admit, bee.harness.launch:start, bee.resources:associate, bee.resources:grant,
-      bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:read_after]
+      bee.credentials:define, bee.credentials:issue_projection, bee.credentials:list, bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
 - name: setup_client_policy
   kind: security.policy.expr
@@ -565,6 +565,8 @@ entries:
   imports:
     test: wippy.test:test
     admission: bee.harness.launch:admission
+    definitions: bee.harness.launch:definitions
+    launch_policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
     checkpoint: bee.harness.carrier:checkpoint
     hook_records: bee.harness.carrier:hook_records

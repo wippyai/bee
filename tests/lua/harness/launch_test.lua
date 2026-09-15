@@ -12,6 +12,8 @@ local registry = require("registry")
 local env = require("env")
 local time = require("time")
 local admission = require("admission")
+local definitions = require("definitions")
+local launch_policy = require("launch_policy")
 local machine = require("machine")
 local checkpoint = require("checkpoint")
 local hook_records = require("hook_records")
@@ -44,6 +46,11 @@ end
 local actor = security.new_actor(REQUESTER)
 local function call(target: string, request: unknown): admission.Reply
     local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
+    if err then error(target .. ": " .. tostring(err)) end
+    return result :: admission.Reply
+end
+local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
+    local result, err = funcs.new():with_actor(security.new_actor(actor_id)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
 end
@@ -370,6 +377,79 @@ local function define_tests()
             local reply = call("bee.harness.launch:admit", request)
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
+        end)
+        test.it("ships hidden Codex and Claude research routes with bounded batch policies", function()
+            local cases = {
+                {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",
+                    binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
+                    config = "bee.driver.codex:config_home", option = "sandbox", expected = "read-only"},
+                {definition = "bee.driver.claude:research_batch", policy = "bee:launch_policy_claude_batch",
+                    binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
+                    config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
+            }
+            for _, selected in ipairs(cases) do
+                local entry = assert(registry.get(selected.definition))
+                local decoded, definition_error = definitions.decode(selected.definition, entry)
+                if not decoded then error(tostring(definition_error)) end
+                test.eq(decoded.binding_ref, selected.binding)
+                test.eq(decoded.profile_id, "batch")
+                test.eq(decoded.default_mode, "batch")
+                test.eq(decoded.thread_policy.kind, "caller")
+                test.eq(decoded.allowed_overrides[1], "thread")
+                test.eq(#decoded.allowed_overrides, 1)
+                test.eq(decoded.credentials[1], selected.credential)
+                test.is_false(decoded.presentation.start_menu)
+                local policy_entry = assert(registry.get(selected.policy))
+                local policy, policy_error = launch_policy.decode(selected.policy, policy_entry,
+                    function(ref: string): (string?, string?)
+                        if ref == selected.executable then return "/usr/bin/research-agent", nil end
+                        if ref == selected.config then return "", nil end
+                        return nil, "unadmitted environment reference"
+                    end)
+                if not policy then error(tostring(policy_error)) end
+                test.eq(policy.prepare_options[selected.option], selected.expected)
+                local has_workspace = false
+                for _, tool in ipairs(policy.gateway_tools) do if tool == "workspace" then has_workspace = true end end
+                test.is_true(has_workspace)
+            end
+        end)
+        test.it("admits a shared caller thread only after checking membership and before acquiring launch resources", function()
+            local entry = assert(registry.get(DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.allowed_overrides = {"thread"}
+            changed.thread_policy = {kind = "caller"}
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local shared = fresh("research-thread")
+                value(call("bee.threads.service:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Research"}))
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("shared-agent"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "independent finding", thread_id = shared}))
+                test.eq(admitted.thread_id, shared)
+                test.eq((admitted.request :: {[string]: unknown}).thread_id, shared)
+
+                local foreign_owner = fresh("foreign-owner")
+                local foreign_thread = fresh("foreign-thread")
+                value(call_as(foreign_owner, "bee.threads.service:create", {thread_id = foreign_thread,
+                    idempotency_key = fresh("foreign-create"), title = "Foreign"}))
+                local before = value(call_as(foreign_owner, "bee.threads.service:read_after", {thread_id = foreign_thread, cursor = 0}))
+                local resources_before = value(call("bee.resources:list", {workspace_id = workspace}))
+                local credentials_before = value(call("bee.credentials:list", {workspace_id = workspace}))
+                local refused = call("bee.harness.launch:admit", {request_id = fresh("foreign-agent"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "must not start", thread_id = foreign_thread})
+                test.eq(code(refused), "DENIED")
+                local after = value(call_as(foreign_owner, "bee.threads.service:read_after", {thread_id = foreign_thread, cursor = 0}))
+                test.eq(#(after.records :: {unknown}), #(before.records :: {unknown}))
+                local resources_after = value(call("bee.resources:list", {workspace_id = workspace}))
+                local credentials_after = value(call("bee.credentials:list", {workspace_id = workspace}))
+                test.eq(#(resources_after.grants :: {unknown}), #(resources_before.grants :: {unknown}))
+                test.eq(#(credentials_after.projections :: {unknown}), #(credentials_before.projections :: {unknown}))
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("refuses caller environment before admitting a thread", function()
             for _, environment in ipairs({{}, {BEE_PROFILE_VALUE = "caller-value"}}) do
@@ -805,6 +885,62 @@ local function define_tests()
             local retried_list = kinds(tostring(first.thread_id))
             test.eq(count(retried_list, "attempt.started"), 1)
             test.eq(count(retried_list, "turn.request"), 1)
+        end)
+        test.it("fans two managed research actions into one caller-owned durable thread", function()
+            local entry = assert(registry.get(DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.allowed_overrides = {"thread"}
+            changed.thread_policy = {kind = "caller"}
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local shared = fresh("autoresearch")
+                value(call("bee.threads.service:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Autoresearch"}))
+                local first_id, second_id = fresh("research-one"), fresh("research-two")
+                local first = value(call("bee.harness.launch:start", {request_id = first_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
+                local second = value(call("bee.harness.launch:start", {request_id = second_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "investigate the second hypothesis", thread_id = shared}))
+                test.eq(first.thread_id, shared)
+                test.eq(second.thread_id, shared)
+                test.neq(first.action_id, second.action_id)
+                test.neq(first.attempt_id, second.attempt_id)
+                test.eq(((await_exit(tostring(first.carrier))).settlement :: {[string]: unknown}).answer, "pong")
+                test.eq(((await_exit(tostring(second.carrier))).settlement :: {[string]: unknown}).answer, "pong")
+                local records = kinds(shared)
+                test.eq(count(records, "action.admitted"), 2)
+                test.eq(count(records, "attempt.prepared"), 2)
+                test.eq(count(records, "attempt.started"), 2)
+                test.eq(count(records, "turn.request"), 2)
+                test.eq(count(records, "receipt"), 2)
+                local subscribed = value(call("bee.threads.delivery:subscribe", {thread_id = shared,
+                    idempotency_key = fresh("subscribe"), consumer_id = "autoresearch-coordinator",
+                    after_sequence = 0, filter = {kinds = {"receipt"}}, durability = "durable"}))
+                local page = value(call("bee.threads.delivery:page", {thread_id = shared,
+                    subscription_id = subscribed.subscription_id}))
+                test.eq(#(page.records :: {unknown}), 2)
+                value(call("bee.threads.delivery:ack_page", {thread_id = shared,
+                    idempotency_key = fresh("ack-page"), subscription_id = subscribed.subscription_id,
+                    page_id = page.page_id, scanned_through = page.scanned_through}))
+                local detached = value(call("bee.threads.delivery:unsubscribe", {thread_id = shared,
+                    idempotency_key = fresh("detach-consumer"), subscription_id = subscribed.subscription_id}))
+                test.is_true(detached.closed)
+                local resumed = value(call("bee.threads.delivery:resume", {thread_id = shared,
+                    idempotency_key = fresh("resume-consumer"), subscription_id = subscribed.subscription_id}))
+                test.eq(resumed.lease_generation, 2)
+                local caught_up = value(call("bee.threads.delivery:page", {thread_id = shared,
+                    subscription_id = subscribed.subscription_id}))
+                test.eq(#(caught_up.records :: {unknown}), 0)
+                test.is_nil(caught_up.page_id)
+                test.eq(code(call("bee.harness.launch:start", {request_id = first_id, definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared})), "CONFLICT")
+                test.eq(count(kinds(shared), "receipt"), 2)
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
         end)
         test.it("readmits a recorded window with fresh grants and its original action and session", function()
             -- Construct committed predecessor state through the actual owners.

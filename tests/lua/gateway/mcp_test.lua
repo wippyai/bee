@@ -66,6 +66,12 @@ local function define_tests()
             test.eq(message_annotations.readOnlyHint, false)
             test.eq(message_annotations.idempotentHint, true)
             test.eq(#mcp.list({}).tools, 0)
+            local workspace_tools = mcp.list({"workspace"}).tools :: {{[string]: unknown}}
+            test.eq(#workspace_tools, 1)
+            test.eq(workspace_tools[1].name, "workspace")
+            local workspace_annotations = workspace_tools[1].annotations :: {[string]: unknown}
+            test.eq(workspace_annotations.readOnlyHint, false)
+            test.eq(mcp.tool("workspace") and mcp.tool("workspace").operation, "bee.governance:workspace_call")
             local wait_only = mcp.list({"thread_wait"}).tools :: {{[string]: unknown}}
             test.eq(#wait_only, 1)
             test.eq(wait_only[1].name, "thread_wait")
@@ -116,6 +122,26 @@ local function define_tests()
             test.eq(context_override, "unknown field context")
             local _, kind_override = mcp.message_arguments({arguments = {idempotency_key = "key", kind = "receipt", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}}})
             test.eq(kind_override, "unknown field kind")
+            local workspace = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 1, idempotency_key = "finding-1", path = "findings/one.md", content = "evidence"}})
+            test.eq(workspace and workspace.operation, "put")
+            test.eq(workspace and workspace.workspace_id, "research-candidate")
+            test.eq(workspace and workspace.content, "evidence")
+            local binary = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 1, idempotency_key = "binary-1", path = "assets/proof.bin", content_base64 = "AP8="}})
+            test.eq(binary and binary.content, "\0\255")
+            local _, workspace_context = mcp.workspace_arguments({arguments = {operation = "list", workspace_id = "research-candidate", thread_id = "other"}})
+            test.eq(workspace_context, "unknown field thread_id")
+            local _, workspace_invalid = mcp.workspace_arguments({arguments = {operation = "freeze", workspace_id = "research-candidate"}})
+            test.eq(workspace_invalid, "expected_revision and idempotency_key are required")
+            local _, oversized_text = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 1, idempotency_key = "large-text", path = "large.txt",
+                content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
+            test.eq(oversized_text, "content exceeds the MCP text bound")
+            local _, oversized_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 1, idempotency_key = "large-binary", path = "large.bin",
+                content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 4)}})
+            test.eq(oversized_base64, "content_base64 exceeds the MCP body bound")
             local result = mcp.tool_result("{}", true)
             test.is_true(result.isError)
             test.eq(result.content[1].text, "{}")

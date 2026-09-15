@@ -67,8 +67,16 @@ migration owns mutable files, frozen copies and bounded retry receipts. Writes
 use expected revisions; identical retries return committed receipts across
 restart. Freeze retains a separate binary-safe copy without activating it.
 See [the module contract](../src/governance/README.md) for request fields and
-capacity limits. There are no default authoring grants, host filesystem mounts,
-registry writers or approval rights in this trait.
+capacity limits. Managed Agent host policies now admit this facade through the
+private MCP gateway. Storage still enforces actor ownership, and the scope has
+no host filesystem mounts, registry writer, publication, approval or activation
+rights.
+
+An authored application snapshot contains `entries.json`, a plain JSON list of
+complete registry entries. Preparation parses that frozen file and creates the
+canonical measured artifact with `bee.governance:artifact`; it executes no code
+and does not mutate the snapshot. This removes the need for an Agent to produce
+the internal canonical artifact envelope itself.
 
 `make governance-workspace-check` passes actual authenticated function calls over
 two boots of the same database, including concurrent revision contention, binary

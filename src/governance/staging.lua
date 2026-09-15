@@ -21,7 +21,8 @@ type File = {path: string, content: string, content_base64: string, digest: stri
 type Snapshot = {digest: string, files_digest: string, file_count: integer, total_bytes: integer, revision: integer}
 type FileSource = "workspace" | "snapshot"
 
-local MAX_WORKSPACES = 8
+local MAX_WORKSPACES = 64
+local MAX_ACTOR_WORKSPACES = 8
 local MAX_SNAPSHOTS = 2
 local MAX_RECEIPTS = 512
 local MAX_FILES = 256
@@ -300,6 +301,15 @@ local function create(store: Store, tx: sql.Transaction, actor: string, input: p
         if existing.actor ~= actor then return failure("DENIED", "workspace belongs to another actor") end
         local replay, replay_error = matching_receipt(store, tx, actor, input, content_digest)
         return replay or replay_error or failure("CONFLICT", "workspace already exists")
+    end
+    local actor_count_row, actor_count_error = one(tx,
+        "SELECT COUNT(*) AS count FROM bee_governance_workspaces WHERE owner_node = ? AND actor_id = ?",
+        {store.node, actor}, "author workspace count")
+    if actor_count_error or not actor_count_row then return actor_count_error or failure("INTERNAL", "read author workspace count") end
+    local actor_count = integer(actor_count_row.count)
+    if actor_count == nil then return failure("INTERNAL", "author workspace count is corrupt") end
+    if actor_count >= MAX_ACTOR_WORKSPACES then
+        return failure("CAPACITY_EXHAUSTED", "author workspace capacity is exhausted")
     end
     local count_row, count_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_workspaces WHERE owner_node = ?", {store.node}, "workspace count")
     if count_error or not count_row then return count_error or failure("INTERNAL", "read workspace count") end

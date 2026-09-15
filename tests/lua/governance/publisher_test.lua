@@ -70,18 +70,36 @@ local function define_tests()
                 expected_revision = 0, idempotency_key = "create"})
             test.is_true(created.ok)
             local put = store:call("author-a", {operation = "put", workspace_id = workspace,
-                expected_revision = 1, idempotency_key = "put", path = "registry.json", content = "[]"})
+                expected_revision = 1, idempotency_key = "put", path = "entries.json", content = "[]"})
             test.is_true(put.ok)
             local frozen = store:call("author-a", {operation = "freeze", workspace_id = workspace,
                 expected_revision = 2, idempotency_key = "freeze"})
             test.is_true(frozen.ok)
             local digest = (frozen.value :: {[string]: unknown}).digest :: string
             local denied = store:call("author-b", {operation = "read", workspace_id = workspace,
-                path = "registry.json", snapshot_digest = digest})
+                path = "entries.json", snapshot_digest = digest})
             test.eq(denied.code, "DENIED")
-            local read = store:read_frozen(workspace, "registry.json", digest)
+            local read = store:read_frozen(workspace, "entries.json", digest)
             test.is_true(read.ok)
             test.eq((read.value :: {[string]: unknown}).content_base64, "W10=")
+            test.is_true(store:close())
+        end)
+
+        test.it("contains workspace capacity per author instead of exhausting the node", function()
+            local suffix = assert(uuid.v7())
+            local store = assert(staging.open("bee.governance:plan_test_db", "capacity-node-" .. suffix))
+            for index = 1, 8 do
+                local created = store:call("bounded-author", {operation = "create",
+                    workspace_id = "bounded-" .. tostring(index), expected_revision = 0,
+                    idempotency_key = "create-" .. tostring(index)})
+                test.is_true(created.ok)
+            end
+            local exhausted = store:call("bounded-author", {operation = "create",
+                workspace_id = "bounded-9", expected_revision = 0, idempotency_key = "create-9"})
+            test.eq(exhausted.code, "CAPACITY_EXHAUSTED")
+            local other = store:call("other-author", {operation = "create",
+                workspace_id = "other-1", expected_revision = 0, idempotency_key = "create-other"})
+            test.is_true(other.ok)
             test.is_true(store:close())
         end)
     end)

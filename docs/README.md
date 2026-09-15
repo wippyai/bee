@@ -1,7 +1,7 @@
 # Documentation map
 
 The repository Markdown is currently authoritative. Bee does not yet publish a
-runtime documentation catalog or agent tools. A future registry catalog should
+runtime documentation catalog. A future registry catalog should
 package these same pages with status and version, not maintain a second copy.
 
 | Read for | Current source |
@@ -24,6 +24,7 @@ package these same pages with status and version, not maintain a second copy.
 | Whole-system destination: governed edits, installation plans, sharing and federated inboxes | [System map](SYSTEM_MAP.md) |
 | Package seams and native distribution | [Package boundaries](PACKAGE_BOUNDARIES.md) |
 | Harness hooks, MCP, sessions and gotchas per coding agent | [Harness inventory](HARNESS_INVENTORY.md) |
+| Compose bounded managed Agents on one durable thread and author a reviewed candidate | [Managed autoresearch](AUTORESEARCH.md) |
 | Thread record families, delivery rules and driver bindings | [Thread records](THREAD_RECORDS.md) |
 | Namespaces, contracts and build order for threads, approvals and drivers | [Component layout](COMPONENT_LAYOUT.md) |
 | How overlays and Hub modules add drivers, transports, channels, agents and tools | [Registry extension](REGISTRY_EXTENSION.md) |

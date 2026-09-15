@@ -4,10 +4,13 @@
 -- tool or reads a store; the handler maps a call to one owner operation.
 local bounds = require("bounds")
 local message = require("message")
+local workspace_protocol = require("workspace_protocol")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
 M.MAX_BODY_BYTES = 65536
+M.MAX_WORKSPACE_TEXT_BYTES = 8192
+M.MAX_WORKSPACE_BASE64_BYTES = 49152
 type Object = {[string]: unknown}
 type Call = {id: unknown, method: string, params: Object, notification: boolean}
 type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
@@ -29,6 +32,18 @@ local TOOLS: {Tool} = {
             content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
             in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
             outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
+        }}},
+    {name = "workspace", description = "Create, inspect, edit or freeze a caller-owned Governance authoring workspace", operation = "bee.governance:workspace_call",
+        policies = {"bee:gateway_tool_workspace_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id"}, properties = {
+            operation = {type = "string", enum = {"create", "list", "read", "put", "remove", "freeze"}},
+            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 160},
+            path = {type = "string", minLength = 1, maxLength = 240},
+            content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
+            content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
+            snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
         }}},
 }
 M.TOOLS = TOOLS
@@ -152,5 +167,20 @@ function M.message_arguments(params: Object): (Object?, string?)
     if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
     if decoded.outcome then body.outcome = decoded.outcome end
     return {idempotency_key = key, body = body}, nil
+end
+
+-- Governance owns the complete operation-specific schema. Keeping its decoder
+-- here avoids a second, looser MCP dialect and converts canonical base64 to the
+-- exact bytes accepted by the authoring store.
+function M.workspace_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    if type(arguments.content) == "string" and #arguments.content > M.MAX_WORKSPACE_TEXT_BYTES then
+        return nil, "content exceeds the MCP text bound"
+    end
+    if type(arguments.content_base64) == "string" and #arguments.content_base64 > M.MAX_WORKSPACE_BASE64_BYTES then
+        return nil, "content_base64 exceeds the MCP body bound"
+    end
+    return workspace_protocol.decode(arguments)
 end
 return M

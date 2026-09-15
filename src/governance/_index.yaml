@@ -88,7 +88,7 @@ entries:
 - name: publication_service
   kind: library.lua
   source: file://publication_service.lua
-  modules: [registry, security, system, base64]
+  modules: [registry, security, system, base64, json]
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
@@ -351,6 +351,9 @@ entries:
     base64 content and a digest. Paths are relative and confined to this virtual
     workspace, not OS paths. Freeze with expected_revision and a retry key to
     retain an exact candidate. Freeze is not approval, installation or execution.
+    For an application candidate, write entries.json as a JSON list of complete
+    registry entries before freezing. Governance canonicalizes it during the
+    separately authorized preparation step; do not construct registry.json.
     Pass snapshot_digest to list/read to inspect that retained candidate instead
     of current files; the returned revision is the frozen revision.
     Host policy admits each workspace operation; this trait grants no authority.

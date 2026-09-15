@@ -97,6 +97,7 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - workspace
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -110,6 +111,29 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+- name: launch_policy_claude_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
+    environment: {}
+    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
 - name: launch_policy_codex_window
   kind: registry.entry
   meta:
@@ -135,6 +159,7 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - workspace
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -148,6 +173,29 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+- name: launch_policy_codex_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected read-only Codex batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {codex: bee.driver.codex:executable}
+    environment: {}
+    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {sandbox: read-only}
 - name: launch_policy_agy_window
   kind: registry.entry
   meta:
@@ -171,6 +219,7 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - workspace
     gateway_hooks:
     - PreToolUse
     - PostToolUse
@@ -205,6 +254,7 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
+    - workspace
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

@@ -2,12 +2,25 @@
 
 The September 15 integration candidate combines the latest Agent, MCP, Docker,
 display and Hub work with private application delivery and ordinary persisted
-Hive profile consumption. Strict lint and all 995 Lua tests pass. A race-enabled
+Hive profile consumption. Strict lint and all 999 Lua tests pass. A race-enabled
 two-runtime gate publishes private application versions through generic Sync;
 the destination stages, reviews, selects, approves and applies v1, retains it
 across restart while v2 remains merely available, then explicitly updates to v2
 and rolls back to v1. The receiving Bee remains the authority for every review
 and activation decision.
+
+Managed Agents can now self-author without receiving registry or activation
+authority. The scoped MCP catalog exposes the caller-owned Governance workspace
+facade, where an Agent can create, revision-check, edit and freeze files. A
+frozen `entries.json` list is canonicalized into the measured registry artifact
+only during separately authorized publication preparation. Hidden Codex and
+Claude batch definitions let an application launch distinct research actions
+into one caller-owned durable thread. Acceptance proves membership before
+launch resources are acquired, two settled actions with distinct identities,
+idempotent replay, and coordinator subscription detach/resume without duplicate
+results. Review, approval and destination-local apply remain separate decisions;
+there is no direct Agent publication or activation path. See
+[managed autoresearch](AUTORESEARCH.md).
 
 Native Bee now consumes a strict saved joined-Hive profile containing the stable
 node identity, membership secret, seeds, signing identity, pinned peer keys and

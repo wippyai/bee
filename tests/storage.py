@@ -423,7 +423,7 @@ def client_storage():
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
-        host = project / "src/_index.yaml"
+        host = project / "src/environment/_index.yaml"
         configuration = yaml.safe_load(host.read_text())
         next(e for e in configuration["entries"] if e["name"] == "client_db")["file"] = "${env:bee:client_db_path}"
         configuration["entries"] += [

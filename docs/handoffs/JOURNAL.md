@@ -6849,3 +6849,29 @@ replacement is not the implementation of this grant. The next MCP unit wires
 existing approvals to this flow. The combined inbox must ultimately support
 about 100 Bees and remain available independently of the selected workspace;
 current explicit 16-source enrollment does not meet that requirement.
+
+
+### Repeatable live Gemini acceptance — September 15
+
+`make live-agy-mcp-check` now supplies a Go runner and test-only Lua fixture.
+It passes with the real provider, verifying the message's random identity and
+actor/action/attempt plus both selected traits and dynamic context in durable
+storage. It retains private evidence, uses ordinary user HOME/login, and leaves
+native port allocation to the gateway. The fixture now waits for the listener's
+reported address before launch; a cold-start race had failed before inference.
+
+Saved profiles and source/pack client storage pass after fixture host-path
+repairs. The shared Python fixture environment now assigns the Sync database
+as well; resource containment/restart acceptance passes with that fix.
+The desktop acceptance run continues; full foundation completion is not claimed.
+Luna children experienced repeated provider availability errors, so the parent
+finished the live fixture locally and consulted Agy on the access-grant seam.
+
+Next MCP unit: a host-declared requestable set with an agent-initiated request
+to the existing approval owner. Grants must stay binding-qualified; fixed app
+targets cannot be broadened through dynamic context. Approval consumption and
+gateway application need separate, idempotent receipts to recover the gap
+between their transactions. No shared-policy mutation or new approval authority.
+The user also requires a cumulative authorized inbox for roughly 100 Bees and
+client switching without relaunch; neither is inferred from today's 16-source
+configured inbox.

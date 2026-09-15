@@ -1,3 +1,11 @@
+The managed Agy caller-thread batch route now has a provider-backed MCP gate:
+`make live-agy-mcp-check` passes against installed Gemini Flash with explicit
+high effort and the normal user login. It verifies the exact durable thread
+message and stored two-trait/context selection. A fixture readiness race was
+fixed by waiting for the existing native listener address before launch. This
+does not prove the performance dashboard or per-agent access-request approval
+flow. Those remain the next units; global installation is unchanged.
+
 # Foundation status
 
 The configurable MCP checkpoint adds protected launch-policy tool/trait

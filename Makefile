@@ -378,3 +378,12 @@ check: app-admission-check
 .PHONY: app-admission-check
 app-admission-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_admission.py
+
+# Explicit live-provider proof: uses the installed Agy login and consumes inference.
+.PHONY: live-agy-mcp-check live-agy-mcp-lint
+live-agy-mcp-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))"
+live-agy-mcp-lint:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -lint-only

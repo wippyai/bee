@@ -232,6 +232,25 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+- name: launch_policy_agy_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {agy: bee.driver.agy:executable}
+    environment: {}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
 - name: launch_policy_grok_window
   kind: registry.entry
   meta:

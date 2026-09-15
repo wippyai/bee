@@ -18,3 +18,4 @@ entries:
     stream_json: bee.driver.transport:stream_json
     quote: bee.driver.kit:quote
     bounds: bee.threads.records:bounds
+    placement_request: bee.placement:request

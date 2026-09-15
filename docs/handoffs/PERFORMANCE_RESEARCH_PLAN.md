@@ -84,9 +84,17 @@ before proposing any additional approval mode.
 - Clean checkpoint and current guide/status/development conventions inspected.
 - Existing autoresearch and Timeline contracts inspected.
 - Gemini/Agy current implementation and POC inspection delegated, read-only.
-- Milestone 1 remains in progress; no live-provider or dashboard claim yet.
+- Milestone 1's bounded MCP acceptance is complete at `7070137`: 1011 Lua
+  cases including native policy characterization, real HTTP and managed child
+  proofs, typed lint and pack pass. The wider foundation/release checks continue;
+  host-index fixture repairs are pushed at `3d34ad1`.
+- The Agy caller-thread batch route now uses the existing structured profile,
+  normal user HOME, Gemini Flash with explicit high effort, and retained MCP
+  configuration. Its 54 focused driver/launch cases pass. A real managed Gemini
+  run selected both configured traits and committed the exact requested thread
+  message under its bound actor/action/attempt. No dashboard claim yet.
 
-Implementation in progress: `bee.gateway:catalog` strictly decodes bounded
+Implemented: `bee.gateway:catalog` strictly decodes bounded
 tool/trait configuration and computes an active tool set within an independent
 admission ceiling. `bee.gateway:context` validates and copies fixed/dynamic
 context. Both are now connected to HTTP admission and dispatch; the carrier
@@ -116,3 +124,22 @@ A same-binding HTTP test proves the existing token observes a replacement
 policy after native publication converges. Strict policy pinning would need
 native compiled-policy identity if the user chooses that stronger behavior.
 See [MCP configuration](../MCP_CONFIGURATION.md) for the implemented contract.
+
+## Updated user requirements (September 15)
+
+An Agent must request additional MCP tools and selected app-state access through
+MCP itself. The existing durable approval inbox presents the exact agent, Bee,
+application target and requested access to the user. Approval enables only that
+Agent's access on subsequent calls, without relaunching it or changing other
+Agents. Retrying a request reuses its recorded decision; denial, revocation,
+restart and uncertain delivery must remain explicit. A shared native policy
+replacement is not an agent-specific grant. This access-request integration is
+the next MCP unit before the live dashboard, not an already implemented feature.
+
+The client must eventually switch authorized Bees/workspaces/displays without
+relaunching and present cumulative pending approvals across a Hive of roughly
+100 Bees independently of the viewed workspace. Current inbox source enrollment
+is explicit and limited to 16; automatic authorized discovery and bounded paging
+across 100 owners are unverified work. Preserve per-owner decision authority,
+show unavailable/stale sources, and do not infer an empty inbox from disconnects.
+Keep this client-scale unit separate from the immediate per-agent request flow.

@@ -138,6 +138,50 @@ func savedProfilesWrite(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
+// Stage the production sync entry definitions needed by bee.sync:store and
+// its import closure. The saved-profile fixture calls sync.open with its
+// explicitly selected resource, so transport, replica and distribution
+// entries are outside this acceptance's host composition.
+func savedProfilesStageSyncStoreIndex(source, destination string) error {
+	contents, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	needed := map[string]struct{}{
+		"bounds": {}, "canonical": {}, "migrations": {},
+		"database": {}, "resources": {}, "store": {},
+	}
+	found := make(map[string]bool, len(needed))
+	var header, selected, entry []string
+	entryName := ""
+	flush := func() {
+		if _, ok := needed[entryName]; ok {
+			selected = append(selected, entry...)
+			found[entryName] = true
+		}
+	}
+	for _, line := range strings.SplitAfter(string(contents), "\n") {
+		if strings.HasPrefix(line, "- name: ") {
+			flush()
+			entryName = strings.TrimSpace(strings.TrimPrefix(line, "- name: "))
+			entry = []string{line}
+			continue
+		}
+		if entryName == "" {
+			header = append(header, line)
+		} else {
+			entry = append(entry, line)
+		}
+	}
+	flush()
+	for name := range needed {
+		if !found[name] {
+			return fmt.Errorf("production sync index is missing store dependency %q", name)
+		}
+	}
+	return savedProfilesWrite(destination, strings.Join(append(header, selected...), ""))
+}
+
 func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesWrite(filepath.Join(root, "src", "_index.yaml"), savedProfilesRootIndex); err != nil {
 		return err
@@ -151,8 +195,13 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "harness", "profiles"), filepath.Join(source, "src", "harness", "profiles")); err != nil {
 		return fmt.Errorf("copy profiles source: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "src", "sync"), filepath.Join(source, "src", "sync")); err != nil {
+	syncSource := filepath.Join(source, "src", "sync")
+	syncDestination := filepath.Join(root, "src", "sync")
+	if err := savedProfilesCopyTree(syncDestination, syncSource); err != nil {
 		return fmt.Errorf("copy sync source: %w", err)
+	}
+	if err := savedProfilesStageSyncStoreIndex(filepath.Join(syncSource, "_index.yaml"), filepath.Join(syncDestination, "_index.yaml")); err != nil {
+		return fmt.Errorf("stage sync store import closure: %w", err)
 	}
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "persist"), filepath.Join(source, "src", "persist")); err != nil {
 		return fmt.Errorf("copy persist source: %w", err)

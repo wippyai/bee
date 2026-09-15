@@ -21,6 +21,17 @@ local function has(list: {string}, item: string): boolean
     return false
 end
 
+local function quoted_arguments(value: unknown): string?
+    if type(value) ~= "table" then return nil end
+    local raw = value :: {unknown}
+    local arguments: {string} = {}
+    for index, argument in ipairs(raw) do
+        if type(argument) ~= "string" then return nil end
+        arguments[index] = argument
+    end
+    return quote.line(arguments)
+end
+
 local function define_tests()
     test.describe("Antigravity CLI binding and profile declarations", function()
         test.it("validates the agy binding and profiles against the driver profile decoder", function()
@@ -65,6 +76,9 @@ local function define_tests()
             local batch_p = profile.find(binding, "batch")
             if not batch_p then error("batch profile missing") end
             test.eq(batch_p.mode, "batch")
+            test.is_false(batch_p.isolation_env.private_home)
+            test.is_true(has(batch_p.mcp.client_transports, "streamable_http"))
+            test.is_false(has(batch_p.mcp.client_transports, "stdio"))
 
             local window_p = profile.find(binding, "window")
             if not window_p then error("window profile missing") end
@@ -103,6 +117,51 @@ local function define_tests()
             test.is_true(line:find("%-%-effort high") ~= nil)
             test.is_true(line:find("%-%-agent default") ~= nil)
             test.is_true(line:find("%-%-print%-timeout 10m") ~= nil)
+        end)
+
+        test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
+            local prepared, prepare_error = funcs.call("bee.driver.agy:prepare", {
+                profile_id = "batch",
+                brief = "Use the admitted Bee workspace tool once.",
+                model = "gemini-3.8-flash",
+                effort = "high",
+                print_timeout = "5m",
+                gateway_tools = {"thread_read", "workspace"},
+            })
+            if prepare_error then error(tostring(prepare_error)) end
+            test.is_true(prepared.ok)
+            test.eq(prepared.launch.executable, "agy")
+            test.eq(prepared.launch.readiness, "protocol:init")
+            test.is_true(prepared.launch.stdin_eof)
+            local arguments = quoted_arguments(prepared.launch.argv)
+            if not arguments then error("prepared launch argv must be a string list") end
+            test.is_true(arguments:find("^%-%-print= %-%-input%-format stream%-json") ~= nil)
+            test.is_true(arguments:find("%-%-model gemini%-3%.8%-flash") ~= nil)
+            test.is_true(arguments:find("%-%-effort high") ~= nil)
+            test.is_true(arguments:find("%-%-print%-timeout 5m") ~= nil)
+
+            local gateway = {
+                endpoint = "127.0.0.1:18790",
+                action_id = "agy-batch-proof",
+                tools = {"thread_read", "workspace"},
+                hooks = {},
+                token_environment = "BEE_GATEWAY_TOKEN",
+            }
+            local configured, configure_error = funcs.call("bee.driver.agy:configure", {
+                gateway = gateway,
+                home_directory = "/private/agy-batch-session",
+                fixture = false,
+            })
+            if configure_error then error(tostring(configure_error)) end
+            test.is_true(configured.ok)
+            test.eq(configured.delivery.arguments[1], "--add-dir")
+            test.eq(configured.delivery.arguments[2], "/private/agy-batch-session")
+            test.eq(#configured.delivery.files, 1)
+            local mcp_file = configured.delivery.files[1]
+            test.eq(mcp_file.path, ".agents/mcp_config.json")
+            test.eq(mcp_file.provider_ref, "bee:gateway_endpoint")
+            test.is_true(mcp_file.content:find("/mcp/agy%-batch%-proof") ~= nil)
+            test.eq(mcp_file.secret_fields[1].environment, "BEE_GATEWAY_TOKEN")
         end)
 
         test.it("does not hardcode a model when omitted in production", function()

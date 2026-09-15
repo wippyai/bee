@@ -5,7 +5,8 @@ thread contracts. It does not need a second scheduler or Agent-to-Agent
 transport.
 
 The coordinator creates one durable thread, then starts the hidden
-`bee.driver.codex:research_batch` and `bee.driver.claude:research_batch`
+`bee.driver.codex:research_batch`, `bee.driver.claude:research_batch`, or
+`bee.driver.agy:research_batch`
 definitions with distinct request IDs and that same thread ID. Each start owns a
 separate action and attempt. Carrier output, hooks and settlement enter the
 thread in owner order, so the coordinator can consume them with an ordinary
@@ -25,8 +26,11 @@ decides which driver-owned definitions are installed and active. Adding another
 provider means installing its batch definition; it does not change the
 coordinator.
 
-Both batch routes are component-owned and host-selected. Codex runs with its
-read-only sandbox. Claude is bounded to one turn. Their host policies may admit
+The batch routes are component-owned and host-selected. Codex runs with its
+read-only sandbox. Claude is bounded to one turn. Agy selects
+`gemini-3.8-flash` with explicit high effort and a five-minute print deadline.
+Its additive configuration retains the ordinary user HOME and login.
+Their host policies may admit
 the thread tools and the caller-owned `workspace` tool. Before Bee acquires a
 session, project grant or credential projection, launch admission checks that
 the requester is an active member of a supplied thread. The carrier checks
@@ -57,6 +61,8 @@ routes select their bounded policies, credentials, caller thread and workspace
 tool. A durable coordinator subscription consumes both receipts, detaches,
 resumes with a fresh lease and sees no duplicate work. The real HTTP/MCP fixture
 proves one authenticated Agent actor can create, edit and freeze its workspace
-while another actor cannot read it. Provider-backed execution of the shipped
-routes, multi-Agent result quality and a dedicated coordinator UI remain
-separate product acceptance.
+while another actor cannot read it. A live Agy batch run also selected two MCP traits and wrote the exact requested
+message into its caller-owned thread with the bound actor/action/attempt. This
+does not prove benchmark execution or authored dashboard publication.
+Multi-Agent result quality and a dedicated coordinator UI remain separate
+product acceptance.

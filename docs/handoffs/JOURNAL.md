@@ -6828,3 +6828,24 @@ headless source/pack, and Hub migration-service gates also pass. Remaining
 foundation gates continue in the existing run; no full-pass or global-install
 claim is made yet. The pending live Gemini unit needs an Agy caller-thread batch
 definition/policy over its existing structured batch profile, not a new carrier.
+
+
+### Gemini MCP proof and agent-specific access — September 15
+
+The new Agy caller-thread batch declaration passed 54 focused tests and lint.
+The first live run exposed a missing required effort setting for Gemini Flash;
+the host policy now selects high effort explicitly. The second run completed
+through the normal shared user HOME and session-owned additive MCP configuration.
+The persisted thread contains the exact random probe message, qualified by
+actor, action and attempt, after real two-trait selection. This proves Gemini
+MCP interaction, not the performance dashboard. A permanent live acceptance
+fixture is being added; the global executable remains unchanged.
+
+The saved-profile gate now stages the production Sync store import closure
+instead of unrelated distribution services; both persistence boots pass.
+The user clarified that MCP/app-state access is requested by the Agent, approved
+in the durable client inbox, and applied to that Agent only. Shared policy
+replacement is not the implementation of this grant. The next MCP unit wires
+existing approvals to this flow. The combined inbox must ultimately support
+about 100 Bees and remain available independently of the selected workspace;
+current explicit 16-source enrollment does not meet that requirement.

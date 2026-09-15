@@ -378,7 +378,7 @@ local function define_tests()
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
         end)
-        test.it("ships hidden Codex and Claude research routes with bounded batch policies", function()
+        test.it("ships hidden Codex, Claude, and Agy research routes with bounded batch policies", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
@@ -386,6 +386,9 @@ local function define_tests()
                 {definition = "bee.driver.claude:research_batch", policy = "bee:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
                     config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
+                {definition = "bee.driver.agy:research_batch", policy = "bee:launch_policy_agy_batch",
+                    binding = "bee.driver.agy:binding", executable = "bee.driver.agy:executable",
+                    option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -397,17 +400,28 @@ local function define_tests()
                 test.eq(decoded.thread_policy.kind, "caller")
                 test.eq(decoded.allowed_overrides[1], "thread")
                 test.eq(#decoded.allowed_overrides, 1)
-                test.eq(decoded.credentials[1], selected.credential)
+                if selected.credential then test.eq(decoded.credentials[1], selected.credential)
+                else test.eq(#decoded.credentials, 0) end
                 test.is_false(decoded.presentation.start_menu)
                 local policy_entry = assert(registry.get(selected.policy))
                 local policy, policy_error = launch_policy.decode(selected.policy, policy_entry,
                     function(ref: string): (string?, string?)
                         if ref == selected.executable then return "/usr/bin/research-agent", nil end
-                        if ref == selected.config then return "", nil end
+                        if selected.config and ref == selected.config then return "", nil end
                         return nil, "unadmitted environment reference"
                     end)
                 if not policy then error(tostring(policy_error)) end
                 test.eq(policy.prepare_options[selected.option], selected.expected)
+                for option, expected in pairs(selected.additional_options or {}) do
+                    test.eq(policy.prepare_options[option], expected)
+                end
+                if selected.binding == "bee.driver.agy:binding" then
+                    test.eq(#policy.gateway_hooks, 0)
+                    test.is_true(policy.allow_host_home)
+                    local has_thread_message = false
+                    for _, tool in ipairs(policy.gateway_tools) do if tool == "thread_message" then has_thread_message = true end end
+                    test.is_true(has_thread_message)
+                end
                 local has_workspace = false
                 for _, tool in ipairs(policy.gateway_tools) do if tool == "workspace" then has_workspace = true end end
                 test.is_true(has_workspace)

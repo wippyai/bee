@@ -1,6 +1,39 @@
-# Global Bee build — September 13, 2026
+# Global Bee build — September 15, 2026
 
-## Current install: Train A native Agent foundation
+## Current install: persisted Hive profile and private application delivery
+
+Source `fe1eb0d`, binary
+`17cd72b19480e2c1a40d6413bf2794934a90446562180a5744118438155e0531`,
+is installed globally with its matching license, effective module, provenance
+and runtime-patch sidecars. The build uses runtime `6b40cb0f` with nine reviewed
+patches and native Bee
+`v0.0.0-20260915183420-48df9c2981b4`. The previous six files are preserved at
+`bee-evidence/0915/global-before-persisted-hive-3699b5a0`; the install receipt is
+`global-persisted-hive-fe1eb0d-install.json`. The previous executable had stale
+sidecars from an older build, so rollback was verified against the observed
+six-file hashes instead of accepting that old provenance as self-consistent.
+
+Strict lint and all 995 Lua tests pass. The race-enabled two-runtime Governance
+gate proves authenticated generic Sync transfer, destination staging, selection
+and local approval, v1 activation and restart reconstruction, v2 availability
+without automatic activation, explicit v2 update, rollback to v1 and an
+independent opaque binary feed. Standalone executable, Modules, About, four
+default Agent profiles, offline cold/restart/reconnect and complete native client
+lifecycle acceptance pass. Post-install offline acceptance reports a 0.103-second
+warm attach. A launch against the preserved user profile reached the desktop and
+detached cleanly with Ctrl+Q. No database or profile was deleted or rewritten by
+installation.
+
+Ordinary launch now consumes a strict saved joined-Hive profile and preserves
+the joined identity across restart. Fresh installs remain local until explicitly
+enrolled. Private application versions move over the existing native mesh and
+remain staged until the receiving Bee reviews and activates them. Destination
+migration execution remains unsupported: captured migration work is measured,
+but activation refuses it until the runtime can execute a captured function
+against the immutable candidate registry view. Public invitation creation and
+simultaneous joined project identities also remain open.
+
+## Previous install: Train A native Agent foundation
 
 Production `414c03b`, binary
 `4692e26713fa848bbe4c2dae32feb9a9e86778fb2d9b870eb552ffc5b85d455a`,

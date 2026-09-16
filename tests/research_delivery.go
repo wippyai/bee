@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -97,6 +98,7 @@ func check() error {
 	selectedRuntime := flag.String("runtime", "", "native runtime executable")
 	artifactPath := flag.String("artifact", "", "path to authored artifact json")
 	lintOnly := flag.Bool("lint-only", false, "stage and lint without applying artifact")
+	measurement := flag.Bool("measurement", false, "prove HTTP measurements after governed activation")
 	flag.Parse()
 
 	repo, err := filepath.Abs(*source)
@@ -150,7 +152,7 @@ func check() error {
 				return fmt.Errorf("entry %d has invalid or foreign id: %v", i, entry["id"])
 			}
 			kind, ok := entry["kind"].(string)
-			if !ok || (kind != "process.lua" && kind != "library.lua") {
+			if !ok || (kind != "process.lua" && kind != "library.lua" && kind != "function.lua") {
 				return fmt.Errorf("entry %s has unadmitted kind: %v", id, entry["kind"])
 			}
 			configuration, ok := entry["data"].(map[string]interface{})
@@ -241,6 +243,14 @@ func check() error {
 	if err = run(root, runtime, environment, "lint", 3*time.Minute, "lint"); err != nil {
 		return err
 	}
+	if *measurement {
+		if len(entries) == 0 {
+			return fmt.Errorf("measurement requires reviewed artifact")
+		}
+		if err = stageMeasurement(repo, root, entries); err != nil {
+			return err
+		}
+	}
 
 	if len(entries) > 0 {
 		if err = reviewArtifact(root, runtime, environment, entries); err != nil {
@@ -276,8 +286,149 @@ func check() error {
 	if reportLine == "" {
 		return fmt.Errorf("missing RESEARCH_DELIVERY_PASS in run.log: %s", root)
 	}
+	if *measurement {
+		found := false
+		for _, line := range strings.Split(string(logBytes), "\n") {
+			if strings.HasPrefix(line, "RESEARCH_MEASUREMENT_PASS ") {
+				fmt.Println(line)
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("missing RESEARCH_MEASUREMENT_PASS in %s", root)
+		}
+	}
 	fmt.Println(reportLine)
+	if *measurement {
+		if err = run(root, runtime, environment, "recovery", 60*time.Second, "run", "research-recovery-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db")); err != nil {
+			return err
+		}
+		recovered, readErr := os.ReadFile(filepath.Join(root, "recovery.log"))
+		if readErr != nil {
+			return readErr
+		}
+		if !strings.Contains(string(recovered), "RESEARCH_RECOVERY_PASS "+artifactDigest) {
+			return fmt.Errorf("missing exact recovery proof in %s", root)
+		}
+		fmt.Println("RESEARCH_RECOVERY_PASS", artifactDigest)
+	}
 	return nil
+}
+
+// The tool imports the approved candidate. Lint it together with the supplied
+// artifact in the review tree; invoke it only after the real destination apply.
+func stageMeasurement(repo, root string, entries []interface{}) error {
+	// Admit the dashboard reader before measuring the activation base. Changing
+	// host admission after approval correctly invalidates recovery of that base.
+	admissionPath := filepath.Join(root, "src/security/_index.yaml")
+	admissionBytes, err := os.ReadFile(admissionPath)
+	if err != nil {
+		return err
+	}
+	var admission map[string]interface{}
+	if err = yaml.Unmarshal(admissionBytes, &admission); err != nil {
+		return err
+	}
+	for _, raw := range admission["entries"].([]interface{}) {
+		entry := raw.(map[string]interface{})
+		if entry["name"] == "application_admission" {
+			entry["bindings"] = append(entry["bindings"].([]interface{}), map[string]interface{}{
+				"definition_id": "bee.research.demo:app", "policies": []string{"bee:ordinary_app_subsystem_boundary", "bee:gateway_tool_read_policy"},
+			})
+		}
+	}
+	admissionBytes, err = yaml.Marshal(admission)
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(admissionPath, admissionBytes, 0600); err != nil {
+		return err
+	}
+	gatewayPath := filepath.Join(root, "src/gateway/_index.yaml")
+	gatewayBytes, err := os.ReadFile(gatewayPath)
+	if err != nil {
+		return err
+	}
+	var gateway map[string]interface{}
+	if err = yaml.Unmarshal(gatewayBytes, &gateway); err != nil {
+		return err
+	}
+	for _, raw := range gateway["entries"].([]interface{}) {
+		entry := raw.(map[string]interface{})
+		if entry["name"] == "mcp_http" {
+			security := entry["security"].(map[string]interface{})
+			security["policies"] = append(security["policies"].([]interface{}), "bee.research_measurement:tool_policy")
+		}
+	}
+	gatewayBytes, err = yaml.Marshal(gateway)
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(gatewayPath, gatewayBytes, 0600); err != nil {
+		return err
+	}
+	fixture := filepath.Join(root, "src/research_measurement")
+	if err := os.CopyFS(fixture, os.DirFS(filepath.Join(repo, "tests/fixtures/research_measurement"))); err != nil {
+		return err
+	}
+	baseline, err := os.ReadFile(filepath.Join(repo, "src/threads/records/canonical.lua"))
+	if err != nil {
+		return err
+	}
+	var candidate string
+	for _, raw := range entries {
+		entry := raw.(map[string]interface{})
+		if entry["id"] == "bee.research.demo:canonical" {
+			candidate = entry["data"].(map[string]interface{})["source"].(string)
+		}
+	}
+	if candidate == "" {
+		return fmt.Errorf("missing candidate source")
+	}
+	indexPath := filepath.Join(fixture, "_index.yaml")
+	indexBytes, err := os.ReadFile(indexPath)
+	if err != nil {
+		return err
+	}
+	var index map[string]interface{}
+	if err = yaml.Unmarshal(indexBytes, &index); err != nil {
+		return err
+	}
+	for _, raw := range index["entries"].([]interface{}) {
+		entry := raw.(map[string]interface{})
+		if entry["name"] == "inputs" {
+			entry["data"] = map[string]interface{}{
+				"baseline_sha256":  fmt.Sprintf("%x", sha256.Sum256(baseline)),
+				"candidate_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(candidate))),
+			}
+		}
+	}
+	encoded, err := yaml.Marshal(index)
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(indexPath, encoded, 0600); err != nil {
+		return err
+	}
+	benchmarkDir := filepath.Join(root, "src/research_benchmark")
+	if err = os.MkdirAll(benchmarkDir, 0700); err != nil {
+		return err
+	}
+	for _, name := range []string{"corpus.lua", "measure.lua"} {
+		if err = copyFile(filepath.Join(benchmarkDir, name), filepath.Join(repo, "tests/fixtures/performance_research", name)); err != nil {
+			return err
+		}
+	}
+	benchmark := map[string]interface{}{"version": "1.0", "namespace": "bee.research_benchmark_probe", "entries": []interface{}{
+		map[string]interface{}{"name": "canonical", "kind": "library.lua", "source": string(baseline)},
+		map[string]interface{}{"name": "corpus", "kind": "library.lua", "source": "file://corpus.lua"},
+		map[string]interface{}{"name": "measure", "kind": "library.lua", "source": "file://measure.lua", "modules": []string{"time"}, "imports": map[string]string{"corpus": "bee.research_benchmark_probe:corpus"}},
+	}}
+	encoded, err = yaml.Marshal(benchmark)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(benchmarkDir, "_index.yaml"), encoded, 0600)
 }
 
 func main() {

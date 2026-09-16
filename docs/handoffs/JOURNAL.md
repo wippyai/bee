@@ -7051,3 +7051,39 @@ The measurement tool remains an unverified fixture draft. Its next gate must
 attribute results to a host-selected thread member, so agent-authored messages
 cannot masquerade as measured results. Global Bee is unchanged; the full goal
 and automatic cumulative inbox requirement remain incomplete.
+
+### Native measurements and automatic artifact recovery — September 15
+
+The measurement fixture now runs real HTTP MCP against an automatic loopback
+port. It verifies both exact source digests, seven actual samples, baseline
+invalid/candidate correct verdicts, same-record replay, inactive trait refusal,
+foreign-thread argument refusal and revoked credential refusal. Results are
+existing typed observations under the fixed host member
+`bee.research.measurement`, source `mcp`, with the authenticated binding's action
+and attempt. A deliberately fabricated one-nanosecond agent message stays a
+message; UI rejection remains to be demonstrated on screen.
+
+`tests/fixtures/research_artifacts/canonical-json-v1.json` retains the reviewed
+Gemini code and explicit subsequent review provenance, artifact digest
+`41ec83bf59ade1e7c9685245ae4a09847e738d0271921afe0488d2106552580f`.
+Its fixed candidate measurement entry is governed with the candidate, avoiding
+an import of absent candidate code before installation. No runtime changes.
+
+`make research-measurement-check` passes on this artifact, including a second
+runtime requiring automatic recovery of the exact approved entries, in
+`/tmp/bee-research-delivery-1488229448` (log
+`/tmp/bee-research-auto-recovery-check.log`). Earlier HTTP-only evidence with the
+strong forged message is `/tmp/bee-research-delivery-2084658457`.
+The full production Lua suite last passed 1019 cases at e8ebb59; subsequent
+changes here are fixture/docs only, with whole staged typed lint and Go vet.
+
+The real desktop check is still failing to list the recovered app. Earlier
+inspection of a modified fixture correctly refused a changed base digest;
+admission is now configured before approval. A clean second-boot backend recovery
+passes, including `--host bee:terminal`, with identical base entry digests.
+Do not weaken approval fencing. Investigate the ordinary `bee` launch path and
+its startup recovery/identity/security context next. Private UI script
+`/tmp/bee-research-observation-ui.py`, output `/tmp/bee-research-observation-ui.log`.
+No live chart, live Gemini measurement invocation, independent consumer or
+global-install claim yet. Luna High's bounded authority review succeeded;
+the separate Lua fixture child failed on model demand, so parent implemented it.

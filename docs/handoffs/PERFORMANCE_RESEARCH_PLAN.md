@@ -177,3 +177,23 @@ in its Governance workspace. Use the existing measured-artifact review/apply
 flow. Do not substitute direct filesystem authoring or fixture-generated charts
 for the requested live MCP workflow. Persist actual benchmark results through
 the thread owner with trusted run attribution before rendering them.
+
+## Measured artifact checkpoint — September 15
+
+The reviewed Gemini artifact is retained outside production in
+`tests/fixtures/research_artifacts/canonical-json-v1.json`, with its original
+author digests and explicit host review changes. `make research-measurement-check`
+now proves exact governed installation, real native HTTP MCP measurements,
+same-record replay, trait/argument/revocation denial and source/producer/action
+attribution. Measurements use the existing typed observation extension, source
+`mcp` and the fixed host-admitted member `bee.research.measurement`. The ordinary
+agent's deliberately fabricated one-nanosecond message remains a message.
+The updated dashboard accepts observations only and versions its checkpoint.
+
+The second-boot gate requires automatic restoration of the exact approved
+artifact; its explicit recovery fallback is diagnostic and cannot pass the gate.
+Evidence `/tmp/bee-research-delivery-1488229448` passes that gate. The baseline
+is still invalid and the candidate is correct; no qualified speedup is claimed.
+Normal desktop launch has not yet displayed the recovered app, so UI rendering,
+real Gemini invocation of the measurement tool, UI recovery and independent
+consumer acceptance remain next. Global Bee is unchanged.

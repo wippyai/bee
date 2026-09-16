@@ -9,6 +9,10 @@ local uuid = require("uuid")
 local bounds = require("bounds")
 local artifact = require("artifact")
 local materializer = require("materializer")
+local canonical = require("canonical")
+local hash = require("hash")
+local recovery = require("recovery")
+local time = require("time")
 
 type Object = {[string]: unknown}
 
@@ -28,6 +32,42 @@ local function call_api(target: string, request: unknown): Object
     local val = bounds.object(reply.value)
     if not val then error(target .. " missing value") end
     return val
+end
+
+local function base_measurements()
+    local snapshot = assert(registry.snapshot())
+    local state = assert(snapshot:state())
+    local measured: Object = {}
+    for _, raw in ipairs(state.entries) do
+        local entry = object(raw)
+        if not tostring(entry.id):match("^bee%.research%.demo:") then
+            local clean: Object = {}
+            for key, value in pairs(entry) do if key ~= "registry" then clean[key] = value end end
+            measured[tostring(entry.id)] = {digest = hash.sha256(assert(canonical.encode(clean, 262144))),
+                owner = object(entry.registry).owner}
+        end
+    end
+    io.print("RESEARCH_BASE " .. tostring(json.encode(measured)))
+end
+
+local function recover()
+    time.sleep("3s")
+    base_measurements()
+    local input = assert(registry.get("bee.research_delivery:artifact_input"))
+    local parsed = object(json.decode(tostring(object(input.data).raw_json)))
+    local measured = assert(artifact.create(parsed.entries))
+    local matches, match_error = materializer.matches("bee.research_delivery:activation_overlay", measured.entries)
+    if matches ~= true then
+        local states = system.supervisor.states()
+        for _, state in ipairs(states or {}) do
+            if tostring(state.id) == "bee.governance:activation_recovery_service" then
+                io.print("RESEARCH_RECOVERY_SERVICE " .. tostring(json.encode(state)))
+            end
+        end
+        local restored, problem = recovery.recover_all()
+        error("automatic recovery absent; explicit diagnostic recovery=" .. tostring(restored) .. ": " .. tostring(problem or match_error))
+    end
+    io.print("RESEARCH_RECOVERY_PASS " .. measured.digest)
 end
 
 local function main()
@@ -157,7 +197,7 @@ local function main()
             allow = {
                 packages = {COMPONENT},
                 namespaces = {"bee.research.demo"},
-                kinds = {"library.lua", "process.lua"},
+                kinds = {"library.lua", "process.lua", "function.lua"},
                 databases = {},
                 grants = {},
                 modules = {"channel", "funcs", "json", "process", "time", "tty", "uuid"},
@@ -183,6 +223,7 @@ local function main()
     assert(changes:update(app_entry))
     local applied, apply_err = changes:apply()
     if not applied then error("failed to apply host profiles: " .. tostring(apply_err)) end
+    base_measurements()
 
     -- publication_call prepare {operation,workspace_id,component,version,snapshot_digest}.
     -- Verify descriptor manifest artifact_digest matches supplied artifact.
@@ -316,6 +357,14 @@ local function main()
     local matches, match_error = materializer.matches(OVERLAY_OWNER, measured.entries)
     if matches ~= true then error("applied overlay differs from reviewed artifact: " .. tostring(match_error)) end
 
+    if registry.get("bee.research_measurement:inputs") then
+        local result, result_error = funcs.call("bee.research_measurement:probe", {})
+        if result_error then error("measurement probe: " .. tostring(result_error)) end
+        local checked = object(result)
+        if checked.ok ~= true then error("measurement probe failed") end
+        io.print("RESEARCH_MEASUREMENT_PASS " .. tostring(json.encode(checked)))
+    end
+
     -- Report actual final phase and digests. No UI launch claim yet; parent extends after this.
     local report_data = {
         passed = true,
@@ -330,4 +379,4 @@ local function main()
     io.print("RESEARCH_DELIVERY_PASS " .. tostring(json.encode(report_data)))
 end
 
-return {main = main}
+return {main = main, recover = recover}

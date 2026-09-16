@@ -405,7 +405,11 @@ research-author-lint:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -author -lint-only
 
-.PHONY: research-delivery-check research-delivery-lint
+.PHONY: research-delivery-check research-delivery-lint research-measurement-check
+research-measurement-check:
+	@test -n "$(ARTIFACT)" || { echo 'Set ARTIFACT to the reviewed measurable artifact JSON'; exit 1; }
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -measurement
 research-delivery-lint:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -lint-only

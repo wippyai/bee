@@ -42,16 +42,31 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [funcs, registry, system, json, io, uuid]
-  imports:
+  modules: &modules [funcs, registry, system, json, io, uuid, hash, time]
+  imports: &imports
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact
     materializer: bee.governance:materializer
+    canonical: bee.sync:canonical
+    recovery: bee.governance:destination_service
   security:
     policies: [bee.research_delivery:operator_policy]
   meta:
     command:
       name: research-delivery-probe
+      security:
+        actor: {id: bee.research_delivery.operator}
+        policies: [bee.research_delivery:operator_policy]
+- name: recover
+  kind: process.lua
+  source: file://main.lua
+  method: recover
+  modules: *modules
+  imports: *imports
+  security: {policies: [bee.research_delivery:operator_policy]}
+  meta:
+    command:
+      name: research-recovery-probe
       security:
         actor: {id: bee.research_delivery.operator}
         policies: [bee.research_delivery:operator_policy]

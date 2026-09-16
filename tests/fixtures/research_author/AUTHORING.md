@@ -45,8 +45,12 @@ Measurements are JSON objects inside a thread message's `body.content.text`:
 - `correct`: boolean; `outcome`: `passed` or `invalid`
 - optional `correctness_error`: text
 
-Only accept message records with `body.content.text`; bound the text before
-decoding. Require the exact schema, benchmark, units, labels and field types:
+Only accept `observation` records whose `source` is `mcp` and whose
+`producer_id` is the host-admitted `bee.research.measurement`. Require
+`body.type = extension` and `body.data` with `type = extension`,
+`event_name = bee.research.measurement`, `event_revision = "1"` and bounded
+`payload_json`. Ordinary agent messages are never measurement evidence.
+Require the exact schema, benchmark, units, labels and field types:
 seven positive finite samples, positive integer counters, a lowercase 64-hex
 source digest, and consistent correctness/outcome. Reject malformed values
 rather than coercing them. Bound optional error text.

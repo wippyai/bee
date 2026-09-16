@@ -84,7 +84,6 @@ local function main(owner: string, database_resource: string?)
         function() return database.assignments:reconcile() end,
         function(value: unknown) return database.assignments:claim(value) end
     ))
-    local catalog_received = false
     local reader_snapshot: retained.CatalogReaders? = nil
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
@@ -173,18 +172,29 @@ local function main(owner: string, database_resource: string?)
         return true
     end
     local function restore_next()
-        local record = table.remove(restore_queue, 1)
+        if restoring ~= "" or stopping then return end
+        -- Installed overlays may become available after the first catalog.
+        -- Keep their saved records pending without delaying other applications.
+        local selected: integer? = nil
+        for index, candidate in ipairs(restore_queue) do
+            for _, descriptor in ipairs(live_inventory.catalog) do
+                if descriptor.definition_id == candidate.definition_id then selected = index; break end
+            end
+            if selected then break end
+        end
+        local record = selected and table.remove(restore_queue, selected) or nil
         if record then
             restoring = uuid.v7()
             send("bee.app.request", {version = 1, request_id = restoring, op = "open", workspace_id = workspace_id,
                 definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id,
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
         else
-            restoring = ""
-            resolve_prepared_intents()
-            ready = true
-            deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
-            forward_catalog_readers()
+            if not ready then
+                resolve_prepared_intents()
+                ready = true
+                deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
+                forward_catalog_readers()
+            end
         end
     end
     local function replace_record(record: recovery.Record?, removed: string?): (boolean, string?)
@@ -233,7 +243,7 @@ local function main(owner: string, database_resource: string?)
                         live_inventory = next_inventory
                         deliver("bee.application.catalog", data)
                         if ready then connections.publish(client_connections, live_inventory, "catalog") end
-                        if not catalog_received then catalog_received = true; restore_next() end
+                        restore_next()
                     end
                 elseif selected.channel == catalog_readers and message:from() == broker then
                     local snapshot = retained.catalog_readers(data, workspace_id)
@@ -376,6 +386,7 @@ local function main(owner: string, database_resource: string?)
                             if not connections.reply(client_connections, reply, live_inventory) then
                                 if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
                                     deliver("bee.host.restore_result", reply)
+                                    restoring = ""
                                     restore_next()
                                 else deliver("bee.app.reply", reply) end
                             end

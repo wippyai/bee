@@ -278,6 +278,10 @@ shell commands or external agents. TTY capability isolation is not filesystem is
 ## Durable checkpoint and restore
 
 An app opts in with `resume_schema` and `restart_policy: automatic|manual`.
+Automatic restart keeps a saved app pending while its definition is absent from
+the admitted catalog, including during durable overlay recovery. Catalog changes
+resume eligible saved apps through the same serialized restore queue. Missing
+apps do not block desktop readiness, and no unavailable definition is launched.
 The default is `never`. Schema names are application-owned compatibility contracts,
 not inferred from the package version. A changed package may read an old schema,
 but Bee will not silently feed data into a different declared schema.

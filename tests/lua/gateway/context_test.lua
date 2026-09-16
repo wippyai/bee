@@ -5,6 +5,29 @@ type Object = {[string]: unknown}
 
 local function run()
     test.describe("Gateway MCP context values", function()
+        test.it("reserves binding attribution and isolates it from caller context", function()
+            local identity = {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a"}
+            local spoof: Object = {}
+            spoof[context.BINDING_KEY] = {thread_id = "foreign"}
+            test.is_nil(context.decode(spoof))
+            test.is_nil(context.compose(spoof, {}, {}))
+            test.is_nil(context.compose({}, {}, {context.BINDING_KEY}))
+            test.is_nil(context.compose({}, spoof, {context.BINDING_KEY}))
+            test.is_nil(context.bind(spoof, identity))
+            local values: Object = {}
+            for index = 1, 32 do values["value" .. tostring(index)] = index end
+            local first, first_error = context.bind(values, identity)
+            if not first then error(tostring(first_error)) end
+            local second, second_error = context.bind(values, identity)
+            if not second then error(tostring(second_error)) end
+            (first[context.BINDING_KEY] :: Object).thread_id = "changed"
+            first.value1 = 99
+            test.eq((second[context.BINDING_KEY] :: Object).thread_id, "thread-a")
+            test.eq(identity.thread_id, "thread-a")
+            test.eq(values.value1, 1)
+            test.eq(second.value32, 32)
+            test.is_nil(context.bind({}, {binding_id = "", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a"}))
+        end)
         test.it("keeps host values fixed and admits only named dynamic keys", function()
             local fixed: Object = {action_id = "action-host", attempt_id = "attempt-host", host = {node = "node-a"}}
             local dynamic, decode_error = context.decode({trace_id = "trace-1", labels = {phase = "review"}})

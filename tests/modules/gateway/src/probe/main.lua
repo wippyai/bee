@@ -141,6 +141,25 @@ local function configurable_surface(token_a: string)
     local measured_value = measured.value :: Object
     assert(measured.ok == true and measured_value.project == "project-a" and measured_value.experiment == "baseline", "native context was not delivered: " .. tostring(json.encode(measured)))
     assert(measured_value.can_read_gateway == false and measured_value.can_create_scope == false, "tool gained gateway authority")
+    local attribution = measured_value.binding :: Object
+    assert(attribution.binding_id == configurable_binding and attribution.thread_id == THREAD
+        and attribution.action_id == "configurable" and attribution.attempt_id == "configurable-attempt", "tool received foreign binding attribution")
+    local spoofed = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
+        active_traits = {"research:measure"}, context = {["bee.gateway.binding"] = {thread_id = "foreign"}}})
+    assert(spoofed.ok == false, "caller replaced reserved binding attribution")
+    local peer = ok(call("bee.gateway:admit", {subject = ACTOR, action_id = "context-peer", attempt_id = "context-peer-attempt",
+        thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"measure_context"}, ttl_ms = 60000,
+        surface = {tools = {{name = "measure_context", operation = "bee.gateway_probe:context_tool", description = "Read attribution",
+            policies = {"bee.gateway_probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
+            traits = {}, base_tools = {"measure_context"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}}), "peer context admission")
+    local peer_binding = tostring((peer.binding :: Object).binding_id)
+    local peer_token = tostring(ok(materialize("context-peer-attempt", 1, peer_binding), "peer credential").token)
+    local peer_result = tool("context-peer", peer_token, "measure_context", {})
+    local peer_identity = (peer_result.value :: Object).binding :: Object
+    assert(peer_result.ok == true and peer_identity.binding_id == peer_binding and peer_binding ~= configurable_binding
+        and peer_identity.action_id == "context-peer" and peer_identity.attempt_id == "context-peer-attempt", "same-subject bindings shared attribution")
+    local original_again = tool("configurable", configurable_token, "measure_context", {})
+    assert(((original_again.value :: Object).binding :: Object).binding_id == configurable_binding, "peer call contaminated original attribution")
     local rejected_context = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
         active_traits = {"research:measure"}, context = {project = "foreign"}})
     assert(rejected_context.ok == false, "caller replaced host context")

@@ -6975,3 +6975,28 @@ prepare, exact approval, then step to applied. Existing acceptance does not yet
 compose public preparation with an actual process.lua dashboard launch; that
 must be tested. Preserve canonical artifact bytes when importing the frozen
 entries into a separate review/activation fixture. No parallel publisher needed.
+
+### September 15: custom MCP measurement attribution
+
+The gateway now supplies one reserved native context record,
+`bee.gateway.binding`, from its authenticated binding. It carries binding,
+thread, action and attempt IDs; caller arguments and configured context cannot
+replace it. Actor/scope and owner authorization remain unchanged. The bounded
+record is separate from the existing configurable context quota. No runtime
+change or identity framework was added.
+
+Pure tests cover reserved host/dynamic context, copying and the full existing
+32-key quota. Actual HTTP calls prove same-subject binding isolation, denial of
+spoofed selection and retained actor/scope restrictions. Production and fixture
+lint pass; all 1,017 Lua tests pass, as do the two-runtime gateway gate, pack and
+11 bundle checks. Evidence logs: `/tmp/bee-binding-context-{lint,unit,http,pack}.log`.
+The custom benchmark still needs to consume this attribution and persist actual
+measurements. Global Bee is unchanged.
+
+The latest Gemini proposal `/tmp/bee-live-agy-mcp-1222818886/authored.json` uses
+read_after/watch but still has one checkpoint type error and needed responsive
+asynchronous reads plus correctly qualified comparison of invalid measurements.
+Repair three is live in `/tmp/bee-research-repair-3-check.log`. Luna implementation
+children failed on provider demand before editing; Agy now owns the isolated
+public publication acceptance fixture, with no permission to apply a rejected
+artifact. Its output is `/tmp/bee-research-delivery-agy.log`.

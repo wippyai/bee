@@ -40,11 +40,12 @@ local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values
     local subject, subject_error = security.new_actor(binding.subject)
     if not subject then return nil, refused("DENIED", tostring(subject_error)) end
     local executor = funcs.new()
-    if values then
-        local contextual, context_error = executor:with_context(values)
-        if not contextual then return nil, refused("DENIED", tostring(context_error)) end
-        executor = contextual
-    end
+    local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
+        thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id})
+    if not attributed then return nil, refused("DENIED", tostring(attribution_error)) end
+    local contextual, context_error = executor:with_context(attributed)
+    if not contextual then return nil, refused("DENIED", tostring(context_error)) end
+    executor = contextual
     local acted, actor_error = executor:with_actor(subject)
     if not acted then return nil, refused("DENIED", tostring(actor_error)) end
     local scoped, scoped_error = acted:with_scope(scope)

@@ -34,6 +34,17 @@ does not clear ambient keys. Host endpoint composition therefore also controls
 what inherited context tools can see. Native Terminal retains OS-user authority;
 MCP scopes do not sandbox its filesystem.
 
+For each tool invocation the gateway supplies native context key
+`bee.gateway.binding` with `binding_id`, `thread_id`, `action_id` and `attempt_id`
+from the authenticated binding. Host configuration and agent-selected context
+cannot declare or replace this reserved key. Its four bounded identifiers are
+separate from the configurable context quota. Custom tools can use this record
+to attribute results without accepting thread/attempt IDs from tool arguments.
+It grants no authority: the executor's actor and scope, endpoint invocation
+permission and destination owner checks still apply. Tools exposed through
+other call paths must authorize those callers too; a context value alone does
+not authenticate a direct function caller.
+
 The built-in `workspace` tool accepts up to 65,536 bytes of inline text or
 87,384 bytes of canonical padded base64 (at most 65,536 decoded bytes) per
 file. The HTTP MCP endpoint caps each complete JSON request body at 524,288

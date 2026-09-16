@@ -6,10 +6,12 @@ local M = {}
 M.MAX_BYTES = 16384
 M.MAX_DEPTH = 4
 M.MAX_KEYS = 32
+M.BINDING_KEY = "bee.gateway.binding"
 type Object = {[string]: unknown}
 type Values = {[string]: unknown}
 type Context = {[string]: unknown}
 type CopyState = {keys: integer, active: {[table]: boolean}}
+type Attribution = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
 
 local function copy_value(value: unknown, parent_depth: integer, state: CopyState): (unknown, string?)
     if value == nil or type(value) == "boolean" or type(value) == "string" then return value, nil end
@@ -87,6 +89,7 @@ local function checked_object(value: unknown): (Object?, string?)
     if not object then return nil, "context must be an object" end
     for key in pairs(object) do
         if key == "" then return nil, "context keys must not be empty" end
+        if key == M.BINDING_KEY then return nil, "context key is reserved for gateway attribution" end
     end
     return object, nil
 end
@@ -122,6 +125,7 @@ function M.compose(fixed_value: unknown, dynamic_value: unknown, allowed_dynamic
     local allowed: {[string]: boolean} = {}
     for _, key in ipairs(allowed_dynamic) do
         if key == "" or allowed[key] then return nil, "allowed dynamic context keys must be unique and nonempty" end
+        if key == M.BINDING_KEY then return nil, "context key is reserved for gateway attribution" end
         allowed[key] = true
     end
 
@@ -136,6 +140,24 @@ function M.compose(fixed_value: unknown, dynamic_value: unknown, allowed_dynamic
     local checked, combined_error = checked_values(combined)
     if not checked then return nil, combined_error end
     return checked :: Context, nil
+end
+
+-- The endpoint supplies these identities from its authenticated binding, never
+-- from tool arguments. This fixed-size record is outside the configurable
+-- context quota. It identifies the call; actor and scope still authorize it.
+function M.bind(values: unknown, identity: Attribution): (Context?, string?)
+    local copied, copy_error = checked_values(values)
+    if not copied then return nil, copy_error end
+    local binding_id = bounds.id(identity.binding_id)
+    local thread_id = bounds.id(identity.thread_id)
+    local action_id = bounds.id(identity.action_id)
+    local attempt_id = bounds.id(identity.attempt_id)
+    if not binding_id or not thread_id or not action_id or not attempt_id then
+        return nil, "invalid gateway binding attribution"
+    end
+    copied[M.BINDING_KEY] = {binding_id = binding_id, thread_id = thread_id,
+        action_id = action_id, attempt_id = attempt_id}
+    return copied, nil
 end
 
 return M

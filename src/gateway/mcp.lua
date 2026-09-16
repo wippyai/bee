@@ -8,9 +8,9 @@ local workspace_protocol = require("workspace_protocol")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
-M.MAX_BODY_BYTES = 65536
-M.MAX_WORKSPACE_TEXT_BYTES = 8192
-M.MAX_WORKSPACE_BASE64_BYTES = 49152
+M.MAX_BODY_BYTES = 524288
+M.MAX_WORKSPACE_TEXT_BYTES = 65536
+M.MAX_WORKSPACE_BASE64_BYTES = 87384
 type Object = {[string]: unknown}
 type Call = {id: unknown, method: string, params: Object, notification: boolean}
 type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
@@ -181,6 +181,11 @@ function M.workspace_arguments(params: Object): (Object?, string?)
     if type(arguments.content_base64) == "string" and #arguments.content_base64 > M.MAX_WORKSPACE_BASE64_BYTES then
         return nil, "content_base64 exceeds the MCP body bound"
     end
-    return workspace_protocol.decode(arguments)
+    local request, decode_error = workspace_protocol.decode(arguments)
+    if not request then return nil, decode_error end
+    if type(request.content) == "string" and #request.content > M.MAX_WORKSPACE_TEXT_BYTES then
+        return nil, "decoded content exceeds the MCP file bound"
+    end
+    return request, nil
 end
 return M

@@ -72,7 +72,7 @@ def run():
                             "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view",
                             "title": name, "revision": "1", "instance_policy": "multiple", "group": "Probe"}}})
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": entries}, sort_keys=False))
-        index = project / "src/_index.yaml"
+        index = project / "src/security/_index.yaml"
         doc = yaml.safe_load(index.read_text())
         admission = next(e for e in doc["entries"] if e["name"] == "application_admission")
         admission["bindings"] += [{"definition_id": "probe:" + e["name"], "policies": []} for e in entries]
@@ -248,8 +248,11 @@ def detached():
             for entry in document["entries"]:
                 if entry["kind"] == "terminal.host":
                     entry["hide_logs"] = False
-            next(e for e in document["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
             index.write_text(yaml.safe_dump(document, sort_keys=False))
+            admission_index = project / "src/security/_index.yaml"
+            admission = yaml.safe_load(admission_index.read_text())
+            next(e for e in admission["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "bee.attachment_probe:app", "policies": []})
+            admission_index.write_text(yaml.safe_dump(admission, sort_keys=False))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
             pack = folder / "detached.wapp"
             if packed:

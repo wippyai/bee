@@ -6935,3 +6935,27 @@ was terminal_selection counting two visible title bars despite intentional
 overlap. It now checks the two header tabs, and source/pack selection pass.
 The Luna continuation for lifecycle/client_desktop failed with provider demand
 before starting either test; neither has a new passing claim. Global unchanged.
+
+### September 15: bounded MCP authoring and research review
+
+Real managed Gemini requested the exact binding's gated MCP access, then wrote
+and froze a 23,049-byte research artifact through Governance. Evidence:
+`/tmp/bee-live-agy-mcp-4021945774/authored.json`. Review rejected activation:
+six app type errors, loss of acknowledged measurements after cold restart,
+permissive measurement decoding and unbounded delivery deduplication. A fresh
+Gemini repair uses the original artifact plus explicit review feedback; this
+is not conversation recovery. The proposal has not been applied or installed.
+
+The previous 8 KiB MCP text cap refused ordinary app source. The bounded fix
+admits 64 KiB decoded files and 512 KiB complete HTTP bodies, preserving owner
+validation. Real HTTP checks prove exact source bytes and refusal without
+workspace mutation; all 1,016 Lua tests, production lint, pack and 11 bundle
+checks pass. No runtime or migration changes. Lifecycle and client_desktop
+source/pack gates now pass after existing fixture admission paths followed
+security entry ownership. The broader release gate remains incomplete.
+
+The cumulative inbox requirement remains explicit in PERFORMANCE_RESEARCH_PLAN:
+all authorized Bees, independent of viewed workspace, origin-qualified agent
+requests and stale/unavailable sources. Automatic 100-node discovery/aggregation
+is not implemented by the current 16-source inbox. Global Bee is unchanged.
+Shared journal checkpoint 1780 records this boundary and evidence.

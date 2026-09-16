@@ -28,6 +28,54 @@ local function define_tests()
             test.eq(mcp.result(3, {a = 1}).result.a, 1)
             test.eq(mcp.initialize().protocolVersion, mcp.PROTOCOL)
         end)
+        test.it("admits bounded full workspace sources while retaining body and owner protocol limits", function()
+            test.eq(mcp.MAX_WORKSPACE_TEXT_BYTES, 65536)
+            test.eq(mcp.MAX_WORKSPACE_BASE64_BYTES, 87384)
+            -- The HTTP adapter applies this whole-request limit through http.request(max_body=...).
+            -- It leaves room for JSON escaping a full 64 KiB text value while bounding its envelope.
+
+            local workspace_tools = mcp.list({"workspace"}).tools :: {{[string]: unknown}}
+            local input_schema = workspace_tools[1].inputSchema :: {[string]: unknown}
+            local properties = input_schema.properties :: {[string]: unknown}
+            local text_property = properties.content :: {[string]: unknown}
+            local base64_property = properties.content_base64 :: {[string]: unknown}
+            test.eq(text_property.maxLength, mcp.MAX_WORKSPACE_TEXT_BYTES)
+            test.eq(base64_property.maxLength, mcp.MAX_WORKSPACE_BASE64_BYTES)
+
+            local source = string.rep("x", 20 * 1024)
+            test.is_true(#source > 8192)
+            local large = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 2, idempotency_key = "large-source", path = "entries.json", content = source}})
+            test.eq(large and large.content, source)
+            local at_text_limit = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 3, idempotency_key = "max-source", path = "entries.json",
+                content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES)}})
+            test.eq(at_text_limit and #(at_text_limit.content or ""), mcp.MAX_WORKSPACE_TEXT_BYTES)
+            local _, oversized_text = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 4, idempotency_key = "oversized-source", path = "entries.json",
+                content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
+            test.eq(oversized_text, "content exceeds the MCP text bound")
+
+            -- 65,536 zero bytes in canonical padded base64 exercise the existing
+            -- Governance decoder at the MCP allowance's exact decoded boundary.
+            local full_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES - 2) .. "=="
+            local binary = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 5, idempotency_key = "max-binary", path = "assets/full.bin", content_base64 = full_base64}})
+            test.eq(#(binary and binary.content or ""), 65536)
+            local _, invalid_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 6, idempotency_key = "invalid-binary", path = "assets/invalid.bin", content_base64 = "!!!!"}})
+            test.eq(invalid_base64, "invalid base64 content")
+            -- A valid unpadded value at the encoded-length cap can decode to
+            -- 65,538 bytes, so the MCP boundary checks decoded bytes as well.
+            local _, oversized_decoded = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 7, idempotency_key = "oversized-decoded", path = "assets/too-large.bin",
+                content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES)}})
+            test.eq(oversized_decoded, "decoded content exceeds the MCP file bound")
+            local _, oversized_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+                expected_revision = 8, idempotency_key = "oversized-binary", path = "assets/large.bin",
+                content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 1)}})
+            test.eq(oversized_base64, "content_base64 exceeds the MCP body bound")
+        end)
         test.it("accepts a readiness answer only under this generation with the proof over this nonce", function()
             local generation = {epoch = 3, restarts = 1}
             local proof = gateway.proof("listener-secret", generation, "nonce-1")

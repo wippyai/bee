@@ -34,6 +34,13 @@ does not clear ambient keys. Host endpoint composition therefore also controls
 what inherited context tools can see. Native Terminal retains OS-user authority;
 MCP scopes do not sandbox its filesystem.
 
+The built-in `workspace` tool accepts up to 65,536 bytes of inline text or
+87,384 bytes of canonical padded base64 (at most 65,536 decoded bytes) per
+file. The HTTP MCP endpoint caps each complete JSON request body at 524,288
+bytes, leaving room for JSON escaping and the bounded request envelope.
+Governance continues to enforce its own larger file limit and validates that
+base64 is canonical; the MCP limits are transport bounds for one tool call.
+
 Clients that cache MCP discovery can use the stable `call_tool` tool with
 `{name, arguments}` after selecting traits. It uses the same active-tool check
 and invocation path as a direct call. Selecting a trait does not grant a tool

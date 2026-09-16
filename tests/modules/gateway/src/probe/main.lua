@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local access_probe = require("access_probe")
 local http_client = require("http_client")
 local json = require("json")
+local base64 = require("base64")
 local time = require("time")
 local process = require("process")
 local registry = require("registry")
@@ -235,6 +236,25 @@ local function main()
     local frozen = tool("workspace-action", workspace_token, "workspace", {operation = "freeze", workspace_id = "gateway-research",
         expected_revision = 2, idempotency_key = "freeze"})
     assert(frozen.ok == true and type((frozen.value :: Object).digest) == "string", "MCP workspace freeze failed")
+    local source = string.rep("local measurement = 1\n", 1024)
+    local large_created = tool("workspace-action", workspace_token, "workspace", {operation = "create", workspace_id = "gateway-large-source",
+        expected_revision = 0, idempotency_key = "create-large"})
+    assert(large_created.ok == true, "large source workspace create failed")
+    local large_put = tool("workspace-action", workspace_token, "workspace", {operation = "put", workspace_id = "gateway-large-source",
+        expected_revision = 1, idempotency_key = "put-large", path = "app.lua", content = source})
+    assert(large_put.ok == true, "app-size source refused over HTTP")
+    local large_read = tool("workspace-action", workspace_token, "workspace", {operation = "read", workspace_id = "gateway-large-source", path = "app.lua"})
+    assert(large_read.ok == true and (large_read.value :: Object).bytes == #source, "app-size source was truncated")
+    local recovered = base64.decode(tostring((large_read.value :: Object).content_base64))
+    assert(recovered == source, "app-size source changed during HTTP authoring")
+    local _, oversized = rpc("workspace-action", workspace_token, "tools/call", {name = "workspace", arguments = {
+        operation = "put", workspace_id = "gateway-large-source", expected_revision = 2,
+        idempotency_key = "too-large", path = "app.lua", content = string.rep("x", 65537)}})
+    assert(oversized and oversized.error, "oversized workspace source was admitted")
+    local body_status = rpc("workspace-action", workspace_token, "ping", {padding = string.rep("x", 524288)})
+    assert(body_status == 400, "whole MCP body limit was not enforced")
+    local unchanged = tool("workspace-action", workspace_token, "workspace", {operation = "list", workspace_id = "gateway-large-source"})
+    assert(unchanged.ok == true and (unchanged.value :: Object).revision == 2, "refused oversized request changed the workspace")
     local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
         attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
         tools = {"workspace"}, ttl_ms = 60000}), "admit foreign workspace actor")

@@ -30,7 +30,7 @@ entries:
   source: file://main.lua
   imports: {access_probe: bee.gateway_probe:access_probe}
   method: main
-  modules: [funcs, http_client, json, time, process, registry, security]
+  modules: [funcs, http_client, json, time, process, registry, security, base64]
   meta:
     command:
       name: gateway-probe

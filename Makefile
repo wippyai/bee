@@ -408,12 +408,18 @@ research-author-lint:
 .PHONY: research-delivery-check research-delivery-lint research-measurement-check
 research-measurement-check:
 	@test -n "$(ARTIFACT)" || { echo 'Set ARTIFACT to the reviewed measurable artifact JSON'; exit 1; }
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -measurement
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go ../tests/research_desktop.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go ../tests/research_desktop.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -measurement
 research-delivery-lint:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -lint-only
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go ../tests/research_desktop.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go ../tests/research_desktop.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -lint-only
 research-delivery-check:
 	@test -n "$(ARTIFACT)" || { echo 'Set ARTIFACT to the reviewed artifact JSON'; exit 1; }
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go ../tests/research_desktop.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go ../tests/research_desktop.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))"
+
+.PHONY: research-live-measurement-check
+research-live-measurement-check:
+	@test -n "$(ARTIFACT)" || (echo "ARTIFACT is required"; exit 1)
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go ../tests/research_desktop.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go ../tests/research_desktop.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -measurement -live

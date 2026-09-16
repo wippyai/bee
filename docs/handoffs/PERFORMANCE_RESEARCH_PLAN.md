@@ -197,3 +197,33 @@ is still invalid and the candidate is correct; no qualified speedup is claimed.
 Normal desktop launch has not yet displayed the recovered app, so UI rendering,
 real Gemini invocation of the measurement tool, UI recovery and independent
 consumer acceptance remain next. Global Bee is unchanged.
+
+### Governed dashboard acceptance — September 15
+
+The measured artifact `dde4264479b2cd3d01472690d7f550183228f38c487d60f28e7611e0ec36e818`
+passes native HTTP measurement, automatic approved-overlay recovery and physical
+desktop acceptance. The ordinary menu discovers the recovered application; both
+median values match its producer-authenticated observations, remain visible at
+70×24, and return automatically after clean exit and restart. The baseline is
+incorrect, so its timings do not establish a valid speedup. Core fixes compare
+the effective catalog independently of history and keep saved automatic apps
+pending until their admitted definitions become available. No runtime patch.
+Evidence: `/tmp/bee-research-delivery-2296074133`,
+`/tmp/bee-late-app-restore-check.log`. Real Gemini invocation of these measurement
+tools, cancellation, the independent consumer and global installation remain.
+
+### Managed Gemini measurement milestone — September 15
+
+`make research-live-measurement-check` now passes in
+`/tmp/bee-research-delivery-408383754`, log
+`/tmp/bee-gemini-measurement-setup-fix.log`. Gemini Flash through the managed Agy
+batch requested the measurement trait via MCP. The separate fixture operator
+approved the exact requesting action/attempt through the durable approval inbox;
+Gemini selected the trait and ran baseline and candidate. The fixture verified
+both new fixed-producer MCP observations under that action and attempt. The
+physical dashboard then displayed those newest measured medians and automatically
+restored them after restart. The earlier Gemini authorship provenance remains in
+the reviewed artifact. This completes the first live experiment milestone;
+measurement cancellation, an independent consumer, the full release gates and
+global installation remain. The baseline correctness failure still precludes a
+qualified performance win.

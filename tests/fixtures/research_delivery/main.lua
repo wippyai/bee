@@ -9,8 +9,6 @@ local uuid = require("uuid")
 local bounds = require("bounds")
 local artifact = require("artifact")
 local materializer = require("materializer")
-local canonical = require("canonical")
-local hash = require("hash")
 local recovery = require("recovery")
 local time = require("time")
 
@@ -34,25 +32,8 @@ local function call_api(target: string, request: unknown): Object
     return val
 end
 
-local function base_measurements()
-    local snapshot = assert(registry.snapshot())
-    local state = assert(snapshot:state())
-    local measured: Object = {}
-    for _, raw in ipairs(state.entries) do
-        local entry = object(raw)
-        if not tostring(entry.id):match("^bee%.research%.demo:") then
-            local clean: Object = {}
-            for key, value in pairs(entry) do if key ~= "registry" then clean[key] = value end end
-            measured[tostring(entry.id)] = {digest = hash.sha256(assert(canonical.encode(clean, 262144))),
-                owner = object(entry.registry).owner}
-        end
-    end
-    io.print("RESEARCH_BASE " .. tostring(json.encode(measured)))
-end
-
 local function recover()
     time.sleep("3s")
-    base_measurements()
     local input = assert(registry.get("bee.research_delivery:artifact_input"))
     local parsed = object(json.decode(tostring(object(input.data).raw_json)))
     local measured = assert(artifact.create(parsed.entries))
@@ -208,13 +189,14 @@ local function main()
 
     local app_entry = assert(registry.get("bee.approvals:approver_policies"))
     local app_data = object(app_entry.data) or {}
-    app_data.policies = {
-        {
-            name = APPROVAL_POLICY,
-            approvers = {"bee.research_delivery.operator"},
-            max_ttl_ms = 60000,
-        },
+    local app_policies = app_data.policies
+    if type(app_policies) ~= "table" then error("host approval policies missing") end
+    app_policies[#app_policies + 1] = {
+        name = APPROVAL_POLICY,
+        approvers = {"bee.research_delivery.operator"},
+        max_ttl_ms = 60000,
     }
+    app_data.policies = app_policies
     app_entry.data = app_data
 
     local changes = registry.snapshot():changes()
@@ -223,7 +205,6 @@ local function main()
     assert(changes:update(app_entry))
     local applied, apply_err = changes:apply()
     if not applied then error("failed to apply host profiles: " .. tostring(apply_err)) end
-    base_measurements()
 
     -- publication_call prepare {operation,workspace_id,component,version,snapshot_digest}.
     -- Verify descriptor manifest artifact_digest matches supplied artifact.
@@ -348,6 +329,10 @@ local function main()
     assert(app_entry, "resulting registry entry bee.research.demo:app missing")
     assert(app_entry.kind == "process.lua", "bee.research.demo:app kind mismatch")
     assert(object(app_entry.data).source == expected_app_source, "bee.research.demo:app source bytes mismatch")
+    local effective = assert(registry.snapshot())
+    local snap_app, snap_error = effective:get("bee.research.demo:app")
+    if not snap_app then error("installed app absent from native registry snapshot: " .. tostring(snap_error)) end
+    assert(object(snap_app.data).source == expected_app_source, "snapshot app source differs from direct registry read")
 
     local canonical_entry = registry.get("bee.research.demo:canonical")
     assert(canonical_entry, "resulting registry entry bee.research.demo:canonical missing")

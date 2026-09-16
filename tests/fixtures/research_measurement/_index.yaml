@@ -61,3 +61,57 @@ entries:
     actions: [funcs.security]
     resources: [security]
     effect: allow
+- name: surface
+  kind: registry.entry
+  data:
+    tools:
+    - name: research_measure
+      operation: bee.research_measurement:run
+      description: Measure reviewed canonical encoder
+      annotations:
+        readOnlyHint: false
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: false
+      policies:
+      - bee.research_measurement:tool_policy
+      - bee.research_measurement:attribution_policy
+      - bee.research_measurement:delegation_policy
+      - bee.research_measurement:observation_policy
+      schema:
+        type: object
+        additionalProperties: false
+        required:
+        - label
+        properties:
+          label:
+            type: string
+            enum:
+            - baseline
+            - candidate
+    traits:
+    - id: research:measure
+      title: Measure
+      prompt: Run bounded measurements of the host-reviewed baseline and candidate. Report correctness before comparing
+        timings.
+      tools:
+      - research_measure
+    base_tools:
+    - thread_read
+    - thread_message
+    active_traits: []
+    fixed_context: {}
+    dynamic_keys: []
+- name: live
+  kind: process.lua
+  method: run
+  source: file://live.lua
+  modules: [funcs, registry, security, process, channel, time, json, io]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.research_measurement:probe_policy]}
+  meta:
+    command:
+      name: research-live-measurement
+      security:
+        actor: {id: bee.research_delivery.operator}
+        policies: [bee.research_measurement:probe_policy]

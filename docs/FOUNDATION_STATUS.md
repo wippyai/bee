@@ -16,6 +16,17 @@ does not prove the performance dashboard. That remains the next experiment unit;
 
 # Foundation status
 
+The research dashboard now passes governed installation, managed Gemini
+requesting and receiving per-attempt MCP access, real measurements, automatic
+overlay recovery, ordinary-menu launch and a second physical desktop boot that
+restores its measured state. Both plotted medians match the native observations
+at normal and 70×24 sizes. The broker notices effective overlay catalog changes
+independently of registry history; the host keeps saved automatic apps pending
+until admitted definitions become available. The baseline fails correctness, so
+no valid speedup is claimed. Cancellation/independent-consumer acceptance and
+global installation remain unfinished. See the
+[research milestone plan](handoffs/PERFORMANCE_RESEARCH_PLAN.md).
+
 The configurable MCP checkpoint adds protected launch-policy tool/trait
 configuration, binding-owned selection with revision CAS, and bounded fixed and
 dynamic native context. Real HTTP checks prove multiple traits, stable dispatch,

@@ -99,7 +99,11 @@ func check() error {
 	artifactPath := flag.String("artifact", "", "path to authored artifact json")
 	lintOnly := flag.Bool("lint-only", false, "stage and lint without applying artifact")
 	measurement := flag.Bool("measurement", false, "prove HTTP measurements after governed activation")
+	live := flag.Bool("live", false, "also require managed Gemini to request access and measure through MCP")
 	flag.Parse()
+	if *live && !*measurement {
+		return fmt.Errorf("live requires measurement")
+	}
 
 	repo, err := filepath.Abs(*source)
 	if err != nil {
@@ -226,6 +230,20 @@ func check() error {
 	}
 	overrides["home"] = root
 	overrides["ANTHROPIC_API_KEY"] = "fixture-only"
+	if *live {
+		agy, locateErr := exec.LookPath("agy")
+		if locateErr != nil {
+			return locateErr
+		}
+		overrides["agy"], err = filepath.Abs(agy)
+		if err != nil {
+			return err
+		}
+		overrides["home"], err = os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+	}
 	for _, name := range []string{"workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "sync"} {
 		overrides["BEE_"+strings.ToUpper(name)+"_DB"] = filepath.Join(root, name+".db")
 	}
@@ -250,6 +268,11 @@ func check() error {
 		if err = stageMeasurement(repo, root, entries); err != nil {
 			return err
 		}
+		if *live {
+			if err = stageLiveMeasurement(root); err != nil {
+				return err
+			}
+		}
 	}
 
 	if len(entries) > 0 {
@@ -267,7 +290,11 @@ func check() error {
 		return fmt.Errorf("artifact path required for execution")
 	}
 
-	runErr := run(root, runtime, environment, "run", 4*time.Minute, "run", "research-delivery-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db"))
+	runDeadline := 4 * time.Minute
+	if *live {
+		runDeadline = 6 * time.Minute
+	}
+	runErr := run(root, runtime, environment, "run", runDeadline, "run", "research-delivery-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db"))
 	if runErr != nil {
 		return runErr
 	}
@@ -311,6 +338,42 @@ func check() error {
 			return fmt.Errorf("missing exact recovery proof in %s", root)
 		}
 		fmt.Println("RESEARCH_RECOVERY_PASS", artifactDigest)
+		if *live {
+			if err = run(root, runtime, environment, "live", 4*time.Minute, "run", "research-live-measurement", "--set", "registry.history_path="+filepath.Join(root, "registry.db")); err != nil {
+				return err
+			}
+			liveBytes, readErr := os.ReadFile(filepath.Join(root, "live.log"))
+			if readErr != nil {
+				return readErr
+			}
+			report := ""
+			for _, line := range strings.Split(string(liveBytes), "\n") {
+				if strings.HasPrefix(line, "RESEARCH_LIVE_MEASUREMENT_PASS ") {
+					report = line
+				}
+			}
+			if report == "" {
+				return fmt.Errorf("live Gemini did not report verified measurements in %s", root)
+			}
+			fmt.Println(report)
+			// The UI must show the newest real provider-driven observations.
+			file, openErr := os.OpenFile(filepath.Join(root, "run.log"), os.O_APPEND|os.O_WRONLY, 0600)
+			if openErr != nil {
+				return openErr
+			}
+			_, writeErr := fmt.Fprintln(file, "RESEARCH_MEASUREMENT_PASS "+strings.TrimPrefix(report, "RESEARCH_LIVE_MEASUREMENT_PASS "))
+			closeErr := file.Close()
+			if writeErr != nil {
+				return writeErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		}
+		if err = checkResearchDesktop(root, runtime, environment); err != nil {
+			return err
+		}
+		fmt.Println("RESEARCH_DESKTOP_PASS", artifactDigest)
 	}
 	return nil
 }
@@ -429,6 +492,69 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(benchmarkDir, "_index.yaml"), encoded, 0600)
+}
+
+// Configure the fixture host before Governance measures its activation base.
+// The managed Agent receives the same measurement surface as the HTTP probe.
+func stageLiveMeasurement(root string) error {
+	measurementPath := filepath.Join(root, "src/research_measurement/_index.yaml")
+	data, err := os.ReadFile(measurementPath)
+	if err != nil {
+		return err
+	}
+	var measurement map[string]interface{}
+	if err = yaml.Unmarshal(data, &measurement); err != nil {
+		return err
+	}
+	var surface map[string]interface{}
+	for _, raw := range measurement["entries"].([]interface{}) {
+		entry := raw.(map[string]interface{})
+		if entry["name"] == "surface" {
+			surface = entry["data"].(map[string]interface{})
+		}
+	}
+	if surface == nil {
+		return fmt.Errorf("measurement surface missing")
+	}
+	surface["access"] = map[string]interface{}{"workspace_id": "research-workspace", "policy": "research-live-measurement", "traits": []string{"research:measure"}}
+	for _, relative := range []string{"src/harness/host/_index.yaml", "src/approvals/_index.yaml"} {
+		path := filepath.Join(root, relative)
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var document map[string]interface{}
+		if err = yaml.Unmarshal(data, &document); err != nil {
+			return err
+		}
+		changed := false
+		for _, raw := range document["entries"].([]interface{}) {
+			entry := raw.(map[string]interface{})
+			if entry["name"] == "launch_policy_agy_batch" {
+				policy := entry["data"].(map[string]interface{})
+				policy["gateway_tools"] = []string{"thread_read", "thread_message", "research_measure"}
+				policy["gateway_surface"] = surface
+				changed = true
+			}
+			if entry["name"] == "approver_policies" {
+				policy := entry
+				policy["policies"] = append(policy["policies"].([]interface{}), map[string]interface{}{
+					"name": "research-live-measurement", "approvers": []string{"bee.research_delivery.operator"}, "max_ttl_ms": 180000})
+				changed = true
+			}
+		}
+		if !changed {
+			return fmt.Errorf("live fixture host configuration missing in %s", relative)
+		}
+		data, err = yaml.Marshal(document)
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(path, data, 0600); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func main() {

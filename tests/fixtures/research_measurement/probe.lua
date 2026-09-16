@@ -49,13 +49,7 @@ local function run(): Object
     if not address or not address:match("^127%.0%.0%.1:%d+$") then error("automatic loopback endpoint unavailable") end
     local admitted = call("bee.gateway:admit", {subject = subject, action_id = ACTION, attempt_id = ATTEMPT,
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_message", "research_measure"}, ttl_ms = 60000,
-        surface = {tools = {{name = "research_measure", operation = "bee.research_measurement:run", description = "Measure reviewed canonical encoder",
-            annotations = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false},
-            policies = {"bee.research_measurement:tool_policy", "bee.research_measurement:attribution_policy",
-                "bee.research_measurement:delegation_policy", "bee.research_measurement:observation_policy"},
-            schema = {type = "object", additionalProperties = false, required = {"label"}, properties = {label = {type = "string", enum = {"baseline", "candidate"}}}}}},
-            traits = {{id = "research:measure", title = "Measure", prompt = "Run bounded measurements", tools = {"research_measure"}}},
-            base_tools = {"thread_read", "thread_message"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}})
+        surface = object(assert(registry.get("bee.research_measurement:surface")).data)})
     local binding_id = object(admitted.binding).binding_id
     local authorized = call("bee.gateway:authorize_materialization", {attempt_id = ATTEMPT, carrier_epoch = 1, binding_id = binding_id})
     local materialized = call("bee.gateway:materialize", {attempt_id = ATTEMPT, carrier_epoch = 1, materialization_key = authorized.materialization_key})

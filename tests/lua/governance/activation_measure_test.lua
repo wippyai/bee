@@ -8,7 +8,7 @@ local hash = require("hash")
 
 local SHA = string.rep("a", 64)
 local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Context)
-    local exact = assert(artifact.create({{id = "demo:run", kind = "function.lua", source = "return true"}}))
+    local exact = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return true"}}}))
     local entry_bytes, entry_encode_error = canonical.encode(exact.entries[1])
     if not entry_bytes then error(tostring(entry_encode_error)) end
     local entry_digest, entry_digest_error = hash.sha256(entry_bytes)

@@ -257,3 +257,4 @@ entries:
     test: wippy.test:test
     artifact: bee.governance:artifact
     overlay_resolver: bee.governance:overlay_resolver
+    preflight: bee.governance:preflight

@@ -94,7 +94,7 @@ local function define_tests()
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local desired = {{id = "app:large", kind = "function.lua",
-                source = string.rep("x", artifact.MAX_BYTES - 2048)}}
+                data = {source = string.rep("x", artifact.MAX_BYTES - 2048)}}}
             local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.governance:overlay", desired)
             if not result then error(tostring(err)) end
             test.is_true(result.changed == true)

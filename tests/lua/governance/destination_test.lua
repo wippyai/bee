@@ -37,7 +37,7 @@ end
 
 local function application(source_node: string, source_workspace: string, component: string): delivery.Delivery
     local exact = assert(artifact.create({{id = "replicated.app:main", kind = "function.lua",
-        source = "--" .. string.rep("x", 40000) .. "\nreturn true"}}))
+        data = {source = "--" .. string.rep("x", 40000) .. "\nreturn true"}}}))
     local result, result_error = delivery.create({schema_revision = delivery.SCHEMA,
         source_node = source_node, source_workspace = source_workspace,
         component = component, version = "v1", artifact = {bytes = exact.bytes, digest = exact.digest}})

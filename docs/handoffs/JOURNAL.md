@@ -7026,3 +7026,28 @@ is now running with that form (exec session20352,
 implementation progress. Parent is testing the reviewed app's actual terminal
 empty-state/resize/close in isolated stores; no global installation or governed
 activation is claimed yet.
+
+### Research governed installation and native entry correction — September 15
+
+The reviewed app initially failed actual apply because the authoring instructions
+used flat YAML shorthand instead of native registry entries. Artifacts now require
+`id`, `kind`, optional `meta`, and object `data`; configuration capabilities are
+measured from `data` before applying host ceilings. Unit fixtures now use that
+same envelope. Native nested module/grant denial and the full 1019-test suite pass
+(`/tmp/bee-native-artifact-unit.log`). No runtime change or migration was needed.
+
+The reviewed native artifact at
+`/tmp/bee-research-reviewed-49s63nym/reviewed-native.json`, digest
+`bb5a50fadee12e4c83dfd15dbf51f35eb2b431f4a19480a444e43b4eada7bcdf`,
+passes `make research-delivery-check`: actual workspace freeze, publication,
+destination staging/review/selection, refusal to apply before approval, exact
+fixture-operator approval, settled apply and effective source-byte verification.
+Evidence: `/tmp/bee-research-delivery-3671345478` and
+`/tmp/bee-research-delivery-check.log`. Source-envelope correction and previous
+retry/checkpoint repairs are explicit reviewed changes; original Gemini artifacts
+remain intact. This proves governed installation, not live chart measurements.
+
+The measurement tool remains an unverified fixture draft. Its next gate must
+attribute results to a host-selected thread member, so agent-authored messages
+cannot masquerade as measured results. Global Bee is unchanged; the full goal
+and automatic cumulative inbox requirement remain incomplete.

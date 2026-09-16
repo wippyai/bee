@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+version: '1.0'
+namespace: bee.research_delivery
+entries:
+- name: artifact_input
+  kind: registry.entry
+  meta:
+    type: bee.research_delivery.artifact_input
+  data:
+    artifact_digest: ''
+    raw_json: ''
+- name: operator_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - registry.get
+    - registry.apply
+    - registry.update.registry.entry
+    - registry.preview
+    - registry.overlay.get
+    - registry.overlay.apply
+    - registry.overlay.create.*
+    - registry.overlay.update.*
+    - registry.overlay.delete.*
+    - db.get
+    - system.read
+    - bee.governance.workspace.read
+    - bee.governance.workspace.write
+    - bee.governance.delivery.read
+    - bee.governance.delivery.manage
+    - bee.governance.delivery.activate
+    - bee.governance.delivery.publish
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, registry, system, json, io, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    materializer: bee.governance:materializer
+  security:
+    policies: [bee.research_delivery:operator_policy]
+  meta:
+    command:
+      name: research-delivery-probe
+      security:
+        actor: {id: bee.research_delivery.operator}
+        policies: [bee.research_delivery:operator_policy]

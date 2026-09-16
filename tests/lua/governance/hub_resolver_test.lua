@@ -30,16 +30,16 @@ local SHA = string.rep("a", 64)
 
 local function entry(id: string, package_name: string, value: string): Object
     return {id = id, kind = "function.lua", registry = {owner = package_name},
-        source = "return '" .. value .. "'", data = {value = value}}
+        data = {source = "return '" .. value .. "'", value = value}}
 end
 
 local function source_artifact(): Artifact
     -- Ownership is deliberately absent from transferred artifact entries.
     -- The destination must obtain it from the registry preview.
     local made = artifact.create({
-        {id = "app:claimed", kind = "function.lua", source = "return 'registry-owner'", data = {value = "registry-owner"}},
-        {id = "app:kept", kind = "function.lua", source = "return 'unchanged'", data = {value = "unchanged"}},
-        {id = "app:new", kind = "function.lua", source = "return 'preview-created'", data = {value = "preview-created"}},
+        {id = "app:claimed", kind = "function.lua", data = {source = "return 'registry-owner'", value = "registry-owner"}},
+        {id = "app:kept", kind = "function.lua", data = {source = "return 'unchanged'", value = "unchanged"}},
+        {id = "app:new", kind = "function.lua", data = {source = "return 'preview-created'", value = "preview-created"}},
     })
     if not made then error("cannot create resolver artifact") end
     return made
@@ -177,7 +177,7 @@ local function define_tests()
         test.it("requires the reviewed artifact bytes and digest to match exactly", function()
             local deps, spec = deps_fixture(nil)
             local altered = source_artifact()
-            altered.entries[2].source = "return 'altered'"
+            altered.entries[2].data.source = "return 'altered'"
             local rebuilt = assert(artifact.create(altered.entries))
             spec.artifact_bytes, spec.artifact_digest = rebuilt.bytes, rebuilt.digest
             local candidate, context, err = resolver.resolve_with(deps, spec)

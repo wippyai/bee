@@ -115,7 +115,7 @@ local function define_tests()
             if not plans then error(tostring(plan_error)) end
             local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-owner")
             if not activations then error(tostring(activation_error)) end
-            local entry = {id = "demo:run", kind = "function.lua", source = "return 'v1'"}
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local applied = false
@@ -133,7 +133,7 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-v1", "activation-v1")).phase, "consuming")
             test.eq(ok(owner.step(config, "intent-v1", "activation-v1")).phase, "authorized")
             test.eq(ok(owner.desired(config)).intent_id, "intent-v1")
-            local v2 = assert(artifact.create({{id = "demo:run", kind = "function.lua", source = "return 'v2'"}}))
+            local v2 = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return 'v2'"}}}))
             selected_plan(plans, "v2", {bytes = v2.bytes, digest = v2.digest})
             local desired = ok(owner.desired(config))
             test.eq(desired.intent_id, "intent-v1")
@@ -151,7 +151,7 @@ local function define_tests()
             if not plans then error(tostring(plan_error)) end
             local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-crash")
             if not activations then error(tostring(activation_error)) end
-            local entry = {id = "demo:run", kind = "function.lua", source = "return 'v1'"}
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
             local exact = assert(artifact.create({entry}))
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local applied = false
@@ -171,7 +171,7 @@ local function define_tests()
                 version = "v1", intent_id = "intent-crash", receipt_key = "activation-crash"}))
             test.eq(ok(owner.step(config, "intent-crash", "activation-crash")).phase, "consuming")
             test.eq(owner.step(config, "intent-crash", "activation-crash").code, "UNAVAILABLE")
-            local v2 = assert(artifact.create({{id = "demo:run", kind = "function.lua", source = "return 'v2'"}}))
+            local v2 = assert(artifact.create({{id = "demo:run", kind = "function.lua", data = {source = "return 'v2'"}}}))
             selected_plan(plans, "v2", {bytes = v2.bytes, digest = v2.digest})
             test.eq(ok(owner.step(config, "intent-crash", "activation-crash")).phase, "authorized")
             test.eq(ok(owner.recover(config, "activation-crash")).phase, "applying")
@@ -199,7 +199,7 @@ local function define_tests()
             if not plans then error(tostring(plan_error)) end
             local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-version-fence")
             if not activations then error(tostring(activation_error)) end
-            local entry = {id = "demo:run", kind = "function.lua", source = "return 'stable'"}
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'stable'"}}
             local exact = assert(artifact.create({entry}))
             local applied = false
             local apply_count = 0

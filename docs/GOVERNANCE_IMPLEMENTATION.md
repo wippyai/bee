@@ -72,6 +72,12 @@ private MCP gateway. Storage still enforces actor ownership, and the scope has
 no host filesystem mounts, registry writer, publication, approval or activation
 rights.
 
+Authored entries use the native registry envelope: `id`, `kind`, optional `meta`,
+and required object `data`. Source, modules, security and lifecycle configuration
+belong inside `data`. Flat YAML shorthand and registry ownership provenance are
+rejected before staging. Preflight reads capabilities from that same native
+configuration, preserving the destination's host-selected ceilings.
+
 An authored application snapshot contains `entries.json`, a plain JSON list of
 complete registry entries. Preparation parses that frozen file and creates the
 canonical measured artifact with `bee.governance:artifact`; it executes no code

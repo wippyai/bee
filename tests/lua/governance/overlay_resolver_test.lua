@@ -3,6 +3,7 @@
 local test = require("test")
 local artifact = require("artifact")
 local resolver = require("overlay_resolver")
+local preflight = require("preflight")
 
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
@@ -17,7 +18,7 @@ type Facts = {candidate: Object, context: Object}
 local SHA = string.rep("a", 64)
 
 local function entry(id: string, kind: string, value: string): Entry
-    return {id = id, kind = kind, source = "return '" .. value .. "'", data = {value = value}}
+    return {id = id, kind = kind, data = {source = "return '" .. value .. "'", value = value}}
 end
 
 local function fixture(policy_raw: Policy?): (Object, Object, {captured: Captured, artifact: Object})
@@ -25,8 +26,8 @@ local function fixture(policy_raw: Policy?): (Object, Object, {captured: Capture
     local captured: Captured = {
         revision = 19,
         entries = {
-            {id = "bee.host:db", kind = "db.sql.sqlite", registry = {owner = "bee/host"}},
-            {id = "private.app:old-overlay", kind = "function.lua", source = "return 'old-overlay'",
+            {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
+            {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"},
                 registry = {owner = "host/overlay"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
@@ -71,6 +72,27 @@ end
 
 local function define_tests()
     test.describe("private overlay artifact resolver", function()
+        test.it("extracts native configuration capabilities without dropping their ceilings", function()
+            local deps, spec = fixture(nil)
+            changes(spec, {{id = "private.app:main", kind = "function.lua", data = {
+                source = "return true", modules = {"os"}, security = {policies = {"bee.host:db"}},
+                lifecycle = {auto_start = true}}}})
+            local facts = resolve(deps, spec)
+            local native = (facts.candidate.entries :: {Object})[1]
+            test.eq((native.modules :: {string})[1], "os")
+            test.eq((native.grants :: {string})[1], "bee.host:db")
+            test.eq(native.auto_start, true)
+            test.is_nil((facts.context.modules :: Object).os)
+            test.is_nil((facts.context.grants :: Object)["bee.host:db"])
+            local report, problem = preflight.check(facts.candidate :: preflight.Candidate,
+                facts.context :: preflight.Context)
+            if not report then error(tostring(problem)) end
+            test.is_false(report.ready)
+            local denied: {[string]: boolean} = {}
+            for _, diagnostic in ipairs(report.diagnostics) do denied[diagnostic.code] = true end
+            test.is_true(denied.MODULE_DENIED)
+            test.is_true(denied.GRANT_DENIED)
+        end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()
@@ -106,7 +128,7 @@ local function define_tests()
         test.it("rejects an entry collision with the composed destination registry", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()
-            captured.entries[2] = {id = "private.app:old", kind = "function.lua",
+            captured.entries[2] = {id = "private.app:old", kind = "function.lua", data = {},
                 registry = {owner = "some/other-package"}}
             changes(spec, {entry("private.app:old", "function.lua", "new")})
             local candidate, context, err = resolver.resolve_with(deps, spec)
@@ -118,7 +140,7 @@ local function define_tests()
         test.it("rejects namespace collision with a definition outside the selected overlay", function()
             local deps, spec = fixture(nil)
             local captured = (deps.capture :: () -> (Captured?, string?))()
-            captured.entries[2] = {id = "private.app:foreign", kind = "function.lua",
+            captured.entries[2] = {id = "private.app:foreign", kind = "function.lua", data = {},
                 registry = {owner = "some/other-package"}}
             changes(spec, {entry("private.app:new", "function.lua", "new")})
             local candidate, context, err = resolver.resolve_with(deps, spec)
@@ -129,12 +151,10 @@ local function define_tests()
 
         test.it("rejects remote registry ownership metadata instead of trusting it", function()
             local deps, spec = fixture(nil)
-            changes(spec, {{id = "private.app:main", kind = "function.lua",
-                registry = {owner = "attacker/authorized-package"}, source = "return true"}})
-            local candidate, context, err = resolver.resolve_with(deps, spec)
-            test.is_nil(candidate)
-            test.is_nil(context)
-            test.is_true(tostring(err):find("registry metadata", 1, true) ~= nil)
+            local invalid, invalid_error = artifact.create({{id = "private.app:main", kind = "function.lua",
+                registry = {owner = "attacker/authorized-package"}, data = {source = "return true"}}})
+            test.is_nil(invalid)
+            test.is_true(tostring(invalid_error):find("unknown field registry", 1, true) ~= nil)
         end)
 
         test.it("rejects Hub dependency directives and migration-bearing artifacts", function()

@@ -15,7 +15,7 @@ local function define_tests()
             local suffix = assert(uuid.v7())
             local source = "publisher-" .. suffix
             local exact = assert(artifact.create({{id = "published.app:main", kind = "function.lua",
-                source = "return 'published'"}}))
+                data = {source = "return 'published'"}}}))
             local request = {source_workspace = "workspace/application", component = "published/app",
                 version = "1.0.0", artifact = {bytes = exact.bytes, digest = exact.digest}}
             local expected = assert(delivery.create({schema_revision = delivery.SCHEMA, source_node = source,
@@ -54,7 +54,7 @@ local function define_tests()
             assert(sync.close(feed_store))
 
             local changed = assert(artifact.create({{id = "published.app:main", kind = "function.lua",
-                source = "return 'changed'"}}))
+                data = {source = "return 'changed'"}}}))
             local conflict = publisher.publish("bee.sync:sync_test_db", source, {
                 source_workspace = request.source_workspace, component = request.component,
                 version = request.version, artifact = {bytes = changed.bytes, digest = changed.digest}})

@@ -142,6 +142,10 @@ local function entries(value: unknown): ({Entry}?, string?)
         if copy_error then return nil, "entries[" .. tostring(index) .. "]: " .. copy_error end
         local item = object(raw)
         if not item then return nil, "entries[" .. tostring(index) .. "] must be an object" end
+        local extra = fields(item, {"id", "kind", "meta", "data"})
+        if extra then return nil, "entries[" .. tostring(index) .. "]: " .. extra .. "; registry configuration belongs in data" end
+        if not object(item.data) then return nil, "entries[" .. tostring(index) .. "] requires a registry data object" end
+        if item.meta ~= nil and not object(item.meta) then return nil, "entries[" .. tostring(index) .. "] metadata must be an object" end
         local id = identifier(item.id)
         local entry_kind = kind(item.kind)
         if not id or not entry_kind then return nil, "entries[" .. tostring(index) .. "] has an invalid id or kind" end

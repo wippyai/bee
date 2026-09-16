@@ -27,8 +27,8 @@ local function define_tests()
             test.not_nil(malformed_error)
         end)
         test.it("builds an exact artifact from declarative frozen entries", function()
-            local entries = "[{\"source\":\"return 'private'\",\"kind\":\"function.lua\",\"id\":\"demo:main\"}]"
-            local exact = assert(artifact.create({{id = "demo:main", kind = "function.lua", source = "return 'private'"}}))
+            local entries = "[{\"data\":{\"source\":\"return 'private'\"},\"kind\":\"function.lua\",\"id\":\"demo:main\"}]"
+            local exact = assert(artifact.create({{id = "demo:main", kind = "function.lua", data = {source = "return 'private'"}}}))
             local encoded = assert(base64.encode(entries))
             local prepared, err = service.snapshot_artifact({ok = true, value = {
                 path = "entries.json", content_base64 = encoded}})

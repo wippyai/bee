@@ -18,7 +18,7 @@ end
 
 local function fixture(existing_database: boolean?): (artifact.Artifact, preflight.Candidate, preflight.Context)
     local target_db = existing_database and "host:db" or "demo:db"
-    local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", file = ".wippy/demo.db"}
+    local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}
     local migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
         meta = {type = "migration", target_db = target_db, ordinal = 1}, data = {up = "create table users"}}
     local definitions: {{[string]: unknown}} = {migration}
@@ -59,7 +59,7 @@ local function define_tests()
             test.eq(#work.databases, 1)
             test.eq(work.databases[1].id, "demo:db")
             test.is_true(work.databases[1].planned)
-            test.eq(work.databases[1].definition.file, ".wippy/demo.db")
+            test.eq(work.databases[1].definition.data.file, ".wippy/demo.db")
             local decoded, decode_error = migration_work.decode(work.bytes, work.digest)
             if not decoded then error(tostring(decode_error)) end
             test.eq(decoded.bytes, work.bytes)
@@ -69,7 +69,7 @@ local function define_tests()
 
         test.it("preserves numeric order across multi-digit migration ordinals", function()
             local _, candidate, context = fixture()
-            local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", file = ".wippy/demo.db"}
+            local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}
             local first: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
                 meta = {type = "migration", target_db = "demo:db", ordinal = 2}, data = {up = "second"}}
             local later: {[string]: unknown} = {id = "demo:010", kind = "function.lua",
@@ -107,7 +107,7 @@ local function define_tests()
             local changed_migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
                 meta = {type = "migration", target_db = "demo:db", ordinal = 1}, data = {up = "create table accounts"}}
             local changed_artifact = assert(artifact.create({
-                {id = "demo:db", kind = "db.sql.sqlite", file = ".wippy/demo.db"}, changed_migration,
+                {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}, changed_migration,
             }))
             candidate.migrations[1].checksum = measured(changed_migration)
             candidate.entries[1].digest = measured(changed_migration)

@@ -125,12 +125,14 @@ local function measured_entry(entry: Entry, package: string): (Object?, string?)
     if not digest then return nil, tostring(digest_error or "measure private overlay entry") end
     local refs, refs_error = references(clean)
     if not refs then return nil, refs_error end
-    local modules, modules_error = list_strings(clean.modules, "entry modules", 32)
+    local data = object(clean.data)
+    if not data then return nil, "registry entry configuration data is missing" end
+    local modules, modules_error = list_strings(data.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
-    local security = object(clean.security)
+    local security = object(data.security)
     local grants, grants_error = list_strings(security and security.policies or nil, "entry policies", 32)
     if not grants then return nil, grants_error end
-    local lifecycle = object(clean.lifecycle)
+    local lifecycle = object(data.lifecycle)
     return {id = clean.id, kind = clean.kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         grants = grants, modules = modules}, nil

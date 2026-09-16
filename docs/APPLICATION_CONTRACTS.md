@@ -23,11 +23,12 @@ contextual discoverability, never authority. Only protected
 `bee:application_admission.bindings` selects allowed definitions, policy IDs and
 operation grants (`appearance_write`, `application_stop`, `catalog_read`).
 
-The broker reconciles the protected declaration against the current registry
-revision on its existing lifecycle tick and before each new open. It reads
-bindings and descriptors from one immutable snapshot, rebuilds the host-selected
-scopes, and checks that policy lookup finished at the same revision before
-publishing a complete catalog. A replacement affects subsequent launches;
+The broker reconciles the effective protected declaration on its existing
+lifecycle tick and before each new open. It compares decoded bindings and
+descriptors from one immutable snapshot as well as the history revision:
+registry overlays can change these values without advancing history. Unchanged
+values reuse the existing scopes and do not republish the catalog. A change
+rebuilds the host-selected scopes and rechecks the catalog before publication. A replacement affects subsequent launches;
 existing instances retain their binding, scope and viewport. Removing a binding
 blocks new opens. An invalid declaration or unavailable policy clears future
 admission until a valid replacement can be loaded, without terminating existing

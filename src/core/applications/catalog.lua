@@ -2,6 +2,7 @@
 local registry = require("registry")
 local contract = require("contract")
 local M = {}
+type Selection = {revision: string, bindings: {contract.Binding}, items: {contract.Descriptor}}
 function M.bindings(pinned: registry.Snapshot?): {contract.Binding}
     local entry, err
     if pinned then entry, err = pinned:get("bee:application_admission")
@@ -41,5 +42,38 @@ function M.items(bindings: {contract.Binding}, pinned: registry.Snapshot?): {con
         return a.definition_id < b.definition_id
     end)
     return result
+end
+-- Overlays change the effective catalog without advancing registry history.
+-- Compare the bounded admission/presentation values captured in one snapshot;
+-- source code and unrelated registry entries are not serialized here.
+function M.read(): Selection
+    local pinned = assert(registry.snapshot())
+    local revision = pinned:version():string()
+    local bindings = M.bindings(pinned)
+    local items = M.items(bindings, pinned)
+    return {revision = revision, bindings = bindings, items = items}
+end
+-- These are bounded, decoded records, not arbitrary registry data. Compare
+-- values directly: JSON object field order is not a catalog revision.
+function M.same(a: Selection, b: Selection): boolean
+    if a.revision ~= b.revision or #a.bindings ~= #b.bindings or #a.items ~= #b.items then return false end
+    for i, left in ipairs(a.bindings) do
+        local right = b.bindings[i]
+        if left.definition_id ~= right.definition_id or left.appearance_write ~= right.appearance_write
+            or left.application_stop ~= right.application_stop or left.catalog_read ~= right.catalog_read
+            or left.scope_management ~= right.scope_management or left.close_grace_ms ~= right.close_grace_ms
+            or #left.policies ~= #right.policies then return false end
+        for j, policy in ipairs(left.policies) do
+            if policy ~= right.policies[j] then return false end
+        end
+    end
+    for i, left in ipairs(a.items) do
+        local right = b.items[i]
+        if left.definition_id ~= right.definition_id or left.definition_revision ~= right.definition_revision
+            or left.title ~= right.title or left.icon ~= right.icon or left.group ~= right.group
+            or left.role ~= right.role or left.singleton ~= right.singleton
+            or left.resume_schema ~= right.resume_schema or left.restart_policy ~= right.restart_policy then return false end
+    end
+    return true
 end
 return M

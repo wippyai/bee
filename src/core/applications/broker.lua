@@ -83,14 +83,13 @@ local function main(owner: string, initial_preferences: unknown)
     -- Reconcile the protected registry declaration without replacing live producers.
     -- Reads use one snapshot; policy lookup must still finish at that revision.
     local function refresh_admission(initial: boolean?)
-        local current = registry.current_version()
         local previous = admission.current
-        if current and previous and current:string() == previous.revision then return end
         local ok, loaded = pcall(function(): Admission
-            local pinned = assert(registry.snapshot())
-            local revision = pinned:version():string()
-            local next_bindings = catalog.bindings(pinned)
-            local next_items = catalog.items(next_bindings, pinned)
+            local selected = catalog.read()
+            if previous and catalog.same(selected, previous) then return previous end
+            local revision = selected.revision
+            local next_bindings = selected.bindings
+            local next_items = selected.items
             local next_scopes: {[string]: security.Scope} = {}
             local base, base_error = security.policy("bee:base_app_policy")
             if base_error then error(tostring(base_error)) end
@@ -112,13 +111,13 @@ local function main(owner: string, initial_preferences: unknown)
                 end
                 next_scopes[binding.definition_id] = security.new_scope(policies)
             end
-            local checked = assert(registry.current_version())
-            if checked:string() ~= revision then error("Application admission changed during refresh") end
+            if not catalog.same(catalog.read(), selected) then error("Application admission changed during refresh") end
             local next_descriptors: {[string]: contract.Descriptor} = {}
             for _, item in ipairs(next_items) do next_descriptors[item.definition_id] = item end
             return {revision = revision, bindings = next_bindings, descriptors = next_descriptors, scopes = next_scopes, items = next_items}
         end)
         if ok then
+            if previous == loaded then return end
             admission.current, admission.error = loaded, ""
             assert(process.send(owner, "bee.application.catalog", {version = 1, items = loaded.items}))
         else

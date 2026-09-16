@@ -7000,3 +7000,29 @@ Repair three is live in `/tmp/bee-research-repair-3-check.log`. Luna implementat
 children failed on provider demand before editing; Agy now owns the isolated
 public publication acceptance fixture, with no permission to apply a rejected
 artifact. Its output is `/tmp/bee-research-delivery-agy.log`.
+
+Repair three completed and its app passes typed lint, but Gemini accidentally
+removed control-escape backslashes in the encoder. Native corpus refused it
+(`/tmp/bee-repair3-corpus-_fupx5lk`). The reviewed composition at
+`/tmp/bee-research-reviewed-49s63nym/reviewed.json` selects the unchanged latest
+Gemini app and unchanged encoder from repair two. It records both source
+artifact digests and a new measured artifact digest
+`cfad687770f2a9dc208a5302cc8b0df2fd41c3e0cc564141c14e562fcf8811ab`.
+Both original source artifact digests were independently recomputed before
+composition; original frozen artifacts remain untouched. The composed artifact
+passes full typed lint and the encoder passes native correctness. It must still
+be frozen through Governance and approved as this new exact artifact.
+
+The benchmark fixture now shares its existing timing loop/corpus via measure.lua
+so offline and future MCP calls use identical measurement code. The unchanged
+baseline verdict, seven samples and cancellation/exit smoke pass again.
+`/tmp/bee-research-shared-measure-check.log` records the evidence. This is fixture
+code only, excluded from production packs.
+
+The first standalone Agy task command returned no work/output. A verified
+`--print=<prompt>` JSON invocation succeeds, and the actual implementation task
+is now running with that form (exec session20352,
+`/tmp/bee-research-delivery-agy-2.log`). Do not confuse the earlier empty log with
+implementation progress. Parent is testing the reviewed app's actual terminal
+empty-state/resize/close in isolated stores; no global installation or governed
+activation is claimed yet.

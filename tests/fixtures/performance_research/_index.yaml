@@ -14,8 +14,12 @@ entries:
   kind: function.lua
   source: file://benchmark.lua
   method: run
+  imports: {canonical: bee.research_benchmark_probe:canonical, measure: bee.research_benchmark_probe:measure}
+- name: measure
+  kind: library.lua
+  source: file://measure.lua
   modules: [time]
-  imports: {canonical: bee.research_benchmark_probe:canonical, corpus: bee.research_benchmark_probe:corpus}
+  imports: {corpus: bee.research_benchmark_probe:corpus}
 - name: spin
   kind: function.lua
   source: file://spin.lua

@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.research_probe
+entries:
+- name: docs
+  kind: function.lua
+  source: file://docs.lua
+  method: handle
+  modules: [registry]
+- name: docs_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.research_probe:docs, bee.research_probe:material]
+    effect: allow
+- name: host_policy
+  kind: security.policy
+  policy: {actions: ['*'], resources: ['*'], effect: allow}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, registry, process, channel, time, json, sql, io, base64]
+  imports: {bounds: bee.threads.records:bounds, artifact: bee.governance:artifact}
+  security: {policies: [bee.research_probe:host_policy]}
+  meta:
+    command:
+      name: research-live-probe
+      security: {actor: {id: bee.research.probe}}

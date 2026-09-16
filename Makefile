@@ -392,3 +392,15 @@ live-agy-mcp-check:
 live-agy-mcp-lint:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -lint-only
+
+.PHONY: research-author-check research-author-lint research-repair-check
+research-repair-check:
+	@test -n "$(PROPOSAL)" -a -n "$(REVIEW)" || { echo 'Set PROPOSAL and REVIEW to the prior artifact and review feedback files'; exit 1; }
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -author -proposal "$(abspath $(PROPOSAL))" -review "$(abspath $(REVIEW))"
+research-author-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -author
+research-author-lint:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_agy_mcp.go -root .. -runtime "$(abspath $(WIPPY))" -author -lint-only

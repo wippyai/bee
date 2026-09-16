@@ -6959,3 +6959,19 @@ all authorized Bees, independent of viewed workspace, origin-qualified agent
 requests and stale/unavailable sources. Automatic 100-node discovery/aggregation
 is not implemented by the current 16-source inbox. Global Bee is unchanged.
 Shared journal checkpoint 1780 records this boundary and evidence.
+
+The first repaired Gemini artifact is `/tmp/bee-live-agy-mcp-416257667/authored.json`.
+Its exact encoder now passes the native corpus (`/tmp/bee-repaired-corpus-q15kegq6`).
+App review still refuses activation: two type errors and a false durability
+assumption (`client.checkpoint` returns a send request ID, not a commit receipt).
+The next repair uses existing read_after plus read-only watch to replay from a
+bounded projection checkpoint without independent subscription ACK state.
+It is running through `make research-repair-check`; command evidence is
+`/tmp/bee-research-repair-2-check.log`. No candidate was applied.
+
+Luna confirmed the existing publication path: public workspace_call freeze,
+publication_call prepare with host profile, destination_call stage/review/select/
+prepare, exact approval, then step to applied. Existing acceptance does not yet
+compose public preparation with an actual process.lua dashboard launch; that
+must be tested. Preserve canonical artifact bytes when importing the frozen
+entries into a separate review/activation fixture. No parallel publisher needed.

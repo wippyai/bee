@@ -84,7 +84,13 @@ func check() error {
 	selectedRuntime := flag.String("runtime", "", "native runtime executable")
 	selectedAgy := flag.String("agy", "agy", "installed Agy executable")
 	lintOnly := flag.Bool("lint-only", false, "stage and lint without provider inference")
+	author := flag.Bool("author", false, "prove Gemini authors a frozen research artifact through MCP")
+	proposalPath := flag.String("proposal", "", "prior authored artifact to repair through MCP")
+	reviewPath := flag.String("review", "", "review feedback for the prior authored artifact")
 	flag.Parse()
+	if (*proposalPath != "" || *reviewPath != "") && (!*author || *proposalPath == "" || *reviewPath == "") {
+		return fmt.Errorf("proposal and review must be supplied together with author")
+	}
 	repo, err := filepath.Abs(*source)
 	if err != nil {
 		return err
@@ -123,8 +129,82 @@ func check() error {
 			return err
 		}
 	}
-	if err = os.CopyFS(filepath.Join(root, "src/research_probe"), os.DirFS(filepath.Join(repo, "tests/fixtures/live_agy_mcp"))); err != nil {
+	fixture := "live_agy_mcp"
+	if *author {
+		fixture = "research_author"
+	}
+	if err = os.CopyFS(filepath.Join(root, "src/research_probe"), os.DirFS(filepath.Join(repo, "tests/fixtures", fixture))); err != nil {
 		return err
+	}
+	if *author {
+		// Tool metadata grants nothing. The experiment host separately admits
+		// this exact operation to the endpoint, as well as its per-tool scope.
+		gatewayPath := filepath.Join(root, "src/gateway/_index.yaml")
+		gatewayBytes, readErr := os.ReadFile(gatewayPath)
+		if readErr != nil {
+			return readErr
+		}
+		var gateway map[string]interface{}
+		if err = yaml.Unmarshal(gatewayBytes, &gateway); err != nil {
+			return err
+		}
+		admitted := false
+		for _, raw := range gateway["entries"].([]interface{}) {
+			entry := raw.(map[string]interface{})
+			if entry["name"] == "mcp_http" {
+				security := entry["security"].(map[string]interface{})
+				security["policies"] = append(security["policies"].([]interface{}), "bee.research_probe:docs_policy")
+				admitted = true
+			}
+		}
+		if !admitted {
+			return fmt.Errorf("MCP endpoint entry missing")
+		}
+		gatewayBytes, err = yaml.Marshal(gateway)
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(gatewayPath, gatewayBytes, 0600); err != nil {
+			return err
+		}
+		material := map[string]string{}
+		for topic, relative := range map[string]string{
+			"source": "src/threads/records/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
+			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "src/apps/timeline/app.lua",
+			"model": "src/apps/timeline/model.lua", "view": "src/apps/timeline/view.lua",
+		} {
+			data, readErr := os.ReadFile(filepath.Join(repo, relative))
+			if readErr != nil {
+				return readErr
+			}
+			material[topic] = string(data)
+		}
+		material["proposal"], material["review"] = "", ""
+		if *proposalPath != "" {
+			for topic, path := range map[string]string{"proposal": *proposalPath, "review": *reviewPath} {
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return readErr
+				}
+				if len(data) == 0 || len(data) > 262144 {
+					return fmt.Errorf("%s exceeds review input bounds", topic)
+				}
+				material[topic] = string(data)
+			}
+		}
+		document := map[string]interface{}{"version": "1.0", "namespace": "bee.research_probe", "entries": []interface{}{
+			map[string]interface{}{"name": "material", "kind": "registry.entry", "data": material},
+		}}
+		data, marshalErr := yaml.Marshal(document)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err = os.MkdirAll(filepath.Join(root, "src/research_material"), 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(root, "src/research_material/_index.yaml"), data, 0600); err != nil {
+			return err
+		}
 	}
 	host := filepath.Join(root, "src/research_host")
 	if err = os.MkdirAll(host, 0700); err != nil {
@@ -160,8 +240,81 @@ func check() error {
 		fmt.Println("Live Agy fixture lint passed; no inference performed")
 		return nil
 	}
-	if err = run(root, runtime, environment, "run", 4*time.Minute, "run", "research-live-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db")); err != nil {
+	runDeadline := 4 * time.Minute
+	if *author {
+		runDeadline = 6 * time.Minute
+	}
+	if err = run(root, runtime, environment, "run", runDeadline, "run", "research-live-probe", "--set", "registry.history_path="+filepath.Join(root, "registry.db")); err != nil {
 		return err
+	}
+	if *author {
+		log, readErr := os.ReadFile(filepath.Join(root, "run.log"))
+		if readErr != nil {
+			return readErr
+		}
+		var authored map[string]interface{}
+		for _, line := range strings.Split(string(log), "\n") {
+			if strings.HasPrefix(line, "RESEARCH_AUTHORED ") {
+				if authored != nil {
+					return fmt.Errorf("duplicate authored artifact")
+				}
+				if err = json.Unmarshal([]byte(strings.TrimPrefix(line, "RESEARCH_AUTHORED ")), &authored); err != nil {
+					return err
+				}
+			}
+		}
+		if authored == nil {
+			return fmt.Errorf("missing verified authored artifact: %s", root)
+		}
+		data, marshalErr := json.MarshalIndent(authored, "", "  ")
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err = os.WriteFile(filepath.Join(root, "authored.json"), data, 0600); err != nil {
+			return err
+		}
+		// Compile the proposed entries in a separate review tree. They are not
+		// added to the running host or applied to its live registry overlay.
+		review := filepath.Join(root, "review")
+		if err = os.CopyFS(filepath.Join(review, "src"), os.DirFS(filepath.Join(root, "src"))); err != nil {
+			return err
+		}
+		for _, name := range []string{".wippy.yaml", "wippy.lock"} {
+			if err = copyFile(filepath.Join(review, name), filepath.Join(root, name)); err != nil {
+				return err
+			}
+		}
+		entries, ok := authored["entries"].([]interface{})
+		if !ok || len(entries) == 0 {
+			return fmt.Errorf("authored entries missing")
+		}
+		for _, raw := range entries {
+			entry, ok := raw.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("invalid authored entry")
+			}
+			id, ok := entry["id"].(string)
+			if !ok || !strings.HasPrefix(id, "bee.research.demo:") {
+				return fmt.Errorf("foreign authored entry")
+			}
+			entry["name"] = strings.TrimPrefix(id, "bee.research.demo:")
+			delete(entry, "id")
+		}
+		proposed, marshalErr := yaml.Marshal(map[string]interface{}{"version": "1.0", "namespace": "bee.research.demo", "entries": entries})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err = os.MkdirAll(filepath.Join(review, "src/research_candidate"), 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(review, "src/research_candidate/_index.yaml"), proposed, 0600); err != nil {
+			return err
+		}
+		if err = run(review, runtime, environment, "lint", 3*time.Minute, "lint"); err != nil {
+			return err
+		}
+		fmt.Println("RESEARCH_AUTHOR_PASS: real Gemini authored and froze candidate/dashboard via MCP; typed lint passed; not applied")
+		return nil
 	}
 	evidence, err := json.MarshalIndent(map[string]interface{}{"passed": true, "proof": "real Gemini requested MCP access, received test-operator inbox approval, selected two traits and committed the exact bound thread message", "runtime": runtime, "agy": agy}, "", "  ")
 	if err != nil {

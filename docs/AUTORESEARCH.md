@@ -87,3 +87,19 @@ invalid for integer `2^53`; the gate records that failure rather than presenting
 it as a valid optimization baseline. A candidate must pass the full corpus.
 This prerequisite is not the MCP benchmark tool, authored dashboard or governed
 publication proof; those remain the active experiment milestone.
+
+`make research-author-check` gives managed Gemini the fixed source, corpus and
+Bee app contracts through a scoped documentation tool. Gemini authors and freezes
+`entries.json` through Governance MCP. The fixture checks the exact digest in
+its bound thread, exports `authored.json`, then lints the entries in a separate
+review tree. It never activates the proposed app. The first real artifact reached
+this boundary but failed typed and semantic review; a frozen artifact is not a
+passing or approved application.
+
+Use `make research-repair-check PROPOSAL=/path/to/authored.json
+REVIEW=/path/to/review.txt` on one command line to give Gemini the prior proposal
+and concrete findings. This creates a fresh isolated authoring run and preserves
+the prior evidence; it does not claim provider conversation recovery. Use
+`make research-author-lint` to check the fixture without inference. Candidate
+correctness, dashboard rendering, recovery and destination-local governed apply
+remain separate acceptance gates.

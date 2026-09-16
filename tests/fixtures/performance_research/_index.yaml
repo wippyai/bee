@@ -24,12 +24,17 @@ entries:
   kind: function.lua
   source: file://spin.lua
   method: run
+  modules: [process, channel]
+- name: cpu_spin
+  kind: function.lua
+  source: file://spin.lua
+  method: cpu_spin
   modules: [process]
 - name: caller
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.research_benchmark_probe:benchmark, bee.research_benchmark_probe:spin]
+    resources: [bee.research_benchmark_probe:benchmark, bee.research_benchmark_probe:spin, bee.research_benchmark_probe:cpu_spin]
     effect: allow
 - name: send_probe
   kind: security.policy

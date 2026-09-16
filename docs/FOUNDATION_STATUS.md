@@ -1,3 +1,5 @@
+# Foundation status
+
 The agent-requested MCP access backend is implemented: host-declared gated
 traits create durable approval requests for the exact binding/attempt and are
 activated only after owner-approved consumption and a gateway effect receipt.
@@ -12,9 +14,8 @@ The managed Agy caller-thread batch route now has a provider-backed MCP gate:
 high effort and the normal user login. It verifies the exact durable thread
 message and stored two-trait/context selection. A fixture readiness race was
 fixed by waiting for the existing native listener address before launch. This
-does not prove the performance dashboard. That remains the next experiment unit; global installation is unchanged.
-
-# Foundation status
+is complemented by the performance-dashboard proof below. Global installation
+is unchanged.
 
 The research dashboard now passes governed installation, managed Gemini
 requesting and receiving per-attempt MCP access, real measurements, automatic
@@ -37,8 +38,8 @@ native policy-reference characterization also passes. Shared native policies
 remain live references: a governed host replacement affects subsequent calls;
 no frozen-policy or filesystem-isolation guarantee is added. Production and HTTP
 fixture lint, pack and bundle checks pass; the broader foundation rerun is in
-progress. This checkpoint is not installed globally and does not yet prove the
-Gemini performance dashboard. See [MCP configuration](MCP_CONFIGURATION.md).
+progress. This checkpoint is not installed globally. See
+[MCP configuration](MCP_CONFIGURATION.md) and the dashboard proof above.
 
 The September 15 integration candidate combines the latest Agent, MCP, Docker,
 display and Hub work with private application delivery and ordinary persisted

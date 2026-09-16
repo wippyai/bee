@@ -78,8 +78,14 @@ func check() error {
 			return fmt.Errorf("%s: %w; evidence %s", step.name, runErr, root)
 		}
 		if step.name == "run" {
-			if strings.Count(string(output), "RESEARCH_SPIN_STARTED") != 3 {
-				return fmt.Errorf("CPU cancellation probe did not start three functions")
+			if strings.Count(string(output), "RESEARCH_SPIN_CPU_STARTED") != 3 {
+				return fmt.Errorf("three non-yielding CPU smoke workers did not start")
+			}
+			if strings.Count(string(output), "RESEARCH_SPIN_CONTROL chunks=4") != 1 {
+				return fmt.Errorf("uncanceled CPU control did not complete four chunks")
+			}
+			if strings.Count(string(output), "RESEARCH_SPIN_COOPERATIVE_CANCELLED chunks=1") != 1 {
+				return fmt.Errorf("cooperative cancellation did not pass its bounded no-progress drain")
 			}
 			var measurement map[string]interface{}
 			for _, line := range strings.Split(string(output), "\n") {
@@ -116,7 +122,7 @@ func check() error {
 			}
 		}
 	}
-	fmt.Println("RESEARCH_BENCHMARK_PASS: correctness verdict, seven baseline samples, cancellation smoke and bounded runtime exit")
+	fmt.Println("RESEARCH_BENCHMARK_PASS: correctness verdict, seven baseline samples, non-yielding smoke, cooperative bounded cancellation proof and runtime exit")
 	return nil
 }
 

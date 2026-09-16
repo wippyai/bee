@@ -7087,3 +7087,145 @@ its startup recovery/identity/security context next. Private UI script
 No live chart, live Gemini measurement invocation, independent consumer or
 global-install claim yet. Luna High's bounded authority review succeeded;
 the separate Lua fixture child failed on model demand, so parent implemented it.
+
+### Continuation: effective catalog and branch inventory
+
+The broker's history-only cache hid automatically recovered overlay apps.
+Uncommitted fix compares bounded decoded admission and descriptor values from
+one registry snapshot; no runtime changes. A first JSON-key draft was invalid
+because native JSON object order is unstable; replaced with typed value comparison.
+Strict production lint passes with cache reset (467 entries, existing fixpoint
+warning). Cached lint reproduced the existing nominal tty.Viewport mismatch.
+Governed measurement and automatic restart recovery pass in
+`/tmp/bee-research-delivery-1995423296`. Ordinary desktop now discovers and opens
+Performance Research with persisted measurements. Full UI acceptance remains
+incomplete: the temporary probe expected uppercase INVALID but the app says
+FAILED (outcome: invalid), candidate detail needs a larger window, and integer
+sample formatting still exposes native `%!g` output. Do not claim complete UI.
+Full unit run: `/tmp/bee-catalog-value-unit.log`, exec session 50027.
+Luna High continues only `tests/research_desktop.go` helper work.
+
+User reiterated cumulative inbox across all authorized nodes; existing plan
+already records the 100-Bee requirement and current 16-source limitation.
+User flagged branch proliferation. Inventory: 185 local branches, 96 remote
+branches plus remote HEAD, 232 worktree registrations including 111 missing
+worktrees. Pruned only the stale registrations; no branch, source directory,
+unmerged commit or remote ref deleted. 77 branch tips are contained in current
+integration HEAD. Remaining branch consolidation needs unique-work inspection.
+Global installation unchanged; goal remains incomplete.
+
+### Effective catalog committed; dashboard visible
+
+Previous goal turn made progress: fixed effective catalog comparison and obtained
+new native evidence, then pruned only stale worktree metadata. Current core commit
+`b47a58a` removes history-only admission caching. Strict cache-reset lint and
+1019 Lua cases pass. `make check` is running as exec session 28340, log
+`/tmp/bee-effective-catalog-check.log`; no broad completion claim yet.
+
+Dashboard artifact now measures
+`841eafa2791adff9876978b45d058aafb50cedfeaba91123c4188fc4d5fb9420`.
+The review preserves prior provenance, places correctness/median before separate
+chart bars, and explicitly converts integer samples for decimal formatting.
+New governed native HTTP and automatic registry recovery pass in
+`/tmp/bee-research-delivery-1201049798`. Temporary physical desktop acceptance
+also passes: normal menu opens the recovered app, displays INVALID/CORRECT and
+real ns/op measurements, and remains usable at 70x24. No valid speedup claimed.
+
+Luna High authored `tests/research_desktop.go`; parent review removed reopen and
+median fallbacks, required both actual medians and completed synchronized frames,
+and simplified cleanup. Integrated acceptance now runs it after registry recovery
+for menu launch, fake-measurement exclusion, resize, clean quit and mandatory
+second-boot layout/checkpoint restoration. Current run exec 77318, log
+`/tmp/bee-research-desktop-integrated.log`, root
+`/tmp/bee-research-delivery-3893444669`. Wait for its actual result before claiming
+this integrated proof. Gemini measurement-path child failed twice on demand;
+no implementation delegated there. Real managed Gemini measurement invocation,
+cancellation/independent consumer and global installation remain outstanding.
+
+### Mandatory automatic app recovery now passes
+
+The first strict desktop restart exposed `restart_policy: manual` in the
+Gemini artifact; review changed it to `automatic` (new artifact digest
+`dde4264479b2cd3d01472690d7f550183228f38c487d60f28e7611e0ec36e818`).
+That exposed a real host ordering defect: first catalog arrived before overlay
+recovery, so the host consumed the saved restore request against a missing app.
+`src/core/host/main.lua` now keeps unavailable saved apps in the existing bounded
+queue, restores eligible records on catalog change, and emits startup readiness
+once without waiting for missing definitions. No new service or runtime API.
+
+Combined governed HTTP + native snapshot + automatic registry recovery + actual
+menu + both medians + 70x24 resize + clean quit + mandatory automatic app restart
+PASS in `/tmp/bee-research-delivery-2296074133`; log
+`/tmp/bee-late-app-restore-check.log`. Typed production lint passes.
+Updated host Lua suite runs at exec 33773, `/tmp/bee-late-app-restore-unit.log`.
+The broader existing make check (28340) continues through integration fixtures.
+
+Next provider gate is being wired into the same runner as explicit `-live`:
+stage the same measurement surface and exact access approver policy before the
+Governance base is measured; use the actual installed Agy and user HOME; invoke
+a separate managed measurement process against these same durable stores after
+approved recovery, then require its observations in the same UI check. Live
+code is not proven yet and the CLI is not advertised as complete. Luna High
+owns only the new live.lua fixture in this integration worktree. Initial wrong
+working-directory lookup was corrected before the child wrote any file.
+
+### Provider measurement gate in progress
+
+Host restore fix committed as `c2c0536`; its 1019-case Lua run passed. Catalog
+fix `b47a58a` is pushed, and push of c2c0536 is exec 79831. Production docs now
+state the actual recovery/measurement scope and unfinished provider/global gates.
+
+`tests/research_desktop.go` (Luna High, reviewed) is integrated into the existing
+research runner/Make commands. New `-live` path and `research-live-measurement-check`
+are test-only and not yet passing. They reuse one declarative measurement surface
+in the fixture index, stage the exact access policy before Governance measures
+the base, use actual Agy/user HOME, and run a separate managed Gemini process
+on the same thread/stores after approved recovery. UI checks must use the latest
+actual provider observations. Removed temporary RESEARCH_BASE logging and its
+unused fixture dependencies after resolving the catalog/recovery cause.
+
+Luna High's `tests/fixtures/research_measurement/live.lua` now uses proven launch
+request shapes, exact per-attempt inbox approval and native measured records.
+Parent corrected old-type-system narrowing of the expected digest and restricted
+measurement selection to the fixed MCP producer so normal harness hook observations
+are not mistaken for benchmark results. An initial staged lint caught the optional
+digest issue before any provider inference. Current fresh live gate:
+exec 27067, log `/tmp/bee-gemini-measurement-retry.log`.
+The prior failed lint evidence is `/tmp/bee-research-delivery-2043450254/review/artifact_lint.log`.
+Do not claim live Gemini measurements until the new process succeeds.
+Full make check remains exec 28340, `/tmp/bee-effective-catalog-check.log`;
+it has progressed through source/pack Modules and application admission checks.
+No global installation. Goal remains active.
+
+### Managed Gemini measurement and release follow-through — September 15
+
+`1746663` is pushed on the existing PR #11 branch. The live gate passed with
+actual managed Gemini requesting the exact per-attempt measurement trait,
+separate fixture-operator approval, both benchmark calls, native observation
+readback, and physical dashboard restart restoration. Evidence:
+`/tmp/bee-research-delivery-408383754`,
+`/tmp/bee-gemini-measurement-setup-fix.log`. No valid speedup claim: the baseline
+fails native large-integer correctness.
+
+The broad check passed its prerequisites but failed the final desktop smoke
+with zero terminal bytes. A focused rerun subsequently passed; the complete
+fresh-pack desktop check is running as exec 8859, log
+`/tmp/bee-current-desktop-check.log`. Disk exhaustion occurred during this work;
+only old generated Go cache entries were removed, recovering about 38 GiB.
+The interrupted status-document write was restored and verified before commit.
+The later successful smoke does not establish disk pressure as its cause.
+
+Cancellation evidence now distinguishes cooperative checkpoints from CPU work.
+`make research-benchmark-check` passes with four uncanceled progress checkpoints,
+cancel after the first checkpoint, a late continuation and 300 ms quiet drain
+while the caller remains alive, followed by the real benchmark. The original
+three non-yielding cancel smoke workers remain separate; these checks do not
+claim standalone CPU-preemption proof. Evidence:
+`/tmp/bee-research-benchmark-772644581/run.log`.
+
+Luna High is adding an independent public-subscription consumer in the test
+fixture only. Standalone build is exec 73251,
+`/tmp/bee-research-standalone.log`. Global installation remains pending.
+No new branch or worktree. The earlier inventory found 185 local branches,
+96 remote branches, and 232 worktree registrations; 111 missing worktree
+registrations were pruned, with no branch or source deletion.

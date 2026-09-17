@@ -1,7 +1,7 @@
 # Native distribution
 
 Bee can be assembled into a Linux or macOS executable on amd64 or arm64 containing Wippy, its
-versioned application bundle and the `ioevents` native component. The reusable
+versioned application pack and the `ioevents` native component. The reusable
 assembler is [wippyai/builder](https://github.com/wippyai/builder); Bee selects its
 inputs in `wippy.build.json` and pins the assembler in `build/builder.lock.json`.
 Both repositories are currently private. No stable native release is published.
@@ -62,20 +62,17 @@ dropped. Only the executable and test harness are mounted. The Terminal tolerate
 an unset `USER` through Wippy's explicit empty placeholder fallback. Container
 images still need Bash and a compatible C library.
 
-The runtime stays on Bee's existing pinned revision to preserve its TTY API.
-The checksummed foundation and application-host patches retain upstream MPL-2.0
-headers. Upstream changes are prepared as runtime PRs
-[667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668). The builder checks out committed
-source into a temporary directory and verifies patches before compiling.
-The complete [upstream dependency list](RUNTIME_UPSTREAM.md) tracks removal of the
-patch inputs and Bee's `runtime/` directory.
-The dependency-notices patch pins Nexus annotations to the source revision
-containing its MIT license, as proposed in
-[runtime PR #677](https://github.com/wippyai/runtime/pull/677).
-The publish-dry-run patch allows credential-free publication packing with an
-explicit version; [runtime PR #684](https://github.com/wippyai/runtime/pull/684)
-prepares that fix upstream. Uploads still require credentials.
+The runtime pin now includes the application host, locked-root redeployment,
+Nexus licensing and credential-free publish-dry-run fixes merged upstream as
+[runtime PR #667](https://github.com/wippyai/runtime/pull/667),
+[#668](https://github.com/wippyai/runtime/pull/668),
+[#677](https://github.com/wippyai/runtime/pull/677) and
+[#684](https://github.com/wippyai/runtime/pull/684); Bee no longer carries
+separate patches for them. Uploads still require credentials. The builder checks
+out that commit into a temporary directory and verifies the remaining runtime
+patches (below) before compiling. The complete
+[upstream dependency list](RUNTIME_UPSTREAM.md) tracks these merges and Bee's
+`runtime/` directory removal.
 
 `BEE_VERSION=0.1.0-dev make standalone` prepares the explicitly owned modules
 in `build/modules.json`. Child namespaces remain slices of their named owner;
@@ -141,6 +138,12 @@ This verifies asset transfer and loading, not WASM execution or automatic Hive
 distribution. Those remain separate runtime/application capabilities.
 
 ## Installed application and updates
+
+The embedded baseline contains the complete default desktop, Terminal, Settings,
+Process Manager and Test Status. First boot requires no Hub connection, account
+or downloaded extension. The standalone acceptance harness starts with empty
+state, opens every default app, runs Test Status checks, exercises a native shell
+and verifies Settings recovery. Linux release jobs run it with networking disabled.
 
 ```sh
 ./dist/bee

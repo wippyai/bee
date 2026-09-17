@@ -3,7 +3,7 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 bee_runtime="${BEE_RUNTIME:-$PWD/.wippy/bin/bee-wippy}"
 if [[ ! -x "$bee_runtime" ]]; then
-  echo 'Set BEE_RUNTIME to a Wippy binary with viewport mounts and page support (#653).' >&2
+  echo 'Bee development runtime is missing. Run make setup, then make run.' >&2
   exit 1
 fi
 if [[ "${1:-}" == "--app" ]]; then

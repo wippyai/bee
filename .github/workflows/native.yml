@@ -1,0 +1,174 @@
+name: Native Bee
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Application version for a local-preview artifact build
+        type: string
+        default: 0.1.0-dev
+      mode:
+        description: Embedded application mode
+        type: choice
+        options: [base, bootstrap]
+        default: base
+permissions:
+  contents: read
+concurrency:
+  group: native-bee-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      targets: ${{ steps.targets.outputs.value }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Check workflows and scan for secrets
+      run: make repository-check
+    - name: Validate release tag
+      if: github.ref_type == 'tag'
+      run: |
+        number='(0|[1-9][0-9]*)'
+        identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+        pattern="^v$number\.$number\.$number(-$identifier(\.$identifier)*)?$"
+        [[ "$GITHUB_REF_NAME" =~ $pattern ]]
+        git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+    - name: Select validation platforms
+      id: targets
+      env:
+        FULL_MATRIX: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+      run: |
+        targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"}]'
+        if [ "$FULL_MATRIX" = true ]; then
+          targets='[{"goos":"linux","goarch":"amd64","runner":"ubuntu-24.04"},{"goos":"linux","goarch":"arm64","runner":"ubuntu-24.04-arm"},{"goos":"darwin","goarch":"amd64","runner":"macos-26-intel"},{"goos":"darwin","goarch":"arm64","runner":"macos-26"}]'
+        fi
+        echo "value=$targets" >> "$GITHUB_OUTPUT"
+  build:
+    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.validate.outputs.targets) }}
+    env:
+      BEE_MODE: ${{ inputs.mode || 'base' }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Build pinned native development runtime
+      id: toolchain
+      uses: wippyai/builder@67a04357e73b43c35d354c5bb17b3261a9802ea3
+      with:
+        mode: toolchain
+        manifest: wippy.build.json
+        output: .wippy/bin/bee-wippy
+    - name: Verify runner architecture
+      env:
+        EXPECTED_OS: ${{ matrix.goos }}
+        EXPECTED_ARCH: ${{ matrix.goarch }}
+      run: |
+        test "$(go env GOOS)" = "$EXPECTED_OS"
+        test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.12'
+    - run: python3 -m pip install -r tests/requirements.txt
+    - name: Validate Hub publication pack
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      env:
+        REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
+      run: |
+        version="$REQUESTED_VERSION"
+        if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
+        make hub-check BEE_VERSION="$version"
+    - name: Full foundation checks
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: make check WIPPY="$PWD/.wippy/bin/bee-wippy"
+    - name: Native module checks
+      run: make native-check
+    - name: Installer checks
+      if: matrix.goos != 'linux' || matrix.goarch != 'amd64'
+      run: make installer-check
+    - name: Assemble application
+      id: assemble
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+        REQUESTED_VERSION: ${{ inputs.version || '0.1.0-dev' }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        version="$REQUESTED_VERSION"
+        if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; fi
+        make standalone BUILDER="$BUILDER_BINARY" BEE_VERSION="$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+    - name: Verify standalone desktop
+      if: matrix.goos == 'darwin'
+      run: make native-binary-check
+    - name: Verify offline standalone desktop
+      if: matrix.goos == 'linux'
+      run: sudo unshare --net -- env PATH="$PATH" make native-binary-check
+    - name: Archive binary and provenance
+      env:
+        BUILDER_BINARY: ${{ steps.toolchain.outputs.builder }}
+        TARGET: ${{ matrix.goos }}-${{ matrix.goarch }}
+      run: '"$BUILDER_BINARY" package dist/bee --output "dist/bee-$TARGET.tar.gz"'
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: bee-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+        if-no-files-found: error
+  required:
+    name: Bee CI
+    if: always()
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Require every target
+      env:
+        RESULTS: ${{ join(needs.*.result, ',') }}
+      run: test "$RESULTS" = success,success
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: required
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        pattern: bee-*
+        merge-multiple: true
+        path: artifacts
+    - name: Verify archive checksums
+      working-directory: artifacts
+      run: sha256sum -c ./*.sha256
+    - name: Prepare draft release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: |
+        release_flags=(--latest)
+        if [[ "$RELEASE_TAG" == *-* ]]; then
+          release_flags=(--prerelease --latest=false)
+        fi
+        gh release create "$RELEASE_TAG" artifacts/* install.sh --verify-tag --draft --generate-notes "${release_flags[@]}"

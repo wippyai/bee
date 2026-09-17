@@ -226,7 +226,7 @@ gateway-readiness-check:
 check: gateway-readiness-check
 pack: lint
 	mkdir -p dist
-	$(WIPPY) pack dist/bee.wapp
+	"$(WIPPY)" pack dist/bee.wapp
 
 # Source-free acceptance boots run in disposable working directories, including
 # cases without .wippy/. Keep their governance store inside that fixture too.

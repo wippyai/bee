@@ -1,0 +1,65 @@
+name: Native module
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['native/v*']
+permissions:
+  contents: read
+concurrency:
+  group: native-module-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+jobs:
+  check:
+    name: Native module CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Validate module release tag
+      if: github.ref_type == 'tag'
+      shell: bash
+      run: |
+        git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+        number='(0|[1-9][0-9]*)'
+        identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+        pattern="^native/v(0|1)\.$number\.$number(-$identifier(\.$identifier)*)?$"
+        [[ "$GITHUB_REF_NAME" =~ $pattern ]]
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version-file: native/go.mod
+        cache: false
+    - name: Check release workflows and scan for secrets
+      if: github.ref_type == 'tag'
+      run: make repository-check
+    - run: make -C native check
+  release:
+    if: startsWith(github.ref, 'refs/tags/native/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Archive module source
+      run: |
+        git archive --format=tar.gz --prefix=bee-native/ "$GITHUB_SHA:native" > bee-native.tar.gz
+        sha256sum bee-native.tar.gz > bee-native.tar.gz.sha256
+        git log --format='- %h %s' -20 -- native > release-notes.md
+    - name: Prepare module draft release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: |
+        release_flags=(--latest=false)
+        if [[ "$RELEASE_TAG" == *-* ]]; then
+          release_flags+=(--prerelease)
+        fi
+        gh release create "$RELEASE_TAG" bee-native.tar.gz bee-native.tar.gz.sha256 --verify-tag --draft --notes-file release-notes.md "${release_flags[@]}"

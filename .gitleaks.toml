@@ -10,3 +10,10 @@ condition = "AND"
 paths = ['''^tests/lua/credentials/broker_test\.lua$''']
 regexTarget = "line"
 regexes = ['''(CODEX|CLAUDE)_FILE_SENTINEL = .*sentinel-''']
+
+[[rules]]
+id = "wippy-hub-token"
+description = "Wippy Hub token"
+regex = '''\b(wpy_(?:k[0-9]+\.)?[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,})'''
+secretGroup = 1
+keywords = ["wpy_"]

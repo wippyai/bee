@@ -25,8 +25,10 @@ command-hook execution with the event JSON on stdin, and every listed hook
 event. The gateway calls back through the host-selected hook command; token
 bytes never enter the file. MCP tool invocation through the rendered server
 entry is accepted at startup but unproven without a Meta provider, and
-`--session-id` pins the session identity while context continuation across
-processes is unproven with the echo provider. The prompt travels as a
+`--session-id` pins the session identity, and a two-call real-provider probe
+(memorize a random code, then recall it under the same session id) shows the
+follow-up answers from prior context, so dispatch resumes by starting a new
+process on that session. The prompt travels as a
 positional argument behind `--` because `exec` reads no prompt from stdin.
 Effort admits the same range as the other drivers, and batch turns default
 to `--approval-mode on-request` unless the host selects `never`.

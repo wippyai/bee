@@ -276,6 +276,12 @@ local function define_tests()
             test.eq(mode_error, "approval_mode is not one Bee admits")
             local _, effort_error = muse_launch.decode({profile_id = "batch", brief = "x", effort = "turbo"})
             test.eq(effort_error, "effort is not one Bee admits")
+            -- Bee keeps one shared effort vocabulary across drivers; the
+            -- executable-only values never pass through.
+            for _, exotic in ipairs({"ultra", "minimal", "none"}) do
+                local _, exotic_error = muse_launch.decode({profile_id = "batch", brief = "x", effort = exotic})
+                test.eq(exotic_error, "effort is not one Bee admits")
+            end
             local _, steps_error = muse_launch.decode({profile_id = "batch", brief = "x", max_steps = 0})
             test.eq(steps_error, "max_steps must be between 1 and 32")
             local _, model_error = muse_launch.decode({profile_id = "batch", brief = "x", model = "not a model"})
@@ -285,6 +291,15 @@ local function define_tests()
             local native = muse_launch.specification(window)
             test.eq(#native.argv, 0)
             test.eq(native.readiness, "terminal:attached")
+            local prompted, prompted_error = muse_launch.decode({profile_id = "window", brief = "--help"})
+            if not prompted then error(tostring(prompted_error)) end
+            test.eq(quote.line(muse_launch.specification(prompted).argv), "-- --help")
+            local native_resume, native_resume_error = muse_launch.decode({profile_id = "window", brief = "", resume_ref = "native-session"})
+            if not native_resume then error(tostring(native_resume_error)) end
+            test.eq(quote.line(muse_launch.specification(native_resume).argv), "resume native-session")
+            local native_both, native_both_error = muse_launch.decode({profile_id = "window", brief = "--help", resume_ref = "native-session"})
+            if not native_both then error(tostring(native_both_error)) end
+            test.eq(quote.line(muse_launch.specification(native_both).argv), "resume native-session -- --help")
             local reply, call_error = funcs.call("bee.driver.muse:normalize", {index = 1,
                 envelope = {payload_type = "runtime.command.accepted", stream = {id = "sess-1"}, payload = {}}})
             if call_error then error(tostring(call_error)) end

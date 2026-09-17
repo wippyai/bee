@@ -81,3 +81,20 @@ The live integration test starts two native stacks with the same gossip secret,
 proves that the unregistered key is denied, registers it through this store, and
 observes authenticated connection without owner restart. Removal denies the next
 key lookup. It does not claim that removal closes the established connection.
+
+## Shared local Hive enrollment candidate
+
+`EnsureShared` creates one protected enrollment epoch and gossip key for the
+local Hive. Subsequent calls preserve the epoch, key and all peer registrations;
+malformed existing state refuses rather than resetting other nodes. This is
+same-account bootstrap authority, not a live topology or workspace permission.
+The current project-node launcher has not yet wired this shared enrollment.
+
+The existing held-slot registration also supports a stable project node name
+after process death. It first tries that name's recorded slot and can replace
+its stale row only after acquiring the released OS lock. A live holder still
+refuses replacement, and exact key/slot cleanup fences a previous holder from
+removing the replacement. This reuses the existing bounded lease mechanism.
+Concurrent initialization, peer preservation, malformed records, live-node
+refusal, released-slot reuse and stale cleanup are covered by the rendezvous
+race suite alongside the existing subprocess-death tests.

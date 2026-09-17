@@ -39,13 +39,26 @@ func (e *Enrollment) RegisterHeld(ctx context.Context, execution, node string, k
 		return nil, Snapshot{}, ErrEnrollment
 	}
 	// Do not create any slot files for missing, malformed or replaced enrollment.
-	if _, err := e.Read(ctx, execution); err != nil {
+	current, err := e.Read(ctx, execution)
+	if err != nil {
 		return nil, Snapshot{}, err
 	}
+	slots := make([]int, 0, MaxLocalPeers)
+	previousSlot, sameNode := current.slots[node]
+	if sameNode {
+		slots = append(slots, previousSlot)
+	} else {
+		for slot := 0; slot < MaxLocalPeers; slot++ {
+			slots = append(slots, slot)
+		}
+	}
 	var lease *PeerLease
-	for slot := 0; slot < MaxLocalPeers; slot++ {
+	for _, slot := range slots {
 		unlock, err := privatefile.TryLock(ctx, e.directory, fmt.Sprintf(".client-slot-%03d.lock", slot))
 		if errors.Is(err, privatefile.ErrLockBusy) {
+			if sameNode {
+				return nil, Snapshot{}, ErrPeerConflict
+			}
 			continue
 		}
 		if err != nil {
@@ -59,16 +72,13 @@ func (e *Enrollment) RegisterHeld(ctx context.Context, execution, node string, k
 	}
 	encoded := base64.RawStdEncoding.EncodeToString(key)
 	var result Snapshot
-	err := e.file.ReadModifyWrite(ctx, maxEnrollmentBytes, func(data []byte) ([]byte, error) {
+	err = e.file.ReadModifyWrite(ctx, maxEnrollmentBytes, func(data []byte) ([]byte, error) {
 		record, err := decodeEnrollment(data)
 		if err != nil {
 			return nil, err
 		}
 		if record.Execution != execution {
 			return nil, ErrOwnerChanged
-		}
-		if _, exists := record.Peers[node]; exists {
-			return nil, ErrPeerConflict
 		}
 		// The held lock proves that this slot has no live native holder. The
 		// slot index is validated and unique by decodeEnrollment.
@@ -78,6 +88,9 @@ func (e *Enrollment) RegisterHeld(ctx context.Context, execution, node string, k
 				delete(record.Slots, previous)
 				break
 			}
+		}
+		if _, exists := record.Peers[node]; exists {
+			return nil, ErrPeerConflict
 		}
 		if len(record.Peers) >= MaxLocalPeers {
 			return nil, ErrPeerCapacity

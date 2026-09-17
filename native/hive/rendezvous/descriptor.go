@@ -92,6 +92,60 @@ func Capture(node cluster.NodeInfo, execution string) (Descriptor, error) {
 	return d, nil
 }
 
+// CaptureLocal publishes same-machine aliases for a node whose mesh advertises
+// a different reachable address to the Hive. The listener must be bound on the
+// selected loopback family; this function only describes its already-bound
+// gossip and internode ports. The caller still owns listener verification.
+func CaptureLocal(node cluster.NodeInfo, execution string, gossipLoopback, transportLoopback netip.Addr) (Descriptor, error) {
+	if !gossipLoopback.IsValid() || !gossipLoopback.IsLoopback() || gossipLoopback.Zone() != "" ||
+		!transportLoopback.IsValid() || !transportLoopback.IsLoopback() || transportLoopback.Zone() != "" {
+		return Descriptor{}, ErrDescriptor
+	}
+	gossip, err := netip.ParseAddrPort(node.Addr)
+	if err != nil || gossip.Port() == 0 {
+		return Descriptor{}, ErrDescriptor
+	}
+	port, err := strconv.ParseUint(node.Meta[internode.MetadataPort], 10, 16)
+	if err != nil || port == 0 {
+		return Descriptor{}, ErrDescriptor
+	}
+	descriptor := Descriptor{
+		Version:   1,
+		Execution: execution,
+		Node:      node.ID,
+		Gossip:    netip.AddrPortFrom(gossipLoopback, gossip.Port()).String(),
+		Transport: netip.AddrPortFrom(transportLoopback, uint16(port)).String(),
+		PublicKey: node.Meta[internode.MetadataPublicKey],
+	}
+	if err := descriptor.validate(); err != nil {
+		return Descriptor{}, err
+	}
+	return descriptor, nil
+}
+
+// MatchesNode authenticates a local alias against the live membership record.
+// Execution remains fenced by re-reading the exact protected descriptor and
+// enrollment after connection; membership itself does not carry that value.
+func (d Descriptor) MatchesNode(node cluster.NodeInfo) bool {
+	if d.validate() != nil || node.ID != d.Node || node.Meta[internode.MetadataPublicKey] != d.PublicKey {
+		return false
+	}
+	gossip, err := netip.ParseAddrPort(node.Addr)
+	if err != nil {
+		return false
+	}
+	localGossip, err := netip.ParseAddrPort(d.Gossip)
+	if err != nil || gossip.Port() != localGossip.Port() {
+		return false
+	}
+	port, err := strconv.ParseUint(node.Meta[internode.MetadataPort], 10, 16)
+	if err != nil {
+		return false
+	}
+	localTransport, err := netip.ParseAddrPort(d.Transport)
+	return err == nil && uint64(localTransport.Port()) == port
+}
+
 // Decode rejects unknown, duplicate, case-aliased, missing and null fields.
 func Decode(data []byte) (Descriptor, error) {
 	if len(data) == 0 || len(data) > MaxBytes || !utf8.Valid(data) {

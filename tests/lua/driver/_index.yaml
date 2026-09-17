@@ -44,8 +44,10 @@ entries:
     stream_json: bee.driver.transport:stream_json
     claude: bee.driver.claude:protocol
     codex: bee.driver.codex:protocol
+    muse: bee.driver.muse:protocol
     claude_launch: bee.driver.claude:launch
     codex_launch: bee.driver.codex:launch
+    muse_launch: bee.driver.muse:launch
     observation: bee.threads.records:observation
     quote: bee.driver.kit:quote
 - name: codex_config_test
@@ -56,3 +58,13 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.driver.codex:configuration
+- name: muse_config_test
+  kind: function.lua
+  source: file://muse_config_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    configuration: bee.driver.muse:configuration
+    configure: bee.driver.muse:configure

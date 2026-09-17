@@ -52,11 +52,12 @@ local function define_tests()
             test.is_true(snapshot.complete)
             local usable, usable_error = catalog.usable(snapshot)
             if not usable then error(tostring(usable_error)) end
-            test.eq(#usable, 4)
+            test.eq(#usable, 5)
             test.eq(usable[1].binding_id, "bee.driver.agy:binding")
             test.eq(usable[2].binding_id, "bee.driver.claude:binding")
             test.eq(usable[3].binding_id, "bee.driver.codex:binding")
             test.eq(usable[4].binding_id, "bee.driver.grok:binding")
+            test.eq(usable[5].binding_id, "bee.driver.muse:binding")
             for index = 2, #snapshot.bindings do
                 test.is_true(snapshot.bindings[index - 1].binding_id < snapshot.bindings[index].binding_id)
             end
@@ -156,8 +157,9 @@ local function define_tests()
             local data = entry.data :: {[string]: unknown}
             test.eq(data.schema_revision, "bee.harness-activation@1")
             local list = data.bindings :: {string}
-            test.eq(#list, 4)
+            test.eq(#list, 5)
             test.is_true(has(list, "bee.driver.claude:binding"))
+            test.is_true(has(list, "bee.driver.muse:binding"))
         end)
         test.it("rejects a malformed activation declaration without activating discovered bindings", function()
             local original = registry.get("bee:harness_activation")

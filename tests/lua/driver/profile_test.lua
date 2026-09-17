@@ -101,8 +101,8 @@ local function define_tests()
             local _, exit_error = profile.decode(exit)
             test.eq(exit_error, "profile batch.exit_codes_trustworthy must be a boolean")
         end)
-        test.it("validates the shipped Claude and Codex bindings", function()
-            for _, id in ipairs({"bee.driver.claude:binding", "bee.driver.codex:binding"}) do
+        test.it("validates the shipped Claude, Codex and Muse bindings", function()
+            for _, id in ipairs({"bee.driver.claude:binding", "bee.driver.codex:binding", "bee.driver.muse:binding"}) do
                 local entry, err = registry.get(id)
                 if not entry then error(id .. ": " .. tostring(err)) end
                 test.eq(entry.meta.type, "harness.driver")

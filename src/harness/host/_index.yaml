@@ -23,6 +23,12 @@ entries:
           kind: fs_directory
           ref: bee:machine_login_source
         optional: true
+      muse_login:
+        provider: muse
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
       agy_login:
         provider: agy
         source:
@@ -53,6 +59,7 @@ entries:
     - bee.driver.claude:binding
     - bee.driver.codex:binding
     - bee.driver.grok:binding
+    - bee.driver.muse:binding
 - name: launch_policy_managed
   kind: registry.entry
   meta:
@@ -196,6 +203,67 @@ entries:
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
     prepare_options: {sandbox: read-only}
+- name: launch_policy_muse_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      muse: bee.driver.muse:executable
+    environment: {}
+    environment_refs:
+      XDG_CONFIG_HOME: bee.driver.muse:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    prepare_options: {}
+- name: launch_policy_muse_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected non-interactive Muse batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {muse: bee.driver.muse:executable}
+    environment: {}
+    environment_refs: {XDG_CONFIG_HOME: bee.driver.muse:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options: {effort: [low, medium, high]}
+    prepare_options: {approval_mode: never, max_steps: 1}
 - name: launch_policy_agy_window
   kind: registry.entry
   meta:

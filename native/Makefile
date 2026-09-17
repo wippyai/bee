@@ -16,6 +16,11 @@ rendezvous-check:
 	go test -mod=mod -modfile="$$testmod/go.mod" -race -count=1 -timeout=60s -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous ./internal/privatefile; \
 	go vet -mod=mod -modfile="$$testmod/go.mod" -tags "$(TAGS) rendezvousintegration" ./hive/rendezvous
 
+.PHONY: hive-config-check
+hive-config-check:
+	go test -race -count=1 -timeout=60s ./hive/config
+	go vet ./hive/config
+
 # For native components consuming API additions in Bee's pinned runtime patches.
 .PHONY: patched-check
 patched-check:

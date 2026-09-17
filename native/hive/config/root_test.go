@@ -33,9 +33,9 @@ func TestRootManyWorkspacesShareRuntimeState(t *testing.T) {
 }
 
 func TestRootInvalidUTF8IsRefused(t *testing.T) {
-	raw := []byte(`{"version":1,"revision":1,"enrollment_ref":"x`)
+	raw := []byte(`{"version":1,"revision":1,"hive":{"mode":"local"},"workspaces":[],"broken":"x`)
 	raw = append(raw, 0xff)
-	raw = append(raw, []byte(`","workspaces":[]}`)...)
+	raw = append(raw, []byte(`"}`)...)
 	if _, err := Decode(raw); err == nil {
 		t.Fatal("invalid UTF-8 silently rewritten")
 	}

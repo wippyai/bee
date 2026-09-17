@@ -64,8 +64,8 @@ func decodeDocument(data []byte, fromDisk bool) (Document, error) {
 			doc.Version, err = decodeVersion(dec)
 		case "revision":
 			doc.Revision, err = decodeRevision(dec, fromDisk)
-		case "enrollment_ref":
-			doc.EnrollmentRef, err = decodeEnrollmentRef(dec)
+		case "hive":
+			doc.Hive, err = decodeHiveProfile(dec)
 		case "workspaces":
 			doc.Workspaces, err = decodeWorkspaces(dec)
 		default:
@@ -81,7 +81,7 @@ func decodeDocument(data []byte, fromDisk bool) (Document, error) {
 		return Document{}, fmt.Errorf("%w: expected end of JSON object", ErrMalformedDocument)
 	}
 
-	if !seen["version"] || !seen["revision"] || !seen["enrollment_ref"] || !seen["workspaces"] {
+	if !seen["version"] || !seen["revision"] || !seen["hive"] || !seen["workspaces"] {
 		return Document{}, fmt.Errorf("%w: missing required field", ErrMalformedDocument)
 	}
 
@@ -144,24 +144,6 @@ func decodeRevision(dec *json.Decoder, fromDisk bool) (uint64, error) {
 		return 0, fmt.Errorf("%w: revision must be positive on disk", ErrMalformedDocument)
 	}
 	return rev, nil
-}
-
-func decodeEnrollmentRef(dec *json.Decoder) (string, error) {
-	tok, err := dec.Token()
-	if err != nil {
-		return "", fmt.Errorf("%w: invalid JSON syntax", ErrMalformedDocument)
-	}
-	if tok == nil {
-		return "", fmt.Errorf("%w: null field", ErrMalformedDocument)
-	}
-	s, ok := tok.(string)
-	if !ok {
-		return "", fmt.Errorf("%w: invalid field type for enrollment_ref", ErrMalformedDocument)
-	}
-	if err := validateEnrollmentRef(s); err != nil {
-		return "", err
-	}
-	return s, nil
 }
 
 func decodeWorkspaces(dec *json.Decoder) ([]WorkspaceLocation, error) {

@@ -51,7 +51,7 @@ func TestRoundtripSeparateReopen(t *testing.T) {
 	s2 := testAbsPath("/state/beta")
 
 	committed1, err := store1.Update(ctx, 0, func(doc Document) (Document, error) {
-		doc.EnrollmentRef = "enrollment-ref-xyz"
+		doc.Hive = LocalHiveProfile()
 		doc.Workspaces = []WorkspaceLocation{
 			{WorkspaceID: "ws-alpha", ProjectDir: p1, RuntimeStateDir: s1},
 			{WorkspaceID: "ws-beta", ProjectDir: p2, RuntimeStateDir: s2},
@@ -68,8 +68,8 @@ func TestRoundtripSeparateReopen(t *testing.T) {
 	if committed1.Revision != 1 {
 		t.Fatalf("expected revision 1, got %d", committed1.Revision)
 	}
-	if committed1.EnrollmentRef != "enrollment-ref-xyz" {
-		t.Fatalf("unexpected enrollment ref %q", committed1.EnrollmentRef)
+	if committed1.Hive.Mode != "local" {
+		t.Fatalf("unexpected hive mode %q", committed1.Hive.Mode)
 	}
 	if len(committed1.Workspaces) != 2 {
 		t.Fatalf("expected 2 workspaces, got %d", len(committed1.Workspaces))
@@ -85,7 +85,7 @@ func TestRoundtripSeparateReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store2 Read failed: %v", err)
 	}
-	if doc2.Version != 1 || doc2.Revision != 1 || doc2.EnrollmentRef != "enrollment-ref-xyz" {
+	if doc2.Version != 1 || doc2.Revision != 1 || doc2.Hive.Mode != "local" {
 		t.Fatalf("reopened doc mismatch: %+v", doc2)
 	}
 	if len(doc2.Workspaces) != 2 {
@@ -251,7 +251,7 @@ func TestConcurrentSameRevisionUpdatesOneCommitOneConflict(t *testing.T) {
 
 		// Initial commit (Revision 1)
 		_, err = store.Update(ctx, 0, func(doc Document) (Document, error) {
-			doc.EnrollmentRef = "initial"
+			doc.Hive = LocalHiveProfile()
 			return doc, nil
 		})
 		if err != nil {
@@ -274,7 +274,7 @@ func TestConcurrentSameRevisionUpdatesOneCommitOneConflict(t *testing.T) {
 					return
 				}
 				_, err = s.Update(ctx, 1, func(doc Document) (Document, error) {
-					doc.EnrollmentRef = fmt.Sprintf("worker-%d", idx)
+					doc.Hive = LocalHiveProfile()
 					return doc, nil
 				})
 				mu.Lock()
@@ -319,7 +319,7 @@ func TestStaleRejectionPreservesPriorBytesAndSkipsCallback(t *testing.T) {
 	s1 := testAbsPath("/state/test1")
 
 	_, err = store.Update(ctx, 0, func(doc Document) (Document, error) {
-		doc.EnrollmentRef = "original"
+		doc.Hive = LocalHiveProfile()
 		doc.Workspaces = []WorkspaceLocation{
 			{WorkspaceID: "ws1", ProjectDir: p1, RuntimeStateDir: s1},
 		}
@@ -409,46 +409,46 @@ func TestCorruptUnknownDuplicateCaseAliasNullMissingRejection(t *testing.T) {
 	}{
 		{"corrupt_json", `{"version": 1, "revision": 1, malformed`},
 		{"empty_object", `{}`},
-		{"unknown_field_root", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [], "unknown_field": 123}`},
-		{"case_alias_version", `{"Version": 1, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"case_alias_revision", `{"version": 1, "Revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"case_alias_enrollment", `{"version": 1, "revision": 1, "enrollmentRef": "", "workspaces": []}`},
-		{"case_alias_workspaces", `{"version": 1, "revision": 1, "enrollment_ref": "", "Workspaces": []}`},
-		{"duplicate_version", `{"version": 1, "version": 1, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"duplicate_revision", `{"version": 1, "revision": 1, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"duplicate_enrollment", `{"version": 1, "revision": 1, "enrollment_ref": "", "enrollment_ref": "", "workspaces": []}`},
-		{"duplicate_workspaces", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [], "workspaces": []}`},
-		{"null_version", `{"version": null, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"null_revision", `{"version": 1, "revision": null, "enrollment_ref": "", "workspaces": []}`},
-		{"null_enrollment", `{"version": 1, "revision": 1, "enrollment_ref": null, "workspaces": []}`},
-		{"null_workspaces", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": null}`},
-		{"missing_version", `{"revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"missing_revision", `{"version": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"missing_enrollment", `{"version": 1, "revision": 1, "workspaces": []}`},
-		{"missing_workspaces", `{"version": 1, "revision": 1, "enrollment_ref": ""}`},
-		{"version_is_zero", `{"version": 0, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"version_is_two", `{"version": 2, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"version_is_string", `{"version": "1", "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"version_is_float", `{"version": 1.0, "revision": 1, "enrollment_ref": "", "workspaces": []}`},
-		{"revision_is_zero_on_disk", `{"version": 1, "revision": 0, "enrollment_ref": "", "workspaces": []}`},
-		{"revision_is_negative", `{"version": 1, "revision": -1, "enrollment_ref": "", "workspaces": []}`},
-		{"revision_is_string", `{"version": 1, "revision": "1", "enrollment_ref": "", "workspaces": []}`},
-		{"revision_is_float", `{"version": 1, "revision": 1.5, "enrollment_ref": "", "workspaces": []}`},
-		{"trailing_content", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": []} extra`},
-		{"trailing_json", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": []} {"extra": 1}`},
-		{"workspace_null_entry", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [null]}`},
-		{"workspace_string_entry", `{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": ["string"]}`},
-		{"workspace_unknown_field", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","project_dir":"%s","runtime_state_dir":"%s","unknown":1}]}`, validP, validS)},
-		{"workspace_case_alias_id", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspaceId":"ws","project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
-		{"workspace_case_alias_project", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","projectDir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
-		{"workspace_case_alias_state", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","project_dir":"%s","stateDir":"%s"}]}`, validP, validS)},
-		{"workspace_duplicate_field", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","workspace_id":"ws","project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
-		{"workspace_null_id", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":null,"project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
-		{"workspace_null_project", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","project_dir":null,"runtime_state_dir":"%s"}]}`, validS)},
-		{"workspace_null_state", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","project_dir":"%s","runtime_state_dir":null}]}`, validP)},
-		{"workspace_missing_id", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
-		{"workspace_missing_project", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","runtime_state_dir":"%s"}]}`, validS)},
-		{"workspace_missing_state", fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [{"workspace_id":"ws","project_dir":"%s"}]}`, validP)},
+		{"unknown_field_root", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [], "unknown_field": 123}`},
+		{"case_alias_version", `{"Version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"case_alias_revision", `{"version": 1, "Revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"case_alias_hive", `{"version": 1, "revision": 1, "Hive": "", "workspaces": []}`},
+		{"case_alias_workspaces", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "Workspaces": []}`},
+		{"duplicate_version", `{"version": 1, "version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"duplicate_revision", `{"version": 1, "revision": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"duplicate_hive", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"duplicate_workspaces", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [], "workspaces": []}`},
+		{"null_version", `{"version": null, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"null_revision", `{"version": 1, "revision": null, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"null_hive", `{"version": 1, "revision": 1, "hive": null, "workspaces": []}`},
+		{"null_workspaces", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": null}`},
+		{"missing_version", `{"revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"missing_revision", `{"version": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"missing_hive", `{"version": 1, "revision": 1, "workspaces": []}`},
+		{"missing_workspaces", `{"version": 1, "revision": 1, "hive": {"mode":"local"}}`},
+		{"version_is_zero", `{"version": 0, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"version_is_two", `{"version": 2, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"version_is_string", `{"version": "1", "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"version_is_float", `{"version": 1.0, "revision": 1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"revision_is_zero_on_disk", `{"version": 1, "revision": 0, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"revision_is_negative", `{"version": 1, "revision": -1, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"revision_is_string", `{"version": 1, "revision": "1", "hive": {"mode":"local"}, "workspaces": []}`},
+		{"revision_is_float", `{"version": 1, "revision": 1.5, "hive": {"mode":"local"}, "workspaces": []}`},
+		{"trailing_content", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": []} extra`},
+		{"trailing_json", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": []} {"extra": 1}`},
+		{"workspace_null_entry", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [null]}`},
+		{"workspace_string_entry", `{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": ["string"]}`},
+		{"workspace_unknown_field", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","project_dir":"%s","runtime_state_dir":"%s","unknown":1}]}`, validP, validS)},
+		{"workspace_case_alias_id", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspaceId":"ws","project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
+		{"workspace_case_alias_project", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","projectDir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
+		{"workspace_case_alias_state", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","project_dir":"%s","stateDir":"%s"}]}`, validP, validS)},
+		{"workspace_duplicate_field", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","workspace_id":"ws","project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
+		{"workspace_null_id", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":null,"project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
+		{"workspace_null_project", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","project_dir":null,"runtime_state_dir":"%s"}]}`, validS)},
+		{"workspace_null_state", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","project_dir":"%s","runtime_state_dir":null}]}`, validP)},
+		{"workspace_missing_id", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"project_dir":"%s","runtime_state_dir":"%s"}]}`, validP, validS)},
+		{"workspace_missing_project", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","runtime_state_dir":"%s"}]}`, validS)},
+		{"workspace_missing_state", fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [{"workspace_id":"ws","project_dir":"%s"}]}`, validP)},
 	}
 
 	for _, tc := range testCases {
@@ -671,16 +671,16 @@ func TestInvalidIndexPreservesBytes(t *testing.T) {
 			},
 		},
 		{
-			name: "enrollment_ref_too_long",
+			name: "local_profile_with_joined_field",
 			fn: func(d Document) (Document, error) {
-				d.EnrollmentRef = strings.Repeat("e", 161)
+				d.Hive.HiveID = strings.Repeat("e", 161)
 				return d, nil
 			},
 		},
 		{
-			name: "enrollment_ref_control_char",
+			name: "local_profile_with_joined_field",
 			fn: func(d Document) (Document, error) {
-				d.EnrollmentRef = "enroll\x1b"
+				d.Hive.HiveID = "enroll\x1b"
 				return d, nil
 			},
 		},
@@ -795,7 +795,7 @@ func TestRevisionOverflow(t *testing.T) {
 	raw := fmt.Sprintf(`{
   "version": 1,
   "revision": %d,
-  "enrollment_ref": "",
+  "hive": {"mode":"local"},
   "workspaces": []
 }
 `, uint64(math.MaxUint64))
@@ -819,7 +819,7 @@ func TestRevisionOverflow(t *testing.T) {
 
 	// Attempting to update max uint64 must fail with ErrRevisionOverflow
 	_, err = store.Update(ctx, math.MaxUint64, func(d Document) (Document, error) {
-		d.EnrollmentRef = "overflow-attempt"
+		d.Hive.HiveID = "overflow-attempt"
 		return d, nil
 	})
 	if !errors.Is(err, ErrRevisionOverflow) {
@@ -921,7 +921,7 @@ func TestDocumentSizeLimit(t *testing.T) {
 
 	// Create a document larger than 4 MiB
 	hugeData := make([]byte, MaxDocumentBytes+1024)
-	copy(hugeData, `{"version": 1, "revision": 1, "enrollment_ref": "`)
+	copy(hugeData, `{"version": 1, "revision": 1, "hive": "`)
 	for i := 49; i < len(hugeData)-25; i++ {
 		hugeData[i] = 'a'
 	}
@@ -966,7 +966,7 @@ func TestErrorMessageSanitization(t *testing.T) {
 	secretPath := testAbsPath("/very/secret/path/to/my/private/keys")
 
 	// 1. Unknown field with secret key name
-	rawUnknown := fmt.Sprintf(`{"version": 1, "revision": 1, "enrollment_ref": "", "workspaces": [], "%s": "val"}`, secretKey)
+	rawUnknown := fmt.Sprintf(`{"version": 1, "revision": 1, "hive": {"mode":"local"}, "workspaces": [], "%s": "val"}`, secretKey)
 	docPath := filepath.Join(dir, ConfigFileName)
 	if err := os.WriteFile(docPath, []byte(rawUnknown), 0600); err != nil {
 		t.Fatal(err)

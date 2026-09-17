@@ -96,9 +96,10 @@ def run(packed):
                  "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view", "revision": "1",
                  "title": "Counter", "instance_policy": "multiple", "resume_schema": "counter.v1", "restart_policy": "automatic"}}}
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
-        index = project / "src/_index.yaml"
+        index = project / "src/security/_index.yaml"
         doc = yaml.safe_load(index.read_text())
-        next(e for e in doc["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "probe:app", "policies": []})
+        admission = next(e for e in doc["entries"] if e["name"] == "application_admission")
+        admission["bindings"].append({"definition_id": "probe:app", "policies": []})
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
         # Same authenticated broker, wrong workspace: the owner must not remove
         # its real view when a foreign reply arrives immediately after open.

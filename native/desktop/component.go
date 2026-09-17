@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/bee/native/harnesshost"
 	"github.com/wippyai/bee/native/hive/localowner"
 	"github.com/wippyai/bee/native/ioevents"
 	"github.com/wippyai/bee/native/launch"
@@ -21,6 +22,7 @@ import (
 	"github.com/wippyai/runtime/boot/components/core"
 	"github.com/wippyai/runtime/boot/components/dispatchers"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
+	bootsystem "github.com/wippyai/runtime/boot/components/system"
 )
 
 // Options are selected by the compiled host, never registry activation metadata.
@@ -36,6 +38,7 @@ type Host struct {
 	owner    *localowner.Component
 	desktop  boot.Component
 	events   boot.Component
+	hostenv  boot.Component
 	initErr  error
 }
 
@@ -56,7 +59,7 @@ func New(options Options) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Host{launcher: launcher, owner: owner, desktop: desktop, events: ioevents.Component()}, nil
+	return &Host{launcher: launcher, owner: owner, desktop: desktop, events: ioevents.Component(), hostenv: harnesshost.Component()}, nil
 }
 
 // Component is the single factory consumed by Wippy Builder. Ordinary fresh
@@ -75,7 +78,7 @@ func Component() boot.Component {
 
 func (*Host) Name() string { return "bee.native" }
 func (*Host) DependsOn() []string {
-	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName}
+	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName, bootsystem.EnvironmentName}
 }
 func (h *Host) PrepareLaunch(ctx context.Context, request application.LaunchRequest) (application.LaunchPlan, error) {
 	if h.initErr != nil {
@@ -94,6 +97,10 @@ func (h *Host) Load(ctx context.Context) (context.Context, error) {
 		return ctx, h.initErr
 	}
 	var err error
+	ctx, err = h.hostenv.Load(ctx)
+	if err != nil {
+		return ctx, err
+	}
 	ctx, err = h.owner.Load(ctx)
 	if err != nil {
 		return ctx, err

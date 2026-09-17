@@ -150,9 +150,11 @@ local function define_tests()
             local first = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1}))
             test.eq(first.schema, "bee.sync-snapshot@1")
             test.eq(first.complete, false)
+            test.eq(first.reset_required, false)
             local tail = value(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
                 after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision}))
             test.eq(tail.complete, true)
+            test.eq(tail.reset_required, false)
             local empty = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
                 expected_scope_revision = first.scope_revision}))
             test.eq(#(empty.events :: {unknown}), 0)

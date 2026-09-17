@@ -264,6 +264,7 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py
 

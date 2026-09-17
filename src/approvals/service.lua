@@ -649,7 +649,7 @@ local function op_feed_snapshot(tx: sql.Transaction, actor: string, object: Obje
     if checked_scope ~= scope then return failure("RESET_REQUIRED", "approval visibility changed") end
     return success({schema = "bee.sync-snapshot@1", owner_id = node(), feed = feed, cursor = cursor,
         earliest_cursor = 0, scope_revision = scope, items = items, complete = not truncated and #rows <= limit,
-        next_key = (truncated or #rows > limit) and next_key or nil}, false)
+        next_key = (truncated or #rows > limit) and next_key or nil, reset_required = false}, false)
 end
 local function op_feed_read_after(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
     local extra = bounds.fields(object, {"workspace_id", "cursor", "limit", "expected_scope_revision"})

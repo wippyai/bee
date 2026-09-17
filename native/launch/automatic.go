@@ -28,6 +28,20 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 	if !filepath.IsAbs(request.Directory) {
 		return errors.New("client launch needs the project directory")
 	}
+	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
+	if err != nil {
+		return err
+	}
+	if c.AttachOnly {
+		// An explicit display client decides from published discovery alone. It
+		// creates no state directory and never contends for the owner lock.
+		if _, err := store.Read(ctx); errors.Is(err, os.ErrNotExist) {
+			return errors.New("No running Bee for this project; run bee to start its node")
+		} else if err != nil {
+			return err
+		}
+		return c.Attach(ctx, request)
+	}
 	if err := privatefile.EnsurePrivateDir(request.StateDir); err != nil {
 		return err
 	}
@@ -39,10 +53,6 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, request)
-	}
-	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
-	if err != nil {
-		return err
 	}
 	previous, err := store.Read(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

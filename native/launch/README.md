@@ -31,6 +31,21 @@ before discovery. The callback runs before deployment/application data bindings.
 `NewOwnerLauncher` exposes only explicit-start routing for host compositions that
 do not select the automatic foreground route.
 
+`CanonicalProject` resolves the launch folder through symlinks so one project
+keeps one native node identity. `ProjectStateDir` assigns one runtime state
+directory per canonical project under a host-selected root, and
+`DefaultProjectStateDir` adds the upgrade rule: the first canonical project
+opened against a root that already holds Bee state is bound to that root by one
+protected receipt, and every later project uses its digest-qualified directory.
+No database is copied or removed, so a previous executable can still use the
+root. A legacy root that a Bee is currently running refuses the upgrade instead
+of splitting live state. An explicitly selected state directory never enters
+this helper.
+
+`AttachOnly` marks an explicit display client. It decides from published
+discovery alone, so it creates no state directory and never contends for the
+owner lock; with no published owner it reports that none is running.
+
 `StartOwner` separates OS process lifetime: null stdin, caller-owned regular log,
 and a new session/process group. The automatic route creates an owner-only log
 in the selected state directory and reports its path on failure. Client detach,

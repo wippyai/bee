@@ -23,11 +23,12 @@ import (
 // deployment or application data binding. The caller owns files and signals.
 // This adapter starts no owner, opens no database and retries no input.
 type Client struct {
-	Command   string
-	Selection session.Selection
-	Mode      hive.DesktopMode
-	Stdin     *os.File
-	Stdout    io.Writer
+	AttachOnly bool // Explicit display client: never start a workspace node.
+	Command    string
+	Selection  session.Selection
+	Mode       hive.DesktopMode
+	Stdin      *os.File
+	Stdout     io.Writer
 }
 
 func (c Client) Attach(ctx context.Context, request application.LaunchRequest) error {

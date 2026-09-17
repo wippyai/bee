@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	application "github.com/wippyai/runtime/api/application"
@@ -32,11 +33,19 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 	if err != nil {
 		return err
 	}
-	if c.AttachOnly {
-		// An explicit display client decides from published discovery alone. It
-		// creates no state directory and never contends for the owner lock.
+	if c.AttachOnly || c.Mode == hive.Observe || c.Selection.Workspace != "" {
+		// An explicit display client, observer or selection decides from
+		// published discovery alone. It creates no state directory, never
+		// contends for the owner lock and never starts a node of its own.
 		if _, err := store.Read(ctx); errors.Is(err, os.ErrNotExist) {
-			return errors.New("No running Bee for this project; run bee to start its node")
+			switch {
+			case c.Mode == hive.Observe:
+				return errors.New("No running Bee to observe; start bee first")
+			case c.Selection.Workspace != "":
+				return errors.New("No running Bee for the selected desktop; start bee first")
+			default:
+				return errors.New("No running Bee for this project; run bee to start its node")
+			}
 		} else if err != nil {
 			return err
 		}

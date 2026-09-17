@@ -31,6 +31,14 @@ before discovery. The callback runs before deployment/application data bindings.
 `NewOwnerLauncher` exposes only explicit-start routing for host compositions that
 do not select the automatic foreground route.
 
+One ordinary invocation selects the host's display client. `bee` alone attaches
+and, with no owner published, starts one. `bee NAME [ARGS]` attaches and submits
+that command inside the desktop. `bee client`, `bee observe` and
+`bee attach WORKSPACE DISPLAY` never start a node, and `bee desktops` lists the
+selected Bee's durable desktop identities. `bee start` keeps the explicit
+headless owner route, and an argument containing `:` keeps the runtime's own
+application entry for recovery and development launches.
+
 `CanonicalProject` resolves the launch folder through symlinks so one project
 keeps one native node identity. `ProjectStateDir` assigns one runtime state
 directory per canonical project under a host-selected root, and

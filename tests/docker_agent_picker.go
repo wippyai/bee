@@ -560,7 +560,7 @@ func run() error {
 	}
 	updatedIndex := rootText
 	if *codexComponent {
-		anchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
+		anchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding, bee.driver.muse:binding]"
 		updatedIndex = strings.Replace(updatedIndex, anchor, strings.TrimSuffix(anchor, "]")+", bee.driver.codex.docker:binding]", 1)
 		if updatedIndex == rootText {
 			return fmt.Errorf("Codex Docker host activation anchor missing")
@@ -570,7 +570,7 @@ func run() error {
 			return err
 		}
 	} else {
-		anchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding]"
+		anchor := "bindings: [bee.driver.agy:binding, bee.driver.claude:binding, bee.driver.codex:binding, bee.driver.grok:binding, bee.driver.muse:binding]"
 		updatedIndex = strings.Replace(rootText, anchor, strings.TrimSuffix(anchor, "]")+", bee.managed_window_fixture:binding]", 1)
 		if updatedIndex == rootText {
 			return fmt.Errorf("host activation anchor missing")

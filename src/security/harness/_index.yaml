@@ -58,8 +58,10 @@ entries:
     - bee.driver.codex:executable
     - bee.driver.agy:executable
     - bee.driver.grok:executable
+    - bee.driver.muse:executable
     - bee.driver.claude:config_home
     - bee.driver.codex:config_home
+    - bee.driver.muse:config_home
     effect: allow
 - name: profile_store_policy
   kind: security.policy

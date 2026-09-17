@@ -13,6 +13,22 @@ runtime state directory's `local-mesh` directory. Discovery is neither workspace
 readiness nor permission to use an application. Busy-lock attachment does not run
 owner preparation.
 
+A host that selects a configuration directory reads the saved Hive profile
+before preparing the owner. A missing document keeps the local path; a malformed
+one fails visibly and is never replaced. A joined profile supplies the node
+identity, the membership secret and internode private key, the seed list, the
+explicit bind and advertise endpoints and the authoritative peer keys, and its
+saved TLS material is snapshotted into this execution's directory. A joined owner
+advertises its Hive-reachable address, so discovery publishes the same-machine
+loopback aliases of its bound gossip and internode ports for local clients.
+Execution-enrolled physical clients still resolve through local rendezvous state,
+never through profile metadata.
+
+A host that selects a shared Hive directory instead joins the same-account
+bootstrap: the shared enrollment's epoch and gossip key are created once, the
+owner registers under a held peer slot, and its execution credential is issued
+under the shared local authority.
+
 The runtime must preserve `OwnerPlan.Deadline` through bootstrap and close native
 networking on execution cancellation. Normal shutdown retains the application
 lock while supervised processes drain. Credentials expire within at most 30 days;

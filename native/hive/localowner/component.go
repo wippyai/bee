@@ -14,15 +14,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/netip"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	machineconfig "github.com/wippyai/bee/native/hive/config"
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	"github.com/wippyai/runtime/cluster/internode"
 )
 
 const DirectoryName = rendezvous.DirectoryName
@@ -30,14 +34,20 @@ const DirectoryName = rendezvous.DirectoryName
 // Options comes from the native host. Node is the selected runtime node name,
 // not a workspace identity. Lifetime must be finite and at most 30 days.
 type Options struct {
-	Node     string
-	Lifetime time.Duration
+	Node            string
+	Lifetime        time.Duration
+	HiveDirectory   string // Host-selected shared same-account bootstrap; empty is an isolated host composition.
+	ConfigDirectory string // Host-selected protected machine configuration; empty selects local mode.
 }
 
 type prepared struct {
 	execution string
 	directory string
+	node      string
 	publicKey string
+	joined    bool
+	gossip    netip.Addr
+	transport netip.Addr
 	expires   time.Time
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -54,6 +64,9 @@ type Component struct {
 }
 
 func New(options Options) (*Component, error) {
+	if options.HiveDirectory != "" && !filepath.IsAbs(options.HiveDirectory) {
+		return nil, errors.New("local Hive directory must be absolute")
+	}
 	if len(options.Node) == 0 || len(options.Node) > 128 || options.Lifetime < time.Second || options.Lifetime > 30*24*time.Hour {
 		return nil, errors.New("invalid local owner options")
 	}
@@ -102,17 +115,78 @@ func (c *Component) PrepareOwner(ctx context.Context, request launch.LaunchReque
 	}
 	directory := filepath.Join(request.StateDir, DirectoryName)
 	executionID := hex.EncodeToString(execution[:])
-	credentials, err := localtls.Prepare(ctx, directory, executionID, time.Now().Add(c.options.Lifetime))
+	profile, joined, err := c.savedProfile(ctx)
 	if err != nil {
 		return launch.OwnerPlan{}, err
 	}
-	public, private, err := ed25519.GenerateKey(rand.Reader)
+	nodeName := c.options.Node
+	if joined {
+		nodeName = profile.NodeID
+	}
+	gossip, transport := netip.MustParseAddr("127.0.0.1"), netip.MustParseAddr("127.0.0.1")
+	if joined {
+		gossip, err = localAlias(profile.MembershipBindAddress)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		transport, err = localAlias(profile.InternodeBindAddress)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+	}
+	var credentials localtls.Credentials
+	switch {
+	case joined:
+		credentials, err = localtls.SnapshotJoined(ctx, directory, executionID, internode.ManagerTLSConfig{
+			Enabled: true, CertFile: profile.TLSCertPath, KeyFile: profile.TLSKeyPath, CAFile: profile.TLSCAPath,
+		})
+	case c.options.HiveDirectory != "":
+		credentials, err = localtls.PrepareShared(ctx, directory, executionID, time.Now().Add(c.options.Lifetime), c.options.HiveDirectory)
+	default:
+		credentials, err = localtls.Prepare(ctx, directory, executionID, time.Now().Add(c.options.Lifetime))
+	}
 	if err != nil {
 		return launch.OwnerPlan{}, err
 	}
+	var public ed25519.PublicKey
+	var private ed25519.PrivateKey
+	if joined {
+		privateBytes, decodeErr := base64.StdEncoding.DecodeString(string(profile.InternodePrivateKey))
+		if decodeErr != nil {
+			return launch.OwnerPlan{}, decodeErr
+		}
+		private = ed25519.PrivateKey(privateBytes)
+		public = private.Public().(ed25519.PublicKey)
+	} else {
+		public, private, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+	}
+	var shared *rendezvous.Enrollment
+	var sharedEpoch string
 	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return launch.OwnerPlan{}, err
+	switch {
+	case joined:
+		secret, err = base64.StdEncoding.DecodeString(string(profile.MembershipSecret))
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+	case c.options.HiveDirectory != "":
+		shared, err = rendezvous.NewEnrollment(c.options.HiveDirectory)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		var snapshot rendezvous.Snapshot
+		sharedEpoch, snapshot, err = shared.EnsureShared(ctx)
+		if err != nil {
+			return launch.OwnerPlan{}, err
+		}
+		secret = snapshot.GossipKey()
+	default:
+		if _, err := rand.Read(secret); err != nil {
+			return launch.OwnerPlan{}, err
+		}
 	}
 	enrollment, err := rendezvous.NewEnrollment(directory)
 	if err != nil {
@@ -122,24 +196,117 @@ func (c *Component) PrepareOwner(ctx context.Context, request launch.LaunchReque
 		return launch.OwnerPlan{}, err
 	}
 	lifetime, cancel := context.WithDeadline(ctx, credentials.ExpiresAt)
-	state := &prepared{execution: executionID, directory: directory, publicKey: base64.RawStdEncoding.EncodeToString(public), expires: credentials.ExpiresAt, ctx: lifetime, cancel: cancel}
+	var sharedLease *rendezvous.PeerLease
+	if shared != nil {
+		sharedLease, _, err = shared.RegisterHeld(lifetime, sharedEpoch, c.options.Node, public)
+		if err != nil {
+			cancel()
+			return launch.OwnerPlan{}, err
+		}
+	}
+	state := &prepared{
+		execution: executionID, directory: directory, node: nodeName,
+		publicKey: base64.RawStdEncoding.EncodeToString(public),
+		joined:    joined, gossip: gossip, transport: transport,
+		expires: credentials.ExpiresAt, ctx: lifetime, cancel: cancel,
+	}
 	c.state = state
-	peerKeys := clusterapi.PeerKeySource(func(node string) (ed25519.PublicKey, bool) { return enrollment.Resolve(lifetime, executionID, node) })
+	peerKeys := clusterapi.PeerKeySource(func(node string) (ed25519.PublicKey, bool) {
+		// Physical clients enroll under this exact owner execution before joining.
+		// Their keys are local rendezvous state, never Hive profile metadata.
+		if key, ok := enrollment.Resolve(lifetime, executionID, node); ok {
+			return key, true
+		}
+		if joined {
+			encoded, ok := profile.PeerPublicKeys[node]
+			if !ok {
+				return nil, false
+			}
+			decoded, decodeErr := base64.StdEncoding.DecodeString(encoded)
+			return ed25519.PublicKey(decoded), decodeErr == nil && len(decoded) == ed25519.PublicKeySize
+		}
+		if shared != nil {
+			return shared.Resolve(lifetime, sharedEpoch, node)
+		}
+		return nil, false
+	})
+	clusterSettings := map[string]any{
+		"enabled": true, "name": nodeName, "raft.enabled": false, "raft.role": "client",
+		"membership.bind_addr": "127.0.0.1", "membership.bind_port": 0, "membership.advertise_addr": "127.0.0.1", "membership.join_addrs": "",
+		"membership.secret_key": base64.StdEncoding.EncodeToString(secret), "membership.secret_file": "",
+		"internode.bind_addr": "127.0.0.1", "internode.bind_port": 0, "internode.auto_port": true,
+		"internode.advertise_addr": "127.0.0.1", "internode.advertise_port": 0,
+		"internode.identity_key": base64.RawStdEncoding.EncodeToString(private), "internode.identity_key_file": "",
+		"internode.trusted_peer_keys." + nodeName: state.publicKey, "internode.peer_key_source": peerKeys,
+		"internode.tls.enabled": true, "internode.tls.cert_file": credentials.TLS.CertFile,
+		"internode.tls.key_file": credentials.TLS.KeyFile, "internode.tls.ca_file": credentials.TLS.CAFile,
+	}
+	if joined {
+		clusterSettings["membership.bind_addr"] = profile.MembershipBindAddress
+		clusterSettings["membership.bind_port"] = int(profile.MembershipBindPort)
+		clusterSettings["membership.advertise_addr"] = profile.MembershipAdvertiseAddress
+		clusterSettings["membership.advertise_port"] = int(profile.MembershipAdvertisePort)
+		clusterSettings["membership.join_addrs"] = strings.Join(profile.Seeds, ",")
+		clusterSettings["internode.bind_addr"] = profile.InternodeBindAddress
+		clusterSettings["internode.bind_port"] = int(profile.InternodeBindPort)
+		clusterSettings["internode.auto_port"] = profile.InternodeBindPort == 0
+		clusterSettings["internode.advertise_addr"] = profile.InternodeAdvertiseAddress
+		clusterSettings["internode.advertise_port"] = int(profile.InternodeAdvertisePort)
+		for node, key := range profile.PeerPublicKeys {
+			clusterSettings["internode.trusted_peer_keys."+node] = key
+		}
+	}
 	config := boot.NewConfig(
-		boot.WithSection("relay", map[string]any{"node_name": c.options.Node}),
-		boot.WithSection("cluster", map[string]any{
-			"enabled": true, "name": c.options.Node, "raft.enabled": false, "raft.role": "client",
-			"membership.bind_addr": "127.0.0.1", "membership.bind_port": 0, "membership.advertise_addr": "127.0.0.1", "membership.join_addrs": "",
-			"membership.secret_key": base64.StdEncoding.EncodeToString(secret), "membership.secret_file": "",
-			"internode.bind_addr": "127.0.0.1", "internode.bind_port": 0, "internode.auto_port": true,
-			"internode.advertise_addr": "127.0.0.1", "internode.advertise_port": 0,
-			"internode.identity_key": base64.RawStdEncoding.EncodeToString(private), "internode.identity_key_file": "",
-			"internode.trusted_peer_keys." + c.options.Node: state.publicKey, "internode.peer_key_source": peerKeys,
-			"internode.tls.enabled": true, "internode.tls.cert_file": credentials.TLS.CertFile,
-			"internode.tls.key_file": credentials.TLS.KeyFile, "internode.tls.ca_file": credentials.TLS.CAFile,
-		}),
+		boot.WithSection("relay", map[string]any{"node_name": nodeName}),
+		boot.WithSection("cluster", clusterSettings),
 	)
-	return launch.OwnerPlan{Config: config, Deadline: credentials.ExpiresAt, Close: func() error { cancel(); return nil }}, nil
+	return launch.OwnerPlan{Config: config, Deadline: credentials.ExpiresAt, Close: func() error {
+		cancel()
+		if sharedLease != nil {
+			cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer stop()
+			return sharedLease.Close(cleanup)
+		}
+		return nil
+	}}, nil
+}
+
+// savedProfile reads the host-selected machine configuration. A host without a
+// configuration directory, or a machine with no saved document, stays local.
+// Malformed saved configuration fails visibly and is never replaced.
+func (c *Component) savedProfile(ctx context.Context) (machineconfig.HiveProfile, bool, error) {
+	if c.options.ConfigDirectory == "" {
+		return machineconfig.LocalHiveProfile(), false, nil
+	}
+	store, err := machineconfig.New(c.options.ConfigDirectory)
+	if err != nil {
+		return machineconfig.HiveProfile{}, false, err
+	}
+	document, err := store.Read(ctx)
+	if errors.Is(err, os.ErrNotExist) {
+		return machineconfig.LocalHiveProfile(), false, nil
+	}
+	if err != nil {
+		return machineconfig.HiveProfile{}, false, err
+	}
+	return document.Hive, document.Hive.Mode == machineconfig.HiveModeJoined, nil
+}
+
+// localAlias selects the same-machine loopback address of the bind family a
+// joined profile selected. A joined owner advertises a Hive-reachable address,
+// so its local clients reach it through this alias instead.
+func localAlias(bind string) (netip.Addr, error) {
+	if bind == "" {
+		return netip.MustParseAddr("127.0.0.1"), nil
+	}
+	address, err := netip.ParseAddr(bind)
+	if err != nil || address.Zone() != "" {
+		return netip.Addr{}, errors.New("joined Hive bind address must be a literal IP")
+	}
+	if address.Is6() {
+		return netip.MustParseAddr("::1"), nil
+	}
+	return netip.MustParseAddr("127.0.0.1"), nil
 }
 
 // Start publishes transport hints only after the normal native cluster starts.
@@ -159,17 +326,25 @@ func (c *Component) Start(ctx context.Context) error {
 	if membership == nil {
 		return errors.New("local owner requires native cluster boot")
 	}
-	descriptor, err := rendezvous.Capture(membership.LocalNode(), state.execution)
+	var descriptor rendezvous.Descriptor
+	var err error
+	if state.joined {
+		descriptor, err = rendezvous.CaptureLocal(membership.LocalNode(), state.execution, state.gossip, state.transport)
+	} else {
+		descriptor, err = rendezvous.Capture(membership.LocalNode(), state.execution)
+	}
 	if err != nil {
 		return err
 	}
-	if descriptor.Node != c.options.Node || descriptor.PublicKey != state.publicKey {
+	if descriptor.Node != state.node || descriptor.PublicKey != state.publicKey {
 		return errors.New("local owner native identity mismatch")
 	}
-	for _, address := range []string{descriptor.Gossip, descriptor.Transport} {
-		endpoint, err := netip.ParseAddrPort(address)
-		if err != nil || !endpoint.Addr().IsLoopback() {
-			return errors.New("local owner requires loopback endpoints")
+	if !state.joined {
+		for _, address := range []string{descriptor.Gossip, descriptor.Transport} {
+			endpoint, err := netip.ParseAddrPort(address)
+			if err != nil || !endpoint.Addr().IsLoopback() {
+				return errors.New("local owner requires loopback endpoints")
+			}
 		}
 	}
 	store, err := rendezvous.New(state.directory)

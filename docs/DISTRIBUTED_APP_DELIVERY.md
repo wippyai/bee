@@ -62,9 +62,11 @@ their plans, selections, approvals and overlays never cross that boundary.
 Overlay activation uses the existing owner-local, generation-fenced overlay API.
 Immediately before apply, governance re-resolves and re-preflights the selected
 candidate in the destination context, then applies the exact reviewed definitions
-through its owned overlay generation. An overlay-generation conflict retires that
-attempt and requires another preflight; overlay activation never writes registry
-history.
+through its owned overlay generation. After an exact observed match, governance
+re-resolves once more and records uncertainty with a named composed-base
+diagnostic when the base moved across the apply instead of claiming applied.
+An overlay-generation conflict retires that attempt and requires another
+preflight; overlay activation never writes registry history.
 
 Durable registry publication is a separate adapter. Its atomic composed-base CAS
 remains unavailable and must not be approximated with a Lua pre-read. That missing

@@ -80,16 +80,30 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
     return result, nil
 end
 
+local function composed_base_diagnostic(intent: Object, current: Object): string?
+    local prior = type(intent.resolution_bytes) == "string"
+        and object(json.decode(intent.resolution_bytes :: string)) or nil
+    local next_candidate = type(current.candidate) == "table" and (current.candidate :: Object) or nil
+    local before = prior and prior.base_digest or nil
+    local after = next_candidate and next_candidate.base_digest or nil
+    if type(before) == "string" and type(after) == "string" and before ~= after then
+        return "composed registry base changed since review; prepare again against the current composed registry"
+    end
+    return nil
+end
+
 local function unchanged(intent: Object, current: Object): Result?
     local fields = {"owner_node", "workspace_id", "source_node", "source_workspace", "version",
         "plan_digest", "artifact_digest", "resolution_digest", "preflight_digest"}
     for _, field in ipairs(fields) do
         if intent[field] ~= current[field] then
-            if field == "resolution_digest" and type(intent.resolution_bytes) == "string"
-                and type(current.candidate) == "table" then
-                local prior = object(json.decode(intent.resolution_bytes :: string))
-                local next_candidate = current.candidate :: Object
-                if prior then
+            if field == "resolution_digest" then
+                local named = composed_base_diagnostic(intent, current)
+                if named then return failure("CONFLICT", named) end
+                local prior = type(intent.resolution_bytes) == "string"
+                    and object(json.decode(intent.resolution_bytes :: string)) or nil
+                local next_candidate = type(current.candidate) == "table" and (current.candidate :: Object) or nil
+                if prior and next_candidate then
                     for _, candidate_field in ipairs({"destination_node", "source_node", "base_revision", "base_digest"}) do
                         if prior[candidate_field] ~= next_candidate[candidate_field] then
                             return failure("CONFLICT", "activation resolution changed: " .. candidate_field)
@@ -262,6 +276,15 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if observed ~= true then
                 return uncertain(observed == nil and tostring(applied_observe_error)
                     or "overlay apply completed without an exact observed match")
+            end
+            local reverified, reverify_error = remeasure_authorized(config, intent)
+            if not reverified then
+                return uncertain(tostring((reverify_error :: Result).message
+                    or "activation apply could not be remeasured against the current composed registry"))
+            end
+            if reverified.resolution_digest ~= spec.resolution_digest then
+                local named = composed_base_diagnostic(intent, reverified)
+                return uncertain(named or "activation measurement changed during apply; prepare again against the current composed registry")
             end
         end
         local outcome_key = key(prefix, "outcome-applied-" .. tostring(intent.revision))

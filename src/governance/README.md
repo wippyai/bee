@@ -91,8 +91,11 @@ resolved dependencies and references, final requirement bindings, a coherent
 registry/policy snapshot, and the applied migration ledgers for updated packages.
 Durable publication and overlay activation use distinct conflict boundaries.
 Durable publication still needs an atomic composed-base CAS. Overlay activation
-may re-resolve and re-preflight immediately before owner-local apply, then rely on
-the overlay's owner/generation conflict check; it does not create registry history.
+re-resolves and re-preflights immediately before owner-local apply, re-verifies
+the composed base after the apply, and records uncertainty with a named
+composed-base diagnostic when the base moved instead of claiming applied. It
+relies on the overlay's owner/generation conflict check and does not create
+registry history.
 Entry measurements enumerate requested grants and runtime modules from actual
 artifact content, including lifecycle/security declarations, not catalog claims.
 Each artifact enumerates its exact owned namespaces, including children. A host

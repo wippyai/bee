@@ -11,7 +11,7 @@ local protocol = require("protocol")
 local decode = require("decode")
 local contract = require("contract")
 type Channel = channel.Channel
-type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping"
+type Phase = "boot" | "admit" | "running" | "render" | "save" | "exit" | "stopping" | "departing"
 type Renderer = {pid: string, connection: string}
 type Child = {id: string, resource: desktops.Desktop, phase: Phase, connection: string, pending: string,
     ready: boolean, activation: string?, deadline: Channel<time.Time>?, renderer: Renderer?}
@@ -42,6 +42,18 @@ local function fail(state: State, child: Child, message: string)
     child.phase, child.deadline = "stopping", nil
     process.terminate(child.resource.pid)
     -- Keep the writer reservation until its actual EXIT, including failed stop.
+end
+-- This actor spawned the child, so its exit is a departure this owner observes
+-- first hand. The host owns the display admission and accepts a release only
+-- from its owner, so the departure is announced there and the display identity
+-- stays held until the host reports the release.
+local function depart(state: State, child: Child)
+    child.phase, child.deadline, child.ready, child.renderer = "departing", nil, false, nil
+    child.pending = uuid.v7()
+    if not send(state.host, "bee.host.client", {version = 1, workspace_id = state.workspace_id,
+        request_id = child.pending, op = "detach", recipient = child.resource.pid}) then
+        child.pending = ""
+    end
 end
 local function control(state: State, child: Child, op: string): boolean
     child.pending = uuid.v7()
@@ -149,7 +161,23 @@ local function host_connection(data: unknown): string?
     if not connection or connection == "" then return nil end
     return connection
 end
+-- The host answers an announced departure on its request, and answers a release
+-- it started for the same client without one. Either completion frees the
+-- display identity; a refusal keeps it held under the departed child.
+local function departed(state: State, topic: string, sender: string, data: unknown): boolean
+    if topic ~= "result" or sender ~= state.host then return false end
+    local result = protocol.client_result(data, state.workspace_id)
+    if not result or result.op ~= "detach" then return false end
+    for id, child in pairs(state.children) do
+        if child.phase == "departing" and child.resource.pid == result.recipient then
+            if result.error_code == "" or result.error_code == "not_found" then state.children[id] = nil end
+            return true
+        end
+    end
+    return false
+end
 function M.receive(state: State, topic: string, sender: string, data: unknown): boolean
+    if departed(state, topic, sender, data) then return true end
     local selected: Child? = nil
     for _, child in pairs(state.children) do
         if sender == child.resource.pid then selected = child; break end
@@ -198,12 +226,12 @@ end
 function M.event(state: State, event: process.Event)
     if event.kind ~= process.event.EXIT and event.kind ~= process.event.LINK_DOWN then return end
     local sender = tostring(event.from)
-    for id, child in pairs(state.children) do
+    for _, child in pairs(state.children) do
         if event.kind == process.event.EXIT and sender == child.resource.pid then
             settle(state, child, "UNAVAILABLE", "Desktop exited before activation completed: " .. (decode.exit_error(event.result) or "without an error"))
             desktops.exited(state.resources, event)
-            state.children[id] = nil
-        else
+            depart(state, child)
+        elseif child.phase ~= "departing" then
             local grants = child.resource.grants
             local attached = (grants.controller and grants.controller.recipient == sender) or grants.observers[sender] ~= nil
             if attached then

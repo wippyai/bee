@@ -28,6 +28,33 @@ local function define_tests()
             test.is_nil(protocol.quit({version = 1, workspace_id = workspace, request_id = "request", emergency = "yes"}, workspace))
             test.is_false(assert(protocol.quit({version = 1, workspace_id = workspace, request_id = "request"}, workspace)).emergency)
         end)
+        test.it("accepts a host release that carries no request id", function()
+            local value = {version = 1, workspace_id = workspace, request_id = "", op = "detach",
+                recipient = "node@bee:workers|client", connection_id = "", display_id = "", error_code = "", error = ""}
+            local result = assert(protocol.client_result(value, workspace))
+            test.eq(result.op, "detach")
+            test.eq(result.recipient, "node@bee:workers|client")
+            test.eq(result.request_id, "")
+            value.request_id = "release"
+            value.error_code = "busy"
+            value.error = "Detach is pending"
+            local pending = assert(protocol.client_result(value, workspace))
+            test.eq(pending.request_id, "release")
+            test.eq(pending.error_code, "busy")
+        end)
+        test.it("rejects a client result without an operation, recipient or workspace", function()
+            local value = {version = 1, workspace_id = workspace, request_id = "", op = "detach",
+                recipient = "node@bee:workers|client", error_code = "", error = ""}
+            test.is_nil(protocol.client_result(value, "ffffffffffffffffffffffffffffffff"))
+            value.op = ""
+            test.is_nil(protocol.client_result(value, workspace))
+            value.op = "detach"
+            value.recipient = ""
+            test.is_nil(protocol.client_result(value, workspace))
+            value.recipient = "node@bee:workers|client"
+            value.error = nil
+            test.is_nil(protocol.client_result(value, workspace))
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

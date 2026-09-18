@@ -4,6 +4,7 @@ local decode = require("decode")
 type Host = {workspace_id: string, desktop: decode.Desktop, fresh: boolean}
 type Ready = {client_id: string, import_receipt: string}
 type Quit = {request_id: string, emergency: boolean}
+type ClientResult = {request_id: string, op: string, recipient: string, error_code: string, error: string}
 local M = {}
 function M.host(value: unknown): Host?
     if type(value) ~= "table" or value.version ~= 1 or type(value.saved) ~= "table" then return nil end
@@ -18,6 +19,20 @@ function M.request(value: unknown, workspace_id: string): string?
     local id = contract.text(value.request_id, 80)
     if not id or id == "" then return nil end
     return id
+end
+-- A host client result names the operation and recipient it settles. A release
+-- the host started for a client it saw exit carries no request id, so an owner
+-- that announced the same departure correlates on recipient and operation.
+function M.client_result(value: unknown, workspace_id: string): ClientResult?
+    if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
+    local request_id = contract.text(value.request_id, 80)
+    local op = contract.text(value.op, 40)
+    local recipient = contract.text(value.recipient, 160)
+    local code = contract.text(value.error_code, 80)
+    local message = value.error
+    if not request_id or not op or op == "" or not recipient or recipient == "" or not code then return nil end
+    if type(message) ~= "string" or #message > 4096 then return nil end
+    return {request_id = request_id, op = op, recipient = recipient, error_code = code, error = message}
 end
 function M.ready(value: unknown, workspace_id: string, require_import: boolean): Ready?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end

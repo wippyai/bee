@@ -81,11 +81,12 @@ checks source inventory, and packs through Wippy's existing namespace exclusions
 Source-free loading must match every pack's assigned IDs and kinds exactly.
 Missing or multiply owned namespaces and extra module roots fail the build.
 
-Claude and Codex each have a separate driver pack (`bee/driver-claude` and
-`bee/driver-codex`). The shared `bee/driver` pack owns the contract, kit and
+Agy, Claude, Codex, Grok and Muse each have a separate driver pack
+(`bee/driver-agy`, `bee/driver-claude`, `bee/driver-codex`, `bee/driver-grok`
+and `bee/driver-muse`). The shared `bee/driver` pack owns the contract, kit and
 transport. Installing a driver does not activate it or grant execution: the host
 still selects its profile, executable and permissions. This split passed native
-bundle assembly with 17 modules and 612 entries; production launch profiles and
+bundle assembly with 22 modules and 831 entries; production launch profiles and
 independent Hub publication remain separate work.
 
 `build/bundle.py` writes checksummed artifacts under `dist/native-bundles/` and

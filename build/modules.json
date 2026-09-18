@@ -81,6 +81,11 @@
       "namespaces": ["bee.driver.grok"]
     },
     {
+      "module": "bee/driver-muse",
+      "root": "bee.driver.muse",
+      "namespaces": ["bee.driver.muse"]
+    },
+    {
       "module": "bee/gateway",
       "root": "bee.gateway",
       "namespaces": [

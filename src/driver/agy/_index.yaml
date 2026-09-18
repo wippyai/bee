@@ -1,0 +1,209 @@
+version: '1.0'
+namespace: bee.driver.agy
+entries:
+- name: definition
+  kind: ns.definition
+  module: driver_agy
+  readme: file://README.md
+  meta:
+    title: Bee Antigravity CLI driver
+    comment: Declarative Agy launch, stream-json normalization, and host-selected configuration delivery
+- name: executable
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: agy
+  default: ''
+  readonly: true
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules: [json]
+  imports:
+    events: bee.driver.kit:events
+    types: bee.driver:types
+    bounds: bee.threads.records:bounds
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    types: bee.driver:types
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    configure_protocol: bee.driver:configuration
+    quote: bee.driver.kit:quote
+- name: prepare
+  kind: function.lua
+  source: file://prepare_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.agy:launch
+    types: bee.driver:types
+- name: configure
+  kind: function.lua
+  source: file://configure_method.lua
+  method: handle
+  imports:
+    configuration: bee.driver.agy:configuration
+    configure_protocol: bee.driver:configuration
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    launch: bee.driver.agy:launch
+    types: bee.driver:types
+- name: normalize
+  kind: function.lua
+  source: file://normalize_method.lua
+  method: handle
+  imports:
+    protocol: bee.driver.agy:protocol
+    bounds: bee.threads.records:bounds
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.agy:prepare
+      dispatch: bee.driver.agy:dispatch
+      normalize: bee.driver.agy:normalize
+      configure: bee.driver.agy:configure
+  meta:
+    type: harness.driver
+    driver_id: agy
+    profiles_ref: bee.driver.agy:profiles
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.driver.agy:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Antigravity CLI
+      implementation_version: 1.2.2
+      default_profile: session
+      profiles:
+      - id: session
+        mode: session
+        protocol: stream-json
+        protocol_revision: agy-stream-json-1
+        answer_path: &id001
+          strategy: terminal_field
+          adapter_ref: bee.driver.agy:protocol
+        resume: &id002
+          strategy: per-process
+          portable: false
+        isolation_env: &id003
+          variables:
+          - HOME
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready: &id004
+          strategy: protocol
+          adapter_ref: bee.driver.agy:protocol
+          timeout_ms: 15000
+        interrupt: &id005
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        inbound:
+        - next_turn
+        permission_exchange:
+          mode: none
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: agy-stream-json-1
+        answer_path: *id001
+        resume: *id002
+        isolation_env:
+          variables: [HOME]
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready: *id004
+        interrupt: *id005
+        mcp:
+          client_transports: [streamable_http]
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
+        permission_exchange:
+          mode: none
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: native-window-1
+        hooks: {transports: [command], events: [PreToolUse, PostToolUse, Stop]}
+        answer_path: {strategy: none}
+        resume: {strategy: none, portable: false}
+        isolation_env:
+          variables: [HOME]
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready: {strategy: none}
+        permission_exchange: {mode: none}
+- name: default_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Antigravity window declaration; the host separately selects its policy, activation, executable and permissions
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agy-window
+    title: Antigravity CLI
+    command_names: [agy]
+    binding_ref: bee.driver.agy:binding
+    profile_id: window
+    policy_ref: bee:launch_policy_agy_window
+    default_mode: window
+    allowed_overrides: []
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: new}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: true, fullscreen: true, reuse: never}
+
+- name: research_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned shared thread
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agy-research-batch
+    title: Gemini researcher
+    command_names: []
+    binding_ref: bee.driver.agy:binding
+    profile_id: batch
+    policy_ref: bee:launch_policy_agy_batch
+    default_mode: batch
+    allowed_overrides: [thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    file:
+      path: .gemini/antigravity-cli/antigravity-oauth-token
+      content_format: opaque
+      initialize: []

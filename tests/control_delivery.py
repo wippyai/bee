@@ -1,5 +1,6 @@
 """A rejected core send must exit visibly, retaining acknowledged recovery."""
 from pathlib import Path
+import json
 import shutil
 import sqlite3
 import subprocess
@@ -9,13 +10,12 @@ import time
 from recovery import stored
 from tui_smoke import Desktop, ROOT, RUNTIME
 
-ANCHOR = '        local sent, err = process.send(recipient, topic, value)'
 CASES = {
-    "bind": 'topic == "bee.app.request" and type(value) == "table" and value.op == "bind"',
-    "restore": 'topic == "bee.app.request" and type(value) == "table" and value.op == "open"',
-    "shutdown": 'topic == "bee.app.request" and type(value) == "table" and value.op == "shutdown"',
-    "scene": 'topic == "bee.desktop.command" and type(value) == "table" and value.op == "add"',
-    "receipt": 'topic == "bee.application.persisted"',
+    "bind": ("client", 'topic == "bee.app.request" and type(value) == "table" and value.op == "bind"'),
+    "restore": ("host", 'topic == "bee.app.request" and type(value) == "table" and value.op == "open"'),
+    "shutdown": ("launch", 'topic == "bee.app.request" and type(value) == "table" and value.op == "shutdown"'),
+    "scene": ("client", 'topic == "bee.desktop.command" and type(value) == "table" and value.op == "add"'),
+    "receipt": ("host", 'topic == "bee.application.persisted"'),
 }
 
 
@@ -24,8 +24,18 @@ def workspace_identity(folder):
         return db.execute("SELECT workspace_id FROM workspace_identity WHERE singleton=1").fetchone()[0]
 
 
-def run(packed):
-    for case, condition in CASES.items():
+def snapshot_values(snapshot):
+    # The restored app may acknowledge the same JSON value with another object
+    # key order. Preserve comparison of every envelope and checkpoint field.
+    result = json.loads(json.dumps(snapshot))
+    for record in result["applications"]:
+        if record["resume_state"]:
+            record["resume_state"] = json.loads(record["resume_state"])
+    return result
+
+
+def run(packed, cases=CASES):
+    for case, (owner, condition) in cases.items():
         with tempfile.TemporaryDirectory(prefix="bee-delivery-") as directory:
             folder = Path(directory)
             # Establish an acknowledged real Settings checkpoint before faulting.
@@ -44,17 +54,19 @@ def run(packed):
             shutil.copytree(ROOT / "src", project / "src")
             for name in (".wippy.yaml", "wippy.lock"):
                 shutil.copy2(ROOT / name, project / name)
-            actor = project / "src/core/workspace/main.lua"
+            actor = project / "src/core" / owner / ("supervisor.lua" if owner == "launch" else "main.lua")
             source = actor.read_text()
-            assert source.count(ANCHOR) == 1
+            recipient = "broker" if owner == "host" else "recipient"
+            anchor = f'local sent, err = process.send({recipient}, topic, value)'
+            assert source.count(anchor) == 1
             injection = f'''        local sent, err = true, ""
         if {condition} then
             sent, err = false, "Injected core delivery failure"
         else
-            local delivered, failure = process.send(recipient, topic, value)
+            local delivered, failure = process.send({recipient}, topic, value)
             sent, err = delivered == true, tostring(failure)
         end'''
-            actor.write_text(source.replace(ANCHOR, injection))
+            actor.write_text(source.replace(anchor, injection))
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
             pack = folder / "failure.wapp"
             if packed:
@@ -66,6 +78,12 @@ def run(packed):
                     ui.wait("BEE SETTINGS")
                     started = time.monotonic()
                     ui.key(b"\x11")
+                elif case == "scene":
+                    # Restored client geometry initializes the session directly;
+                    # a new live view must still cross its structural add edge.
+                    ui.wait("BEE SETTINGS")
+                    started = time.monotonic()
+                    ui.open_start(); ui.choose("Process Manager")
                 while ui.process.poll() is None and time.monotonic() - started < 5:
                     ui.pump(.02)
                 ui.pump(.1)
@@ -79,7 +97,8 @@ def run(packed):
                 recovered = stored(folder)
                 after = recovered["applications"]
                 if case in ("bind", "restore", "scene"):
-                    assert recovered == baseline, f"{case}: incomplete bootstrap overwrote saved desktop"
+                    assert snapshot_values(recovered) == snapshot_values(baseline), (
+                        f"{case}: incomplete bootstrap overwrote saved desktop: {baseline!r} -> {recovered!r}")
                 assert [(v["id"], v["instance_id"]) for v in after] == [
                     (v["id"], v["instance_id"]) for v in before
                 ], f"{case}: failed delivery lost recovery identity"
@@ -96,23 +115,25 @@ def run(packed):
     print(f"Core delivery {'pack' if packed else 'source'}: rejected bind/restore/scene/shutdown/receipt exit visibly, retain recovery, healthy reboot")
 
 
-def routine(packed):
-    for case in ("open", "close", "prepare"):
+def routine(packed, cases=("open", "close", "prepare")):
+    for case in cases:
         with tempfile.TemporaryDirectory(prefix="bee-command-failure-") as directory:
             folder = Path(directory)
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
             for name in (".wippy.yaml", "wippy.lock"):
                 shutil.copy2(ROOT / name, project / name)
-            actor = project / "src/core/workspace/main.lua"
-            source = actor.read_text().replace("    local function application_request", "    local reject_command = true\n    local function application_request")
             if case == "prepare":
-                anchor = '        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
+                actor = project / "src/core/host/main.lua"
+                source = actor.read_text().replace("local function main(", "local reject_command = true\nlocal function main(")
+                anchor = '                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
                 operation = 'process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
                 condition = "reject_command"
             else:
-                anchor = '        local sent, err = process.send(broker, "bee.app.request", value)'
-                operation = 'process.send(broker, "bee.app.request", value)'
+                actor = project / "src/core/host/clients.lua"
+                source = actor.read_text().replace("function M.request(", "local reject_command = true\nfunction M.request(")
+                anchor = '    local sent, send_error = process.send(state.broker, "bee.app.request", request)'
+                operation = 'process.send(state.broker, "bee.app.request", request)'
                 # The initial CLI open must succeed; reject the later user action.
                 condition = 'reject_command and request.op == "' + case + '"'
                 if case == "open":
@@ -126,6 +147,9 @@ def routine(packed):
             local delivered, failure = {operation}
             sent, err = delivered == true, tostring(failure)
         end''')
+            if case != "prepare":
+                source = source.replace('reject(state, client, request, "delivery_failed", tostring(send_error))',
+                                        'reject(state, client, request, "delivery_failed", tostring(err))')
             actor.write_text(source)
             subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
             pack = folder / "routine.wapp"
@@ -165,14 +189,24 @@ def targeting(packed):
                 shutil.copytree(ROOT / "src", project / "src")
                 for name in (".wippy.yaml", "wippy.lock"):
                     shutil.copy2(ROOT / name, project / name)
-                actor = project / "src/core/workspace/main.lua"
-                source = actor.read_text().replace("    local function application_request", "    local reject_target = true\n    local function application_request")
-                anchor = ('        local request = contract.request(value)' if boundary == "workspace"
-                          else '        local sent, err = process.send(broker, "bee.app.request", value)')
+                if boundary == "workspace":
+                    actor = project / "src/core/client/main.lua"
+                    source = actor.read_text().replace("        local function send(", "        local reject_target = true\n        local function send(")
+                    anchor = '            local sent, err = process.send(recipient, topic, value)'
+                    owner_id = "workspace_id"
+                    prefix = ""
+                    delivery = anchor
+                else:
+                    actor = project / "src/core/host/clients.lua"
+                    source = actor.read_text().replace("function M.request(", "local reject_target = true\nfunction M.request(")
+                    anchor = '    local sent, send_error = process.send(state.broker, "bee.app.request", request)'
+                    owner_id = "state.workspace_id"
+                    prefix = "    local value: unknown = request\n"
+                    delivery = anchor.replace(', request)', ', value)')
                 assert source.count(anchor) == 1
                 # Corrupt one authenticated request. Exercise a missing target
                 # for open and a foreign target for close; the next retry is valid.
-                target = 'nil' if operation == "open" else '(workspace_id == string.rep("f", 32) and string.rep("0", 32) or string.rep("f", 32))'
+                target = 'nil' if operation == "open" else f'({owner_id} == string.rep("f", 32) and string.rep("0", 32) or string.rep("f", 32))'
                 condition = f'type(value) == "table" and value.op == "{operation}"'
                 if operation == "open":
                     condition += ' and value.definition_id == "bee.processes:app"'
@@ -181,7 +215,7 @@ def targeting(packed):
             value.workspace_id = {target}
         end
 '''
-                actor.write_text(source.replace(anchor, injection + anchor))
+                actor.write_text(source.replace(anchor, prefix + injection + delivery))
                 subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
                 pack = folder / "target.wapp"
                 if packed:

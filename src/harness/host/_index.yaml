@@ -1,0 +1,358 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: harness_setup
+  kind: registry.entry
+  meta:
+    type: bee.harness_setup
+    comment: Host-selected first-use roots keyed by definition-declared resource names
+  data:
+    roots:
+      project: bee:workspace_root
+      session: bee.placement.native:root
+    credentials:
+      claude_api_key:
+        provider: claude
+        source:
+          kind: env_variable
+          ref: bee.driver.claude:api_key
+        optional: true
+      codex_login:
+        provider: codex
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      muse_login:
+        provider: muse
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      agy_login:
+        provider: agy
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      grok_login:
+        provider: grok
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+      claude_login:
+        provider: claude
+        source:
+          kind: fs_directory
+          ref: bee:machine_login_source
+        optional: true
+- name: harness_activation
+  kind: registry.entry
+  meta:
+    type: bee.harness_activation
+    comment: Driver bindings this host activates; discovery alone activates nothing
+  data:
+    schema_revision: bee.harness-activation@1
+    bindings:
+    - bee.driver.agy:binding
+    - bee.driver.claude:binding
+    - bee.driver.codex:binding
+    - bee.driver.grok:binding
+    - bee.driver.muse:binding
+- name: launch_policy_managed
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Managed harness launches; inert until the combined runtime and the credential failure gates are pinned,
+      since prepare refuses it on the pinned runtime
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    environment: {}
+    prepare_options:
+      permission_mode: dontAsk
+      max_turns: 1
+- name: launch_policy_claude_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Claude Code window; missing host executable
+      leaves the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      claude: bee.driver.claude:executable
+    environment: {}
+    environment_refs:
+      CLAUDE_CONFIG_DIR: bee.driver.claude:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_claude_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {claude: bee.driver.claude:executable}
+    environment: {}
+    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+- name: launch_policy_codex_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Codex window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      codex: bee.driver.codex:executable
+    environment: {}
+    environment_refs:
+      CODEX_HOME: bee.driver.codex:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_codex_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected read-only Codex batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {codex: bee.driver.codex:executable}
+    environment: {}
+    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    profile_options: {effort: [low, medium, high]}
+    profile_instructions: true
+    prepare_options: {sandbox: read-only}
+- name: launch_policy_muse_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      muse: bee.driver.muse:executable
+    environment: {}
+    environment_refs:
+      XDG_CONFIG_HOME: bee.driver.muse:config_home
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    prepare_options: {}
+- name: launch_policy_muse_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected non-interactive Muse batch policy for bounded research actions on a caller-owned thread
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {muse: bee.driver.muse:executable}
+    environment: {}
+    environment_refs: {XDG_CONFIG_HOME: bee.driver.muse:config_home}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options: {effort: [low, medium, high]}
+    prepare_options: {approval_mode: never, max_steps: 1}
+- name: launch_policy_agy_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Antigravity window; missing host executable
+      leaves the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      agy: bee.driver.agy:executable
+    environment: {}
+    allow_host_home: true
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}
+- name: launch_policy_agy_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env: {agy: bee.driver.agy:executable}
+    environment: {}
+    allow_host_home: true
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
+- name: launch_policy_grok_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Grok window; missing host executable leaves
+      the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      grok: bee.driver.grok:executable
+    environment: {}
+    gateway_tools:
+    - thread_read
+    - thread_wait
+    - thread_message
+    - workspace
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    hook_command_ref: bee.gateway:hook_executable
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+    profile_instructions: true
+    prepare_options: {}

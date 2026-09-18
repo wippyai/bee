@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.driver.kit
+entries:
+- name: framing
+  kind: library.lua
+  source: file://framing.lua
+- name: quote
+  kind: library.lua
+  source: file://quote.lua
+- name: events
+  kind: library.lua
+  source: file://events.lua
+  imports:
+    bounds: bee.threads.records:bounds

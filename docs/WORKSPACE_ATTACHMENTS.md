@@ -4,9 +4,10 @@ Status: attachment design, not a callable API. The primary store now persists an
 opaque workspace ID through migration 2. Application launches carry it and the
 app SDK exposes a logical view reference. Broker replies and desktop windows now
 retain it too. Local application requests carry an explicit target checked by
-the workspace and broker; missing or foreign targets are rejected. Production
-still has one local workspace owner and one desktop
-session. [Workspace state](WORKSPACE_STATE.md) documents
+the host and broker; missing or foreign targets are rejected. Public local launch
+uses a separate workspace host and desktop client; independent-client fixtures
+prove detach and reattachment to retained terminals. Mixed-workspace composition
+and remote attachment remain proposals. [Workspace state](WORKSPACE_STATE.md) documents
 the implemented envelope. This design leaves cluster transport and naming to the
 runtime work; no remote discovery or network listener is enabled by it.
 
@@ -15,8 +16,8 @@ runtime work; no remote discovery or network listener is enabled by it.
 A workspace is a logical identity with an owning host, an application environment
 and resource bindings. Its identity is not a database filename or the caller's
 current directory. The registry owns definitions, configuration and registry
-history. The application-level workspace store owns desktop state and supported
-app checkpoints; the journal owns its events. Do not mirror registry definitions
+history. The workspace store owns supported app checkpoints and producer defaults;
+each client owns its layout store, and the journal owns its events. Do not mirror registry definitions
 into workspace tables and build a second registry reconciler there.
 
 The planned portable export separates declarative content from execution state:
@@ -59,13 +60,76 @@ Neither the manager nor a shell selection transfers ownership or authorization.
 These UI and remote operations remain proposals until their contracts and
 acceptance checks exist.
 
+The default workflow supports several project hosts and several independent
+client windows. A client is not permanently assigned to one node or workspace:
+its picker changes the browsing target and destination for new opens, while
+existing tabs retain their full owner references. It can retain admitted
+attachments to several owners concurrently. Switching focus must not restart
+applications, dispose another client's layout or implicitly close a connection.
+Reuse a valid attachment when returning to an owner; expired or revoked
+permissions require fresh admission. Show owner labels on mixed-host tabs and
+distinguish an unreachable owner from an empty workspace. The current single-host
+client composition must be extended to support this workflow; the fixture's
+remote-client success does not prove multi-owner composition.
+
+## Multiple displays and desktop extension
+
+Proposal requested by the user: a client may attach as an independent desktop
+or join an existing desktop as another named display. A display corresponds to
+one terminal window; the operating system places it on a physical monitor.
+Node, workspace, desktop group and display identities remain distinct.
+
+A client may also organize several virtual displays inside one terminal window.
+Neither physical nor virtual displays are assigned permanently to a node: each
+can compose owner-qualified views from several nodes at once. A display may have
+a preferred browsing/launch destination without restricting the origins of its
+existing views. Moving a view between displays transfers presentation and input
+control, not the application's execution or filesystem. Launching on another
+node and any future execution migration are separate admitted operations.
+
+Independent clients already have separate layout state. Extending one desktop
+requires an explicit shared display group and an owner for window placement.
+That owner coordinates moving a window between displays while its application
+and native shell remain on their existing workspace host. Layout stores should
+reference stable display identities, not a renderer PID or monitor coordinates.
+Presenter replacement and reconnection must reacquire a fresh attachment.
+
+A move must revoke the old input controller before granting the new controller;
+an uncertain revocation cannot produce two controllers. Observation on several
+displays is a separate permission from input. Display loss must retain the app
+and offer an explicit move to an available display without silently stealing
+control from a temporarily disconnected client. Shared display groups, handoff,
+and their recovery UI are not implemented. The current remote fixture proves
+independent-client attachment and shell retention, not an extended desktop.
+
+Several clients viewing one application must share its producer and application
+state. Native controller/observer mounts already provide the transport primitive;
+the existing observation fixture covers updates and recipient-rights isolation.
+Bee's broker currently publishes controller mounts only. Extend its owner-held
+attachment records to admit bounded observers without replacing the controller.
+The initial policy is many viewers with one input/resize controller. Observers
+fit or clip the owner's viewport; they cannot repeatedly resize the shared PTY
+to match their own windows. Prove independent observer revocation and continued
+controller operation before exposing this in the client UI.
+
+The input actor is a live routing endpoint, not the durable identity of the
+person or agent controlling the application. Future admission must bind an
+authenticated principal to the exact owner-qualified view, permitted operations
+and a revocable attachment generation. The owner checks that binding; a saved
+client ID, node display name or payload PID cannot establish it. Presenter
+replacement changes the recipient and requires a fresh mount without changing
+the application instance or the principal's identity. The richer principal and
+delegation contract remains proposed; current mounts enforce exact recipient
+and operation rights.
+
 ## Setup without repeated keys
 
 Pairing is a proposed Bee convenience layer over native configuration. The pinned
 runtime example (`boot/components/system/cluster.example.yaml`) provides seed
 addresses, stable unique node names, membership secret configuration and server/
 client roles. It does not establish the proposed one-time invitation protocol.
-Do not advertise `bee hive init/invite/join` as implemented commands yet.
+The current proposed commands and machine/node/workspace mapping are in
+[Hive topology](HIVE_TOPOLOGY.md); none of its setup commands are implemented yet.
 
 An explicit first setup should persist the selected profile, native node identity,
 seed addresses and protected credential references. Subsequent `bee` launches
@@ -210,8 +274,13 @@ Every tab, window and action target retains its workspace reference, including
 minimized windows and restored layouts. In a single-workspace desktop, the
 workspace label can be compact; mixed desktops display a short workspace label
 alongside each application's title. A color is supplementary, never the only
-identifier. Duplicate display names must be disambiguated with a stable short
-ID. Renaming a workspace changes presentation, not saved references.
+identifier. Bee derives a deterministic friendly alias from each opaque workspace
+or display ID for these presentation surfaces. Each alias includes a short
+deterministic hash fragment of its complete source ID, so labels remain stable
+when another workspace appears or disappears and are easier to distinguish when
+IDs are shown together. A hash fragment is not a uniqueness guarantee; technical
+mode includes the raw IDs for diagnostics. These aliases never enter requests,
+keys, journals or authorization, and changing a label changes presentation only.
 
 Start and resource-open actions carry an explicit target workspace. Focus can
 select the initial target, but an asynchronous reply must remain bound to the
@@ -364,3 +433,86 @@ check the actual PR revision and reproduce the missing behavior through native
 contracts. Required end-to-end evidence remains two Bee runtimes with remote
 input/resize, recipient denial, safe controller handoff, disconnect/reconnect
 and tab identity preserved. Current local broker tests do not satisfy that gate.
+
+### Neutral displays and qualified attachment state
+
+Several clients on one machine are separate displays, each able to choose a
+workspace. A display identity must not encode its machine, node or chosen
+workspace. Changing that choice changes its attachments; it must not recreate
+applications or transfer execution implicitly. The installed local independent
+desktops are a foundation for this behavior, not completed workspace switching.
+
+Hive Manager session presentation now records node and owner generation around
+each workspace/display reference. Identical IDs on another node cannot inherit
+"your session" or its control affordance. Owner replacement, removed catalog
+items and evicted nodes retire the corresponding displayed session state; late
+old-owner outcomes cannot restore it. This bookkeeping grants no permissions
+and binds an attachment, not the neutral display's identity. Focused Lua tests
+pass; this follow-up is installed globally.
+
+### Explicit desktop selection candidate
+
+The native ced4008999f4 candidate exposes `bee desktops`,
+`bee attach WORKSPACE DISPLAY` and `bee observe WORKSPACE DISPLAY` against the
+running Bee selected by the local state directory. Listing uses authenticated
+supervisor admission and returns durable identities; it does not acquire control.
+Exact attachment refuses an occupied or foreign target without allocating a
+replacement. Missing Bee refuses without starting one. Plain `bee` keeps its
+independent-desktop behavior.
+
+Executable acceptance proves selected observation, occupied/foreign refusal,
+unchanged catalog on refusal, exact retained-shell reattachment and continued
+input on the other display. These commands are installed globally after full foundation and native acceptance.
+They do not implement a live workspace picker, remote enrollment or composition
+of applications from several hosts. Neutral physical displays remain independent
+of their selected workspace; the command's DISPLAY identifies its attachment
+target, not a permanent workspace binding for the physical client.
+
+### Next implementation boundary: one display, several workspace attachments
+
+This is a proposal, not an available switcher API. The current client still
+requires one workspace at bootstrap. Keep that guard until all host messages and
+operations below route through a qualified attachment.
+
+| Identity | Owns | Changes when selecting another workspace? |
+|---|---|---|
+| Physical client execution | Terminal input, physical size and clipboard output | No; its runtime actor is replaced only on execution restart |
+| Durable display | Layout, focused tab and presentation preferences | No |
+| Workspace attachment | Selected workspace host, current admission and renderer generation | Yes |
+| Application instance | Application process, content and owned resources | No; execution stays at its host |
+
+The display's saved targets already include workspace, instance and view IDs.
+They must not persist execution PIDs, mount grants or admission tokens. On rejoin,
+the supervisor resolves and authorizes each target again. A node address is a
+current route to an owner, not a replacement for durable workspace identity.
+
+The client currently has one `host`, `connection_id`, `renderer_generation`,
+catalog, view revision and question inbox in `core/client/main.lua`. Those values
+must belong to each admitted workspace attachment. The display/session owns the
+combined layout and focus. Incoming messages match the native sender, workspace,
+connection and relevant generation before changing a tab, question or binding.
+Outgoing input, close, bind and question answers select the attachment of their
+specific target. Changing the focused workspace must not redirect an older reply
+or callback. The launcher catalog for a new app must also name its selected
+workspace explicitly.
+
+Host loss retires only that host's live bindings and reports unavailable targets;
+it cannot delete another workspace's tabs or invent application completion.
+Presenter replacement keeps the display identity and rebinds each admitted host.
+The physical client's clipboard stays local even for a remotely executed app.
+
+Acceptance must exercise two hosts with colliding instance/view names, two
+independent physical clients, workspace changes with delayed replies, one shared
+application observed without respawning it, controller refusal, denied foreign
+messages, F12 and client crash/rejoin. Check each application's original process
+and retained shell state. A second local desktop or command-line selection alone
+does not satisfy these checks. Live Hive Manager browsing additionally needs a
+host-authorized catalog route; exposing the native client's control route to
+ordinary applications is not an implementation of that read permission.
+
+The full-height connection dropdown shows the friendly name and complete ID on
+separate rows. Source/pack acceptance requires both workspace and display IDs to
+fit without truncation and remain unchanged after F12. Compact-height rendering
+keeps the shorter identity presentation. The naming changes are integrated with
+the retained-display recovery candidate; global installation has passed both executable
+acceptance suites. They do not implement workspace switching or app transfer.

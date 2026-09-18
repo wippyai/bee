@@ -1,0 +1,60 @@
+version: '1.0'
+namespace: bee.host
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, security, ctx, uuid, hash]
+  imports:
+    persistence: bee.workspace:persistence
+    recovery: bee.workspace:recovery
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+    interaction: bee.application:interaction
+    connections: bee.host:clients
+    inventory: bee.host:inventory
+    transfer: bee.host:transfer
+    retained: bee.launch:retained_protocol
+- name: inventory
+  kind: library.lua
+  source: file://inventory.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+- name: clients
+  kind: library.lua
+  source: file://clients.lua
+  modules: [process, uuid, hash]
+  imports:
+    recovery: bee.host:recovery
+    records: bee.workspace:recovery
+    clients: bee.host:protocol
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    questions: bee.interaction:delivery
+    interaction: bee.application:interaction
+    persistence: bee.workspace:persistence
+    assignment_store: bee.storage:assignments
+    transfer: bee.host:transfer
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  imports:
+    records: bee.workspace:recovery
+    inventory: bee.host:inventory
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    inventory: bee.host:inventory
+    appearance: bee.desktop:appearance
+- name: transfer
+  kind: library.lua
+  source: file://transfer.lua
+  imports:
+    contract: bee.protocol:application

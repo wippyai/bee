@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.placement.docker
+entries:
+- name: definition
+  kind: ns.definition
+  module: placement_docker
+  readme: file://README.md
+  meta:
+    title: Bee Docker placement preparation
+    comment: Internal container configuration projection; managed Docker admission and execution are not implemented
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: inspection
+  kind: library.lua
+  source: file://inspection.lua
+  modules: [time]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  modules: [funcs, process, docker_pty, exec, tty]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: attachment_policy
+  kind: security.policy.expr
+  meta:
+    comment: The Agent may attach only its own container on the host-selected Bee Docker daemon
+  policy:
+    actions: [docker.attach]
+    resources: '*'
+    effect: allow
+    expression: 'resource matches "^bee[.]placement[.]docker[.]daemon:daemon_ref/[0-9a-f]{64}$" && meta.labels["bee.actor_ref"] == actor.id'

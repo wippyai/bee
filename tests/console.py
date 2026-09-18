@@ -16,6 +16,9 @@ PROBE = '''
     local database, database_error = sql.get("bee:workspace_db")
     assert(not database and database_error, "App accessed the primary database")
     assert(not security.can("db.get", "bee:workspace_db"))
+    local client_database, client_database_error = sql.get("bee:client_db")
+    assert(not client_database and client_database_error)
+    assert(not security.can("db.get", "bee:client_db"))
     assert(security.can("db.get", "foreign-resource"), "Broad test policy was not applied")
     assert(security.can("exec.get", "bee.console:executor"))
     assert(not security.can("exec.get", "other:executor"))
@@ -56,7 +59,7 @@ def exercise(packed, theme="honey"):
         executor_entry["default_env"].update({"HOME": str(folder), "HISTFILE": "/dev/null", "PS1": "$ "})
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
         # Deliberately broad package policy cannot override the host's deny boundary.
-        host_index = project / "src/_index.yaml"
+        host_index = project / "src/security/_index.yaml"
         host = yaml.safe_load(host_index.read_text())
         host["entries"].append({"name": "probe_broad_policy", "kind": "security.policy", "policy": {
             "actions": ["db.get", "registry.apply", "registry.apply_version", "registry.overlay.apply"],
@@ -178,7 +181,7 @@ def command_handlers(packed):
         assert result.returncode != 0 and "Ambiguous Bee command: probe" in result.stdout + result.stderr
         del next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["commands"]
         other.write_text(yaml.safe_dump(settings, sort_keys=False))
-        host = project / "src/_index.yaml"
+        host = project / "src/security/_index.yaml"
         composition = yaml.safe_load(host.read_text())
         admission = next(e for e in composition["entries"] if e["name"] == "application_admission")
         admission["bindings"] = [b for b in admission["bindings"] if b["definition_id"] != "bee.console:app"]

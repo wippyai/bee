@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.harness
+entries:
+- name: definition
+  kind: ns.definition
+  module: harness
+  readme: file://README.md
+  meta:
+    title: Bee harness
+    comment: Execution contracts and the pinned discovery of admitted driver bindings; carriers arrive with launch admission
+- name: process_host
+  kind: ns.requirement
+  meta:
+    comment: Host-selected process host for structured carriers
+  default: bee:workers
+  targets:
+  - entry: bee.harness:carrier_host_ref
+    path: .host_ref
+- name: carrier_host_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Linked carrier host; naming a host does not grant spawn permission

@@ -1,0 +1,36 @@
+#!/bin/bash
+# Fixture-only profile environment probe. It checks the fully materialized
+# child environment without exposing any value, then replays the established
+# Claude JSONL result used by the carrier acceptance fixtures.
+set -eu
+
+case "${BEE_PROFILE_PROBE_NAME:-}" in
+  alpha)
+    [ "${BEE_PROFILE_PROBE_HOLD:-}" = "1" ]
+    [ "${BEE_PROFILE_PROBE_ALPHA_ONLY:-}" = "alpha-selected" ]
+    [ -z "${BEE_PROFILE_PROBE_BETA_ONLY:-}" ]
+    ;;
+  beta)
+    [ "${BEE_PROFILE_PROBE_HOLD:-}" = "1" ]
+    [ "${BEE_PROFILE_PROBE_BETA_ONLY:-}" = "beta-selected" ]
+    [ -z "${BEE_PROFILE_PROBE_ALPHA_ONLY:-}" ]
+    ;;
+  *) exit 41 ;;
+esac
+
+[ "${ANTHROPIC_API_KEY:-}" = "launch-sentinel-2b3c4d" ]
+[ -n "${HOME:-}" ]
+[ -n "${BEE_FIXTURE_STREAM:-}" ]
+[ -z "${BEE_PROFILE_PROBE_CALLER_ONLY:-}" ]
+
+# The placement runner supplies precisely policy environment, HOME and the
+# broker projection. Bash adds these interpreter bookkeeping names itself.
+for name in $(compgen -e); do
+  case "$name" in
+    ANTHROPIC_API_KEY|BEE_FIXTURE_STREAM|BEE_PROFILE_PROBE_HOLD|BEE_PROFILE_PROBE_NAME|BEE_PROFILE_PROBE_ALPHA_ONLY|BEE_PROFILE_PROBE_BETA_ONLY|HOME|PATH|PWD|SHLVL|_) ;;
+    *) exit 42 ;;
+  esac
+done
+
+/bin/sleep "${BEE_PROFILE_PROBE_HOLD}"
+/bin/cat "$BEE_FIXTURE_STREAM"

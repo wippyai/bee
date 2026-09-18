@@ -1,0 +1,99 @@
+version: '1.0'
+namespace: bee.harness.profiles
+entries:
+- name: preferences_test
+  kind: function.lua
+  source: file://preferences_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    preferences: bee.driver:preferences
+- name: test_call
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.profiles:call, bee.harness.profiles:context_probe]
+    effect: allow
+- name: test_read
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.read]
+    resources: [saved-profile-workspace]
+    effect: allow
+- name: test_write
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.write]
+    resources: [saved-profile-workspace]
+    effect: allow
+- name: service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid]
+  imports:
+    test: wippy.test:test
+    bounds: bee.threads.records:bounds
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid]
+  security:
+    policies: [bee.harness.profiles:test_call, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
+  imports:
+    test: wippy.test:test
+    selection: bee.harness.launch:selection
+    bounds: bee.threads.records:bounds
+
+- name: context_probe
+  kind: function.lua
+  source: file://context_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [funcs]
+
+- name: editor_test
+  kind: function.lua
+  source: file://editor_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    profile_editor: bee.harness.window:profile_editor
+    protocol: bee.harness.profiles:protocol
+- name: form_test
+  kind: function.lua
+  source: file://form_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    form: bee.harness.window:profile_form
+    editor: bee.harness.window:profile_editor
+    bounds: bee.threads.records:bounds
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    view: bee.harness.window:profile_view
+    editor: bee.harness.window:profile_editor
+    appearance: bee.desktop:appearance
+- name: codex_effort_test
+  kind: function.lua
+  source: file://codex_effort_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.codex:launch

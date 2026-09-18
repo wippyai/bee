@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.driver.agy
+entries:
+- name: agy_test
+  kind: function.lua
+  source: file://agy_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [json, hash, registry, funcs]
+  imports:
+    test: wippy.test:test
+    profile: bee.driver:profile
+    launch: bee.driver.agy:launch
+    protocol: bee.driver.agy:protocol
+    configuration: bee.driver.agy:configuration
+    configure_protocol: bee.driver:configuration
+    observation: bee.threads.records:observation
+    stream_json: bee.driver.transport:stream_json
+    quote: bee.driver.kit:quote
+    bounds: bee.threads.records:bounds
+    placement_request: bee.placement:request

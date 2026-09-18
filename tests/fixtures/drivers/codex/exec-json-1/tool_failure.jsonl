@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a08353-01b9-7fd1-8369-414a5d3ab2a1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll run the command now.\n"}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat missing-file.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc 'cat missing-file.txt'","aggregated_output":"cat: missing-file.txt: No such file or directory\n","exit_code":1,"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"failed"}}
+{"type":"turn.completed","usage":{"input_tokens":26149,"cached_input_tokens":12800,"cache_write_input_tokens":0,"output_tokens":49,"reasoning_output_tokens":0}}

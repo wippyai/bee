@@ -1,0 +1,49 @@
+version: '1.0'
+namespace: bee.workspace
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules:
+  - security
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  imports:
+    command: bee.applications:command
+    contract: bee.protocol:application
+    arguments: bee.application:arguments
+    interaction: bee.application:interaction
+    model: bee.desktop:model
+    decode: bee.protocol:decode
+    decode_input: bee.protocol:input
+    appearance: bee.desktop:appearance
+    physical: bee.terminal:display
+    persistence: bee.workspace:persistence
+    recovery: bee.workspace:recovery
+- name: launch
+  kind: process.lua
+  source: file://main.lua
+  method: launch
+  modules:
+  - security
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  imports:
+    command: bee.applications:command
+    contract: bee.protocol:application
+    arguments: bee.application:arguments
+    interaction: bee.application:interaction
+    model: bee.desktop:model
+    decode: bee.protocol:decode
+    decode_input: bee.protocol:input
+    appearance: bee.desktop:appearance
+    physical: bee.terminal:display
+    persistence: bee.workspace:persistence
+    recovery: bee.workspace:recovery

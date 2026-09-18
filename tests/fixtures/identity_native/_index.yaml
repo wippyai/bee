@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.identity_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: executor
+  kind: exec.native
+  default_env: {PATH: '${env:bee.identity_probe:path}'}
+- name: environment
+  kind: env.storage.os
+  lifecycle: {auto_start: true}
+- name: path
+  kind: env.variable
+  storage: bee.identity_probe:environment
+  variable: BEE_IDENTITY_PATH
+- name: expected
+  kind: env.variable
+  storage: bee.identity_probe:environment
+  variable: BEE_IDENTITY_EXPECTED
+- name: policy
+  kind: security.policy
+  policy: {actions: [exec.get, exec.run, env.get], resources: '*', effect: allow}
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+- name: identity
+  kind: library.lua
+  source: file://identity.lua
+  modules: [exec]
+  imports: {resources: bee.identity_probe:resources}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [exec, logger, env]
+  imports: {identity: bee.identity_probe:identity}
+  security: {policies: [bee.identity_probe:policy]}
+  meta:
+    command:
+      name: identity-probe
+      security: {actor: {id: bee.identity_probe}}

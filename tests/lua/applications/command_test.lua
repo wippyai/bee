@@ -22,6 +22,25 @@ local function define_tests()
             test.eq(native_command.encode({"tool", "two words", "", "a'b", "$HOME;$(id)"}),
                 "'tool' 'two words' '' 'a'\\''b' '$HOME;$(id)'")
         end)
+        test.it("routes every harness alias through the managed Agent window and refuses raw bypass arguments", function()
+            local expected = {
+                agy = "bee.driver.agy:default_window",
+                claude = "bee.driver.claude:default_window",
+                codex = "bee.driver.codex:default_window",
+                grok = "bee.driver.grok:default_window",
+            }
+            for name, definition_ref in pairs(expected) do
+                local launch, err = handler.resolve(name, {})
+                if not launch then error(tostring(err)) end
+                test.eq(launch.definition_id, "bee.harness.window:app")
+                test.eq(#launch.arguments, 1)
+                test.eq(launch.arguments[1], definition_ref)
+                test.is_true(launch.fullscreen)
+                local bypass, bypass_error = handler.resolve(name, {"--dangerously-skip-permissions"})
+                test.is_nil(bypass)
+                test.eq(bypass_error, "Managed Bee command does not accept raw arguments: " .. name)
+            end
+        end)
     end)
 end
 local cases = test.run_cases(define_tests)

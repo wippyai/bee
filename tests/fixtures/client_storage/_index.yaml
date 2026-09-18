@@ -1,0 +1,111 @@
+version: '1.0'
+namespace: bee.client_storage_probe
+entries:
+- name: bindings_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:left, bee.client.db:right, bee.workspace.db:left, bee.workspace.db:right]
+    effect: allow
+- name: broad_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: ['*']
+    effect: allow
+- name: denied
+  kind: process.lua
+  source: file://bindings.lua
+  method: denied
+  modules: [sql]
+  imports:
+    store: bee.client:store
+    workspace_store: bee.storage:store
+    state: bee.client:state
+  security:
+    policies: [bee.client_storage_probe:broad_policy, bee:workspace_storage_boundary]
+  meta:
+    command:
+      name: client-storage-denial
+      short: Verify reserved database denial
+- name: bindings
+  kind: process.lua
+  source: file://bindings.lua
+  method: main
+  modules: [sql]
+  imports:
+    store: bee.client:store
+    workspace_store: bee.storage:store
+    state: bee.client:state
+  security:
+    policies: [bee.client_storage_probe:bindings_policy]
+  meta:
+    command:
+      name: client-storage-bindings
+      short: Verify independent core database bindings
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  imports:
+    store: bee.client:store
+    state: bee.client:state
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+  security:
+    policies: [bee:client_storage_policy]
+  meta:
+    command:
+      name: client-storage-probe
+      short: Test client storage in an isolated database
+- name: desktop_calls
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.client:list_desktops, bee.client:allocate_desktop]
+    effect: allow
+- name: desktop_read
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.read]
+    resources: [bee:client_db]
+    effect: allow
+- name: desktop_allocate
+  kind: security.policy
+  policy:
+    actions: [bee.client.desktops.allocate]
+    resources: [bee:client_db]
+    effect: allow
+- name: authority
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read, bee.client_storage_probe:desktop_allocate]
+  meta:
+    command:
+      name: client-desktop-authority
+      short: Verify scoped desktop operations without caller SQL access
+- name: reader
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls, bee.client_storage_probe:desktop_read]
+  meta:
+    command:
+      name: client-desktop-reader
+      short: Verify read-only desktop catalog authority
+- name: unauthorized
+  kind: process.lua
+  source: file://authority.lua
+  method: main
+  modules: [funcs, sql]
+  security:
+    policies: [bee.client_storage_probe:desktop_calls]
+  meta:
+    command:
+      name: client-desktop-unauthorized
+      short: Function call permission grants no desktop authority

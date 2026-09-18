@@ -6,13 +6,53 @@ local layout = require("layout")
 local render = require("render")
 local bindings = require("bindings")
 local menu = require("menu")
+local selection = require("selection")
+local connection = require("connection")
 local appearance = require("appearance")
+local surface = require("surface")
+local names = require("names")
+local function plain_text(value: string): string return string.gsub(value, "\27%[[0-9;]*m", "") end
 local catalog: {menu.Descriptor} = {
     {definition_id = "sample:settings", title = "Settings", group = "Tools", role = "appearance"},
     {definition_id = "sample:processes", title = "Process Manager", group = "Tools", role = "inspection"},
 }
 local function define_tests()
     test.describe("Desktop presentation boundaries", function()
+        test.it("accepts only exact aggregate attachment state for its display", function()
+            local info = connection.new("{Antares@bee.client:main|one}", string.rep("a", 32),
+                string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
+            test.eq(info.hive, "Supervisor ready")
+            test.eq(info.attachments, "Not reported")
+            test.is_false(connection.available(11, 20))
+            test.is_false(connection.available(80, 3))
+            test.is_true(connection.available(12, 4))
+            test.is_true(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = true, observers = 2}))
+            test.eq(info.attachments, "Controlled · 2 observers")
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = true, observers = 2}))
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("c", 32),
+                controller = false, observers = 0}))
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = false, observers = 17}))
+            test.is_false(connection.observe(info, {version = 1, display_id = string.rep("b", 32),
+                controller = false, observers = 0, recipient = "private"}))
+            test.eq(info.attachments, "Controlled · 2 observers")
+            for height = 4, 17 do test.is_false(connection.details_hit(100, height, info, 58, 14)) end
+            test.is_true(connection.details_hit(100, 18, info, 58, 14))
+            test.is_true(connection.details_hit(100, 30, info, 58, 14))
+            local function card(height: integer): string
+                local canvas = tty.canvas(100, height)
+                canvas:clear(" ")
+                connection.draw(canvas, 100, height, appearance.defaults(), info, true)
+                return plain_text(table.concat(canvas:rows(), "\n"))
+            end
+            test.is_true(card(5):find("CONNECTION", 1, true) ~= nil)
+            test.is_true(card(5):find("Details [D]", 1, true) == nil)
+            test.is_true(card(12):find("F9 / Esc to close", 1, true) ~= nil)
+            test.is_true(card(17):find("Details [D]", 1, true) == nil)
+            test.is_true(card(18):find("Details [D]", 1, true) ~= nil)
+        end)
         test.it("keeps Classic terminals dark without changing application panels", function()
             local theme = appearance.theme("classic")
             local terminal = appearance.page(theme, true)
@@ -54,6 +94,21 @@ local function define_tests()
             end
         end)
 
+        test.it("keeps the Bee mark without instructional desktop text", function()
+            local function frame(width: integer, height: integer): string
+                return plain_text(table.concat(render.draw(model.new(width, height), {}, {}, nil, nil, "", "workspace").rows, "\n"))
+            end
+            local full = frame(80, 30)
+            test.is_true(full:find("╰──╲ ╱──╯", 1, true) ~= nil)
+            test.is_true(full:find("F1 or BEE menu to open an application", 1, true) == nil)
+            test.is_true(full:find("Tools → Modules manages components", 1, true) == nil)
+            test.is_true(frame(24, 9):find("F1 / BEE: open apps", 1, true) == nil)
+            test.is_true(frame(16, 5):find("F1: menu", 1, true) == nil)
+            test.is_true(frame(15, 5):find("F1: menu", 1, true) == nil)
+            local opened = plain_text(table.concat(render.draw(model.add(model.new(80, 30), "one", "app", "One"), {"one"}, {}, nil, nil, "", "workspace").rows, "\n"))
+            test.is_true(opened:find("F1 or BEE menu", 1, true) == nil)
+        end)
+
         test.it("maps a focused cursor through the frame and hides clipped or collapsed cursors", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")
             scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 10})
@@ -69,6 +124,36 @@ local function define_tests()
             contents.one = {rows = rows, cursor = {x = 1, y = 1, visible = true}}
             scene = model.collapse(scene, "one")
             test.is_false(render.draw(scene, {"one"}, contents, nil, nil, "", "workspace").cursor.visible)
+        end)
+        test.it("freezes and highlights only the selected window body", function()
+            local scene = model.add(model.new(80, 24), "one", "app", "One")
+            scene = model.add(scene, "two", "app", "Two")
+            scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 8})
+            scene = model.place(scene, "two", {x = 35, y = 4, width = 20, height = 8})
+            local first = scene.windows[1]
+            local body = layout.interior(first, model.bounds(scene, first))
+            local frozen: {string} = {}
+            for row = 1, body.height do frozen[row] = row == 1 and "frozen \27[31m界\27[0m" or "row " .. row end
+            local active, err = selection.capture({view_id = "one", attachment = "mount-one", mount_generation = 1,
+                width = body.width, height = body.height}, frozen)
+            test.is_nil(err)
+            test.not_nil(active)
+            if not active then error("selection capture failed") end
+            active = selection.drag(selection.press(active, 1, 1), 9, 2)
+            local contents: {[string]: render.Content} = {}
+            local changed: {string} = {"changed live content"}
+            local neighbor: {string} = {"neighbor stays live"}
+            contents.one = {rows = changed, cursor = {x = 1, y = 1, visible = true}}
+            contents.two = {rows = neighbor}
+            local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
+                nil, nil, nil, nil, active)
+            local text = plain_text(table.concat(frame.rows, "\n"))
+            test.is_true(text:find("frozen 界", 1, true) ~= nil)
+            test.is_true(text:find("neighbor stays", 1, true) ~= nil)
+            test.is_true(text:find("changed live content", 1, true) == nil)
+            test.is_false(frame.cursor.visible)
+            test.is_true(frame.rows[body.y]:find("48;2;255;201;99", 1, true) ~= nil)
+            test.is_true(frame.rows[body.y]:find("\27[31m", 1, true) == nil)
         end)
         test.it("shares half-open hit bounds with window interiors", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")
@@ -123,6 +208,9 @@ local function define_tests()
             test.eq(#menu.items(true, false, true, catalog), 2)
             local state: menu.State = {selected = 1, offset = 0, kind = "window", target = "one", x = 79, y = 23}
             local items = menu.entries(state, scene, false, catalog)
+            local selectable = false
+            for _, item in ipairs(items) do if item.action == "select_text" and item.label == "Select text" then selectable = true end end
+            test.is_true(selectable)
             local panel = menu.panel(80, 24, #items, state)
             test.is_true(panel.x + panel.width - 1 <= 80)
             test.is_true(panel.y + panel.height - 1 <= 24)
@@ -138,6 +226,40 @@ local function define_tests()
             local next_state = menu.respond(hover.state, panel, items, {type = "key", action = "press", key_type = "end"})
             test.eq(next_state.state.kind, "window")
             test.eq(next_state.state.x, 79)
+        end)
+        test.it("shows only current assignment destinations in Send to display", function()
+            local scene = model.add(model.new(80, 24), "one", "instance-one", "One")
+            local current = "0123456789abcdef0123456789abcdef"
+            local target = "fedcba9876543210fedcba9876543210"
+            local other = "00112233445566778899aabbccddeeff"
+            local transfers: menu.TransferSnapshot = {version = 1, revision = 1, items = {{tab_id = "one", instance_id = "instance-one",
+                assignment_revision = 7, targets = {current, target, other}}}}
+            local state: menu.State = {selected = 1, offset = 0, kind = "window", target = "one", x = 1, y = 2}
+            local items = menu.entries(state, scene, false, {}, transfers, current)
+            local send: menu.Item? = nil
+            for _, value in ipairs(items) do if value.action == "group:transfer" then send = value; break end end
+            test.not_nil(send)
+            if send then
+                test.is_true(send.enabled)
+                test.eq(#(send.children or {}), 2)
+                local seen_target, seen_other = false, false
+                for _, child in ipairs(send.children or {}) do
+                    if child.action == "transfer:" .. target and child.label == names.label(target) then seen_target = true end
+                    if child.action == "transfer:" .. other and child.label == names.label(other) then seen_other = true end
+                end
+                test.is_true(seen_target)
+                test.is_true(seen_other)
+                for _, child in ipairs(send.children or {}) do test.is_true(child.enabled) end
+            end
+            local no_targets: menu.TransferSnapshot = {version = 1, revision = 2, items = {{tab_id = "one", instance_id = "instance-one",
+                assignment_revision = 8, targets = {current}}}}
+            local empty = menu.entries(state, scene, false, {}, no_targets, current)
+            for _, value in ipairs(empty) do
+                if value.action == "group:transfer" then
+                    test.is_false(value.enabled)
+                    test.eq(#(value.children or {}), 0)
+                end
+            end
         end)
         test.it("enters and leaves nested groups without launching on hover", function()
             local scene = model.new(80, 24)
@@ -203,12 +325,46 @@ local function define_tests()
             local frame = render.draw(scene, {"one", "two"}, {}, nil, nil, "", "workspace", preferences)
             test.is_true(frame.rows[1]:find("界", 1, true) ~= nil)
             test.is_true(frame.rows[1]:find("Application", 1, true) == nil)
-            test.eq(#frame.tabs, 2)
+            test.eq(#frame.tabs, 3)
+            test.eq(frame.tabs[3].action, "connection")
+            test.is_true(frame.tabs[3].x >= frame.tabs[2].x + frame.tabs[2].width)
             test.eq(frame.tabs[1].id, "one")
             test.eq(frame.tabs[2].id, "two")
             test.eq(appearance.cycle(preferences, "theme").taskbar, "icons")
             test.eq(assert(appearance.decode({theme = "honey", background = "dots"})).taskbar, "labels")
             test.is_nil(appearance.decode({theme = "honey", background = "dots", taskbar = "invalid"}))
+        end)
+        test.it("renders status badges in taskbar labels and window chrome without changing titles", function()
+            local scene = model.add(model.new(80, 24), "one", "one", "Application One", "界")
+            local badges: {[string]: surface.Badge} = {one = {glyph = "◐", text = "Waiting on you", tone = "warning"}}
+            local preferences = appearance.defaults()
+            local plain = render.draw(scene, {"one"}, {}, nil, nil, "", "workspace", preferences)
+            local frame = render.draw(scene, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+            local text = table.concat(frame.rows, "\n")
+            test.is_true(text:find("◐", 1, true) ~= nil)
+            test.is_true(text:find("Waiting on you", 1, true) ~= nil)
+            test.is_true(text:find("Application One", 1, true) ~= nil)
+            test.eq(model.display_title(scene.windows[1]), "Application One")
+            test.eq(frame.tabs[1].x, plain.tabs[1].x)
+            test.eq(frame.tabs[1].width, plain.tabs[1].width + 2)
+
+            local collapsed = model.collapse(scene, "one")
+            local recap = render.draw(collapsed, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+            local recap_text = table.concat(recap.rows, "\n")
+            test.is_true(recap_text:find("◐ Waiting on you", 1, true) ~= nil)
+
+            local modes = {
+                {name = "fullscreen", scene = model.toggle_fullscreen(scene, "one"), marker = "▣ ◐"},
+                {name = "minimized", scene = model.minimize(scene, "one"), marker = "− ◐"},
+                {name = "collapsed", scene = model.collapse(scene, "one"), marker = "▸ ◐"},
+            }
+            for _, item in ipairs(modes) do
+                local plain_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences)
+                local badge_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
+                test.is_true(plain_text(table.concat(badge_mode.rows, "\n")):find(item.marker, 1, true) ~= nil)
+                test.eq(badge_mode.tabs[1].x, plain_mode.tabs[1].x)
+                test.eq(badge_mode.tabs[1].width, plain_mode.tabs[1].width + 2)
+            end
         end)
         test.it("keeps the active tab reachable when the taskbar overflows", function()
             local scene = model.new(24, 12)

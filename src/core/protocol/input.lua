@@ -6,7 +6,7 @@ local function coordinate(value: unknown): integer?
         or value ~= math.floor(value) then return nil end
     return math.floor(value)
 end
-function M.decode(value: unknown): tty.InputEvent?
+function M.decode(value: unknown): tty.TTYEvent?
     if type(value) ~= "table" then return nil end
     if value.ctrl ~= nil and type(value.ctrl) ~= "boolean" then return nil end
     if value.alt ~= nil and type(value.alt) ~= "boolean" then return nil end

@@ -1,0 +1,186 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: broker_policy
+  kind: security.policy.expr
+  policy:
+    expression: action != "process.host" || resource == "bee:workers"
+    actions:
+    - tty.mount
+    - tty.observe
+    - tty.input
+    - tty.resize
+    - process.spawn
+    - process.spawn.monitored
+    - process.context
+    - process.host
+    - process.send
+    - process.monitor
+    - process.terminate
+    - process.cancel
+    - registry.get
+    - process.security
+    - security.scope.create
+    - security.policy.get
+    - registry.snapshot
+    - registry.history
+    resources: '*'
+    effect: allow
+- name: processes_policy
+  kind: security.policy
+  policy:
+    actions:
+    - system.read
+    resources:
+    - hosts
+    - memory
+    - goroutines
+    - supervisor
+    effect: allow
+- name: desktop_policy
+  kind: security.policy.expr
+  policy:
+    expression: action != "process.host" || resource == "bee:workers"
+    actions:
+    - registry.get
+    - registry.find
+    - tty.mount
+    - tty.observe
+    - tty.input
+    - tty.resize
+    - process.send
+    - process.monitor
+    - process.terminate
+    - process.cancel
+    - process.host
+    - process.context
+    - process.security
+    - security.scope.create
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: presenter_policy
+  kind: security.policy
+  policy:
+    actions:
+    - tty.observe
+    - tty.input
+    - tty.resize
+    - process.send
+    - process.monitor
+    resources: '*'
+    effect: allow
+- name: session_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.send
+    - process.monitor
+    resources: '*'
+    effect: allow
+- name: session_status_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.projection:status_read
+    - bee.threads.projection:status_update
+    - bee.threads.delivery:watch
+    effect: allow
+- name: host_policy
+  kind: security.policy.expr
+  policy:
+    expression: action != "process.host" || resource == "bee:workers"
+    actions:
+    - process.send
+    - process.monitor
+    - process.unmonitor
+    - process.terminate
+    - process.host
+    - process.context
+    - process.security
+    - security.policy.get
+    - security.scope.create
+    resources: '*'
+    effect: allow
+- name: client_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.session:main
+    - bee.terminal:main
+    effect: allow
+- name: host_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.applications:broker
+    effect: allow
+- name: desktop_catalog_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.client:list_desktops
+    - bee.client:allocate_desktop
+    effect: allow
+- name: desktop_catalog_resource_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.client.desktops.read
+    - bee.client.desktops.allocate
+    resources:
+    - bee:client_db
+    effect: allow
+- name: retained_supervisor_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    - bee.client:main
+    effect: allow
+- name: local_supervisor_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.host:main
+    effect: allow
+- name: local_launcher_spawn_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.launch:supervisor
+    effect: allow
+- name: client_node_defaults_call_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.node:get_appearance
+    effect: allow
+- name: client_node_defaults_read_policy
+  kind: security.policy
+  policy:
+    actions:
+    - bee.node.read
+    resources: '*'
+    effect: allow

@@ -1,0 +1,145 @@
+# Gateway (build sequence step 9, harness lane)
+
+Agreed with Astra 2026-09-09 (rounds 56 to 58). `bee.gateway` is the
+authenticated thread port a managed harness child reaches over loopback HTTP:
+`/mcp/{action}` for tools, later `/hook/{action}` for lifecycle observations.
+The gateway owns bindings and credentials; the host composition owns the native
+HTTP listener. The activation candidate uses loopback port zero, resolves the
+bound address through supervisor state, and declares `thread_read`,
+`thread_wait` and the explicitly admitted `thread_message` write in the four
+default Agent window policies. Claude and Codex also
+declare the five supported lifecycle hooks. Agy and Grok currently refuse HTTP
+hook configuration. Actual standalone child MCP passes for Claude/Codex fixture
+executables using their generated configuration and delivered token: initialize,
+all three declared tools, thread read, authenticated message append and bounded
+wait. This does not prove a provider conversation or complete agent
+orchestration. The refreshed full regression is
+still running; see the global-build handoff for installation status.
+
+## Authority boundaries
+
+Host-selected container access uses the same native listener and gateway bindings.
+The default remains `127.0.0.1:0`; an explicit host composition may select a
+loopback or RFC1918 IPv4 literal and port zero. Wildcard, public, link-local and
+hostname addresses are refused. Native address discovery checks that the
+reported interface matches the configured interface. MCP and both hook endpoints
+check the exact Host address and port; `localhost` is accepted only as an alias
+for `127.0.0.1` on that same port. Browser origins remain refused.
+All three endpoint handlers reject browser origins and missing bearer headers
+before resolving listener state. A request without a bearer returns 401 without
+a supervisor lookup. Requests carrying a bearer still pass the exact Host check
+before token authentication or credential-use accounting.
+
+The host must also select the readiness permission for that interface. Simple
+security policies support suffix wildcards, so `http://IP:*/ready` is not a
+matching pattern. The container acceptance composes an expression restricted to
+the selected IP, a numeric port, and `/ready`, plus private-IP access to that IP.
+The default readiness policy now uses the same expression boundary for
+`127.0.0.1`. `make gateway-readiness-check` proves the native random-port request
+with a narrow fixture caller and refuses unrelated paths, query-bearing URLs,
+and foreign hosts. The previous middle-wildcard policy fails this proof with
+`not allowed` before credential delivery. The fixed-port acceptance fixture
+selects its exact readiness URL through that expression as well.
+
+`make gateway-container-check` takes an explicit `GATEWAY_INTERFACE`, immutable
+locally installed `DOCKER_IMAGE`, and selected `WIPPY`. It uses an isolated store,
+the native random port, and a disposable non-root read-only container. Fixture
+credentials travel through an in-memory callback and container stdin, with no
+host credentials or filesystem mounts. This is a network/credential acceptance
+gate, not managed Docker launch, provider recovery, or sandbox-policy acceptance.
+The real-container gate passes on the selected local Docker bridge with an
+already installed immutable Node image: initialization, exact read/wait tool
+scope, thread read, absent/cross-action/revoked credential refusal, and wrong
+Host/port/Origin refusal. The full regression for the private-interface and
+anonymous-rejection changes passes, including source/pack desktop, client,
+recovery and app checks. The combined integration release remains unverified;
+these changes are not installed in global Bee.
+The container gate also submits and replays `SessionStart` through both HTTP and
+MCP hooks with a separate hook credential. HTTP returns the same occurrence ID
+and empty response; MCP exposes only the hook tool and returns the same queued
+receipt. Both reject tool credentials and check missing credentials, action,
+Host, port, Origin and revocation boundaries. This proves hook admission and queueing, not carrier
+commit to a thread or a real harness's delivery behavior.
+
+| Boundary | Rule |
+|---|---|
+| Endpoint scope | Security setup permissions do not grant function calls. The endpoint separately holds exact call grants for address resolution and the three thread operations; tool execution uses the bound subject's selected tool scope. |
+| Listener | A native `http.service` on an OS-selected loopback port, owned by the host composition. Authorized admission initializes its stored generation; the same execution preserves its epoch and drain decision. A replacement execution requires a new generation. The host owns the service lifetime; closing an attempt never closes the listener. |
+| Binding | Each admitted attempt owns one revocable gateway binding: subject, action, attempt, thread, owner incarnation, expiry and the exact tool set. Carrier exit revokes the binding, never the listener. |
+| Token | `admit` binds without bytes. The bytes are minted by the gateway at delivery only: placement's service, at one start, calls `authorize_materialization` for the binding the carrier recorded and hands the one-time key it receives to the runner it spawns; the runner calls `materialize` for the binding its attempt holds under the carrier epoch it is attached to (the binding issued at the highest epoch not above it), names that binding, presents the key (hash compared, window bounded by the start budget, consumed by use), receives the bytes once for the binding's current credential generation, and puts them nowhere but the child's environment under `BEE_GATEWAY_TOKEN`. A process that merely shares the runner's actor cannot materialize; the credential records the authenticated caller. Every accepted presentation of a token is counted on the credential (`presented_count`, `last_presented_at`), which is how a client's authentication is proven without bytes. Only the sha256 is stored, in a credentials table keyed by binding and generation. A generation cannot be materialized twice; a lost reply is recovered only by an explicit `reissue`, which is a compare-and-set on the expected generation and revokes the previous credentials, never by replay. Bytes never enter URLs, arguments, records, evidence or logs. The credential broker gains no token semantics. |
+| Configuration | The host selects the endpoint, tools, hooks and credential environment names. The carrier measures those inputs; placement independently checks them and asks the activated driver to render bounded arguments/files using the actual private HOME. The intent freezes that delivery. Claude uses inline `--mcp-config` and `--settings` JSON with explicit settings sources; Codex renders `.codex/config.toml` and its hook/trust files. Neither carries credential bytes. Both transports materialize tokens only into the selected environment names. Driver tool flags and MCP annotations do not authorize gateway operations. |
+| Carrier | A launch policy that names `gateway_tools` (and optionally `gateway_ttl_ms` and `gateway_hooks`, the hook events the launch reports, see [Gateway hooks](GATEWAY_HOOKS.md)) makes the carrier admit a binding after the durable action and attempt preparation and its epoch claim, never in the effect-free `plan`; the binding id is recorded in the checkpoint before attach and handed to placement start. Readiness with a valid binding is taken immediately before placement start. A failure after admission revokes the binding before the error returns; settlement revokes it at close. Exactly one live binding exists per attempt and carrier epoch: the same admission identity replays it (a retried open under the replayed claim), a different admission at that epoch conflicts, an epoch below the highest ever admitted for the attempt conflicts even when that binding is revoked, and only a strictly newer carrier epoch supersedes what earlier epochs hold. A replacement carrier that takes over a running child does not admit; it inherits the binding its child holds and retires it at settlement. |
+| Carrier loss | Placement owns revocation independently of any carrier. The runner watches the attached carrier: when it exits while the child lives, the binding stays alive for the takeover grace (`TAKEOVER_GRACE_MS`, 3 s, reported by placement capabilities as `gateway.takeover_grace_ms`) so a replacement attaching under a newer generation inherits it, and is retired by the runner when no takeover comes; an exit from a carrier that is no longer the attached generation revokes nothing. The grace keeps only the binding alive: an explicit revocation, a listener reopen and the binding's own expiry each refuse the token at once inside it. The runner also retires the binding when the child exits and when the start is refused after materialization. Placement supervision retires an attempt's bindings through `revoke_attempt`, fenced by carrier epoch, when reconciliation finds the attempt exited or uncertain, and its recheck at start and on every sweep stops a live attempt whose binding is no longer valid. |
+| Requester | The carrier cannot select an actor or mint tool authority. `admit` binds the subject the launch admission established; every tool call runs as that subject under host-named policies, and the thread owner authorizes every operation again. |
+| Tools | A tool name maps to one existing owner operation; nothing is advertised that is not mapped. `thread_message` maps to `bee.threads.service:record` with fixed `kind=message`; its bounded arguments cannot name a thread, sender, source, lifecycle record or context, while the endpoint binds thread and action/attempt context from the authenticated gateway binding. `thread_done` must not bypass the carrier's settle rule; `thread_launch` gets no grant or credential issuance authority. The four default profiles advertise exactly `thread_message`, `thread_read` and `thread_wait`; every call still requires explicit binding admission. |
+| Wait | `thread_wait` is read-only: it is `bee.threads.delivery:watch`, a wakeup on the head, bounded by `min(wait_ms, transport budget minus margin)`; it claims no obligation. A claiming variant exists only as a separately advertised tool that says so. |
+| Hooks | Observations only: authenticated, deduplicated, payload-bounded, ordered by the carrier epoch; HTTP ingress is never an unfenced second record writer. Not in slice 1. |
+| Readiness | `ready` performs an actual loopback request with a fresh nonce and accepts only an answer whose generation matches the store and the supervisor and whose proof is the HMAC over `{epoch, restarts, nonce}` under the listener secret minted at `open`; another process answering on the port cannot produce it, and a store upgraded to the secret column proves nothing until the next `open`. The proof shows the answer came from a holder of this store's secret, not that the socket reached the configured listener directly; readiness therefore stays fixture-only until redirects are provably closed (see below). It returns the listener generation and the admitted binding. The generation is the gateway epoch (advanced by `open`, which the managed host calls when it brings the listener up) paired with the service's restart count from `system.supervisor.state`, so a listener restart invalidates stale readiness. Carrier startup requires readiness under the current generation and a valid binding, taken immediately before the child starts. `ready` runs under `bee:gateway_readiness_policy`, which grants the HTTP client exactly the configured endpoint's ready URL (`bee:gateway_endpoint`, the address `open` also refuses to differ from); the store policy carries no network grant. The runtime's HTTP client exposes no redirect control (Go's default applies); the grant is an exact URL and the gateway's own handler never redirects. |
+| Drain | `drain(deadline_ms)` records the host-owned shutdown deadline, refuses new admissions, and releases every outstanding wait at its next slice with the explicit outcome `{status: released, reason: draining}`; a bounded read may still finish until the deadline, after which the endpoint answers 503 and the host stops the service. Waits run in one-second slices of the read-only `watch` so the release is prompt. |
+| Transport | Host header must be the configured loopback address, no CORS, authentication required even locally, bounded bodies. |
+
+## Operations (`bee.gateway`, function entries, no listener)
+
+| Operation | Caller | Effect |
+|---|---|---|
+| `open` | managed host | Advances the gateway epoch; records the listener address. |
+| `admit` | carrier (`bee.gateway.admit`) | Binds subject, action, attempt, thread, owner incarnation, carrier epoch, tools and expiry at credential generation 0 in one transaction; returns the binding, never bytes. One live binding per attempt and carrier epoch: the same request digest replays, a different one conflicts, and the attempt's bindings below that carrier epoch are superseded. |
+| `authorize_materialization` | placement service (`bee.gateway.manage` on bindings) | For one start: verifies the carrier-recorded binding is the live one under the attached carrier epoch and returns a one-time materialization key whose hash and window are kept on the binding. |
+| `materialize` | placement runner (`bee.gateway.materialize` plus the key) | Mints the bytes once for the current credential generation of the live binding the attempt holds under the given carrier epoch (issued at the highest epoch not above it); refuses a binding other than the one the carrier recorded, a missing, wrong, used or expired key; conflicts if that generation is already materialized. The materializer recorded is the authenticated caller. |
+| `reissue` | carrier (`bee.gateway.admit`) | Compare-and-set on the expected credential generation: advances it by one, revokes the previous generation's credentials; concurrent reissues yield one successor and a stale expectation conflicts. |
+| `revoke` | carrier, manager or the attempt's materializer | Revokes one binding; later presentations are refused. |
+| `revoke_attempt` | placement supervision (`bee.gateway.manage` on bindings) | Revokes the attempt's bindings whose carrier epoch is at most the reported one and rejects only their unclaimed hook rows; claimed rows remain for carrier reconciliation. |
+| `check` | carrier, materializer or manager | A binding by id or by attempt and carrier epoch, with its validity under the current generation and the current credential's presentation count; never bytes. |
+| `hook_queue` | carrier or manager | A binding's queued, committed and rejected hook submissions, allowlisted fields only (see [Gateway hooks](GATEWAY_HOOKS.md)). |
+| `hook_claim`, `hook_ack`, `hook_reject` | carrier (`bee.gateway.admit`) or manager | The intake lifecycle, fenced by carrier epoch: claim queued submissions at least once, acknowledge the ones the thread committed, reject only rows never claimed. A repeat claim by the same epoch redelivers its outstanding rows in order until acknowledgment. Claimed rows stay recoverable across revocation, expiry and listener fencing because the gateway cannot distinguish an uncommitted claim from a lost acknowledgment of a thread commit. |
+| `hook_http` (HTTP `POST /hook/{action}`), `hook_status_http` (`GET /hook/{action}/{event}`), `hook_mcp_http` (`POST /hook/{action}/mcp`) | child, under the hook credential | Hook submission in Claude Code's http form and Codex's MCP form, and the status of one submission; empty or plain-text answers only. |
+| `drain` | managed host | Records the shutdown deadline, refuses new admissions, revokes nothing, releases waits with `released`/`draining`; past the deadline every call is 503. |
+| `ready` | carrier | Loopback `GET /ready?nonce=…` against the recorded address; verifies the proof; returns `{generation, listening}` and, given a binding id, that binding's current validity. |
+| `mcp` (HTTP `POST /mcp/{action}`) | child | JSON-RPC 2.0: `initialize`, `tools/list` (per-tool annotations), `tools/call`; a notification (`notifications/*`, no id) is accepted with 202 and no body. Authenticates `Authorization: Bearer` against a live credential of the binding's current generation for `{action}`. |
+| `ready_http` (HTTP `GET /ready`) | gateway itself | Returns the generation the store holds and the proof over the caller's nonce. |
+
+## Slice 1 acceptance (`tests/gateway.py`, `tests/lua/gateway`)
+
+- Readiness: `ready` succeeds only after a real loopback request and reports the generation; a fresh `open` changes the generation and the old readiness is stale.
+- Admission and revocation: an admitted token lists and calls `thread_read`; a revoked token is refused; an expired token is refused; a token presented against another action or attempt is refused.
+- `thread_read` returns the owner's page for the bound subject only.
+- `thread_wait` returns within the transport budget, wakes on a new record, and leaves obligations and delivery marks untouched.
+- An explicitly admitted `thread_message` appends through the authenticated thread owner, replays an identical key without a second record, conflicts on changed payload, refuses foreign thread/sender/context and arbitrary record kind fields, leaves attempt settlement untouched, and refuses after token revocation. All four default profiles include the write alongside the two read tools.
+- Drain: a helper drains while a `thread_wait` is in flight; the wait returns `released`/`draining` before its own deadline, a new `admit` is refused, and a bounded read still finishes before the host's deadline.
+- The default composition still has no `http.service` and binds nothing; the managed fixture composition is the only place the listener exists.
+- No token bytes in captured output, records or the store.
+
+## Slice 2 acceptance (`tests/lua/harness/gateway_carrier_test.lua`, `tests/gateway.py`)
+
+The fixture child (`tests/fixtures/harness/bin/claude` under `BEE_FIXTURE_GATEWAY`) is an actual MCP client over HTTP: it reads the configuration from its private home and the token from the environment destination, walks `initialize` with version negotiation, `tools/list` and `tools/call`, and reports status codes on stderr only. The test composition carries the listener as `bee.managed` test-support entries (`tests/lua/managed`); the default composition still has none.
+
+- Admission after preparation, readiness before start, projection at delivery, revocation on exit: the child initializes, discovers exactly the admitted tools and reads the thread; evidence names the credential generation and carrier epoch and never the bytes; the binding is revoked after settlement.
+- Token issued and carrier lost before projection: a carrier that dies after `gateway_admitted` leaves a binding at generation 0; the retry admits anew and starts under its own binding, and the first is superseded.
+- Projection completed and child not started: a start refused after materialization revokes the binding before the runner answers; the attempt exits with no child.
+- Listener generation changed between readiness and start: a fresh `open` after `gateway_ready` makes materialization refuse under the earlier epoch; the carrier revokes and fails the open with nothing minted.
+- Carrier lost while the child lives: the runner retires the binding when the carrier process exits; the child's later call is refused; unclaimed hook rows are rejected while claimed rows remain for a replacement carrier to reconcile before it settles the attempt.
+- Drain during `thread_wait`: the child's wait returns `released`/`draining` well inside its own deadline.
+- Revocation during use: a binding revoked while the child holds the token refuses the child's next call.
+- Carrier lost with no takeover: the binding stays valid through the takeover grace, then the runner retires it; the child's later call is refused; a replacement settles the attempt.
+- Takeover: a replacement carrier attaches under generation 2 while the child lives, the old carrier's exit arrives after the fence and revokes nothing, the child keeps its token and its later call succeeds, and settlement under the replacement retires the inherited binding.
+- Inside the grace: an explicit revocation, a listener reopen and the binding's expiry (`gateway_ttl_ms`) each refuse the child's next call at once.
+- `tests/gateway.py` starts two independent managed fixture compositions concurrently, each with a fixture-local loopback endpoint copied consistently into the host endpoint, readiness policy and listener. Both complete authenticated readiness and all gateway proofs, proving fixtures cannot answer each other's generation. It also proves materialize-once, the one-time materialization key (none, wrong and used keys refused), reissue as compare-and-set (stale expectation conflicts, the replaced token is refused, the next generation works), admission replay and conflict at one carrier epoch, stale admission below the highest epoch refused even after revocation, supersession by a later carrier epoch that then inherits the materialized generation, refusal of a binding other than the carrier's recorded one, presentation counting, `revoke_attempt` fenced by carrier epoch, and authenticated readiness across a reopen.
+- `tests/lua/gateway/mcp_test.lua` proves the readiness verification refuses a wrong nonce, stale or newer restart counts or epochs, a stale or forged proof, a missing proof and an unopened secret; proves per-tool advertisement and argument bounds enforce strict attempt and context scope isolation (including the explicitly admitted write's fixed message kind and rejection of caller-injected sender, thread, context and arbitrary kind); proves bindings are invalidated across listener epoch changes while surviving service restarts; and `tests/lua/gateway/upgrade_test.lua` proves a store populated under migrations 1 and 2 upgrades through migration 3 keeping its bindings and their tokens as credential generation 1, drops the token column, and refuses a downgrade. The managed gateway probe proves authenticated message append, identical replay without duplicate delivery or record rows, changed-payload conflict, bound sender/context, no attempt settlement and revoked-token refusal.
+
+### Store history
+
+Migrations 1 (`gateway`) and 2 (`drain_deadline`) are immutable once any store applied them; migration 3 (`credentials`, a rebuild) adds the listener secret, moves token hashes into `bee_gateway_credentials` as generation 1 of their binding, and adds `carrier_epoch` (0 for bindings admitted before epochs) and `credential_generation` to bindings; migration 4 (`materialization`) adds the materialization key hash and window to bindings and the presentation count to credentials; migration 5 (`hooks`, a rebuild) adds `hooks_json` to bindings, a `kind` (tool or hook) to credentials with uniqueness per binding, generation and kind, and the `bee_gateway_hooks` queue; migration 6 (`intake`, a rebuild) gives the queue its claim epoch, rejection reason and the `rejected` status.
+
+## Real-harness acceptance (`tests/lua/harness/gateway_harness_test.lua`, `tests/managed_launch.py`)
+
+With `BEE_CLAUDE_BIN` and `BEE_CODEX_BIN` naming the executables (bound in the policies as their resolved images, since the host volume follows no links), each harness launches through placement under a policy admitting `thread_read` and `thread_wait`, with the sentinel provider key projected by the credential broker and a scripted loopback model endpoint (`tests/fixtures/harness/bin/endpoint` under `BEE_ENDPOINT_MCP_TOOL`) that answers the first model request with a call of `thread_read` on the server named bee. Proven for both: the endpoint was offered exactly the gateway tools (Claude Code as `mcp__bee__<tool>`, Codex as the `mcp__bee` namespace), the harness called the tool through the gateway and handed the owner's page with its records back to the model, the turn settled `succeeded`, the credential was presented at least three times and is revoked after settlement, evidence carries the gateway materialization, the credential projection, the executable measurement (on a runtime that measures streams) and for Codex the provider configuration, and no bearer value other than the environment reference, no destination assignment and no key reaches evidence, records, the carrier outcome or the endpoint record. Without the variable, the same configuration run directly reaches the model endpoint but presents nothing: Claude Code sends the literal reference and reports the server `failed` with no tools, Codex resolves no credential and offers no gateway tools; the binding's presentation count stays 0 and nothing was read. Codex proofs need a runtime that closes a child's stdin and report the gate open on the pinned one; `make managed-launch-check` runs everything against the combined runtime.
+
+Two authority checks carried into this acceptance. The one-time materialization key travels from the placement service to the runner as a spawn payload: the runtime delivers spawn payloads only to the spawned process (`runtime/lua/modules/process/module.go`, `createPayloadsFromArgs`), no Lua API lists a process's payloads (`system.hosts.processes` reports stats, `system.supervisor.state` reports id, status, desired, retry_count, last_update, started_at and details), and a runner failure reaches the service as an EXIT event carrying the error text only; placement evidence never records the key. The Claude launch line's `--allowedTools` comes from the launch policy's `gateway_tools` through the carrier's prepare request, never from the launch request, and placement refuses at intent any launch line that allows a gateway tool outside the binding's admitted set or the bare server name; the gateway refuses at the call any tool outside the binding regardless of what a client allows itself, so annotations describe behavior and authorize nothing.
+
+Facts established against Claude Code 2.1.267 and Codex 0.153.4 while building this: Claude Code loads user-scope servers from `~/.claude.json` in a fresh HOME, expands `${VAR}` in headers, sends the literal when the variable is unset, denies MCP tools under `dontAsk` unless allowed by name, sends `server/discover` before `initialize`, and names tools `mcp__<server>__<tool>`; Codex reads `bearer_token_env_var`, exposes the server as a namespace tool whose calls arrive as `function_call` with `namespace`, executes read-only annotated tools without approval under `approval_policy = never`, and connects nowhere when the variable is unset.
+
+Hooks follow this path.
+
+## Redirect control (runtime facts and the scoped proposal, not started)
+
+The runtime's Lua `http_client` checks `http_client.request` against the URL argument before the `query` option is appended (`runtime/lua/modules/httpclient/module.go`), so the exact ready URL grant admits the nonce query without widening the destination. Its redirect handler (`service/http/client/handler.go`, `redirectClient`) checks `http_client.request` and the private-IP rule against every redirect target, so under the exact grant a redirect can only lead back to the pinned URL, capped at ten hops. What is still missing is a way to refuse following at all and to see the 3xx: the proposal for wippyai/runtime is a request option `follow_redirects = false` (default unchanged) that returns the redirect response instead of following it. Until it lands and readiness asserts it, readiness remains fixture-only.

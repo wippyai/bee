@@ -1,0 +1,70 @@
+version: '1.0'
+namespace: bee.driver
+entries:
+- name: fixtures
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: ./fixtures/drivers
+- name: fixture_reader_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get, fs.read]
+    resources: '*'
+    effect: allow
+- name: profile_test
+  kind: function.lua
+  source: file://profile_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+    profile: bee.driver:profile
+- name: kit_test
+  kind: function.lua
+  source: file://kit_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    framing: bee.driver.kit:framing
+    quote: bee.driver.kit:quote
+    events: bee.driver.kit:events
+    observation: bee.threads.records:observation
+    stream_json: bee.driver.transport:stream_json
+- name: providers_test
+  kind: function.lua
+  source: file://providers_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [fs, json, funcs]
+  imports:
+    test: wippy.test:test
+    stream_json: bee.driver.transport:stream_json
+    claude: bee.driver.claude:protocol
+    codex: bee.driver.codex:protocol
+    muse: bee.driver.muse:protocol
+    claude_launch: bee.driver.claude:launch
+    codex_launch: bee.driver.codex:launch
+    muse_launch: bee.driver.muse:launch
+    observation: bee.threads.records:observation
+    quote: bee.driver.kit:quote
+- name: codex_config_test
+  kind: function.lua
+  source: file://codex_config_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    configuration: bee.driver.codex:configuration
+- name: muse_config_test
+  kind: function.lua
+  source: file://muse_config_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    configuration: bee.driver.muse:configuration
+    configure: bee.driver.muse:configure

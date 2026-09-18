@@ -1,6 +1,24 @@
 version: '1.0'
 namespace: bee.terminal
 entries:
+- name: selection_test
+  kind: function.lua
+  source: file://selection_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    selection: bee.terminal:selection
+- name: delivery_test
+  kind: function.lua
+  source: file://delivery_test.lua
+  method: run
+  modules: [time]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    delivery: bee.terminal:delivery
 - name: render_test
   kind: function.lua
   source: file://render_test.lua
@@ -17,7 +35,11 @@ entries:
     chrome: bee.terminal:chrome
     bindings: bee.terminal:bindings
     menu: bee.terminal:menu
+    selection: bee.terminal:selection
+    connection: bee.terminal:connection
     appearance: bee.desktop:appearance
+    surface: bee.application:status_surface
+    names: bee.desktop:names
 - name: title_editor_test
   kind: function.lua
   source: file://title_editor_test.lua

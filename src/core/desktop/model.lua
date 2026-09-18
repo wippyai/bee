@@ -139,7 +139,7 @@ local function default_bounds(area: Rect, index: integer): Rect
     local slot = index - 1
     return clamp({
         x = first_x + (slot % columns) * CASCADE_X,
-        y = first_y + (slot % rows) * CASCADE_Y,
+        y = first_y + ((slot // columns) % rows) * CASCADE_Y,
         width = width,
         height = height,
     }, area)

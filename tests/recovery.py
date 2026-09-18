@@ -70,6 +70,17 @@ def stored(folder):
     with sqlite3.connect(folder / "workspace.db") as db:
         return json.loads(db.execute("SELECT value FROM workspace_state WHERE singleton=1").fetchone()[0])
 
+def client_stored(folder):
+    with sqlite3.connect(folder / "workspace.db.client") as db:
+        return json.loads(db.execute("SELECT value FROM client_state WHERE singleton=1").fetchone()[0])
+
+def assert_client_identity(folder, record, workspace_id):
+    layout = client_stored(folder)
+    target = next(t for t in layout["targets"] if t["view_id"] == record["id"])
+    assert target["workspace_id"] == workspace_id and target["instance_id"] == record["instance_id"]
+    window = next(w for w in layout["scene"]["windows"] if w["id"] == target["tab_id"])
+    assert window["workspace_id"] == workspace_id and window["instance_id"] == record["instance_id"]
+
 def run(packed):
     with tempfile.TemporaryDirectory(prefix="bee-recovery-") as temporary:
         folder = Path(temporary)
@@ -85,9 +96,10 @@ def run(packed):
                  "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view", "revision": "1",
                  "title": "Counter", "instance_policy": "multiple", "resume_schema": "counter.v1", "restart_policy": "automatic"}}}
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
-        index = project / "src/_index.yaml"
+        index = project / "src/security/_index.yaml"
         doc = yaml.safe_load(index.read_text())
-        next(e for e in doc["entries"] if e["name"] == "application_admission")["bindings"].append({"definition_id": "probe:app", "policies": []})
+        admission = next(e for e in doc["entries"] if e["name"] == "application_admission")
+        admission["bindings"].append({"definition_id": "probe:app", "policies": []})
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
         # Same authenticated broker, wrong workspace: the owner must not remove
         # its real view when a foreign reply arrives immediately after open.
@@ -122,23 +134,17 @@ def run(packed):
             bounds = ui.frame()
             state = stored(folder)
             identity = state["applications"][0]["instance_id"]
-            assert state["applications"][0]["window"]["workspace_id"] == workspace_id
+            assert_client_identity(folder, state["applications"][0], workspace_id)
+            assert "window" not in state["applications"][0], "Host adopted client geometry"
             old_execution = re.search(r"Execution: (\S+)", ui.text()).group(1)
             ui.key(b"\x1b[20;3~")
             ui.quit()
             assert json.loads(stored(folder)["applications"][0]["resume_state"])["cleaned"], "Cooperative close checkpoint was lost"
         finally:
             ui.close()
-        # Simulate a pre-window-identity checkpoint without changing its
-        # migration ledger or app-owned state. Reopen must stamp the current owner.
-        legacy = stored(folder)
-        for window in legacy["desktop"]["scene"]["windows"]:
-            window.pop("workspace_id", None)
-        for record in legacy["applications"]:
-            if record.get("window"):
-                record["window"].pop("workspace_id", None)
-        with sqlite3.connect(folder / "workspace.db") as db:
-            db.execute("UPDATE workspace_state SET value=? WHERE singleton=1", (json.dumps(legacy),))
+        # Legacy combined layouts (including absent window workspace IDs) are
+        # exercised by local_launcher.public_migration. This path checks that
+        # current recovery restores the host's application and client's layout.
         ui = boot()
         try:
             ui.wait("− Counter")
@@ -147,9 +153,10 @@ def run(packed):
             ui.wait("Workspace: " + workspace_id)
             assert ui.frame() == bounds, (ui.frame(), bounds)
             assert stored(folder)["applications"][0]["instance_id"] == identity
-            assert stored(folder)["applications"][0]["window"]["workspace_id"] == workspace_id
+            assert_client_identity(folder, stored(folder)["applications"][0], workspace_id)
             assert re.search(r"Execution: (\S+)", ui.text()).group(1) != old_execution
             assert old_execution not in json.dumps(stored(folder)), "Execution capability was persisted"
+            assert old_execution not in json.dumps(client_stored(folder)), "Client persisted an execution capability"
             ui.key(b"c")
             ui.wait("Saved: 3")
             # Unclean termination must recover the last acknowledged checkpoint.
@@ -203,9 +210,10 @@ def run(packed):
         finally:
             ui.close()
         with sqlite3.connect(folder / "workspace.db") as db:
-            migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations").fetchall()
-            assert len(migrations) == 2
-        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, two migrations")
+            migrations = db.execute("SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id").fetchall()
+            assert [row[0] for row in migrations] == [1, 2, 3], migrations
+            assert migrations[2][1] == "workspace_display_assignments_v1", migrations
+        print(f"Recovery {'pack' if packed else 'source'}: stable identity, fresh execution, layout, acknowledged state, crash recovery, minimize, close tombstone, manual restore, incompatible schema, three migrations")
 
 if __name__ == "__main__":
     run(False)

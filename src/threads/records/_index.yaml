@@ -1,0 +1,70 @@
+version: '1.0'
+namespace: bee.threads.records
+entries:
+- name: types
+  kind: library.lua
+  source: file://types.lua
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+- name: values
+  kind: library.lua
+  source: file://values.lua
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+- name: observation
+  kind: library.lua
+  source: file://observation.lua
+  modules: [json]
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+- name: message
+  kind: library.lua
+  source: file://message.lua
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+- name: approval
+  kind: library.lua
+  source: file://approval.lua
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+    canonical: bee.threads.records:canonical
+- name: record
+  kind: library.lua
+  source: file://record.lua
+  modules: [json]
+  imports:
+    types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    values: bee.threads.records:values
+    observation: bee.threads.records:observation
+    approval: bee.threads.records:approval
+    canonical: bee.threads.records:canonical
+    message: bee.threads.records:message
+    lifecycle: bee.threads.records:lifecycle
+    delivery: bee.threads.records:delivery
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  modules: [json]

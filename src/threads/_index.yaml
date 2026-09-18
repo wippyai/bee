@@ -1,6 +1,40 @@
 version: '1.0'
 namespace: bee.threads
 entries:
+- name: definition
+  kind: ns.definition
+  module: threads
+  readme: file://README.md
+  meta:
+    title: Bee threads
+    comment: Durable local journal with a checked SQLite store and an actor-owned contract
+- name: target_db
+  kind: ns.requirement
+  meta:
+    comment: SQL resource the journal store opens for every owned table
+  default: bee.threads:db
+  targets:
+  - entry: bee.threads:database_ref
+    path: .resource_ref
+- name: process_host
+  kind: ns.requirement
+  meta:
+    comment: Process host that runs the module's owner process
+  default: bee:workers
+  targets:
+  - entry: bee.threads:owner_service
+    path: .host
+  - entry: bee.threads.delivery:waiter_service
+    path: .host
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked SQL resource; target_db fills resource_ref
+- name: resources
+  kind: library.lua
+  source: file://resources.lua
+  modules: [registry]
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -10,6 +44,99 @@ entries:
   modules: [contract]
   imports:
     protocol: bee.threads:protocol
+- name: capabilities_report
+  kind: library.lua
+  source: file://capabilities.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    migrations: bee.threads.persist:migrations
+    claims: bee.threads.delivery:claims
+    subscriptions: bee.threads.delivery:subscriptions
+    waits: bee.threads.delivery:waits
+    recap: bee.threads.projection:recap
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    capabilities: bee.threads:capabilities_report
+  meta:
+    comment: Implementation facts for any caller; the Hive metadata is inert when no Hive supervisor runs
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Threads capabilities
+      input: {type: object, properties: {}, additionalProperties: false}
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          revision: {type: string}
+          record_schema: {type: string}
+          recap_schema: {type: string}
+          record_kinds: {type: array, items: {type: string}, maxItems: 64}
+          record_sources: {type: array, items: {type: string}, maxItems: 64}
+          outcomes: {type: array, items: {type: string}, maxItems: 64}
+          migrations:
+            type: array
+            maxItems: 64
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                id: {type: integer}
+                name: {type: string}
+                rebuild: {type: boolean}
+          contracts:
+            type: array
+            maxItems: 64
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                contract: {type: string}
+                methods: {type: array, items: {type: string}, maxItems: 64}
+          limits:
+            type: object
+            additionalProperties: false
+            properties:
+              max_record_bytes: {type: integer}
+              max_page_records: {type: integer}
+              max_thread_records: {type: integer}
+              max_thread_members: {type: integer}
+              max_thread_actions: {type: integer}
+              max_thread_attempts: {type: integer}
+              max_thread_turns: {type: integer}
+              max_thread_obligations: {type: integer}
+              max_thread_subscriptions: {type: integer}
+              max_array_items: {type: integer}
+              max_json_depth: {type: integer}
+              max_title_bytes: {type: integer}
+              claim_ttl_seconds: {type: integer}
+              max_wait_ms: {type: integer}
+              wait_budget_margin_ms: {type: integer}
+              max_waiters_per_thread: {type: integer}
+              max_waiters: {type: integer}
+              recap_summary_lines: {type: integer}
+              recap_line_bytes: {type: integer}
+          delivery:
+            type: object
+            additionalProperties: false
+            properties:
+              channels: {type: array, items: {type: string}, maxItems: 64}
+              self_service_only: {type: boolean}
+              delegated_replies: {type: boolean}
+              cross_thread_replies: {type: boolean}
+              cross_node_send: {type: boolean}
+              telemetry_subscribe: {type: boolean}
+              outstanding_pages_per_subscription: {type: integer}
+              transport_budget:
+                type: object
+                additionalProperties: false
+                properties:
+                  ceiling_ms: {type: integer}
+                  caller_may_shorten: {type: boolean}
+                  caller_may_extend: {type: boolean}
 - name: journal
   kind: contract.definition
   methods:
@@ -27,6 +154,177 @@ entries:
       claim: bee.threads:claim
       append: bee.threads:append
       read_after: bee.threads:read_after
+- name: authority
+  kind: contract.definition
+  methods:
+  - name: create
+    description: Create a rich thread owned by the caller
+  - name: get
+    description: Read a thread summary and the caller's membership
+  - name: list
+    description: List threads the caller can read
+  - name: join
+    description: Add or reactivate a member at an expected revision
+  - name: leave
+    description: Deactivate a member at an expected revision
+  - name: close
+    description: Close a thread that has no unsettled actions
+  - name: record
+    description: Commit a message or observation the caller produced
+  - name: read_after
+    description: Read committed records after a cursor with a bounded filter
+  - name: send
+    description: Commit a message forwarded from another node under its caller node and idempotency key with the payload digest the sender computed; the same identity replays, a different payload conflicts
+  - name: send_status
+    description: What the owner committed under a send identity, for a sender that lost the reply
+- name: authority_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:authority
+    methods:
+      create: bee.threads.service:create
+      get: bee.threads.service:get
+      list: bee.threads.service:list
+      join: bee.threads.service:join
+      leave: bee.threads.service:leave
+      close: bee.threads.service:close
+      record: bee.threads.service:record
+      read_after: bee.threads.service:read_after
+      send: bee.threads.service:send
+      send_status: bee.threads.service:send_status
+- name: delivery
+  kind: contract.definition
+  methods:
+  - name: claim
+    description: Claim the caller's pending messages as one batch
+  - name: dispatch
+    description: Record dispatch intent and any transport acceptance for a claim
+  - name: ack
+    description: Acknowledge a claimed delivery
+  - name: release
+    description: Release a claim that was never dispatched
+  - name: expire
+    description: Mark an expired claim uncertain
+  - name: reconcile
+    description: Decide an uncertain delivery
+  - name: subscribe
+    description: Open a consumer cursor on the thread
+  - name: page
+    description: Return the outstanding page or open the next one
+  - name: ack_page
+    description: Acknowledge the outstanding page by identity and extent
+  - name: unsubscribe
+    description: Stop delivery on a subscription
+  - name: resume
+    description: Rebind a retained durable subscription under a new lease
+  - name: close_subscription
+    description: The thread owner stops delivery on any subscription, preserving its durable cursor
+  - name: forget_subscription
+    description: The thread owner forgets a closed subscription, reclaiming retained metadata
+  - name: wait
+    description: Claim what is pending or wait, bounded, for the thread to move
+  - name: watch
+    description: Wait, bounded and read-only, for the thread to move past a cursor; claims nothing
+- name: delivery_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:delivery
+    methods:
+      claim: bee.threads.delivery:claim
+      dispatch: bee.threads.delivery:dispatch
+      ack: bee.threads.delivery:ack
+      release: bee.threads.delivery:release
+      expire: bee.threads.delivery:expire
+      reconcile: bee.threads.delivery:reconcile
+      subscribe: bee.threads.delivery:subscribe
+      page: bee.threads.delivery:page
+      ack_page: bee.threads.delivery:ack_page
+      unsubscribe: bee.threads.delivery:unsubscribe
+      resume: bee.threads.delivery:resume
+      close_subscription: bee.threads.delivery:close_subscription
+      forget_subscription: bee.threads.delivery:forget_subscription
+      wait: bee.threads.delivery:wait
+      watch: bee.threads.delivery:watch
+- name: projection
+  kind: contract.definition
+  methods:
+  - name: recap_read
+    description: Read the stored recap checkpoint
+  - name: recap_update
+    description: Fold new records into the recap
+  - name: recap_rebuild
+    description: Drop the recap and fold it again from the first record
+  - name: status_read
+    description: Read the status projection with the caller's waiting relationship derived
+  - name: status_update
+    description: Fold new records into the status projection
+  - name: status_rebuild
+    description: Drop the status projection and fold it again from the first record
+- name: projection_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:projection
+    methods:
+      recap_read: bee.threads.projection:recap_read
+      recap_update: bee.threads.projection:recap_update
+      recap_rebuild: bee.threads.projection:recap_rebuild
+      status_read: bee.threads.projection:status_read
+      status_update: bee.threads.projection:status_update
+      status_rebuild: bee.threads.projection:status_rebuild
+- name: lifecycle
+  kind: contract.definition
+  methods:
+  - name: admit_action
+    description: Commit an admitted action
+  - name: prepare_attempt
+    description: Commit a prepared attempt with its pinned execution plan before anything external exists
+  - name: start_attempt
+    description: Commit the start of a prepared attempt under a new owner epoch
+  - name: request_turn
+    description: Commit a turn request on a running attempt
+  - name: end_turn
+    description: Commit the end of an open turn
+  - name: receipt
+    description: Commit the single terminal receipt of an attempt or action
+- name: carrier
+  kind: contract.definition
+  methods:
+  - name: claim
+    description: Acquire a new carrier epoch on a live attempt; earlier carriers are fenced out
+  - name: commit
+    description: Commit derived records and the next checkpoint in one transaction under the current epoch and revision
+  - name: checkpoint
+    description: Read the stored carrier checkpoint, revision and epoch of an attempt
+- name: approvals
+  kind: contract.definition
+  methods:
+  - name: append
+    description: Append one approval projection record under the approval owner's event id; the authority alone holds this
+- name: approvals_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:approvals
+    methods:
+      append: bee.threads.approvals:append
+- name: carrier_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:carrier
+    methods:
+      claim: bee.threads.carrier:claim
+      commit: bee.threads.carrier:commit
+      checkpoint: bee.threads.carrier:checkpoint
+- name: lifecycle_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:lifecycle
+    methods:
+      admit_action: bee.threads.service:admit_action
+      prepare_attempt: bee.threads.service:prepare_attempt
+      start_attempt: bee.threads.service:start_attempt
+      request_turn: bee.threads.service:request_turn
+      end_turn: bee.threads.service:end_turn
+      receipt: bee.threads.service:receipt
 - name: claim
   kind: function.lua
   source: file://methods.lua
@@ -34,9 +332,10 @@ entries:
   modules: [security]
   imports:
     protocol: bee.threads:protocol
+    resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy]
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
 - name: append
   kind: function.lua
   source: file://methods.lua
@@ -44,9 +343,10 @@ entries:
   modules: [security]
   imports:
     protocol: bee.threads:protocol
+    resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy]
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
 - name: read_after
   kind: function.lua
   source: file://methods.lua
@@ -54,9 +354,29 @@ entries:
   modules: [security]
   imports:
     protocol: bee.threads:protocol
+    resources: bee.threads:resources
     store: bee.threads.persist:store
   security:
-    policies: [bee:thread_storage_policy]
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process]
+  imports:
+    resources: bee.threads:resources
+    database: bee.threads.persist:database
+    owner: bee.threads.persist:owner
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: owner_service
+  kind: process.service
+  process: bee.threads:owner
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    restart:
+      max_attempts: 10
 - name: environment
   kind: env.storage.os
   lifecycle: {auto_start: true}

@@ -26,9 +26,6 @@ entries:
       role: terminal
       commands:
       - {name: terminal, fullscreen: true}
-      - {name: claude, arguments: [claude], fullscreen: true}
-      - {name: codex, arguments: [codex], fullscreen: true}
-      - {name: agy, arguments: [agy], fullscreen: true}
 - name: command
   kind: library.lua
   source: file://command.lua

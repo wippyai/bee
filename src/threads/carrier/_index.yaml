@@ -1,0 +1,47 @@
+version: '1.0'
+namespace: bee.threads.carrier
+entries:
+- name: carrier
+  kind: library.lua
+  source: file://carrier.lua
+  modules: [sql, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    observation: bee.threads.records:observation
+    types: bee.threads.records:types
+    record: bee.threads.records:record
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    access: bee.threads.service:access
+- name: claim
+  kind: function.lua
+  source: file://claim_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: commit
+  kind: function.lua
+  source: file://commit_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]
+- name: checkpoint
+  kind: function.lua
+  source: file://checkpoint_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]

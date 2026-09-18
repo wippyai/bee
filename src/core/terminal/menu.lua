@@ -2,7 +2,11 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local model = require("model")
+local names = require("names")
+local display_transfer = require("display_transfer")
 type Descriptor = {definition_id: string, title: string, group: string, role: string}
+type TransferItem = display_transfer.Item
+type TransferSnapshot = display_transfer.Snapshot
 type Item = {label: string, action: string, enabled: boolean, shortcut: string?, children: {Item}?}
 type State = {selected: integer, offset: integer, kind: string?, target: string?, x: integer?, y: integer?, path: {integer}?}
 type Panel = {x: integer, y: integer, width: integer, height: integer, capacity: integer, inset: integer}
@@ -36,10 +40,22 @@ local function descend(items: {Item}, path: {integer}?): {Item}
     end
     return items
 end
-function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: {Descriptor}?): {Item}
+function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: {Descriptor}?, transfers: TransferSnapshot?, display_id: string?): {Item}
     if state.kind == "window" then
         for _, win in ipairs(scene.windows) do
             if win.id == state.target then
+                local transfer_items: {Item} = {}
+                local transfer_item: TransferItem? = nil
+                for _, item in ipairs(transfers and transfers.items or {}) do
+                    if item.tab_id == win.id and item.instance_id == win.instance_id then transfer_item = item; break end
+                end
+                if transfer_item then
+                    for _, target in ipairs(transfer_item.targets) do
+                        if target ~= display_id then
+                            transfer_items[#transfer_items + 1] = {label = names.label(target), action = "transfer:" .. target, enabled = true}
+                        end
+                    end
+                end
                 return descend({
                     {label = "Restore", action = "restore", enabled = win.mode ~= "floating"},
                     {label = "Minimize", shortcut = "Alt+F9", action = "minimize", enabled = win.mode ~= "minimized"},
@@ -48,6 +64,8 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
                     {label = "Snap right", action = "snap_right", enabled = win.mode ~= "minimized"},
                     {label = "Collapse", action = "collapse", enabled = win.mode == "floating"},
                     {label = "Rename…", action = "rename", enabled = true},
+                    {label = "Select text", action = "select_text", enabled = win.mode ~= "collapsed"},
+                    {label = "Send to display", action = "group:transfer", enabled = #transfer_items > 0, children = transfer_items},
                     {label = "Accent", action = "group:accent", enabled = true, children = {
                         {label = "Theme default", action = "accent:", enabled = true},
                         {label = "Amber", action = "accent:amber", enabled = true},

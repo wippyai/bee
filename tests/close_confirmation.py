@@ -8,12 +8,35 @@ from workspace import ROOT, RUNTIME
 from tui_smoke import Desktop
 
 
+
+def replaced_presenter(ui, prompt):
+    previous = ui.screen.display[0]
+    ui.key(b"\x1b[24~")
+    deadline = time.monotonic() + 4
+    while (ui.screen.display[0] == previous or prompt not in ui.text()) and time.monotonic() < deadline:
+        ui.pump(.05)
+    assert ui.screen.display[0] != previous and prompt in ui.text(), ui.text()
+
+
+def canceled_prompt(ui, prompt):
+    ui.key(b"\x1b")
+    deadline = time.monotonic() + 4
+    while prompt in ui.text() and time.monotonic() < deadline:
+        ui.pump(.05)
+    assert prompt not in ui.text(), ui.text()
+
+
 def exercise(packed, responsive=True):
     with tempfile.TemporaryDirectory(prefix="bee-close-confirm-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
         for name in (".wippy.yaml", "wippy.lock"):
             shutil.copy2(ROOT / name, project / name)
+        presenter = project / "src/core/terminal/main.lua"
+        presentation = presenter.read_text()
+        label = '"Workspace " .. names.label(workspace_id)'
+        assert presentation.count(label) == 1
+        presenter.write_text(presentation.replace(label, label + ' .. " P:" .. tostring(process.pid()):sub(-8)'))
         source = project / "src/apps/console/app.lua"
         code = source.read_text()
         handler = '''        elseif selected.channel == closes then
@@ -58,10 +81,8 @@ def exercise(packed, responsive=True):
                 ui.wait("Terminal busy")
             ui.pump(.4)
             assert ui.process.poll() is None
-            ui.key(b"\x1b[24~")
-            ui.pump(.4)
-            ui.wait("Quit Bee?")
-            ui.key(b"\x1b")
+            replaced_presenter(ui, "Quit Bee?")
+            canceled_prompt(ui, "Quit Bee?")
             ui.key(b"printf 'AFTER_%s\\n' 'CANCEL'\r")
             ui.wait("AFTER_CANCEL")
             ui.key(b"\x17")
@@ -76,9 +97,7 @@ def exercise(packed, responsive=True):
             ui.wait("STILL_ALIVE")
             ui.key(b"\x17")
             ui.wait(prompt)
-            ui.key(b"\x1b[24~")
-            ui.pump(.4)
-            ui.wait(prompt)
+            replaced_presenter(ui, prompt)
             ui.key(b"\t\r")
             ui.pump(.7)
             assert "Terminal" not in ui.screen.display[0], ui.text()

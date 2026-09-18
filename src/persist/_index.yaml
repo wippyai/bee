@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.persist
+entries:
+- name: definition
+  kind: ns.definition
+  module: persist
+  readme: file://README.md
+  meta:
+    title: Bee persist
+    comment: Checked migration ledger and SQLite open helper shared by every owned store; owns mechanics, never a schema
+- name: ledger
+  kind: library.lua
+  source: file://ledger.lua
+  modules: [sql, hash]
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+  imports:
+    ledger: bee.persist:ledger
+- name: transaction
+  kind: library.lua
+  source: file://transaction.lua
+  modules: [sql, time]

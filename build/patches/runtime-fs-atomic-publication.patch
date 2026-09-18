@@ -1,0 +1,835 @@
+diff --git a/api/fs/errors.go b/api/fs/errors.go
+index 9c982b2aa6..e00e98093d 100644
+--- a/api/fs/errors.go
++++ b/api/fs/errors.go
+@@ -21,3 +21,8 @@ var (
+ 	ErrNotEmpty    = errors.New("directory is not empty")
+ 	ErrBusy        = errors.New("filesystem resource is busy")
+ )
++
++var (
++	ErrAtomicWriteUnsupported = errors.New("atomic file publication is unsupported")
++	ErrPublishedSyncFailed    = errors.New("file published but directory sync failed")
++)
+diff --git a/api/fs/fs.go b/api/fs/fs.go
+index f4a15417db..d39f901387 100644
+--- a/api/fs/fs.go
++++ b/api/fs/fs.go
+@@ -82,3 +82,13 @@ type (
+ 		GetFS(name string) (FS, bool)
+ 	}
+ )
++
++// AtomicWriteFS is an optional whole-file publication capability. Implementations
++// must publish either all content or none, without following symbolic-link
++// parents. Existing nonregular targets are refused. It does not provide compare-
++// and-swap between writers. ErrPublishedSyncFailed means publication happened but
++// its durability is uncertain; callers must inspect state before retrying.
++// Unsupported platforms/providers return ErrAtomicWriteUnsupported.
++type AtomicWriteFS interface {
++	WriteFileAtomic(name string, data []byte, perm fs.FileMode) error
++}
+diff --git a/runtime/lua/modules/fs/atomic_write_test.go b/runtime/lua/modules/fs/atomic_write_test.go
+new file mode 100644
+index 0000000000..b0c21c2324
+--- /dev/null
++++ b/runtime/lua/modules/fs/atomic_write_test.go
+@@ -0,0 +1,165 @@
++// SPDX-License-Identifier: MPL-2.0
++
++package fs
++
++import (
++	"errors"
++	iofs "io/fs"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	lua "github.com/wippyai/go-lua"
++	fsapi "github.com/wippyai/runtime/api/fs"
++	"github.com/wippyai/runtime/service/fs/directory"
++)
++
++type atomicTestFS struct {
++	fsapi.FS
++	err    error
++	root   string
++	name   string
++	data   []byte
++	perm   iofs.FileMode
++	called bool
++}
++
++func (f *atomicTestFS) WriteFileAtomic(name string, data []byte, perm iofs.FileMode) error {
++	f.called = true
++	f.name = name
++	f.data = append([]byte(nil), data...)
++	f.perm = perm
++	if f.err != nil {
++		return f.err
++	}
++	return os.WriteFile(filepath.Join(f.root, name), data, perm)
++}
++
++func newAtomicTestFS(t *testing.T, backendErr error) (*FS, *atomicTestFS, func()) {
++	t.Helper()
++	root := t.TempDir()
++	base, err := directory.NewFS(root, 0755, false)
++	require.NoError(t, err)
++	wrapped := &atomicTestFS{FS: base, root: root, err: backendErr}
++	return NewFS(wrapped, ""), wrapped, func() { _ = base.Close() }
++}
++
++func callAtomicWrite(t *testing.T, filesystem *FS, path, content string) (*lua.LState, int) {
++	t.Helper()
++	l := lua.NewState()
++	ud := l.NewUserData()
++	ud.Value = filesystem
++	l.Push(ud)
++	l.Push(lua.LString(path))
++	l.Push(lua.LString(content))
++	return l, fsWritefileAtomic(l)
++}
++
++func TestFSWritefileAtomicSuccessUsesBoundedAtomicCapability(t *testing.T) {
++	f, backend, cleanup := newAtomicTestFS(t, nil)
++	defer cleanup()
++	require.NoError(t, os.WriteFile(filepath.Join(backend.root, "config"), []byte("old"), 0644))
++
++	l, nret := callAtomicWrite(t, f, "config", "new")
++	defer l.Close()
++	require.Equal(t, 2, nret)
++	assert.Equal(t, lua.LTrue, l.Get(-2))
++	assert.Equal(t, lua.LNil, l.Get(-1))
++	assert.True(t, backend.called)
++	assert.Equal(t, "config", backend.name)
++	assert.Equal(t, []byte("new"), backend.data)
++	assert.Equal(t, iofs.FileMode(0600), backend.perm)
++	data, err := os.ReadFile(filepath.Join(backend.root, "config"))
++	require.NoError(t, err)
++	assert.Equal(t, "new", string(data))
++}
++
++func TestFSWritefileAtomicRefusesUnsupportedAndDeniedBackends(t *testing.T) {
++	t.Run("unsupported", func(t *testing.T) {
++		root := t.TempDir()
++		base, err := directory.NewFS(root, 0755, false)
++		require.NoError(t, err)
++		defer base.Close()
++		f := NewFS(fsapi.NewReadOnlyFS(base), "")
++		l, nret := callAtomicWrite(t, f, "config", "secret-free content")
++		defer l.Close()
++		require.Equal(t, 2, nret)
++		assert.Equal(t, lua.LFalse, l.Get(-2))
++		luaErr := requireLuaError(t, l.Get(-1))
++		assert.Equal(t, lua.Unavailable, luaErr.Kind())
++		assert.Contains(t, luaErr.Error(), "atomic write unsupported")
++		assert.NotContains(t, luaErr.Error(), "secret-free content")
++	})
++
++	t.Run("permission denied", func(t *testing.T) {
++		f, backend, cleanup := newAtomicTestFS(t, fsapi.ErrPermissionDenied)
++		defer cleanup()
++		l, nret := callAtomicWrite(t, f, "config", "private content")
++		defer l.Close()
++		require.Equal(t, 2, nret)
++		assert.Equal(t, lua.LFalse, l.Get(-2))
++		luaErr := requireLuaError(t, l.Get(-1))
++		assert.Equal(t, lua.PermissionDenied, luaErr.Kind())
++		assert.True(t, backend.called)
++		assert.NotContains(t, luaErr.Error(), "private content")
++	})
++}
++
++func TestFSWritefileAtomicRejectsInvalidPathsAndOversizedInputBeforeBackend(t *testing.T) {
++	paths := []string{"", "../escape", "bad\x00path"}
++	for _, path := range paths {
++		t.Run("path "+path, func(t *testing.T) {
++			f, backend, cleanup := newAtomicTestFS(t, nil)
++			defer cleanup()
++			l, nret := callAtomicWrite(t, f, path, "content")
++			defer l.Close()
++			require.Equal(t, 2, nret)
++			assert.Equal(t, lua.LFalse, l.Get(-2))
++			assert.Equal(t, lua.Invalid, requireLuaError(t, l.Get(-1)).Kind())
++			assert.False(t, backend.called)
++		})
++	}
++
++	f, backend, cleanup := newAtomicTestFS(t, nil)
++	defer cleanup()
++	l, nret := callAtomicWrite(t, f, "config", strings.Repeat("x", (8<<20)+1))
++	defer l.Close()
++	require.Equal(t, 2, nret)
++	assert.Equal(t, lua.LFalse, l.Get(-2))
++	luaErr := requireLuaError(t, l.Get(-1))
++	assert.Equal(t, lua.Invalid, luaErr.Kind())
++	assert.Contains(t, luaErr.Error(), "8 MiB")
++	assert.False(t, backend.called)
++}
++
++func TestFSWritefileAtomicBackendFailureIsSafe(t *testing.T) {
++	secret := "backend failure with secret content"
++	f, backend, cleanup := newAtomicTestFS(t, errors.New(secret))
++	defer cleanup()
++	l, nret := callAtomicWrite(t, f, "config", "private content")
++	defer l.Close()
++	require.Equal(t, 2, nret)
++	assert.Equal(t, lua.LFalse, l.Get(-2))
++	luaErr := requireLuaError(t, l.Get(-1))
++	assert.Equal(t, lua.Internal, luaErr.Kind())
++	assert.Equal(t, "atomic write failed", luaErr.Error())
++	assert.NotContains(t, luaErr.Error(), secret)
++	assert.True(t, backend.called)
++}
++
++func TestFSWritefileAtomicPublishedSyncFailureIsUncertain(t *testing.T) {
++	f, backend, cleanup := newAtomicTestFS(t, fsapi.ErrPublishedSyncFailed)
++	defer cleanup()
++	l, nret := callAtomicWrite(t, f, "config", "new")
++	defer l.Close()
++	require.Equal(t, 2, nret)
++	assert.Equal(t, lua.LFalse, l.Get(-2))
++	luaErr := requireLuaError(t, l.Get(-1))
++	assert.Equal(t, lua.Unavailable, luaErr.Kind())
++	assert.Contains(t, luaErr.Error(), "atomic write published; sync status uncertain")
++	assert.Equal(t, true, luaErr.Details()["published"])
++	assert.True(t, backend.called)
++}
+diff --git a/runtime/lua/modules/fs/atomic_write_unix_test.go b/runtime/lua/modules/fs/atomic_write_unix_test.go
+new file mode 100644
+index 0000000000..46407eda02
+--- /dev/null
++++ b/runtime/lua/modules/fs/atomic_write_unix_test.go
+@@ -0,0 +1,37 @@
++//go:build linux || darwin
++
++// SPDX-License-Identifier: MPL-2.0
++
++package fs
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++	lua "github.com/wippyai/go-lua"
++	"github.com/wippyai/runtime/service/fs/directory"
++)
++
++func TestFSWritefileAtomicWithDirectoryBackend(t *testing.T) {
++	root := t.TempDir()
++	backend, err := directory.NewFS(root, 0700, false)
++	require.NoError(t, err)
++	defer backend.Close()
++	require.NoError(t, os.Mkdir(filepath.Join(root, "state"), 0700))
++
++	f := NewFS(backend, "")
++	l, nret := callAtomicWrite(t, f, "state/config", "published")
++	defer l.Close()
++	require.Equal(t, 2, nret)
++	require.Equal(t, lua.LTrue, l.Get(-2))
++	require.Equal(t, lua.LNil, l.Get(-1))
++
++	data, err := os.ReadFile(filepath.Join(root, "state", "config"))
++	require.NoError(t, err)
++	require.Equal(t, "published", string(data))
++	info, err := os.Stat(filepath.Join(root, "state", "config"))
++	require.NoError(t, err)
++	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
++}
+diff --git a/runtime/lua/modules/fs/fs.go b/runtime/lua/modules/fs/fs.go
+index 09d4546748..aecf420ad3 100644
+--- a/runtime/lua/modules/fs/fs.go
++++ b/runtime/lua/modules/fs/fs.go
+@@ -22,6 +22,8 @@ type FS struct {
+ 	cwd string
+ }
+ 
++const maxAtomicWriteBytes = 8 << 20
++
+ func wrapFilesystemError(l *lua.LState, err error, message string, fallback lua.Kind) *lua.Error {
+ 	kind := fallback
+ 	if errors.Is(err, fsapi.ErrReadOnly) ||
+@@ -73,19 +75,20 @@ func (f *FS) resolvePath(p string) (string, error) {
+ }
+ 
+ var fsMethods = map[string]lua.LGoFunc{
+-	"chdir":      fsChdir,
+-	"pwd":        fsPwd,
+-	"open":       fsOpen,
+-	"stat":       fsStat,
+-	"mkdir":      fsMkdir,
+-	"remove":     fsRemove,
+-	"readdir":    fsReaddir,
+-	"exists":     fsExists,
+-	"isdir":      fsIsdir,
+-	"readfile":   fsReadfile,
+-	"read_file":  fsReadfile,
+-	"writefile":  fsWritefile,
+-	"write_file": fsWritefile,
++	"chdir":            fsChdir,
++	"pwd":              fsPwd,
++	"open":             fsOpen,
++	"stat":             fsStat,
++	"mkdir":            fsMkdir,
++	"remove":           fsRemove,
++	"readdir":          fsReaddir,
++	"exists":           fsExists,
++	"isdir":            fsIsdir,
++	"readfile":         fsReadfile,
++	"read_file":        fsReadfile,
++	"writefile":        fsWritefile,
++	"write_file":       fsWritefile,
++	"writefile_atomic": fsWritefileAtomic,
+ }
+ 
+ func fsChdir(l *lua.LState) int {
+@@ -520,6 +523,80 @@ func fsWritefile(l *lua.LState) int {
+ 	return 2
+ }
+ 
++// fsWritefileAtomic delegates the complete replacement to the filesystem's
++// optional atomic capability. The Lua layer buffers and bounds the input so a
++// backend is never asked to publish an oversized document or a partial stream.
++func fsWritefileAtomic(l *lua.LState) int {
++	fs := checkFS(l, 1)
++	if fs == nil {
++		return 0
++	}
++	pathArg := l.CheckString(2)
++	if pathArg == "" {
++		l.Push(lua.LFalse)
++		l.Push(lua.NewLuaError(l, "path required").WithKind(lua.Invalid))
++		return 2
++	}
++	content := l.Get(3)
++	if content == lua.LNil {
++		l.Push(lua.LFalse)
++		l.Push(lua.NewLuaError(l, "data argument required").WithKind(lua.Invalid))
++		return 2
++	}
++
++	resolved, err := fs.resolvePath(pathArg)
++	if err != nil {
++		l.Push(lua.LFalse)
++		l.Push(lua.WrapErrorWithLua(l, err, "invalid path").WithKind(lua.Invalid))
++		return 2
++	}
++
++	atomicFS, ok := fs.fs.(fsapi.AtomicWriteFS)
++	if !ok {
++		l.Push(lua.LFalse)
++		l.Push(lua.WrapErrorWithLua(l, fsapi.ErrAtomicWriteUnsupported, "atomic write unsupported").WithKind(lua.Unavailable).WithRetryable(false))
++		return 2
++	}
++
++	value, ok := content.(lua.LString)
++	if !ok {
++		l.Push(lua.LFalse)
++		l.Push(lua.NewLuaError(l, "content must be a string").WithKind(lua.Invalid).WithRetryable(false))
++		return 2
++	}
++	if len(value) > maxAtomicWriteBytes {
++		l.Push(lua.LFalse)
++		l.Push(lua.NewLuaError(l, "atomic write input exceeds 8 MiB").WithKind(lua.Invalid).WithRetryable(false))
++		return 2
++	}
++	data := []byte(string(value))
++
++	if err := atomicFS.WriteFileAtomic(resolved, data, 0600); err != nil {
++		if errors.Is(err, fsapi.ErrPublishedSyncFailed) {
++			l.Push(lua.LFalse)
++			l.Push(lua.WrapErrorWithLua(l, fsapi.ErrPublishedSyncFailed, "atomic write published; sync status uncertain").WithKind(lua.Unavailable).WithRetryable(false).WithDetails(map[string]any{"published": true}))
++			return 2
++		}
++		if errors.Is(err, fsapi.ErrAtomicWriteUnsupported) {
++			l.Push(lua.LFalse)
++			l.Push(lua.WrapErrorWithLua(l, fsapi.ErrAtomicWriteUnsupported, "atomic write unsupported").WithKind(lua.Unavailable).WithRetryable(false))
++			return 2
++		}
++		if errors.Is(err, fsapi.ErrReadOnly) || errors.Is(err, fsapi.ErrPermissionDenied) || errors.Is(err, iofs.ErrPermission) {
++			l.Push(lua.LFalse)
++			l.Push(lua.NewLuaError(l, "atomic write permission denied").WithKind(lua.PermissionDenied).WithRetryable(false))
++			return 2
++		}
++		l.Push(lua.LFalse)
++		l.Push(lua.NewLuaError(l, "atomic write failed").WithKind(lua.Internal).WithRetryable(false))
++		return 2
++	}
++
++	l.Push(lua.LTrue)
++	l.Push(lua.LNil)
++	return 2
++}
++
+ func fsToString(l *lua.LState) int {
+ 	fs := checkFS(l, 1)
+ 	if fs == nil {
+diff --git a/runtime/lua/modules/fs/spec.md b/runtime/lua/modules/fs/spec.md
+index 7a4613528d..2bd688fec7 100644
+--- a/runtime/lua/modules/fs/spec.md
++++ b/runtime/lua/modules/fs/spec.md
+@@ -322,6 +322,31 @@ Writes data to a file.
+ - Created files have mode 0644
+ - File is automatically closed after writing
+ 
++### writefile_atomic(path: string, content: string) → boolean, error
++
++Publishes a complete file through the filesystem's atomic-write capability.
++The runtime passes the data to that capability with mode `0600`; it never
++falls back to truncating or recreating the destination. Input is limited to
++8 MiB before the filesystem is called. The operation accepts a string only;
++it does not consume arbitrary readers.
++
++The operation returns `false, error` when the filesystem does not support
++atomic writes (`errors.UNAVAILABLE`), when input is invalid or oversized
++(`errors.INVALID`), or when the write fails (`errors.INTERNAL`). If the
++filesystem reports `ErrPublishedSyncFailed`, the error is
++`errors.UNAVAILABLE` with text beginning `atomic write published; sync status
++uncertain` and `err:details().published == true`; publication has happened but
++durability is uncertain, so callers must inspect state before retrying. The
++structured detail lets callers detect this outcome without parsing error text.
++Permission failures use
++`errors.PERMISSION_DENIED`.
++
++The directory filesystem provides this capability on Linux and macOS. It pins
++each parent directory without following symbolic-link parents, refuses
++nonregular existing targets (including final symbolic links), writes with
++0600 permissions, syncs the file, atomically renames it, and syncs the parent
++directory.
++
+ ## File Object Methods
+ 
+ ### read(size?: integer) → string, error
+diff --git a/runtime/lua/modules/fs/types.go b/runtime/lua/modules/fs/types.go
+index cbdffb0b6b..87798d8f2b 100644
+--- a/runtime/lua/modules/fs/types.go
++++ b/runtime/lua/modules/fs/types.go
+@@ -181,6 +181,12 @@ func init() {
+ 			OptParam("mode", typ.String).
+ 			Returns(typ.Boolean, typ.NewOptional(typ.LuaError)).
+ 			Build()},
++		{Name: "writefile_atomic", Type: typ.Func().
++			Param("self", typ.Self).
++			Param("path", typ.String).
++			Param("content", typ.String).
++			Returns(typ.Boolean, typ.NewOptional(typ.LuaError)).
++			Build()},
+ 	})
+ }
+ 
+diff --git a/service/fs/directory/atomic_unix.go b/service/fs/directory/atomic_unix.go
+new file mode 100644
+index 0000000000..24d14f437a
+--- /dev/null
++++ b/service/fs/directory/atomic_unix.go
+@@ -0,0 +1,157 @@
++//go:build linux || darwin
++
++// SPDX-License-Identifier: MPL-2.0
++
++package directory
++
++import (
++	"crypto/rand"
++	"errors"
++	"io"
++	"io/fs"
++	"os"
++	"path"
++	"strings"
++
++	fsapi "github.com/wippyai/runtime/api/fs"
++)
++
++// atomicParent pins each actual directory rather than repeatedly resolving a
++// path. OpenRoot can follow links: compare its identity with Lstat, and reject
++// links explicitly. A rename after opening does not retarget the held handle.
++func (d *FS) atomicParent(name string) (*os.Root, string, error) {
++	name = d.normalizePath(name)
++	if name == "." || !fs.ValidPath(name) {
++		return nil, "", fs.ErrInvalid
++	}
++	parent, err := d.root.OpenRoot(".")
++	if err != nil {
++		return nil, "", err
++	}
++	parts := strings.Split(name, "/")
++	for _, part := range parts[:len(parts)-1] {
++		before, err := parent.Lstat(part)
++		if err != nil {
++			parent.Close()
++			return nil, "", err
++		}
++		if !before.IsDir() || before.Mode()&fs.ModeSymlink != 0 {
++			parent.Close()
++			return nil, "", fs.ErrInvalid
++		}
++		child, err := parent.OpenRoot(part)
++		if err != nil {
++			parent.Close()
++			return nil, "", err
++		}
++		opened, openErr := child.Lstat(".")
++		after, afterErr := parent.Lstat(part)
++		parent.Close()
++		if openErr != nil || afterErr != nil || !after.IsDir() || after.Mode()&fs.ModeSymlink != 0 || !os.SameFile(before, opened) || !os.SameFile(after, opened) {
++			child.Close()
++			return nil, "", fs.ErrInvalid
++		}
++		parent = child
++	}
++	return parent, parts[len(parts)-1], nil
++}
++
++type atomicOutput interface {
++	io.Writer
++	Sync() error
++	Close() error
++}
++type atomicDirectory interface {
++	create(string, fs.FileMode) (atomicOutput, error)
++	regular(string) error
++	remove(string) error
++	rename(string, string) error
++	sync() error
++}
++type rootedAtomicDirectory struct{ root *os.Root }
++
++func (p rootedAtomicDirectory) create(name string, mode fs.FileMode) (atomicOutput, error) {
++	return p.root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
++}
++func (p rootedAtomicDirectory) regular(name string) error {
++	info, err := p.root.Lstat(name)
++	if errors.Is(err, fs.ErrNotExist) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	if !info.Mode().IsRegular() {
++		return fs.ErrInvalid
++	}
++	return nil
++}
++func (p rootedAtomicDirectory) remove(name string) error     { return p.root.Remove(name) }
++func (p rootedAtomicDirectory) rename(old, new string) error { return p.root.Rename(old, new) }
++func (p rootedAtomicDirectory) sync() error {
++	f, err := p.root.Open(".")
++	if err != nil {
++		return err
++	}
++	return errors.Join(f.Sync(), f.Close())
++}
++
++func publishAtomic(parent atomicDirectory, name string, data []byte, mode fs.FileMode) (result error) {
++	if err := parent.regular(name); err != nil {
++		return err
++	}
++	temporary := ".wippy-write-" + rand.Text()
++	f, err := parent.create(temporary, mode)
++	if err != nil {
++		return err
++	}
++	unpublished := true
++	defer func() {
++		if unpublished {
++			result = errors.Join(result, parent.remove(temporary))
++		}
++	}()
++	n, writeErr := f.Write(data)
++	if writeErr == nil && n != len(data) {
++		writeErr = io.ErrShortWrite
++	}
++	if writeErr != nil {
++		return errors.Join(writeErr, f.Close())
++	}
++	if err := f.Sync(); err != nil {
++		return errors.Join(err, f.Close())
++	}
++	if err := f.Close(); err != nil {
++		return err
++	}
++	// Recheck the target's kind; Rename never follows a final symbolic link.
++	if err := parent.regular(name); err != nil {
++		return err
++	}
++	if err := parent.rename(temporary, name); err != nil {
++		return err
++	}
++	unpublished = false
++	if err := parent.sync(); err != nil {
++		return errors.Join(fsapi.ErrPublishedSyncFailed, err)
++	}
++	return nil
++}
++
++func (d *FS) WriteFileAtomic(name string, data []byte, perm fs.FileMode) error {
++	if perm&^fs.ModePerm != 0 {
++		return fsapi.ErrInvalidFileMode
++	}
++	if err := d.checkPermissions("writefile_atomic", name, permRead|permWrite|permExec); err != nil {
++		return err
++	}
++	parent, base, err := d.atomicParent(name)
++	if err != nil {
++		return &fs.PathError{Op: "writefile_atomic", Path: name, Err: err}
++	}
++	defer parent.Close()
++	if err := publishAtomic(rootedAtomicDirectory{parent}, base, data, perm&d.mode); err != nil {
++		return &fs.PathError{Op: "writefile_atomic", Path: path.Clean(name), Err: err}
++	}
++	return nil
++}
+diff --git a/service/fs/directory/atomic_unix_test.go b/service/fs/directory/atomic_unix_test.go
+new file mode 100644
+index 0000000000..73a8041574
+--- /dev/null
++++ b/service/fs/directory/atomic_unix_test.go
+@@ -0,0 +1,220 @@
++//go:build linux || darwin
++
++// SPDX-License-Identifier: MPL-2.0
++
++package directory
++
++import (
++	"errors"
++	"io"
++	"io/fs"
++	"os"
++	"path/filepath"
++	"strings"
++	"sync"
++	"testing"
++
++	fsapi "github.com/wippyai/runtime/api/fs"
++)
++
++func TestAtomicWriteReplaceAndRefuseLinks(t *testing.T) {
++	dir := t.TempDir()
++	d, err := NewFS(dir, 0700, false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close()
++	if err := os.Mkdir(filepath.Join(dir, "session"), 0700); err != nil {
++		t.Fatal(err)
++	}
++	if err := d.WriteFileAtomic("session/config", []byte("first"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	if err := d.WriteFileAtomic("session/config", []byte("second"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	content, err := os.ReadFile(filepath.Join(dir, "session/config"))
++	if err != nil || string(content) != "second" {
++		t.Fatal("replacement", err)
++	}
++	info, err := os.Stat(filepath.Join(dir, "session/config"))
++	if err != nil || info.Mode().Perm() != 0600 {
++		t.Fatal("mode", err)
++	}
++	if err := os.Symlink("session", filepath.Join(dir, "link")); err != nil {
++		t.Fatal(err)
++	}
++	for _, name := range []string{"link/config", "../escape", "session", "missing/config"} {
++		if err := d.WriteFileAtomic(name, []byte("bad"), 0600); err == nil {
++			t.Fatalf("accepted %s", name)
++		}
++	}
++	if err := os.Symlink("config", filepath.Join(dir, "session/symlink")); err != nil {
++		t.Fatal(err)
++	}
++	if err := d.WriteFileAtomic("session/symlink", []byte("bad"), 0600); err == nil {
++		t.Fatal("accepted final symlink")
++	}
++	content, _ = os.ReadFile(filepath.Join(dir, "session/config"))
++	if string(content) != "second" {
++		t.Fatal("refusal changed target")
++	}
++	ro, err := NewFS(dir, 0500, false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer ro.Close()
++	if err := ro.WriteFileAtomic("session/config", nil, 0600); err == nil {
++		t.Fatal("read-only write")
++	}
++	if err := d.WriteFileAtomic("session/config", nil, fs.ModeDir); !errors.Is(err, fsapi.ErrInvalidFileMode) {
++		t.Fatal(err)
++	}
++	entries, _ := os.ReadDir(filepath.Join(dir, "session"))
++	for _, entry := range entries {
++		if strings.HasPrefix(entry.Name(), ".wippy-write-") {
++			t.Fatal("temporary leaked")
++		}
++	}
++}
++
++func TestAtomicWritePinsParentAcrossReplacement(t *testing.T) {
++	dir := t.TempDir()
++	d, err := NewFS(dir, 0700, false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close()
++	for _, name := range []string{"session-a", "session-b"} {
++		if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
++			t.Fatal(err)
++		}
++	}
++	parent, base, err := d.atomicParent("session-a/config")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer parent.Close()
++	if err := os.Rename(filepath.Join(dir, "session-a"), filepath.Join(dir, "retained-a")); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.Symlink("session-b", filepath.Join(dir, "session-a")); err != nil {
++		t.Fatal(err)
++	}
++	if err := publishAtomic(rootedAtomicDirectory{parent}, base, []byte("private"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := os.Stat(filepath.Join(dir, "session-b/config")); !errors.Is(err, fs.ErrNotExist) {
++		t.Fatal("retargeted to sibling", err)
++	}
++	if content, err := os.ReadFile(filepath.Join(dir, "retained-a/config")); err != nil || string(content) != "private" {
++		t.Fatal("lost pinned parent", err)
++	}
++}
++
++type faultAtomic struct {
++	stage, content     string
++	published, removed bool
++}
++
++var errAtomicFixture = errors.New("fixture failure")
++
++func (f *faultAtomic) create(string, fs.FileMode) (atomicOutput, error) {
++	if f.stage == "create" {
++		return nil, errAtomicFixture
++	}
++	return f, nil
++}
++func (f *faultAtomic) Write(data []byte) (int, error) {
++	if f.stage == "write" {
++		return 0, errAtomicFixture
++	}
++	if f.stage == "short" {
++		return 0, nil
++	}
++	f.content = string(data)
++	return len(data), nil
++}
++func (f *faultAtomic) Sync() error {
++	if f.stage == "file-sync" {
++		return errAtomicFixture
++	}
++	return nil
++}
++func (f *faultAtomic) Close() error {
++	if f.stage == "close" {
++		return errAtomicFixture
++	}
++	return nil
++}
++func (f *faultAtomic) regular(string) error { return nil }
++func (f *faultAtomic) remove(string) error  { f.removed = true; return nil }
++func (f *faultAtomic) rename(string, string) error {
++	if f.stage == "rename" {
++		return errAtomicFixture
++	}
++	f.published = true
++	return nil
++}
++func (f *faultAtomic) sync() error {
++	if f.stage == "directory-sync" {
++		return errAtomicFixture
++	}
++	return nil
++}
++func TestAtomicWriteFailureStages(t *testing.T) {
++	for _, stage := range []string{"create", "write", "short", "file-sync", "close", "rename", "directory-sync"} {
++		t.Run(stage, func(t *testing.T) {
++			f := &faultAtomic{stage: stage}
++			err := publishAtomic(f, "config", []byte("secret"), 0600)
++			if err == nil {
++				t.Fatal("missing failure")
++			}
++			published := stage == "directory-sync"
++			if f.published != published || errors.Is(err, fsapi.ErrPublishedSyncFailed) != published {
++				t.Fatal("publication outcome wrong", err)
++			}
++			if f.removed != (stage != "create" && !published) {
++				t.Fatal("temporary cleanup wrong")
++			}
++			if stage == "short" && !errors.Is(err, io.ErrShortWrite) {
++				t.Fatal(err)
++			}
++			if strings.Contains(err.Error(), "secret") {
++				t.Fatal("data leaked")
++			}
++		})
++	}
++}
++func TestAtomicWriteConcurrentWholeFiles(t *testing.T) {
++	dir := t.TempDir()
++	d, err := NewFS(dir, 0700, false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close()
++	a, b := strings.Repeat("a", 32768), strings.Repeat("b", 32768)
++	if err := d.WriteFileAtomic("config", []byte(a), 0600); err != nil {
++		t.Fatal(err)
++	}
++	var wg sync.WaitGroup
++	for _, value := range []string{a, b} {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			for i := 0; i < 30; i++ {
++				if err := d.WriteFileAtomic("config", []byte(value), 0600); err != nil {
++					t.Error(err)
++					return
++				}
++			}
++		}()
++	}
++	for i := 0; i < 120; i++ {
++		v, err := os.ReadFile(filepath.Join(dir, "config"))
++		if err != nil || (string(v) != a && string(v) != b) {
++			t.Fatal("partial publication", err)
++		}
++	}
++	wg.Wait()
++}
+diff --git a/service/fs/directory/atomic_unsupported.go b/service/fs/directory/atomic_unsupported.go
+new file mode 100644
+index 0000000000..eff66631d5
+--- /dev/null
++++ b/service/fs/directory/atomic_unsupported.go
+@@ -0,0 +1,14 @@
++//go:build !linux && !darwin
++
++// SPDX-License-Identifier: MPL-2.0
++
++package directory
++
++import (
++	fsapi "github.com/wippyai/runtime/api/fs"
++	"io/fs"
++)
++
++func (d *FS) WriteFileAtomic(_ string, _ []byte, _ fs.FileMode) error {
++	return fsapi.ErrAtomicWriteUnsupported
++}

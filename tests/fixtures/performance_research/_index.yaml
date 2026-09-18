@@ -1,0 +1,51 @@
+version: '1.0'
+namespace: bee.research_benchmark_probe
+entries:
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+- name: corpus
+  kind: library.lua
+  source: file://corpus.lua
+- name: benchmark
+  kind: function.lua
+  source: file://benchmark.lua
+  method: run
+  imports: {canonical: bee.research_benchmark_probe:canonical, measure: bee.research_benchmark_probe:measure}
+- name: measure
+  kind: library.lua
+  source: file://measure.lua
+  modules: [time]
+  imports: {corpus: bee.research_benchmark_probe:corpus}
+- name: spin
+  kind: function.lua
+  source: file://spin.lua
+  method: run
+  modules: [process, channel]
+- name: cpu_spin
+  kind: function.lua
+  source: file://spin.lua
+  method: cpu_spin
+  modules: [process]
+- name: caller
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.research_benchmark_probe:benchmark, bee.research_benchmark_probe:spin, bee.research_benchmark_probe:cpu_spin]
+    effect: allow
+- name: send_probe
+  kind: security.policy
+  policy: {actions: [process.send], resources: '*', effect: allow}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, channel, time, json, io, process]
+  security: {policies: [bee.research_benchmark_probe:caller, bee.research_benchmark_probe:send_probe]}
+  meta:
+    command:
+      name: research-benchmark-probe
+      security: {actor: {id: bee.research.benchmark.probe}}

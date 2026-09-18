@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee.inbox_decide_probe
+entries:
+- name: seed_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - db.get
+    - registry.get
+    - system.read
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: helper
+  kind: library.lua
+  source: file://helper.lua
+  modules:
+  - hash
+  - system
+  imports:
+    canonical: bee.sync:canonical
+    artifact: bee.governance:artifact
+    plan_store: bee.governance:plan_store
+    staging: bee.governance:staging_resources
+    approval: bee.governance:approval
+- name: seed
+  kind: process.lua
+  source: file://seed.lua
+  method: main
+  modules:
+  - funcs
+  - security
+  - system
+  - logger
+  imports:
+    helper: bee.inbox_decide_probe:helper
+  security:
+    policies:
+    - bee.inbox_decide_probe:seed_policy
+    - bee:approval_request_policy
+    - bee:approval_consume_policy
+  meta:
+    command:
+      name: inbox-decide-seed
+      security:
+        actor:
+          id: bee.inbox_decide_probe
+- name: consume
+  kind: process.lua
+  source: file://consume.lua
+  method: main
+  modules:
+  - funcs
+  - security
+  - logger
+  imports:
+    helper: bee.inbox_decide_probe:helper
+  security:
+    policies:
+    - bee.inbox_decide_probe:seed_policy
+    - bee:approval_request_policy
+    - bee:approval_consume_policy
+  meta:
+    command:
+      name: inbox-decide-consume
+      security:
+        actor:
+          id: bee.inbox_decide_probe

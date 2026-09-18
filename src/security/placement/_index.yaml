@@ -1,0 +1,76 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: placement_store_policy
+  kind: security.policy
+  meta:
+    comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - fs.get
+    - exec.get
+    - system.read
+    - security.scope.create
+    - funcs.security
+    resources:
+    - bee.placement.native:db
+    - bee.placement.native:database_ref
+    - bee.placement.native:root_ref
+    - bee.placement.native:runner_host_ref
+    - custom
+    - security
+    - bee.placement.native:admitted_roots
+    - bee.placement.native:root
+    - bee.placement.native:host_files
+    - bee.placement.native:executor
+    - cwd
+    effect: allow
+- name: placement_exec_policy
+  kind: security.policy
+  meta:
+    comment: Commands and host environment values resolve at launch; the request names them, the host admits them
+  policy:
+    actions:
+    - exec.run
+    - env.get
+    - registry.get
+    resources: '*'
+    effect: allow
+- name: placement_service_policy
+  kind: security.policy
+  meta:
+    comment: The service spawns runners on the workers host and talks to them
+  policy:
+    actions:
+    - process.spawn
+    - process.host
+    - process.monitor
+    - process.unmonitor
+    - process.send
+    resources:
+    - bee.placement.native:runner
+    - bee:workers
+    - '*'
+    effect: allow
+- name: placement_sweeper_policy
+  kind: security.policy
+  policy:
+    actions:
+    - process.registry.register
+    - funcs.call
+    resources: ['*', bee.placement.docker:reconcile_internal]
+    effect: allow
+- name: placement_runner_policy
+  kind: security.policy
+  meta:
+    comment: A runner answers its starter and its bound recipient, and watches the recipient so a lost carrier retires the
+      gateway binding
+  policy:
+    actions:
+    - process.send
+    - process.monitor
+    - process.unmonitor
+    resources: '*'
+    effect: allow

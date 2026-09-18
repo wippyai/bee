@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 4, max_processes: 16}
+  lifecycle: {auto_start: true}

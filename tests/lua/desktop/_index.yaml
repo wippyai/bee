@@ -33,3 +33,13 @@ entries:
     model: bee.desktop:model
     decode: bee.protocol:decode
     test: wippy.test:test
+- name: names_test
+  kind: function.lua
+  source: file://names_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    names: bee.desktop:names
+    test: wippy.test:test

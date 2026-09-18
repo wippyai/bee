@@ -12,6 +12,6 @@ if [[ "${1:-}" == "--app" ]]; then
     echo 'Usage: ./run.sh --app definition-id [application arguments...]' >&2
     exit 2
   fi
-  exec "$bee_runtime" run bee-app -- "$@"
+  exec "$bee_runtime" run -e bee-app -- "$@"
 fi
-exec "$bee_runtime" run bee "$@"
+exec "$bee_runtime" run -e bee "$@"

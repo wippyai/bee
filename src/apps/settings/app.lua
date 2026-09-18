@@ -1,4 +1,4 @@
--- A standalone application: workspace owns preferences; view owns only geometry.
+-- A standalone application: the controlling display owns preferences; view owns geometry.
 local tty = require("tty")
 local client = require("client")
 local channel = require("channel")
@@ -19,8 +19,8 @@ local function main(value: unknown)
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
-    local preferences = appearance.defaults()
-    local confirmed = preferences
+    local preferences: appearance.Preferences = appearance.defaults()
+    local confirmed: appearance.Preferences = preferences
     local status = ""
     local pending_ticks = 0
     local ticker = assert(time.ticker("1s"))
@@ -30,7 +30,7 @@ local function main(value: unknown)
     local last_checkpoint = ""
     if launch.resume_state ~= "" then
         local restored: unknown = json.decode(launch.resume_state)
-        if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar")
+        if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar" and restored.pane ~= "about")
             or type(restored.offset) ~= "number" or restored.offset < 0 or restored.offset > 10000
             or restored.offset ~= math.floor(restored.offset) then error("Invalid Settings checkpoint") end
         pane = restored.pane; offset = math.floor(restored.offset)
@@ -38,7 +38,7 @@ local function main(value: unknown)
     local hits: {view.Hit} = {}
     local pending = ""
     local running, dirty = true, true
-    local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or #appearance.backgrounds()) end
+    local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width) or 0))) end
     local function selected(): integer
         if pane == "taskbar" then return preferences.taskbar == "icons" and 2 or 1 end
         if pane == "theme" then
@@ -49,9 +49,14 @@ local function main(value: unknown)
         return 1
     end
     local function reveal()
+        if pane == "about" then
+            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width) - math.max(0, height - 5)), offset)))
+            return
+        end
         offset = view.offset(selected(), offset, view.grid(width, height), count(), true)
     end
     local function choose(index: integer)
+        if pane == "about" then return end
         local value = math.floor(math.max(1, math.min(count(), index)))
         local next_preferences: appearance.Preferences
         if pane == "theme" then next_preferences = {theme = appearance.themes()[value].id, background = preferences.background, taskbar = preferences.taskbar}
@@ -65,7 +70,21 @@ local function main(value: unknown)
         end
         reveal(); dirty = true
     end
+    local function inherit()
+        if not broker then return end
+        pending = uuid.v7(); pending_ticks = 0; status = ""
+        local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending,
+            op = "inherit", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
+        if not sent then pending = ""; status = tostring(err) end
+        dirty = true
+    end
     local function browse(amount: integer)
+        if pane == "about" then
+            local capacity = math.max(0, height - 5)
+            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width) - capacity), offset + amount)))
+            dirty = true
+            return
+        end
         local grid = view.grid(width, height)
         offset = view.offset(selected(), offset + amount, grid, count(), false)
         dirty = true
@@ -102,10 +121,12 @@ local function main(value: unknown)
                 local payload: unknown = message:payload():data()
                 local next_preferences = appearance.decode(payload)
                 if next_preferences and type(payload) == "table" and payload.version == 1 then
-                    confirmed = next_preferences
+                    local error_code = type(payload.error_code) == "string" and payload.error_code or ""
+                    if error_code == "" then confirmed = next_preferences end
                     -- An older acknowledgement must not undo a newer key/click.
                     if pending == "" or pending == payload.request_id then
-                        preferences = next_preferences; pending = ""; dirty = true
+                        preferences = confirmed
+                        pending = ""; dirty = true
                         status = type(payload.error) == "string" and payload.error or ""
                     end
                 end
@@ -119,15 +140,16 @@ local function main(value: unknown)
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local grid = view.grid(width, height)
-                if key == "left" then choose(selected() - 1)
+                if key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
+                elseif key == "left" then choose(selected() - 1)
                 elseif key == "right" then choose(selected() + 1)
                 elseif key == "up" then choose(selected() - grid.columns)
                 elseif key == "down" then choose(selected() + grid.columns)
                 elseif key == "home" then choose(1)
                 elseif key == "end" then choose(count())
-                elseif key == "pgup" then browse(-grid.capacity)
-                elseif key == "pgdown" then browse(grid.capacity)
-                elseif key == "tab" then switch(pane == "theme" and "background" or (pane == "background" and "taskbar" or "theme"))
+                elseif key == "pgup" then browse(-math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
+                elseif key == "pgdown" then browse(math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
+                elseif key == "tab" then switch(pane == "theme" and "background" or (pane == "background" and "taskbar" or (pane == "taskbar" and "about" or "theme")))
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" then
                 local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
@@ -138,9 +160,11 @@ local function main(value: unknown)
                 elseif data.action == "press" and data.button == "left" then
                     local hit = view.hit(hits, x, y)
                     if hit then
-                        if hit.kind == "theme" then switch("theme")
+                        if hit.kind == "inherit" then inherit()
+                        elseif hit.kind == "theme" then switch("theme")
                         elseif hit.kind == "background" then switch("background")
                         elseif hit.kind == "taskbar" then switch("taskbar")
+                        elseif hit.kind == "about" then switch("about")
                         elseif hit.kind == "select" then choose(hit.index)
                         elseif hit.kind == "step" then choose(selected() + hit.index)
                         elseif hit.kind == "page" then browse(hit.index * view.grid(width, height).capacity) end

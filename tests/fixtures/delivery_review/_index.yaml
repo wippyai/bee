@@ -1,0 +1,67 @@
+version: '1.0'
+namespace: bee.delivery_review_probe
+entries:
+- name: destination
+  kind: registry.entry
+  meta:
+    type: bee.delivery_review_destination
+    comment: The desktop workspace this acceptance stages into; the harness writes it after the workspace identity exists
+  data:
+    workspace_id: ''
+- name: seed_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - security.policy.get
+    - registry.get
+    - registry.apply
+    - registry.update.registry.entry
+    - registry.preview
+    - registry.overlay.get
+    - db.get
+    - system.read
+    - bee.governance.workspace.read
+    - bee.governance.workspace.write
+    - bee.governance.delivery.read
+    - bee.governance.delivery.manage
+    - bee.governance.delivery.publish
+    resources: '*'
+    effect: allow
+- name: seed
+  kind: process.lua
+  source: file://seed.lua
+  method: main
+  modules: [funcs, registry, system, json, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    preflight: bee.governance:preflight
+  security:
+    policies:
+    - bee.delivery_review_probe:seed_policy
+  meta:
+    command:
+      name: delivery-review-seed
+      security:
+        actor: {id: bee.delivery_review.operator}
+        policies: [bee.delivery_review_probe:seed_policy]
+- name: invoke_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, registry.get, system.read]
+    resources: '*'
+    effect: allow
+- name: invoke
+  kind: process.lua
+  source: file://invoke.lua
+  method: main
+  modules: [funcs, registry, time, logger]
+  security:
+    policies: [bee.delivery_review_probe:invoke_policy]
+  meta:
+    command:
+      name: delivery-review-invoke
+      security:
+        actor: {id: bee.delivery_review.operator}
+        policies: [bee.delivery_review_probe:invoke_policy]

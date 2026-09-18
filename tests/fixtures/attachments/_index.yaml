@@ -1,6 +1,18 @@
 version: '1.0'
 namespace: bee.attachment_probe
 entries:
+- name: client_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, tty.observe, tty.input, tty.resize]
+    resources: '*'
+    effect: allow
+- name: observation_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.attachment_probe:observer_producer, bee.attachment_probe:observer_consumer, bee.attachment_probe:host_guest, bee.attachment_probe:controller, bee.attachment_probe:client, bee.attachment_probe:renderer]
+    effect: allow
 - name: naming_policy
   kind: security.policy
   policy:
@@ -11,9 +23,12 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, time, security, tty, json]
+  modules: [process, channel, time, security, tty, json, logger]
   imports:
     terminal_probe: bee.attachment_probe:terminal
+    observation_probe: bee.attachment_probe:observation
+    host_probe: bee.attachment_probe:host
+    clients_probe: bee.attachment_probe:clients
     decode: bee.protocol:decode
     model: bee.desktop:model
     appearance: bee.desktop:appearance
@@ -24,7 +39,73 @@ entries:
       name: attachment-probe
       security:
         actor: {id: attachment-test}
-        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy]
+        policies: [bee:desktop_policy, bee:core_spawn_policy, bee:workspace_storage_policy, bee.attachment_probe:observation_policy]
+- name: observation
+  kind: library.lua
+  source: file://observation.lua
+  modules: [process, channel, tty, time]
+- name: clients
+  kind: library.lua
+  source: file://clients.lua
+  modules: [process, security, tty, time, channel]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    client_protocol: bee.host:protocol
+- name: client
+  kind: process.lua
+  source: file://clients.lua
+  method: client
+  modules: [process, security, tty, time, channel]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    client_protocol: bee.host:protocol
+- name: renderer
+  kind: process.lua
+  source: file://clients.lua
+  method: renderer
+  modules: [process, security, tty, time, channel]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    client_protocol: bee.host:protocol
+- name: host
+  kind: library.lua
+  source: file://host.lua
+  modules: [process, security, tty]
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    recovery: bee.workspace:recovery
+    persistence: bee.workspace:persistence
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+- name: host_guest
+  kind: process.lua
+  source: file://host.lua
+  method: guest
+  modules: [process, security, tty]
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    recovery: bee.workspace:recovery
+    persistence: bee.workspace:persistence
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+- name: observer_producer
+  kind: process.lua
+  source: file://observation.lua
+  method: producer
+  modules: [process, channel, tty, time]
+- name: observer_consumer
+  kind: process.lua
+  source: file://observation.lua
+  method: observer
+  modules: [process, channel, tty, time]
 - name: terminal
   kind: library.lua
   source: file://terminal.lua
@@ -33,6 +114,11 @@ entries:
     decode: bee.protocol:decode
     appearance: bee.desktop:appearance
     store: bee.storage:store
+- name: controller
+  kind: process.lua
+  source: file://controller.lua
+  method: main
+  modules: [process, tty, time]
 - name: app
   kind: process.lua
   source: file://app.lua

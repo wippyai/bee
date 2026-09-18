@@ -1,0 +1,60 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: resource_store_policy
+  kind: security.policy
+  meta:
+    comment: The resource authority's store, its linked references and node identity
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - system.read
+    resources:
+    - bee.resources:db
+    - bee.resources:database_ref
+    - bee.resources:roots_ref
+    - bee.placement.native:admitted_roots
+    - node
+    - '*'
+    effect: allow
+- name: resource_manage_policy
+  kind: security.policy
+  meta:
+    comment: Workspace managers associate roots, list, revoke any grant and advance the authorization epoch
+  policy:
+    actions:
+    - bee.resources.manage
+    resources: '*'
+    effect: allow
+- name: resource_grant_policy
+  kind: security.policy
+  meta:
+    comment: A principal takes grants for itself
+  policy:
+    actions:
+    - bee.resources.grant
+    resources: '*'
+    effect: allow
+- name: resource_resolve_policy
+  kind: security.policy
+  meta:
+    comment: Attached to placement service entries only; a caller cannot resolve grants on its own
+  policy:
+    actions:
+    - bee.resources.resolve
+    - funcs.call
+    resources:
+    - '*'
+    - bee.resources:resolve
+    effect: allow
+- name: resource_environment_policy
+  kind: security.policy
+  meta:
+    comment: Resource root identity may resolve only the host-selected path variables
+  policy:
+    actions:
+    - env.get
+    resources:
+    - bee.placement.native:root_path
+    effect: allow

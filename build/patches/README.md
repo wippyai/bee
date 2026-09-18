@@ -1,0 +1,53 @@
+# Runtime patch composition
+
+`runtime-http-port0.patch` is runtime PR
+[#737](https://github.com/wippyai/runtime/pull/737), commit
+`20e657b4ee1f6f3d5bd71325d540da8095a0cfce`, applied to Bee's selected runtime
+`291f5c6b708c80afe5da07f3223767573b4d183f`. The upstream PR is merged. Bee still
+needs the launch ABI from its selected pin, so this patch composes the upstream
+HTTP fix without changing that ABI. `wippy.build.json` verifies the patch digest.
+
+The patch preserves native HTTP listener ownership and reports the bound address
+when port zero is selected. Remove this composition when the selected runtime
+contains both requirements. Upstream file licenses remain unchanged.
+
+`runtime-offline-restore-host.patch` composes runtime PRs
+[#740](https://github.com/wippyai/runtime/pull/740) (`b9dc19e6e9`) and
+[#741](https://github.com/wippyai/runtime/pull/741) (`b7b89f5a7d`) onto the same
+selected pin. Both PRs are open, assigned to Rodrigo (`skhaz`), and unmerged.
+The older pin calls its restore helper `materializeRestoreModules`; that name
+is retained without importing newer dependency-reconciliation changes.
+This composition preserves the application/native launch ABI and upstream
+licenses. It makes startup restoration offline and supports an explicit
+terminal host in command metadata. A combined candidate passed the affected
+Hub, core registry and CLI race suites and lint. Bee offline upgrade acceptance
+remains pending; see `docs/handoffs/OFFLINE_BOOT.md`.
+
+`runtime-application-artifact-cache.patch` is runtime PR
+[#742](https://github.com/wippyai/runtime/pull/742), commit `31bc4ad1ee`,
+stacked on PR #726. It uses the existing registry vendor configuration to retain
+exact installed artifacts across embedded bundle changes. Atomic publication
+checks copied bytes and preserves existing artifacts and registry history.
+The PR is open and assigned to Rodrigo. Its upstream MPL license is preserved.
+
+`runtime-terminal-session-identity.patch` composes runtime PR
+[#743](https://github.com/wippyai/runtime/pull/743), through commit
+`42732c141922c4a28531f7eddb953750090dc465`, onto the same pin. It preserves the
+optional host process identity after PTY ownership transfers to a terminal
+session. `TerminalSession:pid()` returns an optional integer and an optional
+error; startup remains asynchronous, with a retryable unavailable result until
+it completes. A PID is not proof of process-group absence. The PR is open,
+assigned to Rodrigo (`skhaz`), and unmerged. Upstream MPL licenses are preserved.
+Affected race suites, vet, repository-pinned lint and Bee toolchain assembly pass.
+
+`runtime-fs-atomic-publication.patch` composes runtime PR
+[#744](https://github.com/wippyai/runtime/pull/744), through `5e76e3c4e1`,
+onto the same pin. It adds optional `AtomicWriteFS` and Lua `writefile_atomic`.
+The Linux/macOS directory provider verifies and pins parent handles, refuses
+symlink parents and nonregular targets, and publishes a synced temporary file
+by rename. A directory-sync failure returns `err:details().published == true`;
+unsupported providers refuse explicitly. This does not change existing writes
+or provide compare-and-swap. The PR is open, assigned to Rodrigo (`skhaz`), and
+unmerged. Upstream MPL licenses are preserved. Filesystem API/directory/Lua race
+suites, pinned lint, toolchain assembly and strict Bee lint pass. macOS is
+cross-compiled only; the Windows provider explicitly returns unsupported.

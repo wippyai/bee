@@ -1,10 +1,11 @@
 # Workspace state and application restoration
 
 This describes the implemented version-1 store, not the future resource catalog.
-The workspace owner alone opens `bee:workspace_db`. Its default local file is
-`.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The launcher runs
-from the Bee checkout directory. Each database now has a durable opaque workspace
-ID in the separate
+The workspace host alone opens `bee:workspace_db`. Its source-development default
+is `.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The standalone
+executable uses its application state directory by default and preserves the
+caller's working directory for native commands. See the [launch instructions](../README.md).
+Each database has a durable opaque workspace ID in the separate
 `workspace_identity` table. Selecting a project folder does not create an
 authorized filesystem binding.
 
@@ -17,9 +18,9 @@ ownership and integrity checks. The envelope is bounded to 2 MiB.
 | Envelope field | Contents |
 |---|---|
 | `version` | `1` |
-| `desktop` | Validated scene, tabs and appearance preferences |
+| `desktop` | Workspace appearance preferences and retained legacy scene/tabs for client import |
 | `applications` | At most 16 opt-in resume records |
-| Each resume record | `id` (view), `instance_id`, `definition_id`, `resume_schema`, `restart_policy`, `resume_state`, optional `window` |
+| Each resume record | `id` (view), `instance_id`, `definition_id`, `resume_schema`, `restart_policy`, `resume_state`, optional legacy `window` |
 
 App state is a JSON string bounded to 64 KiB. There are no persisted per-app
 checkpoint sequence numbers or pinned definition versions in this envelope.
@@ -30,11 +31,11 @@ attachment and cross-workspace request routing remain unimplemented. Runtime lau
 resolves the admitted definition available at boot and checks its declared
 resume schema. An installer must not mistake this for version pinning.
 
-The workspace stores committed scene changes, not each drag preview. During
-bootstrap and sequential restoration, persistence retains the saved desktop
-projection until restoration finishes. A rejected bind or restore send therefore
-cannot overwrite the previous layout with an incomplete boot screen. It retains
-resume records for failed or incompatible restores. Runtime PIDs, launch tokens,
+The host retains the old desktop projection for a once-only client import; it
+does not write new window geometry into application checkpoints. The client stores
+committed scene changes, not each drag preview, in its own database. Its import
+receipt preserves later edits across repeated boots. See [client persistence](CLIENT_STATE.md).
+Host recovery retains resume records for failed or incompatible restores. Runtime PIDs, launch tokens,
 TTY mounts and native resources are recreated, never stored as authority.
 PID strings may repeat across runtime boots.
 
@@ -81,4 +82,5 @@ grant cross-owner SQL access or provide synchronization between machines.
 and client layout split for future mixed-workspace tabs. The storage identity
 exists and the app SDK exposes workspace-qualified logical view references.
 Desktop snapshots preserve workspace identity for newly opened windows.
-Client layout separation, remote routing and attachment remain unimplemented.
+Client layout separation and admitted local attachments are implemented. Mixed-workspace
+composition and remote routing remain unimplemented.

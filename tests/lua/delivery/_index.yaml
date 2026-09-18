@@ -1,0 +1,26 @@
+version: '1.0'
+namespace: tests.delivery
+entries:
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    model: bee.delivery:model
+    caller: bee.application:caller
+    preflight: bee.governance:preflight
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    model: bee.delivery:model
+    view: bee.delivery:view
+    appearance: bee.desktop:appearance
+    preflight: bee.governance:preflight

@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.client
+entries:
+- name: native
+  kind: process.host
+  host: {max_processes: 8, workers: 2}
+  lifecycle: {auto_start: true}

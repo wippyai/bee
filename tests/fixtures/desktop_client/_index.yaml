@@ -1,0 +1,97 @@
+version: '1.0'
+namespace: bee.desktop_client_probe
+entries:
+- name: physical
+  kind: process.lua
+  source: file://physical.lua
+  method: main
+  modules: [tty, process, channel, time]
+  imports:
+    input_decode: bee.protocol:input
+- name: root_policy
+  kind: security.policy
+  policy:
+    actions: ['*']
+    resources: ['*']
+    effect: allow
+- name: left_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:left]
+    effect: allow
+- name: right_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:right]
+    effect: allow
+- name: observer_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:observer]
+    effect: allow
+- name: status_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.client.db:status]
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, security, tty, time, channel, logger]
+  imports:
+    desktops: bee.client:desktops
+    desktop_attachments: bee.client:attachments
+    store: bee.client:store
+    decode: bee.protocol:decode
+    launch_protocol: bee.launch:protocol
+    interaction: bee.application:interaction
+    names: bee.desktop:names
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: desktop-client-probe
+      short: Verify two independent desktop clients
+- name: retained
+  kind: process.lua
+  source: file://retained.lua
+  method: main
+  modules: [process, security, tty, time, channel, logger]
+  imports: {store: bee.client:store}
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: retained-supervisor-probe
+      short: Verify node-owned desktop supervisor and display replacement
+- name: status
+  kind: process.lua
+  source: file://status.lua
+  method: main
+  modules: [process, security, tty, time, channel, funcs, uuid, logger]
+  imports:
+    desktops: bee.client:desktops
+    store: bee.client:store
+    state: bee.client:state
+    model: bee.desktop:model
+    decode: bee.protocol:decode
+    launch_protocol: bee.launch:protocol
+  security:
+    policies: [bee.desktop_client_probe:root_policy]
+  meta:
+    command:
+      name: thread-status-probe
+      short: Verify host-authorized thread status through F12 and reconnect
+      security:
+        actor: {id: bee.desktop_client_probe:status_viewer}
+        policies: [bee.desktop_client_probe:root_policy]
+- name: forger
+  kind: process.lua
+  source: file://forger.lua
+  method: forger
+  modules: [process, security, tty, time, channel, logger]

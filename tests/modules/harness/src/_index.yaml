@@ -1,0 +1,34 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: workers
+  kind: process.host
+  host: {max_processes: 4, workers: 2}
+  lifecycle: {auto_start: true}
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}
+- name: carrier_policy
+  kind: security.policy
+  policy: {actions: [funcs.call], resources: '*', effect: deny}
+- name: launch_spawn_policy
+  kind: security.policy
+  policy: {actions: [process.spawn], resources: '*', effect: deny}
+- name: probe_policy
+  kind: security.policy
+  policy: {actions: [registry.get, registry.find], resources: '*', effect: allow}
+- name: probe
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [registry, io]
+  imports:
+    admission: bee.harness.launch:admission
+    catalog: bee.harness.catalog:catalog
+  meta:
+    command:
+      name: harness-isolation
+      short: Prove the static harness closure and fail-closed host link
+      security:
+        actor: {id: harness-isolation}
+        policies: [bee:probe_policy]

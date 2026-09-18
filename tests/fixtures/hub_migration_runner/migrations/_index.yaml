@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: acme.app
+entries:
+- name: 10_first
+  kind: function.lua
+  source: file://10_first.lua
+  method: run
+  modules: [sql]
+  imports:
+    migration: wippy.migration:migration
+  meta: {type: migration, target_db: probe:db, timestamp: '2026-09-12T10:00:00Z', description: Create probe users}
+- name: 20_second
+  kind: function.lua
+  source: file://20_second.lua
+  method: run
+  modules: [sql]
+  imports:
+    migration: wippy.migration:migration
+  meta: {type: migration, target_db: probe:db, timestamp: '2026-09-12T11:00:00Z', description: Add probe audit}
+- name: 99_excluded
+  kind: function.lua
+  source: file://99_excluded.lua
+  method: run
+  modules: [sql]
+  imports:
+    migration: wippy.migration:migration
+  meta: {type: migration, target_db: probe:db, timestamp: '2026-09-12T12:00:00Z', description: Excluded migration}

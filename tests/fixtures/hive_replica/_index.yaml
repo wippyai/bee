@@ -1,0 +1,68 @@
+version: '1.0'
+namespace: bee.replica_probe
+entries:
+- name: desktop_protocol
+  kind: library.lua
+  source: file://desktop_protocol.lua
+- name: desktop_owner
+  kind: library.lua
+  source: file://desktop_owner.lua
+- name: controller_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call, registry.get, registry.apply, registry.preview, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, db.get, bee.governance.delivery.read, bee.governance.delivery.manage, bee.governance.delivery.activate, bee.approvals.decide]
+    resources: '*'
+    effect: allow
+- name: names_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual,
+      process.registry.unregister.eventual, process.registry.lookup]
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    effect: allow
+- name: execute_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_policy,
+      bee.hive.supervisor:admit_replica, bee.hive.supervisor:advertise]
+    effect: allow
+- name: replica_policy
+  kind: security.policy
+  policy:
+    actions: [hive.invoke, funcs.call, bee.sync.replica.receive]
+    resources: [bee.sync:replica_receive, node-1]
+    effect: allow
+- name: inspect_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: coordinator
+  kind: process.lua
+  source: file://coordinator.lua
+  method: main
+  modules: [process, security, time, channel, io, system, funcs, registry, hash, base64]
+  security: {policies: [bee.replica_probe:controller_policy]}
+  imports:
+    types: bee.hive:types
+    client: bee.hive:client
+    sender: bee.sync:replica_sender
+    replicas: bee.sync:replicas
+    version: bee.sync:version
+    canonical: bee.sync:canonical
+    artifact: bee.governance:artifact
+    delivery: bee.governance:delivery
+    destination: bee.governance:destination
+    plan_store: bee.governance:plan_store
+    materializer: bee.governance:materializer
+    overlay_resolver: bee.governance:overlay_resolver
+    publisher: bee.governance:publisher
+    sync: bee.sync:store
+  meta:
+    command:
+      name: hive-replica-probe
+      security:
+        actor: {id: bee.replica_probe}
+        policies: [bee.replica_probe:controller_policy, bee.replica_probe:inspect_policy]

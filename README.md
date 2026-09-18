@@ -7,8 +7,8 @@ Bee is a terminal desktop for coding. Run shells and command-line agents in
 separate windows, switch between them, and keep your workspace preferences.
 Built on [Wippy](https://github.com/wippyai/runtime).
 
-The executable includes the desktop and all four default apps. Its first launch
-works offline; Hub access is optional for later application updates.
+The executable includes the desktop and its default apps. First launch works
+offline; Hub access is optional for later application updates.
 
 [Install](#install) · [Run](#run) · [Development](#development) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md)
 
@@ -26,11 +26,37 @@ bee
 bee claude
 bee codex
 bee agy
+bee grok
 ```
 
-Agent commands open fullscreen and receive the arguments you pass after their
-name. They must already be installed on PATH. These are native terminal sessions;
-Bee-specific agent hooks and MCP integration are not implemented yet.
+Agent commands open the corresponding managed profile fullscreen through the
+same admission path as the Agent picker. They must already be available under
+the host launch policy. Raw trailing arguments are refused; configure reviewed
+options in a saved profile, or run an arbitrary command inside Native Terminal.
+Managed profiles provide scoped MCP and driver-specific thread hooks; see
+[saved profiles](docs/handoffs/SAVED_AGENT_PROFILES.md) for setup and verified
+harness support. Managed Docker launch remains unfinished.
+
+Run `bee observe` in another terminal to view the running Bee read-only. It shares
+the retained desktop; typing cannot control its apps. Ctrl+Q or Ctrl+] detaches
+that display. If no Bee is running, observation refuses without starting one.
+
+To choose an existing local desktop explicitly, copy its identities from the list:
+
+```sh
+bee desktops
+bee attach WORKSPACE DISPLAY
+bee observe WORKSPACE DISPLAY
+```
+
+An occupied desktop refuses control; observation remains an explicit choice.
+These commands use the Bee selected by `--state-dir`. Live workspace switching
+and public remote enrollment are still in development.
+
+Named commands attach to the selected owner and launch through its admitted
+catalog. Ctrl+Q detaches while retaining applications. An already-running owner
+keeps its loaded code after a binary update; new command routing requires an owner
+started from the current build. See [current build status](docs/handoffs/GLOBAL_BUILD.md).
 
 ## Install
 
@@ -81,9 +107,11 @@ served by the same GitHub release as the binary.
 ## Inside Bee
 
 - **Terminal** — an interactive shell, or an installed command-line program.
-- **Settings** — themes, backgrounds and tab appearance.
+- **Settings** — themes, backgrounds, tab appearance and loaded build details.
 - **Process Manager** — live process and service metrics.
-- **Test Status** — background UI checks with recorded results you can reopen.
+- **Approvals** — requests from agents that wait on you, decided once and recorded.
+- **Timeline** — a thread's records in order, as its owner committed them.
+- **Hive Manager** — the Bees you can see, their status and their desktops.
 
 Press **F1** for the menu, **Alt+Tab** to switch apps, **F11** to maximize, and
 **Ctrl+Q** to quit. Drag windows by their titles and resize from their corners.

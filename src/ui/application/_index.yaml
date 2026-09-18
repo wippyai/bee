@@ -11,6 +11,21 @@ entries:
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
+- name: text
+  kind: library.lua
+  source: file://text.lua
+- name: caller
+  kind: library.lua
+  source: file://caller.lua
+- name: status_reader
+  kind: library.lua
+  source: file://status_reader.lua
+  imports:
+    text: bee.application:text
+    caller: bee.application:caller
+- name: status_surface
+  kind: library.lua
+  source: file://status_surface.lua
 - name: interaction
   kind: library.lua
   source: file://interaction.lua

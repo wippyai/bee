@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: MIT
+version: '1.0'
+namespace: bee.research_measurement
+entries:
+- name: probe_policy
+  kind: security.policy
+  policy: {actions: ['*'], resources: ['*'], effect: allow}
+- name: probe
+  kind: function.lua
+  method: run
+  source: file://probe.lua
+  modules: [funcs, registry, security, http_client, json, time, hash]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.research_measurement:probe_policy]}
+- name: inputs
+  kind: registry.entry
+  data: {baseline_sha256: '', candidate_sha256: ''}
+- name: measure
+  kind: function.lua
+  method: run
+  source: |
+    local measure = require("measure")
+    local baseline = require("baseline")
+    local function run(label: string): {[string]: unknown}
+        if label == "baseline" then return measure.run(baseline.encode) end
+        error("unknown benchmark label")
+    end
+    return {run = run}
+  imports:
+    measure: bee.research_benchmark_probe:measure
+    baseline: bee.research_benchmark_probe:canonical
+- name: run
+  kind: function.lua
+  source: file://tool.lua
+  method: run
+  modules: [ctx, funcs, channel, time, registry, security, hash, json]
+  imports: {bounds: bee.threads.records:bounds}
+- name: tool_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.research_measurement:run, bee.research_measurement:measure,
+      bee.research_measurement:inputs, bee.research_benchmark_probe:canonical,
+      bee.research.demo:canonical, bee.research.demo:measure, bee.threads.service:read_after, bee.threads.service:record]
+    effect: allow
+- name: attribution_policy
+  kind: security.policy
+  policy:
+    actions: [security.actor.create]
+    resources: [bee.research.measurement]
+    effect: allow
+- name: observation_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.observe]
+    resources: [research-performance]
+    effect: allow
+- name: delegation_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.security]
+    resources: [security]
+    effect: allow
+- name: surface
+  kind: registry.entry
+  data:
+    tools:
+    - name: research_measure
+      operation: bee.research_measurement:run
+      description: Measure reviewed canonical encoder
+      annotations:
+        readOnlyHint: false
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: false
+      policies:
+      - bee.research_measurement:tool_policy
+      - bee.research_measurement:attribution_policy
+      - bee.research_measurement:delegation_policy
+      - bee.research_measurement:observation_policy
+      schema:
+        type: object
+        additionalProperties: false
+        required:
+        - label
+        properties:
+          label:
+            type: string
+            enum:
+            - baseline
+            - candidate
+    traits:
+    - id: research:measure
+      title: Measure
+      prompt: Run bounded measurements of the host-reviewed baseline and candidate. Report correctness before comparing
+        timings.
+      tools:
+      - research_measure
+    base_tools:
+    - thread_read
+    - thread_message
+    active_traits: []
+    fixed_context: {}
+    dynamic_keys: []
+- name: live
+  kind: process.lua
+  method: run
+  source: file://live.lua
+  modules: [funcs, registry, security, process, channel, time, json, io]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.research_measurement:probe_policy]}
+  meta:
+    command:
+      name: research-live-measurement
+      security:
+        actor: {id: bee.research_delivery.operator}
+        policies: [bee.research_measurement:probe_policy]

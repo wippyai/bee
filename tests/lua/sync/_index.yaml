@@ -1,0 +1,114 @@
+version: '1.0'
+namespace: bee.sync
+entries:
+- name: sync_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/sync-ledger-test.db
+  lifecycle: {auto_start: true}
+- name: sync_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.sync:sync_test_db]
+    effect: allow
+- name: store_test
+  kind: function.lua
+  source: file://store_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [uuid, hash, base64]
+  security:
+    policies: [bee.sync:sync_test_policy]
+  imports:
+    test: wippy.test:test
+    store: bee.sync:store
+- name: canonical_test
+  kind: function.lua
+  source: file://canonical_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    canonical: bee.sync:canonical
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.sync:protocol
+- name: version_test
+  kind: function.lua
+  source: file://version_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    version: bee.sync:version
+- name: replicas_test
+  kind: function.lua
+  source: file://replicas_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [uuid, hash, base64, json]
+  security:
+    policies: [bee.sync:sync_test_policy]
+  imports:
+    test: wippy.test:test
+    replicas: bee.sync:replicas
+    version: bee.sync:version
+- name: distribution_store_test
+  kind: function.lua
+  source: file://distribution_store_test.lua
+  method: run
+  modules: [uuid]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.sync:sync_test_policy]}
+  imports:
+    test: wippy.test:test
+    store: bee.sync:distribution_store
+- name: distributor_test
+  kind: function.lua
+  source: file://distributor_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    distributor: bee.sync:distributor
+- name: replica_protocol_test
+  kind: function.lua
+  source: file://replica_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [hash]
+  imports:
+    test: wippy.test:test
+    protocol: bee.sync:replica_protocol
+    version: bee.sync:version
+- name: replica_method_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.sync:replica_receive]
+    effect: allow
+- name: replica_source_node_a_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.sync.replica.receive]
+    resources: [node-a]
+    effect: allow
+- name: replica_method_test
+  kind: function.lua
+  source: file://replica_method_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid, hash, base64]
+  imports:
+    test: wippy.test:test
+    version: bee.sync:version

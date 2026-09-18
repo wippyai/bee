@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "modules": [
+    {
+      "module": "bee/node",
+      "root": "bee.node",
+      "namespaces": ["bee.node"]
+    },
+    {
+      "module": "bee/sync",
+      "root": "bee.sync",
+      "namespaces": ["bee.sync"]
+    },
+    {
+      "module": "bee/approvals",
+      "root": "bee.approvals",
+      "namespaces": [
+        "bee.approvals"
+      ]
+    },
+    {
+      "module": "bee/bee",
+      "root": "bee",
+      "namespaces": [
+        "bee",
+        "bee.application",
+        "bee.applications",
+        "bee.client",
+        "bee.console",
+        "bee.desktop",
+        "bee.delivery",
+        "bee.hive_manager",
+        "bee.host",
+        "bee.inbox",
+        "bee.interaction",
+        "bee.launch",
+        "bee.processes",
+        "bee.protocol",
+        "bee.session",
+        "bee.settings",
+        "bee.storage",
+        "bee.terminal",
+        "bee.timeline",
+        "bee.workspace"
+      ]
+    },
+    {
+      "module": "bee/credentials",
+      "root": "bee.credentials",
+      "namespaces": [
+        "bee.credentials"
+      ]
+    },
+    {
+      "module": "bee/driver",
+      "root": "bee.driver",
+      "namespaces": [
+        "bee.driver",
+        "bee.driver.kit",
+        "bee.driver.transport"
+      ]
+    },
+    {
+      "module": "bee/driver-agy",
+      "root": "bee.driver.agy",
+      "namespaces": ["bee.driver.agy"]
+    },
+    {
+      "module": "bee/driver-claude",
+      "root": "bee.driver.claude",
+      "namespaces": ["bee.driver.claude"]
+    },
+    {
+      "module": "bee/driver-codex",
+      "root": "bee.driver.codex",
+      "namespaces": ["bee.driver.codex"]
+    },
+    {
+      "module": "bee/driver-grok",
+      "root": "bee.driver.grok",
+      "namespaces": ["bee.driver.grok"]
+    },
+    {
+      "module": "bee/driver-muse",
+      "root": "bee.driver.muse",
+      "namespaces": ["bee.driver.muse"]
+    },
+    {
+      "module": "bee/gateway",
+      "root": "bee.gateway",
+      "namespaces": [
+        "bee.gateway"
+      ]
+    },
+    {
+      "module": "bee/governance",
+      "root": "bee.governance",
+      "namespaces": [
+        "bee.governance"
+      ]
+    },
+    {
+      "module": "bee/hub",
+      "root": "bee.hub",
+      "namespaces": [
+        "bee.hub",
+        "bee.modules"
+      ]
+    },
+    {
+      "module": "bee/harness",
+      "root": "bee.harness",
+      "namespaces": [
+        "bee.harness",
+        "bee.harness.carrier",
+        "bee.harness.catalog",
+        "bee.harness.launch",
+        "bee.harness.permission",
+        "bee.harness.profiles",
+        "bee.harness.window"
+      ]
+    },
+    {
+      "module": "bee/hive",
+      "root": "bee.hive",
+      "namespaces": [
+        "bee.hive",
+        "bee.hive.desktop",
+        "bee.hive.supervisor",
+        "bee.hive.telemetry"
+      ]
+    },
+    {
+      "module": "bee/persist",
+      "root": "bee.persist",
+      "namespaces": [
+        "bee.persist"
+      ]
+    },
+    {
+      "module": "bee/placement",
+      "root": "bee.placement",
+      "namespaces": [
+        "bee.placement"
+      ]
+    },
+    {
+      "module": "bee/placement-docker",
+      "root": "bee.placement.docker",
+      "namespaces": ["bee.placement.docker"]
+    },
+    {
+      "module": "bee/placement-native",
+      "root": "bee.placement.native",
+      "namespaces": [
+        "bee.placement.native"
+      ]
+    },
+    {
+      "module": "bee/resources",
+      "root": "bee.resources",
+      "namespaces": [
+        "bee.resources"
+      ]
+    },
+    {
+      "module": "bee/threads",
+      "root": "bee.threads",
+      "namespaces": [
+        "bee.threads",
+        "bee.threads.approvals",
+        "bee.threads.carrier",
+        "bee.threads.delivery",
+        "bee.threads.persist",
+        "bee.threads.projection",
+        "bee.threads.records",
+        "bee.threads.service"
+      ]
+    }
+  ]
+}

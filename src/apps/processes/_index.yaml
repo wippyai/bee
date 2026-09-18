@@ -40,3 +40,4 @@ entries:
   imports:
     appearance: bee.desktop:appearance
     probe: bee.processes:probe
+    text: bee.application:text

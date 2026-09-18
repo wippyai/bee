@@ -1,0 +1,47 @@
+version: '1.0'
+namespace: bee.desktop_admission_probe
+entries:
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.terminate, process.monitor, process.context, process.security, security.scope.create, security.policy.get]
+    resources: '*'
+    effect: allow
+- name: names
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    effect: allow
+- name: inspect
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: client_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, process.spawn, process.spawn.monitored, process.host, process.registry.lookup, tty.attach, tty.read, tty.write, tty.resize, tty.viewport]
+    resources: '*'
+    effect: allow
+- name: coordinator
+  kind: process.lua
+  source: file://coordinator.lua
+  method: main
+  modules: [process, security, time, channel, io, system]
+  meta:
+    command:
+      name: hive-desktop-admission-probe
+      security:
+        actor: {id: bee.desktop.probe}
+        policies: [bee.desktop_admission_probe:policy, bee.desktop_admission_probe:inspect]
+- name: client
+  kind: process.lua
+  source: file://client.lua
+  method: main
+  modules: [process, time, channel, tty, uuid]
+  imports:
+    types: bee.hive:types
+    protocol: bee.hive.desktop:protocol
+    contract: bee.protocol:application

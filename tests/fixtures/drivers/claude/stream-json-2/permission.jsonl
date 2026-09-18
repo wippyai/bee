@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"fixture","model":"claude-fable-5-1","permissionMode":"default","claude_code_version":"2.1.265","cwd":"/work","tools":["Bash","Read"],"mcp_servers":[]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I need to run cat on the notes file."}],"usage":{"input_tokens":2,"output_tokens":9}},"session_id":"fixture"}
+{"type":"control_request","request_id":"perm-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"cat notes.txt"}},"session_id":"fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"perm-1","name":"Bash","input":{"command":"cat notes.txt"}}],"usage":{"input_tokens":2,"output_tokens":4}},"session_id":"fixture"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"perm-1","content":"hello from notes"}]},"session_id":"fixture"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The file says: hello from notes"}],"usage":{"input_tokens":2,"output_tokens":6}},"session_id":"fixture"}
+{"type":"result","subtype":"success","is_error":false,"result":"The file says: hello from notes","session_id":"fixture","usage":{"input_tokens":6,"output_tokens":19}}

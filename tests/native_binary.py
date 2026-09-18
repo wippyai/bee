@@ -1,87 +1,60 @@
 """Standalone Bee acceptance: no source or Wippy executable in the launch folder."""
-import codecs
-import fcntl
-import os
 from pathlib import Path
-import pty
-import struct
-import subprocess
 import sys
 import tempfile
-import termios
-
-import pyte
-from tui_smoke import Desktop
+from native_workspace import NativeDesktop, STORE_NAMES
+from terminal_selection import begin, copies
+from terminal_scroll import scroll_terminal
 
 BINARY = Path(sys.argv[1]).resolve()
-
-
-class NativeDesktop(Desktop):
-    def __init__(self, folder, state, application=None):
-        self.master, slave = pty.openpty()
-        self.width, self.height = 100, 30
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
-        self.screen = pyte.Screen(100, 30)
-        self.stream = pyte.Stream(self.screen)
-        self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
-        self.raw = bytearray()
-        self.pending_output = ""
-        args = [str(BINARY), "--state-dir", str(state)]
-        if application:
-            args.extend(["--command", "bee-app", "run", application])
-        env = {key: value for key, value in os.environ.items() if key not in ("BEE_WORKSPACE_DB", "BEE_THREADS_DB", "BEE_RUNTIME", "USER")}
-        env.update(TERM="xterm-256color", HOME=str(folder), PATH="/usr/bin:/bin")
-        self.process = subprocess.Popen(args, cwd=folder, stdin=slave, stdout=slave, stderr=slave,
-                                        start_new_session=True, env=env)
-        os.close(slave)
-
-
 with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     folder = Path(temporary) / "empty launch folder"
     folder.mkdir()
     state = Path(temporary) / "bee state"
-    ui = NativeDesktop(folder, state)
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app")
     try:
-        ui.wait("No applications open")
-        ui.open_start()
-        ui.choose("Settings")
         ui.wait("Settings")
         ui.key(b"\x1b[24~")
         ui.wait("Settings")
         ui.quit()
     finally:
         ui.close()
-    assert (state / "workspace.db").is_file(), "Workspace data did not use the selected native state directory"
-    assert (state / "deployment/wippy.lock").is_file(), "No canonical application deployment"
-    ui = NativeDesktop(folder, state)
+    for filename in [f"{name}.db" for name in STORE_NAMES] + ["workspace.db.client"]:
+        database = state / filename
+        assert database.is_file(), f"{filename} did not use the selected native state directory"
+        with database.open("rb") as handle:
+            assert handle.read(16) == b"SQLite format 3\0", f"{filename} is not an initialized SQLite store"
+    assert len(list((state / "base").glob("*/wippy.lock"))) == 1, "No digest-scoped embedded deployment"
+    assert (state / "registry.db").is_file(), "Ordinary launch lost its shared registry history"
+    assert not list((state / "base").glob("*/registry.db")), "Ordinary launch selected recovery history"
+    # This suite verifies explicit in-process application launches. The public
+    # owner/client route (which retains its owner after exit) is exercised by
+    # native_client.py with explicit fixture-owned process cleanup.
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app")
     try:
         ui.wait("Settings")
         ui.quit()
     finally:
         ui.close()
-    ui = NativeDesktop(folder, state, "bee.console:app")
+    ui = NativeDesktop(BINARY, folder, state, "bee.console:app")
     try:
         ui.wait("Terminal")
         ui.key(b"printf '\\102\\105\\105\\137\\116\\101\\124\\111\\126\\105\\137\\117\\113\\n'\r")
         ui.wait("BEE_NATIVE_OK")
+        x, y = begin(ui, "BEE_NATIVE_OK")
+        copied_after = len(ui.raw)
+        ui.mouse(0, x, y)
+        ui.mouse(32, x + len("BEE_NATIVE_OK") - 1, y)
+        ui.mouse(0, x + len("BEE_NATIVE_OK") - 1, y, True)
+        ui.key(b"\x03")
+        ui.wait("Clipboard request submitted")
+        assert copies(ui, copied_after) == ["BEE_NATIVE_OK"], "Standalone copy did not use its physical output"
         ui.key(b"\x1b[24~")
         ui.wait("BEE_NATIVE_OK")
+        scroll_terminal(ui)
         ui.quit(confirm=True)
     finally:
         ui.close()
-    for name, heading in (("Process Manager", "Heap"), ("Test Status", "SHARED UI CHECKS")):
-        ui = NativeDesktop(folder, Path(temporary) / name)
-        try:
-            ui.wait("No applications open")
-            ui.open_start()
-            ui.choose("Tools")
-            ui.choose(name)
-            ui.wait(heading)
-            if name == "Test Status":
-                ui.key(b"r")
-                ui.wait("6 passed / 0 failed")
-            ui.quit()
-        finally:
-            ui.close()
     assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
-print("Standalone Bee: fresh desktop, all default apps, Settings recovery, native terminal and presenter rejoin passed")
+    assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
+print("Standalone Bee: embedded boot, Settings recovery, terminal, wheel/burst scrolling and physical selection/copy passed")

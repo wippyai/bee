@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.hive
+entries:
+- name: activation
+  kind: bee.hive.activation
+  meta:
+    comment: Inert unless the compiled native host enables the Hive service and selects its permissions

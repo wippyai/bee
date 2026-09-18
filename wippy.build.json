@@ -3,13 +3,53 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "fdad09cef2b766e17b95c52c0aa01183601a9243",
+    "commit": "6b40cb0fb9a0c4249ac0891ae7be33adb455f0f1",
     "go": "1.27.0",
     "tags": [
       "fts5",
       "sqlite_vec",
       "treesitter",
-      "sqlite_preupdate_hook"
+      "sqlite_preupdate_hook",
+      "meshclient",
+      "physicalclient"
+    ],
+    "patches": [
+      {
+        "path": "build/patches/runtime-http-port0.patch",
+        "sha256": "e6903cb4b71912d5f3cb96b18e281f964fd6d2bc523740b20f5c882ac24ca033"
+      },
+      {
+        "path": "build/patches/runtime-offline-restore-host.patch",
+        "sha256": "c74aa0e4dcbb5ca651b68c96a02613424362053f3d16427e66a5b71bd47880a2"
+      },
+      {
+        "path": "build/patches/runtime-application-artifact-cache.patch",
+        "sha256": "60d546ab0425c41f2bfae5a9ded6261af327c42eddada53de0ee4618baff5081"
+      },
+      {
+        "path": "build/patches/runtime-terminal-session-identity.patch",
+        "sha256": "e2e9db6733aea25f9ec3e19c7749b074cde51b7b85b25692a5cd7325e50c4d33"
+      },
+      {
+        "path": "build/patches/runtime-fs-atomic-publication.patch",
+        "sha256": "ac300d9830e2ed88d4a95e263b0fb8b1c45e7469410fbf00326c4780e62eb9c4"
+      },
+      {
+        "path": "build/patches/runtime-terminal-input-cancellation.patch",
+        "sha256": "8ae384769ded2c0600d6e39a953aaf42afd9d3228dcba6c18eb5ede6fc3d6b0c"
+      },
+      {
+        "path": "build/patches/runtime-toml-insert-candidate.patch",
+        "sha256": "4cfe05ca1f9a377398b9086d50b00bf4c5e96eaf75d3f2e2c89118001fab090d"
+      },
+      {
+        "path": "build/patches/runtime-registry-reviewed-preview.patch",
+        "sha256": "b4b4f5f6138c61c867070690c99d8a6824286337cd39ac64ab3f47fe4133aad8"
+      },
+      {
+        "path": "build/patches/runtime-membership-async-join.patch",
+        "sha256": "6698b1c0425521b5546fcc665d2937abde81e8ea0a4f56b08a049ccab0ef1839"
+      }
     ]
   },
   "application": {
@@ -18,23 +58,41 @@
     "mode": "base",
     "data_env": {
       "BEE_THREADS_DB": "threads.db",
-      "BEE_WORKSPACE_DB": "workspace.db"
+      "BEE_NODE_DB": "node.db",
+      "BEE_WORKSPACE_DB": "workspace.db",
+      "BEE_APPROVALS_DB": "approvals.db",
+      "BEE_RESOURCES_DB": "resources.db",
+      "BEE_CREDENTIALS_DB": "credentials.db",
+      "BEE_GATEWAY_DB": "gateway.db",
+      "BEE_PLACEMENT_DB": "placement.db",
+      "BEE_PLACEMENT_ROOT": "placement",
+      "BEE_GOVERNANCE_DB": "governance.db",
+      "BEE_SYNC_DB": "sync.db"
     },
     "packs": [
       {
         "module": "bee/bee",
         "version": "0.1.0-dev",
         "path": "dist/bee-native.wapp",
-        "sha256": "099dfa37ebd3a8057d3c92b720eec30d9ec42f257fdd86dc1b4cfdd449cd0dd6"
+        "sha256": "c5be95febd09eef53e2e0bc97403e5a2b9974d2919177c0d942a563b0646159a"
       }
-    ]
+    ],
+    "baseline": "embedded"
   },
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20260908170903-33a0f6b8c1b7",
-      "package": "github.com/wippyai/bee/native/ioevents",
+      "version": "v0.0.0-20260915183420-48df9c2981b4",
+      "package": "github.com/wippyai/bee/native/desktop",
       "factory": "Component",
+      "private": true,
+      "launch": true
+    },
+    {
+      "module": "github.com/wippyai/bee/native",
+      "version": "v0.0.0-20260915183420-48df9c2981b4",
+      "package": "github.com/wippyai/bee/native/docker",
+      "factory": "ConfiguredComponent",
       "private": true
     }
   ]

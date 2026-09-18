@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.admission_probe
+entries:
+- name: writer
+  kind: security.policy
+  policy:
+    actions: [registry.apply]
+    resources: '*'
+    effect: allow
+- name: grant
+  kind: security.policy
+  policy:
+    actions: [bee.admission.probe]
+    resources: [fixture]
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, time, security, registry, tty, logger]
+  imports:
+    decode: bee.protocol:decode
+    appearance: bee.desktop:appearance
+  meta:
+    command:
+      name: app-admission-probe
+      security:
+        actor: {id: app-admission-test}
+        policies: [bee:broker_policy, bee:core_spawn_policy, bee.admission_probe:writer]
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: [process, security, tty]
+  imports:
+    client: bee.application:client
+  meta:
+    type: bee.application
+    policies: [bee.admission_probe:grant]
+    application:
+      api_version: 1
+      title: Admission probe
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      restart_policy: never

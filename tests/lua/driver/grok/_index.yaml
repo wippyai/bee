@@ -1,0 +1,32 @@
+version: '1.0'
+namespace: bee.driver.grok
+entries:
+- name: launch_test
+  kind: function.lua
+  source: file://launch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.grok:launch
+    prepare: bee.driver.grok:prepare
+    dispatch: bee.driver.grok:dispatch
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    configuration: bee.driver.grok:configuration
+    configure: bee.driver.grok:configure
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.driver.grok:protocol
+    normalize: bee.driver.grok:normalize

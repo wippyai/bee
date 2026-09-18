@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.threads.approvals
+entries:
+- name: ingress
+  kind: library.lua
+  source: file://ingress.lua
+  modules: [sql]
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.threads.records:types
+    record: bee.threads.records:record
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    authority: bee.threads.service:authority
+    access: bee.threads.service:access
+- name: append
+  kind: function.lua
+  source: file://append_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    ingress: bee.threads.approvals:ingress
+    types: bee.threads.service:types
+  security:
+    policies: [bee:thread_storage_policy, bee:thread_resource_policy]

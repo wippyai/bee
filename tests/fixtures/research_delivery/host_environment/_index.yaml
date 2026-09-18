@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.harness.host
+entries:
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true

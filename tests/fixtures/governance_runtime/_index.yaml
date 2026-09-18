@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.governance_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.apply]
+    resources: '*'
+    effect: allow
+- name: subject
+  kind: registry.entry
+  data: {value: initial}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [registry, logger]
+  security:
+    policies: [bee.governance_probe:policy]
+  meta:
+    command:
+      name: governance-runtime-probe
+      security:
+        actor: {id: bee.governance_probe}

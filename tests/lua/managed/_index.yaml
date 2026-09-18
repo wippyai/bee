@@ -1,0 +1,57 @@
+version: '1.0'
+namespace: bee.managed
+entries:
+- name: listener
+  kind: http.service
+  meta:
+    type: test_support
+    comment: The managed host's loopback listener for the gateway, present in the test composition only; the default desktop composition carries no http.service
+  addr: 127.0.0.1:18790
+  lifecycle:
+    auto_start: true
+- name: router
+  kind: http.router
+  meta:
+    type: test_support
+    server: bee.managed:listener
+  prefix: /
+- name: ready
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.managed:router
+  method: GET
+  path: /ready
+  func: bee.gateway:ready_http
+- name: mcp
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.managed:router
+  method: POST
+  path: /mcp/:action
+  func: bee.gateway:mcp_http
+- name: hook
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.managed:router
+  method: POST
+  path: /hook/:action
+  func: bee.gateway:hook_http
+- name: hook_status
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.managed:router
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway:hook_status_http
+- name: hook_mcp
+  kind: http.endpoint
+  meta:
+    type: test_support
+    router: bee.managed:router
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway:hook_mcp_http

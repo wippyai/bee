@@ -1,0 +1,314 @@
+version: '1.0'
+namespace: bee.placement.native
+entries:
+- name: docker_test
+  kind: function.lua
+  source: file://docker_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    configuration: bee.placement.docker:configuration
+- name: inspection_test
+  kind: function.lua
+  source: file://inspection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [time]
+  imports:
+    test: wippy.test:test
+    inspection: bee.placement.docker:inspection
+- name: project_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/placement-project
+  auto_init: true
+- name: readonly_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/placement-readonly
+  auto_init: true
+- name: sentinel_storage
+  kind: env.storage.memory
+  meta: {type: test_support}
+  lifecycle:
+    auto_start: true
+- name: sentinel_key
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:sentinel_storage
+  variable: BEE_PLACEMENT_SENTINEL_KEY
+  default: placement-sentinel-4e5f6a
+  readonly: true
+- name: apply_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, process.registry.lookup, process.terminate]
+    resources: '*'
+    effect: allow
+- name: client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.native:prepare, bee.placement.native:start, bee.placement.native:status, bee.placement.native:stop,
+      bee.placement.native:reconcile, bee.placement.native:cleanup, bee.placement.native:evidence, bee.placement.native:attach,
+      bee.resources:associate, bee.resources:grant, bee.resources:revoke, bee.credentials:define, bee.credentials:issue_projection, bee.credentials:revoke,
+      bee.placement.native:fixture_stop_materialization]
+    effect: allow
+- name: fixture_stop_materialization_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, fs.get, fs.write]
+    resources: [bee.placement.native:stop, bee.credentials:codex_login_fixture]
+    effect: allow
+- name: fixture_stop_materialization
+  kind: function.lua
+  source: file://fixture_stop_materialization.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [fs, funcs]
+  security:
+    policies: [bee.placement.native:fixture_stop_materialization_policy]
+- name: request_test
+  kind: function.lua
+  source: file://request_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    request: bee.placement:request
+    transitions: bee.placement:transitions
+    protocol: bee.placement.native:protocol
+    types: bee.placement:types
+- name: codex_test_provider
+  kind: registry.entry
+  meta:
+    type: bee.codex_provider
+    test_support: true
+  data:
+    schema_revision: bee.codex-provider@1
+    name: bee
+    base_url: https://gateway.example.net/v1
+    model: gpt-5
+- name: fixture_agent_provider
+  kind: registry.entry
+  meta:
+    type: bee.fixture_agent_provider
+    test_support: true
+  data:
+    schema_revision: bee.fixture-agent-provider@1
+    model: terra
+- name: fixture_agent_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    provider_ref: bee.placement.native:fixture_agent_provider
+- name: fixture_agent_binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: fixture-agent
+    test_support: true
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.placement.native:fixture_agent_prepare
+      dispatch: bee.placement.native:fixture_agent_dispatch
+      normalize: bee.placement.native:fixture_agent_normalize
+      configure: bee.placement.native:fixture_agent_configure
+- name: fixture_agent_prepare
+  kind: function.lua
+  source: file://fixture_agent.lua
+  method: prepare
+  modules: [hash]
+  imports:
+    configure_protocol: bee.driver:configuration
+- name: fixture_agent_dispatch
+  kind: function.lua
+  source: file://fixture_agent.lua
+  method: dispatch
+  modules: [hash]
+  imports:
+    configure_protocol: bee.driver:configuration
+- name: fixture_agent_normalize
+  kind: function.lua
+  source: file://fixture_agent.lua
+  method: normalize
+  modules: [hash]
+  imports:
+    configure_protocol: bee.driver:configuration
+- name: fixture_agent_configure
+  kind: function.lua
+  source: file://fixture_agent.lua
+  method: configure
+  modules: [hash]
+  imports:
+    configure_protocol: bee.driver:configuration
+- name: test_launch_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The host launch policy the placement suite's requests name; it selects the test provider
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    allow_host_home: true
+    provider_ref: bee.placement.native:codex_test_provider
+- name: test_launch_policy_without_provider
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The same policy selecting no provider, for the unauthorized-provider refusal
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+- name: test_non_native_launch_policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@2
+    placement_binding: bee.placement.fixture_container:binding
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    fixture: true
+    executables: {}
+    environment: {}
+- name: native_test
+  kind: function.lua
+  source: file://native_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, process, channel, time, registry, exec, hash, json, sql]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:placement_service_policy, bee:resource_store_policy, bee:credential_store_policy, bee:resource_resolve_policy, bee:credential_materialize_policy]
+  imports:
+    configuration: bee.driver.codex:configuration
+    grok_configuration: bee.driver.grok:configuration
+    grok_launch: bee.driver.grok:launch
+    configuration_protocol: bee.driver:configuration
+    test: wippy.test:test
+    service: bee.placement.native:service
+    identity: bee.placement.native:identity
+    store: bee.placement.native:store
+    materialization: bee.placement.native:materialization
+    request_codec: bee.placement:request
+    protocol: bee.placement.native:protocol
+    homes: bee.placement.native:homes
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
+- name: provider_configuration_test
+  kind: function.lua
+  source: file://provider_configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "30s"}
+  modules: [funcs, security, registry, json, hash, time, exec]
+  imports:
+    test: wippy.test:test
+    service: bee.placement.native:service
+    store: bee.placement.native:store
+    homes: bee.placement.native:homes
+    quote: bee.driver.kit:quote
+    configuration_protocol: bee.driver:configuration
+- name: fixture_builder_read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [env.get]
+    resources: [bee.placement.native:sentinel_key]
+    effect: allow
+- name: builder_test_caller_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.context, funcs.call, funcs.actor, security.scope.create, funcs.security]
+    resources: '*'
+    effect: allow
+- name: fixture_instruction_builder
+  kind: library.lua
+  source: file://fixture_instruction_builder.lua
+  meta: {type: test_support}
+  modules: [security, ctx, env, exec]
+  imports:
+    store: bee.placement.native:store
+- name: fixture_builder_build
+  kind: function.lua
+  source: file://fixture_instruction_builder.lua
+  method: build
+  meta: {type: test_support}
+  modules: [security, ctx, env, exec]
+  imports:
+    store: bee.placement.native:store
+  security:
+    policies: [bee.placement.native:fixture_builder_read_policy]
+- name: instruction_builder_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    provider_ref: bee.placement.native:fixture_agent_provider
+    instructions: "Base static instructions."
+    instruction_builder:
+      func_id: bee.placement.native:fixture_builder_build
+      args:
+        tag: integration
+- name: instruction_builder_test
+  kind: function.lua
+  source: file://instruction_builder_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, json, hash, time, exec, ctx, env]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee:placement_store_policy, bee:placement_exec_policy, bee:resource_store_policy, bee:credential_store_policy, bee:resource_resolve_policy, bee:credential_materialize_policy, bee.placement.native:builder_test_caller_policy]
+  imports:
+    test: wippy.test:test
+    service: bee.placement.native:service
+    store: bee.placement.native:store
+    homes: bee.placement.native:homes
+    quote: bee.driver.kit:quote
+    configuration_protocol: bee.driver:configuration
+    canonical: bee.threads.records:canonical
+    fixture_builder: bee.placement.native:fixture_instruction_builder

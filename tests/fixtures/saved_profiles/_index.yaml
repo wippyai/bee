@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.saved_profiles_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: owner_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, system.read]
+    resources: '*'
+    effect: allow
+- name: call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.profiles:call]
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  policy: {actions: [bee.harness.profiles.read], resources: [saved-profile-restart-workspace], effect: allow}
+- name: write_policy
+  kind: security.policy
+  policy: {actions: [bee.harness.profiles.write], resources: [saved-profile-restart-workspace], effect: allow}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, security, logger, system]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.saved_profiles_probe:owner_policy]}
+  meta:
+    command:
+      name: saved-profiles-probe
+      security:
+        actor: {id: bee.saved_profiles_probe}

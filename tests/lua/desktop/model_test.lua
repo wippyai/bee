@@ -53,6 +53,19 @@ local function define_tests()
             test.eq(added.normal_bounds.y, added.bounds.y)
         end)
 
+        test.it("uses every cascade slot before reusing a window position", function()
+            local scene = model.new(77, 24)
+            local positions: {[string]: boolean} = {}
+            for index = 1, 8 do
+                local id = "window-" .. tostring(index)
+                scene = model.add(scene, id, "instance-" .. tostring(index), "Window")
+                local bounds = window(scene, id).bounds
+                local position = tostring(bounds.x) .. ":" .. tostring(bounds.y)
+                test.is_nil(positions[position])
+                positions[position] = true
+            end
+        end)
+
         test.it("personalizes bounded display data without changing identity or focus", function()
             local scene = model.add(model.new(80, 24), "one", "instance-one", "Announced")
             scene = model.add(scene, "two", "instance-two", "Other")

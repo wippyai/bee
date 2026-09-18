@@ -1,82 +1,22 @@
 version: '1.0'
 namespace: bee.workspace
 entries:
-- name: main
-  kind: process.lua
-  source: file://main.lua
-  method: main
+- name: persistence
+  kind: library.lua
+  source: file://persistence.lua
   modules:
-  - security
-  - tty
-  - process
-  - channel
-  - time
-  - uuid
   - json
   imports:
-    command: bee.applications:command
-    contract: bee.protocol:application
-    arguments: bee.application:arguments
-    interaction: bee.application:interaction
-    model: bee.desktop:model
-    decode: bee.protocol:decode
-    decode_input: bee.protocol:input
-    appearance: bee.desktop:appearance
-    chrome: bee.terminal:chrome
     store: bee.storage:store
+    assignments: bee.storage:assignments
     recovery: bee.workspace:recovery
-  meta:
-    command:
-      name: bee
-      short: Open the Bee workspace desktop
-      security:
-        actor:
-          id: bee.local
-        policies:
-        - bee:desktop_policy
-        - bee:core_spawn_policy
-        - bee:workspace_storage_policy
-- name: launch
-  kind: process.lua
-  source: file://main.lua
-  method: launch
-  modules:
-  - security
-  - tty
-  - process
-  - channel
-  - time
-  - uuid
-  - json
-  imports:
-    command: bee.applications:command
-    contract: bee.protocol:application
-    arguments: bee.application:arguments
-    interaction: bee.application:interaction
-    model: bee.desktop:model
-    decode: bee.protocol:decode
-    decode_input: bee.protocol:input
-    appearance: bee.desktop:appearance
-    chrome: bee.terminal:chrome
-    store: bee.storage:store
-    recovery: bee.workspace:recovery
-  meta:
-    command:
-      name: bee-app
-      short: Open an application with explicit arguments
-      security:
-        actor:
-          id: bee.local
-        policies:
-        - bee:desktop_policy
-        - bee:core_spawn_policy
-        - bee:workspace_storage_policy
 - name: recovery
   kind: library.lua
   source: file://recovery.lua
   modules:
   - json
   imports:
+    appearance: bee.desktop:appearance
     decode: bee.protocol:decode
     contract: bee.protocol:application
     model: bee.desktop:model

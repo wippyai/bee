@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.hive_boot_probe
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [system, time, io]
+  meta:
+    command:
+      name: hive-boot-probe
+      security:
+        actor: {id: hive-boot-probe}
+        policies: [bee.hive_boot_probe:inspect]
+- name: inspect
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node, cluster]
+    effect: allow
+- name: terminal
+  kind: terminal.host
+  lifecycle: {auto_start: true}

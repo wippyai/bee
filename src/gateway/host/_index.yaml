@@ -1,0 +1,56 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: gateway_endpoint
+  kind: registry.entry
+  meta:
+    type: bee.gateway_endpoint
+    comment: Native HTTP selects and retains an available loopback port; gateway address resolves it from supervisor
+      state
+  data:
+    address: 127.0.0.1:0
+- name: gateway_listener
+  kind: http.service
+  addr: 127.0.0.1:0
+  lifecycle:
+    auto_start: true
+- name: gateway_router
+  kind: http.router
+  meta:
+    server: bee:gateway_listener
+  prefix: /
+- name: gateway_ready
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: GET
+  path: /ready
+  func: bee.gateway:ready_http
+- name: gateway_mcp
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /mcp/:action
+  func: bee.gateway:mcp_http
+- name: gateway_hook
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action
+  func: bee.gateway:hook_http
+- name: gateway_hook_status
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway:hook_status_http
+- name: gateway_hook_mcp
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway:hook_mcp_http

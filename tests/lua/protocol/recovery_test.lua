@@ -12,15 +12,20 @@ local function define_tests()
                 restart_policy = "never", resume_state = "{}"}))
             test.is_nil(recovery.record({id = "v", instance_id = "i", definition_id = "x:a", resume_schema = "v1",
                 restart_policy = "automatic", resume_state = string.rep("x", 65537)}))
+            test.is_nil(recovery.record({id = "v", instance_id = "i", definition_id = "x:a", thread_id = string.rep("x", 161), resume_schema = "v1",
+                restart_policy = "automatic", resume_state = "{}"}))
         end)
         test.it("rejects duplicate persisted identities and mismatched windows", function()
             local record = {id = "v", instance_id = "i", definition_id = "x:a", resume_schema = "v1",
-                restart_policy = "automatic", resume_state = '{"session":"uid"}'}
+                thread_id = "thread:one", restart_policy = "automatic", resume_state = '{"session":"uid"}'}
             local encoded = json.encode({version = 1, desktop = {scene = model.new(80, 24), tabs = {}}, applications = {record, record}})
             test.is_nil(recovery.decode(encoded))
             local scene = model.add(model.new(80, 24), "other", "i", "Other")
             test.is_nil(recovery.record({id = "v", instance_id = "i", definition_id = "x:a", resume_schema = "v1",
                 restart_policy = "automatic", resume_state = "{}", window = scene.windows[1]}))
+            local decoded = assert(recovery.record({id = "v2", instance_id = "i2", definition_id = "x:a", thread_id = "thread:one", resume_schema = "v1",
+                restart_policy = "automatic", resume_state = "{}"}))
+            test.eq(decoded.thread_id, "thread:one")
         end)
     end)
 end

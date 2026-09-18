@@ -32,7 +32,11 @@ application, assembles Bee, runs executable acceptance, and packages the result
 under `dist/release/`. Use `BEE_MODE=bootstrap` to seed only the first deployment.
 Packing requires Wippy syntax and strict type checking. The lint command explicitly
 enables the type system and strict mode; validation failures stop the build.
-The manifest records the selected version, mode and pack hash; review its diff.
+The generated `dist/bee.bundle.build.json` records the selected version, mode and
+every pack hash. Review `build/modules.json` for ownership and the generated
+bundle's `ownership.json` for entry coverage. Packing leaves the input runtime
+manifest unchanged. Current runtime cutover gates still apply; see
+`handoffs/STATUS_RUNTIME_GATE.md` before attempting a release.
 See [native distribution](NATIVE_DISTRIBUTION.md) for prerequisites and update
 semantics. Local builds create no Git tags or GitHub releases.
 
@@ -79,8 +83,8 @@ through a reviewed workflow change if a product needs bootstrap-only releases.
 Production packs select `src/`; architecture acceptance checks loaded entries
 and the source/pack boundary. Tests, local databases, credentials and development
 stores must stay outside the application pack. The release archive contains the
-binary, provenance, effective Go module files and available dependency notices.
-Bee builds the pinned upstream Wippy source without local runtime patches.
+binary, provenance, effective Go module files, available dependency notices and
+runtime patch sources. Runtime patches retain their upstream MPL-2.0 license.
 
 Resolve missing dependency notices before a stable public release. Signing and
 Hub credentials require separate configuration. Keep private keys in

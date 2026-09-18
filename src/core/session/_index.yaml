@@ -5,11 +5,40 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, ctx]
+  modules: [process, channel, ctx, funcs, time, uuid]
   imports:
     contract: bee.protocol:application
     commands: bee.protocol:commands
     state: bee.desktop:state
     appearance: bee.desktop:appearance
+    decode: bee.protocol:decode
+    status_bindings: bee.session:bindings
+    statuses: bee.session:statuses
+    status_driver: bee.session:status
+    status_reader: bee.application:status_reader
   security:
-    policies: [bee:session_policy]
+    policies: [bee:session_policy, bee:session_status_policy]
+
+- name: status
+  kind: library.lua
+  source: file://status.lua
+  modules: [funcs, channel]
+  imports:
+    reader: bee.application:status_reader
+    caller: bee.application:caller
+
+- name: bindings
+  kind: library.lua
+  source: file://bindings.lua
+  imports:
+    contract: bee.protocol:application
+    model: bee.desktop:model
+
+- name: statuses
+  kind: library.lua
+  source: file://statuses.lua
+  imports:
+    bindings: bee.session:bindings
+    driver: bee.session:status
+    reader: bee.application:status_reader
+    model: bee.desktop:model

@@ -1,0 +1,90 @@
+version: '1.0'
+namespace: bee.launch
+entries:
+- name: desktop_lifecycle
+  kind: library.lua
+  source: file://desktop_lifecycle.lua
+  modules: [process, security, channel, time, uuid]
+  imports:
+    desktops: bee.client:desktops
+    attachments: bee.client:attachments
+    decode: bee.protocol:decode
+    protocol: bee.launch:protocol
+    contract: bee.protocol:application
+- name: desktop_storage
+  kind: library.lua
+  source: file://desktop_storage.lua
+  modules: [funcs, channel, time]
+  imports:
+    contract: bee.protocol:application
+- name: retained_protocol
+  kind: library.lua
+  source: file://retained_protocol.lua
+  imports:
+    arguments: bee.application:arguments
+    clipboard: bee.client:clipboard
+    contract: bee.protocol:application
+- name: headless
+  kind: process.lua
+  source: file://headless.lua
+  method: main
+  modules: [process, channel, security, time, logger]
+  imports:
+    protocol: bee.launch:protocol
+    decode: bee.protocol:decode
+  meta:
+    command:
+      name: bee-host
+      host: bee:terminal
+      short: Run a local workspace without a desktop
+      security:
+        actor: {id: bee.local}
+        policies: [bee:host_policy, bee:local_supervisor_spawn_policy]
+- name: bootstrap
+  kind: library.lua
+  source: file://bootstrap.lua
+  modules: [process, channel, tty, security, time]
+  imports:
+    physical: bee.terminal:display
+    input_decode: bee.protocol:input
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+- name: supervisor
+  kind: process.lua
+  source: file://supervisor.lua
+  method: main
+  modules: [process, channel, security, ctx, time, uuid, logger]
+  imports: &supervisor_imports
+    desktop_lifecycle: bee.launch:desktop_lifecycle
+    desktop_storage: bee.launch:desktop_storage
+    desktops: bee.client:desktops
+    attachments: bee.client:attachments
+    retained_protocol: bee.launch:retained_protocol
+    protocol: bee.launch:protocol
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    interaction: bee.application:interaction
+- name: retained
+  kind: process.lua
+  source: file://supervisor.lua
+  method: retained
+  modules: [process, channel, security, ctx, time, uuid, logger]
+  imports: *supervisor_imports
+
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process]
+  meta:
+    comment: Native start keeps this command alive while the Hive service owns the retained desktop; it spawns no host
+    command:
+      name: bee-owner
+      host: bee:terminal
+      short: Internal retained-owner lifetime entry selected by bee start

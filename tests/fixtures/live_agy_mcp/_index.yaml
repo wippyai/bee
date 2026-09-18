@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.research_probe
+entries:
+- name: host_policy
+  kind: security.policy
+  policy: {actions: ['*'], resources: ['*'], effect: allow}
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, registry, process, channel, time, json, sql]
+  imports: {bounds: bee.threads.records:bounds}
+  security: {policies: [bee.research_probe:host_policy]}
+  meta:
+    command:
+      name: research-live-probe
+      security: {actor: {id: bee.research.probe}}

@@ -1,0 +1,47 @@
+version: '1.0'
+namespace: bee.hive_probe
+entries:
+- name: controller_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call]
+    resources: '*'
+    effect: allow
+- name: names_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.register.eventual, process.registry.unregister.eventual]
+    resources: [bee.hive.supervisor, 'bee.hive.supervisor/*']
+    effect: allow
+- name: execute_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_feed]
+    effect: allow
+- name: inspect_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node]
+    effect: allow
+- name: name_injection_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.foreign]
+    resources: '*'
+    effect: allow
+- name: coordinator
+  kind: process.lua
+  source: file://coordinator.lua
+  method: main
+  modules: [process, security, time, channel, io, system, funcs]
+  imports:
+    types: bee.hive:types
+    client: bee.hive:client
+  meta:
+    command:
+      name: hive-supervisor-probe
+      security:
+        actor: {id: bee.hive.probe}
+        policies: [bee.hive_probe:controller_policy, bee.hive_probe:inspect_policy, bee.hive_probe:name_injection_policy]

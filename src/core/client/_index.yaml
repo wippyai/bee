@@ -1,0 +1,163 @@
+version: '1.0'
+namespace: bee.client
+entries:
+- name: clipboard
+  kind: library.lua
+  source: file://clipboard.lua
+- name: desktops
+  kind: library.lua
+  source: file://desktops.lua
+  modules: [process, tty, security]
+  imports:
+    binding: bee.storage:binding
+    contract: bee.protocol:application
+    lifecycle: bee.client:lifecycle
+    attachments: bee.client:attachments
+- name: attachments
+  kind: library.lua
+  source: file://attachments.lua
+  modules: [tty]
+  imports:
+    attachment: bee.applications:attachment
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  imports:
+    contract: bee.protocol:application
+    interaction: bee.application:interaction
+    arguments: bee.application:arguments
+- name: inbox
+  kind: library.lua
+  source: file://inbox.lua
+  imports:
+    layout: bee.client:state
+    questions: bee.interaction:protocol
+    interaction: bee.application:interaction
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: &client_imports
+    node_appearance: bee.client:node_appearance
+    retained_protocol: bee.launch:retained_protocol
+    clipboard: bee.client:clipboard
+    launcher: bee.launch:bootstrap
+    command: bee.applications:command
+    arguments: bee.application:arguments
+    store: bee.client:store
+    state: bee.client:state
+    decode: bee.protocol:decode
+    input_decode: bee.protocol:input
+    contract: bee.protocol:application
+    inventory: bee.host:inventory
+    status_bindings: bee.session:bindings
+    status_surface: bee.application:status_surface
+    host_protocol: bee.host:protocol
+    transfer: bee.host:transfer
+    transfer_ui: bee.protocol:display_transfer
+    assignment_layout: bee.client:assignments
+    inbox: bee.client:inbox
+    lifecycle: bee.client:lifecycle
+    interaction: bee.application:interaction
+    physical: bee.terminal:display
+    appearance: bee.desktop:appearance
+- name: local
+  kind: process.lua
+  source: file://main.lua
+  method: local_entry
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: *client_imports
+- name: local_command
+  kind: process.lua
+  source: file://main.lua
+  method: local_command
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: *client_imports
+- name: local_application
+  kind: process.lua
+  source: file://main.lua
+  method: local_application
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: *client_imports
+- name: desktop
+  kind: process.lua
+  source: file://main.lua
+  method: desktop
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: *client_imports
+  meta:
+    command:
+      name: bee
+      host: bee:terminal
+      short: Open the Bee workspace desktop
+      security: &local_security
+        actor:
+          id: bee.local
+        policies:
+        - bee:desktop_policy
+        - bee:client_spawn_policy
+        - bee:client_storage_policy
+        - bee:local_launcher_spawn_policy
+- name: application
+  kind: process.lua
+  source: file://main.lua
+  method: application
+  modules: [process, channel, tty, ctx, security, uuid, hash, time, logger]
+  imports: *client_imports
+  meta:
+    command:
+      name: bee-app
+      host: bee:terminal
+      short: Open an application with explicit arguments
+      security: *local_security
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, hash]
+  imports:
+    state: bee.client:state
+    contract: bee.protocol:application
+    binding: bee.storage:binding
+- name: state
+  kind: library.lua
+  source: file://state.lua
+  modules: [hash]
+  imports:
+    decode: bee.protocol:decode
+    contract: bee.protocol:application
+    model: bee.desktop:model
+    appearance: bee.desktop:appearance
+- name: list_desktops
+  kind: function.lua
+  source: file://desktop_storage.lua
+  method: list
+  modules: [security]
+  imports: &desktop_storage_imports
+    store: bee.client:store
+    binding: bee.storage:binding
+    contract: bee.protocol:application
+  security:
+    policies: [bee:client_storage_policy]
+- name: allocate_desktop
+  kind: function.lua
+  source: file://desktop_storage.lua
+  method: allocate
+  modules: [security]
+  imports: *desktop_storage_imports
+  security:
+    policies: [bee:client_storage_policy]
+
+- name: node_appearance
+  kind: library.lua
+  source: file://node_appearance.lua
+  modules: [funcs, channel]
+  imports:
+    appearance: bee.desktop:appearance
+- name: assignments
+  kind: library.lua
+  source: file://assignments.lua
+  imports:
+    transfer: bee.host:transfer
+    state: bee.client:state
+    inventory: bee.host:inventory

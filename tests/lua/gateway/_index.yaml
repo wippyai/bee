@@ -1,0 +1,169 @@
+version: '1.0'
+namespace: bee.gateway
+entries:
+- name: surface_test_db
+  kind: db.sql.sqlite
+  file: .wippy/surface-test.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: surface_test_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: [bee.gateway:surface_test_db], effect: allow}
+- name: surface_store_test
+  kind: function.lua
+  source: file://surface_store_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gateway:surface_test_policy]}
+  imports: {test: wippy.test:test, persist: bee.persist:database, migrations: bee.gateway:migrations, store: bee.gateway:surface_store}
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, catalog: bee.gateway:catalog, surface: bee.gateway:surface}
+- name: upgrade_db_path
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_GATEWAY_UPGRADE_DB
+  default: .wippy/gateway-upgrade.db
+  readonly: true
+- name: upgrade_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: ${env:bee.gateway:upgrade_db_path}
+  lifecycle:
+    auto_start: true
+- name: upgrade_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.gateway:upgrade_db]
+    effect: allow
+- name: upgrade_test
+  kind: function.lua
+  source: file://upgrade_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [sql, hash]
+  security:
+    policies: [bee.gateway:upgrade_test_policy]
+  imports:
+    test: wippy.test:test
+    persist: bee.persist:database
+    migrations: bee.gateway:migrations
+    gateway: bee.gateway:gateway
+- name: hooks_test
+  kind: function.lua
+  source: file://hooks_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, funcs]
+  imports:
+    test: wippy.test:test
+    hooks: bee.gateway:hooks
+    configuration: bee.driver:configuration
+    codex_configuration: bee.driver.codex:configuration
+- name: mcp_test
+  kind: function.lua
+  source: file://mcp_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    mcp: bee.gateway:mcp
+    gateway: bee.gateway:gateway
+- name: context_test
+  kind: function.lua
+  source: file://context_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    context: bee.gateway:context
+- name: ephemeral_listener
+  kind: http.service
+  meta: {type: test_support}
+  addr: 127.0.0.1:0
+  lifecycle: {auto_start: true}
+- name: alternate_listener
+  kind: http.service
+  meta: {type: test_support}
+  addr: 127.0.0.2:0
+  lifecycle: {auto_start: true}
+- name: address_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, registry.update.registry.entry, registry.get, funcs.call]
+    resources: ['*']
+    effect: allow
+- name: address_test
+  kind: function.lua
+  source: file://address_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, funcs]
+  security:
+    policies: [bee.gateway:address_test_policy]
+  imports:
+    test: wippy.test:test
+    configuration: bee.gateway:configuration
+- name: native_admission_db_path
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_GATEWAY_NATIVE_ADMISSION_DB
+  default: .wippy/gateway-native-admission.db
+  readonly: true
+- name: native_admission_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: ${env:bee.gateway:native_admission_db_path}
+  lifecycle:
+    auto_start: true
+- name: native_admission_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, registry.apply, registry.update.registry.entry, registry.get, funcs.call]
+    resources: ['*']
+    effect: allow
+- name: native_admission_test
+  kind: function.lua
+  source: file://native_admission_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, funcs, security, sql, json, time]
+  security:
+    policies: [bee.gateway:native_admission_test_policy]
+  imports:
+    test: wippy.test:test
+    configuration: bee.gateway:configuration
+- name: policy_reference_admin
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [security.policy.get, registry.apply, registry.update.registry.entry, registry.get]
+    resources: ['*']
+    effect: allow
+- name: policy_reference_target
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway_probe:policy_reference_other]
+    effect: allow
+- name: policy_reference_test
+  kind: function.lua
+  source: file://policy_reference_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security, json, time]
+  security:
+    policies: [bee.gateway:policy_reference_admin]
+  imports:
+    test: wippy.test:test

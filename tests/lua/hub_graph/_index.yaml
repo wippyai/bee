@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: tests.hub_graph
+entries:
+- name: graph_test
+  kind: function.lua
+  source: file://graph_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    graph: bee.hub:graph
+    inspect: bee.hub:inspect

@@ -1,0 +1,140 @@
+version: '1.0'
+namespace: bee.harness.window
+entries:
+- name: request
+  kind: library.lua
+  source: file://request.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: input
+  kind: library.lua
+  source: file://input.lua
+  modules: [tty]
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: hooks
+  kind: library.lua
+  source: file://hooks.lua
+  imports:
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [funcs, channel]
+  imports:
+    hooks: bee.harness.window:hooks
+- name: interrupted
+  kind: library.lua
+  source: file://interrupted.lua
+  modules: [funcs, channel, time, uuid]
+  imports:
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+    hooks: bee.harness.window:hooks
+    delivery: bee.harness.window:delivery
+    records: bee.harness.carrier:hook_records
+- name: restore_view
+  kind: library.lua
+  source: file://restore_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+- name: runtime
+  kind: library.lua
+  source: file://runtime.lua
+  modules: [tty, exec, process, channel, time, funcs, uuid, json]
+  imports:
+    client: bee.application:client
+    text: bee.application:text
+    window_request: bee.harness.window:request
+    input_event: bee.harness.window:input
+    admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    picker: bee.harness.window:picker
+    recovery: bee.harness.window:recovery
+    hooks: bee.harness.window:hooks
+    delivery: bee.harness.window:delivery
+    records: bee.harness.carrier:hook_records
+    appearance: bee.desktop:appearance
+    restore_view: bee.harness.window:restore_view
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: []
+  imports:
+    runtime: bee.harness.window:runtime
+    window: bee.placement.native:window
+    docker_window: bee.placement.docker:window
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Agent
+      icon: A
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: ''
+      role: terminal
+      resume_schema: bee.agent.window@1
+      restart_policy: automatic
+      commands:
+      - {name: agent, fullscreen: false}
+- name: picker_view
+  kind: library.lua
+  source: file://picker_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    text: bee.application:text
+    selection: bee.harness.launch:selection
+- name: picker
+  kind: library.lua
+  source: file://picker.lua
+  modules: [tty, process, channel, uuid, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    client: bee.application:client
+    appearance: bee.desktop:appearance
+    input_event: bee.harness.window:input
+    selection: bee.harness.launch:selection
+    admission: bee.harness.launch:admission
+    view: bee.harness.window:picker_view
+    forms: bee.harness.window:profile_form
+    profile_view: bee.harness.window:profile_view
+
+- name: profile_editor
+  kind: library.lua
+  source: file://profile_editor.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    preferences: bee.driver:preferences
+    protocol: bee.harness.profiles:protocol
+- name: profile_form
+  kind: library.lua
+  source: file://profile_form.lua
+  modules: [funcs, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    protocol: bee.harness.profiles:protocol
+    editor: bee.harness.window:profile_editor
+    selection: bee.harness.launch:selection
+- name: profile_view
+  kind: library.lua
+  source: file://profile_view.lua
+  modules: [tty]
+  imports:
+    appearance: bee.desktop:appearance
+    text: bee.application:text
+    editor: bee.harness.window:profile_editor
+    forms: bee.harness.window:profile_form

@@ -31,6 +31,7 @@ entries:
   imports:
     catalog: bee.applications:catalog
     arguments: bee.application:arguments
+    managed: bee.harness.launch:selection
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

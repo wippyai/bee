@@ -2,6 +2,7 @@
 local registry = require("registry")
 local catalog = require("catalog")
 local arguments = require("arguments")
+local managed = require("managed")
 type Handler = {name: string, arguments: {string}, fullscreen: boolean}
 type Launch = {definition_id: string, arguments: {string}, fullscreen: boolean}
 local M = {}
@@ -53,6 +54,13 @@ function M.resolve(name: string, tail: {string}): (Launch?, string?)
                 end
             end
         end
+    end
+    local agent, agent_error = managed.command(name)
+    if agent_error then return nil, agent_error end
+    if agent then
+        if selected then return nil, "Ambiguous Bee command: " .. name end
+        if #tail > 0 then return nil, "Managed Bee command does not accept raw arguments: " .. name end
+        selected = {definition_id = "bee.harness.window:app", arguments = {agent.definition_ref}, fullscreen = agent.fullscreen}
     end
     if not selected then return nil, "Unknown Bee command: " .. name end
     return selected, nil

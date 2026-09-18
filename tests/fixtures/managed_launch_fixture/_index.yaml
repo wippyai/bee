@@ -1,0 +1,67 @@
+version: '1.0'
+namespace: bee.fixture_terminal_launch
+entries:
+- name: policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: Executable and environment are filled in by the acceptance script with the fixture Claude protocol binary and its replayed stream. The window profile's isolation_env is not private, so allow_host_home is required the same way the shipped launch_policy_claude_window requires it
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 1000
+    runner_drain_ms: 500
+    fixture: true
+    executables: {}
+    environment: {}
+    allow_host_home: true
+- name: definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: Same production Claude driver binding and window profile real accounts use; only the executable is the fixture
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: fixture-terminal-window
+    title: Open fixture provider window
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: window
+    policy_ref: bee.fixture_terminal_launch:policy
+    default_mode: window
+    allowed_overrides:
+    - brief
+    - thread
+    workdir_policy:
+      kind: caller_workspace
+    thread_policy:
+      kind: caller
+    credentials: []
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
+- name: test
+  kind: function.lua
+  source: file://main.lua
+  method: run
+  modules: [process, channel, time, security, tty, funcs, json, registry]
+  imports:
+    test: wippy.test:test
+    appearance: bee.desktop:appearance
+  security:
+    policies:
+    - bee:desktop_policy
+    - bee:core_spawn_policy
+    - bee:thread_authority_client_policy
+    - bee:thread_lifecycle_client_policy
+    - bee:thread_create_policy
+  meta:
+    type: test
+    suite: bee
+    timeout: 45s

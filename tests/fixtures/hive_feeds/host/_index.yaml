@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: hive_feed_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide]
+    effect: allow
+- name: feed_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check, bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after, bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide]
+    effect: allow
+- name: approval_store_policy
+  kind: security.policy
+  policy:
+    actions: [db.get, registry.get, system.read, process.send]
+    resources: [bee.approvals:db, bee.approvals:database_ref, bee.approvals:policies_ref, bee.approvals:approver_policies, node, '*']
+    effect: allow
+- name: approval_owner_policy
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.own, process.registry.register, funcs.call]
+    resources: '*'
+    effect: allow

@@ -1,0 +1,366 @@
+diff --git a/boot/components/system/cluster.go b/boot/components/system/cluster.go
+index 85d90ac37e..ac929df85a 100644
+--- a/boot/components/system/cluster.go
++++ b/boot/components/system/cluster.go
+@@ -436,7 +436,7 @@ func Cluster() boot.Component {
+ 			}
+ 			if membershipSvc != nil {
+ 				logger.Info("starting cluster membership service")
+-				// Membership can acquire sockets before reporting a join error.
++				// Start can acquire sockets before a later initialization error.
+ 				membershipActive = true
+ 				if err := membershipSvc.Start(ctx); err != nil {
+ 					stopServices()
+diff --git a/boot/components/system/cluster_listener_test.go b/boot/components/system/cluster_listener_test.go
+index 3747dd9604..1f9a378292 100644
+--- a/boot/components/system/cluster_listener_test.go
++++ b/boot/components/system/cluster_listener_test.go
+@@ -32,7 +32,7 @@ import (
+ 
+ func TestClusterBootPublishesOnlyRetainedListener(t *testing.T) {
+ 	t.Run("normal_shutdown", func(t *testing.T) { checkClusterBootListener(t, false, nil, false) })
+-	t.Run("failed_join_shutdown", func(t *testing.T) { checkClusterBootListener(t, true, nil, false) })
++	t.Run("offline_seed_shutdown", func(t *testing.T) { checkClusterBootListener(t, true, nil, false) })
+ }
+ 
+ func TestClusterBootRequiresNativePeerKeySource(t *testing.T) {
+@@ -98,25 +98,19 @@ func checkClusterBootListener(t *testing.T, failJoin bool, source any, wantLoadE
+ 	stop := component.(boot.Stopper)
+ 	defer stop.Stop(ctx)
+ 	startErr := component.(boot.Starter).Start(ctx)
+-	if failJoin {
+-		require.Error(t, startErr)
+-	} else {
+-		require.NoError(t, startErr)
+-	}
++	require.NoError(t, startErr)
+ 	node := membership.LocalNode()
+ 	port, err := strconv.Atoi(node.Meta[internode.MetadataPort])
+ 	require.NoError(t, err)
+ 	require.Positive(t, port)
+ 	endpoint := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+-	if !failJoin {
+-		probe, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", endpoint)
+-		if probe != nil {
+-			_ = probe.Close()
+-		}
+-		require.Error(t, err, "advertised endpoint must remain reserved")
++	probe, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", endpoint)
++	if probe != nil {
++		_ = probe.Close()
+ 	}
++	require.Error(t, err, "advertised endpoint must remain reserved")
+ 	require.NoError(t, stop.Stop(ctx))
+-	probe, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", endpoint)
++	probe, err = (&net.ListenConfig{}).Listen(t.Context(), "tcp", endpoint)
+ 	require.NoError(t, err, "shutdown must release the retained socket")
+ 	require.NoError(t, probe.Close())
+ }
+diff --git a/boot/components/system/cluster_test.go b/boot/components/system/cluster_test.go
+index 9784c40acb..4842240168 100644
+--- a/boot/components/system/cluster_test.go
++++ b/boot/components/system/cluster_test.go
+@@ -62,3 +62,23 @@ func TestClusterRaftEnabled_RoleComposition(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestRaftBootstrapExpect(t *testing.T) {
++	cases := []struct {
++		section map[string]any
++		name    string
++		want    int
++	}{
++		{name: "local bootstrap default", section: map[string]any{}, want: 1},
++		{name: "joining node default", section: map[string]any{"membership.join_addrs": "127.0.0.1:7946"}, want: 0},
++		{name: "blank seed is local", section: map[string]any{"membership.join_addrs": "  "}, want: 1},
++		{name: "explicit bootstrap wins", section: map[string]any{"membership.join_addrs": "127.0.0.1:7946", "raft.bootstrap_expect": 3}, want: 3},
++		{name: "explicit zero", section: map[string]any{"raft.bootstrap_expect": 0}, want: 0},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			cfg := boot.NewConfig(boot.WithSection(ClusterName, tc.section))
++			require.Equal(t, tc.want, raftBootstrapExpect(cfg.Sub(ClusterName)))
++		})
++	}
++}
+diff --git a/boot/components/system/raft.go b/boot/components/system/raft.go
+index cc3d694ec4..3235e5a681 100644
+--- a/boot/components/system/raft.go
++++ b/boot/components/system/raft.go
+@@ -54,6 +54,16 @@ const raftLivenessLastContactCeiling = 30 * time.Second
+ // (cluster.gossip), which has its own staleness window.
+ const raftLivenessNonVoterCeiling = 5 * time.Minute
+ 
++func raftBootstrapExpect(cfg boot.Config) int {
++	if _, configured := cfg.Get(ClusterRaftBootstrapExpect); configured {
++		return cfg.GetInt(ClusterRaftBootstrapExpect, 1)
++	}
++	if strings.TrimSpace(cfg.GetString(ClusterMembershipJoin, "")) != "" {
++		return 0
++	}
++	return 1
++}
++
+ // Context keys for raft and global registry components.
+ var (
+ 	raftNodeKey     = &ctxapi.Key{Name: "raft.node"}
+@@ -219,7 +229,7 @@ func Raft() boot.Component {
+ 			// BootstrapCluster with it. Nodes joining a running cluster see
+ 			// existing peers with raft_status=in and skip bootstrap; the
+ 			// leader's reconciler adds them via AddVoter.
+-			bootstrapExpect = raftCfg.GetInt(ClusterRaftBootstrapExpect, 1)
++			bootstrapExpect = raftBootstrapExpect(raftCfg)
+ 			rc := raftapi.Config{
+ 				BootstrapExpect:   bootstrapExpect,
+ 				SnapshotThreshold: uint64(raftCfg.GetInt(ClusterRaftSnapshotThreshold, 0)),
+diff --git a/cluster/membership/membership.go b/cluster/membership/membership.go
+index 9038f00710..0ca8c95d3d 100644
+--- a/cluster/membership/membership.go
++++ b/cluster/membership/membership.go
+@@ -61,6 +61,7 @@ type Service struct {
+ 	userDelegates  map[byte]UserDelegate
+ 	lastChangeAt   time.Time
+ 	config         Config
++	background     sync.WaitGroup
+ 	userDelegateMu sync.RWMutex
+ 	mu             sync.RWMutex
+ }
+@@ -312,7 +313,9 @@ func (s *Service) Start(ctx context.Context) error {
+ 	}
+ 	s.memberlist = ml
+ 
+-	// Join cluster if addresses provided.
++	// Join cluster if addresses are configured. Seed availability is not a
++	// readiness condition: the local memberlist is already active and can serve
++	// the rest of the runtime while this lifecycle-owned worker retries.
+ 	//
+ 	// Retry with exponential backoff up to s.ctx cancellation so a
+ 	// transient DNS outage at boot does not crash the pod: under DNSChaos
+@@ -328,17 +331,11 @@ func (s *Service) Start(ctx context.Context) error {
+ 	if len(s.config.JoinAddrs) > 0 {
+ 		s.logger.Info("joining existing cluster",
+ 			zap.Strings("join_addresses", s.config.JoinAddrs))
+-
+-		if err := s.joinWithRetry(s.ctx, ml); err != nil {
+-			s.tel.recordJoin(err)
+-			return NewJoinClusterError(err)
+-		}
+ 	} else {
+ 		s.logger.Info("starting as cluster bootstrap node")
++		s.tel.recordJoin(nil)
+ 	}
+ 
+-	s.tel.recordJoin(nil)
+-
+ 	// Log initial cluster state
+ 	members := ml.Members()
+ 	s.logger.Info("membership active",
+@@ -347,9 +344,22 @@ func (s *Service) Start(ctx context.Context) error {
+ 
+ 	s.refreshMemberStateGauges()
+ 
+-	go s.emitHealthLoop(s.ctx)
++	s.background.Add(1)
++	go func() {
++		defer s.background.Done()
++		s.emitHealthLoop(s.ctx)
++	}()
+ 	if len(s.config.JoinAddrs) > 0 {
+-		go s.rejoinLoop(s.ctx)
++		s.background.Add(1)
++		go func() {
++			defer s.background.Done()
++			if err := s.joinWithRetry(s.ctx, ml); err != nil {
++				return
++			}
++			s.tel.recordJoin(nil)
++			s.refreshMemberStateGauges()
++			s.rejoinLoop(s.ctx)
++		}()
+ 	}
+ 
+ 	return nil
+@@ -374,8 +384,14 @@ func (s *Service) joinWithRetry(ctx context.Context, ml *memberlist.Memberlist)
+ 	lastSummaryAt := time.Now()
+ 
+ 	for {
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
+ 		attempt++
+ 		n, err := ml.Join(s.config.JoinAddrs)
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
+ 		if err == nil {
+ 			s.logger.Info("successfully joined cluster",
+ 				zap.Int("discovered_nodes", n),
+@@ -400,10 +416,7 @@ func (s *Service) joinWithRetry(ctx context.Context, ml *memberlist.Memberlist)
+ 
+ 		select {
+ 		case <-ctx.Done():
+-			s.logger.Error("join cancelled by ctx",
+-				zap.Int("attempts", attempt),
+-				zap.Error(err))
+-			return err
++			return ctx.Err()
+ 		case <-time.After(backoff):
+ 		}
+ 
+@@ -511,6 +524,7 @@ func (s *Service) Stop() error {
+ 	if s.cancel != nil {
+ 		s.cancel()
+ 	}
++	s.background.Wait()
+ 
+ 	s.tel.recordLeave()
+ 
+diff --git a/cluster/membership/membership_test.go b/cluster/membership/membership_test.go
+index 3ad9feddfe..3fbc6433b6 100644
+--- a/cluster/membership/membership_test.go
++++ b/cluster/membership/membership_test.go
+@@ -6,6 +6,8 @@ import (
+ 	"context"
+ 	"encoding/base64"
+ 	"encoding/json"
++	"fmt"
++	"net"
+ 	"os"
+ 	"path/filepath"
+ 	"sync"
+@@ -17,6 +19,8 @@ import (
+ 	"github.com/stretchr/testify/require"
+ 	"github.com/wippyai/runtime/api/cluster"
+ 	"github.com/wippyai/runtime/api/event"
++	"github.com/wippyai/runtime/api/metrics"
++	"github.com/wippyai/runtime/internal/telemetrytest"
+ 	"github.com/wippyai/runtime/system/eventbus"
+ 	"go.uber.org/zap"
+ )
+@@ -160,6 +164,69 @@ func TestService_Start_Success(t *testing.T) {
+ 	assert.NotNil(t, service.ctx)
+ }
+ 
++func TestService_StartDoesNotWaitForConfiguredSeed(t *testing.T) {
++	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
++	defer cancel()
++	recorder := telemetrytest.NewRecorder()
++
++	service := NewService(Config{
++		NodeName:  "offline-joiner",
++		BindAddr:  "127.0.0.1",
++		BindPort:  0,
++		JoinAddrs: []string{"[invalid-seed"},
++	}, eventbus.NewBus(), zap.NewNop(), recorder, nil, nil)
++
++	started := time.Now()
++	startMembershipServiceForTest(ctx, t, "offline joiner", service)
++	// A synchronous join would remain in its retry loop until cancellation.
++	// Leave enough headroom for slow Windows CI listener startup.
++	require.Less(t, time.Since(started), 8*time.Second)
++	require.Len(t, service.memberlist.Members(), 1)
++	time.Sleep(25 * time.Millisecond)
++	stopStarted := time.Now()
++	require.NoError(t, service.Stop())
++	require.Less(t, time.Since(stopStarted), 2*time.Second)
++	atStop := recorder.CounterValue("gossip_join_total", metrics.Labels{"result": "err"})
++	time.Sleep(600 * time.Millisecond)
++	require.Equal(t, atStop, recorder.CounterValue("gossip_join_total", metrics.Labels{"result": "err"}))
++}
++
++func TestService_ConfiguredSeedConvergesAfterOfflineStart(t *testing.T) {
++	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++	defer cancel()
++
++	var listenConfig net.ListenConfig
++	udp, err := listenConfig.ListenPacket(t.Context(), "udp4", "127.0.0.1:0")
++	require.NoError(t, err)
++	seedPort := udp.LocalAddr().(*net.UDPAddr).Port
++	tcp, err := listenConfig.Listen(t.Context(), "tcp4", fmt.Sprintf("127.0.0.1:%d", seedPort))
++	require.NoError(t, err)
++	require.NoError(t, tcp.Close())
++	require.NoError(t, udp.Close())
++
++	joiner := NewService(Config{
++		NodeName:  "late-seed-joiner",
++		BindAddr:  "127.0.0.1",
++		BindPort:  0,
++		JoinAddrs: []string{fmt.Sprintf("127.0.0.1:%d", seedPort)},
++	}, eventbus.NewBus(), zap.NewNop(), nil, nil, nil)
++	startMembershipServiceForTest(ctx, t, "late-seed joiner", joiner)
++	defer func() { _ = joiner.Stop() }()
++	require.Len(t, joiner.memberlist.Members(), 1)
++
++	seed := NewService(Config{
++		NodeName: "late-seed",
++		BindAddr: "127.0.0.1",
++		BindPort: seedPort,
++	}, eventbus.NewBus(), zap.NewNop(), nil, nil, nil)
++	startMembershipServiceForTest(ctx, t, "late seed", seed)
++	defer func() { _ = seed.Stop() }()
++
++	require.Eventually(t, func() bool {
++		return joiner.memberlist.NumMembers() == 2 && seed.memberlist.NumMembers() == 2
++	}, 5*time.Second, 50*time.Millisecond)
++}
++
+ func TestService_Start_WithSecretKey(t *testing.T) {
+ 	logger := zap.NewNop()
+ 	bus := eventbus.NewBus()
+diff --git a/cluster/stack_ports_test.go b/cluster/stack_ports_test.go
+index 6ed032f4a3..bcfe0500ed 100644
+--- a/cluster/stack_ports_test.go
++++ b/cluster/stack_ports_test.go
+@@ -148,7 +148,7 @@ func TestConcurrentAutomaticPorts(t *testing.T) {
+ 	joined = true
+ }
+ 
+-func TestFailedJoinReleasesAutomaticPorts(t *testing.T) {
++func TestOfflineSeedRetainsAutomaticPortsUntilStop(t *testing.T) {
+ 	collector := metrics.NewCollector(metricscfg.Config{})
+ 	defer collector.Close()
+ 	pub, key, err := ed25519.GenerateKey(rand.Reader)
+@@ -166,10 +166,10 @@ func TestFailedJoinReleasesAutomaticPorts(t *testing.T) {
+ 		InternodeTrustedPeerKeys: map[string]string{"failed-join": base64.RawStdEncoding.EncodeToString(pub)},
+ 	})
+ 	require.NoError(t, err)
+-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
++	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+ 	defer cancel()
+ 	err = stack.Start(ctx)
+-	require.ErrorContains(t, err, "join", "the test must reach membership joining")
++	require.NoError(t, err)
+ 	port := stack.ConnMgr.GetListenPort()
+ 	require.Positive(t, port, "internode must have started before the failed join")
+ 	_, gossipPort, err := net.SplitHostPort(stack.Membership.LocalNode().Addr)
+@@ -179,11 +179,25 @@ func TestFailedJoinReleasesAutomaticPorts(t *testing.T) {
+ 		net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), stack.Membership.LocalNode().Addr,
+ 	} {
+ 		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", address)
+-		require.NoError(t, err, "failed startup must release %s", address)
+-		require.NoError(t, listener.Close())
++		if listener != nil {
++			require.NoError(t, listener.Close())
++		}
++		require.Error(t, err, "active offline stack must retain %s", address)
+ 	}
+ 	packet, err := (&net.ListenConfig{}).ListenPacket(t.Context(), "udp", stack.Membership.LocalNode().Addr)
+-	require.NoError(t, err, "failed startup must release gossip UDP")
+-	require.NoError(t, packet.Close())
++	if packet != nil {
++		require.NoError(t, packet.Close())
++	}
++	require.Error(t, err, "active offline stack must retain gossip UDP")
+ 	require.NoError(t, stack.Stop())
++	for _, address := range []string{
++		net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), stack.Membership.LocalNode().Addr,
++	} {
++		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", address)
++		require.NoError(t, err, "stopped stack must release %s", address)
++		require.NoError(t, listener.Close())
++	}
++	packet, err = (&net.ListenConfig{}).ListenPacket(t.Context(), "udp", stack.Membership.LocalNode().Addr)
++	require.NoError(t, err, "stopped stack must release gossip UDP")
++	require.NoError(t, packet.Close())
+ }

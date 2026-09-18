@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.hub_preview_probe
+entries:
+- name: workers
+  kind: process.host
+  host: {workers: 2, max_processes: 8}
+  lifecycle: {auto_start: true}
+- name: inspect_policy
+  kind: security.policy
+  policy:
+    actions: [hub.versions.open]
+    resources: keeper/keeper
+    effect: allow
+- name: registry_read_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get]
+    resources: '*'
+    effect: allow
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [logger, registry, base64]
+  imports:
+    preview: bee.hub:preview
+  security:
+    policies: [bee.hub_preview_probe:inspect_policy, bee.hub_preview_probe:registry_read_policy]
+  meta:
+    command:
+      name: hub-preview-probe
+      security:
+        actor: {id: bee.hub_preview_probe}

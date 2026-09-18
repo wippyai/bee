@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.workspace_hosts
+entries:
+- name: first_storage_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.workspace.db:first]
+    effect: allow
+- name: second_storage_policy
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee.workspace.db:second]
+    effect: allow
+- name: supervisor_spawn_policy
+  kind: security.policy
+  policy:
+    actions: [process.spawn, process.spawn.monitored]
+    resources: [bee.host:main]
+    effect: allow
+- name: supervisor
+  kind: process.lua
+  source: file://supervisor.lua
+  method: main
+  modules: [process, channel, security, time, logger]
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    recovery: bee.workspace:recovery
+  meta:
+    command:
+      name: workspace-hosts-supervisor
+      short: Bounded acceptance supervisor for dual workspace hosts in one runtime
+      security:
+        actor: {id: workspace_hosts.supervisor}
+        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy]

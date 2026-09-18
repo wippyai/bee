@@ -1,0 +1,77 @@
+-- MIT. Bootstrap choice does not imply authority in incoming control payloads.
+local test = require("test")
+local lifecycle = require("lifecycle")
+local workspace = "0123456789abcdef0123456789abcdef"
+local function define_tests()
+    test.describe("Client supervisor lifecycle", function()
+        test.it("defaults to detach and requires a versioned explicit supervisor choice", function()
+            test.eq(assert(lifecycle.bootstrap(nil)).quit_mode, "detach")
+            test.eq(assert(lifecycle.bootstrap({version = 1, quit_mode = "supervisor"})).quit_mode, "supervisor")
+            test.is_nil(lifecycle.bootstrap({quit_mode = "supervisor"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, quit_mode = "shutdown"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, fullscreen = "yes"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = "yes"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = true}))
+            test.is_nil(lifecycle.bootstrap({version = 1, workspace_appearance = false}))
+            test.is_nil(lifecycle.bootstrap({version = 1, arguments = {"bad\nargument"}}))
+            local args = {"space ; $HOME"}
+            local options = lifecycle.bootstrap({version = 1, arguments = args, fullscreen = true})
+            if not options then error("Missing launch options") end
+            args[1] = "changed"
+            test.eq(options.arguments[1], "space ; $HOME")
+            test.is_true(options.fullscreen)
+            test.is_nil(lifecycle.bootstrap({version = 1, secondary_application = ""}))
+            test.is_nil(lifecycle.bootstrap({version = 1, secondary_application = "bad\napp"}))
+            local secondary = lifecycle.bootstrap({version = 1, secondary_application = "probe:app"})
+            if not secondary then error("Missing secondary launch") end
+            test.eq(secondary.secondary_application, "probe:app")
+        end)
+        test.it("accepts only opaque supervisor-selected desktop identities", function()
+            local selected = lifecycle.bootstrap({version = 1, desktop_id = workspace})
+            if not selected then error("Missing desktop selection") end
+            test.eq(selected.desktop_id, workspace)
+            test.is_nil(assert(lifecycle.bootstrap(nil)).desktop_id)
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = ""}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = "../other"}))
+            test.is_nil(lifecycle.bootstrap({version = 1, desktop_id = 7}))
+        end)
+        test.it("refuses foreign workspace and ambiguous shutdown control", function()
+            local value = {version = 1, workspace_id = workspace, request_id = "control", op = "exit", error = "Supervisor failed"}
+            local fatal = lifecycle.control(value, workspace)
+            if not fatal then error("Missing fatal exit control") end
+            test.eq(fatal.error, "Supervisor failed")
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = true}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = string.rep("x", 4097)}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "exit",
+                error = "Must not save", shutdown = {version = 1, request_id = "q", id = "application", instance_id = "instance",
+                    kind = "confirm", title = "Stop?", message = "", accept = "Stop"}}, workspace))
+            value.error = nil
+            test.not_nil(lifecycle.control(value, workspace))
+            value.op = "save"
+            test.not_nil(lifecycle.control(value, workspace))
+            test.is_nil(lifecycle.control(value, "ffffffffffffffffffffffffffffffff"))
+            value.request_id = ""
+            test.is_nil(lifecycle.control(value, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "control", op = "state",
+                shutdown = {version = 1, request_id = "q", id = "application", instance_id = "instance",
+                    kind = "confirm", title = "Stop?", message = "", accept = "Stop"}}, workspace))
+            test.not_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "clear", op = "state"}, workspace))
+            local refused = lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = "Delivery refused"}, workspace)
+            if not refused then error("Missing failure control") end
+            test.eq(refused.error, "Delivery refused")
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = true}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = string.rep("x", 4097)}, workspace))
+            test.not_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "state",
+                error = "Delivery refused\n" .. string.rep("x", 2048)}, workspace))
+            test.is_nil(lifecycle.control({version = 1, workspace_id = workspace, request_id = "failure", op = "save",
+                error = "Must not commit"}, workspace))
+        end)
+    end)
+end
+local cases = test.run_cases(define_tests)
+return {run = function(options) return cases(options) end}

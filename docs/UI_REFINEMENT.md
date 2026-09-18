@@ -24,6 +24,11 @@ Four focused passes prepare the desktop for the next foundation phase.
    state, window geometry, input isolation and prompt shutdown. Registry audits
    exclude legacy code, fixtures and test entries from the production package.
 
+New floating windows fill each available cascade position before a position is
+reused. Process Manager disambiguates equal process names with a short process
+identity and calls its destructive action Stop consistently. The F9 connection
+card names controller state directly and uses explicit close wording.
+
 Live presenter replacement preserves application producers, window state and
 appearance. Local SQLite migrations and opt-in application checkpoint/restore
 now preserve workspace state across full restarts, as described
@@ -110,8 +115,9 @@ isolation, cancel/clear, accents, minimized restore and Settings cold recovery.
 A fixture also verifies that an app cannot submit a private personalization
 command directly to the workspace. Application title announcements are implemented
 through `bee.application:client.title`; native OSC forwarding remains future work.
-Test Status announces “Checks · started” and “Checks · complete” from journal
-replay; these describe recorded events, not proof of current worker liveness.
+An application announces recorded events through its title (the Timeline
+names its thread and state as the owner reports them); announcements describe
+recorded events, not proof of current liveness.
 
 Multiple terminals need distinguishable names. Keep the definition's launcher
 title, the application's announced instance title, and the user's title override
@@ -144,3 +150,68 @@ rename, control/oversize rejection, repeated announcements while an override is
 active, clearing the override, minimized/overflow tabs, presenter rejoin and
 supported cold restore. Native OSC reporting needs a real PTY test, including
 split escape sequences; an API-only test does not prove that path.
+
+## Window-local text selection (candidate)
+
+The candidate presenter offers **Select text** in a window's title/tab context
+menu. It freezes that window's visible rows; left-drag selects only its body,
+Ctrl+C requests a copy, and Escape cancels. Hovering after release does not move
+the range. Application input resumes after successful submission. Resize,
+attachment replacement and presenter retirement cancel selection. A request
+has an 8 KiB text limit and a ten-second feedback deadline.
+
+Local physical clients use the runtime surface's explicit clipboard method,
+serialized with frame writes. This requires runtime PR #722, together with
+PR #720 for native plain-text extraction. Success means an OSC52 request was
+submitted; the user's terminal may ignore it. Neither clipboard text nor the
+selection enters retained frames, checkpoints or databases.
+
+`make terminal-selection-check` passes source and pack on the candidate: two
+actual overlapping Terminals, exact foreground clipboard text decoded from
+physical output, hover stability, resumed keyboard input and no replay after
+cancellation/rejoin. Model/render tests cover Unicode and ANSI extraction,
+geometry bounds and highlighting. The global Bee now includes this tested
+candidate; installed-executable acceptance also passes physical selection/copy.
+Use `bee --base` to select its embedded baseline. The release runtime pin still
+awaits upstream cutover.
+
+Compiled remote physical-client copy routing remains unimplemented. Its native
+actor inbox can carry a recipient-specific operation, but virtual surfaces
+currently return unsupported instead of broadcasting a clipboard effect.
+
+## Terminal scrolling candidate acceptance
+
+`make terminal-scroll-check` exercises physical SGR input through the real Bee
+presenter and native Terminal, from source and pack. It covers a wheel notch,
+trackpad-style repeated events, downward scrolling and subsequent keyboard input.
+The baseline fails on the first notch because native proxy history retains
+only one line. Runtime PR #719 supplies bounded history; PR #705 also fixes Unix
+input framing so a burst crossing a read boundary cannot become shell text.
+The combined candidate passes this regression from source and pack, all 161
+navigation cases, and the existing Terminal source/pack acceptance.
+
+History retains at most 256 lines with a cell budget and conservative resize
+limits. Once retained history is full, new output can move a scrolled viewport;
+the emulator does not expose stable history-line identities. Windows keeps its
+existing console reader. These changes are not in Bee's release pin or global
+binary. Device-specific trackpad behavior and a real Codex conversation still
+require acceptance; synthetic wheel events are not hardware verification.
+
+Installed executable acceptance now also runs the same wheel-notch, 12-event up
+burst, 40-event down burst and resumed-keyboard checks against global `bee`. It
+targets the visible Terminal body while Settings remains behind it. Evidence:
+`/tmp/bee-global-scroll-check-2.log`. These are terminal protocol events; actual
+hardware trackpad behavior and a live Codex conversation still need observation.
+
+## Final terminal UX audit
+
+The 2026-09-14 production audit covered all 416 Lua source files with separate
+Promptmap passes for consistency, layout and input, visual language, repetitive
+implementation patterns, and accessibility. Verified fixes keep unavailable
+Timeline rows from offering stale actions, add keyboard guidance to Timeline and
+Approvals, preserve Process Manager mode and health at narrow widths, bound its
+native sampler text, and make profile action styling match the accepted action.
+Window cascades now fill each grid slot once, compact recovery plans cannot be
+accepted before they can be reviewed, and Hive, connection, picker and process
+copy use the same direct platform language. The review introduced no new UI
+framework or presentation vocabulary.

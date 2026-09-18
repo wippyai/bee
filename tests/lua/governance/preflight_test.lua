@@ -1,6 +1,8 @@
 -- MIT. Preflight has no runtime-write route; host evidence remains separate.
 local test = require("test")
 local preflight = require("preflight")
+local canonical = require("canonical")
+local hash = require("hash")
 local SHA = string.rep("a", 64)
 local function fixture(): (preflight.Candidate, preflight.Context)
     local references: {string} = {}
@@ -146,6 +148,27 @@ local function define_tests()
                 diagnostics = {{code = "DENIED", target = "x", message = "x", remedy = "x"}},
                 pending_migrations = report.pending_migrations}
             test.is_nil(preflight.encode_report(forged))
+        end)
+        test.it("decodes the reviewed candidate only from its exact measured bytes", function()
+            local candidate = fixture()
+            local bytes = assert(canonical.encode(candidate, 1048576))
+            local digest = assert(hash.sha256(bytes))
+            local decoded = assert(preflight.decode_candidate(bytes, digest))
+            test.eq(decoded.base_digest, candidate.base_digest)
+            test.eq(decoded.base_revision, candidate.base_revision)
+            test.eq(#decoded.entries, 1)
+            test.eq(decoded.entries[1].id, "demo:run")
+            test.eq(decoded.entries[1].kind, "function.lua")
+            test.eq(decoded.requirements[1].value, "host:db")
+            test.eq(decoded.migrations[1].ordinal, 1)
+            test.is_nil(preflight.decode_candidate(bytes .. " ", digest))
+            test.is_nil(preflight.decode_candidate(bytes, string.rep("b", 64)))
+            local widened = assert(canonical.encode({destination_node = candidate.destination_node,
+                source_node = candidate.source_node, base_revision = candidate.base_revision,
+                base_digest = candidate.base_digest, artifacts = candidate.artifacts,
+                entries = candidate.entries, requirements = candidate.requirements,
+                migrations = candidate.migrations, resolver = "overlay"}, 1048576))
+            test.is_nil(preflight.decode_candidate(widened, assert(hash.sha256(widened))))
         end)
     end)
 end

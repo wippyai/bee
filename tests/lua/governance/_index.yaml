@@ -216,9 +216,11 @@ entries:
   source: file://preflight_test.lua
   method: run
   meta: {type: test, suite: bee}
+  modules: [hash]
   imports:
     test: wippy.test:test
     preflight: bee.governance:preflight
+    canonical: bee.sync:canonical
 - name: workspace_test
   kind: function.lua
   source: file://workspace_test.lua

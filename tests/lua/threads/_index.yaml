@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.threads
 entries:
+- name: canonical_test
+  kind: function.lua
+  source: file://canonical_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    canonical: bee.threads.records:canonical
 - name: records_test
   kind: function.lua
   source: file://records_test.lua

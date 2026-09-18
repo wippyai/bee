@@ -100,7 +100,9 @@ local function copy(value: unknown, depth: integer, active: {[table]: boolean}, 
         active[source] = nil
         return nil, "artifact table mixes list and object keys"
     end
-    local result: {[unknown]: unknown} = {}
+    -- A copy keeps the source's list-or-map allocation, so an empty list stays
+    -- a list through measurement and application.
+    local result: {[unknown]: unknown} = total == 0 and canonical.empty_like(source) or {}
     if #strings == 0 and total > 0 then
         for index = 1, total do
             if source[index] == nil then

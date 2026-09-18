@@ -1,8 +1,16 @@
 -- MIT. Canonical JSON for plain Lua values: sorted keys, no whitespace, so
 -- equal requests and replies compare byte for byte. Dense integer-keyed
--- tables encode as arrays; an empty table encodes as an empty object.
+-- tables encode as arrays; an empty table carries its list-or-map shape in its
+-- allocation, table.create(1, 0) for a list and table.create(0, 1) for a map,
+-- and the runtime json module reads that same allocation.
+local json = require("json")
 local M = {}
 local MAX_DEPTH = 32
+local function empty(value: table): (string?, string?)
+    local shape, shape_error = json.encode(value)
+    if type(shape) ~= "string" then return nil, tostring(shape_error or "cannot read empty table shape") end
+    return shape :: string, nil
+end
 local function encode_string(value: string): string
     local escaped = value:gsub('[%c"\\]', function(char: string): string
         if char == '"' then return '\\"' end
@@ -22,6 +30,7 @@ local function encode_value(value: unknown, depth: integer): (string?, string?)
     end
     if type(value) == "string" then return encode_string(value), nil end
     if type(value) ~= "table" then return nil, "value is not encodable" end
+    if next(value :: table) == nil then return empty(value :: table) end
     local count = 0
     local keys: {string} = {}
     local dense = true
@@ -34,7 +43,7 @@ local function encode_value(value: unknown, depth: integer): (string?, string?)
         end
     end
     if #keys > 0 and #keys ~= count then return nil, "table mixes list and object keys" end
-    if #keys == 0 and count > 0 then
+    if #keys == 0 then
         local parts: {string} = {}
         for index = 1, count do
             local item: unknown = value[index]

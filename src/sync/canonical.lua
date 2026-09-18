@@ -2,7 +2,17 @@
 -- request byte for byte. This is deliberately local so sync does not depend
 -- on the thread authority subsystem.
 local bounds = require("bounds")
+local json = require("json")
 local M = {}
+-- An empty table carries its list-or-map shape in its allocation:
+-- table.create(1, 0) is a list and table.create(0, 1) is a map. The runtime
+-- json module reads that allocation, so this encoder reads it through the same
+-- module and both answer alike for one value.
+local function empty(value: table): (string?, string?)
+    local shape, shape_error = json.encode(value)
+    if type(shape) ~= "string" then return nil, tostring(shape_error or "cannot read empty table shape") end
+    return shape :: string, nil
+end
 local function encode_string(value: string): string
     return '"' .. value:gsub('[%c"\\]', function(char: string): string
         if char == '"' then return '\\"' end
@@ -21,6 +31,7 @@ local function encode(value: unknown, depth: integer): (string?, string?)
     end
     if type(value) == "string" then return encode_string(value), nil end
     if type(value) ~= "table" then return nil, "value is not encodable" end
+    if next(value :: table) == nil then return empty(value :: table) end
     local total = 0
     local strings: {string} = {}
     for key in pairs(value) do
@@ -33,7 +44,7 @@ local function encode(value: unknown, depth: integer): (string?, string?)
     end
     if #strings > 0 and #strings ~= total then return nil, "table mixes list and object keys" end
     local parts: {string} = {}
-    if #strings == 0 and total > 0 then
+    if #strings == 0 then
         for index = 1, total do
             if value[index] == nil then return nil, "list is not dense" end
             local item, item_error = encode(value[index], depth + 1)
@@ -49,6 +60,15 @@ local function encode(value: unknown, depth: integer): (string?, string?)
         parts[index] = encode_string(key) .. ":" .. item
     end
     return "{" .. table.concat(parts, ",") .. "}", nil
+end
+-- Hand a copied empty table the allocation its source carries, so the copy
+-- measures and applies as the value it was taken from.
+function M.empty_like(value: unknown): {[unknown]: unknown}
+    if type(value) == "table" then
+        local shape = json.encode(value :: table)
+        if shape == "{}" then return table.create(0, 1) :: {[unknown]: unknown} end
+    end
+    return table.create(1, 0) :: {[unknown]: unknown}
 end
 function M.encode(value: unknown, maximum_raw: unknown?): (string?, string?)
     local maximum = bounds.capacity(maximum_raw, bounds.MAX_JSON_BYTES, 16777216)

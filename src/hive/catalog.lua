@@ -47,8 +47,20 @@ end
 -- The invocation action a principal's own scope must grant on an
 -- operation; exposure publishes, invocation authorizes.
 M.INVOKE = "hive.invoke"
+-- Registry metadata reaches Lua through a conversion that drops a map's hash
+-- allocation, so an empty declared map arrives without a shape. Inside a schema
+-- an empty table is the unconstrained object, and the decoded schema says so.
+local function schema_objects(value: unknown, depth: integer): unknown
+    if type(value) ~= "table" or depth > 16 then return value end
+    local source = value :: {[unknown]: unknown}
+    if next(source) == nil then return table.create(0, 1) end
+    local result: {[unknown]: unknown} = {}
+    for key, item in pairs(source) do result[key] = schema_objects(item, depth + 1) end
+    return result
+end
 -- A bounded object schema: explicit properties and nothing else.
-local function bounded_schema(value: unknown): ({[string]: unknown}?, string?)
+local function bounded_schema(raw: unknown): ({[string]: unknown}?, string?)
+    local value = schema_objects(raw, 0)
     local schema = bounds.object(value)
     if not schema then return nil, "schema must be an object" end
     if schema.type ~= "object" then return nil, "schema type must be object" end

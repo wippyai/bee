@@ -57,6 +57,24 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     local client_renderers = assert(process.listen("bee.client.renderer", {message = true}))
     local events: Channel<process.Event> = assert(process.events())
 
+    -- Desktop hops race the monitored clients and a bound, so a stalled hop
+    -- names itself and the controller reports it.
+    local function hop(source: Channel<process.Message>, name: string)
+        local deadline = time.after("30s")
+        while true do
+            local selected = channel.select({source:case_receive(), events:case_receive(), deadline:case_receive()})
+            if not selected.ok then error("Desktop hop closed: " .. name) end
+            if selected.channel == source then return selected.value end
+            if selected.channel == deadline then error("Desktop hop did not complete: " .. name) end
+            local event = selected.value
+            if event.kind == process.event.CANCEL then error("Desktop hop cancelled: " .. name) end
+            if event.kind == process.event.EXIT then
+                error("Desktop hop lost " .. tostring(event.from) .. " (" .. tostring(event.error) .. "): " .. name)
+            end
+        end
+        error("Desktop hop ended: " .. name)
+    end
+
     -- Wait for cluster membership convergence (at least 2 members)
     for _ = 1, 200 do
         local members = system.cluster.members()
@@ -89,7 +107,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee:client_db",
             "bee.console:app", {version = 1, quit_mode = "detach", fullscreen = true})))
 
-    local c1_ready_msg = assert(client_readies:receive())
+    local c1_ready_msg = hop(client_readies, "client 1 ready")
     assert(tostring(c1_ready_msg:from()) == client1_pid, "Client 1 ready sender mismatch")
     local c1_ready_data: unknown = c1_ready_msg:payload():data()
     local c1_display_id = type(c1_ready_data) == "table" and contract.workspace_id(c1_ready_data.client_id) or nil
@@ -104,7 +122,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         client = client1_pid,
         display_id = c1_display_id,
     }))
-    local ack1 = assert(render_acks:receive())
+    local ack1 = hop(render_acks, "client 1 admission ack")
     assert(tostring(ack1:from()) == supervisor_pid, "Ack 1 sender mismatch")
     local ack1_data: unknown = ack1:payload():data()
     if type(ack1_data) ~= "table" or ack1_data.version ~= 1 or ack1_data.op ~= "admit_ack"
@@ -112,7 +130,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         error("Invalid admit ack 1")
     end
 
-    local rend1_msg = assert(client_renderers:receive())
+    local rend1_msg = hop(client_renderers, "client 1 renderer")
     assert(tostring(rend1_msg:from()) == client1_pid, "Renderer 1 sender mismatch")
     local rend1_data: unknown = rend1_msg:payload():data()
     if type(rend1_data) ~= "table" or rend1_data.version ~= 1 or rend1_data.workspace_id ~= workspace_id
@@ -128,7 +146,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         client = client1_pid,
         renderer = renderer1_pid,
     }))
-    local ack_rend1 = assert(render_acks:receive())
+    local ack_rend1 = hop(render_acks, "client 1 renderer ack")
     assert(tostring(ack_rend1:from()) == supervisor_pid, "Render ack 1 sender mismatch")
     local ack_rend1_data: unknown = ack_rend1:payload():data()
     if type(ack_rend1_data) ~= "table" or ack_rend1_data.version ~= 1 or ack_rend1_data.op ~= "render_ack"
@@ -173,7 +191,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
 
     -- Step 4: F12 rejoin same Bash/variable
     assert(screen:send({type = "key", key = "f12", key_type = "f12", action = "press"}))
-    local repl_msg = assert(client_renderers:receive())
+    local repl_msg = hop(client_renderers, "F12 replacement renderer")
     assert(tostring(repl_msg:from()) == client1_pid, "F12 renderer sender mismatch")
     local repl_data: unknown = repl_msg:payload():data()
     if type(repl_data) ~= "table" or repl_data.version ~= 1 or repl_data.workspace_id ~= workspace_id
@@ -189,7 +207,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         client = client1_pid,
         renderer = repl_renderer_pid,
     }))
-    local ack_rejoin = assert(render_acks:receive())
+    local ack_rejoin = hop(render_acks, "F12 renderer ack")
     assert(tostring(ack_rejoin:from()) == supervisor_pid, "Rejoin ack sender mismatch")
     local ack_rejoin_data: unknown = ack_rejoin:payload():data()
     if type(ack_rejoin_data) ~= "table" or ack_rejoin_data.version ~= 1 or ack_rejoin_data.op ~= "render_ack"
@@ -223,6 +241,23 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
     assert(c1_exited, "Client 1 did not exit within 6s after Ctrl+Q detach")
     screen:close()
 
+    -- A departed client keeps its display fenced on the host until the owner
+    -- releases the admission. The controller observes its own client, so it
+    -- drives that release before the display is attached again.
+    assert(process.send(supervisor_pid, "bee.hive_remote.active_done", {
+        version = 1,
+        request_id = "detach-c1",
+        op = "detach_client",
+        client = client1_pid,
+    }))
+    local detach_ack = hop(render_acks, "client 1 detach ack")
+    assert(tostring(detach_ack:from()) == supervisor_pid, "Detach ack sender mismatch")
+    local detach_data: unknown = detach_ack:payload():data()
+    if type(detach_data) ~= "table" or detach_data.version ~= 1 or detach_data.op ~= "detach_ack"
+        or detach_data.client ~= client1_pid then
+        error("Invalid client 1 detach ack")
+    end
+
     -- Step 6: Fresh client with same local client store reattaches retained inventory and same shell
     local screen2, disp_err2 = tty.viewport({width = 100, height = 32})
     if not screen2 then error("tty.viewport failed for fresh client: " .. tostring(disp_err2)) end
@@ -234,7 +269,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee:client_db",
             nil, {version = 1, quit_mode = "detach", fullscreen = true})))
 
-    local c2_ready_msg = assert(client_readies:receive())
+    local c2_ready_msg = hop(client_readies, "client 2 ready")
     assert(tostring(c2_ready_msg:from()) == client2_pid, "Client 2 ready sender mismatch")
     local c2_ready_data: unknown = c2_ready_msg:payload():data()
     local c2_display_id = type(c2_ready_data) == "table" and contract.workspace_id(c2_ready_data.client_id) or nil
@@ -249,7 +284,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         client = client2_pid,
         display_id = c2_display_id,
     }))
-    local ack2 = assert(render_acks:receive())
+    local ack2 = hop(render_acks, "client 2 admission ack")
     assert(tostring(ack2:from()) == supervisor_pid, "Ack 2 sender mismatch")
     local ack2_data: unknown = ack2:payload():data()
     if type(ack2_data) ~= "table" or ack2_data.version ~= 1 or ack2_data.op ~= "admit_ack"
@@ -257,7 +292,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         error("Invalid admit ack 2")
     end
 
-    local rend2_msg = assert(client_renderers:receive())
+    local rend2_msg = hop(client_renderers, "client 2 renderer")
     assert(tostring(rend2_msg:from()) == client2_pid, "Renderer 2 sender mismatch")
     local rend2_data: unknown = rend2_msg:payload():data()
     if type(rend2_data) ~= "table" or rend2_data.version ~= 1 or rend2_data.workspace_id ~= workspace_id
@@ -273,7 +308,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         client = client2_pid,
         renderer = renderer2_pid,
     }))
-    local ack_rend2 = assert(render_acks:receive())
+    local ack_rend2 = hop(render_acks, "client 2 renderer ack")
     assert(tostring(ack_rend2:from()) == supervisor_pid, "Render ack 2 sender mismatch")
     local ack_rend2_data: unknown = ack_rend2:payload():data()
     if type(ack_rend2_data) ~= "table" or ack_rend2_data.version ~= 1 or ack_rend2_data.op ~= "render_ack"

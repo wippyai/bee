@@ -128,6 +128,7 @@ func (b *safeBuffer) Truncated() bool {
 
 type outputCollector struct {
 	lines      chan string
+	closed     chan struct{}
 	stderr     *safeBuffer
 	scanErr    error
 	wg         sync.WaitGroup
@@ -137,12 +138,14 @@ type outputCollector struct {
 func startReader(ctx context.Context, r io.ReadCloser, nodeName string, stderr *safeBuffer) *outputCollector {
 	c := &outputCollector{
 		lines:      make(chan string, 100),
+		closed:     make(chan struct{}),
 		stderr:     stderr,
 		stdoutPipe: r,
 	}
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
+		defer close(c.closed)
 		defer close(c.lines)
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
@@ -883,23 +886,42 @@ func run() (retErr error) {
 	}
 	cmdAStarted = true
 
+	// Marker waits race the peer node, so a failure on one node surfaces while
+	// the other node is still waiting, together with the last completed stage.
+	lastStage := "startup"
+	var peerOf func(collector *outputCollector) (*outputCollector, string)
 	waitMarker := func(collector *outputCollector, nodeName, stage, prefix string) (string, error) {
+		peer, peerName := (*outputCollector)(nil), ""
+		if peerOf != nil {
+			peer, peerName = peerOf(collector)
+		}
+		var peerClosed <-chan struct{}
+		var peerStderr *safeBuffer
+		if peer != nil {
+			peerClosed, peerStderr = peer.closed, peer.stderr
+		}
 		for {
 			select {
 			case line, ok := <-collector.lines:
 				if !ok {
-					errMsg := fmt.Sprintf("[%s] %s closed output while waiting for %q", stage, nodeName, prefix)
+					errMsg := fmt.Sprintf("[%s] %s closed output while waiting for %q (last completed stage: %s)", stage, nodeName, prefix, lastStage)
 					if collector.scanErr != nil {
 						errMsg += fmt.Sprintf(" (scanner error: %v)", collector.scanErr)
 					}
 					return "", fmt.Errorf("%s\n%s stderr:\n%s", errMsg, nodeName, sanitizeDiagnostics(collector.stderr.String(), secretStr, keys))
 				}
 				if strings.HasPrefix(line, prefix) {
+					lastStage = stage
 					return line, nil
 				}
+			case <-peerClosed:
+				return "", fmt.Errorf("[%s] %s closed output while %s was waiting for %q (last completed stage: %s)\n%s stderr:\n%s\n%s stderr:\n%s",
+					stage, peerName, nodeName, prefix, lastStage,
+					peerName, sanitizeDiagnostics(peerStderr.String(), secretStr, keys),
+					nodeName, sanitizeDiagnostics(collector.stderr.String(), secretStr, keys))
 			case <-ctx.Done():
-				return "", fmt.Errorf("[%s] timeout waiting for %q from %s: %w\n%s stderr:\n%s",
-					stage, prefix, nodeName, ctx.Err(), nodeName, sanitizeDiagnostics(collector.stderr.String(), secretStr, keys))
+				return "", fmt.Errorf("[%s] timeout waiting for %q from %s: %w (last completed stage: %s)\n%s stderr:\n%s",
+					stage, prefix, nodeName, ctx.Err(), lastStage, nodeName, sanitizeDiagnostics(collector.stderr.String(), secretStr, keys))
 			}
 		}
 	}
@@ -938,6 +960,15 @@ func run() (retErr error) {
 	}
 	if err := runnerB.start(ctx, "node B"); err != nil {
 		return err
+	}
+	peerOf = func(collector *outputCollector) (*outputCollector, string) {
+		if runnerA != nil && collector == runnerA.collector {
+			return runnerB.collector, "node B"
+		}
+		if collector == runnerB.collector {
+			return runnerA.collector, "node A"
+		}
+		return nil, ""
 	}
 
 	clientLine, err := waitMarker(runnerB.collector, "node B", "client startup", "BEE_HIVE_REMOTE client_ready ")

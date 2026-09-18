@@ -10,11 +10,15 @@ The internal `bee.governance:preflight` library now checks a host-resolved closu
 for destination/base mismatch, package/namespace/kind policy, exact package-owned
 child namespaces and conflicts with existing namespace owners, requested grants and
 runtime modules, missing dependency
-members, final-state references, typed requirement bindings, ownership collisions,
+members, final-state references the candidate answers for, typed requirement
+bindings, ownership collisions,
 applied migration changes/removal, migration database admission and unsafe early
 service activation. Its deterministic report contains bounded diagnostics and
 remediation instructions, pending migration identities and a digest binding the
-candidate, host policy and applied-migration baseline. It has no write capability.
+candidate, host policy and applied-migration baseline. A reference is the
+candidate's to answer for when the candidate defines the entry holding it, or
+when the candidate removes the target; a destination whose base already points
+at an entry its host supplies out of band is not blamed on the plan. It has no write capability.
 `make governance-preflight-check` exercises this slice. There is no production
 resolver adapter, installer, activation trait or worker yet; the context supplied
 to this internal library must never be accepted as authority from a remote peer.

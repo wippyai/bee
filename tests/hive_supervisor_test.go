@@ -53,7 +53,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.WriteFile(filepath.Join(canonicalDir, "canonical.lua"), canonical, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(canonicalDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(canonicalDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, dependency := range []struct{ directory, source, manifest string }{

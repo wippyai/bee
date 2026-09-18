@@ -65,6 +65,18 @@ governance-overlay-check:
 governance-overlay-composed-base-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_overlay.go -runtime "$(abspath $(WIPPY))" -gate composed-base
 
+.PHONY: app-journey-check
+# One governed application: authored, frozen, staged, preflighted, approved,
+# applied by the activation owner, admitted, opened from the desktop catalog
+# and restored with its state after a host restart.
+app-journey-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_journey.py
+.PHONY: delivery-review-check
+# What a person approves: the destination's own verdict, the diagnostics that
+# block it, the entry set the plan changes, and the approval and activation
+# record, all read back in the App Delivery review surface.
+delivery-review-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/delivery_review.py
 .PHONY: governance-workspace-check
 governance-workspace-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_workspace.go
@@ -264,6 +276,9 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
+	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"
+	$(MAKE) delivery-review-check WIPPY="$(abspath $(WIPPY))"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py
 

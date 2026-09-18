@@ -43,7 +43,9 @@ local function selected_plan(store: plan_store.Store, version: string, entry_blo
         version = version}))
 end
 
-local function resolver(entry: {[string]: unknown}): owner.Resolver
+local SHA_B = string.rep("b", 64)
+
+local function shifting_resolver(entry: {[string]: unknown}, world: {revision: integer, digest: string}): owner.Resolver
     local entry_bytes, encode_error = canonical.encode(entry)
     if not entry_bytes then error(tostring(encode_error)) end
     local selected_digest, digest_error = hash.sha256(entry_bytes)
@@ -54,19 +56,24 @@ local function resolver(entry: {[string]: unknown}): owner.Resolver
         local version = selected.version :: string
         local entry_id, entry_kind = entry.id :: string, entry.kind :: string
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a",
-            base_revision = 4, base_digest = SHA,
+            base_revision = world.revision, base_digest = world.digest,
             artifacts = {{component = "demo/app", version = version,
                 digest = SHA, dependencies = {}, namespaces = {"demo"}}},
             entries = {{id = entry_id, kind = entry_kind, package = "demo/app",
                 digest = selected_digest, references = {}, auto_start = false,
-                grants = {}, modules = {}}}, requirements = {}, migrations = {}}
-        local context: preflight.Context = {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
+                grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {}, migrations = {}}
+        local context: preflight.Context = {node_id = "node-owner", registry_revision = world.revision,
+                registry_digest = world.digest,
                 policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},
                 entries = {}, applied = {}, exact_expansion = true, migration_barrier = false}
         return candidate, context, nil
     end
     return value :: owner.Resolver
+end
+
+local function resolver(entry: {[string]: unknown}): owner.Resolver
+    return shifting_resolver(entry, {revision = 4, digest = SHA})
 end
 
 local function approvals(): owner.Executor
@@ -243,6 +250,140 @@ local function define_tests()
             test.eq(ok(owner.desired(config)).intent_id, "intent-fenced-v2")
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
+        end)
+
+        test.it("refuses an authorized apply when the composed base changed under review", function()
+            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-refusal")
+            if not plans then error(tostring(plan_error)) end
+            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-refusal")
+            if not activations then error(tostring(activation_error)) end
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: {revision: integer, digest: string} = {revision = 4, digest = SHA}
+            local applied = false
+            local apply_count = 0
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world),
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
+                    applied, apply_count = true, apply_count + 1
+                    return {changed = true}, nil
+                end}
+            local prepared = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-composed", receipt_key = "composed-v1"})
+            test.eq(ok(prepared).phase, "approval_bound")
+            test.eq(ok(owner.step(config, "intent-composed", "composed-v1")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-composed", "composed-v1")).phase, "authorized")
+            world.revision, world.digest = 5, SHA_B
+            local refused = owner.step(config, "intent-composed", "composed-v1")
+            test.eq(refused.code, "CONFLICT")
+            test.is_true(tostring(refused.message):find("composed registry base", 1, true) ~= nil)
+            test.is_false(applied)
+            test.eq(apply_count, 0)
+            world.revision, world.digest = 4, SHA
+            test.eq(ok(owner.step(config, "intent-composed", "composed-v1")).phase, "applying")
+            test.eq(ok(owner.step(config, "intent-composed", "composed-v1")).outcome, "applied")
+            test.eq(apply_count, 1)
+            local again = ok(owner.step(config, "intent-composed", "composed-v1"))
+            test.eq(again.outcome, "applied")
+            test.eq(apply_count, 1)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+
+        test.it("leaves an apply uncertain when the base moves during the apply", function()
+            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-apply")
+            if not plans then error(tostring(plan_error)) end
+            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-apply")
+            if not activations then error(tostring(activation_error)) end
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: {revision: integer, digest: string} = {revision = 4, digest = SHA}
+            local applied = false
+            local apply_count = 0
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world),
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
+                apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
+                    applied, apply_count = true, apply_count + 1
+                    world.revision, world.digest = 5, SHA_B
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-composed-apply", receipt_key = "composed-apply-v1"}))
+            test.eq(ok(owner.step(config, "intent-composed-apply", "composed-apply-v1")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-composed-apply", "composed-apply-v1")).phase, "authorized")
+            test.eq(ok(owner.step(config, "intent-composed-apply", "composed-apply-v1")).phase, "applying")
+            local outcome = owner.step(config, "intent-composed-apply", "composed-apply-v1")
+            test.eq(outcome.code, "UNCERTAIN")
+            test.is_true(tostring(outcome.message):find("composed registry base", 1, true) ~= nil)
+            test.is_true(applied)
+            test.eq(apply_count, 1)
+            local later = owner.recover(config, "composed-apply-v1")
+            test.eq(later.code, "CONFLICT")
+            test.is_true(tostring(later.message):find("composed registry base", 1, true) ~= nil)
+            test.eq(apply_count, 1)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+
+        test.it("reconciles an interrupted apply after a restart without duplicating it", function()
+            local plans, plan_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart")
+            if not plans then error(tostring(plan_error)) end
+            local activations, activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart")
+            if not activations then error(tostring(activation_error)) end
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: {revision: integer, digest: string} = {revision = 4, digest = SHA}
+            local applied = false
+            local apply_count = 0
+            local function config_with(plan_handle: plan_store.Store, activation_handle: activation_store.Store): owner.Config
+                return {plans = plan_handle, activations = activation_handle,
+                    resolver = shifting_resolver(entry, world),
+                    approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                    overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                    matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
+                    apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
+                        applied, apply_count = true, apply_count + 1
+                        return {changed = true}, nil
+                    end}
+            end
+            ok(owner.prepare(config_with(plans, activations), {source_node = "source-a",
+                source_workspace = "app-a", version = "v1", intent_id = "intent-composed-restart",
+                receipt_key = "composed-restart-v1"}))
+            test.eq(ok(owner.step(config_with(plans, activations), "intent-composed-restart", "composed-restart-v1")).phase, "consuming")
+            test.eq(ok(owner.step(config_with(plans, activations), "intent-composed-restart", "composed-restart-v1")).phase, "authorized")
+            test.eq(ok(owner.step(config_with(plans, activations), "intent-composed-restart", "composed-restart-v1")).phase, "applying")
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+            local reopened_plans, reopen_error = plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart")
+            if not reopened_plans then error(tostring(reopen_error)) end
+            local reopened_activations, reopen_activation_error = activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart")
+            if not reopened_activations then error(tostring(reopen_activation_error)) end
+            local settled = ok(owner.recover(config_with(reopened_plans, reopened_activations), "composed-restart-v1"))
+            test.eq(settled.outcome, "applied")
+            test.eq(apply_count, 1)
+            assert(activation_store.close(reopened_activations))
+            assert(plan_store.close(reopened_plans))
+            local again_plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-composed-restart"))
+            local again_activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-composed-restart"))
+            local replayed = ok(owner.recover(config_with(again_plans, again_activations), "composed-restart-v1"))
+            test.eq(replayed.outcome, "applied")
+            test.eq(apply_count, 1)
+            world.revision, world.digest = 5, SHA_B
+            local refused = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
+            test.eq(refused.code, "CONFLICT")
+            test.is_true(tostring(refused.message):find("composed registry base", 1, true) ~= nil)
+            test.eq(apply_count, 1)
+            assert(activation_store.close(again_activations))
+            assert(plan_store.close(again_plans))
         end)
     end)
 end

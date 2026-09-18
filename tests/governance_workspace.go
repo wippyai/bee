@@ -29,6 +29,7 @@ entries:
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
+  modules: [json]
   imports:
     bounds: bee.sync:bounds
 `

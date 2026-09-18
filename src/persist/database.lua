@@ -10,7 +10,7 @@ type Options = {resource: string, ledger: ledger.Ledger, migrations: {ledger.Mig
 function M.open(options: Options): (sql.DB?, string?)
     local label = options.ledger.label
     local db, acquire_err = sql.get(options.resource)
-    if not db then return nil, "open " .. label .. " database" end
+    if not db then return nil, "open " .. label .. " database: " .. tostring(acquire_err or "no reason given") end
     local db_type, type_err = db:type()
     if type_err or not db_type then
         db:release()

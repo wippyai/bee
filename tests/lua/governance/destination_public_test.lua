@@ -23,7 +23,10 @@ local function define_tests()
                 source_node = "source-node", source_workspace = "vendor/app", version = "1.0.0",
                 intent_id = "intent-1", receipt_key = "prepare-1"})
             test.is_false(result.ok == true)
-            test.eq(result.code, "BLOCKED")
+            -- The facade names the owner's fault the way an application reads it.
+            local fault = result.error :: {[string]: unknown}
+            test.eq(fault.code, "BLOCKED")
+            test.is_true((fault.message :: string):find("activation profile", 1, true) ~= nil)
         end)
     end)
 end

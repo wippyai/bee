@@ -2,6 +2,7 @@
 local test = require("test")
 local model = require("model")
 local caller = require("caller")
+local preflight = require("preflight")
 
 local function reply(value: unknown): caller.Reply
     local result = caller.decode({ok = true, value = value, replayed = false})
@@ -33,6 +34,36 @@ local function available(version: string): {[string]: unknown}
         content_kind = "bee.governance-application-version@2", total_bytes = 2048,
         manifest = {schema_revision = "bee.governance-application-version@2", source_workspace = "workspace-source",
             component = "sample/app", artifact_digest = string.rep("c", 64)}, digest = string.rep("d", 64)}
+end
+
+local function report(ready: boolean): (string, string)
+    local diagnostics: {unknown} = {}
+    if not ready then
+        diagnostics[1] = {code = "DANGLING_REFERENCE", target = "demo:run",
+            message = "missing final-state target demo:absent", remedy = "repair the reference or include its target"}
+    end
+    local bytes, digest = preflight.encode_report({schema_revision = "bee.governance-preflight@1",
+        plan_digest = string.rep("a", 64), destination_node = "node-destination", base_revision = 7,
+        policy_digest = string.rep("a", 64), ready = ready, diagnostics = diagnostics, pending_migrations = {}})
+    if not bytes or not digest then error("valid preflight report fixture was rejected") end
+    return bytes, digest
+end
+
+local function detail(version: string, bytes: string, digest: string): {[string]: unknown}
+    local value = plan(version, "staged", false, 1)
+    value.preflight_bytes, value.preflight_digest = bytes, digest
+    return value
+end
+
+local function changes_value(version: string): {[string]: unknown}
+    return {owner_node = "node-destination", workspace_id = "workspace-destination",
+        source_node = "node-source", source_workspace = "workspace-source", version = version,
+        plan_digest = string.rep("a", 64), candidate_digest = string.rep("b", 64),
+        artifact_digest = string.rep("c", 64), base_revision = 7, base_digest = string.rep("a", 64),
+        composed_base_revision = 8, composed_base_digest = string.rep("b", 64),
+        added = {{id = "demo:run", kind = "function.lua", digest = string.rep("a", 64)}},
+        changed = {},
+        removed = {{id = "demo:gone", kind = "function.lua", digest = string.rep("b", 64)}}}
 end
 
 local function define_tests()
@@ -129,6 +160,58 @@ local function define_tests()
             test.eq(restored.pending_stage.idempotency_key, "stage-key")
             test.is_nil(restored.intent)
             test.is_false(model.restore(restored, '{"pending_recover_key":7}'))
+        end)
+
+        test.it("reads the verdict from the report bytes the plan stores", function()
+            local state = model.new("workspace-destination")
+            local ready_bytes, ready_digest = report(true)
+            test.is_true(model.apply_list(state, reply({owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 1)}})))
+            test.eq(model.verdict(state, model.selected(state)), "unread")
+            test.is_true(model.refusal(state, model.selected(state)):find("preflight report first", 1, true) ~= nil)
+            test.is_true(model.apply_plan(state, reply(detail("1.0.0", ready_bytes, ready_digest))))
+            test.eq(model.verdict(state, model.selected(state)), "ready")
+            test.is_nil(model.refusal(state, model.selected(state)))
+        end)
+
+        test.it("refuses to act on a plan whose report refuses it or fails its digest check", function()
+            local state = model.new("workspace-destination")
+            local blocked_bytes, blocked_digest = report(false)
+            test.is_true(model.apply_list(state, reply({owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 1)}})))
+            test.is_true(model.apply_plan(state, reply(detail("1.0.0", blocked_bytes, blocked_digest))))
+            test.eq(model.verdict(state, model.selected(state)), "blocked")
+            test.is_true(model.refusal(state, model.selected(state)):find("Preflight blocks", 1, true) ~= nil)
+            local rows = model.review_rows(state)
+            local rendered = ""
+            for _, row in ipairs(rows) do rendered = rendered .. row.text .. "\n" end
+            test.is_true(rendered:find("DANGLING_REFERENCE  demo:run", 1, true) ~= nil)
+            test.is_true(rendered:find("missing final-state target demo:absent", 1, true) ~= nil)
+            -- The same bytes under another plan's digest are not that plan's report.
+            test.is_true(model.apply_plan(state, reply(detail("1.0.0", blocked_bytes, string.rep("e", 64)))))
+            test.eq(model.verdict(state, model.selected(state)), "unreadable")
+            test.is_true(model.refusal(state, model.selected(state)):find("does not match its digest", 1, true) ~= nil)
+        end)
+
+        test.it("decodes the entry set of one plan against the composed base", function()
+            local state = model.new("workspace-destination")
+            local ready_bytes, ready_digest = report(true)
+            test.is_true(model.apply_list(state, reply({owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 1)}})))
+            test.is_true(model.apply_plan(state, reply(detail("1.0.0", ready_bytes, ready_digest))))
+            local item = model.selected(state)
+            test.not_nil(item)
+            if not item then return end
+            test.eq(model.changes_request(state, item).operation, "changes")
+            test.is_true(model.apply_changes(state, reply(changes_value("1.0.0")), item))
+            test.eq(#state.changes.added, 1)
+            test.eq(state.changes.added[1].id, "demo:run")
+            test.eq(state.changes.removed[1].id, "demo:gone")
+            local foreign = changes_value("1.0.0")
+            foreign.plan_digest = string.rep("f", 64)
+            test.is_false(model.apply_changes(state, reply(foreign), item))
+            test.is_nil(state.changes)
+            test.is_true(state.changes_error ~= nil)
         end)
 
         test.it("rejects foreign workspaces and malformed evidence", function()

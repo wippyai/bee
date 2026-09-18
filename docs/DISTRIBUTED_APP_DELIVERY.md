@@ -62,9 +62,11 @@ their plans, selections, approvals and overlays never cross that boundary.
 Overlay activation uses the existing owner-local, generation-fenced overlay API.
 Immediately before apply, governance re-resolves and re-preflights the selected
 candidate in the destination context, then applies the exact reviewed definitions
-through its owned overlay generation. An overlay-generation conflict retires that
-attempt and requires another preflight; overlay activation never writes registry
-history.
+through its owned overlay generation. After an exact observed match, governance
+re-resolves once more and records uncertainty with a named composed-base
+diagnostic when the base moved across the apply instead of claiming applied.
+An overlay-generation conflict retires that attempt and requires another
+preflight; overlay activation never writes registry history.
 
 Durable registry publication is a separate adapter. Its atomic composed-base CAS
 remains unavailable and must not be approximated with a Lua pre-read. That missing
@@ -108,6 +110,51 @@ The destination now has a durable internal plan store. Available versions retain
 their exact candidate, artifact and preflight bytes; local review, explicit
 selection and approval binding advance through CAS revisions and bounded retry
 receipts. Selection remains separate from receipt of a replicated version.
+
+## What a reviewer sees
+
+App Delivery reads a staged plan and shows, in a review pane beside the
+available and staged lists, what a person is being asked to approve:
+
+1. The verdict. The application decodes the plan's own preflight report from the
+   exact bytes the plan stores and checks them against the plan's preflight
+   digest through `bee.governance:preflight.decode_report`. A report that fails
+   that check is shown as unreadable with the reason, never as ready.
+2. Every diagnostic by its code and the entry it concerns, with its message and
+   remedy, and every pending migration by its target.
+3. The entry set the plan changes against the composed base: added, changed and
+   removed, each with id, kind and digest, beside the artifact and plan digests.
+   The destination supplies this through the read-only `changes` operation; it
+   decodes the reviewed candidate from its own measured bytes and compares it to
+   the composed base its resolver captures now, and names both base digests so a
+   base that moved since staging is visible.
+4. The approval state the owner holds: unbound, proposed with its proposal
+   digest, consumed with the digest the activation owner consumed, and after
+   apply the activation phase, outcome and the activation owner's receipt,
+   including an uncertain outcome with the composed-base diagnostic the ledger
+   records.
+5. Refusals. Accept, Select and Prepare are unavailable while the verdict is not
+   ready or the report fails its digest check, and the reason is the status line.
+   The application never acts on a plan whose report it could not decode.
+
+The application gains no authority: it decodes and displays what the plan store,
+the approvals owner and the activation ledger already hold, through the
+destination facade it already calls. Overlays remain the activation owner's.
+
+The public facade authenticates the caller's exact delivery operation and then
+enters the private destination execution scope to reach the destination store,
+the same shape the authoring facade uses. An ordinary application is denied the
+governance database directly, so without that scope hop App Delivery could not
+read its own destination. The facade also presents an owner fault as the
+application boundary names it, so a refusal arrives with its code and reason.
+
+`make delivery-review-check` stages one version whose candidate introduces a
+reference to an entry nothing supplies and one the destination preflight
+accepts, then drives the App Delivery window: the refused version shows blocked
+with `DANGLING_REFERENCE` on its own entry and refuses selection with that
+reason, and the accepted version shows ready with its entry changes, is reviewed,
+selected and prepared in App Delivery, approved in Approvals, and read back with
+its activation outcome and receipt.
 
 The owner-local overlay materializer is now implemented and tested. It accepts
 only exact artifact entries, replaces one logical overlay, relies on one native
@@ -167,6 +214,17 @@ resolver and destination owner service.
 Modules separately proves its production Governance binding from source and a
 source-free pack. An unprofiled component is refused instead of publishing its
 Hub dependency overlay.
+
+`make app-journey-check` carries one `bee.application` definition the whole way
+on a disposable database environment: a harness acting as the agent authors it
+through the authoring surface, the frozen artifact is published, staged and
+preflighted, the owner accepts and decides it, the activation owner consumes
+that one decision and applies the overlay, a second consume is refused, and the
+same effective catalog the application broker reads then admits the definition.
+Boot recovery re-establishes the overlay on each later boot, so the desktop
+opens the application from its own start menu and restores its checkpointed
+state after a full host restart. Nothing outside the destination owner holds
+overlay write authority, and the acceptance asserts that.
 
 The runtime also defines the canonical receive surface
 `stream.pipe(peer, limit)`. Its Stream handle stays in the receiving actor's

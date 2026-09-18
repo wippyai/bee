@@ -5,7 +5,8 @@ local hash = require("hash")
 local json = require("json")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
-    grants: {string}, modules: {string}}
+    grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
+    config_empty: {string}?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string}}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
@@ -25,6 +26,22 @@ end
 local function identifier(value: string): boolean
     return #value > 0 and #value <= 160 and not value:find("%c")
 end
+-- The runtime unpacks these kinds into a typed config. A field it reads as a
+-- list refuses an object at apply, a field it reads as a nested config refuses
+-- a list, and an empty declared field crosses into the destination as neither,
+-- so review answers for all three here.
+local CONFIG_LISTS: {[string]: {[string]: boolean}} = {
+    ["function.lua"] = {modules = true},
+    ["library.lua"] = {modules = true},
+    ["process.lua"] = {modules = true},
+    ["workflow.lua"] = {modules = true},
+}
+local CONFIG_OBJECTS: {[string]: {[string]: boolean}} = {
+    ["function.lua"] = {imports = true, security = true, pool = true},
+    ["library.lua"] = {imports = true},
+    ["process.lua"] = {imports = true, security = true},
+    ["workflow.lua"] = {imports = true},
+}
 local function migration_key(item: Migration): string
     return item.target_db .. "\n" .. item.id
 end
@@ -103,6 +120,197 @@ function M.decode_report(bytes_raw: unknown, digest_raw: unknown): (Report?, str
     if not canonical_bytes or canonical_bytes ~= bytes then return nil, encode_error or "preflight report bytes are not canonical" end
     return report, nil
 end
+local CANDIDATE_LIMIT = 1048576
+local function dense_count(raw: unknown, label: string, maximum: integer): (integer?, string?)
+    if type(raw) ~= "table" then return nil, label .. " must be a list" end
+    local count = 0
+    for key in pairs(raw :: table) do
+        if type(key) ~= "number" or key ~= math.floor(key :: number) or (key :: number) < 1 then return nil, label .. " must be a dense list" end
+        count = count + 1
+    end
+    if count > maximum then return nil, label .. " exceeds its bound" end
+    for index = 1, count do
+        if (raw :: table)[index] == nil then return nil, label .. " must be a dense list" end
+    end
+    return count, nil
+end
+local function identifiers(raw: unknown, label: string, maximum: integer): ({string}?, string?)
+    local count, count_error = dense_count(raw, label, maximum)
+    if not count then return nil, count_error end
+    local result: {string} = {}
+    for index = 1, count do
+        local value = (raw :: table)[index]
+        if type(value) ~= "string" or not identifier(value :: string) then return nil, label .. " has a malformed value" end
+        result[index] = value :: string
+    end
+    return result, nil
+end
+local function only(value: {[string]: unknown}, allowed: {[string]: boolean}, label: string): string?
+    for name in pairs(value) do
+        if type(name) ~= "string" or not allowed[name] then return label .. " has an unknown field" end
+    end
+    return nil
+end
+local function candidate_artifacts(raw: unknown): ({Artifact}?, string?)
+    local count, count_error = dense_count(raw, "candidate artifacts", 32)
+    if not count then return nil, count_error end
+    local allowed: {[string]: boolean} = {component = true, version = true, digest = true,
+        dependencies = true, namespaces = true}
+    local result: {Artifact} = {}
+    for index = 1, count do
+        local row = (raw :: table)[index]
+        if type(row) ~= "table" then return nil, "candidate artifact is malformed" end
+        local item = row :: {[string]: unknown}
+        local extra = only(item, allowed, "candidate artifact")
+        if extra then return nil, extra end
+        local dependencies, dependencies_error = identifiers(item.dependencies, "artifact dependencies", 32)
+        if not dependencies then return nil, dependencies_error end
+        local namespaces, namespaces_error = identifiers(item.namespaces, "artifact namespaces", 64)
+        if not namespaces then return nil, namespaces_error end
+        if #namespaces == 0 then return nil, "candidate artifact declares no namespace" end
+        if type(item.component) ~= "string" or not identifier(item.component :: string)
+            or type(item.version) ~= "string" or not identifier(item.version :: string)
+            or type(item.digest) ~= "string" or not digest(item.digest :: string) then
+            return nil, "candidate artifact is malformed"
+        end
+        result[index] = {component = item.component :: string, version = item.version :: string,
+            digest = item.digest :: string, dependencies = dependencies, namespaces = namespaces}
+    end
+    if #result < 1 then return nil, "candidate declares no artifact" end
+    return result, nil
+end
+local function candidate_entries(raw: unknown): ({Entry}?, string?)
+    local count, count_error = dense_count(raw, "candidate entries", 512)
+    if not count then return nil, count_error end
+    local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
+        references = true, auto_start = true, grants = true, modules = true,
+        config_objects = true, config_lists = true, config_empty = true}
+    local result: {Entry} = {}
+    for index = 1, count do
+        local row = (raw :: table)[index]
+        if type(row) ~= "table" then return nil, "candidate entry is malformed" end
+        local item = row :: {[string]: unknown}
+        local extra = only(item, allowed, "candidate entry")
+        if extra then return nil, extra end
+        local references, references_error = identifiers(item.references, "entry references", 64)
+        if not references then return nil, references_error end
+        local grants, grants_error = identifiers(item.grants, "entry grants", 32)
+        if not grants then return nil, grants_error end
+        local modules, modules_error = identifiers(item.modules, "entry modules", 32)
+        if not modules then return nil, modules_error end
+        local config_objects, objects_error = identifiers(item.config_objects, "entry config objects", 32)
+        if not config_objects then return nil, objects_error end
+        local config_lists, lists_error = identifiers(item.config_lists, "entry config lists", 32)
+        if not config_lists then return nil, lists_error end
+        local config_empty, empty_error = identifiers(item.config_empty, "entry config empty fields", 32)
+        if not config_empty then return nil, empty_error end
+        if type(item.id) ~= "string" or not identifier(item.id :: string)
+            or type(item.kind) ~= "string" or not identifier(item.kind :: string)
+            or type(item.package) ~= "string" or not identifier(item.package :: string)
+            or type(item.digest) ~= "string" or not digest(item.digest :: string)
+            or type(item.auto_start) ~= "boolean" then
+            return nil, "candidate entry is malformed"
+        end
+        result[index] = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
+            digest = item.digest :: string, references = references, auto_start = item.auto_start :: boolean,
+            grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
+            config_empty = config_empty}
+    end
+    return result, nil
+end
+local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
+    local count, count_error = dense_count(raw, "candidate requirements", 128)
+    if not count then return nil, count_error end
+    local allowed: {[string]: boolean} = {id = true, package = true, value = true,
+        expected_kind = true, targets = true}
+    local result: {Requirement} = {}
+    for index = 1, count do
+        local row = (raw :: table)[index]
+        if type(row) ~= "table" then return nil, "candidate requirement is malformed" end
+        local item = row :: {[string]: unknown}
+        local extra = only(item, allowed, "candidate requirement")
+        if extra then return nil, extra end
+        local targets, targets_error = identifiers(item.targets, "requirement targets", 64)
+        if not targets then return nil, targets_error end
+        if type(item.id) ~= "string" or not identifier(item.id :: string)
+            or type(item.package) ~= "string" or not identifier(item.package :: string)
+            or (item.value ~= nil and (type(item.value) ~= "string" or not identifier(item.value :: string)))
+            or (item.expected_kind ~= nil and (type(item.expected_kind) ~= "string" or not identifier(item.expected_kind :: string))) then
+            return nil, "candidate requirement is malformed"
+        end
+        local requirement: Requirement = {id = item.id :: string, package = item.package :: string,
+            value = item.value :: string?, expected_kind = item.expected_kind :: string?, targets = targets}
+        result[index] = requirement
+    end
+    return result, nil
+end
+local function candidate_migrations(raw: unknown): ({Migration}?, string?)
+    local count, count_error = dense_count(raw, "candidate migrations", 128)
+    if not count then return nil, count_error end
+    local allowed: {[string]: boolean} = {id = true, target_db = true, checksum = true, ordinal = true}
+    local result: {Migration} = {}
+    for index = 1, count do
+        local row = (raw :: table)[index]
+        if type(row) ~= "table" then return nil, "candidate migration is malformed" end
+        local item = row :: {[string]: unknown}
+        local extra = only(item, allowed, "candidate migration")
+        if extra then return nil, extra end
+        if type(item.id) ~= "string" or not identifier(item.id :: string)
+            or type(item.target_db) ~= "string" or not identifier(item.target_db :: string)
+            or type(item.checksum) ~= "string" or not digest(item.checksum :: string)
+            or type(item.ordinal) ~= "number" or item.ordinal ~= math.floor(item.ordinal :: number)
+            or (item.ordinal :: number) < 1 then
+            return nil, "candidate migration is malformed"
+        end
+        result[index] = {id = item.id :: string, target_db = item.target_db :: string,
+            checksum = item.checksum :: string, ordinal = math.floor(item.ordinal :: number)}
+    end
+    return result, nil
+end
+local function normalize_candidate(raw: unknown): (Candidate?, string?)
+    if type(raw) ~= "table" then return nil, "candidate must be an object" end
+    local value = raw :: {[string]: unknown}
+    local allowed: {[string]: boolean} = {destination_node = true, source_node = true, base_revision = true,
+        base_digest = true, artifacts = true, entries = true, requirements = true, migrations = true}
+    local extra = only(value, allowed, "candidate")
+    if extra then return nil, extra end
+    if type(value.destination_node) ~= "string" or not identifier(value.destination_node :: string)
+        or type(value.source_node) ~= "string" or not identifier(value.source_node :: string)
+        or type(value.base_revision) ~= "number" or value.base_revision ~= math.floor(value.base_revision :: number)
+        or (value.base_revision :: number) < 0
+        or type(value.base_digest) ~= "string" or not digest(value.base_digest :: string) then
+        return nil, "candidate identity is malformed"
+    end
+    local artifacts, artifacts_error = candidate_artifacts(value.artifacts)
+    if not artifacts then return nil, artifacts_error end
+    local entries, entries_error = candidate_entries(value.entries)
+    if not entries then return nil, entries_error end
+    local requirements, requirements_error = candidate_requirements(value.requirements)
+    if not requirements then return nil, requirements_error end
+    local migrations, migrations_error = candidate_migrations(value.migrations)
+    if not migrations then return nil, migrations_error end
+    return {destination_node = value.destination_node :: string, source_node = value.source_node :: string,
+        base_revision = math.floor(value.base_revision :: number), base_digest = value.base_digest :: string,
+        artifacts = artifacts, entries = entries, requirements = requirements, migrations = migrations}, nil
+end
+
+-- The stored candidate is review evidence, never authority: this decoder
+-- answers for the exact bytes a plan was measured over and refuses anything
+-- that does not re-encode to them.
+function M.decode_candidate(bytes_raw: unknown, digest_raw: unknown): (Candidate?, string?)
+    if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > CANDIDATE_LIMIT then return nil, "candidate bytes exceed bound" end
+    if type(digest_raw) ~= "string" or not digest(digest_raw :: string) then return nil, "candidate digest is malformed" end
+    local bytes: string = bytes_raw :: string
+    local measured, measure_error = hash.sha256(bytes)
+    if not measured or measure_error or measured ~= digest_raw then return nil, "candidate digest does not match bytes" end
+    local decoded, decode_error = json.decode(bytes)
+    if decode_error then return nil, "candidate bytes are not JSON" end
+    local candidate, candidate_error = normalize_candidate(decoded)
+    if not candidate then return nil, candidate_error end
+    local canonical_bytes, encode_error = canonical.encode(candidate, CANDIDATE_LIMIT)
+    if not canonical_bytes or canonical_bytes ~= bytes then return nil, encode_error or "candidate bytes are not canonical" end
+    return candidate, nil
+end
 -- Context is supplied by an authorized destination adapter, never decoded from
 -- a remote plan as authority. Every suggested remedy requires a NEW candidate.
 function M.check(candidate: Candidate, context: Context): (Report?, string?)
@@ -169,6 +377,35 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         for _, module in ipairs(item.modules) do
             if not context.modules[module] then issue("MODULE_DENIED", item.id, "unadmitted runtime module " .. module, "remove the module or request host policy review") end
         end
+        local config_objects, config_lists = item.config_objects, item.config_lists
+        local config_empty = item.config_empty
+        if config_objects == nil or config_lists == nil or config_empty == nil then return nil, "invalid entry measurement" end
+        local wants_list = CONFIG_LISTS[item.kind]
+        local wants_object = CONFIG_OBJECTS[item.kind]
+        if wants_list then
+            for _, field in ipairs(config_objects) do
+                if wants_list[field] then
+                    issue("CONFIG_SHAPE", item.id, "configuration field " .. field .. " reaches the destination as an object, not a list",
+                        "declare " .. field .. " with its values, or omit it")
+                end
+            end
+        end
+        if wants_object then
+            for _, field in ipairs(config_lists) do
+                if wants_object[field] then
+                    issue("CONFIG_SHAPE", item.id, "configuration field " .. field .. " reaches the destination as a list, not an object",
+                        "declare " .. field .. " as named values, or omit it")
+                end
+            end
+        end
+        if wants_list or wants_object then
+            for _, field in ipairs(config_empty) do
+                if (wants_list and wants_list[field]) or (wants_object and wants_object[field]) then
+                    issue("CONFIG_SHAPE", item.id, "configuration field " .. field .. " is empty and reaches the destination as neither shape",
+                        "omit " .. field)
+                end
+            end
+        end
         local existing = context.entries[item.id]
         if existing and (existing.package ~= item.package or existing.kind ~= item.kind) then
             issue("ENTRY_COLLISION", item.id, "entry ownership or kind would change", "choose a nonconflicting destination")
@@ -178,9 +415,16 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         end
         final[item.id] = item
     end
+    -- A destination composes part of its own registry out of band, so the base
+    -- carries references whose targets the host supplies or withholds. This
+    -- plan answers for the references it defines and for base references whose
+    -- targets it removes; a target already absent before the plan is the
+    -- destination's standing state and is diagnosed where it is owned.
     for id, item in pairs(final) do
         for _, reference in ipairs(item.references) do
-            if not final[reference] then issue("DANGLING_REFERENCE", id, "missing final-state target " .. reference, "repair the reference or include its target") end
+            if not final[reference] and (seen[id] or context.entries[reference] ~= nil) then
+                issue("DANGLING_REFERENCE", id, "missing final-state target " .. reference, "repair the reference or include its target")
+            end
         end
     end
     local requirements: {[string]: boolean} = {}

@@ -1,14 +1,17 @@
 -- MIT. Preflight has no runtime-write route; host evidence remains separate.
 local test = require("test")
 local preflight = require("preflight")
+local canonical = require("canonical")
+local artifact = require("artifact")
+local hash = require("hash")
 local SHA = string.rep("a", 64)
 local function fixture(): (preflight.Candidate, preflight.Context)
     local references: {string} = {}
-    local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host", digest = SHA, references = references, auto_start = true, grants = {}, modules = {}}
+    local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host", digest = SHA, references = references, auto_start = true, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
     local entries: {[string]: preflight.Entry} = {["host:db"] = database}
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7, base_digest = SHA,
         artifacts = {{component = "wolfy-j/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
-        entries = {{id = "demo:run", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {"host:db"}, auto_start = false, grants = {}, modules = {}}},
+        entries = {{id = "demo:run", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {"host:db"}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}},
         requirements = {{id = "demo:target_db", package = "wolfy-j/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
         migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
@@ -39,8 +42,32 @@ local function define_tests()
             context.namespaces["demo.child"] = false
             test.is_true(has(checked(candidate, context), "NAMESPACE_DENIED"))
             context.namespaces["demo.child"] = true
-            context.entries["demo.child:foreign"] = {id = "demo.child:foreign", kind = "function.lua", package = "other/owner", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}}
+            context.entries["demo.child:foreign"] = {id = "demo.child:foreign", kind = "function.lua", package = "other/owner", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             test.is_true(has(checked(candidate, context), "NAMESPACE_COLLISION"))
+        end)
+        test.it("refuses a configuration shape the runtime's typed config rejects", function()
+            local candidate, context = fixture()
+            local function shaped(config: {[string]: unknown})
+                local objects, lists, empty = artifact.config_shapes(config)
+                if not objects or not lists or not empty then error("measure configuration shapes") end
+                candidate.entries[1].config_objects = objects
+                candidate.entries[1].config_lists = lists
+                candidate.entries[1].config_empty = empty
+            end
+            shaped({source = "file://run.lua", method = "handle", modules = {json = true}})
+            local blocked = checked(candidate, context)
+            test.is_false(blocked.ready)
+            test.is_true(has(blocked, "CONFIG_SHAPE"))
+            -- An empty declared field crosses as neither shape, whichever
+            -- allocation it carries.
+            shaped({source = "file://run.lua", method = "handle", modules = table.create(1, 0)})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
+            shaped({source = "file://run.lua", method = "handle", imports = table.create(0, 1)})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
+            shaped({source = "file://run.lua", method = "handle", modules = {"json"}, imports = {demo = "bee.demo:library"}})
+            test.is_true(checked(candidate, context).ready)
+            shaped({source = "file://run.lua", method = "handle", modules = {"json"}, imports = {"bee.demo:library"}})
+            test.is_true(has(checked(candidate, context), "CONFIG_SHAPE"))
         end)
         test.it("measures an exact destination plan without executing it", function()
             local candidate, context = fixture()
@@ -79,13 +106,28 @@ local function define_tests()
         end)
         test.it("checks final-state references and refuses cross-owner replacement", function()
             local candidate, context = fixture()
-            context.entries["demo:run"] = {id = "demo:run", kind = "function.lua", package = "other/owner", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}}
+            context.entries["demo:run"] = {id = "demo:run", kind = "function.lua", package = "other/owner", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             candidate.entries[1].references = {"demo:missing"}
             local report = checked(candidate, context)
             test.is_true(has(report, "ENTRY_COLLISION"))
             test.is_true(has(report, "DANGLING_REFERENCE"))
-            context.entries["demo:removed"] = {id = "demo:removed", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}}
+            context.entries["demo:removed"] = {id = "demo:removed", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             candidate.entries[1].references = {"demo:removed"}
+            test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
+        end)
+        test.it("attributes only the references this plan is answerable for", function()
+            local candidate, context = fixture()
+            -- The destination host supplies part of its own composition out of
+            -- band. An entry already pointing at an absent target is the host's
+            -- standing state, not a fault this candidate introduces.
+            context.entries["host:option"] = {id = "host:option", kind = "function.lua", package = "host", digest = SHA, references = {"host:supplied"}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.is_false(has(report, "DANGLING_REFERENCE"))
+            -- Removing a target that a retained entry still references is a
+            -- fault this candidate does introduce.
+            context.entries["host:option"].references = {"demo:retired"}
+            context.entries["demo:retired"] = {id = "demo:retired", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
         end)
         test.it("preserves applied migrations and binds their baseline into the measurement", function()
@@ -131,6 +173,27 @@ local function define_tests()
                 diagnostics = {{code = "DENIED", target = "x", message = "x", remedy = "x"}},
                 pending_migrations = report.pending_migrations}
             test.is_nil(preflight.encode_report(forged))
+        end)
+        test.it("decodes the reviewed candidate only from its exact measured bytes", function()
+            local candidate = fixture()
+            local bytes = assert(canonical.encode(candidate, 1048576))
+            local digest = assert(hash.sha256(bytes))
+            local decoded = assert(preflight.decode_candidate(bytes, digest))
+            test.eq(decoded.base_digest, candidate.base_digest)
+            test.eq(decoded.base_revision, candidate.base_revision)
+            test.eq(#decoded.entries, 1)
+            test.eq(decoded.entries[1].id, "demo:run")
+            test.eq(decoded.entries[1].kind, "function.lua")
+            test.eq(decoded.requirements[1].value, "host:db")
+            test.eq(decoded.migrations[1].ordinal, 1)
+            test.is_nil(preflight.decode_candidate(bytes .. " ", digest))
+            test.is_nil(preflight.decode_candidate(bytes, string.rep("b", 64)))
+            local widened = assert(canonical.encode({destination_node = candidate.destination_node,
+                source_node = candidate.source_node, base_revision = candidate.base_revision,
+                base_digest = candidate.base_digest, artifacts = candidate.artifacts,
+                entries = candidate.entries, requirements = candidate.requirements,
+                migrations = candidate.migrations, resolver = "overlay"}, 1048576))
+            test.is_nil(preflight.decode_candidate(widened, assert(hash.sha256(widened))))
         end)
     end)
 end

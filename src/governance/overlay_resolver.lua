@@ -129,13 +129,16 @@ local function measured_entry(entry: Entry, package: string): (Object?, string?)
     if not data then return nil, "registry entry configuration data is missing" end
     local modules, modules_error = list_strings(data.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
+    local config_objects, config_lists, config_empty, shapes_error = artifact.config_shapes(data)
+    if not config_objects or not config_lists or not config_empty then return nil, tostring(shapes_error or "measure entry configuration shapes") end
     local security = object(data.security)
     local grants, grants_error = list_strings(security and security.policies or nil, "entry policies", 32)
     if not grants then return nil, grants_error end
     local lifecycle = object(data.lifecycle)
     return {id = clean.id, kind = clean.kind, package = package, digest = digest,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
-        grants = grants, modules = modules}, nil
+        grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
+        config_empty = config_empty}, nil
 end
 
 local function path_value(entry: Entry, path: unknown): (unknown?, string?)

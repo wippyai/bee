@@ -15,6 +15,7 @@ M.MAX_ENTRIES = 512
 M.MAX_ID_BYTES = 160
 M.MAX_DEPTH = 16
 M.MAX_BYTES = 262144
+M.MAX_CONFIG_FIELDS = 32
 M.MAX_VALUES = 8192
 
 type Entry = {[string]: unknown}
@@ -100,7 +101,9 @@ local function copy(value: unknown, depth: integer, active: {[table]: boolean}, 
         active[source] = nil
         return nil, "artifact table mixes list and object keys"
     end
-    local result: {[unknown]: unknown} = {}
+    -- A copy keeps the source's list-or-map allocation, so an empty list stays
+    -- a list through measurement and application.
+    local result: {[unknown]: unknown} = total == 0 and canonical.empty_like(source) or {}
     if #strings == 0 and total > 0 then
         for index = 1, total do
             if source[index] == nil then
@@ -166,6 +169,43 @@ local function encode_entries(value: unknown): ({Entry}?, string?, string?)
     return copied, encoded, nil
 end
 
+-- The shape a declared field reaches the typed config the runtime unpacks it
+-- into: the destination reads a table carrying a positive integer key as a
+-- list and every other populated table as an object, and it carries an empty
+-- table across as neither.
+local function reaching_shape(item: unknown): string
+    if type(item) ~= "table" then return "value" end
+    local source = item :: table
+    if next(source) == nil then return "empty" end
+    for key in pairs(source) do
+        if type(key) == "number" then return "array" end
+    end
+    return "object"
+end
+-- The runtime unpacks an entry's configuration into a typed config, so review
+-- answers for the shape each declared field reaches that config as.
+function M.config_shapes(value: unknown): ({string}?, {string}?, {string}?, string?)
+    local objects: {string} = {}
+    local lists: {string} = {}
+    local empty: {string} = {}
+    if value ~= nil then
+        if type(value) ~= "table" then return nil, nil, nil, "registry entry configuration is not an object" end
+        for field, item in pairs(value :: {[string]: unknown}) do
+            if type(field) ~= "string" then return nil, nil, nil, "registry entry configuration field is not a name" end
+            local shape = reaching_shape(item)
+            if shape == "object" then objects[#objects + 1] = field
+            elseif shape == "array" then lists[#lists + 1] = field
+            elseif shape == "empty" then empty[#empty + 1] = field end
+        end
+    end
+    if #objects > M.MAX_CONFIG_FIELDS or #lists > M.MAX_CONFIG_FIELDS or #empty > M.MAX_CONFIG_FIELDS then
+        return nil, nil, nil, "registry entry configuration exceeds its field bound"
+    end
+    table.sort(objects)
+    table.sort(lists)
+    table.sort(empty)
+    return objects, lists, empty, nil
+end
 function M.encode(value: unknown): (string?, string?)
     local _, encoded, encode_error = encode_entries(value)
     return encoded, encode_error

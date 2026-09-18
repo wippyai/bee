@@ -91,10 +91,17 @@ resolved dependencies and references, final requirement bindings, a coherent
 registry/policy snapshot, and the applied migration ledgers for updated packages.
 Durable publication and overlay activation use distinct conflict boundaries.
 Durable publication still needs an atomic composed-base CAS. Overlay activation
-may re-resolve and re-preflight immediately before owner-local apply, then rely on
-the overlay's owner/generation conflict check; it does not create registry history.
+re-resolves and re-preflights immediately before owner-local apply, re-verifies
+the composed base after the apply, and records uncertainty with a named
+composed-base diagnostic when the base moved instead of claiming applied. It
+relies on the overlay's owner/generation conflict check and does not create
+registry history.
 Entry measurements enumerate requested grants and runtime modules from actual
 artifact content, including lifecycle/security declarations, not catalog claims.
+Final-state reference checks name the references this candidate answers for: the
+ones its own entries hold and the base ones whose targets it removes. A base
+entry already pointing at a target the destination host supplies out of band
+carries its own standing state and does not block an unrelated plan.
 Each artifact enumerates its exact owned namespaces, including children. A host
 namespace allowlist is a ceiling, not evidence that the package owns a namespace.
 Remote package descriptions cannot supply this trusted context. Materialized
@@ -140,6 +147,21 @@ Registry-owned metadata supplies package ownership. Destination configuration
 supplies package, namespace, kind, grant, runtime-module and database ceilings
 plus applied migration ledgers. The flattened artifact must equal the reviewed
 bytes exactly.
+
+The destination facade is split the way the authoring facade is: the public
+`destination_call` authenticates the caller's exact delivery operation and then
+enters `bee:destination_execution_scope` to call the private
+`destination_backend_call`, which proves it is in that scope before opening any
+store. The caller's own actor stays the recorded one. The facade returns an
+owner fault as the application boundary names it, so a refusal carries its code
+and reason to an application instead of the internal store result shape.
+
+Beside `get`, the facade answers the read-only `changes` operation for one
+staged plan: it decodes the reviewed candidate from its own measured bytes with
+`preflight.decode_candidate`, resolves the composed base through the same
+host-selected resolver activation uses, and returns the added, changed and
+removed entries with both base digests. It records no decision, consumes no
+approval and writes no overlay.
 
 The resolver and destination service are implemented and covered through the
 preview adapter. `activation_profiles` supplies host-selected roots, overlay

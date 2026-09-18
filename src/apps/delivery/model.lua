@@ -3,11 +3,13 @@
 local bounds = require("bounds")
 local caller = require("caller")
 local json = require("json")
+local preflight = require("preflight")
 
 local M = {}
 M.CALL = "bee.governance:destination_call"
 M.MAX_PLANS = 128
 M.MAX_AVAILABLE = 512
+M.MAX_CHANGES = 512
 type Object = {[string]: unknown}
 type Status = "staged" | "reviewed" | "rejected" | "approval_bound"
 type Available = {owner_id: string, feed: string, version_key: string, component: string,
@@ -16,24 +18,38 @@ type Available = {owner_id: string, feed: string, version_key: string, component
 type Plan = {owner_node: string, workspace_id: string, source_node: string, source_workspace: string,
     version: string, plan_digest: string, candidate_digest: string, artifact_digest: string,
     preflight_digest: string, revision: integer, status: Status, review_status: string?,
-    review_reason: string?, reviewer_id: string?, approval_id: string?, selected: boolean,
-    selection_revision: integer?}
+    review_reason: string?, reviewer_id: string?, approval_id: string?,
+    approval_proposal_digest: string?, selected: boolean,
+    selection_revision: integer?, preflight_bytes: string?}
 type Intent = {owner_node: string, workspace_id: string, intent_id: string, overlay_owner: string,
     source_node: string, source_workspace: string, version: string, revision: integer,
-    phase: string, outcome: string?, diagnostics: string?, approval_id: string?}
+    phase: string, outcome: string?, diagnostics: string?, approval_id: string?,
+    approval_proposal_digest: string?, consumed_proposal_digest: string?,
+    observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?}
+type EntryChange = {id: string, kind: string, digest: string}
+type Changes = {plan_digest: string, candidate_digest: string, artifact_digest: string,
+    base_digest: string, composed_base_digest: string, base_revision: integer,
+    composed_base_revision: integer, added: {EntryChange}, changed: {EntryChange}, removed: {EntryChange}}
+type Verdict = "ready" | "blocked" | "unread" | "unreadable"
+type ReviewRow = {text: string, heading: boolean}
 type PendingPrepare = {plan_key: string, intent_id: string, receipt_key: string}
 type PendingStep = {intent_id: string, receipt_key: string}
 type PendingStage = {available_key: string, idempotency_key: string}
-type Pane = "available" | "plans"
+type Pane = "available" | "plans" | "review"
 type State = {workspace_id: string, available: {Available}, selected_available_key: string?, pane: Pane,
     plans: {Plan}, selected_key: string?, detail: Plan?, intent: Intent?,
     offset: integer, technical: boolean, notice: string, pending_prepare: PendingPrepare?,
-    pending_step: PendingStep?, pending_recover_key: string?, restored_intent_id: string?, pending_stage: PendingStage?}
+    pending_step: PendingStep?, pending_recover_key: string?, restored_intent_id: string?, pending_stage: PendingStage?,
+    review_key: string?, report: preflight.Report?, report_error: string?,
+    changes: Changes?, changes_error: string?}
 
 local PLAN_FIELDS = {"owner_node", "workspace_id", "source_node", "source_workspace", "version", "plan_digest",
     "candidate_digest", "artifact_digest", "preflight_digest", "revision", "status", "review_status",
     "review_reason", "reviewer_id", "approval_id", "approval_plan_digest", "approval_proposal_digest",
     "approval_owner_incarnation", "selected", "selection_revision", "candidate_bytes", "artifact_bytes", "preflight_bytes"}
+local CHANGE_FIELDS = {"owner_node", "workspace_id", "source_node", "source_workspace", "version",
+    "plan_digest", "candidate_digest", "artifact_digest", "base_revision", "base_digest",
+    "composed_base_revision", "composed_base_digest", "added", "changed", "removed"}
 local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "overlay_owner", "source_node",
     "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact_bytes",
     "artifact_digest", "resolution_bytes", "resolution_digest", "preflight_bytes", "preflight_digest",
@@ -139,7 +155,9 @@ local function plan(raw: unknown, workspace_id: string): (Plan?, string?)
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, preflight_digest = preflight_digest,
         revision = revision, status = status :: Status, review_status = review_status,
         review_reason = review_reason, reviewer_id = reviewer_id, approval_id = approval_id,
-        selected = selected, selection_revision = selection_revision}, nil
+        approval_proposal_digest = value.approval_proposal_digest :: string?,
+        selected = selected, selection_revision = selection_revision,
+        preflight_bytes = value.preflight_bytes :: string?}, nil
 end
 local function available(raw: unknown): (Available?, string?)
     local value = object(raw)
@@ -192,6 +210,8 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     end
     local outcome = optional_id(value.outcome)
     if value.outcome ~= nil and (not outcome or not OUTCOMES[outcome]) then return nil, "activation outcome is malformed" end
+    local observed = optional_id(value.observed_outcome)
+    if value.observed_outcome ~= nil and (not observed or not OUTCOMES[observed]) then return nil, "observed activation outcome is malformed" end
     local diagnostics, approval_id = optional_text(value.diagnostics, 8192), optional_id(value.approval_id)
     if not owner_node or workspace ~= workspace_id or not intent_id or not overlay_owner or not source_node
         or not source_workspace or not version or not revision or not phase
@@ -209,7 +229,62 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         or not valid_blob(value.preflight_bytes, 131072) then return nil, "activation evidence is malformed" end
     return {owner_node = owner_node, workspace_id = workspace, intent_id = intent_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace, version = version,
-        revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id}, nil
+        revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,
+        approval_proposal_digest = value.approval_proposal_digest :: string?,
+        consumed_proposal_digest = value.consumed_proposal_digest :: string?,
+        observed_intent_id = optional_id(value.observed_intent_id),
+        observed_artifact_digest = value.observed_artifact_digest :: string?,
+        observed_outcome = observed}, nil
+end
+local function entry_change(raw: unknown): (EntryChange?, string?)
+    local value = object(raw)
+    if not value then return nil, "entry change is not an object" end
+    local extra = bounds.fields(value, {"id", "kind", "digest"})
+    if extra then return nil, "entry change: " .. extra end
+    local id, kind = bounds.id(value.id), bounds.id(value.kind)
+    local measured = digest(value.digest)
+    if not id or not kind or not measured then return nil, "entry change is malformed" end
+    return {id = id, kind = kind, digest = measured}, nil
+end
+local function entry_changes(raw: unknown): ({EntryChange}?, string?)
+    local rows = dense(raw, M.MAX_CHANGES)
+    if not rows then return nil, "entry change list is malformed" end
+    local result: {EntryChange} = {}
+    for index, item in ipairs(rows) do
+        local change, change_error = entry_change(item)
+        if not change then return nil, change_error end
+        result[index] = change
+    end
+    return result, nil
+end
+local function changes(raw: unknown, workspace_id: string, item: Plan): (Changes?, string?)
+    local value = object(raw)
+    if not value then return nil, "plan changes are not an object" end
+    local extra = bounds.fields(value, CHANGE_FIELDS)
+    if extra then return nil, "plan changes: " .. extra end
+    if bounds.id(value.owner_node) == nil or value.workspace_id ~= workspace_id
+        or value.source_node ~= item.source_node or value.source_workspace ~= item.source_workspace
+        or value.version ~= item.version then return nil, "plan changes name another version" end
+    local plan_digest, candidate_digest = digest(value.plan_digest), digest(value.candidate_digest)
+    local artifact_digest = digest(value.artifact_digest)
+    local base_digest, composed_digest = digest(value.base_digest), digest(value.composed_base_digest)
+    local base_revision = bounds.count(value.base_revision)
+    local composed_revision = bounds.count(value.composed_base_revision)
+    if not plan_digest or not candidate_digest or not artifact_digest or not base_digest
+        or not composed_digest or base_revision == nil or composed_revision == nil then
+        return nil, "plan change measurement is malformed"
+    end
+    if plan_digest ~= item.plan_digest or candidate_digest ~= item.candidate_digest
+        or artifact_digest ~= item.artifact_digest then return nil, "plan changes measure another plan" end
+    local added, added_error = entry_changes(value.added)
+    if not added then return nil, added_error end
+    local changed, changed_error = entry_changes(value.changed)
+    if not changed then return nil, changed_error end
+    local removed, removed_error = entry_changes(value.removed)
+    if not removed then return nil, removed_error end
+    return {plan_digest = plan_digest, candidate_digest = candidate_digest, artifact_digest = artifact_digest,
+        base_digest = base_digest, composed_base_digest = composed_digest, base_revision = base_revision,
+        composed_base_revision = composed_revision, added = added, changed = changed, removed = removed}, nil
 end
 local function message(reply: caller.Reply?): string
     if not reply then return "No answer from the destination; check status before retrying" end
@@ -237,7 +312,14 @@ function M.new(workspace_id: string): State
     return {workspace_id = workspace_id, available = {}, selected_available_key = nil, pane = "available",
         plans = {}, selected_key = nil, detail = nil, intent = nil,
         offset = 0, technical = false, notice = "", pending_prepare = nil, pending_step = nil,
-        pending_recover_key = nil, restored_intent_id = nil, pending_stage = nil}
+        pending_recover_key = nil, restored_intent_id = nil, pending_stage = nil,
+        review_key = nil, report = nil, report_error = nil, changes = nil, changes_error = nil}
+end
+-- Review evidence belongs to one plan. Nothing decoded for another version may
+-- survive a selection change and describe the version now in front of a person.
+function M.forget_review(state: State)
+    state.review_key, state.report, state.report_error = nil, nil, nil
+    state.changes, state.changes_error = nil, nil
 end
 function M.selected(state: State): Plan?
     for _, item in ipairs(state.plans) do if M.key(item) == state.selected_key then return item end end
@@ -254,12 +336,15 @@ function M.select_available(state: State, key: string?)
     state.notice = ""
 end
 function M.toggle_pane(state: State)
-    state.pane = state.pane == "available" and "plans" or "available"
+    if state.pane == "available" then state.pane = "plans"
+    elseif state.pane == "plans" then state.pane = "review"
+    else state.pane = "available" end
     state.notice = ""
 end
 function M.select(state: State, key: string?)
     state.selected_key = key
     if state.detail and M.key(state.detail) ~= key then state.detail = nil end
+    if state.review_key and state.review_key ~= key then M.forget_review(state) end
     state.notice = ""
 end
 function M.move(state: State, step: integer)
@@ -312,6 +397,7 @@ function M.apply_list(state: State, reply: caller.Reply?)
         for _, item in ipairs(decoded) do if M.key(item) == M.key(state.detail :: Plan) then found = true end end
         if not found then state.detail = nil end
     end
+    if state.review_key and state.review_key ~= state.selected_key then M.forget_review(state) end
     visible(state)
     state.notice = #decoded == 0 and "No staged application versions in this workspace" or ""
     return true
@@ -350,7 +436,31 @@ function M.apply_plan(state: State, reply: caller.Reply?)
     for index, current in ipairs(state.plans) do
         if M.key(current) == M.key(item) then state.plans[index] = item; break end
     end
+    -- A review or selection reply carries no evidence bytes; the report already
+    -- read for this exact plan remains the report for it.
+    if state.review_key ~= M.key(item) then M.forget_review(state) end
+    if item.preflight_bytes ~= nil then
+        state.review_key = M.key(item)
+        local report, report_error = preflight.decode_report(item.preflight_bytes, item.preflight_digest)
+        state.report = report
+        if report then state.report_error = nil
+        else state.report_error = report_error or "preflight report could not be decoded" end
+    end
     state.notice = "Plan details refreshed"
+    return true
+end
+function M.apply_changes(state: State, reply: caller.Reply?, item: Plan): boolean
+    local value = result_object(reply)
+    if not value then
+        state.changes, state.changes_error = nil, message(reply)
+        return false
+    end
+    local decoded, err = changes(value, state.workspace_id, item)
+    if not decoded then
+        state.changes, state.changes_error = nil, err or "Destination returned invalid plan changes"
+        return false
+    end
+    state.changes, state.changes_error = decoded, nil
     return true
 end
 function M.apply_stage(state: State, reply: caller.Reply?, source: Available): boolean
@@ -374,6 +484,7 @@ function M.apply_stage(state: State, reply: caller.Reply?, source: Available): b
     end
     state.selected_key = M.key(item)
     state.detail = nil
+    M.forget_review(state)
     state.pane = "plans"
     state.notice = "Staged for local review; no installation performed"
     return true
@@ -397,6 +508,10 @@ function M.stage_request(state: State, item: Available, key: string): Object
     return {operation = "stage", workspace_id = state.workspace_id, source_owner = item.owner_id,
         feed = item.feed, version_key = item.version_key, descriptor_digest = item.descriptor_digest,
         idempotency_key = key}
+end
+function M.changes_request(state: State, item: Plan): Object
+    return {operation = "changes", workspace_id = state.workspace_id, source_node = item.source_node,
+        source_workspace = item.source_workspace, version = item.version}
 end
 function M.get_request(state: State, item: Plan): Object
     return {operation = "get", workspace_id = state.workspace_id, source_node = item.source_node,
@@ -454,7 +569,7 @@ function M.restore(state: State, encoded: string): boolean
     -- separators. They are lookup hints only and never become request identity.
     if value.selected_key ~= nil and not bounds.text(value.selected_key, 500) then return false end
     if value.selected_available_key ~= nil and not bounds.text(value.selected_available_key, 700) then return false end
-    if value.pane ~= nil and value.pane ~= "available" and value.pane ~= "plans" then return false end
+    if value.pane ~= nil and value.pane ~= "available" and value.pane ~= "plans" and value.pane ~= "review" then return false end
     if value.technical ~= nil and type(value.technical) ~= "boolean" then return false end
     if value.intent_id ~= nil and not bounds.id(value.intent_id) then return false end
     if value.pending_recover_key ~= nil and not bounds.id(value.pending_recover_key) then return false end
@@ -485,7 +600,9 @@ function M.restore(state: State, encoded: string): boolean
     end
     state.selected_key = type(value.selected_key) == "string" and value.selected_key or nil
     state.selected_available_key = type(value.selected_available_key) == "string" and value.selected_available_key or nil
-    state.pane = value.pane == "plans" and "plans" or "available"
+    local pane: Pane = "available"
+    if value.pane == "plans" then pane = "plans" elseif value.pane == "review" then pane = "review" end
+    state.pane = pane
     state.technical = value.technical == true
     state.pending_prepare, state.pending_step = pending_prepare, pending_step
     state.pending_recover_key = type(value.pending_recover_key) == "string" and value.pending_recover_key or nil
@@ -497,6 +614,121 @@ function M.restore(state: State, encoded: string): boolean
 end
 function M.toggle_technical(state: State)
     state.technical = not state.technical
+end
+-- The verdict is the destination's own preflight report, read from the exact
+-- bytes the plan stores and checked against the plan's preflight digest.
+function M.verdict(state: State, item: Plan?): Verdict
+    if not item or state.review_key ~= M.key(item) then return "unread" end
+    if state.report_error ~= nil then return "unreadable" end
+    local report = state.report
+    if not report then return "unread" end
+    if report.ready then return "ready" end
+    return "blocked"
+end
+-- Selecting and accepting act on the plan. Neither is offered while the report
+-- is unread, fails its digest check, or refuses the plan.
+function M.refusal(state: State, item: Plan?): string?
+    if not item then return "Choose a staged version first" end
+    local verdict = M.verdict(state, item)
+    if verdict == "ready" then return nil end
+    if verdict == "unread" then return "Read this version's preflight report first; press Enter" end
+    if verdict == "unreadable" then
+        return "Preflight report does not match its digest: " .. (state.report_error or "report could not be decoded")
+    end
+    local report = state.report
+    local count = report and #report.diagnostics or 0
+    return "Preflight blocks this version with " .. tostring(count) .. " diagnostics; it cannot be selected"
+end
+local function short(state: State, value: string): string
+    if state.technical then return value end
+    return value:sub(1, 12)
+end
+local function approval_row(state: State, item: Plan): string
+    local intent = state.intent
+    local consumed = intent and intent.consumed_proposal_digest or nil
+    if consumed then return "consumed  proposal " .. short(state, consumed) end
+    local proposed = (intent and intent.approval_proposal_digest) or item.approval_proposal_digest
+    if proposed then return "proposed  proposal " .. short(state, proposed) end
+    return "unbound  no approval is requested for this version yet"
+end
+function M.review_rows(state: State): {ReviewRow}
+    local rows: {ReviewRow} = {}
+    local function put(text: string, heading: boolean)
+        rows[#rows + 1] = {text = text, heading = heading}
+    end
+    local item = M.selected(state)
+    if not item then
+        put("No staged version is chosen", false)
+        return rows
+    end
+    put("REVIEW " .. item.source_workspace .. "  version " .. item.version, true)
+    local verdict = M.verdict(state, item)
+    if verdict == "ready" then put("Verdict ready; the destination's preflight found nothing that blocks activation", false)
+    elseif verdict == "blocked" then put("Verdict blocked; the destination's preflight refuses this plan", false)
+    elseif verdict == "unreadable" then
+        put("Verdict unreadable; the preflight report does not match its digest", false)
+        put(bounds.line(state.report_error, 240) or "report could not be decoded", false)
+    else put("Verdict unread; press Enter on this version to read its plan", false) end
+    local report = state.report
+    if report and state.review_key == M.key(item) then
+        put("Preflight " .. short(state, item.preflight_digest) .. "  base revision " .. tostring(report.base_revision), false)
+        put("DIAGNOSTICS " .. tostring(#report.diagnostics) .. "  pending migrations " .. tostring(#report.pending_migrations), true)
+        for _, diagnostic in ipairs(report.diagnostics) do
+            put(diagnostic.code .. "  " .. bounds.line(diagnostic.target, 200), false)
+            put("    " .. bounds.line(diagnostic.message, 240), false)
+            put("    remedy " .. bounds.line(diagnostic.remedy, 240), false)
+        end
+        for _, pending in ipairs(report.pending_migrations) do
+            put("PENDING_MIGRATION  " .. bounds.line(pending, 200), false)
+        end
+        if #report.diagnostics == 0 and #report.pending_migrations == 0 then
+            put("No diagnostics and no pending migrations", false)
+        end
+    end
+    local plan_changes = state.changes
+    put("CHANGES", true)
+    put("Artifact " .. short(state, item.artifact_digest) .. "  plan " .. short(state, item.plan_digest), false)
+    if state.changes_error ~= nil then
+        put("Entry changes unavailable: " .. (bounds.line(state.changes_error, 240) or "the destination gave no reason"), false)
+    elseif not plan_changes then
+        put("Entry changes unread; press Enter on this version to read them", false)
+    else
+        put("Composed base " .. short(state, plan_changes.composed_base_digest)
+            .. "  revision " .. tostring(plan_changes.composed_base_revision), false)
+        if plan_changes.composed_base_digest ~= plan_changes.base_digest then
+            put("The composed base changed since this plan was staged; it was measured against "
+                .. short(state, plan_changes.base_digest), false)
+        end
+        local function entries(label: string, list: {EntryChange})
+            for _, change in ipairs(list) do
+                put(label .. "  " .. change.id .. "  " .. change.kind .. "  " .. short(state, change.digest), false)
+            end
+        end
+        entries("added", plan_changes.added)
+        entries("changed", plan_changes.changed)
+        entries("removed", plan_changes.removed)
+        if #plan_changes.added == 0 and #plan_changes.changed == 0 and #plan_changes.removed == 0 then
+            put("This plan adds, changes and removes no entry", false)
+        end
+    end
+    put("APPROVAL", true)
+    put(approval_row(state, item), false)
+    local intent = state.intent
+    if intent and M.key(item) == (intent.source_node .. "\0" .. intent.source_workspace .. "\0" .. intent.version) then
+        put("ACTIVATION", true)
+        put(intent.phase .. (intent.outcome and ("  " .. intent.outcome) or "") .. "  " .. intent.intent_id, false)
+        if intent.observed_intent_id ~= nil then
+            put("Receipt  overlay " .. intent.overlay_owner .. "  intent " .. intent.observed_intent_id
+                .. "  " .. (intent.observed_outcome or "no observed outcome"), false)
+            if intent.observed_artifact_digest ~= nil then
+                put("Receipt  artifact " .. short(state, intent.observed_artifact_digest), false)
+            end
+        end
+        if intent.diagnostics ~= nil and intent.diagnostics ~= "" then
+            put("Result: " .. (bounds.line(intent.diagnostics, 240) or "the owner gave no reason"), false)
+        end
+    end
+    return rows
 end
 function M.accepts_review(item: Plan?): boolean
     return item ~= nil and item.status == "staged"

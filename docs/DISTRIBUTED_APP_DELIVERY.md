@@ -170,6 +170,17 @@ Modules separately proves its production Governance binding from source and a
 source-free pack. An unprofiled component is refused instead of publishing its
 Hub dependency overlay.
 
+`make app-journey-check` carries one `bee.application` definition the whole way
+on a disposable database environment: a harness acting as the agent authors it
+through the authoring surface, the frozen artifact is published, staged and
+preflighted, the owner accepts and decides it, the activation owner consumes
+that one decision and applies the overlay, a second consume is refused, and the
+same effective catalog the application broker reads then admits the definition.
+Boot recovery re-establishes the overlay on each later boot, so the desktop
+opens the application from its own start menu and restores its checkpointed
+state after a full host restart. Nothing outside the destination owner holds
+overlay write authority, and the acceptance asserts that.
+
 The runtime also defines the canonical receive surface
 `stream.pipe(peer, limit)`. Its Stream handle stays in the receiving actor's
 resource table and its opaque offer is routing metadata, not authority. The

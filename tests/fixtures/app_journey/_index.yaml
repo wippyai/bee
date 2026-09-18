@@ -1,0 +1,63 @@
+version: '1.0'
+namespace: bee.app_journey_probe
+entries:
+- name: operator_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - security.policy.get
+    - registry.get
+    - registry.apply
+    - registry.update.registry.entry
+    - registry.preview
+    - registry.overlay.get
+    - db.get
+    - system.read
+    - bee.governance.workspace.read
+    - bee.governance.workspace.write
+    - bee.governance.delivery.read
+    - bee.governance.delivery.manage
+    - bee.governance.delivery.activate
+    - bee.governance.delivery.publish
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: deliver
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules: [funcs, registry, system, json, uuid, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+    artifact: bee.governance:artifact
+    materializer: bee.governance:materializer
+    preflight: bee.governance:preflight
+    catalog: bee.applications:catalog
+  security:
+    policies:
+    - bee.app_journey_probe:operator_policy
+    - bee:approval_consume_policy
+  meta:
+    command:
+      name: app-journey-deliver
+      security:
+        actor: {id: bee.app_journey.operator}
+        policies:
+        - bee.app_journey_probe:operator_policy
+        - bee:approval_consume_policy
+- name: inspect
+  kind: process.lua
+  source: file://inspect.lua
+  method: main
+  modules: [registry, time, logger]
+  imports:
+    catalog: bee.applications:catalog
+  security:
+    policies: [bee.app_journey_probe:operator_policy]
+  meta:
+    command:
+      name: app-journey-inspect
+      security:
+        actor: {id: bee.app_journey.operator}
+        policies: [bee.app_journey_probe:operator_policy]

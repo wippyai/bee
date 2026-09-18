@@ -65,6 +65,12 @@ governance-overlay-check:
 governance-overlay-composed-base-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/governance_overlay.go -runtime "$(abspath $(WIPPY))" -gate composed-base
 
+.PHONY: app-journey-check
+# One governed application: authored, frozen, staged, preflighted, approved,
+# applied by the activation owner, admitted, opened from the desktop catalog
+# and restored with its state after a host restart.
+app-journey-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_journey.py
 .PHONY: governance-workspace-check
 governance-workspace-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/governance_workspace.go
@@ -265,6 +271,7 @@ desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
+	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_RUNTIME="$(abspath $(WIPPY))" go run tests/hive_manager_app.go
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/timeline_app.py
 

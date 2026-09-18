@@ -915,7 +915,7 @@ func defaultPicker(binary string) error {
 	if err := ui.waitFor("Choose a profile", 25*time.Second); err != nil {
 		return err
 	}
-	for _, profile := range []string{"Antigravity", "Claude", "Codex", "Grok"} {
+	for _, profile := range []string{"Antigravity", "Claude", "Codex", "Grok", "Muse"} {
 		latest, _, _ := ui.snapshot()
 		if !ui.observed(profile, 0) {
 			return fmt.Errorf("picker omitted default profile %q\n%s", profile, latest)
@@ -1118,8 +1118,8 @@ func savedProfileLaunch(binary string) error {
 		return fmt.Errorf("saved launch profile did not appear in picker: %w", err)
 	}
 	// The picker refreshes with the first default selected; move to the saved
-	// row (after the four built-in profiles) before opening it.
-	if err := ui.send("\x1b[B\x1b[B\x1b[B\x1b[B"); err != nil {
+	// row (after the five built-in profiles) before opening it.
+	if err := ui.send("\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B"); err != nil {
 		return err
 	}
 	if err := ui.send("\r"); err != nil {
@@ -3164,5 +3164,5 @@ func main() {
 			}
 		}
 	}
-	fmt.Println("Native bee agent: four default profiles, no-work picker, F12, Escape close, project cwd, separate retained HOME durable session file, and present/absent machine login")
+	fmt.Println("Native bee agent: five default profiles, no-work picker, F12, Escape close, project cwd, separate retained HOME durable session file, and present/absent machine login")
 }

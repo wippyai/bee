@@ -148,6 +148,21 @@ supplies package, namespace, kind, grant, runtime-module and database ceilings
 plus applied migration ledgers. The flattened artifact must equal the reviewed
 bytes exactly.
 
+The destination facade is split the way the authoring facade is: the public
+`destination_call` authenticates the caller's exact delivery operation and then
+enters `bee:destination_execution_scope` to call the private
+`destination_backend_call`, which proves it is in that scope before opening any
+store. The caller's own actor stays the recorded one. The facade returns an
+owner fault as the application boundary names it, so a refusal carries its code
+and reason to an application instead of the internal store result shape.
+
+Beside `get`, the facade answers the read-only `changes` operation for one
+staged plan: it decodes the reviewed candidate from its own measured bytes with
+`preflight.decode_candidate`, resolves the composed base through the same
+host-selected resolver activation uses, and returns the added, changed and
+removed entries with both base digests. It records no decision, consumes no
+approval and writes no overlay.
+
 The resolver and destination service are implemented and covered through the
 preview adapter. `activation_profiles` supplies host-selected roots, overlay
 owners, approval policies and capability ceilings; it cannot be populated by a

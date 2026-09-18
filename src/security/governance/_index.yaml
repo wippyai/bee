@@ -3,6 +3,7 @@ namespace: bee
 entries:
 - name: governance_destination_service_policy
   kind: security.policy
+  groups: [destination_execution_scope]
   meta:
     comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action
   policy:
@@ -10,6 +11,15 @@ entries:
       security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply,
       registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
     resources: '*'
+    effect: allow
+- name: governance_destination_execution_policy
+  kind: security.policy
+  groups: [destination_execution_scope]
+  meta:
+    comment: Proof that a caller entered the private destination scope; nothing else grants this action
+  policy:
+    actions: [bee.governance.delivery.execute]
+    resources: [bee.governance:destination_backend_call]
     effect: allow
 - name: governance_publication_service_policy
   kind: security.policy

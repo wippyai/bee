@@ -19,9 +19,13 @@ local resolver = require("hub_resolver")
 local overlay_resolver = require("overlay_resolver")
 local delivery = require("delivery")
 local destination = require("destination")
+local preflight = require("preflight")
 local materializer = require("materializer")
 
 local M = {}
+M.BACKEND = "bee.governance:destination_backend_call"
+M.EXECUTE = "bee.governance.delivery.execute"
+M.SCOPE = "bee:destination_execution_scope"
 local CONFIG = "bee.governance:activation_profiles"
 local ACTOR = "bee.governance.activation"
 local MAX_PROFILES = 64
@@ -37,6 +41,7 @@ type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
     applied: {[string]: unknown}, migration_barrier: boolean}
+type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
 
 local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
@@ -209,12 +214,97 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
         end}, nil
 end
 
-local function authorize(action: string, workspace_id: unknown): (string?, string?, Result?)
+-- Read-only entry-set comparison for one staged plan. It decodes the exact
+-- reviewed candidate from its own measured bytes and resolves the current
+-- composed base through the host-selected resolver. It records no decision,
+-- consumes no approval and writes no overlay.
+local function entry_change(raw: unknown): Object?
+    local item = bounds.object(raw)
+    local id = item and bounds.id(item.id) or nil
+    local kind = item and bounds.id(item.kind) or nil
+    local measured = item and bounds.text(item.digest, 64) or nil
+    if not item or not id or not kind or not measured then return nil end
+    return {id = id, kind = kind, digest = measured}
+end
+
+local function by_id(rows: {Object})
+    table.sort(rows, function(left: Object, right: Object): boolean
+        return tostring(left.id) < tostring(right.id)
+    end)
+end
+
+local function plan_changes(plan_store: plans.Store, actor_id: string, workspace_id: string,
+    source_node: string, source_workspace: string, version: string): Result
+    local found = plans.call(plan_store, actor_id, {operation = "get", source_node = source_node,
+        source_workspace = source_workspace, version = version})
+    if not found.ok then return found end
+    local plan = bounds.object(found.value)
+    if not plan then return failure("INTERNAL", "plan store returned no plan") end
+    local reviewed, candidate_error = preflight.decode_candidate(plan.candidate_bytes, plan.candidate_digest)
+    if not reviewed then return failure("INTERNAL", tostring(candidate_error or "decode the reviewed candidate")) end
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace)
+    if not chosen then return failure("BLOCKED", profile_error or "destination host has no activation profile for this source") end
+    local owner_node = bounds.id(plan.owner_node)
+    if not owner_node then return failure("INTERNAL", "plan store returned no owner") end
+    local resolved = destination_resolver(chosen, owner_node, workspace_id)
+    local _, context, resolve_error = (resolved :: Resolver):resolve({owner_node = owner_node,
+        workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
+        version = version, artifact_bytes = plan.artifact_bytes, artifact_digest = plan.artifact_digest})
+    local base = bounds.object(context)
+    if not base then return failure("BLOCKED", tostring(resolve_error or "resolve the composed base")) end
+    local base_entries = bounds.object(base.entries)
+    local base_digest = bounds.text(base.registry_digest, 64)
+    local base_revision = bounds.count(base.registry_revision)
+    if not base_entries or not base_digest or base_revision == nil then
+        return failure("INTERNAL", "resolved composed base is malformed")
+    end
+    local packages: Set = {}
+    for _, item in ipairs(reviewed.artifacts) do packages[item.component] = true end
+    local proposed: Set = {}
+    local added: {Object} = {}
+    local changed: {Object} = {}
+    local removed: {Object} = {}
+    for _, item in ipairs(reviewed.entries) do
+        proposed[item.id] = true
+        local existing = bounds.object(base_entries[item.id])
+        local row = entry_change({id = item.id, kind = item.kind, digest = item.digest})
+        if not row then return failure("INTERNAL", "reviewed candidate entry is malformed") end
+        if not existing then added[#added + 1] = row
+        elseif existing.digest ~= item.digest then changed[#changed + 1] = row end
+    end
+    -- An update replaces the complete owned set, so a base entry of an updated
+    -- package that the candidate omits is removed by this plan.
+    for id, raw in pairs(base_entries) do
+        local existing = bounds.object(raw)
+        local package = existing and bounds.id(existing.package) or nil
+        if package and packages[package] and not proposed[id] then
+            local row = entry_change(existing)
+            if not row then return failure("INTERNAL", "composed base entry is malformed") end
+            removed[#removed + 1] = row
+        end
+    end
+    by_id(added)
+    by_id(changed)
+    by_id(removed)
+    return transaction.success({owner_node = owner_node, workspace_id = workspace_id,
+        source_node = source_node, source_workspace = source_workspace, version = version,
+        plan_digest = plan.plan_digest, candidate_digest = plan.candidate_digest,
+        artifact_digest = plan.artifact_digest, base_revision = reviewed.base_revision,
+        base_digest = reviewed.base_digest, composed_base_revision = base_revision,
+        composed_base_digest = base_digest, added = added, changed = changed, removed = removed}, false)
+end
+
+-- The public facade authenticates the caller's exact delivery operation and
+-- then enters the private destination scope; this backend runs inside that
+-- scope, where the caller's own actor is still the recorded one.
+local function authorize(workspace_id: unknown): (string?, string?, Result?)
     local workspace = bounds.id(workspace_id)
     local actor = security.actor()
     if not workspace then return nil, nil, failure("INVALID", "destination workspace is invalid") end
-    if not actor or not security.can(action, workspace) then
-        return nil, nil, failure("DENIED", "destination operation is not authorized")
+    if not actor or not security.can(M.EXECUTE, M.BACKEND) then
+        return nil, nil, failure("DENIED", "destination backend is not authorized")
     end
     local node_id, node_error = system.node.id()
     if not node_id or node_error then return nil, nil, failure("UNAVAILABLE", "native node identity is unavailable") end
@@ -240,8 +330,20 @@ local function identity(request: Object): (string?, string?, string?)
     return bounds.id(request.source_node), bounds.id(request.source_workspace), bounds.id(request.version)
 end
 
-local OPERATIONS: Set = {available = true, stage = true, list = true, get = true, review = true, select = true,
-    prepare = true, step = true, status = true, recover = true}
+local OPERATIONS: Set = {available = true, stage = true, list = true, get = true, changes = true,
+    review = true, select = true, prepare = true, step = true, status = true, recover = true}
+local READS: Set = {available = true, list = true, get = true, changes = true, status = true}
+local MANAGES: Set = {stage = true, review = true, select = true}
+
+-- One delivery action per operation, so the public facade authenticates the
+-- exact operation a caller asks for before any store opens.
+function M.required_action(raw: unknown): string?
+    local operation = bounds.id(raw)
+    if not operation or not OPERATIONS[operation] then return nil end
+    if READS[operation] then return "bee.governance.delivery.read" end
+    if MANAGES[operation] then return "bee.governance.delivery.manage" end
+    return "bee.governance.delivery.activate"
+end
 
 local function exact(request: Object, fields: {string}): string?
     local allowed = {"operation", "workspace_id"}
@@ -255,10 +357,7 @@ function M.call(raw: unknown): Result
     if not request or not operation or not OPERATIONS[operation] then
         return failure("INVALID", "destination request operation is invalid")
     end
-    local action = (operation == "available" or operation == "list" or operation == "get" or operation == "status")
-        and "bee.governance.delivery.read" or ((operation == "review" or operation == "select")
-        or operation == "stage") and "bee.governance.delivery.manage" or "bee.governance.delivery.activate"
-    local node_id, actor_id, denied = authorize(action, request.workspace_id)
+    local node_id, actor_id, denied = authorize(request.workspace_id)
     if not node_id or not actor_id then return denied :: Result end
     local workspace_id = request.workspace_id :: string
     local plan_store, activation_store, open_error = stores(node_id, workspace_id)
@@ -360,6 +459,15 @@ function M.call(raw: unknown): Result
             or not source_node or not source_workspace or not version then result = failure("INVALID", "plan identity is invalid")
         else result = plans.call(plan_store, actor_id, {operation = "get", source_node = source_node,
             source_workspace = source_workspace, version = version}) end
+    elseif operation == "changes" then
+        local source_node, source_workspace, version = identity(request)
+        if exact(request, {"source_node", "source_workspace", "version"}) then
+            result = failure("INVALID", "plan identity is invalid")
+        elseif not source_node or not source_workspace or not version then
+            result = failure("INVALID", "plan identity is invalid")
+        else
+            result = plan_changes(plan_store, actor_id, workspace_id, source_node, source_workspace, version)
+        end
     elseif operation == "review" or operation == "select" then
         local source_node, source_workspace, version = identity(request)
         local fields = {"source_node", "source_workspace", "version", "expected_revision", "idempotency_key"}

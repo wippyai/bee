@@ -231,6 +231,7 @@ entries:
     delivery: bee.governance:delivery
     destination: bee.governance:destination
     materializer: bee.governance:materializer
+    preflight: bee.governance:preflight
 - name: delivery_contract
   kind: contract.definition
   methods:
@@ -245,8 +246,31 @@ entries:
   kind: function.lua
   source: file://destination_method.lua
   method: handle
-  imports: {service: bee.governance:destination_service}
-  security: {policies: [bee:governance_destination_service_policy]}
+  modules: [funcs, security]
+  imports:
+    service: bee.governance:destination_service
+    transaction: bee.persist:transaction
+    bounds: bee.threads.records:bounds
+  security: {policies: [bee.governance:destination_facade_policy]}
+- name: destination_backend_call
+  kind: function.lua
+  source: file://destination_backend.lua
+  method: call
+  modules: [security]
+  imports:
+    service: bee.governance:destination_service
+    transaction: bee.persist:transaction
+  meta:
+    type: internal
+- name: destination_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The facade may enter the private destination scope and call its backend; it holds no store, registry or overlay grant of its own
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee:destination_execution_scope") || (action == "funcs.call" && resource == "bee.governance:destination_backend_call")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee:destination_execution_scope, bee.governance:destination_backend_call]
+    effect: allow
 - name: activation_recovery
   kind: process.lua
   source: file://activation_recovery.lua

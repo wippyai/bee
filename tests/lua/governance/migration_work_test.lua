@@ -23,15 +23,15 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
         meta = {type = "migration", target_db = target_db, ordinal = 1}, data = {up = "create table users"}}
     local definitions: {{[string]: unknown}} = {migration}
     local candidate_entries: {preflight.Entry} = {{id = migration.id :: string, kind = migration.kind :: string,
-        package = "demo/app", digest = measured(migration), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}}}
+        package = "demo/app", digest = measured(migration), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}
     local destination_entries: {[string]: preflight.Entry} = {}
     if existing_database then
         destination_entries[target_db] = {id = target_db, kind = "db.sql.sqlite", package = "host/storage",
-            digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}}
+            digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
     else
         definitions[#definitions + 1] = database
         candidate_entries[#candidate_entries + 1] = {id = "demo:db", kind = "db.sql.sqlite", package = "demo/app",
-            digest = measured(database), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}}
+            digest = measured(database), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
     end
     local exact = assert(artifact.create(definitions))
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7,
@@ -78,7 +78,7 @@ local function define_tests()
             candidate.entries[1].digest = measured(first)
             candidate.migrations[1].checksum, candidate.migrations[1].ordinal = measured(first), 2
             candidate.entries[#candidate.entries + 1] = {id = "demo:010", kind = "function.lua", package = "demo/app",
-                digest = measured(later), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}}
+                digest = measured(later), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             candidate.migrations[#candidate.migrations + 1] = {id = "demo:010", target_db = "demo:db",
                 checksum = measured(later), ordinal = 10}
             local work = assert(migration_work.capture(candidate, exact, context))

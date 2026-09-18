@@ -61,7 +61,7 @@ local function shifting_resolver(entry: {[string]: unknown}, world: {revision: i
                 digest = SHA, dependencies = {}, namespaces = {"demo"}}},
             entries = {{id = entry_id, kind = entry_kind, package = "demo/app",
                 digest = selected_digest, references = {}, auto_start = false,
-                grants = {}, modules = {}, config_objects = {}, config_lists = {}}}, requirements = {}, migrations = {}}
+                grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {}, migrations = {}}
         local context: preflight.Context = {node_id = "node-owner", registry_revision = world.revision,
                 registry_digest = world.digest,
                 policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},

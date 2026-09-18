@@ -1,7 +1,8 @@
--- MIT. Stage two application versions into the desktop's own workspace through
--- the production publication and destination chain: one whose candidate
--- introduces a reference to an entry nothing supplies, and one the destination
--- preflight accepts. The review surface is exercised afterwards in the
+-- MIT. Stage three application versions into the desktop's own workspace
+-- through the production publication and destination chain: one whose
+-- candidate introduces a reference to an entry nothing supplies, one whose
+-- function entry declares an empty modules field the destination's function
+-- config cannot read, and one the destination preflight accepts. The review surface is exercised afterwards in the
 -- App Delivery window; this probe records no review, selection or approval.
 local funcs = require("funcs")
 local registry = require("registry")
@@ -25,6 +26,10 @@ local BLOCKED_COMPONENT = "bee.delivery_review_blocked/app"
 local BLOCKED_WORKSPACE = "delivery-review-blocked"
 local BLOCKED_ENTRY = "bee.delivery_review_blocked:probe"
 local BLOCKED_OVERLAY = "bee.delivery_review_probe:blocked_overlay"
+local CONFIG_COMPONENT = "bee.delivery_review_config/app"
+local CONFIG_WORKSPACE = "delivery-review-config"
+local CONFIG_ENTRY = "bee.delivery_review_config:probe"
+local CONFIG_OVERLAY = "bee.delivery_review_probe:config_overlay"
 local ABSENT_TARGET = "bee.delivery_review_absent:target"
 
 -- Executable, not a data descriptor: this is what the review surface's
@@ -86,15 +91,23 @@ local function entries_for(id: string, absent: string?): {unknown}
 end
 
 -- A minimal function.lua entry with its executable source inline, the same
--- shape the native destination unpacks into a callable. The optional
--- "modules" field is omitted rather than supplied empty: an authored empty
--- Lua list and an authored empty Lua map are the same value, and the
--- destination's function config requires the list shape when the field is
--- present at all.
+-- shape the native destination unpacks into a callable. An empty declared
+-- field crosses into the destination as neither a list nor an object, so this
+-- entry omits the optional ones and review answers for that.
 local function ready_entries(): {unknown}
     local measured, measure_error = artifact.create({{id = READY_ENTRY, kind = "function.lua",
         data = {source = READY_SOURCE, method = "handle"}}})
     if not measured then error("measure ready entry: " .. tostring(measure_error)) end
+    return measured.entries
+end
+
+-- The same entry with an empty modules field. The destination's function
+-- config reads that field as a list and an empty declared field reaches it as
+-- neither, so review refuses the version.
+local function config_entries(): {unknown}
+    local measured, measure_error = artifact.create({{id = CONFIG_ENTRY, kind = "function.lua",
+        data = {source = READY_SOURCE, method = "handle", modules = table.create(0, 1)}}})
+    if not measured then error("measure config entry: " .. tostring(measure_error)) end
     return measured.entries
 end
 
@@ -105,7 +118,9 @@ local function configure(workspace_id: string, local_node: string)
         {workspace_id = workspace_id, source_workspace = READY_WORKSPACE,
             component = READY_COMPONENT, overlay_owner = READY_OVERLAY},
         {workspace_id = workspace_id, source_workspace = BLOCKED_WORKSPACE,
-            component = BLOCKED_COMPONENT, overlay_owner = BLOCKED_OVERLAY}}
+            component = BLOCKED_COMPONENT, overlay_owner = BLOCKED_OVERLAY},
+        {workspace_id = workspace_id, source_workspace = CONFIG_WORKSPACE,
+            component = CONFIG_COMPONENT, overlay_owner = CONFIG_OVERLAY}}
     publication.data = publication_data
 
     local activation = assert(registry.get("bee.governance:activation_profiles"))
@@ -120,7 +135,12 @@ local function configure(workspace_id: string, local_node: string)
             component = BLOCKED_COMPONENT, resolver = "overlay", overlay_owner = BLOCKED_OVERLAY,
             approval_policy = APPROVAL_POLICY, parameters = {},
             allow = {packages = {BLOCKED_COMPONENT}, namespaces = {"bee.delivery_review_blocked"},
-                kinds = {"registry.entry"}, databases = {}, grants = {}, modules = {}}}}
+                kinds = {"registry.entry"}, databases = {}, grants = {}, modules = {}}},
+        {workspace_id = workspace_id, source_node = local_node, source_workspace = CONFIG_WORKSPACE,
+            component = CONFIG_COMPONENT, resolver = "overlay", overlay_owner = CONFIG_OVERLAY,
+            approval_policy = APPROVAL_POLICY, parameters = {},
+            allow = {packages = {CONFIG_COMPONENT}, namespaces = {"bee.delivery_review_config"},
+                kinds = {"function.lua"}, databases = {}, grants = {}, modules = {}}}}
     activation.data = activation_data
 
     local approvers = assert(registry.get("bee.approvals:approver_policies"))
@@ -184,9 +204,11 @@ local function main()
 
     local ready_snapshot = author(READY_WORKSPACE, ready_entries())
     local blocked_snapshot = author(BLOCKED_WORKSPACE, entries_for(BLOCKED_ENTRY, ABSENT_TARGET))
+    local config_snapshot = author(CONFIG_WORKSPACE, config_entries())
 
     local ready = stage(workspace_id, READY_COMPONENT, READY_WORKSPACE, ready_snapshot)
     local blocked = stage(workspace_id, BLOCKED_COMPONENT, BLOCKED_WORKSPACE, blocked_snapshot)
+    local config = stage(workspace_id, CONFIG_COMPONENT, CONFIG_WORKSPACE, config_snapshot)
 
     local ready_report = verdict(ready, READY_COMPONENT)
     if ready_report.ready ~= true or #ready_report.diagnostics > 0 then
@@ -201,6 +223,14 @@ local function main()
         if diagnostic.code == "DANGLING_REFERENCE" and diagnostic.target == BLOCKED_ENTRY then dangling = true end
     end
     if not dangling then error("the blocked plan carries no DANGLING_REFERENCE: " .. json.encode(blocked_report.diagnostics)) end
+
+    local config_report = verdict(config, CONFIG_COMPONENT)
+    if config_report.ready ~= false then error("the map-shaped modules plan preflight did not refuse it") end
+    local shaped = false
+    for _, diagnostic in ipairs(config_report.diagnostics) do
+        if diagnostic.code == "CONFIG_SHAPE" and diagnostic.target == CONFIG_ENTRY then shaped = true end
+    end
+    if not shaped then error("the map-shaped modules plan carries no CONFIG_SHAPE: " .. json.encode(config_report.diagnostics)) end
 
     -- The entry set a reviewer sees comes from the destination's read-only
     -- comparison of the reviewed candidate against the composed base.
@@ -219,7 +249,9 @@ local function main()
         ready_plan_digest = digest_of(ready.plan_digest, "ready plan digest"),
         ready_artifact_digest = digest_of(ready.artifact_digest, "ready artifact digest"),
         blocked_plan_digest = digest_of(blocked.plan_digest, "blocked plan digest"),
-        blocked_diagnostics = #blocked_report.diagnostics})
+        blocked_diagnostics = #blocked_report.diagnostics,
+        config_plan_digest = digest_of(config.plan_digest, "config plan digest"),
+        config_diagnostics = #config_report.diagnostics})
 end
 
 return {main = function(...)

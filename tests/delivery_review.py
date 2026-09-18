@@ -1,12 +1,13 @@
 """Review an application delivery in the App Delivery window before approving it.
 
-Two versions of a private application are staged into the desktop's own
+Three versions of a private application are staged into the desktop's own
 workspace through the production publication and destination chain: one whose
-candidate introduces a reference to an entry nothing supplies, and one the
-destination preflight accepts. App Delivery then has to show the destination's
+candidate introduces a reference to an entry nothing supplies, one whose
+function entry declares an empty modules field the destination's function
+config cannot read, and one the destination preflight accepts. App Delivery then has to show the destination's
 own verdict, the diagnostic that blocks activation, the entry set the plan
 changes against the composed base, and the approval and activation record. The
-blocked version must refuse selection with its reason; the ready one is
+blocked versions must refuse selection with their reason; the ready one is
 reviewed, selected and prepared in App Delivery, approved in Approvals, and its
 activation outcome and receipt read back in the same review surface.
 """
@@ -36,6 +37,8 @@ READY_ENTRY = "bee.delivery_review_ready:probe"
 ABSENT_TARGET = "bee.delivery_review_absent:target"
 READY_WORKSPACE = "delivery-review-ready"
 BLOCKED_WORKSPACE = "delivery-review-blocked"
+CONFIG_WORKSPACE = "delivery-review-config"
+CONFIG_ENTRY = "bee.delivery_review_config:probe"
 
 
 def workspace_identity(folder):
@@ -67,9 +70,10 @@ def seed(project, folder):
     match = re.search(r"DELIVERY_REVIEW_SEEDED\s+(\{.*\})", output)
     assert match, output
     evidence = json.loads(match.group(1))
-    for name in ("ready_plan_digest", "ready_artifact_digest", "blocked_plan_digest"):
+    for name in ("ready_plan_digest", "ready_artifact_digest", "blocked_plan_digest", "config_plan_digest"):
         assert re.fullmatch(r"[0-9a-f]{64}", evidence[name]), (name, evidence)
     assert evidence["blocked_diagnostics"] >= 1, evidence
+    assert evidence["config_diagnostics"] >= 1, evidence
     return evidence
 
 
@@ -152,6 +156,7 @@ def exercise():
             ui.key(b"\t")
             ui.wait("STAGED PLANS", timeout=20)
             ui.wait(BLOCKED_WORKSPACE, timeout=20)
+            ui.wait(CONFIG_WORKSPACE, timeout=20)
             ui.wait(READY_WORKSPACE, timeout=20)
 
             # The refused plan names its verdict, the diagnostic code and the
@@ -165,6 +170,19 @@ def exercise():
             ui.key(b"a")
             ui.wait("Preflight blocks this version", timeout=20)
             assert "settled" not in ui.text(), ui.text()
+
+            # A version whose function entry declares modules as a map is
+            # refused for the shape the destination's function config reads.
+            back_to_plans(ui)
+            open_review(ui, CONFIG_WORKSPACE, 1)
+            ui.wait("Verdict blocked", timeout=20)
+            ui.wait("CONFIG_SHAPE  " + CONFIG_ENTRY, timeout=20)
+            ui.wait("configuration field modules is empty and reaches the destination", timeout=20)
+            ui.key(b"s")
+            ui.wait("Preflight blocks this version", timeout=20)
+            ui.key(b"a")
+            ui.wait("Preflight blocks this version", timeout=20)
+            assert "Verdict ready" not in ui.text(), ui.text()
 
             # The accepted plan names its verdict and the entry set it changes
             # against the composed base, and can be reviewed and selected.
@@ -218,7 +236,8 @@ def exercise():
 
         invoked = invoke(project, folder)
     print("Delivery review: the refused plan shows blocked with DANGLING_REFERENCE on "
-          + BLOCKED_ENTRY + " and refuses selection, the accepted plan shows ready as a "
+          + BLOCKED_ENTRY + ", the empty modules plan shows blocked with CONFIG_SHAPE on "
+          + CONFIG_ENTRY + ", both refuse selection, the accepted plan shows ready as a "
           "function.lua entry with its entry changes against the composed base, its approval, "
           "activation outcome and receipt read back in the same review surface, and the applied "
           "entry itself runs on a later boot: " + json.dumps(invoked["result"]))

@@ -21,7 +21,7 @@ local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Con
         base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
             digest = SHA, dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:run",
             kind = "function.lua", package = "demo/app", digest = entry_digest, references = {}, auto_start = false,
-            grants = {}, modules = {}, config_objects = {}, config_lists = {}}}, requirements = {}, migrations = {}}
+            grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {}, migrations = {}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
         registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true},
         namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {}, grants = {},
@@ -47,7 +47,7 @@ local function define_tests()
             candidate.migrations = {{id = "demo:001", target_db = "demo:db", checksum = SHA, ordinal = 1}}
             context.databases["demo:db"] = true
             context.entries["demo:db"] = {id = "demo:db", kind = "db.sql.sqlite", package = "base",
-                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}}
+                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             test.is_nil(measure.measure(plan, candidate, context))
             local directive = assert(artifact.create({{id = "demo:root", kind = "ns.dependency", data = {}}}))
             plan.artifact_bytes, plan.artifact_digest = directive.bytes, directive.digest

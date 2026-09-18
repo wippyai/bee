@@ -61,6 +61,21 @@ local function encode(value: unknown, depth: integer): (string?, string?)
     end
     return "{" .. table.concat(parts, ",") .. "}", nil
 end
+-- The JSON shape a value encodes as. A table holding string keys is an object,
+-- a table holding integer keys is an array, and an empty table answers by its
+-- allocation, the same reading encode() applies.
+function M.shape(value: unknown): string
+    if type(value) ~= "table" then return "value" end
+    local source = value :: table
+    if next(source) == nil then
+        if json.encode(source) == "{}" then return "object" end
+        return "array"
+    end
+    for key in pairs(source) do
+        if type(key) == "string" then return "object" end
+    end
+    return "array"
+end
 -- Hand a copied empty table the allocation its source carries, so the copy
 -- measures and applies as the value it was taken from.
 function M.empty_like(value: unknown): {[unknown]: unknown}

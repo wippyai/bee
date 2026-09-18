@@ -5,7 +5,7 @@ local hash = require("hash")
 local json = require("json")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
-    grants: {string}, modules: {string}}
+    grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string}}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
@@ -25,6 +25,21 @@ end
 local function identifier(value: string): boolean
     return #value > 0 and #value <= 160 and not value:find("%c")
 end
+-- The runtime unpacks these kinds into a typed config. A field it reads as a
+-- list refuses a JSON object at apply, and a field it reads as a nested config
+-- refuses a JSON array, so review answers for both here.
+local CONFIG_LISTS: {[string]: {[string]: boolean}} = {
+    ["function.lua"] = {modules = true},
+    ["library.lua"] = {modules = true},
+    ["process.lua"] = {modules = true},
+    ["workflow.lua"] = {modules = true},
+}
+local CONFIG_OBJECTS: {[string]: {[string]: boolean}} = {
+    ["function.lua"] = {imports = true, security = true, pool = true},
+    ["library.lua"] = {imports = true},
+    ["process.lua"] = {imports = true, security = true},
+    ["workflow.lua"] = {imports = true},
+}
 local function migration_key(item: Migration): string
     return item.target_db .. "\n" .. item.id
 end
@@ -166,7 +181,8 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
     local count, count_error = dense_count(raw, "candidate entries", 512)
     if not count then return nil, count_error end
     local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
-        references = true, auto_start = true, grants = true, modules = true}
+        references = true, auto_start = true, grants = true, modules = true,
+        config_objects = true, config_lists = true}
     local result: {Entry} = {}
     for index = 1, count do
         local row = (raw :: table)[index]
@@ -180,6 +196,10 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         if not grants then return nil, grants_error end
         local modules, modules_error = identifiers(item.modules, "entry modules", 32)
         if not modules then return nil, modules_error end
+        local config_objects, objects_error = identifiers(item.config_objects, "entry config objects", 32)
+        if not config_objects then return nil, objects_error end
+        local config_lists, lists_error = identifiers(item.config_lists, "entry config lists", 32)
+        if not config_lists then return nil, lists_error end
         if type(item.id) ~= "string" or not identifier(item.id :: string)
             or type(item.kind) ~= "string" or not identifier(item.kind :: string)
             or type(item.package) ~= "string" or not identifier(item.package :: string)
@@ -189,7 +209,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         end
         result[index] = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
             digest = item.digest :: string, references = references, auto_start = item.auto_start :: boolean,
-            grants = grants, modules = modules}
+            grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists}
     end
     return result, nil
 end
@@ -351,6 +371,26 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         end
         for _, module in ipairs(item.modules) do
             if not context.modules[module] then issue("MODULE_DENIED", item.id, "unadmitted runtime module " .. module, "remove the module or request host policy review") end
+        end
+        local config_objects, config_lists = item.config_objects, item.config_lists
+        if config_objects == nil or config_lists == nil then return nil, "invalid entry measurement" end
+        local wants_list = CONFIG_LISTS[item.kind]
+        local wants_object = CONFIG_OBJECTS[item.kind]
+        if wants_list then
+            for _, field in ipairs(config_objects) do
+                if wants_list[field] then
+                    issue("CONFIG_SHAPE", item.id, "configuration field " .. field .. " is an object where the runtime reads a list",
+                        "declare " .. field .. " as a list, or omit it")
+                end
+            end
+        end
+        if wants_object then
+            for _, field in ipairs(config_lists) do
+                if wants_object[field] then
+                    issue("CONFIG_SHAPE", item.id, "configuration field " .. field .. " is a list where the runtime reads an object",
+                        "declare " .. field .. " as an object, or omit it")
+                end
+            end
         end
         local existing = context.entries[item.id]
         if existing and (existing.package ~= item.package or existing.kind ~= item.kind) then

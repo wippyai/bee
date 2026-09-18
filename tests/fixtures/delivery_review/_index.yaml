@@ -46,3 +46,22 @@ entries:
       security:
         actor: {id: bee.delivery_review.operator}
         policies: [bee.delivery_review_probe:seed_policy]
+- name: invoke_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, registry.get, system.read]
+    resources: '*'
+    effect: allow
+- name: invoke
+  kind: process.lua
+  source: file://invoke.lua
+  method: main
+  modules: [funcs, registry, time, logger]
+  security:
+    policies: [bee.delivery_review_probe:invoke_policy]
+  meta:
+    command:
+      name: delivery-review-invoke
+      security:
+        actor: {id: bee.delivery_review.operator}
+        policies: [bee.delivery_review_probe:invoke_policy]

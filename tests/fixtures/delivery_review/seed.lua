@@ -27,6 +27,14 @@ local BLOCKED_ENTRY = "bee.delivery_review_blocked:probe"
 local BLOCKED_OVERLAY = "bee.delivery_review_probe:blocked_overlay"
 local ABSENT_TARGET = "bee.delivery_review_absent:target"
 
+-- Executable, not a data descriptor: this is what the review surface's
+-- "settled applied" and the standalone invoke command both prove ran.
+local READY_SOURCE = [[local function handle(request)
+    return {ok = true, ready_probe = "delivery-review-ready"}
+end
+return {handle = handle}
+]]
+
 local function object(value: unknown): Object
     local decoded = bounds.object(value)
     if not decoded then error("expected an object value") end
@@ -77,6 +85,19 @@ local function entries_for(id: string, absent: string?): {unknown}
     return measured.entries
 end
 
+-- A minimal function.lua entry with its executable source inline, the same
+-- shape the native destination unpacks into a callable. The optional
+-- "modules" field is omitted rather than supplied empty: an authored empty
+-- Lua list and an authored empty Lua map are the same value, and the
+-- destination's function config requires the list shape when the field is
+-- present at all.
+local function ready_entries(): {unknown}
+    local measured, measure_error = artifact.create({{id = READY_ENTRY, kind = "function.lua",
+        data = {source = READY_SOURCE, method = "handle"}}})
+    if not measured then error("measure ready entry: " .. tostring(measure_error)) end
+    return measured.entries
+end
+
 local function configure(workspace_id: string, local_node: string)
     local publication = assert(registry.get("bee.governance:publication_profiles"))
     local publication_data = object(publication.data)
@@ -94,7 +115,7 @@ local function configure(workspace_id: string, local_node: string)
             component = READY_COMPONENT, resolver = "overlay", overlay_owner = READY_OVERLAY,
             approval_policy = APPROVAL_POLICY, parameters = {},
             allow = {packages = {READY_COMPONENT}, namespaces = {"bee.delivery_review_ready"},
-                kinds = {"registry.entry"}, databases = {}, grants = {}, modules = {}}},
+                kinds = {"function.lua"}, databases = {}, grants = {}, modules = {}}},
         {workspace_id = workspace_id, source_node = local_node, source_workspace = BLOCKED_WORKSPACE,
             component = BLOCKED_COMPONENT, resolver = "overlay", overlay_owner = BLOCKED_OVERLAY,
             approval_policy = APPROVAL_POLICY, parameters = {},
@@ -161,7 +182,7 @@ local function main()
     local local_node = assert(system.node.id())
     configure(workspace_id, local_node)
 
-    local ready_snapshot = author(READY_WORKSPACE, entries_for(READY_ENTRY, nil))
+    local ready_snapshot = author(READY_WORKSPACE, ready_entries())
     local blocked_snapshot = author(BLOCKED_WORKSPACE, entries_for(BLOCKED_ENTRY, ABSENT_TARGET))
 
     local ready = stage(workspace_id, READY_COMPONENT, READY_WORKSPACE, ready_snapshot)
@@ -189,6 +210,9 @@ local function main()
     local added = changes.added :: {unknown}
     if #added ~= 1 or object(added[1]).id ~= READY_ENTRY then
         error("the ready plan does not add its single entry: " .. json.encode(changes.added))
+    end
+    if object(added[1]).kind ~= "function.lua" then
+        error("the ready plan entry is not function.lua: " .. tostring(object(added[1]).kind))
     end
 
     logger:info("DELIVERY_REVIEW_SEEDED", {workspace_id = workspace_id,

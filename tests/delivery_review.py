@@ -73,6 +73,23 @@ def seed(project, folder):
     return evidence
 
 
+def invoke(project, folder):
+    """A separate boot calls the settled entry directly: the review surface's
+    outcome names a function that actually runs, not just a descriptor."""
+    args = [str(RUNTIME), "run", "--verbose", "delivery-review-invoke", "--host", "bee:workers",
+            "--set", f"registry.history_path={folder}/registry.db"]
+    result = subprocess.run(args, cwd=project, capture_output=True, text=True,
+                            timeout=300, env=database_environment(folder))
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "DELIVERY_REVIEW_INVOKED" in output, output
+    match = re.search(r"DELIVERY_REVIEW_INVOKED\s+(\{.*\})", output)
+    assert match, output
+    invoked = json.loads(match.group(1))
+    assert invoked["result"]["ok"] is True, invoked
+    assert invoked["result"]["ready_probe"] == "delivery-review-ready", invoked
+    return invoked
+
+
 def focus(ui, label):
     """Windows are chosen from the taskbar, the way a person switches them."""
     deadline = time.monotonic() + 10
@@ -155,7 +172,7 @@ def exercise():
             open_review(ui, READY_WORKSPACE, 1)
             ui.wait("Verdict ready", timeout=20)
             ui.wait("No diagnostics and no pending migrations", timeout=20)
-            ui.wait("added  " + READY_ENTRY + "  registry.entry", timeout=20)
+            ui.wait("added  " + READY_ENTRY + "  function.lua", timeout=20)
             ui.wait("unbound", timeout=20)
             ui.key(b"a")
             ui.wait("Plan details refreshed", timeout=20)
@@ -198,10 +215,13 @@ def exercise():
             ui.quit()
         finally:
             ui.close()
+
+        invoked = invoke(project, folder)
     print("Delivery review: the refused plan shows blocked with DANGLING_REFERENCE on "
-          + BLOCKED_ENTRY + " and refuses selection, the accepted plan shows ready with its "
-          "entry changes against the composed base, and its approval, activation outcome and "
-          "receipt read back in the same review surface")
+          + BLOCKED_ENTRY + " and refuses selection, the accepted plan shows ready as a "
+          "function.lua entry with its entry changes against the composed base, its approval, "
+          "activation outcome and receipt read back in the same review surface, and the applied "
+          "entry itself runs on a later boot: " + json.dumps(invoked["result"]))
 
 
 if __name__ == "__main__":

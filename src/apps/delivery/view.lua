@@ -33,8 +33,30 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     line(1, "APP DELIVERY", theme.text, theme.surface)
     local workspace_label = state.workspace_id
     if #workspace_label > 20 then workspace_label = workspace_label:sub(1, 10) .. "…" .. workspace_label:sub(-6) end
-    local pane_label = state.pane == "available" and "AVAILABLE" or "STAGED PLANS"
+    local pane_label = "STAGED PLANS"
+    if state.pane == "available" then pane_label = "AVAILABLE"
+    elseif state.pane == "review" then pane_label = "REVIEW" end
     line(2, "Destination workspace " .. workspace_label .. "   " .. pane_label, theme.muted)
+    local status_y = height - 2
+    if state.pane == "review" then
+        local review = model.review_rows(state)
+        put(1, 3, string.rep("─", width), width, theme.border)
+        local first = 4
+        local room = maximum(0, status_y - 1 - first + 1)
+        local last = maximum(0, #review - room)
+        local start = math.floor(math.max(0, math.min(last, offset)))
+        for slot = 1, room do
+            local row = review[start + slot]
+            if not row then break end
+            line(first + slot - 1, row.text, row.heading and theme.muted or theme.text)
+        end
+        local status = state.notice
+        if status == "" then status = "Approval decisions are made in Approvals" end
+        line(status_y, status, theme.muted)
+        line(height - 1, "Tab Available   ↑↓ Scroll   Enter Read   A Accept   S Select   P Prepare   T Details", theme.muted)
+        line(height, "X Step   I Status   G Recover   F Refresh   Esc Close", theme.muted)
+        return {rows = canvas:rows(), capacity = room, offset = start}
+    end
     local plans_pane = state.pane == "plans"
     if plans_pane then
         line(3, string.format("%-24s %-12s %-14s %-9s %s", "SOURCE", "VERSION", "STATE", "REVIEW", "SELECTED"), theme.muted)
@@ -46,7 +68,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local selected_available = not plans_pane and model.selected_available(state) or nil
     local has_selection = selected ~= nil or selected_available ~= nil
     local detail_rows = has_selection and height >= 13 and math.floor(math.max(5, math.min(height - 9, state.technical and 9 or 6))) or 0
-    local status_y = height - 2
     local list_first = 4
     local list_last = status_y - 1 - detail_rows
     local capacity = maximum(0, list_last - list_first + 1)
@@ -129,7 +150,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if status == "" then status = "Approval decisions are made in Approvals" end
     line(status_y, status, theme.muted)
     if plans_pane then
-        line(height - 1, "Tab Available   ↑↓ Choose   Enter Get   A Accept   N Reject   S Select   P Prepare", theme.muted)
+        line(height - 1, "Tab Review   ↑↓ Choose   Enter Get   A Accept   N Reject   S Select   P Prepare", theme.muted)
         line(height, "X Step   I Status   G Recover   F Refresh   T Details   Esc Close", theme.muted)
     else
         line(height - 1, "Tab Staged plans   ↑↓ Choose   S Stage   Enter Stage   F Refresh   T Details", theme.muted)

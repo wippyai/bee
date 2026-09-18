@@ -4,6 +4,7 @@ local tty = require("tty")
 local model = require("model")
 local view = require("view")
 local appearance = require("appearance")
+local preflight = require("preflight")
 
 local function define_tests()
     test.describe("App Delivery frame", function()
@@ -45,9 +46,44 @@ local function define_tests()
             test.is_true(rendered:find("does not install", 1, true) ~= nil)
         end)
 
+        test.it("shows the verdict, its diagnostics and the entry set the plan changes", function()
+            local state = model.new("workspace-destination")
+            local digest = string.rep("a", 64)
+            local bytes, measured = preflight.encode_report({schema_revision = "bee.governance-preflight@1",
+                plan_digest = digest, destination_node = "node-destination", base_revision = 7,
+                policy_digest = digest, ready = false,
+                diagnostics = {{code = "DANGLING_REFERENCE", target = "demo:run",
+                    message = "missing final-state target demo:absent", remedy = "repair the reference"}},
+                pending_migrations = {}})
+            if not bytes or not measured then error("valid preflight report fixture was rejected") end
+            local row: {[string]: unknown} = {owner_node = "node-destination",
+                workspace_id = "workspace-destination", source_node = "node-source",
+                source_workspace = "example-app", version = "2.0.0", plan_digest = digest,
+                candidate_digest = digest, artifact_digest = digest, preflight_digest = measured,
+                revision = 1, status = "staged", selected = false}
+            model.toggle_pane(state)
+            model.apply_list(state, {ok = true, error = nil, replayed = false, value = {owner_node = "node-destination",
+                workspace_id = "workspace-destination", plans = {row}}})
+            local detail: {[string]: unknown} = {}
+            for key, value in pairs(row) do detail[key] = value end
+            detail.preflight_bytes = bytes
+            model.apply_plan(state, {ok = true, error = nil, replayed = false, value = detail})
+            model.toggle_pane(state)
+            test.eq(state.pane, "review")
+            local frame = view.draw(100, 26, appearance.defaults(), state, 0)
+            local rendered = table.concat(frame.rows, "\n")
+            test.is_true(rendered:find("Verdict blocked", 1, true) ~= nil)
+            test.is_true(rendered:find("DANGLING_REFERENCE  demo:run", 1, true) ~= nil)
+            test.is_true(rendered:find("missing final-state target demo:absent", 1, true) ~= nil)
+            test.is_true(rendered:find("Entry changes unread", 1, true) ~= nil)
+            test.is_true(rendered:find("unbound", 1, true) ~= nil)
+        end)
+
         test.it("fills every compact canvas without leaking control text", function()
             local state = model.new("workspace-destination")
             state.notice = "unsafe \27[31m notice \7"
+            for _ = 1, 3 do
+            model.toggle_pane(state)
             for _, width in ipairs({1, 12, 40, 100}) do
                 for _, height in ipairs({1, 3, 8, 24}) do
                     local frame = view.draw(width, height, appearance.defaults(), state, 0)
@@ -58,6 +94,7 @@ local function define_tests()
                         test.is_nil(row:find("\7", 1, true))
                     end
                 end
+            end
             end
         end)
     end)

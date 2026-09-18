@@ -82,11 +82,17 @@ local function main(value: unknown)
     local function get_selected()
         local item = model.selected(state)
         if not item then state.notice = "Choose a staged version first"; dirty = true; return end
-        model.apply_plan(state, invoke(model.get_request(state, item)))
+        if model.apply_plan(state, invoke(model.get_request(state, item))) then
+            model.apply_changes(state, invoke(model.changes_request(state, item)), item)
+            state.pane = "review"
+            offset = 0
+        end
         dirty = true
     end
     local function review(accepted: boolean)
         local item = model.selected(state)
+        local refused = accepted and model.refusal(state, item) or nil
+        if refused then state.notice = refused; dirty = true; return end
         if not model.accepts_review(item) or not item then
             state.notice = "Only a staged version can receive a local review"; dirty = true; return
         end
@@ -95,6 +101,8 @@ local function main(value: unknown)
     end
     local function select_version()
         local item = model.selected(state)
+        local refused = model.refusal(state, item)
+        if refused then state.notice = refused; dirty = true; return end
         if not model.can_select(item) or not item then
             state.notice = "Record an accepted local review before selecting this version"; dirty = true; return
         end
@@ -103,6 +111,8 @@ local function main(value: unknown)
     end
     local function prepare()
         local item = model.selected(state)
+        local refused = model.refusal(state, item)
+        if refused then state.notice = refused; dirty = true; return end
         if not model.can_prepare(state, item) or not item then
             state.notice = "Select an accepted version before preparing activation"; dirty = true; return
         end
@@ -190,18 +200,22 @@ local function main(value: unknown)
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local text = tostring(data.key or "")
-                if key == "tab" or text == "\t" then model.toggle_pane(state); dirty = true
+                if key == "tab" or text == "\t" then model.toggle_pane(state); offset = 0; dirty = true
                 elseif key == "up" or text == "k" then
-                    if state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
+                    if state.pane == "review" then offset = math.floor(math.max(0, offset - 1))
+                    elseif state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
                     dirty = true
                 elseif key == "down" or text == "j" then
-                    if state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
+                    if state.pane == "review" then offset = offset + 1
+                    elseif state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
                     dirty = true
                 elseif key == "pgup" then
-                    if state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
+                    if state.pane == "review" then offset = math.floor(math.max(0, offset - 8))
+                    elseif state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
                     dirty = true
                 elseif key == "pgdown" then
-                    if state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
+                    if state.pane == "review" then offset = offset + 8
+                    elseif state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
                     dirty = true
                 elseif key == "enter" then if state.pane == "available" then stage_available() else get_selected() end
                 elseif text == "a" then if state.pane == "available" then stage_available() else review(true) end

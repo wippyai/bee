@@ -111,6 +111,51 @@ their exact candidate, artifact and preflight bytes; local review, explicit
 selection and approval binding advance through CAS revisions and bounded retry
 receipts. Selection remains separate from receipt of a replicated version.
 
+## What a reviewer sees
+
+App Delivery reads a staged plan and shows, in a review pane beside the
+available and staged lists, what a person is being asked to approve:
+
+1. The verdict. The application decodes the plan's own preflight report from the
+   exact bytes the plan stores and checks them against the plan's preflight
+   digest through `bee.governance:preflight.decode_report`. A report that fails
+   that check is shown as unreadable with the reason, never as ready.
+2. Every diagnostic by its code and the entry it concerns, with its message and
+   remedy, and every pending migration by its target.
+3. The entry set the plan changes against the composed base: added, changed and
+   removed, each with id, kind and digest, beside the artifact and plan digests.
+   The destination supplies this through the read-only `changes` operation; it
+   decodes the reviewed candidate from its own measured bytes and compares it to
+   the composed base its resolver captures now, and names both base digests so a
+   base that moved since staging is visible.
+4. The approval state the owner holds: unbound, proposed with its proposal
+   digest, consumed with the digest the activation owner consumed, and after
+   apply the activation phase, outcome and the activation owner's receipt,
+   including an uncertain outcome with the composed-base diagnostic the ledger
+   records.
+5. Refusals. Accept, Select and Prepare are unavailable while the verdict is not
+   ready or the report fails its digest check, and the reason is the status line.
+   The application never acts on a plan whose report it could not decode.
+
+The application gains no authority: it decodes and displays what the plan store,
+the approvals owner and the activation ledger already hold, through the
+destination facade it already calls. Overlays remain the activation owner's.
+
+The public facade authenticates the caller's exact delivery operation and then
+enters the private destination execution scope to reach the destination store,
+the same shape the authoring facade uses. An ordinary application is denied the
+governance database directly, so without that scope hop App Delivery could not
+read its own destination. The facade also presents an owner fault as the
+application boundary names it, so a refusal arrives with its code and reason.
+
+`make delivery-review-check` stages one version whose candidate introduces a
+reference to an entry nothing supplies and one the destination preflight
+accepts, then drives the App Delivery window: the refused version shows blocked
+with `DANGLING_REFERENCE` on its own entry and refuses selection with that
+reason, and the accepted version shows ready with its entry changes, is reviewed,
+selected and prepared in App Delivery, approved in Approvals, and read back with
+its activation outcome and receipt.
+
 The owner-local overlay materializer is now implemented and tested. It accepts
 only exact artifact entries, replaces one logical overlay, relies on one native
 overlay generation compare-and-set, and creates no durable registry version. A

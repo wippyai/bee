@@ -11,6 +11,7 @@ entries:
     test: wippy.test:test
     model: bee.delivery:model
     caller: bee.application:caller
+    preflight: bee.governance:preflight
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -22,3 +23,4 @@ entries:
     model: bee.delivery:model
     view: bee.delivery:view
     appearance: bee.desktop:appearance
+    preflight: bee.governance:preflight

@@ -172,6 +172,7 @@ entries:
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
+  modules: [json]
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

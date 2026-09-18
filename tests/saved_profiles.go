@@ -72,6 +72,7 @@ entries:
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
+  modules: [json]
 `
 
 func savedProfilesRunCommand(ctx context.Context, directory, runtime string, environment []string, args ...string) ([]byte, error) {

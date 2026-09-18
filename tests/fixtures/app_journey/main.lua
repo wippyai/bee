@@ -245,6 +245,9 @@ local function main()
     local misdirected = reply_of("bee.approvals:decide", {approval_id = approval_id, expected_revision = 1,
         decision = "approved", proposal_digest = artifact_digest})
     if misdirected.ok == true then error("a decision on another proposal digest was accepted") end
+    if fault_code(misdirected) ~= "CONFLICT" then
+        error("a decision on another proposal digest was refused with " .. fault_code(misdirected) .. " instead of CONFLICT")
+    end
 
     local pending = call_api("bee.governance:destination_call", {operation = "step", workspace_id = workspace_id,
         intent_id = intent_id, receipt_key = receipt_key})

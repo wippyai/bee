@@ -7,7 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee governance authoring
-    comment: Caller-owned migrated staging and measured-closure checks; install/update execution remains gated
+    comment: Caller-owned migrated staging and measured-closure checks; overlay activation is implemented and durable install/update publication remains gated
 - name: preflight
   kind: library.lua
   source: file://preflight.lua

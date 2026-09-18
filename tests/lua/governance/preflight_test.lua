@@ -88,6 +88,21 @@ local function define_tests()
             candidate.entries[1].references = {"demo:removed"}
             test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
         end)
+        test.it("attributes only the references this plan is answerable for", function()
+            local candidate, context = fixture()
+            -- The destination host supplies part of its own composition out of
+            -- band. An entry already pointing at an absent target is the host's
+            -- standing state, not a fault this candidate introduces.
+            context.entries["host:option"] = {id = "host:option", kind = "function.lua", package = "host", digest = SHA, references = {"host:supplied"}, auto_start = false, grants = {}, modules = {}}
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.is_false(has(report, "DANGLING_REFERENCE"))
+            -- Removing a target that a retained entry still references is a
+            -- fault this candidate does introduce.
+            context.entries["host:option"].references = {"demo:retired"}
+            context.entries["demo:retired"] = {id = "demo:retired", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}}
+            test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
+        end)
         test.it("preserves applied migrations and binds their baseline into the measurement", function()
             local candidate, context = fixture()
             local before = checked(candidate, context)

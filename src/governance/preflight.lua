@@ -178,9 +178,16 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         end
         final[item.id] = item
     end
+    -- A destination composes part of its own registry out of band, so the base
+    -- carries references whose targets the host supplies or withholds. This
+    -- plan answers for the references it defines and for base references whose
+    -- targets it removes; a target already absent before the plan is the
+    -- destination's standing state and is diagnosed where it is owned.
     for id, item in pairs(final) do
         for _, reference in ipairs(item.references) do
-            if not final[reference] then issue("DANGLING_REFERENCE", id, "missing final-state target " .. reference, "repair the reference or include its target") end
+            if not final[reference] and (seen[id] or context.entries[reference] ~= nil) then
+                issue("DANGLING_REFERENCE", id, "missing final-state target " .. reference, "repair the reference or include its target")
+            end
         end
     end
     local requirements: {[string]: boolean} = {}

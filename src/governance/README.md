@@ -98,6 +98,10 @@ relies on the overlay's owner/generation conflict check and does not create
 registry history.
 Entry measurements enumerate requested grants and runtime modules from actual
 artifact content, including lifecycle/security declarations, not catalog claims.
+Final-state reference checks name the references this candidate answers for: the
+ones its own entries hold and the base ones whose targets it removes. A base
+entry already pointing at a target the destination host supplies out of band
+carries its own standing state and does not block an unrelated plan.
 Each artifact enumerates its exact owned namespaces, including children. A host
 namespace allowlist is a ceiling, not evidence that the package owns a namespace.
 Remote package descriptions cannot supply this trusted context. Materialized

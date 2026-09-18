@@ -6,6 +6,7 @@ package launch
 import (
 	"context"
 	"errors"
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/session"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"os"
@@ -61,24 +62,86 @@ func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.L
 	if request.Operation != application.RunApplication || request.Command != l.command {
 		return application.LaunchPlan{}, nil
 	}
-	if len(request.Arguments) == 0 {
-		if l.client == nil || request.Base {
-			return application.LaunchPlan{}, nil
+	if len(request.Arguments) > 0 && request.Arguments[0] == "start" {
+		if request.Base || len(request.Arguments) != 1 {
+			return application.LaunchPlan{}, errors.New("bee start requires ordinary startup with no extra arguments")
 		}
-		foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		return application.LaunchPlan{Handled: true}, l.client.Run(foreground, request)
+		return application.LaunchPlan{
+			Command: l.ownerCommand, Arguments: []string{}, PrepareOwner: l.prepare,
+			Attach: func(ctx context.Context, selected application.LaunchRequest) error {
+				return session.Probe(ctx, filepath.Join(selected.StateDir, rendezvous.DirectoryName))
+			},
+		}, nil
 	}
-	if request.Arguments[0] != "start" {
+	if l.client == nil || request.Base {
 		return application.LaunchPlan{}, nil
 	}
-	if request.Base || len(request.Arguments) != 1 {
-		return application.LaunchPlan{}, errors.New("bee start requires ordinary startup with no extra arguments")
+	selected, handled, err := l.selectClient(request)
+	if err != nil || !handled {
+		return application.LaunchPlan{}, err
 	}
-	return application.LaunchPlan{
-		Command: l.ownerCommand, Arguments: []string{}, PrepareOwner: l.prepare,
-		Attach: func(ctx context.Context, selected application.LaunchRequest) error {
-			return session.Probe(ctx, filepath.Join(selected.StateDir, rendezvous.DirectoryName))
-		},
-	}, nil
+	// The owner child starts empty. Exactly this foreground session submits the
+	// command after admission; spawning the owner must not execute it.
+	startup := request
+	startup.Arguments = nil
+	foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if selected.listing {
+		return application.LaunchPlan{Handled: true}, selected.list(foreground, startup)
+	}
+	return application.LaunchPlan{Handled: true}, selected.Run(foreground, startup)
+}
+
+// selectClient maps one ordinary invocation onto this host's display client.
+// An unhandled request keeps the runtime's own application entry, which is how
+// an explicit application ID still reaches recovery and development launches.
+func (l *OwnerLauncher) selectClient(request application.LaunchRequest) (clientSelection, bool, error) {
+	selected := clientSelection{Client: *l.client}
+	if len(request.Arguments) == 0 {
+		return selected, true, nil
+	}
+	display := request.Arguments[0] == "client"
+	observe := request.Arguments[0] == "observe"
+	attach := request.Arguments[0] == "attach"
+	selected.listing = request.Arguments[0] == "desktops"
+	if selected.listing && len(request.Arguments) != 1 {
+		return selected, false, errors.New("bee desktops takes no arguments")
+	}
+	if observe || attach || display {
+		if len(request.Arguments) == 3 {
+			selection, err := parseSelection(request.Arguments[1], request.Arguments[2])
+			if err != nil {
+				return selected, false, err
+			}
+			selected.Selection = selection
+		} else if attach || len(request.Arguments) != 1 {
+			return selected, false, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe/client takes no application arguments or one WORKSPACE DISPLAY pair")
+		}
+		selected.AttachOnly = display
+		selected.Mode = hive.Control
+		if observe {
+			selected.Mode = hive.Observe
+		}
+		selected.Launch = nil
+		return selected, true, nil
+	}
+	if selected.listing {
+		return selected, true, nil
+	}
+	// Explicit application IDs retain their existing recovery/development
+	// entry. Named handlers resolve only through the retained owner.
+	if strings.Contains(request.Arguments[0], ":") {
+		return selected, false, nil
+	}
+	command := hive.DesktopCommand{Name: request.Arguments[0], Arguments: append([]string{}, request.Arguments[1:]...)}
+	if !command.Valid() {
+		return selected, false, errors.New("invalid Bee command arguments")
+	}
+	selected.Launch = &command
+	return selected, true, nil
+}
+
+type clientSelection struct {
+	Client
+	listing bool
 }

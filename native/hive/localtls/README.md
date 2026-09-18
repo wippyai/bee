@@ -1,9 +1,9 @@
 # Same-account native TLS credentials
 
-`Prepare(ctx, directory, execution, expires)` provisions the local owner's native
+`Prepare(ctx, directory, execution, expires)` provisions a local owner's native
 mesh TLS credential. Call it under the real application-state lock, before stack
 assembly, enrollment initialization and rendezvous publication. It creates no
-listener and adds no transport. The public launcher is not wired to it yet.
+listener and adds no transport.
 
 One protected PEM bundle holds a fresh self-signed certificate and independent
 Ed25519 TLS key. The runtime uses that same file for its certificate, key and
@@ -30,6 +30,20 @@ loopback discovery and before mutating client enrollment. The native runtime sti
 loads the selected files itself; immutable execution filenames avoid owner-restart
 replacement races. Same-account native programs retain ordinary OS-user authority.
 
+`SnapshotJoined(ctx, directory, execution, source)` copies the host-selected
+joined owner's existing `internode.ManagerTLSConfig` into that same protected,
+execution-specific location. It keeps the configured leaf certificate, private
+key and CA certificates; it does not generate or rotate a TLS identity. The source
+files must resolve to regular PEM files, at most 32 KiB each and 96 KiB total. The leaf
+and optional intermediates must form a currently valid chain to the configured
+CA, the key must match, and the leaf must allow both client and server TLS with
+`127.0.0.1` and `::1` IP SANs. Each configured CA certificate must be a valid CA.
+The recorded deadline is capped at 30 days and at the earliest certificate or
+CA expiry. Same-execution retries keep the first snapshot; a snapshot copied to a
+different execution is rejected. The PEM bundle remains readable by Go's TLS
+certificate and root-pool loaders, so existing `Load` and `SameAccount` use the
+same joined identity as the owner.
+
 Expiry is host-selected, finite, and at most 30 days away. Prepare returns the
 actual retained expiry on retry. The owner must stop its mesh by `ExpiresAt` and
 start a fresh execution for renewal; that public owner lifecycle is not implemented.
@@ -42,7 +56,31 @@ make -C native local-tls-check MESH_RUNTIME=/absolute/reviewed/runtime
 make -C native mesh-client-check MESH_RUNTIME=/absolute/reviewed/runtime
 ```
 
-The first checks storage, expiry, execution isolation and certificate validation.
+The first checks storage, expiry, execution isolation and certificate validation,
+including joined snapshots and concurrent reads/retries.
 The package requires the `meshclient` build tag and an explicit runtime checkout.
 Public owner startup and automatic attachment remain unwired. The native mesh
 checks are component proofs, not evidence of public Hive activation.
+
+## Shared local Hive authority candidate
+
+`PrepareShared` takes the execution's credential directory and a separately
+host-selected, owner-only authority directory. It issues a different leaf
+certificate/key for each execution under that shared CA. The execution directory
+contains only its leaf key and certificate chain; the CA private key stays in
+the authority directory. The existing `Load` verifies the execution identity,
+chain and expiry, so physical display clients can use their selected node's
+credential without a second transport path.
+
+Authority creation and issuance reads use the existing protected atomic-file
+lock. A malformed authority refuses rather than being replaced. Leaf deadlines
+are capped by the authority's expiry; an expired authority may rotate after all
+credentials under it have expired. Nodes and clients must continue enforcing
+those deadlines on live transports. Concurrent issuers share one authority.
+
+This establishes same-OS-account TLS trust only. Native signed-node enrollment,
+gossip keys, discovery and supervisor admission remain separate. Tests perform
+actual mutual TLS handshakes, reject unrelated authorities and execution
+mismatches, exercise concurrent issuance and expiry rotation, and preserve invalid
+on-disk state. Existing isolated execution TLS remains available to explicit
+host compositions and fixtures.

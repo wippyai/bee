@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	application "github.com/wippyai/runtime/api/application"
@@ -28,6 +29,28 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 	if !filepath.IsAbs(request.Directory) {
 		return errors.New("client launch needs the project directory")
 	}
+	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
+	if err != nil {
+		return err
+	}
+	if c.AttachOnly || c.Mode == hive.Observe || c.Selection.Workspace != "" {
+		// An explicit display client, observer or selection decides from
+		// published discovery alone. It creates no state directory, never
+		// contends for the owner lock and never starts a node of its own.
+		if _, err := store.Read(ctx); errors.Is(err, os.ErrNotExist) {
+			switch {
+			case c.Mode == hive.Observe:
+				return errors.New("No running Bee to observe; start bee first")
+			case c.Selection.Workspace != "":
+				return errors.New("No running Bee for the selected desktop; start bee first")
+			default:
+				return errors.New("No running Bee for this project; run bee to start its node")
+			}
+		} else if err != nil {
+			return err
+		}
+		return c.Attach(ctx, request)
+	}
 	if err := privatefile.EnsurePrivateDir(request.StateDir); err != nil {
 		return err
 	}
@@ -39,10 +62,6 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, request)
-	}
-	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
-	if err != nil {
-		return err
 	}
 	previous, err := store.Read(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

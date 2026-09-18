@@ -24,6 +24,18 @@ versions must be selected together; the release manifest is not yet cut over.
 Actual-source cold start, reuse, retained shell and physical detach pass through
 this composition. Standalone build/upgrade/global acceptance remain outstanding.
 
+The host selects one runtime state directory per canonical launch folder under
+its state root, so several projects on one machine keep separate state and the
+owner's mesh identity is qualified by the selected project state. A request that
+selected state explicitly keeps it, and state created by earlier Bee versions
+stays bound to the root. The host also selects the shared same-account Hive
+directory and the protected machine configuration directory; a saved joined
+profile in the latter is what makes an owner join a Hive.
+
+A generated command hook runs `bee hook-post ENDPOINT ACTION_ID TOKEN_ENV EVENT`,
+which is answered before project selection and owner startup, and the
+`bee.harness.host:environment` storage exposes this executable's own path.
+
 Ordinary application launches opt into the runtime's `EmbeddedBaseline` policy:
 code comes from this executable's digest-scoped bundle and authored registry
 history remains in the selected state's `registry.db`. Explicit recovery keeps

@@ -63,7 +63,7 @@ func (s *Store) Read(ctx context.Context) (Document, error) {
 //
 // Behavior and Guarantees:
 //   - If the configuration file is missing, transform begins with:
-//     {Version: 1, Revision: 0, EnrollmentRef: "", Workspaces: []}.
+//     {Version: 1, Revision: 0, Hive: LocalHiveProfile(), Workspaces: []}.
 //   - expectedRevision must match the existing document's revision; expectedRevision 0
 //     is valid only when the document does not yet exist.
 //   - Existing corrupt, empty, unknown, duplicate, case-aliased, null, missing, or unsupported
@@ -94,10 +94,10 @@ func (s *Store) Update(ctx context.Context, expectedRevision uint64, transform f
 				return nil, ErrConflict
 			}
 			currentDoc = Document{
-				Version:       CurrentVersion,
-				Revision:      0,
-				EnrollmentRef: "",
-				Workspaces:    []WorkspaceLocation{},
+				Version:    CurrentVersion,
+				Revision:   0,
+				Hive:       LocalHiveProfile(),
+				Workspaces: []WorkspaceLocation{},
 			}
 		} else {
 			if len(existing) == 0 {

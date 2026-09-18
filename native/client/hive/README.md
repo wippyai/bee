@@ -25,6 +25,14 @@ and expiry. A node's catalog can contain multiple workspaces. Ordinary typed
 refusals remain distinct from uncertain mutations. No method owns the terminal,
 starts a workspace or retries a mutation.
 
+`Launch` submits one in-desktop application command through the existing
+controller session. The command carries literal values, bounded to 40 name bytes,
+16 arguments and 8 KiB total, and the owner resolves its admitted catalog. It
+requires a live control mount belonging to this execution and never retries: the
+reply must identify the same selection and session and name the committed
+application and instance. A catalog may mark exactly one desktop per workspace
+as the default; a workspace either marks all of its desktops or none.
+
 JSON decoders bound messages to 16 KiB, reject duplicate keys, unknown/case-aliased
 contract fields and invalid optional owner resources. Empty Lua grants `{}` means
 an empty list; arbitrary objects do not. Operation-specific results are decoded

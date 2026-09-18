@@ -14,8 +14,10 @@ These physical-client exits retain the owner and its applications.
 
 Input admission is bounded by a 256-slot queue and 2 MiB of outstanding event
 data. The worker retains each byte charge until delivery completes. Overflow
-cancels delivery and detaches without replay. Cleanup cancels native operations
-before joining workers and restores terminal modes. Operation errors survive a
+cancels delivery and detaches without replay. Cleanup cancels native operations,
+joins the worker, then closes the viewport and restores terminal modes. This
+prevents local viewport closure from revoking an operation still unwinding its
+cancellation. Genuine operation errors survive a
 concurrent mount retirement. Cancellation is not proof that pending input was
 unapplied, and nothing retries it automatically.
 

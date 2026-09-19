@@ -1,0 +1,49 @@
+version: '1.0'
+namespace: bee
+entries:
+- name: docs_corpus
+  kind: fs.directory
+  directory: ./src/corpus
+  mode: '0500'
+  auto_init: false
+  meta:
+    title: Bee agent documentation corpus
+    comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack. Rebuilt by build/agent_corpus.py.
+- name: docs_policy
+  kind: security.policy
+  meta:
+    comment: The docs facade's own scope; the corpus volume is read and nothing else is reached
+  policy:
+    actions:
+    - fs.get
+    resources:
+    - bee:docs_corpus
+    effect: allow
+- name: docs_call
+  kind: function.lua
+  source: file://method.lua
+  method: handle
+  modules: [fs, json]
+  imports:
+    protocol: bee:docs_protocol
+    corpus: bee:docs_corpus_library
+    transaction: bee.persist:transaction
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee:docs_policy]
+  meta:
+    type: tool
+    title: Platform documentation
+    llm_alias: BeeDocs
+    llm_description: Read the platform documentation that ships inside Bee, offline. list names the corpus by topic with document ids; search finds a phrase across the corpus and returns the section each match sits under; read returns one bounded window of one document by stable id, optionally from a heading anchor. Start with search, then read the id it returns. Covers the runtime modules an application author calls (process, channel, tty, registry, sql, fs, http, events and the rest), Bee's own contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage, UI) and Bee's terminal toolkit for drawing, layout, styles and input.
+    input_schema: |
+      {"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["list","search","read"]},"topic":{"type":"string","pattern":"^[a-z0-9_-]+$","maxLength":64},"query":{"type":"string","minLength":1,"maxLength":256},"id":{"type":"string","minLength":1,"maxLength":160},"section":{"type":"string","pattern":"^[a-z0-9_-]+$","maxLength":120},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":16384}}}
+- name: docs_protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: docs_corpus_library
+  kind: library.lua
+  source: file://corpus.lua
+  modules: [fs, json]
+  imports: {bounds: bee.threads.records:bounds}

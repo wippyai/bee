@@ -106,6 +106,7 @@ entries:
     - thread_message
     - workspace
     - delivery
+    - docs
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -137,7 +138,7 @@ entries:
     environment: {}
     environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery]
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery, docs]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
@@ -169,6 +170,7 @@ entries:
     - thread_message
     - workspace
     - delivery
+    - docs
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -201,7 +203,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery]
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery, docs]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
@@ -225,7 +227,7 @@ entries:
     environment: {}
     environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, workspace]
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery, docs]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
@@ -258,6 +260,7 @@ entries:
     - thread_message
     - workspace
     - delivery
+    - docs
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -288,7 +291,7 @@ entries:
     environment: {}
     environment_refs: {XDG_CONFIG_HOME: bee.driver.muse:config_home}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery]
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery, docs]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high]}
@@ -318,6 +321,7 @@ entries:
     - thread_message
     - workspace
     - delivery
+    - docs
     gateway_hooks:
     - PreToolUse
     - PostToolUse
@@ -347,7 +351,7 @@ entries:
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     allow_host_home: true
-    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery]
+    gateway_tools: [thread_read, thread_wait, thread_message, workspace, delivery, docs]
     prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m}
 - name: launch_policy_grok_window
   kind: registry.entry
@@ -373,6 +377,7 @@ entries:
     - thread_message
     - workspace
     - delivery
+    - docs
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

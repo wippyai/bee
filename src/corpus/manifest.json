@@ -1,0 +1,1139 @@
+{
+  "base": "https://wippy.ai/llm",
+  "ceiling_bytes": 3145728,
+  "documents": [
+    {
+      "bytes": 8834,
+      "id": "runtime/concepts/architecture",
+      "sha256": "0f21e2371d7ce052fc2e9132b69d9d67b748096ad8c3614cd32bb48f1a0b9e59",
+      "source": "https://wippy.ai/llm/path/en/concepts/architecture",
+      "topic": "platform"
+    },
+    {
+      "bytes": 5365,
+      "id": "runtime/concepts/cluster",
+      "sha256": "1fadd0e9011628e8c60e1253ae87d60229489143d4ff0e8ea720f3355743557c",
+      "source": "https://wippy.ai/llm/path/en/concepts/cluster",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 3775,
+      "id": "runtime/concepts/compute-units",
+      "sha256": "04ed9243fa5fc02eb1be567f6971b35587aa003a30655b57a97abebea8cef826",
+      "source": "https://wippy.ai/llm/path/en/concepts/compute-units",
+      "topic": "platform"
+    },
+    {
+      "bytes": 5381,
+      "id": "runtime/concepts/functions",
+      "sha256": "b575b112889e728cee1f096b86006e9d15c2e791f05d906dc7c5f2e12fa65172",
+      "source": "https://wippy.ai/llm/path/en/concepts/functions",
+      "topic": "platform"
+    },
+    {
+      "bytes": 6631,
+      "id": "runtime/concepts/process-model",
+      "sha256": "8fd53f9a764797b446cc0251481f17d6ed5c6287b59716e797a55ee64652aa9f",
+      "source": "https://wippy.ai/llm/path/en/concepts/process-model",
+      "topic": "process"
+    },
+    {
+      "bytes": 3182,
+      "id": "runtime/concepts/registry",
+      "sha256": "51cca941716cab30710439c08ad052296776f555a4ecc3dd4e3f242ddbdd1236",
+      "source": "https://wippy.ai/llm/path/en/concepts/registry",
+      "topic": "registry"
+    },
+    {
+      "bytes": 15513,
+      "id": "runtime/concepts/security-model",
+      "sha256": "46f43f3dced3473d335aab6f5429a70bd3fc55db44cc77af315ff065bbf1c9bf",
+      "source": "https://wippy.ai/llm/path/en/concepts/security-model",
+      "topic": "security"
+    },
+    {
+      "bytes": 6874,
+      "id": "runtime/concepts/workflows",
+      "sha256": "c1da72ec5825fe73774ec43c727ad9436d17476bf0a8386926e358373716ce80",
+      "source": "https://wippy.ai/llm/path/en/concepts/workflows",
+      "topic": "process"
+    },
+    {
+      "bytes": 11410,
+      "id": "runtime/guides/artifacts",
+      "sha256": "2b10eaa5f4bcdea6b94e6f5b7bdc102e8918d0daff999fc3ee05066e41cdcec8",
+      "source": "https://wippy.ai/llm/path/en/guides/artifacts",
+      "topic": "registry"
+    },
+    {
+      "bytes": 21583,
+      "id": "runtime/guides/cluster",
+      "sha256": "0b8a6919438cb56676673e1d8f7636006c531f8732754729a8ae23d8349f0581",
+      "source": "https://wippy.ai/llm/path/en/guides/cluster",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 7629,
+      "id": "runtime/guides/components",
+      "sha256": "08717a3cf856e14c7b6bc055747dcc3128fff2278a95f0ea3812bfd116a60698",
+      "source": "https://wippy.ai/llm/path/en/guides/components",
+      "topic": "registry"
+    },
+    {
+      "bytes": 13772,
+      "id": "runtime/guides/dependency-management",
+      "sha256": "a97c6a62b289075fa06ec779cb9b28c9cc9c9a1be1174ba43ccc8069ebc5fce6",
+      "source": "https://wippy.ai/llm/path/en/guides/dependency-management",
+      "topic": "registry"
+    },
+    {
+      "bytes": 21260,
+      "id": "runtime/guides/entry-kinds",
+      "sha256": "1c09c5545d914bb84a8652a415c6a55c929d4701eabf6f128141b6be0d63717c",
+      "source": "https://wippy.ai/llm/path/en/guides/entry-kinds",
+      "topic": "registry"
+    },
+    {
+      "bytes": 9670,
+      "id": "runtime/guides/supervision",
+      "sha256": "269145c9b706d54e017355cd8259899e61cc2914957021f39500619dfd2c5ee7",
+      "source": "https://wippy.ai/llm/path/en/guides/supervision",
+      "topic": "process"
+    },
+    {
+      "bytes": 10436,
+      "id": "runtime/http/endpoint",
+      "sha256": "19f7d6c2a10d62cf617e0180619bf3161d6af7e8027d0ee4aad852a99f58d049",
+      "source": "https://wippy.ai/llm/path/en/http/endpoint",
+      "topic": "http"
+    },
+    {
+      "bytes": 8741,
+      "id": "runtime/http/middleware",
+      "sha256": "d7c0c6032ac54c95e13e5bba5058ac35d89e2a1da32b0b1a958137761ac3e082",
+      "source": "https://wippy.ai/llm/path/en/http/middleware",
+      "topic": "http"
+    },
+    {
+      "bytes": 9125,
+      "id": "runtime/http/router",
+      "sha256": "2483aedc6d2f4893afa9a68de06fbb78831b633a70979652a07f5b58803ee0f5",
+      "source": "https://wippy.ai/llm/path/en/http/router",
+      "topic": "http"
+    },
+    {
+      "bytes": 7431,
+      "id": "runtime/http/server",
+      "sha256": "d5d51c5efd61880d04300f8f06c674d1469fa167b6bca89c69b5e21ca595919d",
+      "source": "https://wippy.ai/llm/path/en/http/server",
+      "topic": "http"
+    },
+    {
+      "bytes": 9209,
+      "id": "runtime/http/sse",
+      "sha256": "a795cc9cf852017a2a32169a2ba491691b3bcf2859ce8ccac7e019ba3dbe0a67",
+      "source": "https://wippy.ai/llm/path/en/http/sse",
+      "topic": "http"
+    },
+    {
+      "bytes": 4763,
+      "id": "runtime/http/static",
+      "sha256": "85c3e385011be38eaa035e2e592a9e0bbf9566dc1444fa3b399c1f9e0b26f67d",
+      "source": "https://wippy.ai/llm/path/en/http/static",
+      "topic": "http"
+    },
+    {
+      "bytes": 8052,
+      "id": "runtime/http/websocket-relay",
+      "sha256": "398f89756b70bbf9b47240d59925ae83fb3094da60ae2db58e4cb212f98d9c42",
+      "source": "https://wippy.ai/llm/path/en/http/websocket-relay",
+      "topic": "http"
+    },
+    {
+      "bytes": 7781,
+      "id": "runtime/internals/architecture",
+      "sha256": "05a1bf144460a514c5b9f3f6506c35b1a01aaba488ec9c6d7d5a624b81f2626a",
+      "source": "https://wippy.ai/llm/path/en/internals/architecture",
+      "topic": "platform"
+    },
+    {
+      "bytes": 5313,
+      "id": "runtime/internals/dispatch",
+      "sha256": "54db13f8c703ff512d344a94ba8261fbc45594bdef7e7afd3e0a5e5315fb7e80",
+      "source": "https://wippy.ai/llm/path/en/internals/dispatch",
+      "topic": "process"
+    },
+    {
+      "bytes": 8712,
+      "id": "runtime/internals/events",
+      "sha256": "31ccaae3a6819b9bed821815f2a57d66a5eb57ded2ba68011606aa44d66fa543",
+      "source": "https://wippy.ai/llm/path/en/internals/events",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 4431,
+      "id": "runtime/internals/kinds",
+      "sha256": "7f228600dea5c868795547bb6fac1027eb4e200a51a59e2959a782701f8661c0",
+      "source": "https://wippy.ai/llm/path/en/internals/kinds",
+      "topic": "registry"
+    },
+    {
+      "bytes": 12146,
+      "id": "runtime/internals/modules",
+      "sha256": "18074b947998fc8477ce69c4d67074eb0e839cf4c1b3d4b3b7812f67dae77b7a",
+      "source": "https://wippy.ai/llm/path/en/internals/modules",
+      "topic": "registry"
+    },
+    {
+      "bytes": 9048,
+      "id": "runtime/internals/registry",
+      "sha256": "1cf6c4ab387a64b0f01801afbe930d81e3fb68cbaed38fb5a994a25e460acab7",
+      "source": "https://wippy.ai/llm/path/en/internals/registry",
+      "topic": "registry"
+    },
+    {
+      "bytes": 7294,
+      "id": "runtime/internals/scheduler",
+      "sha256": "37b71af62fff996b351dd1528bc4fc5dabff7cfce98c1b0177e26853da01bd01",
+      "source": "https://wippy.ai/llm/path/en/internals/scheduler",
+      "topic": "process"
+    },
+    {
+      "bytes": 11631,
+      "id": "runtime/lua/core/base",
+      "sha256": "03c7e0a289e3c871b32a05be3a80324ccfeba2c9fe90f3b1b703033b5c145347",
+      "source": "https://wippy.ai/llm/path/en/lua/core/base",
+      "topic": "core"
+    },
+    {
+      "bytes": 7354,
+      "id": "runtime/lua/core/channel",
+      "sha256": "0fbc5b38f587d2a83b67c16d3e25f11d0bfb76292fd61ee4cf69903a6b2c0856",
+      "source": "https://wippy.ai/llm/path/en/lua/core/channel",
+      "topic": "core"
+    },
+    {
+      "bytes": 1435,
+      "id": "runtime/lua/core/context",
+      "sha256": "3b44232223f2e6b9e0f6e40f5284b49ccd1046ea4027734e68d31c870d49a475",
+      "source": "https://wippy.ai/llm/path/en/lua/core/context",
+      "topic": "core"
+    },
+    {
+      "bytes": 8563,
+      "id": "runtime/lua/core/contract",
+      "sha256": "e40407fde97e44a32b460aab6a23b4012eb265e3bc64b199811a9d5b7813e5a9",
+      "source": "https://wippy.ai/llm/path/en/lua/core/contract",
+      "topic": "core"
+    },
+    {
+      "bytes": 3723,
+      "id": "runtime/lua/core/errors",
+      "sha256": "ca0be60fad63cc947f4794bc9f1e7b04400bdeeb1268f92d9f4cec2bacc7747d",
+      "source": "https://wippy.ai/llm/path/en/lua/core/errors",
+      "topic": "core"
+    },
+    {
+      "bytes": 4143,
+      "id": "runtime/lua/core/events",
+      "sha256": "9305a7d8b7d2a2b33143eb3f1abb11905fa3e0b8b17b034aa1fa08dfde3ddd09",
+      "source": "https://wippy.ai/llm/path/en/lua/core/events",
+      "topic": "core"
+    },
+    {
+      "bytes": 11997,
+      "id": "runtime/lua/core/funcs",
+      "sha256": "4234d166bcea3dbb465252f880fa98641e0b5485b62c7046f8fcabb030c13ca2",
+      "source": "https://wippy.ai/llm/path/en/lua/core/funcs",
+      "topic": "core"
+    },
+    {
+      "bytes": 4280,
+      "id": "runtime/lua/core/future",
+      "sha256": "c7b75428d3f3ea744d6245aa7b50320108dd82f68b01125e6ed42bddab0f7ce7",
+      "source": "https://wippy.ai/llm/path/en/lua/core/future",
+      "topic": "core"
+    },
+    {
+      "bytes": 8336,
+      "id": "runtime/lua/core/pg",
+      "sha256": "b920302d74c3bae0d36c946a0ed6c71422befda02b5e4831a419f94bea8e485d",
+      "source": "https://wippy.ai/llm/path/en/lua/core/pg",
+      "topic": "core"
+    },
+    {
+      "bytes": 16678,
+      "id": "runtime/lua/core/process",
+      "sha256": "05ef6aa0397033f08f8204db4fbf4d958af7ca1c9e9c352db83c8aeca0fee46c",
+      "source": "https://wippy.ai/llm/path/en/lua/core/process",
+      "topic": "core"
+    },
+    {
+      "bytes": 11384,
+      "id": "runtime/lua/core/registry",
+      "sha256": "14a8d7db9bfb41fe98c94a82557c5d608aff9439c700e75deb9af2de5aa3cb7c",
+      "source": "https://wippy.ai/llm/path/en/lua/core/registry",
+      "topic": "core"
+    },
+    {
+      "bytes": 3546,
+      "id": "runtime/lua/core/stream",
+      "sha256": "1ce017f6c3e4fcc6f9b5083fc2751bdc17328728636eee6cc84b34367344820f",
+      "source": "https://wippy.ai/llm/path/en/lua/core/stream",
+      "topic": "core"
+    },
+    {
+      "bytes": 15860,
+      "id": "runtime/lua/core/time",
+      "sha256": "6eacaae6aeacdff457b2ef116b46b38a9bdd69897027496a542b330909481a3a",
+      "source": "https://wippy.ai/llm/path/en/lua/core/time",
+      "topic": "core"
+    },
+    {
+      "bytes": 9135,
+      "id": "runtime/lua/data/archive",
+      "sha256": "9aa3280e2a98f969fb44129cf3961a55ea337f919811e4c06959f0fc15cb655a",
+      "source": "https://wippy.ai/llm/path/en/lua/data/archive",
+      "topic": "data"
+    },
+    {
+      "bytes": 3667,
+      "id": "runtime/lua/data/base64",
+      "sha256": "ead7365cf3943a4cf2fb24ccd68f55b0ed5e83631b7d2fef66d75f72f27c9688",
+      "source": "https://wippy.ai/llm/path/en/lua/data/base64",
+      "topic": "data"
+    },
+    {
+      "bytes": 13678,
+      "id": "runtime/lua/data/compress",
+      "sha256": "d6e054626107cfb33163bcb3fc9b21b6c18d4b4e8b0be1ebaf4469fda72cc211",
+      "source": "https://wippy.ai/llm/path/en/lua/data/compress",
+      "topic": "data"
+    },
+    {
+      "bytes": 8389,
+      "id": "runtime/lua/data/excel",
+      "sha256": "d613a0819b1ab3146318c53809a4ba50f127dcb986431e503319cdabaf5d4884",
+      "source": "https://wippy.ai/llm/path/en/lua/data/excel",
+      "topic": "data"
+    },
+    {
+      "bytes": 5939,
+      "id": "runtime/lua/data/json",
+      "sha256": "2fe60006aaa7a149ed98565fd71039812926bf891299bddad43ab286842422e8",
+      "source": "https://wippy.ai/llm/path/en/lua/data/json",
+      "topic": "data"
+    },
+    {
+      "bytes": 5101,
+      "id": "runtime/lua/data/payload",
+      "sha256": "9f2167a4dfee27ca3fe9cbdb9142d8f59900065d92aad4e1f805ee244e08f3c3",
+      "source": "https://wippy.ai/llm/path/en/lua/data/payload",
+      "topic": "data"
+    },
+    {
+      "bytes": 3818,
+      "id": "runtime/lua/data/yaml",
+      "sha256": "4a865c29d089f26ff5b673ed22c211a22629e6926a95a75861533e3fc11644fd",
+      "source": "https://wippy.ai/llm/path/en/lua/data/yaml",
+      "topic": "data"
+    },
+    {
+      "bytes": 8996,
+      "id": "runtime/lua/dynamic/eval",
+      "sha256": "1b0e5facb51c77edc4e6640d319293d6dee4dbe6fbf7baf4f4c9b14d1e40b2f8",
+      "source": "https://wippy.ai/llm/path/en/lua/dynamic/eval",
+      "topic": "dynamic"
+    },
+    {
+      "bytes": 11553,
+      "id": "runtime/lua/dynamic/exec",
+      "sha256": "380428a0729dce75a9937028a130641ffb325a4feb445455bcf9758e86d56e50",
+      "source": "https://wippy.ai/llm/path/en/lua/dynamic/exec",
+      "topic": "dynamic"
+    },
+    {
+      "bytes": 4941,
+      "id": "runtime/lua/dynamic/expression",
+      "sha256": "b530f9a005593808bca7330f01640ad05787854ad01428743a7b8c0669ee5aac",
+      "source": "https://wippy.ai/llm/path/en/lua/dynamic/expression",
+      "topic": "dynamic"
+    },
+    {
+      "bytes": 6896,
+      "id": "runtime/lua/entries",
+      "sha256": "adb497b46a1d1f769048c51982c5d423d199993f6777e048fa732281cac823a4",
+      "source": "https://wippy.ai/llm/path/en/lua/entries",
+      "topic": "lua"
+    },
+    {
+      "bytes": 16200,
+      "id": "runtime/lua/http/client",
+      "sha256": "46bf6e73acd219ad85d3b18295b13693a2d9ee84c4636a8e8e1cb66d01515d2e",
+      "source": "https://wippy.ai/llm/path/en/lua/http/client",
+      "topic": "http"
+    },
+    {
+      "bytes": 10687,
+      "id": "runtime/lua/http/html",
+      "sha256": "670e671cacdf0eda8de995bce26db54eee75db9f5bc0e704ed479221c41b74d7",
+      "source": "https://wippy.ai/llm/path/en/lua/http/html",
+      "topic": "http"
+    },
+    {
+      "bytes": 21466,
+      "id": "runtime/lua/http/http",
+      "sha256": "717fe1fb5bb59e319806e9fb81fa2701d82eda787d9325379cc74a9911bd6a33",
+      "source": "https://wippy.ai/llm/path/en/lua/http/http",
+      "topic": "http"
+    },
+    {
+      "bytes": 12803,
+      "id": "runtime/lua/http/websocket",
+      "sha256": "2dfd3449fa8c8154104b62fa58db9860a18d7692f8a5361b33109d0fe9da6444",
+      "source": "https://wippy.ai/llm/path/en/lua/http/websocket",
+      "topic": "http"
+    },
+    {
+      "bytes": 4795,
+      "id": "runtime/lua/overview",
+      "sha256": "fbe8f2eb364a82734406bd27d21e12558f36849949990c7194ca581b304015c3",
+      "source": "https://wippy.ai/llm/path/en/lua/overview",
+      "topic": "lua"
+    },
+    {
+      "bytes": 8685,
+      "id": "runtime/lua/security/crypto",
+      "sha256": "b3241b822d03646a63b6d1b3b89c5bdf769243a5b9f36529eaf64f1467edb038",
+      "source": "https://wippy.ai/llm/path/en/lua/security/crypto",
+      "topic": "security"
+    },
+    {
+      "bytes": 5759,
+      "id": "runtime/lua/security/hash",
+      "sha256": "d582305fde10029102356ff6b890c5afe9a3dbf9f3a1a22f60bd008a8e43f5ae",
+      "source": "https://wippy.ai/llm/path/en/lua/security/hash",
+      "topic": "security"
+    },
+    {
+      "bytes": 11686,
+      "id": "runtime/lua/security/security",
+      "sha256": "58e4ac4d4c62e355a33afac05cf229473767615a8f970b6f1f5b0efab197c07b",
+      "source": "https://wippy.ai/llm/path/en/lua/security/security",
+      "topic": "security"
+    },
+    {
+      "bytes": 4507,
+      "id": "runtime/lua/security/uuid",
+      "sha256": "35a48215ddd61a6422821ad6f031f8d328a4800aafc0bd3f090f2a7927dd4384",
+      "source": "https://wippy.ai/llm/path/en/lua/security/uuid",
+      "topic": "security"
+    },
+    {
+      "bytes": 9255,
+      "id": "runtime/lua/storage/cdc",
+      "sha256": "2bbdf300b03b332d0c69213afae0d134b382088a13e5297df6d39926b712306b",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/cdc",
+      "topic": "storage"
+    },
+    {
+      "bytes": 19529,
+      "id": "runtime/lua/storage/cloud",
+      "sha256": "300101dfb1dbd524589c3abfff6e17352dc35d4e3acefc7f9e7563fe4e288626",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/cloud",
+      "topic": "storage"
+    },
+    {
+      "bytes": 9808,
+      "id": "runtime/lua/storage/filesystem",
+      "sha256": "20d492952217970fc925a0d710a047f5f61a1e78dd3cba12ce231f892559cbbb",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/filesystem",
+      "topic": "storage"
+    },
+    {
+      "bytes": 6043,
+      "id": "runtime/lua/storage/queue",
+      "sha256": "38aed37e56ac9ca2983d7be2169576cd3f205897978e1192b37787889ca116be",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/queue",
+      "topic": "storage"
+    },
+    {
+      "bytes": 35623,
+      "id": "runtime/lua/storage/sql",
+      "sha256": "1679aabb41e64b9b3d5a66ff2f458aff6eb999200b389523447e8d497093b472",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/sql",
+      "topic": "storage"
+    },
+    {
+      "bytes": 9369,
+      "id": "runtime/lua/storage/store",
+      "sha256": "10d7fdc8bed7e681b332ed20c5fd545d1244f06ac3b42aa505a58d991cd140c7",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/store",
+      "topic": "storage"
+    },
+    {
+      "bytes": 3722,
+      "id": "runtime/lua/system/env",
+      "sha256": "54d09c0accd200089504b3fc9f55249258acb8f2d38acea9c852ac0cbc1cbc7b",
+      "source": "https://wippy.ai/llm/path/en/lua/system/env",
+      "topic": "system"
+    },
+    {
+      "bytes": 8468,
+      "id": "runtime/lua/system/hub",
+      "sha256": "d9000b9cd46ecc15181d2209b8076ca38c6db075191106d021ff846666546eb3",
+      "source": "https://wippy.ai/llm/path/en/lua/system/hub",
+      "topic": "system"
+    },
+    {
+      "bytes": 4080,
+      "id": "runtime/lua/system/io",
+      "sha256": "b5afc1923b9686751e5f9a1a7008566089b5d08e76dcbbbdedd5d2723004617c",
+      "source": "https://wippy.ai/llm/path/en/lua/system/io",
+      "topic": "system"
+    },
+    {
+      "bytes": 2924,
+      "id": "runtime/lua/system/logger",
+      "sha256": "dda54edb66655c98cc03754526eb443c0fd81d3c2e12d5386a86d864624bc90e",
+      "source": "https://wippy.ai/llm/path/en/lua/system/logger",
+      "topic": "system"
+    },
+    {
+      "bytes": 3856,
+      "id": "runtime/lua/system/metrics",
+      "sha256": "7afa84d0d072e4bc648eb4e1bcbf6322ba1a9989b8cdb6e16029bb7d6fd79b8b",
+      "source": "https://wippy.ai/llm/path/en/lua/system/metrics",
+      "topic": "system"
+    },
+    {
+      "bytes": 5633,
+      "id": "runtime/lua/system/ostime",
+      "sha256": "aadf34bb8858c930af6e4cb2c3d0024ff0121dd99dc07f7764e59fedab0619c6",
+      "source": "https://wippy.ai/llm/path/en/lua/system/ostime",
+      "topic": "system"
+    },
+    {
+      "bytes": 16317,
+      "id": "runtime/lua/system/system",
+      "sha256": "aef195f703b61af66380f2e3d80cb48cbf4d1799d4a3123f7817beedd6f91b05",
+      "source": "https://wippy.ai/llm/path/en/lua/system/system",
+      "topic": "system"
+    },
+    {
+      "bytes": 22652,
+      "id": "runtime/lua/system/tty",
+      "sha256": "888cef2390ce7ff6a9e3a31611616ff3f96bad767e5c451e60759d6019143ba0",
+      "source": "https://wippy.ai/llm/path/en/lua/system/tty",
+      "topic": "system"
+    },
+    {
+      "bytes": 4105,
+      "id": "runtime/lua/text/template",
+      "sha256": "0b56a30c8c92e06b3335b4b97c7fe179fad583f383cf1d3e55d4ce709ba8ce6b",
+      "source": "https://wippy.ai/llm/path/en/lua/text/template",
+      "topic": "text"
+    },
+    {
+      "bytes": 12626,
+      "id": "runtime/lua/text/text",
+      "sha256": "b20abb34c348590bd51a327127362548d78195177a1ea6f4990f8e5c4d53399f",
+      "source": "https://wippy.ai/llm/path/en/lua/text/text",
+      "topic": "text"
+    },
+    {
+      "bytes": 16267,
+      "id": "runtime/lua/text/treesitter",
+      "sha256": "f7210308e3ad067722602dc50f81c03563eb5f85fd24ffc1174e0b7dad359750",
+      "source": "https://wippy.ai/llm/path/en/lua/text/treesitter",
+      "topic": "text"
+    },
+    {
+      "bytes": 12334,
+      "id": "runtime/lua/types",
+      "sha256": "51aaeaf60197bb2459aff14c031fd669443b69d82ebab1892c08e3000ba334e4",
+      "source": "https://wippy.ai/llm/path/en/lua/types",
+      "topic": "lua"
+    },
+    {
+      "bytes": 4980,
+      "id": "runtime/lua/why-lua",
+      "sha256": "afad83c51b949e0fa86258da430da0cfefc618565f5918862e3f04dfa9484272",
+      "source": "https://wippy.ai/llm/path/en/lua/why-lua",
+      "topic": "lua"
+    },
+    {
+      "bytes": 16395,
+      "id": "runtime/start/llm-brief",
+      "sha256": "90a4d40c8bad253f799c89a0b269b30a3b0e64448befa08d2c3bea37dd76de0a",
+      "source": "https://wippy.ai/llm/path/en/start/llm-brief",
+      "topic": "platform"
+    },
+    {
+      "bytes": 7993,
+      "id": "runtime/start/structure",
+      "sha256": "a218de599d21a258d8444b3703f06aaaed5b15daf260a4f7277ed67a83801659",
+      "source": "https://wippy.ai/llm/path/en/start/structure",
+      "topic": "platform"
+    },
+    {
+      "bytes": 10503,
+      "id": "runtime/system/cdc",
+      "sha256": "1d1380f34498e4bb52a49f69fed9526b461100e17462d372426dc904f770ec11",
+      "source": "https://wippy.ai/llm/path/en/system/cdc",
+      "topic": "system"
+    },
+    {
+      "bytes": 4470,
+      "id": "runtime/system/cloudstorage",
+      "sha256": "6a94b928deef9fbb97cc6a6d89862f488c9c90d0090f8bf089b134235990b47a",
+      "source": "https://wippy.ai/llm/path/en/system/cloudstorage",
+      "topic": "system"
+    },
+    {
+      "bytes": 8715,
+      "id": "runtime/system/database",
+      "sha256": "40a99e553b9f2a69949db3f04b146d834e6107c1c4d83b1554f18d7fd5a210b5",
+      "source": "https://wippy.ai/llm/path/en/system/database",
+      "topic": "system"
+    },
+    {
+      "bytes": 8055,
+      "id": "runtime/system/env",
+      "sha256": "a53f77366d3ffe2e1eae1d1269e50e885d3cede318a45d16e833563a26f9ca4b",
+      "source": "https://wippy.ai/llm/path/en/system/env",
+      "topic": "system"
+    },
+    {
+      "bytes": 5750,
+      "id": "runtime/system/exec",
+      "sha256": "ea05ad5ba78078460064980c7fa5e4008d81ec32fb0c3d49d571f3d81730bfff",
+      "source": "https://wippy.ai/llm/path/en/system/exec",
+      "topic": "system"
+    },
+    {
+      "bytes": 2889,
+      "id": "runtime/system/filesystem",
+      "sha256": "4f4b468515d3bbcfc3f288730f5d05ee03304821e31311af6211acc3070ae691",
+      "source": "https://wippy.ai/llm/path/en/system/filesystem",
+      "topic": "system"
+    },
+    {
+      "bytes": 8638,
+      "id": "runtime/system/network",
+      "sha256": "dc0110e210ca2811d70300fb05cdc35dd0bff46de4e56ad8ce32aa48b50f8431",
+      "source": "https://wippy.ai/llm/path/en/system/network",
+      "topic": "system"
+    },
+    {
+      "bytes": 5389,
+      "id": "runtime/system/process-groups",
+      "sha256": "7f9dbe7ccf04b10b20a05a7fa5817e777f2beb9e8aa25c1c1aec09e0aba97788",
+      "source": "https://wippy.ai/llm/path/en/system/process-groups",
+      "topic": "system"
+    },
+    {
+      "bytes": 3451,
+      "id": "runtime/system/process-host",
+      "sha256": "a8e5505cca8d5a82cbc983ac6341e8b2438c8498d5cad57f6d4c85ffc2a1b1c3",
+      "source": "https://wippy.ai/llm/path/en/system/process-host",
+      "topic": "system"
+    },
+    {
+      "bytes": 12201,
+      "id": "runtime/system/queue",
+      "sha256": "c9999e2df4f2117b3cb796e0d9731175b6d5755ba9fd23509b5c44a657429eee",
+      "source": "https://wippy.ai/llm/path/en/system/queue",
+      "topic": "system"
+    },
+    {
+      "bytes": 23923,
+      "id": "runtime/system/security",
+      "sha256": "752d5af0fa96109e51e99bd44074010973770671b37f56601d620973966878c8",
+      "source": "https://wippy.ai/llm/path/en/system/security",
+      "topic": "system"
+    },
+    {
+      "bytes": 5684,
+      "id": "runtime/system/store",
+      "sha256": "22cc4ec566c66c071ac42782155bc1552ca76cfa000f6bf553ed74eb55272b03",
+      "source": "https://wippy.ai/llm/path/en/system/store",
+      "topic": "system"
+    },
+    {
+      "bytes": 4395,
+      "id": "runtime/system/template",
+      "sha256": "70ab98570dd30572737c3c3ea5ab1aec79773c8137c394db7989a1ccd6978292",
+      "source": "https://wippy.ai/llm/path/en/system/template",
+      "topic": "system"
+    },
+    {
+      "bytes": 3939,
+      "id": "runtime/system/terminal",
+      "sha256": "7f8838d98116defbce95944711aa543b14d9dcccb7bbd248dc16c64e4c5c66ef",
+      "source": "https://wippy.ai/llm/path/en/system/terminal",
+      "topic": "system"
+    },
+    {
+      "bytes": 6785,
+      "id": "runtime/tutorials/channels",
+      "sha256": "9f65698d0adf1423631937d45c2b9e1e2f633209975009e877fa94c7a2d4dcef",
+      "source": "https://wippy.ai/llm/path/en/tutorials/channels",
+      "topic": "process"
+    },
+    {
+      "bytes": 11542,
+      "id": "runtime/tutorials/echo-service",
+      "sha256": "7406b5f2d5150bc82d3a3f37d4d242073779533d266e1fd6905e9214de5a1674",
+      "source": "https://wippy.ai/llm/path/en/tutorials/echo-service",
+      "topic": "http"
+    },
+    {
+      "bytes": 7833,
+      "id": "runtime/tutorials/facade",
+      "sha256": "7c3c2a7744cf3824e8713636957223a1f49783f187e66c1a792bf5f6a3713101",
+      "source": "https://wippy.ai/llm/path/en/tutorials/facade",
+      "topic": "registry"
+    },
+    {
+      "bytes": 3494,
+      "id": "runtime/tutorials/hello-world",
+      "sha256": "3059cb60dabda6d230521fc0fbb55d01d90fe2034418f8db4d46cf57a904ec2f",
+      "source": "https://wippy.ai/llm/path/en/tutorials/hello-world",
+      "topic": "platform"
+    },
+    {
+      "bytes": 13350,
+      "id": "runtime/tutorials/processes",
+      "sha256": "d3c78e638109ca2ea5a718569b7caea001575514ace4d68e41ad14a9e542a7c4",
+      "source": "https://wippy.ai/llm/path/en/tutorials/processes",
+      "topic": "process"
+    },
+    {
+      "bytes": 23258,
+      "id": "runtime/tutorials/supervision",
+      "sha256": "a24a2fab9fbc5f7d3a16ed511a3be81643269e64645526b22ac5766affac9f6b",
+      "source": "https://wippy.ai/llm/path/en/tutorials/supervision",
+      "topic": "process"
+    },
+    {
+      "bytes": 12369,
+      "id": "runtime/tutorials/task-queue",
+      "sha256": "d1012e89e2fb17df83a488983ff890c1318c08b7b7c8634d132943f11c73583f",
+      "source": "https://wippy.ai/llm/path/en/tutorials/task-queue",
+      "topic": "process"
+    },
+    {
+      "bytes": 23004,
+      "id": "runtime/tutorials/tty",
+      "sha256": "3fe964dbee7853d3071ad7e0ae60d172eb8474201208f985d0dd607672441d17",
+      "source": "https://wippy.ai/llm/path/en/tutorials/tty",
+      "topic": "terminal"
+    },
+    {
+      "bytes": 9920,
+      "id": "docs/agent_guide",
+      "sha256": "4e2874e20c6315995610ee53a056d6fefe327f38d8a216b493ea07210f273ea3",
+      "source": "docs/AGENT_GUIDE.md",
+      "topic": "platform"
+    },
+    {
+      "bytes": 27144,
+      "id": "docs/application_contracts",
+      "sha256": "df7ce41996f0d79381e62476419752f956af5bf3c33dc920f5e52ddbfa41b830",
+      "source": "docs/APPLICATION_CONTRACTS.md",
+      "topic": "application"
+    },
+    {
+      "bytes": 24715,
+      "id": "docs/approvals",
+      "sha256": "cab938296a11b481d4bc0d5f2c2829a190304f1c9f7cefe32db13a1db3b2ec34",
+      "source": "docs/APPROVALS.md",
+      "topic": "approvals"
+    },
+    {
+      "bytes": 34919,
+      "id": "docs/carrier",
+      "sha256": "8310be3abcc116c39eea51a2bc662110e430706eafce1c1bd5f98dd17b29b801",
+      "source": "docs/CARRIER.md",
+      "topic": "application"
+    },
+    {
+      "bytes": 47498,
+      "id": "docs/client_host_split",
+      "sha256": "c5a97ff3cb0200cec2daa76a038c552fc55a841a24d4e60771616bfbfad73516",
+      "source": "docs/CLIENT_HOST_SPLIT.md",
+      "topic": "ui"
+    },
+    {
+      "bytes": 35161,
+      "id": "docs/client_state",
+      "sha256": "d3afebdc900e2b1e7eb9d13e6fe285c880515d343118791fbb67a6bafd5d9973",
+      "source": "docs/CLIENT_STATE.md",
+      "topic": "ui"
+    },
+    {
+      "bytes": 35542,
+      "id": "docs/component_layout",
+      "sha256": "035c5670eedb8c95164c03f78899114badb3701ae3840d5e8c75628bfa4d9179",
+      "source": "docs/COMPONENT_LAYOUT.md",
+      "topic": "platform"
+    },
+    {
+      "bytes": 27776,
+      "id": "docs/desktop_foundation",
+      "sha256": "48423f5674c13e2a74bb2c9965705fcc0f6fb94b212dd115216d38bdb05c9d1f",
+      "source": "docs/DESKTOP_FOUNDATION.md",
+      "topic": "ui"
+    },
+    {
+      "bytes": 18351,
+      "id": "docs/distributed_app_delivery",
+      "sha256": "576986b7e75db5754d84e8ac2031a9cfb6c5876bd1e68fcc007d9181aab751ab",
+      "source": "docs/DISTRIBUTED_APP_DELIVERY.md",
+      "topic": "application"
+    },
+    {
+      "bytes": 27640,
+      "id": "docs/gateway",
+      "sha256": "dfeb4a5c06fbe3b953187915eda7613c0c6c2628628b1514e624c8527df69818",
+      "source": "docs/GATEWAY.md",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 23988,
+      "id": "docs/gateway_hooks",
+      "sha256": "c46d6b0a9507daa1c30d68a9fddf51d6d79e76efb4a6b4e05da2512ea2e52c4b",
+      "source": "docs/GATEWAY_HOOKS.md",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 26942,
+      "id": "docs/governance_implementation",
+      "sha256": "6d110d424416f73aeb5514eb1738c886d7cfe0591d185a0950ab54cf7e251fd8",
+      "source": "docs/GOVERNANCE_IMPLEMENTATION.md",
+      "topic": "application"
+    },
+    {
+      "bytes": 326847,
+      "id": "docs/harness_inventory",
+      "sha256": "9e1c57c7ad960d49eb796f9afa30ae9fce1d94e1661da9a442e70cf81a7530e0",
+      "source": "docs/HARNESS_INVENTORY.md",
+      "topic": "harness"
+    },
+    {
+      "bytes": 19216,
+      "id": "docs/hive_bootstrap",
+      "sha256": "04ff9ce6ea7bc6abb7ac726f23420201b55b6914a8e67de115fd5b7b95b9abbf",
+      "source": "docs/HIVE_BOOTSTRAP.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 22989,
+      "id": "docs/hive_launch_state",
+      "sha256": "58528799d631a1b8111c0ac3993bb615f1cb1eff024947f1208ec8c8430b178c",
+      "source": "docs/HIVE_LAUNCH_STATE.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 19234,
+      "id": "docs/hive_protocol",
+      "sha256": "28d5c940b84a0b58138b94fec960cbbca6fdfd5d77b585cf80070ebecdba50ed",
+      "source": "docs/HIVE_PROTOCOL.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 30223,
+      "id": "docs/hive_supervisor",
+      "sha256": "7f8d1a8bbb4e0b7cf6795fcd5b5f344e2f90807c87f313a1c5d4620075f59960",
+      "source": "docs/HIVE_SUPERVISOR.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 14258,
+      "id": "docs/hive_topology",
+      "sha256": "56865682198d6ae3410a70341a272b184ed3500d0f1f75e14c42cdc134e5aeaa",
+      "source": "docs/HIVE_TOPOLOGY.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 15526,
+      "id": "docs/launch_routing",
+      "sha256": "6890fcf75a80509063785ed8f49d74cf6f80c9aa751c62df0a980f5439616e97",
+      "source": "docs/LAUNCH_ROUTING.md",
+      "topic": "harness"
+    },
+    {
+      "bytes": 9259,
+      "id": "docs/mcp_configuration",
+      "sha256": "bdcd0006fbc3078dd372a6778bb1e9856b33c36277667b00f9964f2b6a9f4964",
+      "source": "docs/MCP_CONFIGURATION.md",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 5820,
+      "id": "docs/package_boundaries",
+      "sha256": "66a0bf078760c55ade4e0ac5d28ff6c150e1933897cb5f9029d009f6ef4971e3",
+      "source": "docs/PACKAGE_BOUNDARIES.md",
+      "topic": "platform"
+    },
+    {
+      "bytes": 17670,
+      "id": "docs/placement_and_subscriptions",
+      "sha256": "5b2e7bf4ce7ee51375253dc0c130d7790e6ceeda46cad92dfe2fd1b5eb48e304",
+      "source": "docs/PLACEMENT_AND_SUBSCRIPTIONS.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 7067,
+      "id": "docs/readme",
+      "sha256": "99e9df92c2bbaffc0a4beae73a187668c82efeee2a58a684c1584ad64d8582bd",
+      "source": "docs/README.md",
+      "topic": "platform"
+    },
+    {
+      "bytes": 17357,
+      "id": "docs/registry_extension",
+      "sha256": "18e3ce9563abb46acea58e1f98f61b1db475c83242b9e238386b6e8a96c4dc9a",
+      "source": "docs/REGISTRY_EXTENSION.md",
+      "topic": "registry"
+    },
+    {
+      "bytes": 3586,
+      "id": "docs/storage",
+      "sha256": "a0d6a56e4b4e47cf21223d22f0f2286977fbceb48560d9e980eb06c6919c31a3",
+      "source": "docs/STORAGE.md",
+      "topic": "storage"
+    },
+    {
+      "bytes": 7889,
+      "id": "docs/sync_and_inbox",
+      "sha256": "a64966a2f1fc73956586eac7f331790bf3d6bdc1f00f06b524967db49576a910",
+      "source": "docs/SYNC_AND_INBOX.md",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 15276,
+      "id": "docs/system_map",
+      "sha256": "d533eee86be9fb84290641ae35e6cf037b7b1c21e27b4e21d1ff317ecf28aa5c",
+      "source": "docs/SYSTEM_MAP.md",
+      "topic": "platform"
+    },
+    {
+      "bytes": 9662,
+      "id": "docs/threads",
+      "sha256": "c0102c3a30e00e0c2f9b788731b2cf46dceb8770a9843c3b7d2cba6e205e716a",
+      "source": "docs/THREADS.md",
+      "topic": "threads"
+    },
+    {
+      "bytes": 24438,
+      "id": "docs/thread_authority",
+      "sha256": "3c5edabe5d5f6ea1fa6e983038f3f37395ca44e9c5dccf63ef46d52c7b9cfcee",
+      "source": "docs/THREAD_AUTHORITY.md",
+      "topic": "threads"
+    },
+    {
+      "bytes": 31423,
+      "id": "docs/thread_delivery",
+      "sha256": "ae06c03d1b2d5ddfbd1f66119fe69ebbe648016405574adc2f6d79871a27c61f",
+      "source": "docs/THREAD_DELIVERY.md",
+      "topic": "threads"
+    },
+    {
+      "bytes": 19133,
+      "id": "docs/thread_records",
+      "sha256": "782c633accb8b1ebf6cc777dda90688f77de8033b9102655d86b2d96a6c2e7e9",
+      "source": "docs/THREAD_RECORDS.md",
+      "topic": "threads"
+    },
+    {
+      "bytes": 5957,
+      "id": "docs/thread_sessions",
+      "sha256": "0dbf41ee7576324e9fb73fb30fcb2cb182ad058c49d0aa6743ad35bca6226c67",
+      "source": "docs/THREAD_SESSIONS.md",
+      "topic": "threads"
+    },
+    {
+      "bytes": 13491,
+      "id": "docs/ui_refinement",
+      "sha256": "1c6f293238cc639cf8bfac34383cec1569612ae76e7953adf5158d60fce48e98",
+      "source": "docs/UI_REFINEMENT.md",
+      "topic": "ui"
+    },
+    {
+      "bytes": 33062,
+      "id": "docs/workspace_attachments",
+      "sha256": "e8750cf0f54a97c607a8bc1685766281ab07423c4fb7bc0c125b789aa3af2848",
+      "source": "docs/WORKSPACE_ATTACHMENTS.md",
+      "topic": "ui"
+    },
+    {
+      "bytes": 5256,
+      "id": "docs/workspace_state",
+      "sha256": "34c7d2f7defeeb35fd49114d95701d67ca9ba82575f12014ad5a8f9d02d1d07c",
+      "source": "docs/WORKSPACE_STATE.md",
+      "topic": "storage"
+    },
+    {
+      "bytes": 2746,
+      "id": "component/approvals",
+      "sha256": "a1471368df2f4c9a1fa8f15cbd215025767954bac7dc39d18246947c63b80e79",
+      "source": "src/approvals",
+      "topic": "component"
+    },
+    {
+      "bytes": 10662,
+      "id": "component/credentials",
+      "sha256": "dee1d0243150585b48a5ae937c37f4d7cb73b7cb0c2525d46fc71a12aaf2c319",
+      "source": "src/credentials",
+      "topic": "component"
+    },
+    {
+      "bytes": 16187,
+      "id": "component/driver",
+      "sha256": "4aadd60360711ff2730eabb12b9d47403b2939a176c29be7a045269e611209f6",
+      "source": "src/driver",
+      "topic": "component"
+    },
+    {
+      "bytes": 3717,
+      "id": "component/driver:agy",
+      "sha256": "fec462d1439f34a9469c1d75e0ecf63e021b1aafb41b92ec4fe3680dc3dd6922",
+      "source": "src/driver:agy",
+      "topic": "component"
+    },
+    {
+      "bytes": 787,
+      "id": "component/driver:claude",
+      "sha256": "545bbead1c40fc4bfd7c687212f79fce99540cf4ef6d190add0ac9eb2fbef69e",
+      "source": "src/driver:claude",
+      "topic": "component"
+    },
+    {
+      "bytes": 784,
+      "id": "component/driver:codex",
+      "sha256": "fe07374d76c9719e2ff6c3eef9a8320cd2c164c64a8e9ce8992e092e0228192c",
+      "source": "src/driver:codex",
+      "topic": "component"
+    },
+    {
+      "bytes": 4805,
+      "id": "component/driver:grok",
+      "sha256": "14c50e5d41ff249999c3be496ed621bd3d755923b69c88549ca3d2ba9d671b42",
+      "source": "src/driver:grok",
+      "topic": "component"
+    },
+    {
+      "bytes": 2048,
+      "id": "component/driver:muse",
+      "sha256": "b42e2095c9171b3616e9be5c800879681fe2bd7f1ab3c1ca305244c3f5491f08",
+      "source": "src/driver:muse",
+      "topic": "component"
+    },
+    {
+      "bytes": 2047,
+      "id": "component/gateway",
+      "sha256": "f14ddf72ad522b1edc2054b9cb388faca908916fdad71212b0343d7dd07fcf62",
+      "source": "src/gateway",
+      "topic": "component"
+    },
+    {
+      "bytes": 12211,
+      "id": "component/governance",
+      "sha256": "3c37cc455e09f956f2c030436c66b5dadf1a455f13ec05df9cf5f4141a95ef86",
+      "source": "src/governance",
+      "topic": "component"
+    },
+    {
+      "bytes": 17782,
+      "id": "component/harness",
+      "sha256": "eeb832daeccf5bd7e278f9efbe3a1aa0f84d1e78fcc2698297eabe240852bd9b",
+      "source": "src/harness",
+      "topic": "component"
+    },
+    {
+      "bytes": 2388,
+      "id": "component/hive",
+      "sha256": "600850e75d75376569fcadb054b5e4c68da27387e7bc09ba55efc12381c64f90",
+      "source": "src/hive",
+      "topic": "component"
+    },
+    {
+      "bytes": 3501,
+      "id": "component/hub",
+      "sha256": "8a167b39dfcc409c3d9e32c13ecd931530a06c17d80e4757a8cb7b9080a88fa7",
+      "source": "src/hub",
+      "topic": "component"
+    },
+    {
+      "bytes": 1546,
+      "id": "component/node",
+      "sha256": "ab0ab528792c8c68ad90d228c6c6ea7715d2165b362defb65421bf7ada8313a6",
+      "source": "src/node",
+      "topic": "component"
+    },
+    {
+      "bytes": 830,
+      "id": "component/persist",
+      "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
+      "source": "src/persist",
+      "topic": "component"
+    },
+    {
+      "bytes": 3987,
+      "id": "component/placement",
+      "sha256": "f79b1a872a46ac5ad970d93b6fdf3e0cb20690f33d7b93f853d31c597cc75c99",
+      "source": "src/placement",
+      "topic": "component"
+    },
+    {
+      "bytes": 8578,
+      "id": "component/placement:docker",
+      "sha256": "3ca214a63cf1b0bfb74f71f1b98f562dee5119be5deb6646b5ee61e7d97afae2",
+      "source": "src/placement:docker",
+      "topic": "component"
+    },
+    {
+      "bytes": 17698,
+      "id": "component/placement:native",
+      "sha256": "22f51f3e4509b587730d766001c3f6b1100c897987d663f5074944c94d253512",
+      "source": "src/placement:native",
+      "topic": "component"
+    },
+    {
+      "bytes": 2642,
+      "id": "component/resources",
+      "sha256": "10f73c256752e04ee0af2b5f85d166deb1754613e463aa1a0c6192b1b9a502b9",
+      "source": "src/resources",
+      "topic": "component"
+    },
+    {
+      "bytes": 2247,
+      "id": "component/sync",
+      "sha256": "fb587cd182e79afffc4aac386bd61ee4e9597dc2f4531c753e664fec3c41f321",
+      "source": "src/sync",
+      "topic": "component"
+    },
+    {
+      "bytes": 5818,
+      "id": "component/threads",
+      "sha256": "8ec2019625cd00bccc884e46683fb1c666037b6a4c28cbbfd21df14d25b34596",
+      "source": "src/threads",
+      "topic": "component"
+    },
+    {
+      "bytes": 3655,
+      "id": "toolkit",
+      "sha256": "341705af9ada9bcb293abc48300c5d57a78960002c6be07b2de033baea6bc684",
+      "source": "generated: src/ui, src/apps, src/governance/guide.lua",
+      "topic": "terminal"
+    }
+  ],
+  "schema": "bee.docs-corpus@1",
+  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
+  "totals": {
+    "bytes": 2123509,
+    "documents": 161
+  }
+}

@@ -73,6 +73,11 @@ local function define_tests()
             test.eq(watch.request.after_sequence, 2)
             test.is_nil(watch.request.consumer_id)
             test.is_nil(watch.request.limit)
+            -- A bounded change-wait is a read hint: a wait that ended
+            -- without an answer never claims the owner is unavailable.
+            local before = state.unavailable
+            model.apply_watch(state, fault("UNAVAILABLE", "no answer from the owner"))
+            test.eq(state.unavailable, before)
             test.is_false(model.apply_page(state, page("p-2", 2, 2, 3, {message(3, "three")}, false)))
             test.eq(#state.rows, 2)
             test.eq(state.phase, "resume_required")

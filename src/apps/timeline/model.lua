@@ -274,9 +274,11 @@ function M.watch_intent(state: State): Intent?
     if not state.thread_id or not current or state.phase ~= "attached" then return nil end
     return {target = M.WATCH, request = {thread_id = state.thread_id, after_sequence = current.after_sequence, wait_ms = M.WAIT_MS}}
 end
-function M.apply_watch(state: State, reply: Reply)
-    if reply.ok then state.unavailable = ""; return end
-    state.unavailable = fault_text(reply)
+-- A bounded change-wait is a read hint: it claims nothing, and a wait that
+-- ended without an answer is not evidence the owner is gone. Owner
+-- availability is what attach, pages and lost() established; only they, and
+-- never this hint, may change what the footer says about it.
+function M.apply_watch(_: State, _: Reply)
 end
 -- Closing this viewer's own subscription when it leaves a thread; the
 -- owner authorizes only the actor's own subscription. It is not sent on a

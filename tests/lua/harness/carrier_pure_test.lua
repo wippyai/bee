@@ -179,12 +179,28 @@ local function define_tests()
             local data_noturn = (batch_noturn.records[1].body :: Object).data :: Object
             test.eq(data_noturn.payload_json, data1.payload_json)
 
-            -- Ambiguous event key uses hook:<event_id>
+            -- Ambiguous event key uses hook:<event_id>. A stop's ambiguity is
+            -- occurrence identity only: a prompt may stop more than once, so
+            -- the stop cannot be merged, but it still reports that activity
+            -- ended rather than that what happened is unknown.
             local amb_item = make_valid_item("evt-002", "Stop", true)
             local batch_amb, err_amb = hook_records.batch(binding_id, nil, {amb_item})
             test.is_nil(err_amb)
             if not batch_amb then error("batch_amb is nil") end
-            test.eq(batch_amb.activity, "Activity uncertain")
+            test.eq(batch_amb.activity, "Stopped")
+            -- An activity that describes a specific occurrence cannot be
+            -- attributed without that occurrence's identity.
+            local untagged_tool = make_valid_item("evt-003", "PreToolUse", true)
+            local batch_untagged = hook_records.batch(binding_id, nil, {untagged_tool})
+            if not batch_untagged then error("batch_untagged is nil") end
+            test.eq(batch_untagged.activity, "Activity uncertain")
+            -- A captured turn ends with its stop: the sequence is not
+            -- uncertain merely because the stop has no stable identity.
+            local sequence = {make_valid_item("evt-010", "UserPromptSubmit", false), make_valid_item("evt-011", "PreToolUse", false),
+                make_valid_item("evt-012", "PostToolUse", false), make_valid_item("evt-013", "Stop", true)}
+            local batch_sequence = hook_records.batch(binding_id, nil, sequence)
+            if not batch_sequence then error("batch_sequence is nil") end
+            test.eq(batch_sequence.activity, "Stopped")
             test.eq((batch_amb.records[1].body :: Object).event_key, "hook:evt-002")
             local ref_amb = reference_hook_record(binding_id, nil, amb_item)
             test.eq((batch_amb.records[1].body :: Object).event_key, (ref_amb.body :: Object).event_key)

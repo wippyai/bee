@@ -17,6 +17,11 @@ type Batch = {
     activity: string?,
 }
 
+-- Events whose activity describes a specific occurrence: without that
+-- occurrence's identity the activity cannot be attributed and is uncertain.
+local ATTRIBUTED: {[string]: boolean} = {
+    UserPromptSubmit = true, PreToolUse = true, PostToolUse = true, PostToolUseFailure = true,
+}
 local ACTIVITY: {[string]: string} = {
     SessionStart = "Session started", UserPromptSubmit = "Working",
     PreToolUse = "Using tool", PostToolUse = "Working",
@@ -174,7 +179,17 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
 
         records[index] = record
         event_ids[index] = event_id
-        activity = item.ambiguous == true and "Activity uncertain" or ACTIVITY[item.event]
+        local label = ACTIVITY[item.event]
+        -- Ambiguity is about occurrence identity, not about what the event
+        -- says happened. An ambiguous tool or prompt observation cannot be
+        -- attributed to the action it reports, so that activity is
+        -- uncertain. A stop carries no occurrence identity by design (a
+        -- prompt may stop more than once), which is why it is always
+        -- ambiguous; it reports only that activity ended, so it keeps its
+        -- own label and a healthy attempt idle between turns is not
+        -- reported uncertain.
+        if item.ambiguous == true and ATTRIBUTED[item.event] == true then label = "Activity uncertain" end
+        if label ~= nil then activity = label end
     end
 
     -- Only fixed labels leave the decoder; no prompt, tool input or arbitrary

@@ -10,6 +10,15 @@ entries:
     test: wippy.test:test
     format: bee.timeline:format
     record: bee.threads.records:record
+- name: policy_test
+  kind: function.lua
+  source: file://policy_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [security]
+  imports:
+    test: wippy.test:test
+    model: bee.timeline:model
 - name: model_test
   kind: function.lua
   source: file://model_test.lua

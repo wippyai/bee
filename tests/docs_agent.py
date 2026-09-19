@@ -53,6 +53,10 @@ def main():
         # with the test entries excluded, serves the manifest and a document from
         # the embedded read-only volume and refuses a write to it.
         pack = folder / "bee.wapp"
+        # Production embeds the corpus through wippy.yaml's embed list; carry the
+        # same declaration into the fixture so the packed probe exercises the
+        # embedded filesystem, not a project directory.
+        shutil.copy2(ROOT / "wippy.yaml", folder / "wippy.yaml")
         pack_fixture(folder, pack)
         packed = subprocess.run([str(RUNTIME), "run", str(pack), "docs-volume-probe", "--host", "bee:terminal"],
                                 cwd=folder, env=environment, capture_output=True, text=True, timeout=180)

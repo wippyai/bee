@@ -12,7 +12,7 @@ def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-app-titles-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         source = project / "src/apps/settings/app.lua"
         code = source.read_text()

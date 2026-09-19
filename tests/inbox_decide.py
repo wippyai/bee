@@ -55,7 +55,7 @@ def exercise():
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/inbox_decide", project / "src/probe")
-        for name in [".wippy.yaml", "wippy.lock"]:
+        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         edit_approver_policy(project)
         edit_inbox_workspaces(project)

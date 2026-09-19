@@ -379,7 +379,7 @@ def exercise():
     project = folder / "project"
     shutil.copytree(ROOT / "src", project / "src")
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
-    for name in [".wippy.yaml", "wippy.lock"]:
+    for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copy2(ROOT / name, project / name)
     stage_material(project)
     set_variable(project, "src/driver/agy/_index.yaml", "executable", "BEE_AGENT_APP_AGY")

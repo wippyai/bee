@@ -152,7 +152,7 @@ def exercise():
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/app_journey", project / "src/probe")
-        for name in [".wippy.yaml", "wippy.lock"]:
+        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)
         assert_overlay_authority(project)

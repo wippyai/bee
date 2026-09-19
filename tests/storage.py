@@ -431,7 +431,7 @@ def client_storage():
              "variable": "BEE_CLIENT_DB", "default": str(root / "build-client.db"), "readonly": True},
         ]
         host.write_text(yaml.safe_dump(configuration, sort_keys=False))
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
         pack = root / "client-storage.wapp"

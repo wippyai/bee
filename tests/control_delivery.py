@@ -52,7 +52,7 @@ def run(packed, cases=CASES):
 
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
-            for name in (".wippy.yaml", "wippy.lock"):
+            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             actor = project / "src/core" / owner / ("supervisor.lua" if owner == "launch" else "main.lua")
             source = actor.read_text()
@@ -121,7 +121,7 @@ def routine(packed, cases=("open", "close", "prepare")):
             folder = Path(directory)
             project = folder / "project"
             shutil.copytree(ROOT / "src", project / "src")
-            for name in (".wippy.yaml", "wippy.lock"):
+            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             if case == "prepare":
                 actor = project / "src/core/host/main.lua"
@@ -187,7 +187,7 @@ def targeting(packed):
                 folder = Path(directory)
                 project = folder / "project"
                 shutil.copytree(ROOT / "src", project / "src")
-                for name in (".wippy.yaml", "wippy.lock"):
+                for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                     shutil.copy2(ROOT / name, project / name)
                 if boundary == "workspace":
                     actor = project / "src/core/client/main.lua"

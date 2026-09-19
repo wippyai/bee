@@ -122,7 +122,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="bee-resources-") as directory:
         folder = Path(directory)
         shutil.copytree(ROOT / "src", folder / "src")
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
         probe = folder / "src/resource_probe"
         probe.mkdir()

@@ -205,7 +205,6 @@ def toolkit_reference() -> bytes:
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
     calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance
                                   + "".join(p.read_text() for p in apps))))
-    client_calls = sorted(set(re.findall(r"(?:client|M)\.[A-Za-z_]+", client)))
     sections = [
         "# Bee terminal toolkit",
         "",

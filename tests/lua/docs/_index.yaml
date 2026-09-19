@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.docs
+entries:
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, protocol: bee:docs_protocol}
+- name: corpus_test
+  kind: function.lua
+  source: file://corpus_test.lua
+  method: run
+  modules: [fs, json]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee:docs_policy]}
+  imports: {test: wippy.test:test, corpus: bee:docs_corpus_library, protocol: bee:docs_protocol, method: bee:docs_call}

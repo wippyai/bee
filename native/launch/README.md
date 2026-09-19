@@ -15,6 +15,10 @@ prepares the native owner under that lock and publishes a new execution. A loser
 authenticates the existing owner and reads its catalog without mounting a desktop.
 A successful loser exit or changed descriptor lets the foreground attempt fresh
 supervisor admission once. Hints and lock contention grant no access.
+Because an OS child exit cannot preserve the runtime's typed ownership error,
+the foreground probes the same application lock when a contender exits. It
+waits for fresh publication only while another process holds that lock; a child
+failure with a free state returns immediately.
 
 Startup publication has a 30-second deadline. Unchanged stale discovery does not
 prove readiness; child failure never falls back to stale discovery. Invalid

@@ -90,7 +90,9 @@ func (c Client) Run(ctx context.Context, launch app.Launch) error {
 		return err
 	}
 	startup, cancel := context.WithTimeout(ctx, 30*time.Second)
-	err = waitOwnerPublication(startup, store.Read, previous, child.Done(), child.Wait)
+	err = waitOwnerPublication(startup, store.Read, previous, child.Done(), child.Wait, func() (bool, error) {
+		return app.Owned(launch.State)
+	})
 	cancel()
 	if err != nil {
 		return fmt.Errorf("Bee owner startup (log %s): %w", log.Name(), err)
@@ -102,11 +104,26 @@ func (c Client) Run(ctx context.Context, launch app.Launch) error {
 	return nil
 }
 
-func waitOwnerPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error), previous rendezvous.Descriptor, done <-chan struct{}, wait func(context.Context) error) error {
+func waitOwnerPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error), previous rendezvous.Descriptor, done <-chan struct{}, wait func(context.Context) error, owned func() (bool, error)) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	var childErr error
 	childFinished := false
+	finish := func() error {
+		childErr = wait(ctx)
+		childFinished = true
+		busy, ownedErr := owned()
+		if ownedErr != nil {
+			return errors.Join(childErr, ownedErr)
+		}
+		if busy {
+			return nil
+		}
+		if childErr != nil {
+			return childErr
+		}
+		return errors.New("Bee owner exited before publication")
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -114,8 +131,9 @@ func waitOwnerPublication(ctx context.Context, read func(context.Context) (rende
 		if !childFinished {
 			select {
 			case <-done:
-				childErr = wait(ctx)
-				childFinished = true
+				if err := finish(); err != nil {
+					return err
+				}
 			default:
 			}
 		}
@@ -131,16 +149,14 @@ func waitOwnerPublication(ctx context.Context, read func(context.Context) (rende
 			}
 			return err
 		}
-		if childFinished && !errors.Is(childErr, app.ErrOwned) {
-			return childErr
-		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-done:
 			if !childFinished {
-				childErr = wait(ctx)
-				childFinished = true
+				if err := finish(); err != nil {
+					return err
+				}
 			}
 		case <-tick.C:
 		}

@@ -1,5 +1,25 @@
 # Foundation status
 
+The September 19 runtime-application cut is installed globally from Bee
+`c5b1dd7` as executable SHA-256 `6f4c1d074c00`. It uses runtime PR #787 at
+`3d9926aa`, which additionally migrates verified immutable artifacts
+from the runner's previous `artifact-cache/vendor` layout. This closes a real
+offline upgrade failure where retained registry history selected an older exact
+artifact that the new cache had not imported. The affected retained project
+state was first copied and reproduced unchanged; the candidate then rendered
+its desktop, and the installed global binary rendered the same `Gentle Ember`
+workspace from `/mnt/c/Users/Wolfy-J`. Native Bee remains `ff9810fe`. Bee owns
+TOML subtree composition in Lua
+through the runtime's existing codec and uses the current atomic filesystem
+write option; no TOML or Bee-specific ingress verb was added to runtime. Strict
+lint and all 1,110 unit tests pass. Exact standalone acceptance passes offline
+boot/reconnect, independent and selected desktops, simultaneous cold clients,
+Agent recovery after graceful and abrupt owner loss, isolated project nodes,
+legacy-root cutover and old-binary rollback. The previous six-file artifact set
+is preserved at `bee-evidence/0919/global-before-runtime-787-c8d29db6`; the
+install receipt is `global-runtime-787-fbddfdc-install.json`. Three old owners
+exited on SIGTERM, and no application database was copied or deleted.
+
 Explicitly admitted agents can now open an applied application through the
 `application_open` MCP tool. The workspace host uses the originating agent
 view's existing display assignment; callers cannot choose a foreign workspace

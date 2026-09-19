@@ -16,6 +16,9 @@ import (
 	app "github.com/wippyai/runtime/cmd/app"
 )
 
+func freeOwnerState() (bool, error) { return false, nil }
+func heldOwnerState() (bool, error) { return true, nil }
+
 func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
@@ -25,8 +28,8 @@ func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
 	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
 		reads++
 		return previous, nil
-	}, previous, done, func(context.Context) error { return failure })
-	if err != failure || reads != 1 {
+	}, previous, done, func(context.Context) error { return failure }, freeOwnerState)
+	if err != failure || reads != 0 {
 		t.Fatal("failed child accepted stale discovery", err, reads)
 	}
 }
@@ -34,11 +37,11 @@ func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
 func TestLosingContenderUsesFreshOwnerPublication(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
-	failure := app.ErrOwned
+	failure := errors.New("exit status 1")
 	previous := rendezvous.Descriptor{Execution: "starting"}
 	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
 		return rendezvous.Descriptor{Execution: "winner"}, nil
-	}, previous, done, func(context.Context) error { return failure })
+	}, previous, done, func(context.Context) error { return failure }, heldOwnerState)
 	if err != nil {
 		t.Fatal("fresh winning owner was not offered for authenticated attachment", err)
 	}
@@ -62,7 +65,7 @@ func TestLosingContenderWaitsForPublicationAfterExit(t *testing.T) {
 		default:
 			return previous, nil
 		}
-	}, previous, done, func(context.Context) error { return app.ErrOwned })
+	}, previous, done, func(context.Context) error { return errors.New("exit status 1") }, heldOwnerState)
 	if err != nil {
 		t.Fatal("contention ended before the winner published", err)
 	}
@@ -79,7 +82,7 @@ func TestChildExitDuringReadStillReconcilesPublication(t *testing.T) {
 			return previous, nil
 		}
 		return rendezvous.Descriptor{Execution: "winner"}, nil
-	}, previous, done, func(context.Context) error { return app.ErrOwned })
+	}, previous, done, func(context.Context) error { return errors.New("exit status 1") }, heldOwnerState)
 	if err != nil || reads != 2 {
 		t.Fatal("exit during descriptor read bypassed reconciliation", err, reads)
 	}
@@ -89,7 +92,7 @@ func TestUnchangedOwnerHintDoesNotProveStartup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	previous := rendezvous.Descriptor{Execution: "old"}
-	err := waitOwnerPublication(ctx, func(context.Context) (rendezvous.Descriptor, error) { cancel(); return previous, nil }, previous, make(chan struct{}), func(context.Context) error { t.Fatal("wait called on live child"); return nil })
+	err := waitOwnerPublication(ctx, func(context.Context) (rendezvous.Descriptor, error) { cancel(); return previous, nil }, previous, make(chan struct{}), func(context.Context) error { t.Fatal("wait called on live child"); return nil }, func() (bool, error) { t.Fatal("ownership probed for live child"); return false, nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("stale hint accepted", err)
 	}
@@ -98,7 +101,7 @@ func TestUnchangedOwnerHintDoesNotProveStartup(t *testing.T) {
 func TestReplacementHintAllowsFreshAdmissionAttempt(t *testing.T) {
 	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
 		return rendezvous.Descriptor{Execution: "new"}, nil
-	}, rendezvous.Descriptor{Execution: "old"}, make(chan struct{}), func(context.Context) error { t.Fatal("wait called on live child"); return nil })
+	}, rendezvous.Descriptor{Execution: "old"}, make(chan struct{}), func(context.Context) error { t.Fatal("wait called on live child"); return nil }, func() (bool, error) { t.Fatal("ownership probed for live child"); return false, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +113,7 @@ func TestMissingPublicationRemainsCancelable(t *testing.T) {
 	err := waitOwnerPublication(ctx, func(context.Context) (rendezvous.Descriptor, error) {
 		cancel()
 		return rendezvous.Descriptor{}, os.ErrNotExist
-	}, rendezvous.Descriptor{}, make(chan struct{}), func(context.Context) error { return nil })
+	}, rendezvous.Descriptor{}, make(chan struct{}), func(context.Context) error { return nil }, func() (bool, error) { t.Fatal("ownership probed for live child"); return false, nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}

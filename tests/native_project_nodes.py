@@ -52,7 +52,11 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
         hashed_legacy = legacy_state / "projects" / hashlib.sha256(str(legacy_project.resolve()).encode()).hexdigest()
         hashed_other = legacy_state / "projects" / hashlib.sha256(str(other_project.resolve()).encode()).hexdigest()
 
-        old_view = NativeDesktop(previous, legacy_project, None, arguments=("terminal",), home=home)
+        # Select the historical shared root explicitly. The installed rollback
+        # binary already knows project-scoped defaults, while this case verifies
+        # migration from the older single-root state shape.
+        legacy_args = ("--state-dir", str(legacy_state), "--command", "bee", "terminal")
+        old_view = NativeDesktop(previous, legacy_project, None, arguments=legacy_args, home=home)
         old_owner = None
         try:
             old_view.wait(" BEE ", timeout=30)
@@ -105,7 +109,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
             for owner in owners:
                 stop_owner(owner)
 
-        rollback = NativeDesktop(previous, legacy_project, None, arguments=("terminal",), home=home)
+        rollback = NativeDesktop(previous, legacy_project, None, arguments=legacy_args, home=home)
         rollback_owner = None
         try:
             rollback.wait(" BEE ", timeout=30)

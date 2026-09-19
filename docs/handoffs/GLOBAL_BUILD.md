@@ -1,4 +1,32 @@
-# Global Bee build — September 15, 2026
+# Global Bee build — September 19, 2026
+
+## Current install: runtime application model and concurrent project startup
+
+Source `fbddfdc0`, binary
+`85205596820d8ec86a513fba565e662ca94b8eb4e75279c5e22372e8450b1b18`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime PR #787 at `7f9e7e89bc70` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`. Bee composes provider TOML in Lua with the
+existing runtime codec and publishes retained configuration through
+`writefile(..., {atomic = true})`; no new runtime TOML or ingress API was added.
+
+Strict lint and all 1,110 unit tests pass. Exact installed acceptance covers
+source-free Settings, Terminal, Modules, About and Agent selection; loopback-only
+offline fresh boot, restart and retained-client reconnect; simultaneous cold
+clients electing one owner; independent and explicitly selected displays; Agent
+recovery after graceful restart and owner SIGKILL; distinct project nodes;
+explicit state selection; legacy-root cutover; unchanged migration ledgers; and
+rollback through the previous binary. The installed offline warm attach took
+0.101 seconds in this run.
+
+The previous six files are preserved at
+`/home/wolfy-j/wippy/bee-evidence/0919/global-before-runtime-787-c8d29db6`.
+Receipt: `global-runtime-787-fbddfdc-install.json`. The installer first proved
+post-replacement rollback against a disposable artifact set, then atomically
+replaced all six files and verified their hashes and patch archive. Three exact
+old Bee owner processes exited on SIGTERM; none required SIGKILL. Databases,
+profiles, conversations, workspaces, displays, credentials and migration
+ledgers were not removed or copied.
 
 ## Current install: persisted Hive profile and private application delivery
 

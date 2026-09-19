@@ -23,19 +23,18 @@ Docker control plane, or dependency on `../bee-legacy`. Production loads only
 
 ## Current truth
 
-The installed Train A executable has SHA-256 `4692e267` and source `414c03b`.
-It is the rollback point. It passed offline boot, native Agent selection, scoped
-Codex MCP/hooks, recovery, pack inspection and atomic installation.
+The installed executable has SHA-256 `85205596820d` and source `fbddfdc0` on
+`main`. Runtime PR #787 is pinned at `7f9e7e89`; native Bee is
+`ff9810fe`. This is the rollback point for subsequent work. It passed strict
+lint, all 1,110 unit tests, standalone and offline boot, full native client
+lifecycle, independent/selected displays, simultaneous cold startup, Agent
+recovery, project isolation, database upgrade and old-binary rollback. The
+previous global artifact set is retained under `bee-evidence/0919`.
 
-The integration branch is `feat/docker-harness-delivery-20260913`. Grok B1.1 is
-the immutable implementation base at `380d288`; later finish evidence builds on
-it in bounded commits. This plan is the only finish queue for that branch. Older
-handoff queues provide evidence and history but do not reorder this plan.
-The current pushed integration head is `daec47c`. It includes the bounded Claude
-credential projection, the selected-state manifest composition, the native
-legacy-root preservation cut and the promotion handoff. Candidate artifacts
-remain evidence until the promotion gate passes; they are not installed as
-global Bee.
+Older branch and provider checkpoints below remain implementation history. New
+work starts from the installed `main` checkpoint and keeps the same narrow
+runtime boundary: application planning comes from #787, while TOML composition
+and Bee launch policy remain in Bee.
 
 Completed on this branch:
 

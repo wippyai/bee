@@ -792,7 +792,7 @@ entries:
     machine: bee.harness.carrier:machine
     types: bee.placement:types
     driver_types: bee.driver:types
-    materialization: bee.placement.publication_test:materialization
+    materialization: bee.placement.native:materialization
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua

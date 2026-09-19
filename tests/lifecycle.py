@@ -60,7 +60,7 @@ def run():
     with tempfile.TemporaryDirectory(prefix="bee-lifecycle-") as temporary:
         project = Path(temporary) / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in ["wippy.lock", ".wippy.yaml"]:
+        for name in ["wippy.lock", ".wippy.yaml", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         fixture = project / "src/probe"
         fixture.mkdir()
@@ -237,7 +237,7 @@ def detached():
         end
     end''')
             host_main.write_text(code)
-            for name in (".wippy.yaml", "wippy.lock"):
+            for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
                 shutil.copy2(ROOT / name, project / name)
             index = project / "src/_index.yaml"
             document = yaml.safe_load(index.read_text())

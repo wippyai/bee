@@ -131,7 +131,7 @@ def exercise():
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "tests/fixtures/delivery_review", project / "src/probe")
-        for name in [".wippy.yaml", "wippy.lock"]:
+        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
 
         # The workspace names itself on its first boot; the staged plans and the

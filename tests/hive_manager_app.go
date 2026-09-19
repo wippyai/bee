@@ -54,7 +54,7 @@ func exercise(runtime, root, mode string, packed bool) error {
 	if err := copyTree(filepath.Join(dir, "src", "tests", "hive_manager_probe"), filepath.Join(root, "tests", "fixtures", "hive_manager_app")); err != nil {
 		return err
 	}
-	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
+	for _, name := range []string{".wippy.yaml", "wippy.lock", "wippy.yaml"} {
 		data, readErr := os.ReadFile(filepath.Join(root, name))
 		if readErr != nil {
 			return readErr
@@ -177,7 +177,7 @@ func counterfactual(runtime, root string) error {
 	if err := copyTree(filepath.Join(dir, "src", "tests", "hive_manager_probe"), filepath.Join(root, "tests", "fixtures", "hive_manager_app")); err != nil {
 		return err
 	}
-	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
+	for _, name := range []string{".wippy.yaml", "wippy.lock", "wippy.yaml"} {
 		data, readErr := os.ReadFile(filepath.Join(root, name))
 		if readErr != nil {
 			return readErr

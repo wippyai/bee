@@ -19,7 +19,7 @@ def gateway_workspace():
     with tempfile.TemporaryDirectory(prefix="bee-gateway-") as directory:
         folder = Path(directory)
         shutil.copytree(ROOT / "src", folder / "src")
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, folder / name)
         for child in (ROOT / "tests/modules/gateway/src").iterdir():
             if os.environ.get("BEE_GATEWAY_NATIVE") == "1" and child.name == "managed":

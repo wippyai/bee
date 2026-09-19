@@ -323,7 +323,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
     time.sleep("1500ms")
     storage("allocate", string.rep("a", 32), "OK", 0)''', 1)
             fixture.write_text(code)
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         lint = subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"], cwd=project, capture_output=True, text=True)
         assert lint.returncode == 0, lint.stdout + lint.stderr

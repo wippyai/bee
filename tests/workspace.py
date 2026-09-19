@@ -114,6 +114,10 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         shutil.copytree(ROOT / "tests/fixtures/drivers", folder / "fixtures/drivers")
         shutil.copytree(ROOT / "tests/fixtures/harness", folder / "fixtures/harness")
         shutil.copy2(ROOT / ".wippy.yaml", folder / ".wippy.yaml")
+        # Carry the production embed declaration so a packed fixture embeds the
+        # offline documentation corpus read-only instead of resolving a project
+        # directory relative to the packed run's working directory.
+        shutil.copy2(ROOT / "wippy.yaml", folder / "wippy.yaml")
         lock = yaml.safe_load((ROOT / "wippy.lock").read_text())
         lock.setdefault("modules", [])
         lock["modules"] += yaml.safe_load((ROOT / "tests/dependencies.yaml").read_text())["modules"]

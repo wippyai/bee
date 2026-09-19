@@ -34,7 +34,7 @@ def run():
         anchor = 'local action = bindings.action('
         assert code.count(anchor) == 1
         presenter.write_text(code.replace(anchor, 'if event.key_type == "f10" then error("Injected presenter failure") end\n                ' + anchor))
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         index = project / "src/_index.yaml"
         document = yaml.safe_load(index.read_text())
@@ -398,7 +398,7 @@ def public_migration():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         # The removed combined actor is historical test data, never production.
         legacy = ROOT / "tests/fixtures/legacy_workspace"

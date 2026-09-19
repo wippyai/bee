@@ -48,7 +48,7 @@ def exercise(packed, theme="honey"):
             anchor = 'function M.defaults(): Preferences return {theme = "honey",'
             assert source.count(anchor) == 1
             appearance.write_text(source.replace(anchor, f'function M.defaults(): Preferences return {{theme = "{theme}",'))
-        for name in ["wippy.lock", ".wippy.yaml"]:
+        for name in ["wippy.lock", ".wippy.yaml", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         app = project / "src/apps/console/app.lua"
         app.write_text(app.read_text().replace('    local input = assert(tty.events())', PROBE + '\n    local input = assert(tty.events())'))
@@ -150,7 +150,7 @@ def command_handlers(packed):
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in ("wippy.lock", ".wippy.yaml"):
+        for name in ("wippy.lock", ".wippy.yaml", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         index = project / "src/apps/console/_index.yaml"
         document = yaml.safe_load(index.read_text())

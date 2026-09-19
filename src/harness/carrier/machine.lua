@@ -457,6 +457,12 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     -- belongs to and no tool argument can replace a host key.
     local surface_value = plan.policy.gateway_surface
     if request.workspace_id then
+        -- A policy may declare no surface; the binding then admits with the
+        -- same default surface gateway.admit would build, so the workspace
+        -- still travels as host-selected fixed context.
+        if not surface_value then
+            surface_value = {tools = {}, traits = {}, base_tools = gateway.tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+        end
         surface_value = policy.with_workspace(surface_value, request.workspace_id)
         if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
     end

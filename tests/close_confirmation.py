@@ -30,7 +30,7 @@ def exercise(packed, responsive=True):
     with tempfile.TemporaryDirectory(prefix="bee-close-confirm-") as directory:
         project = Path(directory) / "project"
         shutil.copytree(ROOT / "src", project / "src")
-        for name in (".wippy.yaml", "wippy.lock"):
+        for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
         presenter = project / "src/core/terminal/main.lua"
         presentation = presenter.read_text()

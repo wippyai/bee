@@ -38,7 +38,7 @@ def live_owners(binary, state):
         except OSError:
             continue
         if (args and args[0] == executable and state_dir in args and
-                b'--command' in args and b'start' in args):
+                b'run' in args and b'start' in args):
             owners.append(int(process.name))
     return sorted(owners)
 
@@ -54,7 +54,7 @@ def owner_pidfd(pid, binary, state):
             os.close(handle)
         return None
     if (args and args[0] == os.fsencode(binary) and os.fsencode(state) in args and
-            b'--command' in args and b'start' in args):
+            b'run' in args and b'start' in args):
         return handle
     os.close(handle)
     return None

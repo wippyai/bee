@@ -123,7 +123,7 @@ def run_legacy_upgrade(binary, previous, databases, bindings):
 
 def run(binary, previous=None):
     provenance = json.loads(Path(str(binary) + ".provenance.json").read_text())
-    bindings = provenance["manifest"]["application"]["data_env"]
+    bindings = provenance["manifest"]["application"]["data"]
     databases = [path for name, path in bindings.items() if name.endswith("_DB")]
     databases += [bindings["BEE_WORKSPACE_DB"] + ".client", "registry.db"]
     def check_stores(state):

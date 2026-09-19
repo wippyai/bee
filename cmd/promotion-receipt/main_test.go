@@ -180,13 +180,13 @@ func testManifest() map[string]any {
 			"patches":    []any{map[string]any{"path": "patch", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
 		},
 		"application": map[string]any{
-			"module": "bee/bee", "command": "bee", "mode": "base", "baseline": "embedded",
-			"data_env": map[string]any{"BEE_THREADS_DB": "threads.db"},
+			"module": "bee/bee", "command": "bee",
+			"data": map[string]any{"BEE_THREADS_DB": "threads.db"},
 		},
 		"native": []any{map[string]any{
 			"module": "github.com/wippyai/bee/native", "version": "v1.0.0",
 			"package": "github.com/wippyai/bee/native/desktop", "factory": "Component",
-			"private": true, "launch": true,
+			"private": true, "host": true,
 		}},
 	}
 }

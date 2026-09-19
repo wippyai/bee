@@ -1,4 +1,4 @@
--- MIT. Hub resolution tests use a host-owned registry preview double.  The
+-- MIT. Hub resolution tests use a host-owned registry plan double.  The
 -- double is deliberately small: it exposes the same capture/root/policy
 -- boundaries as the destination host without granting this test a registry
 -- writer or an execution capability.
@@ -62,13 +62,13 @@ local function deps_fixture(policy: Object?): (Object, Spec, {root: Object?, cap
     local preview_entry = entry("app:new", "vendor/app", "preview-created")
     local deleted_entry = entry("app:removed", "vendor/app", "removed-by-preview")
     local preview: Object = {
-        -- A runtime preview normally contains changes, so this intentionally
+        -- A runtime plan normally contains changes, so this intentionally
         -- omits app:kept.  The resolver must flatten the selected package's
         -- unchanged registry entries together with these changes.
         digest = SHA,
-        changes = {{kind = "entry.update", entry = updated_entry},
-            {kind = "entry.create", entry = preview_entry},
-            {kind = "entry.delete", entry = deleted_entry}},
+        changes = {{op = "update", entry = updated_entry},
+            {op = "create", entry = preview_entry},
+            {op = "delete", entry = deleted_entry}},
         resolution = {modules = {
             {name = "vendor/app", version = "1.2.0", digest = "sha256:" .. SHA},
             {name = "host/base", version = "1.0.0", digest = SHA},

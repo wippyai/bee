@@ -26,7 +26,7 @@ def exercise(binary):
             return ui
 
         def command(*args):
-            return subprocess.run([str(binary), '--state-dir', str(state), *args],
+            return subprocess.run([str(binary), '--state', str(state), *args],
                                   cwd=folder, env=env, stdin=subprocess.DEVNULL,
                                   capture_output=True, text=True, timeout=15)
 

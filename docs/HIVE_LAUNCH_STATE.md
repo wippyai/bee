@@ -62,7 +62,7 @@ select one workspace. Neither relationship requires copying a registry or
 starting another runtime. The saved index is a location hint; startup must
 verify the requested workspace identity through its owner before attaching.
 
-Explicit `--state-dir` keeps precedence. Preserve the existing default state
+Explicit `--state` keeps precedence. Preserve the existing default state
 directory when introducing project lookup. Remembering that directory in central
 configuration must not move, copy or rewrite its registry or application stores.
 Corrupt configuration is a visible error, not a reason to recreate identities
@@ -128,7 +128,7 @@ unreachable. A stale activation result must not override a newer revocation.
 ## Starting or reusing a host
 
 Ordinary launches select their protected remembered runtime state by canonical
-project directory, while explicit `--state-dir` takes precedence. An occupied
+project directory, while explicit `--state` takes precedence. An occupied
 workspace follows the existing physical-client admission path instead of
 starting a competing writer.
 

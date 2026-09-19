@@ -11,11 +11,6 @@ on:
         description: Application version for a local-preview artifact build
         type: string
         default: 0.1.0-dev
-      mode:
-        description: Embedded application mode
-        type: choice
-        options: [base, bootstrap]
-        default: base
 permissions:
   contents: read
 concurrency:
@@ -64,15 +59,13 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.validate.outputs.targets) }}
-    env:
-      BEE_MODE: ${{ inputs.mode || 'base' }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
     - name: Build pinned native development runtime
       id: toolchain
-      uses: wippyai/builder@67a04357e73b43c35d354c5bb17b3261a9802ea3
+      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
       with:
         mode: toolchain
         manifest: wippy.build.json

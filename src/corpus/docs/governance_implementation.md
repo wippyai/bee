@@ -323,11 +323,11 @@ A temporary worker lease serializes this workflow's workers. It does not make
 the runtime's durable registry apply atomic against other registry writers;
 the publication precondition gate below remains required.
 
-## Runtime gates to establish before publication
+## Runtime publication contract
 
 - The executable under test must expose the same verified artifact and registry
   APIs as the selected runtime source; source documentation alone is insufficient.
-- Candidate preview must describe the expansion that publication will actually
+- The candidate plan must describe the expansion that publication will actually
   apply. Checking only the requested `ns.dependency` is insufficient.
 - The publication boundary must serialize owner writes and enforce the expected
   base. A Lua read immediately before an unconstrained apply does not provide
@@ -336,20 +336,10 @@ the publication precondition gate below remains required.
   starts a service requiring an unapplied schema needs a supported readiness
   barrier or must be refused by this first slice.
 
-`make governance-runtime-check` now reproduces the durable-publication gap in
-an isolated four-entry composition with stdin closed. On the development
-toolchain (runtime `055505e`), a candidate from v0 still commits as v2 after an
-intervening v1 write. The fixture lints successfully, but the guarded-publication
-gate fails with `GOVERNANCE_STALE_APPLY_ACCEPTED`. The selected runtime source
-at `674b58a` also calls ordinary `Apply` without the snapshot version. This is
-source evidence for that newer revision, not an executable test of its binary.
-The gate is separate from `make check` while this runtime contract is missing.
-
-Rechecked against the combined candidate executable on September 10: the same
-v0/v1/v2 stale-apply acceptance is reproduced. An application worker lease or a
-fresh Lua read cannot repair this race against another registry writer. The
-runtime lane must provide atomic expected-version publication and an exact
-expanded-closure preview before this governance owner gains publication authority.
+Earlier runtime candidates accepted a stale v0 plan after an intervening v1
+write. Runtime PR #787 replaces that gap with a reviewed expanded-closure plan
+whose apply is bound to its base, digest and effects. Bee consumes that plan
+directly; it has no unconstrained apply fallback.
 
 ## Hive package and overlay sharing
 

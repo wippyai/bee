@@ -79,7 +79,7 @@ type receipt struct {
 }
 
 func main() {
-	var milestone, expectedCommit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion, beeMode string
+	var milestone, expectedCommit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion string
 	providers := map[string]*string{}
 	privateFiles := map[string]*string{}
 	var claudeCredentialEnv string
@@ -94,7 +94,6 @@ func main() {
 	flag.StringVar(&agyModel, "agy-model", "", "Agy model used by the live recovery gate")
 	flag.StringVar(&builderCommand, "builder-command", "", "builder command selected by the Make invocation")
 	flag.StringVar(&beeVersion, "bee-version", "", "optional bundle version override")
-	flag.StringVar(&beeMode, "bee-mode", "", "optional bundle mode override")
 	for _, name := range []string{"agy", "claude", "codex", "grok"} {
 		providers[name] = flag.String(name, "", name+" executable")
 	}
@@ -198,7 +197,7 @@ func main() {
 	if r.PackAudit, err = auditPackManifest(runtime, bundleManifest); err != nil {
 		fatal(err)
 	}
-	if r.Invocation, err = promotionInvocation(expectedCommit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion, beeMode, providers, claudeCredentialEnv); err != nil {
+	if r.Invocation, err = promotionInvocation(expectedCommit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion, providers, claudeCredentialEnv); err != nil {
 		fatal(err)
 	}
 	r.Provenance = provenance
@@ -287,7 +286,7 @@ type nativeComponent struct {
 	Package string `json:"package"`
 	Factory string `json:"factory"`
 	Private bool   `json:"private"`
-	Launch  bool   `json:"launch"`
+	Host    bool   `json:"host"`
 }
 
 type buildDocument struct {
@@ -303,15 +302,13 @@ type buildDocument struct {
 	Application struct {
 		Module  string            `json:"module"`
 		Command string            `json:"command"`
-		Mode    string            `json:"mode"`
-		DataEnv map[string]string `json:"data_env"`
+		Data    map[string]string `json:"data"`
 		Packs   []struct {
 			Module  string `json:"module"`
 			Version string `json:"version"`
 			Path    string `json:"path"`
 			SHA256  string `json:"sha256"`
 		} `json:"packs"`
-		Baseline string `json:"baseline"`
 	} `json:"application"`
 	Native []nativeComponent `json:"native"`
 }
@@ -369,10 +366,10 @@ func verifyProvenance(data []byte, artifacts []artifact, buildManifest, bundleMa
 	if err := json.Unmarshal(bundleData, &bundle); err != nil {
 		return fmt.Errorf("decode bundle manifest: %w", err)
 	}
-	if err := validateManifest("build", source, false); err != nil {
+	if err := validateManifest("build", source); err != nil {
 		return err
 	}
-	if err := validateManifest("bundle", bundle, true); err != nil {
+	if err := validateManifest("bundle", bundle); err != nil {
 		return err
 	}
 	if err := compareManifestInputs(source, bundle); err != nil {
@@ -391,13 +388,12 @@ func verifyProvenance(data []byte, artifacts []artifact, buildManifest, bundleMa
 	return nil
 }
 
-func validateManifest(label string, manifest buildDocument, requireBaseline bool) error {
+func validateManifest(label string, manifest buildDocument) error {
 	if manifest.Schema != 1 || manifest.Name != "bee" {
 		return fmt.Errorf("%s manifest has an unsupported schema or identity", label)
 	}
 	app := manifest.Application
-	if app.Module != "bee/bee" || app.Command != "bee" || app.Mode == "" ||
-		(requireBaseline && app.Baseline != "embedded") || (!requireBaseline && app.Baseline != "" && app.Baseline != "embedded") {
+	if app.Module != "bee/bee" || app.Command != "bee" {
 		return fmt.Errorf("%s manifest has an invalid Bee application identity", label)
 	}
 	if manifest.Runtime.Repository == "" || manifest.Runtime.Commit == "" || manifest.Runtime.Go == "" {
@@ -423,8 +419,8 @@ func compareManifestInputs(source, bundle buildDocument) error {
 	if source.Schema != bundle.Schema || source.Name != bundle.Name ||
 		source.Runtime.Repository != bundle.Runtime.Repository || source.Runtime.Commit != bundle.Runtime.Commit ||
 		source.Runtime.Go != bundle.Runtime.Go || source.Application.Module != bundle.Application.Module ||
-		source.Application.Command != bundle.Application.Command || source.Application.Mode != bundle.Application.Mode ||
-		!reflect.DeepEqual(source.Application.DataEnv, bundle.Application.DataEnv) {
+		source.Application.Command != bundle.Application.Command ||
+		!reflect.DeepEqual(source.Application.Data, bundle.Application.Data) {
 		return errors.New("build and bundle manifests disagree on immutable inputs")
 	}
 	if !equalStringSet(source.Runtime.Tags, bundle.Runtime.Tags) ||
@@ -472,7 +468,7 @@ func equalDigestSet(left, right []manifestArtifact) bool {
 
 func equalNativeSet(left, right []nativeComponent) bool {
 	key := func(value nativeComponent) string {
-		return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%t\x00%t", value.Module, value.Version, value.Package, value.Factory, value.Private, value.Launch)
+		return fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%t\x00%t", value.Module, value.Version, value.Package, value.Factory, value.Private, value.Host)
 	}
 	a := make([]string, 0, len(left))
 	for _, item := range left {
@@ -685,7 +681,7 @@ func confinedPath(root, relative string) (string, error) {
 	return candidate, nil
 }
 
-func promotionInvocation(commit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion, beeMode string, providers map[string]*string, claudeEnv string) (invocation, error) {
+func promotionInvocation(commit, binary, runtime, previous, buildManifest, bundleManifest, output, agyModel, builderCommand, beeVersion string, providers map[string]*string, claudeEnv string) (invocation, error) {
 	makefile, err := inspect("build/native.mk")
 	if err != nil {
 		return invocation{}, err
@@ -701,7 +697,6 @@ func promotionInvocation(commit, binary, runtime, previous, buildManifest, bundl
 		"PROMOTION_RECEIPT":     output,
 		"BUILDER":               builderCommand,
 		"BEE_VERSION":           beeVersion,
-		"BEE_MODE":              beeMode,
 		"AGY_BIN":               *providers["agy"],
 		"AGY_MODEL":             agyModel,
 		"CLAUDE_BIN":            *providers["claude"],

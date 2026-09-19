@@ -1,8 +1,9 @@
 # Releasing Bee
 
-Bee launches through its own executable. The embedded application can be a
-recoverable base version or a first-install bootstrap. Hub publication follows
-publication of a validated GitHub release; no Hub launch entry point is required.
+Bee launches through its own executable. The embedded application is the
+recoverable deployment source for first install and update. Hub publication
+follows publication of a validated GitHub release; no Hub launch entry point is
+required.
 
 | Deliverable | Repository | Tag | Artifact |
 |---|---|---|---|
@@ -24,16 +25,16 @@ revision and contains the same native source as the original development pin.
 ## Local release
 
 ```sh
-make release BEE_VERSION=0.1.0-dev BEE_MODE=base
+make release BEE_VERSION=0.1.0-dev
 ```
 
 This builds pinned tools, runs the foundation and native checks, packs the
 application, assembles Bee, runs executable acceptance, and packages the result
-under `dist/release/`. Use `BEE_MODE=bootstrap` to seed only the first deployment.
+under `dist/release/`.
 Packing requires Wippy syntax and strict type checking. The lint command explicitly
 enables the type system and strict mode; validation failures stop the build.
-The generated `dist/bee.bundle.build.json` records the selected version, mode and
-every pack hash. Review `build/modules.json` for ownership and the generated
+The generated `dist/bee.bundle.build.json` records the selected version and every
+pack hash. Review `build/modules.json` for ownership and the generated
 bundle's `ownership.json` for entry coverage. Packing leaves the input runtime
 manifest unchanged. Current runtime cutover gates still apply; see
 `handoffs/STATUS_RUNTIME_GATE.md` before attempting a release.
@@ -74,9 +75,7 @@ The tagged commit's complete message must contain no GitHub Actions skip
 directive, including `[skip ci]`. A skipped tag-push workflow produces no assets
 and cannot satisfy the Hub publication gate.
 
-A manual Bee workflow run accepts a preview version and base/bootstrap choice
-and uploads artifacts. Tag releases use base mode. Change that release policy
-through a reviewed workflow change if a product needs bootstrap-only releases.
+A manual Bee workflow run accepts a preview version and uploads artifacts.
 
 ## Contents and publication prerequisites
 

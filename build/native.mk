@@ -20,7 +20,7 @@ native-check: native-bootstrap-check
 	$(MAKE) -C native integration WIPPY="$(abspath $(NATIVE_WIPPY))"
 
 native-pack:
-	python3 build/bundle.py --manifest "$(BEE_BUILD_MANIFEST)" --output "$(BEE_BUNDLE_MANIFEST)" --toolchain "$(abspath $(NATIVE_WIPPY))" $(if $(BEE_VERSION),--version "$(BEE_VERSION)",) $(if $(BEE_MODE),--mode "$(BEE_MODE)",)
+	python3 build/bundle.py --manifest "$(BEE_BUILD_MANIFEST)" --output "$(BEE_BUNDLE_MANIFEST)" --toolchain "$(abspath $(NATIVE_WIPPY))" $(if $(BEE_VERSION),--version "$(BEE_VERSION)",)
 
 standalone: native-pack
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
@@ -214,7 +214,6 @@ promotion-native-agents-check:
 		-agy-model "$(AGY_MODEL)" \
 		-builder-command "$(BUILDER)" \
 		-bee-version "$(BEE_VERSION)" \
-		-bee-mode "$(BEE_MODE)" \
 		-claude "$(abspath $(CLAUDE_BIN))" \
 		-claude-credential-env "$(CLAUDE_CREDENTIAL_ENV)" \
 		-codex "$(abspath $(CODEX_BIN))" \

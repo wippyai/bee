@@ -29,15 +29,15 @@ class BundleTest(unittest.TestCase):
                 {"name": "governance", "kind": "db.sql.sqlite", "file": "${env:bee:governance_path}"},
             ]
             (root / "_index.yaml").write_text(bundle.yaml.safe_dump({"namespace": "bee", "entries": entries}))
-            app = {"data_env": {"BEE_WORKSPACE_DB": "workspace.db"}}
+            app = {"data": {"BEE_WORKSPACE_DB": "workspace.db"}}
             with self.assertRaisesRegex(ValueError, "BEE_GOVERNANCE_DB"):
                 bundle.state_bindings(root, app)
-            app["data_env"]["BEE_GOVERNANCE_DB"] = "governance.db"
+            app["data"]["BEE_GOVERNANCE_DB"] = "governance.db"
             self.assertEqual(bundle.state_bindings(root, app), {
                 "bee:workspace": "workspace.db", "bee:client": "workspace.db.client",
                 "bee:governance": "governance.db"})
             for path in ("../outside.db", "/tmp/outside.db", "folder/../../outside.db"):
-                app["data_env"]["BEE_GOVERNANCE_DB"] = path
+                app["data"]["BEE_GOVERNANCE_DB"] = path
                 with self.assertRaisesRegex(ValueError, "inside the selected state directory"):
                     bundle.state_bindings(root, app)
             entries[-1]["file"] = ".wippy/governance.db"

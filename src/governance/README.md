@@ -139,9 +139,9 @@ resolver, approval executor, overlay owner, apply and exact-observation function
 remain host-selected inputs; replicated content supplies none of them.
 
 `bee.governance:hub_resolver` now provides the destination resolution adapter.
-It captures one atomic registry state, asks the runtime to preview a
+It captures one atomic registry state, asks the runtime to plan a
 host-selected Hub dependency root, reconstructs the complete selected closure
-from the previewed final state, and retains definitions absent from the preview
+from the planned final state, and retains definitions absent from the plan
 delta. It strips all `ns.dependency` directives before overlay activation.
 Registry-owned metadata supplies package ownership. Destination configuration
 supplies package, namespace, kind, grant, runtime-module and database ceilings
@@ -164,12 +164,11 @@ removed entries with both base digests. It records no decision, consumes no
 approval and writes no overlay.
 
 The resolver and destination service are implemented and covered through the
-preview adapter. `activation_profiles` supplies host-selected roots, overlay
+plan adapter. `activation_profiles` supplies host-selected roots, overlay
 owners, approval policies and capability ceilings; it cannot be populated by a
 remote artifact. The boot worker follows only an already-authorized desired
-intent. The preview-capable runtime in runtime PR #752 remains required for
-production resolution. Older runtimes can load the pure tests at the dynamic
-native seam, but cannot perform production resolution.
+intent. Runtime PR #787 supplies the reviewed plan and bound apply contract
+used for production resolution.
 
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable

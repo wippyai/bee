@@ -33,7 +33,7 @@ the owner's contract; mesh membership does not make SQLite a replicated store.
 **Timeline** is an on-demand application under Start → Tools. Run it with:
 
 ```sh
-bee --command bee-app run bee.timeline:app <thread_id>
+bee run bee.timeline:app <thread_id>
 ```
 
 Without an argument it lists the threads the local actor is a member of and

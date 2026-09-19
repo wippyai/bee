@@ -71,7 +71,7 @@ func newDesktopWithArguments(binary, project, state, home string, arguments []st
 		"PATH="+filepath.Join(project, "bin")+":/usr/bin:/bin",
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 	)
-	cmd := exec.Command(binary, append([]string{"--state-dir", state}, arguments...)...)
+	cmd := exec.Command(binary, append([]string{"--state", state}, arguments...)...)
 	cmd.Dir = project
 	cmd.Env = append(env, extraEnv...)
 	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 30, Cols: 100})
@@ -116,7 +116,7 @@ func filteredEnvironment() []string {
 		"XDG_RUNTIME_DIR": true, "XDG_STATE_HOME": true,
 		"BEE_WORKSPACE_DB": true, "BEE_THREADS_DB": true, "BEE_APPROVALS_DB": true,
 		"BEE_RESOURCES_DB": true, "BEE_CREDENTIALS_DB": true, "BEE_PLACEMENT_DB": true,
-		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true,
+		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true, "BEE_SYNC_DB": true,
 		"BEE_CLIENT_DB": true, "BEE_PLACEMENT_ROOT": true,
 	}
 	result := make([]string, 0, len(os.Environ())+5)
@@ -672,22 +672,16 @@ func ownerArgsMatch(args []string, binary, state string) bool {
 	if len(args) == 0 || args[0] != binary {
 		return false
 	}
-	stateMatch, startMatch, commandMatch := false, false, false
+	stateMatch, startMatch := false, false
 	for i, arg := range args {
-		if arg == state && i > 0 && args[i-1] == "--state-dir" {
+		if arg == state && i > 0 && args[i-1] == "--state" {
 			stateMatch = true
 		}
 		if arg == "start" {
 			startMatch = true
 		}
-		if arg == "--command" {
-			commandMatch = true
-			if i+1 >= len(args) || args[i+1] == "" {
-				return false
-			}
-		}
 	}
-	return stateMatch && startMatch && commandMatch
+	return stateMatch && startMatch
 }
 
 func ownerPidfd(pid int, binary, state string) (*owner, error) {

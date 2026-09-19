@@ -682,7 +682,7 @@ retries a launch automatically; an uncertain reply requires explicit user action
 The native mesh composition proves literal arguments, controller checks, unknown
 commands, identical replay and conflicting reuse. CLI routing and session checks
 also pass. The assembled candidate passes standalone cold/warm command acceptance
-in `tests/native_client.py`, the explicit `--command bee run terminal` form, and
+in `tests/native_client.py`, the explicit `bee run terminal` form, and
 unknown-command refusal followed by rejoin to the retained Terminal. The full
 native-client gate also passes. The full foundation gate passes, and the global binary now includes this route. Explicit `--base` and qualified
 application-ID development launches retain their existing routes.

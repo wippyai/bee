@@ -82,7 +82,7 @@ local function apply_preview(base: {Entry}, preview: Object): ({Entry}?, string?
     if not operations then return nil, operations_error end
     for _, raw in ipairs(operations) do
         local operation = object(raw)
-        local kind = operation and operation.kind or nil
+        local kind = operation and (operation.op or operation.kind) or nil
         local entry: Entry? = nil
         local entry_error: string? = nil
         if operation then entry, entry_error = copy_entry(operation.entry) end
@@ -514,14 +514,10 @@ function M.new(config: Config): unknown
                 if existing then created, create_error = changes:update(root_entry)
                 else created, create_error = changes:create(root_entry) end
                 if not created then return nil, tostring(create_error or "stage Hub dependency root") end
-                -- The checked runtime gate supplies preview(); keeping the
-                -- native call at this single dynamic seam lets older binaries
-                -- load the pure resolver tests without pretending they can
-                -- execute production resolution.
-                local previewer = changes :: any
-                local preview, preview_error = previewer:preview()
-                if not preview then return nil, tostring(preview_error or "preview Hub dependency root") end
-                return preview :: Object, nil
+                local planner = changes :: any
+                local plan, plan_error = planner:plan()
+                if not plan then return nil, tostring(plan_error or "plan Hub dependency root") end
+                return plan :: Object, nil
             end}
         return captured, nil
     end

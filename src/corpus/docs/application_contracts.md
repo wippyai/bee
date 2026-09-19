@@ -144,8 +144,8 @@ bind or shutdown operations.
 This is a launch-only boundary: focusing an existing singleton does not deliver
 new arguments or restart it. Arguments are not automatically persisted; an app
 must checkpoint the domain identifiers it needs for recovery. Start opens with an
-empty list. `bee --command bee-app run definition-id [arguments...]` uses the native `bee-app`
-command to launch an application with explicit arguments. Nonempty explicit
+empty list. `bee run definition-id [arguments...]` passes the application
+identifier through the executable's default `bee` command and launches it with explicit arguments. Nonempty explicit
 arguments take precedence over a saved checkpoint for that initial launch.
 
 ### Registered CLI handlers
@@ -155,19 +155,19 @@ managed launch definition and open the Agent window fullscreen. They use the
 same measured plan, setup, admission, carrier, thread, hook and MCP path as a
 selection from the Agent picker. The executable must already be available under
 the host-selected launch policy. The standalone binary preserves the caller's
-working directory. Native options such as `--state-dir` precede the alias.
+working directory. Native options such as `--state` precede the alias.
 Managed aliases accept no trailing raw arguments because those arguments could
 bypass reviewed profile options; arbitrary harness commands remain available
 inside Native Terminal with its OS-user authority.
 If an existing native state directory still selects an older installed pack,
-use `bee --base codex` to run the rebuilt embedded application. This selects
-base code without deleting workspace databases; it does not upgrade the installed
-Hub selection.
+use `bee recover codex` to run the rebuilt embedded application with fresh
+registry history. This preserves workspace databases and does not upgrade the
+installed Hub selection.
 
 Admitted application metadata can declare `application.commands`, a dense list
 of up to 16 `{name, arguments?, fullscreen?}` records. Names are lowercase ASCII
 identifiers, at most 40 characters, with digits, underscores and hyphens after
-the first letter. `run`, `runtime` and `update` are reserved by the native host.
+the first letter. `run`, `update`, `recover` and `wippy` are reserved by the native host.
 Duplicate matches fail rather than choosing an arbitrary application. Discovery
 considers only host-admitted applications; metadata grants no execution authority.
 Prefix arguments and caller arguments share the existing bounded argument decoder.

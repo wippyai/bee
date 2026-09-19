@@ -21,12 +21,67 @@ func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
 	close(done)
 	failure := errors.New("owner boot failed")
 	reads := 0
+	previous := rendezvous.Descriptor{Execution: "stale"}
 	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
 		reads++
-		return rendezvous.Descriptor{Execution: "stale"}, nil
-	}, rendezvous.Descriptor{}, done, func(context.Context) error { return failure })
-	if err != failure || reads != 0 {
+		return previous, nil
+	}, previous, done, func(context.Context) error { return failure })
+	if err != failure || reads != 1 {
 		t.Fatal("failed child accepted stale discovery", err, reads)
+	}
+}
+
+func TestLosingContenderUsesFreshOwnerPublication(t *testing.T) {
+	done := make(chan struct{})
+	close(done)
+	failure := app.ErrOwned
+	previous := rendezvous.Descriptor{Execution: "starting"}
+	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
+		return rendezvous.Descriptor{Execution: "winner"}, nil
+	}, previous, done, func(context.Context) error { return failure })
+	if err != nil {
+		t.Fatal("fresh winning owner was not offered for authenticated attachment", err)
+	}
+}
+
+func TestLosingContenderWaitsForPublicationAfterExit(t *testing.T) {
+	done := make(chan struct{})
+	published := make(chan struct{})
+	previous := rendezvous.Descriptor{Execution: "starting"}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	go func() {
+		close(done)
+		time.Sleep(75 * time.Millisecond)
+		close(published)
+	}()
+	err := waitOwnerPublication(ctx, func(context.Context) (rendezvous.Descriptor, error) {
+		select {
+		case <-published:
+			return rendezvous.Descriptor{Execution: "winner"}, nil
+		default:
+			return previous, nil
+		}
+	}, previous, done, func(context.Context) error { return app.ErrOwned })
+	if err != nil {
+		t.Fatal("contention ended before the winner published", err)
+	}
+}
+
+func TestChildExitDuringReadStillReconcilesPublication(t *testing.T) {
+	done := make(chan struct{})
+	previous := rendezvous.Descriptor{Execution: "starting"}
+	reads := 0
+	err := waitOwnerPublication(context.Background(), func(context.Context) (rendezvous.Descriptor, error) {
+		reads++
+		if reads == 1 {
+			close(done)
+			return previous, nil
+		}
+		return rendezvous.Descriptor{Execution: "winner"}, nil
+	}, previous, done, func(context.Context) error { return app.ErrOwned })
+	if err != nil || reads != 2 {
+		t.Fatal("exit during descriptor read bypassed reconciliation", err, reads)
 	}
 }
 

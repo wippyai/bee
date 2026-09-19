@@ -24,9 +24,17 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
         assert database.is_file(), f"{filename} did not use the selected native state directory"
         with database.open("rb") as handle:
             assert handle.read(16) == b"SQLite format 3\0", f"{filename} is not an initialized SQLite store"
-    assert len(list((state / "base").glob("*/wippy.lock"))) == 1, "No digest-scoped embedded deployment"
+    deployments = list((state / "deployments").glob("*/wippy.lock"))
+    assert len(deployments) == 1, "No digest-scoped embedded deployment"
     assert (state / "registry.db").is_file(), "Ordinary launch lost its shared registry history"
-    assert not list((state / "base").glob("*/registry.db")), "Ordinary launch selected recovery history"
+    assert not (state / "recovery" / "registry.db").exists(), "Ordinary launch selected recovery history"
+    recovery = NativeDesktop(BINARY, folder, state, arguments=("recover",))
+    try:
+        recovery.wait(" BEE ")
+        recovery.quit()
+    finally:
+        recovery.close()
+    assert (state / "recovery" / "registry.db").is_file(), "Recovery launch did not isolate registry history"
     # This suite verifies explicit in-process application launches. The public
     # owner/client route (which retains its owner after exit) is exercised by
     # native_client.py with explicit fixture-owned process cleanup.

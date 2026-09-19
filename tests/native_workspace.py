@@ -9,8 +9,8 @@ import termios
 import pyte
 from tui_smoke import Desktop
 
-STORE_NAMES = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node")
-STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_PLACEMENT_ROOT", "BEE_CLIENT_DB", "BEE_GOVERNANCE_DB"}
+STORE_NAMES = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "sync")
+STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_PLACEMENT_ROOT", "BEE_CLIENT_DB"}
 
 
 class NativeDesktop(Desktop):
@@ -25,9 +25,9 @@ class NativeDesktop(Desktop):
         self.pending_output = ""
         args = [str(binary)]
         if state is not None:
-            args.extend(["--state-dir", str(state)])
+            args.extend(["--state", str(state)])
         if application:
-            args.extend(["--command", "bee-app", "run", application])
+            args.extend(["run", application])
         args.extend(arguments)
         # Exercise the embedded defaults without borrowing the caller's stores.
         # Runtime intentionally permits explicit environment overrides.
@@ -38,5 +38,3 @@ class NativeDesktop(Desktop):
         self.process = subprocess.Popen(args, cwd=folder, stdin=slave, stdout=slave, stderr=slave,
                                         start_new_session=True, env=env)
         os.close(slave)
-
-

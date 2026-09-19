@@ -835,17 +835,17 @@
       "topic": "terminal"
     },
     {
-      "bytes": 9920,
+      "bytes": 9934,
       "id": "docs/agent_guide",
-      "sha256": "4e2874e20c6315995610ee53a056d6fefe327f38d8a216b493ea07210f273ea3",
+      "sha256": "19c343deed8c5cb9ece7584c5acfbe11dcdb54f38fd27a1c9f6a118c5c1e1ba0",
       "source": "docs/AGENT_GUIDE.md",
       "title": "Working on Bee",
       "topic": "platform"
     },
     {
-      "bytes": 27144,
+      "bytes": 27173,
       "id": "docs/application_contracts",
-      "sha256": "df7ce41996f0d79381e62476419752f956af5bf3c33dc920f5e52ddbfa41b830",
+      "sha256": "77e16507e69b19db027c9c7c8410ebf1c24fbffd3351eaa950c645ddf3119a71",
       "source": "docs/APPLICATION_CONTRACTS.md",
       "title": "Application contracts (development version 1)",
       "topic": "application"
@@ -867,17 +867,17 @@
       "topic": "application"
     },
     {
-      "bytes": 47498,
+      "bytes": 47488,
       "id": "docs/client_host_split",
-      "sha256": "c5a97ff3cb0200cec2daa76a038c552fc55a841a24d4e60771616bfbfad73516",
+      "sha256": "7522e803ab07680102127bafe621e9870da76130004b2876fc1dbd970fe59f76",
       "source": "docs/CLIENT_HOST_SPLIT.md",
       "title": "Workspace host and desktop client extraction",
       "topic": "ui"
     },
     {
-      "bytes": 35161,
+      "bytes": 35148,
       "id": "docs/client_state",
-      "sha256": "d3afebdc900e2b1e7eb9d13e6fe285c880515d343118791fbb67a6bafd5d9973",
+      "sha256": "fd9bd16a0ae75002d9eee270f7c6b300978a76e24a5f6664e777df6c3f7445a2",
       "source": "docs/CLIENT_STATE.md",
       "title": "Client layout persistence",
       "topic": "ui"
@@ -923,9 +923,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 26942,
+      "bytes": 26186,
       "id": "docs/governance_implementation",
-      "sha256": "6d110d424416f73aeb5514eb1738c886d7cfe0591d185a0950ab54cf7e251fd8",
+      "sha256": "ad03553d8ae50ebd48a20c317025234efcb37f6aacaf9b8962d958697b276256",
       "source": "docs/GOVERNANCE_IMPLEMENTATION.md",
       "title": "Bee governance implementation plan",
       "topic": "application"
@@ -947,9 +947,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 22989,
+      "bytes": 22981,
       "id": "docs/hive_launch_state",
-      "sha256": "58528799d631a1b8111c0ac3993bb615f1cb1eff024947f1208ec8c8430b178c",
+      "sha256": "b5c490502b264c5af6de294fbb5502428afe2914350537616683b0d1b7318d4a",
       "source": "docs/HIVE_LAUNCH_STATE.md",
       "title": "Native launch and local configuration",
       "topic": "cluster"
@@ -1051,9 +1051,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 9662,
+      "bytes": 9644,
       "id": "docs/threads",
-      "sha256": "c0102c3a30e00e0c2f9b788731b2cf46dceb8770a9843c3b7d2cba6e205e716a",
+      "sha256": "485d079a0702732b178d8ebcb573fa6000b9c2d1032528f4543c11b4cef1b148",
       "source": "docs/THREADS.md",
       "title": "Threads, hooks and subscriptions",
       "topic": "threads"
@@ -1195,9 +1195,9 @@
       "topic": "component"
     },
     {
-      "bytes": 12211,
+      "bytes": 12100,
       "id": "component/governance",
-      "sha256": "3c37cc455e09f956f2c030436c66b5dadf1a455f13ec05df9cf5f4141a95ef86",
+      "sha256": "af7eaeaf6818f3b9f8a18ea3024a354588073003b78417bc8c504fe6741c8101",
       "source": "src/governance",
       "title": "Governance authoring and preflight",
       "topic": "component"
@@ -1302,7 +1302,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2132081,
+    "bytes": 2131208,
     "documents": 162
   }
 }

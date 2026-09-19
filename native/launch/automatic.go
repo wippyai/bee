@@ -18,9 +18,9 @@ import (
 )
 
 // Run starts a detached owner contender, then attaches once. The child's normal
-// runtime lock selects the owner. A losing contender authenticates the existing
-// owner without mounting a desktop before it exits successfully. Discovery hints
-// select when to attempt admission; they never grant it. No mutation is replayed.
+// runtime lock selects the owner. A losing contender may exit with the runtime's
+// owned-state error; a newly published descriptor then permits one authenticated
+// attachment attempt. Discovery hints never grant admission. No mutation is replayed.
 func (c Client) Run(ctx context.Context, launch app.Launch) error {
 	if err := c.validate(ctx, launch); err != nil {
 		return err
@@ -99,29 +99,43 @@ func (c Client) Run(ctx context.Context, launch app.Launch) error {
 func waitOwnerPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error), previous rendezvous.Descriptor, done <-chan struct{}, wait func(context.Context) error) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
+	var childErr error
+	childFinished := false
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		select {
-		case <-done:
-			// Success means the losing start contender completed a read-only native
-			// owner probe. The subsequent client attachment authenticates independently.
-			return wait(ctx)
-		default:
+		if !childFinished {
+			select {
+			case <-done:
+				childErr = wait(ctx)
+				childFinished = true
+			default:
+			}
 		}
 		current, err := read(ctx)
 		if err == nil && current != previous {
+			// The descriptor is only a fresh routing hint. Attach performs the
+			// actual owner authentication and can still refuse it.
 			return nil
 		}
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			if childFinished {
+				return errors.Join(childErr, err)
+			}
 			return err
+		}
+		if childFinished && !errors.Is(childErr, app.ErrOwned) {
+			return childErr
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-done:
-			return wait(ctx)
+			if !childFinished {
+				childErr = wait(ctx)
+				childFinished = true
+			}
 		case <-tick.C:
 		}
 	}

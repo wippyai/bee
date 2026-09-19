@@ -88,7 +88,7 @@ def run(binary, rounds, keep_fixture=False):
         # stack. Keep surviving clients drained during this read-only probe.
         if owner is not None and not select.select([owner], [], [], 0)[0]:
             started = time.monotonic()
-            with subprocess.Popen([str(binary), "--state-dir", str(state), "desktops"],
+            with subprocess.Popen([str(binary), "--state", str(state), "desktops"],
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as probe:
                 while True:
                     try:

@@ -1,6 +1,6 @@
 # Client layout persistence
 
-Status: source `bee` and `bee-app` now select the independent client and this
+Status: source `bee` now selects the independent client and this
 store. Source/pack migration acceptance proves import from the old combined
 desktop, retained application identities and placement, unchanged workspace
 migrations, F12, and preservation of later client edits on a second boot.

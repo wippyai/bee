@@ -1,15 +1,44 @@
-"""Two-binary base-code upgrade regression; never uses --base or user stores.
+"""Two-binary state upgrade regression; never uses recover or user stores.
 
-Select a Tools application added between the previous and current binary
-(Hive Manager by default). This proves base selection and workspace identity preservation;
-authorized registry-overlay preservation remains a separate required gate.
+The predecessor is deliberately launched through its historical CLI. This is a
+test fixture for an installed old binary, not compatibility in Bee's current
+command surface.
 """
+import codecs
+import fcntl
+import os
 from pathlib import Path
+import pty
 import sqlite3
+import struct
+import subprocess
 import sys
 import tempfile
+import termios
+import pyte
 from native_workspace import NativeDesktop
 from native_client import owner_handle, stop_owner
+from tui_smoke import Desktop
+
+
+class PreviousDesktop(Desktop):
+    def __init__(self, binary, folder, state, application):
+        self.master, slave = pty.openpty()
+        self.width, self.height = 100, 30
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
+        self.screen = pyte.Screen(100, 30)
+        self.stream = pyte.Stream(self.screen)
+        self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self.raw = bytearray()
+        self.pending_output = ""
+        args = [str(binary), "--state-dir", str(state), "--command", application]
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith("BEE_") and key != "USER"}
+        env.update(TERM="xterm-256color", HOME=str(folder),
+                   PATH=f"{folder}/bin:/usr/bin:/bin", XDG_CONFIG_HOME=str(folder / ".config"))
+        self.process = subprocess.Popen(args, cwd=folder, stdin=slave, stdout=slave, stderr=slave,
+                                        start_new_session=True, env=env)
+        os.close(slave)
 
 
 def identity(state):
@@ -18,21 +47,22 @@ def identity(state):
                 db.execute("SELECT id,name,checksum FROM workspace_schema_migrations ORDER BY id").fetchall())
 
 
-def run(previous, current, added_application="Hive Manager"):
+def run(previous, current, added_application=None):
     with tempfile.TemporaryDirectory(prefix="bee-native-upgrade-") as temporary:
         folder = Path(temporary)
         state = folder / "state"
-        old = NativeDesktop(previous, folder, state, "bee.settings:app")
+        old = PreviousDesktop(previous, folder, state, "bee.settings:app")
         try:
             old.wait("Settings")
             old.wait("Theme: Honey")
             old.key(b"\x1b[C")
             old.wait("Theme: Ocean")
-            old.open_start()
-            old.choose("Tools")
-            assert added_application not in old.text(), f"Previous binary already has {added_application}"
-            old.key(b"\x1b")
-            old.key(b"\x1b")
+            if added_application:
+                old.open_start()
+                old.choose("Tools")
+                assert added_application not in old.text(), f"Previous binary already has {added_application}"
+                old.key(b"\x1b")
+                old.key(b"\x1b")
             old.quit()
         finally:
             old.close()
@@ -47,7 +77,7 @@ def run(previous, current, added_application="Hive Manager"):
             new.wait("Theme: Ocean")
             new.open_start()
             new.choose("Tools")
-            new.wait(added_application)
+            new.wait(added_application or "Hive Manager")
             assert "Test Status" not in new.text(), new.text()
             new.key(b"\x1b")
             new.key(b"\x1b")
@@ -58,10 +88,10 @@ def run(previous, current, added_application="Hive Manager"):
         after = identity(state)
         assert after[0] == before[0], "Binary upgrade changed workspace identity"
         assert after[1][:len(before[1])] == before[1], "Binary upgrade rewrote applied migrations"
-    print("Native base upgrade: fresh embedded catalog, retained Settings and workspace identity, unchanged applied migrations")
+    print("Native upgrade: retained Settings and workspace identity, unchanged applied migrations")
 
 
 if __name__ == "__main__":
     if len(sys.argv) not in (3, 4):
         raise SystemExit("usage: native_upgrade.py PREVIOUS_BEE CURRENT_BEE [ADDED_APPLICATION]")
-    run(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3] if len(sys.argv) == 4 else "Hive Manager")
+    run(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3] if len(sys.argv) == 4 else None)

@@ -122,7 +122,7 @@ def state_bindings(source, application):
         document = yaml.safe_load(path.read_text())
         for entry in document["entries"]:
             entries[f'{document["namespace"]}:{entry["name"]}'] = entry
-    bindings = application.get("data_env", {})
+    bindings = application.get("data", {})
     resolved = {}
     for identity, entry in entries.items():
         if entry["kind"] != "db.sql.sqlite":
@@ -134,7 +134,7 @@ def state_bindings(source, application):
         variable = environment.get("variable")
         path = bindings.get(variable)
         if environment.get("kind") != "env.variable" or not isinstance(path, str) or not path:
-            raise ValueError(f"database {identity} has no data_env binding for {variable}")
+            raise ValueError(f"database {identity} has no data binding for {variable}")
         if Path(path).is_absolute() or ".." in Path(path).parts or "\\" in path or "\0" in path:
             raise ValueError(f"database {identity} must stay inside the selected state directory")
         resolved[identity] = path + selected[2]
@@ -222,7 +222,7 @@ def freeze_assets(root, source, entries):
     return assets
 
 
-def prepare(root, manifest_path, plan_path, output, runtime, version=None, mode=None):
+def prepare(root, manifest_path, plan_path, output, runtime, version=None):
     root, manifest_path, plan_path = root.resolve(), manifest_path.resolve(), plan_path.resolve()
     output, runtime = output.resolve(), runtime.resolve()
     if output in {manifest_path, plan_path} or output.is_relative_to(root / "src"):
@@ -234,10 +234,6 @@ def prepare(root, manifest_path, plan_path, output, runtime, version=None, mode=
                                if p["module"] == app["module"])).removeprefix("v")
     if not re.fullmatch(VERSION, version):
         raise ValueError("invalid bundle version")
-    if mode is not None:
-        if mode not in {"base", "bootstrap"}:
-            raise ValueError("bundle mode must be base or bootstrap")
-        app["mode"] = mode
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".bee-bundle-", dir=output.parent) as temporary:
         stage = Path(temporary)
@@ -331,9 +327,8 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("dist/bee.bundle.build.json"))
     parser.add_argument("--toolchain", type=Path, required=True)
     parser.add_argument("--version")
-    parser.add_argument("--mode", choices=("base", "bootstrap"))
     args = parser.parse_args()
-    prepare(args.root, args.manifest, args.plan, args.output, args.toolchain, args.version, args.mode)
+    prepare(args.root, args.manifest, args.plan, args.output, args.toolchain, args.version)
 
 
 if __name__ == "__main__":

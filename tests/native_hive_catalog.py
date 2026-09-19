@@ -20,7 +20,7 @@ def exercise(binary):
         clients = []
 
         def catalog():
-            result = subprocess.run([str(binary), '--state-dir', str(state), 'desktops'],
+            result = subprocess.run([str(binary), '--state', str(state), 'desktops'],
                                     cwd=folder, env=env, stdin=subprocess.DEVNULL,
                                     capture_output=True, text=True, timeout=15)
             assert result.returncode == 0, result.stderr

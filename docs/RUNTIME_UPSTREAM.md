@@ -1,8 +1,10 @@
 # Runtime integration
 
 Bee builds Wippy from upstream commit
-`fdad09cef2b766e17b95c52c0aa01183601a9243`, selected in `wippy.build.json`.
-The repository carries no runtime patches or runtime source directory.
+`7f9e7e89bc70dce15c191d279b46029f4da18810`, the reviewed head of runtime
+PR [#787](https://github.com/wippyai/runtime/pull/787), selected in
+`wippy.build.json`. The repository carries one composed terminal-session
+identity patch and no runtime source directory.
 
 `make setup` and standalone builds use the same Go builder and manifest. The
 builder pin lives in `build/builder.lock.json`. Builder calls Wippy's application
@@ -31,16 +33,10 @@ of runtime main; the assembly manifest selects the complete application runtime.
 
 ## Validation and upgrades
 
-On Linux amd64, the combined upstream source passed `make setup`, `make check`, `make native-check`,
-`make standalone` and `make native-binary-check` in a checkout with no runtime patch
-inputs. The merged upstream tree is byte-for-byte identical to that tested tree.
-The extracted fixes also passed affected Go package race suites and pinned
-golangci-lint v2.13.2. Full-width and shrink regressions fail against the previous
-upstream main and pass with the fixes.
-
-The final pin was rebuilt from the official repository URL with no local source
-overrides. Typed lint and standalone executable acceptance passed again, and its
-provenance contains the upstream commit without patch inputs.
+The #787 source and Bee's terminal-session patch pass the affected Go race and
+vet gates. Bee's typed, bundle and native bootstrap checks use this exact pin;
+standalone and executable acceptance must pass again before global promotion.
+The generated provenance records the upstream commit and verified patch digest.
 
 For a runtime upgrade, select a containing upstream commit, build the toolchain,
 and run the same application and native acceptance gates. Update the native

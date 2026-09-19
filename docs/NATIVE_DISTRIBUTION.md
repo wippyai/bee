@@ -24,7 +24,7 @@ see [offline acceptance](handoffs/OFFLINE_BOOT.md). Local loopback communication
 remains available for clients and scoped MCP endpoints.
 
 The selected-state candidate derives a project root from the canonical launch
-folder before runtime state opens. Explicit `--state-dir` still wins. On upgrade,
+folder before runtime state opens. Explicit `--state` still wins. On upgrade,
 one protected receipt binds the existing shared root to the first project after
 the old owner stops; it does not copy databases, and another project receives a
 new hashed root. Machine Hive enrollment remains under `~/.config/bee/local-hive`.
@@ -148,11 +148,11 @@ and verifies Settings recovery. Linux release jobs run it with networking disabl
 
 ```sh
 ./dist/bee
-./dist/bee --state-dir /path/to/bee-state
-./dist/bee --command bee-app run bee.settings:app
+./dist/bee --state /path/to/bee-state
+./dist/bee run bee.settings:app
 ./dist/bee update
-./dist/bee --base
-./dist/bee runtime auth --help
+./dist/bee recover
+./dist/bee wippy auth --help
 ```
 
 The default state directory is the OS user configuration directory plus `bee`
@@ -164,7 +164,8 @@ variables override these defaults. Registry history is separate from application
 databases. These mappings apply to newly assembled executables; an application
 pack update alone does not change the installed launcher's defaults.
 
-On first boot the embedded pack seeds a Wippy lock and vendor deployment.
+On first boot the embedded pack seeds `deployments/<bundle-id>/wippy.lock` and
+its vendor deployment.
 Later boots preserve the installed selection. `update` uses the normal Wippy Hub
 resolver in a staged deployment, lints against the compiled native modules,
 verifies artifact hashes, then switches the activation record. Failure retains
@@ -176,11 +177,12 @@ is configured and passed live publish authorization checks. A completed Bee uplo
 and update proof remain pending. In-app Hub installation is
 not implemented.
 
-The manifest's `base` mode provides explicit `--base` recovery using embedded code
-and separate registry history. `bootstrap` mode seeds only the first deployment
-and rejects `--base`. Neither mode resets application databases. Existing migration
-checks can reject older code against newer data. Code activation requires a
-restart; schema rollback requires an application-specific migration strategy.
+The executable's immutable bundle is seeded under `deployments/<bundle-id>`.
+`run` continues the selected deployment, while `recover` starts the shipped
+bundle with a separate `recovery/registry.db` history and records its receipt.
+Neither operation resets application databases. Existing migration checks can
+reject older code against newer data. Code activation requires a restart; schema
+rollback requires an application-specific migration strategy.
 
 Normal standalone launches enable event-stream logging (Wippy's `-e`) so runtime
 logs go to the event bus instead of writing over the desktop. The development
@@ -188,8 +190,9 @@ launcher uses the same default. Arguments following the application name remain
 literal application arguments. This native default requires rebuilding the executable;
 updating an application pack does not change an already installed launcher.
 
-`runtime` exposes the Wippy CLI directly, with its explicit logging flags. `runtime update` modifies the selected
-deployment directly and bypasses standalone staging. Native code updates
+`wippy` exposes the Wippy CLI directly, with its explicit logging flags. `wippy
+update` is the CLI operation for direct Wippy updates; the executable's `update`
+operation uses standalone staging. Native code updates
 require a new executable; Hub updates replace application packs. Lint catches
 missing module exports and type incompatibilities, but a semantic native-version
 requirement gate is not implemented.
@@ -257,16 +260,17 @@ stable release. No release tag is created by development checks.
 ## State-directory coverage
 
 Standalone packaging checks every shipped `db.sql.sqlite` entry against the
-application's `data_env` bindings. A new database without a state-bound path
+application's `data` bindings. A new database without a state-bound path
 refuses packaging; a relative source default is insufficient. The client store
-inherits the workspace path with a `.client` suffix. Registry history is selected
-by the runtime. The host manifest also binds governance storage, so adding that
-component cannot silently put its database in the launch directory.
+inherits the workspace path with a `.client` suffix. Ordinary runs use
+`registry.db`, while `recover` uses `recovery/registry.db`. The host manifest
+also binds governance and sync storage, so adding either component cannot
+silently put its database in the launch directory.
 
 `make native-project-nodes-check BEE_BINARY=/absolute/bee` reads the executable's
 provenance manifest and verifies every declared database, the client store,
 registry history and placement root. Two project nodes must use distinct files;
-explicit `--state-dir` must contain those stores without creating another set
+explicit `--state` must contain those stores without creating another set
 in the default state or project folder. It also checks terminal cwd, same-project
 display reuse and client-only refusal. This proves the tested executable's
 composition, not components absent from that executable or Hive convergence.

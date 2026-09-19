@@ -452,8 +452,16 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     local gateway = plan.gateway
     if not gateway then return nil, nil end
     local request = plan.request
+    -- The admitted attempt's workspace is host-selected, so it travels with the
+    -- binding surface's fixed context: a bound tool reads which workspace it
+    -- belongs to and no tool argument can replace a host key.
+    local surface_value = plan.policy.gateway_surface
+    if request.workspace_id then
+        surface_value = policy.with_workspace(surface_value, request.workspace_id)
+        if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
+    end
     local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
-        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = plan.policy.gateway_surface,
+        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,
         policy_ref = plan.policy.ref, workspace_id = request.workspace_id})
     if admit_error then return nil, "gateway admit: " .. admit_error end
     local binding = bounds.object((bounds.object(admitted) or {}).binding) or {}

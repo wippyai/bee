@@ -136,6 +136,22 @@ local function define_tests()
             test.is_nil(policy.decode("test:policy", raw))
         end)
 
+        test.it("composes the host-selected workspace into the binding surface fixed context", function()
+            local source: Entry = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {project = "one"}, dynamic_keys = {}}
+            local composed = policy.with_workspace(source, "workspace-one")
+            if not composed then error("compose surface") end
+            local fixed = composed.fixed_context :: Entry
+            test.eq(fixed["bee.workspace_id"], "workspace-one")
+            test.eq(fixed.project, "one")
+            -- The helper copies: a launch policy's surface is host-owned and shared.
+            test.is_nil((source.fixed_context :: Entry)["bee.workspace_id"])
+            local absent = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, dynamic_keys = {}}, "workspace-two")
+            if not absent then error("compose surface without context") end
+            test.eq((absent.fixed_context :: Entry)["bee.workspace_id"], "workspace-two")
+            test.is_nil(policy.with_workspace(nil, "workspace-one"))
+            -- A malformed declared context refuses rather than silently dropping it.
+            test.is_nil(policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = "broken", dynamic_keys = {}}, "workspace-one"))
+        end)
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry

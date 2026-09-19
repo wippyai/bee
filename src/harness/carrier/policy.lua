@@ -303,6 +303,23 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options}
     return decoded, nil
 end
+type SurfaceValue = {[string]: unknown}
+-- The host-selected workspace a launch belongs to, carried into the admitted
+-- gateway surface's fixed context. A bound subject reads it as host-selected
+-- data and no tool argument can replace a host key (context.compose refuses).
+function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string): SurfaceValue?
+    if not gateway_surface then return nil end
+    local fixed: SurfaceValue = {["bee.workspace_id"] = workspace_id}
+    local declared = gateway_surface.fixed_context
+    if declared ~= nil then
+        if type(declared) ~= "table" then return nil end
+        for key, value in pairs(declared :: SurfaceValue) do fixed[key] = value end
+    end
+    local result: SurfaceValue = {}
+    for key, value in pairs(gateway_surface) do result[key] = value end
+    result.fixed_context = fixed
+    return result
+end
 function M.load(ref: string): (Policy?, string?)
     local entry, err = registry.get(ref)
     if err or not entry then return nil, "launch policy " .. ref .. " is not in the registry" end

@@ -235,7 +235,7 @@ func actualAgyColdRecovery(binary, executable, loginFile, model string) (result 
 	if err = first.send("\r"); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "5 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "6 tools configured"} {
 		if err = first.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("real Agy profile summary: %w", err)
 		}

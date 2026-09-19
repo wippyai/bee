@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from workspace import RUNTIME, fixture_workspace  # noqa: E402
+from workspace import RUNTIME, fixture_workspace, pack_fixture  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKERS = ("docs agent:", "tty.canvas", "subscribe(thread", "sql.builder.select")
@@ -49,6 +49,17 @@ def main():
         print("Docs agent: an admitted fixture agent answered the terminal toolkit, "
               "cross-node subscriptions and the SQL module from the embedded corpus")
         print(answered[:400])
+        # The corpus must also travel inside a real pack: the same source, packed
+        # with the test entries excluded, serves the manifest and a document from
+        # the embedded read-only volume and refuses a write to it.
+        pack = folder / "bee.wapp"
+        pack_fixture(folder, pack)
+        packed = subprocess.run([str(RUNTIME), "run", str(pack), "docs-volume-probe", "--host", "bee:terminal"],
+                                cwd=folder, env=environment, capture_output=True, text=True, timeout=180)
+        packed_output = re.sub(r"\x1b\[[0-9;]*m", "", packed.stdout + packed.stderr).replace("\r", "\n")
+        assert packed.returncode == 0, packed_output[-4000:]
+        assert "read-only embedded filesystem" in packed_output, packed_output[-2000:]
+        print("Docs corpus: the packed application serves the embedded read-only corpus with no network")
 
 
 if __name__ == "__main__":

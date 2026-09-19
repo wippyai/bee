@@ -1,6 +1,24 @@
 version: '1.0'
 namespace: bee.docs_agent
 entries:
+- name: volume
+  kind: process.lua
+  source: file://volume.lua
+  method: main
+  modules: [fs, io, json]
+  meta:
+    command:
+      name: docs-volume-probe
+      security:
+        actor: {id: bee.test.docs_volume}
+  security:
+    policies: [bee.docs_agent:volume_policy]
+- name: volume_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee:docs_corpus]
+    effect: allow
 - name: main
   kind: process.lua
   source: file://main.lua

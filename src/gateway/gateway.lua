@@ -142,6 +142,14 @@ local function restarts(): (integer?, string?)
     if state_error or not state then return nil, "listener service state unavailable" end
     return integer(state.retry_count) or 0, nil
 end
+-- An optional text column: the SQL binder cannot carry a trailing nil, so an
+-- absent value is stored as the empty string and read back as nil.
+local function optional_text(value: unknown): string?
+    if value == nil then return nil end
+    local text = tostring(value)
+    if text == "" then return nil end
+    return text
+end
 local function binding_of(row: Row): (Binding?, string?)
     local tools: unknown, decode_error = json.decode(tostring(row.tools_json))
     if decode_error or type(tools) ~= "table" then return nil, "binding tools are corrupt" end
@@ -154,8 +162,7 @@ local function binding_of(row: Row): (Binding?, string?)
     return {binding_id = tostring(row.binding_id), subject = tostring(row.subject), action_id = tostring(row.action_id), attempt_id = tostring(row.attempt_id),
         thread_id = tostring(row.thread_id), owner_incarnation = integer(row.owner_incarnation) or 0, carrier_epoch = integer(row.carrier_epoch) or 0, tools = names, hooks = hook_names,
         epoch = integer(row.epoch) or 0, credential_generation = integer(row.credential_generation) or 0, expires_at = tostring(row.expires_at), revoked = row.revoked_at ~= nil, sealed = row.sealed_at ~= nil,
-        policy_ref = row.policy_ref ~= nil and tostring(row.policy_ref) or nil,
-        workspace_id = row.workspace_id ~= nil and tostring(row.workspace_id) or nil}, nil
+        policy_ref = optional_text(row.policy_ref), workspace_id = optional_text(row.workspace_id)}, nil
 end
 local function view(binding: Binding): Object
     return {binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, thread_id = binding.thread_id,
@@ -379,7 +386,7 @@ function M.admit(value: unknown): Reply
     if supersede_error then tx:rollback(); db:release(); return fail("STORAGE", "supersede earlier bindings") end
     local _, insert_error = tx:execute([[INSERT INTO bee_gateway_bindings (binding_id, subject, action_id, attempt_id, thread_id, owner_incarnation, carrier_epoch, tools_json, hooks_json,
         epoch, credential_generation, expires_at, revoked_at, idempotency_key, request_digest, created_at, policy_ref, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ?, ?)]],
-        {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created), policy_ref, workspace_id})
+        {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created), policy_ref or "", workspace_id or ""})
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
     if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end

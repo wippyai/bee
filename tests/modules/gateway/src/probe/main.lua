@@ -105,7 +105,7 @@ local function prove_configuration_scope(address: string)
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_workspace_policy"}) do
+    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_workspace_policy", "bee:gateway_tool_docs_policy"}) do
         local selected, err = security.policy(name)
         assert(selected ~= nil and err == nil, "endpoint policy unavailable")
         policies[#policies + 1] = selected
@@ -113,9 +113,12 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:workspace_call"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:workspace_call", "bee:docs_call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
+    -- The docs tool reads the one embedded corpus and reaches no other volume.
+    assert(scope:evaluate(actor, "fs.get", "bee:docs_corpus") == "allow", "docs corpus read is absent")
+    assert(scope:evaluate(actor, "fs.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
     assert(scope:evaluate(actor, "bee.governance.workspace.read", "any-workspace") == "allow", "workspace read is absent")
     assert(scope:evaluate(actor, "bee.governance.workspace.write", "any-workspace") == "allow", "workspace write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do

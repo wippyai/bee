@@ -6,6 +6,7 @@ package these same pages with status and version, not maintain a second copy.
 
 | Read for | Current source |
 |---|---|
+| Platform documentation and runtime modules an agent looks up offline | [Agent documentation corpus](../src/docs/README.md) |
 | Run and develop | [Repository README](../README.md), [agent guide](AGENT_GUIDE.md) |
 | Contributions, reviews and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |

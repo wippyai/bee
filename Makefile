@@ -244,7 +244,7 @@ pack: lint
 # cases without .wippy/. Keep their governance store inside that fixture too.
 check desktop-check client-storage-check: export BEE_GOVERNANCE_DB = governance.db
 
-check: identity-native-check installer-check bundle-check bundle-assets-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack about-check headless-check workspace-hosts-check
+check: identity-native-check installer-check bundle-check bundle-assets-check agent-corpus-check docs-agent-check lint test window-native-check managed-window-app-check window-hooks-check threads threads-module harness-module resources-module gateway-check governance-workspace-check pack about-check headless-check workspace-hosts-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_storage.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/resources.py
@@ -340,6 +340,18 @@ managed-launch-fixture-check: fixture-gateway-client
 .PHONY: thread-launch-check
 thread-launch-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
+
+.PHONY: docs-agent-check agent-corpus
+# The embedded documentation corpus: build it from the published runtime docs
+# and Bee's own contracts, or verify the committed snapshot offline.
+agent-corpus:
+	python3 build/agent_corpus.py
+agent-corpus-check:
+	python3 build/agent_corpus.py --check
+# An admitted fixture agent answers three questions from the embedded corpus
+# through the read-only docs tool, with no network.
+docs-agent-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/docs_agent.py
 
 .PHONY: headless-check
 headless-check:

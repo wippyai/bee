@@ -15,6 +15,8 @@ def run():
             shutil.copytree(ROOT / "src", project / "src")
             shutil.copytree(ROOT / "tests/fixtures/app_admission", project / "src/probe")
             shutil.copy2(ROOT / ".wippy.yaml", project / ".wippy.yaml")
+            # Carry the production embed declaration so the pack embeds the corpus.
+            shutil.copy2(ROOT / "wippy.yaml", project / "wippy.yaml")
             shutil.copy2(ROOT / "wippy.lock", project / "wippy.lock")
             if not packed:
                 subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",

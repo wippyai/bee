@@ -126,6 +126,13 @@ func run() error {
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
 		return err
 	}
+	manifest, manifestErr := os.ReadFile("wippy.yaml")
+	if manifestErr != nil {
+		return manifestErr
+	}
+	if err := os.WriteFile(filepath.Join(root, "wippy.yaml"), manifest, 0600); err != nil {
+		return err
+	}
 	first, err := boot(runtime, root, "")
 	if err != nil {
 		return err

@@ -572,7 +572,7 @@ func run() error {
 	if err := os.CopyFS(filepath.Join(project, "src"), os.DirFS("src")); err != nil {
 		return fmt.Errorf("copy source tree: %w", err)
 	}
-	for _, name := range []string{".wippy.yaml", "wippy.lock"} {
+	for _, name := range []string{".wippy.yaml", "wippy.lock", "wippy.yaml"} {
 		if err := copyFile(name, filepath.Join(project, name)); err != nil {
 			return err
 		}

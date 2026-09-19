@@ -116,6 +116,13 @@ func run() error {
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
 		return fmt.Errorf("write wippy.lock: %w", err)
 	}
+	manifest, manifestErr := os.ReadFile("wippy.yaml")
+	if manifestErr != nil {
+		return fmt.Errorf("read wippy.yaml: %w", manifestErr)
+	}
+	if err := os.WriteFile(filepath.Join(root, "wippy.yaml"), manifest, 0600); err != nil {
+		return fmt.Errorf("write wippy.yaml: %w", err)
+	}
 
 	// Step 1: Strict Lua lint
 	fmt.Println("=== Step 1: Strict Lua Lint ===")

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestOwnerCommandPreservesLiteralStateAndProject(t *testing.T) {
@@ -27,18 +27,18 @@ func TestOwnerCommandPreservesLiteralStateAndProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	request := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", StateDir: filepath.Join(root, "state $literal `literal`"), Directory: root}
-	command, err := ownerCommand("/absolute/bee", request, log)
+	launch := app.Launch{Op: app.OpRun, Command: "bee", State: filepath.Join(root, "state $literal `literal`"), Dir: root}
+	command, err := ownerCommand("/absolute/bee", launch, log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"/absolute/bee", "--state-dir", request.StateDir, "--command", "bee", "run", "start"}
+	want := []string{"/absolute/bee", "--state", launch.State, "run", "start"}
 	if !reflect.DeepEqual(command.Args, want) || command.Dir != root || command.Stdin != nil || command.Stdout != log || command.Stderr != log {
 		t.Fatalf("wrong command: %#v", command)
 	}
-	request.Base = true
-	if _, err := ownerCommand("/absolute/bee", request, log); err == nil {
-		t.Fatal("base accepted")
+	launch.Op = app.OpRecover
+	if _, err := ownerCommand("/absolute/bee", launch, log); err == nil {
+		t.Fatal("reserved verb accepted")
 	}
 }
 

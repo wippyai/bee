@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // OwnerProcess is a child executable, not proof of workspace ownership or
@@ -28,22 +28,25 @@ type OwnerProcess struct {
 // supplies a protected log file; no pipe keeps the owner tied to the client.
 // An already canceled context prevents creation. After success, foreground
 // cancellation or exit must not terminate the owner or its applications.
-func StartOwner(ctx context.Context, request application.LaunchRequest, log *os.File) (*OwnerProcess, error) {
+func StartOwner(ctx context.Context, launch app.Launch, log *os.File) (*OwnerProcess, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	command, err := ownerCommand(executable, request, log)
+	command, err := ownerCommand(executable, launch, log)
 	if err != nil {
 		return nil, err
 	}
 	return startDetached(ctx, command)
 }
 
-func ownerCommand(executable string, request application.LaunchRequest, log *os.File) (*exec.Cmd, error) {
-	if !filepath.IsAbs(executable) || request.Operation != application.RunApplication || request.Base ||
-		request.Command == "" || len(request.Arguments) != 0 || !filepath.IsAbs(request.StateDir) ||
-		!filepath.IsAbs(request.Directory) || log == nil {
+// ownerCommand builds the model's ordinary-start grammar for a detached
+// owner: the leading --state selects the directory and the child's own "start"
+// argument selects the retained owner route the host plans for it. The model
+// resolves Command from the executable, so the child names no --command.
+func ownerCommand(executable string, launch app.Launch, log *os.File) (*exec.Cmd, error) {
+	if !filepath.IsAbs(executable) || launch.Op != app.OpRun ||
+		launch.Command == "" || !filepath.IsAbs(launch.State) || !filepath.IsAbs(launch.Dir) || log == nil {
 		return nil, errors.New("invalid background Bee owner launch")
 	}
 	info, err := log.Stat()
@@ -53,8 +56,8 @@ func ownerCommand(executable string, request application.LaunchRequest, log *os.
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("owner output must be a regular log file")
 	}
-	command := exec.Command(executable, "--state-dir", request.StateDir, "--command", request.Command, "run", "start")
-	command.Dir = request.Directory
+	command := exec.Command(executable, "--state", launch.State, "run", "start")
+	command.Dir = launch.Dir
 	command.Stdout, command.Stderr = log, log
 	// A nil stdin is /dev/null. Never inherit the client's controlling terminal.
 	return command, nil

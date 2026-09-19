@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/internal/privatefile"
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 const (
@@ -35,24 +35,24 @@ type legacyProjectSelection struct {
 }
 
 // CanonicalProject preserves the native node identity across symlink aliases.
-// It deliberately does not alter StateDir: launch preparation selects that.
-func CanonicalProject(request application.LaunchRequest) (application.LaunchRequest, error) {
-	if !filepath.IsAbs(request.Directory) || !filepath.IsAbs(request.StateDir) {
-		return request, errors.New("project launch requires absolute project and state directories")
+// It deliberately does not alter State: the host's plan selects that.
+func CanonicalProject(launch app.Launch) (app.Launch, error) {
+	if !filepath.IsAbs(launch.Dir) || !filepath.IsAbs(launch.State) {
+		return launch, errors.New("project launch requires absolute project and state directories")
 	}
-	directory, err := filepath.EvalSymlinks(request.Directory)
+	directory, err := filepath.EvalSymlinks(launch.Dir)
 	if err != nil {
-		return request, err
+		return launch, err
 	}
 	directory = filepath.Clean(directory)
-	request.Directory = directory
-	return request, nil
+	launch.Dir = directory
+	return launch, nil
 }
 
-// ProjectStateDir is selected during launch preparation, before the runtime
+// ProjectStateDir is selected while planning a launch, before the runtime
 // resolves its own default. It preserves the caller-selected root while
 // assigning one runtime state directory per canonical project. An explicit
-// --state-dir request remains outside this helper and is left unchanged.
+// --state launch remains outside this helper and is left unchanged.
 func ProjectStateDir(root, directory string) (string, error) {
 	root, directory, err := canonicalStateInputs(root, directory)
 	if err != nil {

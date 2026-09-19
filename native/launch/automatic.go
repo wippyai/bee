@@ -14,22 +14,21 @@ import (
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
-	application "github.com/wippyai/runtime/api/application"
-	"github.com/wippyai/runtime/application/statelock"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // Run starts a detached owner contender, then attaches once. The child's normal
 // runtime lock selects the owner. A losing contender authenticates the existing
 // owner without mounting a desktop before it exits successfully. Discovery hints
 // select when to attempt admission; they never grant it. No mutation is replayed.
-func (c Client) Run(ctx context.Context, request application.LaunchRequest) error {
-	if err := c.validate(ctx, request); err != nil {
+func (c Client) Run(ctx context.Context, launch app.Launch) error {
+	if err := c.validate(ctx, launch); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(request.Directory) {
+	if !filepath.IsAbs(launch.Dir) {
 		return errors.New("client launch needs the project directory")
 	}
-	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
+	store, err := rendezvous.New(filepath.Join(launch.State, rendezvous.DirectoryName))
 	if err != nil {
 		return err
 	}
@@ -49,28 +48,30 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		} else if err != nil {
 			return err
 		}
-		return c.Attach(ctx, request)
+		return c.Attach(ctx, launch)
 	}
-	if err := privatefile.EnsurePrivateDir(request.StateDir); err != nil {
+	if err := privatefile.EnsurePrivateDir(launch.State); err != nil {
 		return err
 	}
-	busy, err := ownerLockBusy(request.StateDir)
+	// The runtime's application lock is the ownership authority. Owned is a
+	// snapshot that creates nothing, so an absent state stays absent.
+	busy, err := app.Owned(launch.State)
 	if err != nil {
 		return err
 	}
 	if busy {
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
-		return c.Attach(ctx, request)
+		return c.Attach(ctx, launch)
 	}
 	previous, err := store.Read(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := privatefile.EnsurePrivateDir(request.StateDir); err != nil {
+	if err := privatefile.EnsurePrivateDir(launch.State); err != nil {
 		return err
 	}
-	log, err := os.CreateTemp(request.StateDir, "owner-*.log")
+	log, err := os.CreateTemp(launch.State, "owner-*.log")
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,7 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 	if err := privatefile.SetOwnerOnlyPermissions(log.Name()); err != nil {
 		return err
 	}
-	child, err := StartOwner(ctx, request, log)
+	child, err := StartOwner(ctx, launch, log)
 	if err != nil {
 		return err
 	}
@@ -89,23 +90,10 @@ func (c Client) Run(ctx context.Context, request application.LaunchRequest) erro
 		return fmt.Errorf("Bee owner startup (log %s): %w", log.Name(), err)
 	}
 	// Detach/cancellation ends only this client. Never abort the retained owner.
-	if err := c.Attach(ctx, request); err != nil {
+	if err := c.Attach(ctx, launch); err != nil {
 		return fmt.Errorf("Bee client attachment (owner log %s): %w", log.Name(), err)
 	}
 	return nil
-}
-
-// Release a free runtime lock before spawning. The child must acquire it again;
-// another launcher winning that race is handled by the existing contender path.
-func ownerLockBusy(state string) (bool, error) {
-	unlock, err := statelock.Acquire(state)
-	if errors.Is(err, statelock.ErrBusy) {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return false, unlock()
 }
 
 func waitOwnerPublication(ctx context.Context, read func(context.Context) (rendezvous.Descriptor, error), previous rendezvous.Descriptor, done <-chan struct{}, wait func(context.Context) error) error {

@@ -6,16 +6,14 @@ package launch
 import (
 	"context"
 	"errors"
-	"github.com/wippyai/bee/native/client/hive"
-	"github.com/wippyai/bee/native/client/session"
-	"github.com/wippyai/bee/native/hive/rendezvous"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
-	application "github.com/wippyai/runtime/api/application"
+	"github.com/wippyai/bee/native/client/hive"
+	"github.com/wippyai/runtime/api/boot"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // OwnerLauncher maps the explicit start command to the host's retained-owner
@@ -26,10 +24,10 @@ type OwnerLauncher struct {
 	client       *Client
 	command      string
 	ownerCommand string
-	prepare      func(context.Context, application.LaunchRequest) (application.OwnerPlan, error)
+	prepare      func(context.Context, app.Launch) (boot.Config, func() error, error)
 }
 
-func NewOwnerLauncher(command, ownerCommand string, prepare func(context.Context, application.LaunchRequest) (application.OwnerPlan, error)) (*OwnerLauncher, error) {
+func NewOwnerLauncher(command, ownerCommand string, prepare func(context.Context, app.Launch) (boot.Config, func() error, error)) (*OwnerLauncher, error) {
 	if command == "" || ownerCommand == "" || command == ownerCommand ||
 		strings.ContainsAny(command+ownerCommand, " \t\r\n") || prepare == nil {
 		return nil, errors.New("invalid retained owner launch configuration")
@@ -38,8 +36,9 @@ func NewOwnerLauncher(command, ownerCommand string, prepare func(context.Context
 }
 
 // NewLauncher enables ordinary foreground startup plus explicit headless start.
-// One compiled component owns both routes; runtime/update/base remain separate.
-func NewLauncher(client Client, ownerCommand string, prepare func(context.Context, application.LaunchRequest) (application.OwnerPlan, error)) (*OwnerLauncher, error) {
+// One compiled component owns both routes; the runtime's own verbs stay with
+// the runtime.
+func NewLauncher(client Client, ownerCommand string, prepare func(context.Context, app.Launch) (boot.Config, func() error, error)) (*OwnerLauncher, error) {
 	launcher, err := NewOwnerLauncher(client.Command, ownerCommand, prepare)
 	if err != nil {
 		return nil, err
@@ -52,69 +51,76 @@ func (*OwnerLauncher) Name() string                                      { retur
 func (*OwnerLauncher) DependsOn() []string                               { return nil }
 func (*OwnerLauncher) Load(ctx context.Context) (context.Context, error) { return ctx, nil }
 
-func (l *OwnerLauncher) PrepareLaunch(ctx context.Context, request application.LaunchRequest) (application.LaunchPlan, error) {
+// Plan decides what one invocation does before the runner touches state. Only
+// an ordinary run of this executable's command is handled here; every reserved
+// verb keeps the runtime's own behavior.
+func (l *OwnerLauncher) Plan(ctx context.Context, launch app.Launch) (app.Plan, error) {
 	if ctx == nil {
-		return application.LaunchPlan{}, errors.New("owner launch requires a context")
+		return app.Plan{}, errors.New("owner launch requires a context")
 	}
 	if err := ctx.Err(); err != nil {
-		return application.LaunchPlan{}, err
+		return app.Plan{}, err
 	}
-	if request.Operation != application.RunApplication || request.Command != l.command {
-		return application.LaunchPlan{}, nil
+	if launch.Op != app.OpRun || launch.Command != l.command {
+		return app.Plan{}, nil
 	}
-	if len(request.Arguments) > 0 && request.Arguments[0] == "start" {
-		if request.Base || len(request.Arguments) != 1 {
-			return application.LaunchPlan{}, errors.New("bee start requires ordinary startup with no extra arguments")
+	if len(launch.Args) > 0 && launch.Args[0] == "start" {
+		if len(launch.Args) != 1 {
+			return app.Plan{}, errors.New("bee start requires ordinary startup with no extra arguments")
 		}
-		return application.LaunchPlan{
-			Command: l.ownerCommand, Arguments: []string{}, PrepareOwner: l.prepare,
-			Attach: func(ctx context.Context, selected application.LaunchRequest) error {
-				return session.Probe(ctx, filepath.Join(selected.StateDir, rendezvous.DirectoryName))
+		// The retained owner boots the runtime under the real state lock. Its
+		// preparation is the host preparation the runtime calls under that lock.
+		selected := launch
+		return app.Plan{
+			Command: l.ownerCommand,
+			Args:    []string{},
+			Prepare: func(ctx context.Context) (boot.Config, func() error, error) {
+				return l.prepare(ctx, selected)
 			},
 		}, nil
 	}
-	if l.client == nil || request.Base {
-		return application.LaunchPlan{}, nil
+	if l.client == nil {
+		return app.Plan{}, nil
 	}
-	selected, handled, err := l.selectClient(request)
+	selected, handled, err := l.selectClient(launch)
 	if err != nil || !handled {
-		return application.LaunchPlan{}, err
+		return app.Plan{}, err
 	}
 	// The owner child starts empty. Exactly this foreground session submits the
 	// command after admission; spawning the owner must not execute it.
-	startup := request
-	startup.Arguments = nil
+	startup := launch
+	startup.Args = nil
 	foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if selected.listing {
-		return application.LaunchPlan{Handled: true}, selected.list(foreground, startup)
+		return app.Plan{Run: func(context.Context) error { return selected.list(foreground, startup) }}, nil
 	}
-	return application.LaunchPlan{Handled: true}, selected.Run(foreground, startup)
+	return app.Plan{Run: func(context.Context) error { return selected.Run(foreground, startup) }}, nil
 }
 
 // selectClient maps one ordinary invocation onto this host's display client.
 // An unhandled request keeps the runtime's own application entry, which is how
 // an explicit application ID still reaches recovery and development launches.
-func (l *OwnerLauncher) selectClient(request application.LaunchRequest) (clientSelection, bool, error) {
+func (l *OwnerLauncher) selectClient(launch app.Launch) (clientSelection, bool, error) {
 	selected := clientSelection{Client: *l.client}
-	if len(request.Arguments) == 0 {
+	if len(launch.Args) == 0 {
 		return selected, true, nil
 	}
-	display := request.Arguments[0] == "client"
-	observe := request.Arguments[0] == "observe"
-	attach := request.Arguments[0] == "attach"
-	selected.listing = request.Arguments[0] == "desktops"
-	if selected.listing && len(request.Arguments) != 1 {
+	display := launch.Args[0] == "client"
+	observe := launch.Args[0] == "observe"
+	attach := launch.Args[0] == "attach"
+	selected.listing = launch.Args[0] == "desktops"
+	if selected.listing && len(launch.Args) != 1 {
 		return selected, false, errors.New("bee desktops takes no arguments")
 	}
 	if observe || attach || display {
-		if len(request.Arguments) == 3 {
-			selection, err := parseSelection(request.Arguments[1], request.Arguments[2])
+		if len(launch.Args) == 3 {
+			selection, err := parseSelection(launch.Args[1], launch.Args[2])
 			if err != nil {
 				return selected, false, err
 			}
 			selected.Selection = selection
-		} else if attach || len(request.Arguments) != 1 {
+		} else if attach || len(launch.Args) != 1 {
 			return selected, false, errors.New("bee attach requires WORKSPACE DISPLAY; bee observe/client takes no application arguments or one WORKSPACE DISPLAY pair")
 		}
 		selected.AttachOnly = display
@@ -130,10 +136,10 @@ func (l *OwnerLauncher) selectClient(request application.LaunchRequest) (clientS
 	}
 	// Explicit application IDs retain their existing recovery/development
 	// entry. Named handlers resolve only through the retained owner.
-	if strings.Contains(request.Arguments[0], ":") {
+	if strings.Contains(launch.Args[0], ":") {
 		return selected, false, nil
 	}
-	command := hive.DesktopCommand{Name: request.Arguments[0], Arguments: append([]string{}, request.Arguments[1:]...)}
+	command := hive.DesktopCommand{Name: launch.Args[0], Arguments: append([]string{}, launch.Args[1:]...)}
 	if !command.Valid() {
 		return selected, false, errors.New("invalid Bee command arguments")
 	}

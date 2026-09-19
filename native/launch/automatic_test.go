@@ -7,10 +7,13 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	"github.com/wippyai/runtime/application/statelock"
+	"github.com/wippyai/runtime/api/boot"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestFailedOwnerNeverFallsBackToStaleDiscovery(t *testing.T) {
@@ -58,25 +61,65 @@ func TestMissingPublicationRemainsCancelable(t *testing.T) {
 	}
 }
 
+// ownedHost blocks inside the model's host preparation, which runs only after
+// the runner holds the real application state lock. It therefore holds the state
+// exactly as a live owner does, without a bundle or a second lock primitive.
+type ownedHost struct{ started chan struct{} }
+
+func (h ownedHost) Plan(context.Context, app.Launch) (app.Plan, error) {
+	return app.Plan{Prepare: func(ctx context.Context) (boot.Config, func() error, error) {
+		close(h.started)
+		<-ctx.Done()
+		return nil, nil, ctx.Err()
+	}}, nil
+}
+
+// TestWarmLaunchUsesRuntimeLockAndFreeProbeReleasesIt proves the client's
+// ownership question is answered by the runtime's own application lock: a free
+// state reports no owner, a state an owner holds reports one, and the probe
+// itself leaves an absent state absent.
 func TestWarmLaunchUsesRuntimeLockAndFreeProbeReleasesIt(t *testing.T) {
-	state := t.TempDir()
-	busy, err := ownerLockBusy(state)
+	state := filepath.Join(t.TempDir(), "state")
+	busy, err := app.Owned(state)
 	if err != nil || busy {
 		t.Fatal(busy, err)
 	}
-	unlock, err := statelock.Acquire(state)
-	if err != nil {
-		t.Fatal("free probe retained lock", err)
+	if _, err := os.Lstat(state); !os.IsNotExist(err) {
+		t.Fatalf("free probe created state: %v", err)
 	}
-	defer unlock()
-	busy, err = ownerLockBusy(state)
+	started := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	executable := app.Executable{Name: "owner-probe", Command: "holder", Host: ownedHost{started: started}}
+	go func() { done <- app.Run(ctx, executable, []string{"--state", state, "run"}) }()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("owner did not reach lock-held preparation")
+	}
+	busy, err = app.Owned(state)
 	if err != nil || !busy {
-		t.Fatal("live runtime lock was not recognized", busy, err)
+		t.Fatal("live application lock was not recognized", busy, err)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal("owner did not stop on cancellation", err)
+	}
+	busy, err = app.Owned(state)
+	if err != nil || busy {
+		t.Fatal("released application lock still reported owned", busy, err)
 	}
 }
 
 func TestOwnerProbeDoesNotTreatFilesystemFailureAsContention(t *testing.T) {
-	if busy, err := ownerLockBusy(t.TempDir() + "/missing"); err == nil || busy {
+	// A state path whose parent is a regular file cannot open a lock file, so
+	// the probe must report the failure rather than a false owner. An absent
+	// state is deliberately not a failure; that is the model's contract.
+	blocked := filepath.Join(t.TempDir(), "state")
+	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if busy, err := app.Owned(blocked); err == nil || busy {
 		t.Fatal("filesystem failure was accepted as an owner", busy, err)
 	}
 }

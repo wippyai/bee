@@ -13,7 +13,7 @@ import (
 
 	"github.com/wippyai/bee/native/client/session"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func parseSelection(workspace, desktop string) (session.Selection, error) {
@@ -26,11 +26,11 @@ func parseSelection(workspace, desktop string) (session.Selection, error) {
 	return session.Selection{Workspace: workspace, Desktop: desktop}, nil
 }
 
-func (c clientSelection) list(ctx context.Context, request application.LaunchRequest) error {
-	if err := c.validate(ctx, request); err != nil {
+func (c clientSelection) list(ctx context.Context, launch app.Launch) error {
+	if err := c.validate(ctx, launch); err != nil {
 		return err
 	}
-	store, err := rendezvous.New(filepath.Join(request.StateDir, rendezvous.DirectoryName))
+	store, err := rendezvous.New(filepath.Join(launch.State, rendezvous.DirectoryName))
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (c clientSelection) list(ctx context.Context, request application.LaunchReq
 	} else if err != nil {
 		return err
 	}
-	catalog, err := session.List(ctx, filepath.Join(request.StateDir, rendezvous.DirectoryName))
+	catalog, err := session.List(ctx, filepath.Join(launch.State, rendezvous.DirectoryName))
 	if err != nil {
 		return err
 	}

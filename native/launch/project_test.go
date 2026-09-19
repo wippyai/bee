@@ -15,7 +15,7 @@ import (
 
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/internal/privatefile"
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestProjectStateDirsAreDistinctAndCanonical(t *testing.T) {
@@ -240,21 +240,21 @@ func TestDefaultProjectStateDirRefusesRunningLegacyOwner(t *testing.T) {
 
 func TestCanonicalProjectDoesNotRedirectRuntimeState(t *testing.T) {
 	root := t.TempDir()
-	request := application.LaunchRequest{Directory: root, StateDir: filepath.Join(root, "state")}
-	selected, err := CanonicalProject(request)
-	if err != nil || selected.StateDir != request.StateDir || selected.Directory != root {
+	launch := app.Launch{Dir: root, State: filepath.Join(root, "state")}
+	selected, err := CanonicalProject(launch)
+	if err != nil || selected.State != launch.State || selected.Dir != root {
 		t.Fatal(selected, err)
 	}
 }
 
 func TestExplicitClientNeverStartsProjectNode(t *testing.T) {
-	request := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", Directory: t.TempDir(), StateDir: t.TempDir()}
+	launch := app.Launch{Op: app.OpRun, Command: "bee", Dir: t.TempDir(), State: t.TempDir()}
 	client := Client{Command: "bee", Mode: hive.Control, AttachOnly: true, Stdin: os.Stdin, Stdout: io.Discard}
-	err := client.Run(context.Background(), request)
+	err := client.Run(context.Background(), launch)
 	if err == nil || !strings.Contains(err.Error(), "No running Bee for this project") {
 		t.Fatal(err)
 	}
-	entries, err := os.ReadDir(request.StateDir)
+	entries, err := os.ReadDir(launch.State)
 	if err != nil {
 		t.Fatal(err)
 	}

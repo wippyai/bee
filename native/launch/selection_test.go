@@ -11,7 +11,8 @@ import (
 	"testing"
 
 	"github.com/wippyai/bee/native/client/hive"
-	application "github.com/wippyai/runtime/api/application"
+	"github.com/wippyai/runtime/api/boot"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestExplicitSelectionDoesNotFallBackToDefaults(t *testing.T) {
@@ -32,18 +33,23 @@ func TestExplicitSelectionAndListNeverRunOwnerForAbsentBee(t *testing.T) {
 	for _, args := range [][]string{{"desktops"}, {"attach", id, id}, {"observe", id, id}, {"client"}} {
 		t.Run(args[0], func(t *testing.T) {
 			state := t.TempDir()
-			launcher, err := NewLauncher(Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: io.Discard}, "bee-owner", func(context.Context, application.LaunchRequest) (application.OwnerPlan, error) {
+			launcher, err := NewLauncher(Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: io.Discard}, "bee-owner", func(context.Context, app.Launch) (boot.Config, func() error, error) {
 				t.Fatal("explicit client command prepared an owner")
-				return application.OwnerPlan{}, nil
+				return nil, nil, nil
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan, err := launcher.PrepareLaunch(context.Background(), application.LaunchRequest{
-				Operation: application.RunApplication, Command: "bee", Arguments: args, StateDir: state, Directory: state,
+			plan, err := launcher.Plan(context.Background(), app.Launch{
+				Op: app.OpRun, Command: "bee", Args: args, State: state, Dir: state,
 			})
-			if err == nil || plan.PrepareOwner != nil || plan.Command != "" {
+			if err != nil || plan.Prepare != nil || plan.Run == nil || plan.Command != "" {
 				t.Fatal(err, plan)
+			}
+			// The model keeps the decision and the work separate: the explicit
+			// client route runs through Plan.Run and must refuse an absent Bee.
+			if err := plan.Run(context.Background()); err == nil {
+				t.Fatal("explicit client command accepted an absent Bee")
 			}
 			entries, readErr := os.ReadDir(state)
 			if readErr != nil {

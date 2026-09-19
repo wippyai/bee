@@ -5,47 +5,45 @@ package launch
 
 import (
 	"context"
-	application "github.com/wippyai/runtime/api/application"
+	"github.com/wippyai/runtime/api/boot"
+	app "github.com/wippyai/runtime/cmd/app"
 	"testing"
 )
 
 func TestStartRouteDefersPreparationToRuntimeLock(t *testing.T) {
 	calls := 0
-	launcher, err := NewOwnerLauncher("bee", "retained-owner", func(context.Context, application.LaunchRequest) (application.OwnerPlan, error) {
+	launcher, err := NewOwnerLauncher("bee", "retained-owner", func(context.Context, app.Launch) (boot.Config, func() error, error) {
 		calls++
-		return application.OwnerPlan{}, nil
+		return nil, nil, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", Arguments: []string{"start"}}
-	plan, err := launcher.PrepareLaunch(context.Background(), request)
-	if err != nil || plan.Command != "retained-owner" || plan.Arguments == nil || len(plan.Arguments) != 0 || plan.PrepareOwner == nil || plan.Attach == nil || plan.Handled || calls != 0 {
+	launch := app.Launch{Op: app.OpRun, Command: "bee", Args: []string{"start"}}
+	plan, err := launcher.Plan(context.Background(), launch)
+	if err != nil || plan.Command != "retained-owner" || plan.Args == nil || len(plan.Args) != 0 || plan.Prepare == nil || plan.Run != nil || calls != 0 {
 		t.Fatalf("invalid start plan: %+v %v calls=%d", plan, err, calls)
 	}
-	if _, err := plan.PrepareOwner(context.Background(), request); err != nil || calls != 1 {
+	if _, release, err := plan.Prepare(context.Background()); err != nil || calls != 1 {
 		t.Fatal(err, calls)
+	} else if release != nil {
+		t.Fatal("start route returned an unexpected release")
 	}
-	for _, operation := range []application.Operation{application.RunRuntime, application.Update} {
-		other := request
-		other.Operation = operation
-		plan, err := launcher.PrepareLaunch(context.Background(), other)
-		if err != nil || plan.PrepareOwner != nil || plan.Command != "" {
+	for _, operation := range []app.Op{app.OpUpdate, app.OpRecover, app.OpWippy} {
+		other := launch
+		other.Op = operation
+		plan, err := launcher.Plan(context.Background(), other)
+		if err != nil || plan.Prepare != nil || plan.Run != nil || plan.Command != "" {
 			t.Fatal("reserved operation intercepted", plan, err)
 		}
 	}
-	request.Base = true
-	if _, err := launcher.PrepareLaunch(context.Background(), request); err == nil {
-		t.Fatal("base start accepted")
-	}
-	request.Base = false
-	request.Arguments = []string{"start", "extra"}
-	if _, err := launcher.PrepareLaunch(context.Background(), request); err == nil {
+	launch.Args = []string{"start", "extra"}
+	if _, err := launcher.Plan(context.Background(), launch); err == nil {
 		t.Fatal("extra argument ignored")
 	}
-	request.Arguments = nil
-	plan, err = launcher.PrepareLaunch(context.Background(), request)
-	if err != nil || plan.PrepareOwner != nil || plan.Command != "" {
+	launch.Args = nil
+	plan, err = launcher.Plan(context.Background(), launch)
+	if err != nil || plan.Prepare != nil || plan.Command != "" {
 		t.Fatal("ordinary launch changed", plan, err)
 	}
 	if calls != 1 {

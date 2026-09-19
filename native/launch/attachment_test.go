@@ -12,34 +12,33 @@ import (
 	"testing"
 
 	"github.com/wippyai/bee/native/client/hive"
-	application "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestAttachmentRejectsUnrelatedLaunchesBeforeDiscovery(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "not-created")
 	client := Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: io.Discard}
-	valid := application.LaunchRequest{Operation: application.RunApplication, Command: "bee", StateDir: state}
-	cases := map[string]application.LaunchRequest{}
-	for _, operation := range []application.Operation{application.Update, application.RunRuntime} {
-		request := valid
-		request.Operation = operation
-		cases[string(operation)] = request
+	valid := app.Launch{Op: app.OpRun, Command: "bee", State: state}
+	cases := map[string]app.Launch{}
+	// The model's reserved verbs never reach the client route; the launcher
+	// plans them, so an attachment must refuse them here.
+	for _, operation := range []app.Op{app.OpUpdate, app.OpRecover, app.OpWippy} {
+		launch := valid
+		launch.Op = operation
+		cases[operation.String()] = launch
 	}
-	request := valid
-	request.Base = true
-	cases["base"] = request
-	request = valid
-	request.Command = "bee-host"
-	cases["other command"] = request
-	request = valid
-	request.Arguments = []string{"claude"}
-	cases["launch arguments"] = request
-	request = valid
-	request.StateDir = "relative"
-	cases["relative state"] = request
-	for name, request := range cases {
+	launch := valid
+	launch.Command = "bee-host"
+	cases["other command"] = launch
+	launch = valid
+	launch.Args = []string{"claude"}
+	cases["launch arguments"] = launch
+	launch = valid
+	launch.State = "relative"
+	cases["relative state"] = launch
+	for name, launch := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := client.Attach(context.Background(), request); err == nil {
+			if err := client.Attach(context.Background(), launch); err == nil {
 				t.Fatal("unsupported launch attached")
 			}
 		})

@@ -199,6 +199,11 @@ local POLICY_SQL = [[
 ALTER TABLE bee_gateway_bindings ADD COLUMN policy_ref TEXT;
 ALTER TABLE bee_gateway_bindings ADD COLUMN workspace_id TEXT;
 ]]
+-- Migration 12: window launches may bind their gateway to the host-selected
+-- origin view. Headless bindings keep this nullable and remain unassigned.
+local ORIGIN_VIEW_SQL = [[
+ALTER TABLE bee_gateway_bindings ADD COLUMN origin_view_json TEXT;
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
@@ -207,6 +212,7 @@ function M.all(): {Migration}
         {id = 8, name = "native_listener", sql = NATIVE_LISTENER_SQL, rebuild = false},
         {id = 9, name = "binding_surface", sql = SURFACE_SQL, rebuild = false},
         {id = 10, name = "access_grants", sql = ACCESS_SQL, rebuild = false},
-        {id = 11, name = "binding_policy", sql = POLICY_SQL, rebuild = false}}
+        {id = 11, name = "binding_policy", sql = POLICY_SQL, rebuild = false},
+        {id = 12, name = "binding_origin_view", sql = ORIGIN_VIEW_SQL, rebuild = false}}
 end
 return M

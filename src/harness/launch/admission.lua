@@ -50,6 +50,7 @@ type Plan = {
     mode: string,
     plan_digest: string,
 }
+type OriginView = {view_id: string, instance_id: string}
 type Admitted = {
     plan: Plan, request: carrier.Request, requester: string,
     request_id: string, thread_id: string, action_id: string, attempt_id: string,
@@ -70,6 +71,7 @@ type Request = {
     expected_plan_digest: string?,
     continuation: Continuation?,
     parent_action_id: string?,
+    origin_view: OriginView?,
 }
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -236,7 +238,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -271,6 +273,14 @@ function M.decode_request(value: unknown): (Request?, string?)
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
+    local origin_view: OriginView? = nil
+    if object.origin_view ~= nil then
+        local declared = bounds.object(object.origin_view)
+        if not declared or bounds.fields(declared, {"view_id", "instance_id"}) then return nil, "origin_view must contain only view_id and instance_id" end
+        local view_id, instance_id = bounds.id(declared.view_id), bounds.id(declared.instance_id)
+        if not view_id or not instance_id then return nil, "origin_view needs view_id and instance_id identifiers" end
+        origin_view = {view_id = view_id, instance_id = instance_id}
+    end
     local expected_plan_digest: string? = nil
     if object.expected_plan_digest ~= nil then
         local digest = bounds.text(object.expected_plan_digest, 64)
@@ -297,7 +307,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
         saved_profile_id = saved_id, saved_profile_revision = saved_revision,
-        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id}, nil
+        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -434,7 +444,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
-        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil}
+        previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view}
     return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,
         thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, session_ref = session_ref}, nil
 end

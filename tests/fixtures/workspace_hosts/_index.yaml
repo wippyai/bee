@@ -35,3 +35,19 @@ entries:
       security:
         actor: {id: workspace_hosts.supervisor}
         policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy]
+- name: delayed_supervisor
+  kind: process.lua
+  source: file://delayed_supervisor.lua
+  method: main
+  modules: [process, channel, security, time, logger]
+  imports:
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    persistence: bee.workspace:persistence
+  meta:
+    command:
+      name: workspace-hosts-delayed-supervisor
+      short: Delayed broker host timeout regression
+      security:
+        actor: {id: workspace_hosts.delayed_supervisor}
+        policies: [bee:host_policy, bee.workspace_hosts:supervisor_spawn_policy, bee.workspace_hosts:first_storage_policy, bee:application_open_facade_policy]

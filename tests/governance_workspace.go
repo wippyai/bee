@@ -53,6 +53,16 @@ entries:
   source: file://workspace.lua
   modules: [hash]
   imports: {canonical: bee.sync:canonical}
+- name: preflight
+  kind: library.lua
+  source: file://preflight.lua
+  modules: [hash, json]
+  imports: {canonical: bee.sync:canonical}
+- name: guide
+  kind: library.lua
+  source: file://guide.lua
+  modules: [json]
+  imports: {preflight: bee.governance:preflight}
 - name: workspace_protocol
   kind: library.lua
   source: file://workspace_protocol.lua
@@ -134,7 +144,7 @@ entries:
   source: file://workspace_method.lua
   method: handle
   modules: [funcs, security]
-  imports: {protocol: bee.governance:workspace_protocol, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
+  imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
   security: {policies: [bee.governance:workspace_facade_policy]}
 `
 

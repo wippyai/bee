@@ -7,14 +7,28 @@ listener itself (`http.service`, router, endpoints) belongs to the host
 composition. The activation candidate binds native loopback port zero and reads
 the assigned address through supervisor state. The production-listener fixture
 passes real thread and credential checks on two runtimes. Candidate Agent
-profiles declare `thread_read`, `thread_wait`, `thread_message`, and the
-caller-owned Governance `workspace` tool. The host may admit any subset. The
+profiles declare `thread_read`, `thread_wait`, `thread_message`, the
+caller-owned Governance `workspace` tool, and `thread_launch`, which starts one
+host-allow-listed managed launch in the caller's own workspace and returns the
+child's thread, action and attempt. The host may admit any subset; no default
+launch policy advertises `thread_launch` or names an `agent_launch` definition,
+so an agent starts another only where the owner has opted in. The
 workspace tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived
 from the same rule tables preflight enforces). It can stage and freeze files but
 cannot publish or activate them.
-The HTTP MCP route keeps its 64 KiB request bound. Workspace calls through MCP
-therefore accept at most 8 KiB of text or 48 KiB of canonical base64 per put;
+
+The host can explicitly admit `application_open` to open an already admitted
+application with literal arguments. Workspace and origin-view identities come
+from the authenticated binding, not tool arguments. The workspace host assigns
+the new app to that view's display using the existing assignment store; a
+headless binding leaves it unassigned. The result carries qualified view and
+instance identities for subsequent interaction. Source/pack HTTP and desktop
+acceptance includes checkpoint restoration after restart.
+
+The HTTP MCP route bounds each JSON request at 512 KiB. Workspace calls through MCP
+accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
+(at most 64 KiB decoded);
 larger authoring files require another admitted facade rather than an oversized
 gateway request. The underlying Governance workspace keeps its own larger store
 limits for non-MCP callers.

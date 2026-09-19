@@ -907,9 +907,9 @@
       "topic": "application"
     },
     {
-      "bytes": 27640,
+      "bytes": 30683,
       "id": "docs/gateway",
-      "sha256": "dfeb4a5c06fbe3b953187915eda7613c0c6c2628628b1514e624c8527df69818",
+      "sha256": "ebfa988a78bdb78215a1e7b94987bd6902d629d493ab4bdef2367b2811d50724",
       "source": "docs/GATEWAY.md",
       "title": "Gateway (build sequence step 9, harness lane)",
       "topic": "gateway"
@@ -979,17 +979,17 @@
       "topic": "cluster"
     },
     {
-      "bytes": 15526,
+      "bytes": 16147,
       "id": "docs/launch_routing",
-      "sha256": "6890fcf75a80509063785ed8f49d74cf6f80c9aa751c62df0a980f5439616e97",
+      "sha256": "f21c85bfa66c93450985283ed146026457a00d93270a6f39d7a604866029f168",
       "source": "docs/LAUNCH_ROUTING.md",
       "title": "Launch routing, topology and lifecycle",
       "topic": "harness"
     },
     {
-      "bytes": 9259,
+      "bytes": 10479,
       "id": "docs/mcp_configuration",
-      "sha256": "bdcd0006fbc3078dd372a6778bb1e9856b33c36277667b00f9964f2b6a9f4964",
+      "sha256": "9754bacf53609ff6b49e3430b5e734393e2093cd004490197e9bc3e5e81e0589",
       "source": "docs/MCP_CONFIGURATION.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -1075,9 +1075,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 19133,
+      "bytes": 19333,
       "id": "docs/thread_records",
-      "sha256": "782c633accb8b1ebf6cc777dda90688f77de8033b9102655d86b2d96a6c2e7e9",
+      "sha256": "d691b2d4bca1bbe743015cb03973c0ae3102e1268e86f395a0c0efdd7e54f57f",
       "source": "docs/THREAD_RECORDS.md",
       "title": "Thread records and driver bindings",
       "topic": "threads"
@@ -1139,9 +1139,9 @@
       "topic": "component"
     },
     {
-      "bytes": 16187,
+      "bytes": 17153,
       "id": "component/driver",
-      "sha256": "4aadd60360711ff2730eabb12b9d47403b2939a176c29be7a045269e611209f6",
+      "sha256": "0cb243735f1854cccc32fce9ad79c499811d387cddff043eaa99c5d2cc330324",
       "source": "src/driver",
       "title": "bee.driver",
       "topic": "component"
@@ -1187,9 +1187,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2047,
+      "bytes": 2898,
       "id": "component/gateway",
-      "sha256": "f14ddf72ad522b1edc2054b9cb388faca908916fdad71212b0343d7dd07fcf62",
+      "sha256": "86d522e91975e177620c4f30f5af24f8d2cda8bbf17539be712e3d3a2e1be30d",
       "source": "src/gateway",
       "title": "bee.gateway",
       "topic": "component"
@@ -1203,9 +1203,9 @@
       "topic": "component"
     },
     {
-      "bytes": 17782,
+      "bytes": 18070,
       "id": "component/harness",
-      "sha256": "eeb832daeccf5bd7e278f9efbe3a1aa0f84d1e78fcc2698297eabe240852bd9b",
+      "sha256": "40e3ee4226a20d08f53283b6e0969be6e223fe6fb68038bc1687e2712bcb29cf",
       "source": "src/harness",
       "title": "bee.harness",
       "topic": "component"
@@ -1302,7 +1302,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2124892,
+    "bytes": 2132081,
     "documents": 162
   }
 }

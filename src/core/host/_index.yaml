@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, security, ctx, uuid, hash]
+  modules: [process, channel, security, ctx, uuid, hash, time]
   imports:
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
@@ -17,6 +17,7 @@ entries:
     connections: bee.host:clients
     inventory: bee.host:inventory
     transfer: bee.host:transfer
+    open_protocol: bee.applications:open_protocol
     retained: bee.launch:retained_protocol
 - name: inventory
   kind: library.lua

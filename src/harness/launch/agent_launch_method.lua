@@ -51,6 +51,16 @@ local function handle(raw: unknown): Reply
     if not action_id or not thread_id or not policy_ref or not workspace_id then
         return fail("UNAUTHENTICATED", "the binding does not identify an agent launch context")
     end
+    local origin_view: {view_id: string, instance_id: string}? = nil
+    if bound.origin_view ~= nil then
+        local origin = bounds.object(bound.origin_view)
+        if not origin or bounds.fields(origin, {"view_id", "instance_id"}) then
+            return fail("UNAUTHENTICATED", "the binding has an invalid origin view")
+        end
+        local view_id, instance_id = bounds.id(origin.view_id), bounds.id(origin.instance_id)
+        if not view_id or not instance_id then return fail("UNAUTHENTICATED", "the binding has an invalid origin view") end
+        origin_view = {view_id = view_id, instance_id = instance_id}
+    end
     local request, invalid = agent_launch.decode_request(raw)
     if not request then return fail("INVALID", invalid or "invalid launch request") end
     -- The allow-list is the host-selected launch policy the caller's own
@@ -98,7 +108,7 @@ local function handle(raw: unknown): Reply
     local request_id, identity_error = agent_launch.request_id(action_id, request.idempotency_key)
     if not request_id then return fail("INVALID", identity_error or "the request identity failed") end
     local started, start_error = funcs.call(START, {request_id = request_id, definition_ref = request.definition_ref, workspace_id = workspace_id,
-        brief = request.brief, thread_id = on_caller_thread, parent_action_id = action_id, expected_plan_digest = plan_digest})
+        brief = request.brief, thread_id = on_caller_thread, parent_action_id = action_id, expected_plan_digest = plan_digest, origin_view = origin_view})
     if start_error then return fail("UNAVAILABLE", tostring(start_error)) end
     local admitted, start_fault = reply_of(started)
     if not admitted then return fail(start_fault.code, start_fault.message) end

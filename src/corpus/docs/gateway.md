@@ -6,8 +6,9 @@ authenticated thread port a managed harness child reaches over loopback HTTP:
 The gateway owns bindings and credentials; the host composition owns the native
 HTTP listener. The activation candidate uses loopback port zero, resolves the
 bound address through supervisor state, and declares `thread_read`,
-`thread_wait` and the explicitly admitted `thread_message` write in the four
-default Agent window policies. Claude and Codex also
+`thread_wait`, the explicitly admitted `thread_message` write, the scoped
+Governance `workspace` tool and the read-only `delivery` request tool in the
+default Agent window and batch policies. Claude and Codex also
 declare the five supported lifecycle hooks. Agy and Grok currently refuse HTTP
 hook configuration. Actual standalone child MCP passes for Claude/Codex fixture
 executables using their generated configuration and delivered token: initialize,
@@ -71,7 +72,7 @@ commit to a thread or a real harness's delivery behavior.
 | Carrier | A launch policy that names `gateway_tools` (and optionally `gateway_ttl_ms` and `gateway_hooks`, the hook events the launch reports, see [Gateway hooks](GATEWAY_HOOKS.md)) makes the carrier admit a binding after the durable action and attempt preparation and its epoch claim, never in the effect-free `plan`; the binding id is recorded in the checkpoint before attach and handed to placement start. Readiness with a valid binding is taken immediately before placement start. A failure after admission revokes the binding before the error returns; settlement revokes it at close. Exactly one live binding exists per attempt and carrier epoch: the same admission identity replays it (a retried open under the replayed claim), a different admission at that epoch conflicts, an epoch below the highest ever admitted for the attempt conflicts even when that binding is revoked, and only a strictly newer carrier epoch supersedes what earlier epochs hold. A replacement carrier that takes over a running child does not admit; it inherits the binding its child holds and retires it at settlement. |
 | Carrier loss | Placement owns revocation independently of any carrier. The runner watches the attached carrier: when it exits while the child lives, the binding stays alive for the takeover grace (`TAKEOVER_GRACE_MS`, 3 s, reported by placement capabilities as `gateway.takeover_grace_ms`) so a replacement attaching under a newer generation inherits it, and is retired by the runner when no takeover comes; an exit from a carrier that is no longer the attached generation revokes nothing. The grace keeps only the binding alive: an explicit revocation, a listener reopen and the binding's own expiry each refuse the token at once inside it. The runner also retires the binding when the child exits and when the start is refused after materialization. Placement supervision retires an attempt's bindings through `revoke_attempt`, fenced by carrier epoch, when reconciliation finds the attempt exited or uncertain, and its recheck at start and on every sweep stops a live attempt whose binding is no longer valid. |
 | Requester | The carrier cannot select an actor or mint tool authority. `admit` binds the subject the launch admission established; every tool call runs as that subject under host-named policies, and the thread owner authorizes every operation again. |
-| Tools | A tool name maps to one existing owner operation; nothing is advertised that is not mapped. `thread_message` maps to `bee.threads.service:record` with fixed `kind=message`; its bounded arguments cannot name a thread, sender, source, lifecycle record or context, while the endpoint binds thread and action/attempt context from the authenticated gateway binding. `thread_done` must not bypass the carrier's settle rule; `thread_launch` gets no grant or credential issuance authority. The four default profiles advertise exactly `thread_message`, `thread_read` and `thread_wait`; every call still requires explicit binding admission. |
+| Tools | A tool name maps to one existing owner operation; nothing is advertised that is not mapped. `thread_message` maps to `bee.threads.service:record` with fixed `kind=message`; its bounded arguments cannot name a thread, sender, source, lifecycle record or context, while the endpoint binds thread and action/attempt context from the authenticated gateway binding. `thread_done` must not bypass the carrier's settle rule. `thread_launch` maps to one owner operation, `bee.harness.launch:agent_launch_call`, which reads the caller's own launch policy allow-list and starts the named definition through the ordinary launch admission and carrier path; it gets no grant or credential issuance authority, the child receives exactly its own launch policy's gateway tools, and a definition the caller's policy does not name is refused with `LAUNCH_NOT_PERMITTED`. The tool's bounded arguments are one definition reference, one brief and one retry key; the thread, action, attempt, workspace and launch policy all come from the authenticated binding, never from arguments. `application_open` is the explicit application-opening facade: it accepts one applied/admitted definition, bounded literal launch arguments and an idempotency key, then routes through the existing workspace host and application broker. The host coalesces exact concurrent retries, returns a broker `request_conflict` for a reused key with different payload, and never gives this tool publication, activation, registry-write or overlay authority. Every call still requires explicit binding admission. The default Agent profiles advertise `thread_message`, `thread_read`, `thread_wait`, the scoped Governance `workspace` tool, the read-only `delivery` request tool and the read-only `docs` corpus tool; `application_open` is only available where a host policy explicitly admits it. |
 | Wait | `thread_wait` is read-only: it is `bee.threads.delivery:watch`, a wakeup on the head, bounded by `min(wait_ms, transport budget minus margin)`; it claims no obligation. A claiming variant exists only as a separately advertised tool that says so. |
 | Hooks | Observations only: authenticated, deduplicated, payload-bounded, ordered by the carrier epoch; HTTP ingress is never an unfenced second record writer. Not in slice 1. |
 | Readiness | `ready` performs an actual loopback request with a fresh nonce and accepts only an answer whose generation matches the store and the supervisor and whose proof is the HMAC over `{epoch, restarts, nonce}` under the listener secret minted at `open`; another process answering on the port cannot produce it, and a store upgraded to the secret column proves nothing until the next `open`. The proof shows the answer came from a holder of this store's secret, not that the socket reached the configured listener directly; readiness therefore stays fixture-only until redirects are provably closed (see below). It returns the listener generation and the admitted binding. The generation is the gateway epoch (advanced by `open`, which the managed host calls when it brings the listener up) paired with the service's restart count from `system.supervisor.state`, so a listener restart invalidates stale readiness. Carrier startup requires readiness under the current generation and a valid binding, taken immediately before the child starts. `ready` runs under `bee:gateway_readiness_policy`, which grants the HTTP client exactly the configured endpoint's ready URL (`bee:gateway_endpoint`, the address `open` also refuses to differ from); the store policy carries no network grant. The runtime's HTTP client exposes no redirect control (Go's default applies); the grant is an exact URL and the gateway's own handler never redirects. |
@@ -98,13 +99,38 @@ commit to a thread or a real harness's delivery behavior.
 | `mcp` (HTTP `POST /mcp/{action}`) | child | JSON-RPC 2.0: `initialize`, `tools/list` (per-tool annotations), `tools/call`; a notification (`notifications/*`, no id) is accepted with 202 and no body. Authenticates `Authorization: Bearer` against a live credential of the binding's current generation for `{action}`. |
 | `ready_http` (HTTP `GET /ready`) | gateway itself | Returns the generation the store holds and the proof over the caller's nonce. |
 
+The application-opening route passes `make app-journey-check` through real MCP
+in source and packed launches, including assigned display presentation and
+state restoration after restart. This does not qualify a global executable
+release. Its host retains at most 64 pending requests and 16
+callers per request. After 30 seconds it releases callers with an uncertain
+outcome, but retains the operation and its display assignment until the broker
+answers. Unresolved operations still count against capacity; retries do not
+start another operation or extend the deadline. A late success therefore keeps
+the originating display assignment. Expiry does not cancel an application that
+may have started.
+Retry identity is scoped to the bound action; completed replay uses the broker's
+bounded execution-local cache, not an indefinitely durable receipt.
+
+`application_open` takes `{definition_id, arguments, idempotency_key}`. Its
+successful value contains `workspace_id`, `view_id`, `instance_id`,
+`definition_id`, `title` and `reused`; `display_id` is present when assigned.
+`reused` means the broker returned an existing instance, including a singleton,
+and is not proof of a durable retry receipt. For window agents, the trusted
+binding carries the originating view. The host resolves that view's settled
+display assignment and places the new application there through the existing
+assignment store. A replay preserves any later display transfer. Headless
+bindings without an originating view create an unassigned application; they do
+not select an arbitrary connected display. Tool arguments cannot select an
+origin view or workspace.
+
 ## Slice 1 acceptance (`tests/gateway.py`, `tests/lua/gateway`)
 
 - Readiness: `ready` succeeds only after a real loopback request and reports the generation; a fresh `open` changes the generation and the old readiness is stale.
 - Admission and revocation: an admitted token lists and calls `thread_read`; a revoked token is refused; an expired token is refused; a token presented against another action or attempt is refused.
 - `thread_read` returns the owner's page for the bound subject only.
 - `thread_wait` returns within the transport budget, wakes on a new record, and leaves obligations and delivery marks untouched.
-- An explicitly admitted `thread_message` appends through the authenticated thread owner, replays an identical key without a second record, conflicts on changed payload, refuses foreign thread/sender/context and arbitrary record kind fields, leaves attempt settlement untouched, and refuses after token revocation. All four default profiles include the write alongside the two read tools.
+- An explicitly admitted `thread_message` appends through the authenticated thread owner, replays an identical key without a second record, conflicts on changed payload, refuses foreign thread/sender/context and arbitrary record kind fields, leaves attempt settlement untouched, and refuses after token revocation. All default Agent profiles include the write alongside the two read tools, the scoped `workspace` authoring tool, the read-only `delivery` request tool and the read-only `docs` corpus tool.
 - Drain: a helper drains while a `thread_wait` is in flight; the wait returns `released`/`draining` before its own deadline, a new `admit` is refused, and a bounded read still finishes before the host's deadline.
 - The default composition still has no `http.service` and binds nothing; the managed fixture composition is the only place the listener exists.
 - No token bytes in captured output, records or the store.

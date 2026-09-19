@@ -1,5 +1,22 @@
 # Foundation status
 
+Explicitly admitted agents can now open an applied application through the
+`application_open` MCP tool. The workspace host uses the originating agent
+view's existing display assignment; callers cannot choose a foreign workspace
+or display through tool arguments. The source and packed app journey passes
+real HTTP open, same-instance replay, conflict and authorization refusals,
+display presentation, checkpoint and restart restoration. Each composition
+reviews and applies its own exact base. Gateway migration 12 preserves the
+optional origin view through durable bindings, and child launches inherit it.
+The delayed-broker source/pack regression proves that caller expiry preserves
+the eventual display assignment and does not redispatch an unresolved request.
+All 1,110 unit tests and the full check coverage pass after correcting three
+standalone test compositions; the resumed run completes desktop acceptance.
+The existing `desktop_lifecycle` inter-function lint warning remains.
+The tool remains host-admitted rather than enabled in every profile. Global
+Bee is unchanged; cross-node app version updates and rollback still need their
+own acceptance.
+
 The agent-requested MCP access backend is implemented: host-declared gated
 traits create durable approval requests for the exact binding/attempt and are
 activated only after owner-approved consumption and a gateway effect receipt.

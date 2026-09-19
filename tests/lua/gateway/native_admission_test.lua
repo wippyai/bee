@@ -166,6 +166,24 @@ local function define_tests()
                 local empty = raw_call(caller(true, false), "bee.gateway:admit", empty_request)
                 test.eq(empty.error and empty.error.code, "INVALID")
 
+                local replay_request = admit_request("origin-replay")
+                replay_request.idempotency_key = "origin-replay-key"
+                replay_request.origin_view = {view_id = "view-origin", instance_id = "instance-origin"}
+                local first_origin = raw_call(caller(true, false), "bee.gateway:admit", replay_request)
+                if not first_origin.ok then error("origin admission: " .. tostring(first_origin.error and first_origin.error.message)) end
+                local first_binding = (first_origin.value :: Object).binding :: Object
+                test.eq(((first_binding.origin_view :: Object).view_id), "view-origin")
+                local stored_origin, stored_origin_error = db:query("SELECT origin_view_json FROM bee_gateway_bindings WHERE binding_id = ?", {first_binding.binding_id})
+                if stored_origin_error or not stored_origin or #stored_origin ~= 1 then error("missing stored origin view") end
+                local stored_view = json.decode(tostring((stored_origin[1] :: Object).origin_view_json))
+                test.eq((stored_view :: Object).instance_id, "instance-origin")
+                local replayed_origin = raw_call(caller(true, false), "bee.gateway:admit", replay_request)
+                if not replayed_origin.ok then error("origin replay: " .. tostring(replayed_origin.error and replayed_origin.error.message)) end
+                test.is_true((replayed_origin.value :: Object).replayed == true)
+                local replayed_binding = (replayed_origin.value :: Object).binding :: Object
+                test.eq(((replayed_binding.origin_view :: Object).view_id), "view-origin")
+                test.eq(((replayed_binding.origin_view :: Object).instance_id), "instance-origin")
+
                 local before_epoch = first.epoch
                 local before_secret = first.secret
                 local before_key = first.native_key

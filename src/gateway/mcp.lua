@@ -7,6 +7,7 @@ local message = require("message")
 local workspace_protocol = require("workspace_protocol")
 local docs_protocol = require("docs_protocol")
 local delivery_protocol = require("delivery_protocol")
+local arguments = require("arguments")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
@@ -83,6 +84,13 @@ local TOOLS: {Tool} = {
             workspace_id = {type = "string", minLength = 1, maxLength = 160},
             source_workspace = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
+        }}},
+    {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.applications:open_call",
+        policies = {"bee:gateway_tool_application_open_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
+            definition_id = {type = "string", minLength = 1, maxLength = 160},
+            arguments = {type = "array", maxItems = 16, items = {type = "string", maxLength = 1024}},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
 }
 M.TOOLS = TOOLS
@@ -242,6 +250,19 @@ function M.publish_arguments(params: Object): (Object?, string?)
         source_workspace = arguments.source_workspace, version = arguments.version})
     if not request then return nil, decode_error end
     return request, nil
+end
+function M.open_arguments(params: Object): (Object?, string?)
+    local arguments_value = bounds.object(params.arguments)
+    if not arguments_value then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments_value, {"definition_id", "arguments", "idempotency_key"})
+    if unknown_field then return nil, unknown_field end
+    local definition_id = bounds.id(arguments_value.definition_id)
+    local idempotency_key = bounds.id(arguments_value.idempotency_key)
+    local literal = arguments.decode(arguments_value.arguments)
+    if not definition_id then return nil, "definition_id is required and must be an identifier" end
+    if not idempotency_key or #idempotency_key > 64 then return nil, "idempotency_key must be a bounded identifier" end
+    if not literal then return nil, "arguments must be an array of bounded literal strings" end
+    return {definition_id = definition_id, arguments = literal, idempotency_key = idempotency_key}, nil
 end
 
 -- The docs tool shares the corpus request decoder, so the schema the tool

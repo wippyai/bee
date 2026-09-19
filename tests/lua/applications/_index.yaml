@@ -36,3 +36,12 @@ entries:
   imports:
     shutdown: bee.applications:shutdown
     test: wippy.test:test
+- name: open_protocol_test
+  kind: function.lua
+  source: file://open_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    protocol: bee.applications:open_protocol
+    contract: bee.protocol:application
+    test: wippy.test:test

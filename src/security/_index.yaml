@@ -146,3 +146,12 @@ entries:
     - bee.credentials:db
     - bee.governance:db
     effect: deny
+- name: application_open_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The explicitly admitted Agent Open facade may address the selected local workspace host; it cannot publish, activate or edit the registry.
+  policy:
+    expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || action == "process.send")'
+    actions: [process.registry.lookup, process.registry.register, process.registry.unregister, process.send]
+    resources: '*'
+    effect: allow

@@ -36,8 +36,9 @@ MCP scopes do not sandbox its filesystem.
 
 For each tool invocation the gateway supplies native context key
 `bee.gateway.binding` with `binding_id`, `thread_id`, `action_id`, `attempt_id`
-and, when the attempt ran under one, the `policy_ref` and `workspace_id` the
-launch was admitted with. Host configuration and agent-selected context
+and, when present, the `policy_ref`, `workspace_id`, and originating
+`origin_view: {view_id, instance_id}` selected by the host launch. A child
+started through `thread_launch` inherits that origin view. Host configuration and agent-selected context
 cannot declare or replace this reserved key. Those bounded identifiers are
 separate from the configurable context quota. `thread_ref`, `policy_ref` and
 `workspace_id` are attribution the tool's owning operation may read; they are

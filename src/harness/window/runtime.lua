@@ -330,7 +330,7 @@ local function main(value: unknown, constructors: {[string]: Open})
             return {request_id = id, definition_ref = restored.definition_ref, workspace_id = launch.workspace_id,
                 brief = "", mode = "window", saved_profile_id = restored.saved_profile_id,
                 saved_profile_revision = restored.saved_profile_revision, expected_plan_digest = digest,
-                continuation = continuation}
+                continuation = continuation, origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}}
         end
 
         local request = recovery_request(request_id, restored.plan_digest, false)
@@ -507,7 +507,7 @@ local function main(value: unknown, constructors: {[string]: Open})
             error("Managed window recovery surface: " .. tostring(output_error))
         end
     elseif direct then
-        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1])
+        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], {view_id = launch.view_id, instance_id = launch.instance_id})
         if not choice then
             show_failure("Managed window admission: " .. tostring(direct_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
@@ -515,7 +515,7 @@ local function main(value: unknown, constructors: {[string]: Open})
         end
         admitted = choice
     else
-        local body, body_error = window_request.decode(launch.arguments, launch.workspace_id)
+        local body, body_error = window_request.decode(launch.arguments, launch.workspace_id, {view_id = launch.view_id, instance_id = launch.instance_id})
         if not body then
             show_failure("Invalid managed window launch: " .. tostring(body_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)

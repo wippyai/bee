@@ -35,10 +35,14 @@ what inherited context tools can see. Native Terminal retains OS-user authority;
 MCP scopes do not sandbox its filesystem.
 
 For each tool invocation the gateway supplies native context key
-`bee.gateway.binding` with `binding_id`, `thread_id`, `action_id` and `attempt_id`
-from the authenticated binding. Host configuration and agent-selected context
-cannot declare or replace this reserved key. Its four bounded identifiers are
-separate from the configurable context quota. Custom tools can use this record
+`bee.gateway.binding` with `binding_id`, `thread_id`, `action_id`, `attempt_id`
+and, when present, the `policy_ref`, `workspace_id`, and originating
+`origin_view: {view_id, instance_id}` selected by the host launch. A child
+started through `thread_launch` inherits that origin view. Host configuration and agent-selected context
+cannot declare or replace this reserved key. Those bounded identifiers are
+separate from the configurable context quota. `thread_ref`, `policy_ref` and
+`workspace_id` are attribution the tool's owning operation may read; they are
+not authorization, and the destination owner still checks membership. Custom tools can use this record
 to attribute results without accepting thread/attempt IDs from tool arguments.
 It grants no authority: the executor's actor and scope, endpoint invocation
 permission and destination owner checks still apply. Tools exposed through
@@ -55,6 +59,19 @@ file. The HTTP MCP endpoint caps each complete JSON request body at 524,288
 bytes, leaving room for JSON escaping and the bounded request envelope.
 Governance continues to enforce its own larger file limit and validates that
 base64 is canonical; the MCP limits are transport bounds for one tool call.
+
+The built-in `thread_launch` tool starts one host-allow-listed managed launch
+in the caller's own workspace and thread, and returns the child's thread,
+action and attempt so the parent reaches it through the same `thread_read`,
+`thread_wait` and `thread_message`. Its arguments are one definition reference,
+one brief and one retry key. The definition must appear in the calling
+attempt's own launch policy `agent_launch` list; a definition the policy does
+not name is refused with `LAUNCH_NOT_PERMITTED`, and a definition that would
+open a different thread is refused with `LAUNCH_THREAD_UNSUPPORTED` rather than
+started and orphaned. The child receives exactly its own launch policy's
+gateway tools, never the parent's. Every acquisition underneath keys on the
+launching agent's own actor and workspace, and the tool mints no grant,
+credential, trait or overlay authority.
 
 Two built-in tools carry application delivery. `delivery` requests delivery of
 a frozen artifact (publication prepare, destination stage and the destination's

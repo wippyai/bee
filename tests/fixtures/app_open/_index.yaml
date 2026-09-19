@@ -1,0 +1,47 @@
+version: '1.0'
+namespace: bee.app_open_probe
+entries:
+- name: evidence
+  kind: fs.directory
+  directory: evidence
+  auto_init: true
+- name: evidence_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee.app_open_probe:evidence]
+    effect: allow
+- name: view_policy
+  kind: security.policy
+  policy:
+    actions: [process.send, tty.mount, tty.observe, tty.resize]
+    resources: '*'
+    effect: allow
+- name: gateway_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, http_client.private_ip, http_client.request, process.registry.lookup,
+      bee.gateway.admit, bee.gateway.manage, bee.gateway.materialize]
+    resources: '*'
+    expression: '((action == "funcs.call" && (resource == "bee.gateway:open" || resource == "bee.gateway:address" || resource == "bee.gateway:admit" || resource == "bee.gateway:authorize_materialization" || resource == "bee.gateway:materialize")) || (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/mcp/[a-z0-9-]+$") || (action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "bee.gateway.admit" && resource == "open-probe") || (action == "bee.gateway.manage" && (resource == "bindings" || resource == "listener")) || (action == "bee.gateway.materialize" && resource == "open-probe-attempt"))'
+    effect: allow
+- name: seed
+  kind: process.lua
+  source: file://seed.lua
+  method: main
+  modules: [funcs, http_client, json, time, channel, process, tty, fs]
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      lifetime: view
+      revision: '1'
+      title: Open Probe
+      instance_policy: multiple
+      restart_policy: never
+  imports:
+    client: bee.application:client
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.app_open_probe:view_policy, bee.app_open_probe:evidence_policy,
+      bee.app_open_probe:gateway_policy]

@@ -401,6 +401,16 @@ def main():
         document["entries"] = [entry for entry in document["entries"]
                               if entry.get("name") != "test_dependency"]
         index.write_text(yaml.safe_dump(document, sort_keys=False))
+        # The shared fixture lock carries the test framework and its terminal
+        # helper for unrelated app checks. Leaving those modules deployed here
+        # makes the real Hub package look like it is replacing host-owned
+        # modules when its wildcard terminal dependency resolves. Keep this
+        # composition host-free for that package closure so the live resolver
+        # exercises the install path rather than a stale test deployment.
+        lock = yaml.safe_load((project / "wippy.lock").read_text())
+        lock["modules"] = [module for module in lock.get("modules", [])
+                            if module.get("name") not in {"wippy/test", "wippy/terminal"}]
+        (project / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
         pack = project / "modules-real-hub-test.wapp"
         pack_fixture(project, pack)
         exercise_real_facade(project, False, pack)

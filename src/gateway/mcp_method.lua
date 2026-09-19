@@ -42,7 +42,7 @@ local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values
     local executor = funcs.new()
     local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
         thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id,
-        policy_ref = binding.policy_ref, workspace_id = binding.workspace_id})
+        policy_ref = binding.policy_ref, workspace_id = binding.workspace_id, origin_view = binding.origin_view})
     if not attributed then return nil, refused("DENIED", tostring(attribution_error)) end
     local contextual, context_error = executor:with_context(attributed)
     if not contextual then return nil, refused("DENIED", tostring(context_error)) end
@@ -206,6 +206,7 @@ local function handle(): nil
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters)
+    elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
     if not arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, argument_error or "invalid arguments")); return nil end
     if tool.name == "thread_wait" then answer(response, http.STATUS.OK, mcp.result(call.id, wait(binding, tool, arguments, values)))

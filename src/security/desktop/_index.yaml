@@ -15,6 +15,8 @@ entries:
     - process.context
     - process.host
     - process.send
+    - process.registry.register
+    - process.registry.unregister
     - process.monitor
     - process.terminate
     - process.cancel
@@ -96,6 +98,8 @@ entries:
     - process.send
     - process.monitor
     - process.unmonitor
+    - process.registry.register
+    - process.registry.unregister
     - process.terminate
     - process.host
     - process.context

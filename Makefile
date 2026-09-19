@@ -68,7 +68,8 @@ governance-overlay-composed-base-check:
 .PHONY: app-journey-check
 # One governed application: authored, frozen, staged, preflighted, approved,
 # applied by the activation owner, admitted, opened from the desktop catalog
-# and restored with its state after a host restart.
+# and restored with its state after a host restart. The same gate also calls
+# application_open over the real MCP listener in source and packed launches.
 app-journey-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_journey.py
 .PHONY: delivery-review-check
@@ -362,6 +363,7 @@ headless-check:
 workspace-hosts-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/workspace_hosts.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/workspace_hosts.go "$(abspath $(WIPPY))" --delayed
 
 .PHONY: hive-supervisor-check
 hive-supervisor-check:

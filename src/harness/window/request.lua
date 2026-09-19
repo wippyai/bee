@@ -22,9 +22,10 @@ type Request = {
     expected_plan_digest: string?,
     saved_profile_id: string?,
     saved_profile_revision: integer?,
+    origin_view: {view_id: string, instance_id: string}?,
 }
 
-function M.decode(arguments: {string}, workspace_id: string): (Request?, string?)
+function M.decode(arguments: {string}, workspace_id: string, origin_view: {view_id: string, instance_id: string}?): (Request?, string?)
     if #arguments ~= 1 then return nil, "managed window needs exactly one launch request" end
     local encoded = arguments[1]
     if #encoded > M.MAX_ARGUMENT_BYTES then return nil, "managed window launch request is too large" end
@@ -65,7 +66,7 @@ function M.decode(arguments: {string}, workspace_id: string): (Request?, string?
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, expected_plan_digest = expected_plan_digest,
         saved_profile_id = saved_id, saved_profile_revision = saved_revision,
-        brief = brief, mode = "window", workdir = workdir, thread_id = thread_id}, nil
+        brief = brief, mode = "window", workdir = workdir, thread_id = thread_id, origin_view = origin_view}, nil
 end
 
 return M

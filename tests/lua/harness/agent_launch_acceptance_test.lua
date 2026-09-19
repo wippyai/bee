@@ -234,10 +234,14 @@ local function define_tests()
             call("bee.resources:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"})
             local ok, failure = pcall(function()
             local orchestrator = admission(ORCHESTRATOR_POLICY, thread_id, fresh("orchestrator-attempt"), workspace)
+            orchestrator.origin_view = {view_id = "view-agent-origin", instance_id = "instance-agent-origin"}
             orchestrator.environment = {BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_GATEWAY_LAUNCH = WORKER_DEFINITION,
                 BEE_FIXTURE_GATEWAY_BRIEF = "answer the orchestrator", BEE_FIXTURE_WORKER_MARKER = MARKER, BEE_FIXTURE_STREAM = stream("plain.jsonl")}
             local outcome = await_carrier(spawn_carrier(orchestrator), "orchestrator carrier")
             test.eq((outcome.settlement :: Object).outcome, "succeeded")
+            local parent_binding = call("bee.gateway:check", {attempt_id = tostring(orchestrator.attempt_id), carrier_epoch = 1})
+            test.eq((parent_binding.origin_view :: Object).view_id, "view-agent-origin")
+            test.eq((parent_binding.origin_view :: Object).instance_id, "instance-agent-origin")
             local seen = report_with(thread_id, "launch_ok")
             if seen.launch_ok ~= true then error("orchestrator did not launch the child: " .. tostring(json.encode(seen))) end
             local worker = report_with(thread_id, "worker_posted")
@@ -259,12 +263,16 @@ local function define_tests()
             local parent_named: string? = nil
             for _, item in ipairs(records_of(thread_id)) do
                 if item.kind == "action.admitted" and tostring(item.action_id) == parent then
-                    parent_named = tostring(((item.body :: Object).parent_action_id))
+                    local body = item.body :: Object
+                    parent_named = tostring(body.parent_action_id)
                 end
             end
             test.not_nil(parent_named, "lineage names the launching action")
             local orchestrator_action = tostring(orchestrator.action_id)
             test.eq(parent_named, orchestrator_action)
+            local child_binding = call("bee.gateway:check", {attempt_id = tostring(seen.child_attempt), carrier_epoch = 1})
+            test.eq((child_binding.origin_view :: Object).view_id, "view-agent-origin")
+            test.eq((child_binding.origin_view :: Object).instance_id, "instance-agent-origin")
             -- The child's answer and terminal receipt are on the thread.
             local kinds: {[string]: boolean} = {}
             local answered = false

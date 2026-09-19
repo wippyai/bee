@@ -114,6 +114,13 @@ local function define_tests()
             test.eq(tonumber(unchanged.drained), 1)
             test.eq(tonumber(one(reopened, "SELECT COUNT(*) AS applied FROM " .. gateway.LEDGER.table).applied), 8)
             reopened:release()
+            local latest = open_with(#migrations.all())
+            local origin_column, origin_column_error = latest:query("SELECT name FROM pragma_table_info('bee_gateway_bindings') WHERE name = 'origin_view_json'")
+            if origin_column_error or not origin_column then error(tostring(origin_column_error)) end
+            test.eq(#origin_column, 1)
+            local legacy_origin = one(latest, "SELECT origin_view_json FROM bee_gateway_bindings WHERE binding_id = 'binding-1'")
+            test.is_nil(legacy_origin.origin_view_json)
+            latest:release()
         end)
     end)
 end

@@ -397,6 +397,30 @@ local function define_tests()
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
         end)
+        test.it("accepts only a complete bounded origin view in launch requests", function()
+            local base = {request_id = fresh("origin-request"), definition_ref = DEFINITION, workspace_id = fresh("origin-workspace"), brief = ""}
+            local valid = {}
+            for key, item in pairs(base) do valid[key] = item end
+            valid.origin_view = {view_id = "view-origin", instance_id = "instance-origin"}
+            local decoded, decode_error = admission.decode_request(valid)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq(decoded.origin_view and decoded.origin_view.view_id, "view-origin")
+            test.eq(decoded.origin_view and decoded.origin_view.instance_id, "instance-origin")
+
+            local malformed = {
+                {view_id = "view-origin"},
+                {instance_id = "instance-origin"},
+                {view_id = "view-origin", instance_id = "instance-origin", extra = true},
+                "view-origin",
+            }
+            for _, origin_view in ipairs(malformed) do
+                local request = {}
+                for key, item in pairs(base) do request[key] = item end
+                request.origin_view = origin_view
+                local _, invalid = admission.decode_request(request)
+                test.eq(invalid == nil, false)
+            end
+        end)
         test.it("ships hidden Codex, Claude, and Agy research routes with bounded batch policies", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",

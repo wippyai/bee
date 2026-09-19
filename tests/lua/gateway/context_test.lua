@@ -6,7 +6,8 @@ type Object = {[string]: unknown}
 local function run()
     test.describe("Gateway MCP context values", function()
         test.it("reserves binding attribution and isolates it from caller context", function()
-            local identity = {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a"}
+            local identity = {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a",
+                origin_view = {view_id = "view-a", instance_id = "instance-a"}}
             local spoof: Object = {}
             spoof[context.BINDING_KEY] = {thread_id = "foreign"}
             test.is_nil(context.decode(spoof))
@@ -26,6 +27,12 @@ local function run()
             test.eq(identity.thread_id, "thread-a")
             test.eq(values.value1, 1)
             test.eq(second.value32, 32)
+            test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).view_id, "view-a")
+            test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).instance_id, "instance-a")
+            local invalid_origin, invalid_origin_error = context.bind({}, {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a",
+                origin_view = {view_id = "", instance_id = "instance-a"}})
+            test.is_nil(invalid_origin)
+            test.eq(invalid_origin_error, "invalid gateway binding attribution")
             test.is_nil(context.bind({}, {binding_id = "", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a"}))
         end)
         test.it("keeps host values fixed and admits only named dynamic keys", function()

@@ -71,6 +71,7 @@ type Request = {
     projections: {string}?,
     workspace_id: string?,
     parent_action_id: string?,
+    origin_view: {view_id: string, instance_id: string}?,
 }
 -- The permission exchange the host enabled for this launch: the measured
 -- adapter, the acceptance record it stands on, and how the carrier asks.
@@ -468,7 +469,7 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     end
     local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
         owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,
-        policy_ref = plan.policy.ref, workspace_id = request.workspace_id})
+        policy_ref = plan.policy.ref, workspace_id = request.workspace_id, origin_view = request.origin_view})
     if admit_error then return nil, "gateway admit: " .. admit_error end
     local binding = bounds.object((bounds.object(admitted) or {}).binding) or {}
     local binding_id = bounds.id(binding.binding_id)

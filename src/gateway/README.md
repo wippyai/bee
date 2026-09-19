@@ -17,8 +17,18 @@ workspace tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived
 from the same rule tables preflight enforces). It can stage and freeze files but
 cannot publish or activate them.
-The HTTP MCP route keeps its 64 KiB request bound. Workspace calls through MCP
-therefore accept at most 8 KiB of text or 48 KiB of canonical base64 per put;
+
+The host can explicitly admit `application_open` to open an already admitted
+application with literal arguments. Workspace and origin-view identities come
+from the authenticated binding, not tool arguments. The workspace host assigns
+the new app to that view's display using the existing assignment store; a
+headless binding leaves it unassigned. The result carries qualified view and
+instance identities for subsequent interaction. Source/pack HTTP and desktop
+acceptance includes checkpoint restoration after restart.
+
+The HTTP MCP route bounds each JSON request at 512 KiB. Workspace calls through MCP
+accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
+(at most 64 KiB decoded);
 larger authoring files require another admitted facade rather than an oversized
 gateway request. The underlying Governance workspace keeps its own larger store
 limits for non-MCP callers.

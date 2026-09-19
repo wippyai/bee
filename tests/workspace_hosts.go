@@ -45,8 +45,8 @@ func runCommand(ctx context.Context, dir string, env []string, name string, args
 
 // runSupervisor deduplicates supervisor execution between source and packed modes.
 // Output is kept quiet on success and preserved in detail on failure.
-func runSupervisor(runtime string, dir string, env []string, desc string, args ...string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+func runSupervisor(runtime string, dir string, env []string, desc string, budget time.Duration, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
 	out, err := runCommand(ctx, dir, env, runtime, args...)
@@ -81,6 +81,11 @@ func run() error {
 		return fmt.Errorf("resolve runtime path: %w", err)
 	}
 
+	delayed := len(os.Args) > 2 && os.Args[2] == "--delayed"
+	command, budget := "workspace-hosts-supervisor", 35*time.Second
+	if delayed {
+		command, budget = "workspace-hosts-delayed-supervisor", 45*time.Second
+	}
 	root, err := os.MkdirTemp("", "bee-workspace-hosts-")
 	if err != nil {
 		return fmt.Errorf("create temp root: %w", err)
@@ -112,6 +117,17 @@ func run() error {
 	if err := os.CopyFS(filepath.Join(root, "src", "workspace_hosts"), os.DirFS("tests/fixtures/workspace_hosts")); err != nil {
 		return fmt.Errorf("copy fixture: %w", err)
 	}
+	if delayed {
+		// Replace only the disposable composition's broker to deliver a reply
+		// after the production host's unchanged 30-second caller deadline.
+		broker, err := os.ReadFile("tests/fixtures/workspace_hosts/delayed_broker.lua")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(root, "src", "core", "applications", "broker.lua"), broker, 0600); err != nil {
+			return err
+		}
+	}
 
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
 		return fmt.Errorf("write wippy.lock: %w", err)
@@ -138,7 +154,7 @@ func run() error {
 	// Step 2: Source execution of bounded acceptance test
 	fmt.Println("=== Step 2: Dual Workspace Hosts Source Acceptance ===")
 	sourceEnv := databaseEnvironment(root)
-	if err := runSupervisor(runtime, root, sourceEnv, "Source acceptance", "run", "--verbose", "--host", "bee:workers", "--", "workspace-hosts-supervisor"); err != nil {
+	if err := runSupervisor(runtime, root, sourceEnv, "Source acceptance", budget, "run", "--verbose", "--host", "bee:workers", "--", command); err != nil {
 		return err
 	}
 
@@ -160,7 +176,7 @@ func run() error {
 	}
 
 	packEnv := databaseEnvironment(packedDir)
-	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", "run", packFile, "--verbose", "--host", "bee:workers", "--", "workspace-hosts-supervisor"); err != nil {
+	if err := runSupervisor(runtime, packedDir, packEnv, "Pack acceptance", budget, "run", packFile, "--verbose", "--host", "bee:workers", "--", command); err != nil {
 		return err
 	}
 

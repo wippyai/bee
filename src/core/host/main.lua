@@ -5,6 +5,7 @@ local security = require("security")
 local ctx = require("ctx")
 local uuid = require("uuid")
 local hash = require("hash")
+local time = require("time")
 local persistence = require("persistence")
 local recovery = require("recovery")
 local contract = require("contract")
@@ -15,6 +16,7 @@ local interaction = require("interaction")
 local connections = require("connections")
 local inventory = require("inventory")
 local transfer = require("transfer")
+local open_protocol = require("open_protocol")
 
 local function main(owner: string, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
@@ -33,10 +35,12 @@ local function main(owner: string, database_resource: string?)
     local appearance_changes = assert(process.listen("bee.client.appearance.changed", {message = true}))
     local client_appearance = assert(process.listen("bee.client.appearance.result", {message = true}))
     local transfer_requests = assert(process.listen("bee.host.transfer", {message = true}))
+    local open_requests = assert(process.listen("bee.host.application", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
     if not database then error(tostring(database_error)) end
+    local host_registry_name = ""
     -- Recovery must observe every durable prepared fence before any admission
     -- can issue a controlling bind. Unresolved intents stay fenced for the
     -- supervisor/client reconciliation path; they are never silently failed.
@@ -56,6 +60,9 @@ local function main(owner: string, database_resource: string?)
     end
     local fresh_workspace = database.saved == nil
     local workspace_id = database.workspace_id
+    host_registry_name = "bee.workspace.host/" .. workspace_id
+    local registered, register_error = process.registry.register(host_registry_name)
+    if not registered then database:close(); error("Register workspace host: " .. tostring(register_error)) end
     local empty_tabs: {string} = {}
     local empty_records: {recovery.Record} = {}
     local snapshot: recovery.Snapshot = {version = 1,
@@ -88,6 +95,10 @@ local function main(owner: string, database_resource: string?)
     -- Keys are internal broker request IDs, never caller receipt IDs.  This
     -- keeps transfer replies out of the ordinary client-route namespace.
     local pending_transfers: {[string]: {request: transfer.Request, source: string, caller: string, receipt: string}} = {}
+    type OpenWaiters = {callers: {string}, definition_id: string, arguments_fingerprint: string, expires: number?, display_id: string?}
+    local pending_opens: {[string]: OpenWaiters} = {}
+    local MAX_OPEN_WAITERS = 16
+    local MAX_PENDING_OPENS = 64
     local function deliver(topic: string, value: unknown)
         assert(process.send(owner, topic, value))
     end
@@ -217,13 +228,45 @@ local function main(owner: string, database_resource: string?)
         if committed then snapshot = next end
         return committed, err
     end
+    local open_timer: time.Timer? = nil
     local function run()
         while true do
-            local selected = channel.select({requests:case_receive(), replies:case_receive(), catalogs:case_receive(), catalog_readers:case_receive(),
+            local cases = {requests:case_receive(), open_requests:case_receive(), replies:case_receive(), catalogs:case_receive(), catalog_readers:case_receive(),
                 checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(),
-                selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()})
+                selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()}
+            local next_expiry: number? = nil
+            for _, pending in pairs(pending_opens) do
+                if pending.expires and (not next_expiry or pending.expires < next_expiry) then next_expiry = pending.expires end
+            end
+            if next_expiry then
+                local delay = math.max(1, math.ceil(next_expiry * 1000 - time.now():unix_nano() / 1000000))
+                open_timer = assert(time.timer(tostring(delay) .. "ms"))
+                cases[#cases + 1] = open_timer:channel():case_receive()
+            end
+            local selected = channel.select(cases)
+            local expired = open_timer and selected.channel == open_timer:channel()
+            if open_timer then open_timer:stop(); open_timer = nil end
             if not selected.ok then break end
-            if selected.channel == events then
+            if expired then
+                local now = time.now():unix_nano() / 1000000000
+                for request_id, pending in pairs(pending_opens) do
+                    if pending.expires and now >= pending.expires then
+                        -- Keep the bounded in-flight record until the broker
+                        -- settles, so a late success can still claim the
+                        -- originating display assignment. Its slot remains
+                        -- charged as backpressure; no retry is issued.
+                        local reply = contract.reply(request_id, "open", "uncertain", "Application open outcome is unknown")
+                        reply.workspace_id = workspace_id
+                        for _, caller in ipairs(pending.callers) do
+                            process.send(caller, "bee.host.application.reply", {version = 1, workspace_id = workspace_id,
+                                request_id = request_id, reply = reply})
+                        end
+                        local released: {string} = {}
+                        pending.callers = released
+                        pending.expires = nil
+                    end
+                end
+            elseif selected.channel == events then
                 local event = selected.value
                 if event.kind == process.event.CANCEL then break end
                 if event.kind == process.event.EXIT and tostring(event.from) == broker then
@@ -297,6 +340,75 @@ local function main(owner: string, database_resource: string?)
                         end
                     end
                     if request and code ~= "" then transfer_result(caller, request, 0, code, error_text) end
+                elseif selected.channel == open_requests then
+                    local caller = tostring(message:from())
+                    local request = open_protocol.request(data, workspace_id)
+                    if request then
+                        local function send_open(recipient: string, reply: contract.Reply)
+                            reply.workspace_id = workspace_id
+                            process.send(recipient, "bee.host.application.reply", {version = 1, workspace_id = workspace_id,
+                                request_id = request.request_id, reply = reply})
+                        end
+                        -- The workspace ID and request body are routing data,
+                        -- not caller authority.  The facade registers a
+                        -- request-scoped LOCAL name under its own policy and
+                        -- includes that name here; native message:from() must
+                        -- resolve to the same execution before any broker
+                        -- request is admitted.
+                        local registered_caller = process.registry.lookup(request.caller_token)
+                        local display_id: string? = nil
+                        local origin_error: string? = nil
+                        if registered_caller and tostring(registered_caller) == caller and request.origin_view then
+                            local origin = request.origin_view
+                            local live = false
+                            for _, view in ipairs(live_inventory.views) do
+                                if view.view_id == origin.view_id and view.instance_id == origin.instance_id then live = true; break end
+                            end
+                            local assigned, assignment_error = database.assignments:get(origin)
+                            if not live or not assigned or assigned.intent then
+                                origin_error = assignment_error or "Origin view has no settled display assignment"
+                            else display_id = assigned.assignment.display_id end
+                        end
+                        if not registered_caller or tostring(registered_caller) ~= caller then
+                            send_open(caller, contract.reply(request.request_id, "open", "permission_denied", "Open caller is not admitted to this workspace host"))
+                        elseif origin_error then
+                            send_open(caller, contract.reply(request.request_id, "open", "unavailable", origin_error))
+                        elseif not ready or stopping then
+                            send_open(caller, contract.reply(request.request_id, "open", "unavailable", "Workspace host is not ready"))
+                        elseif pending_opens[request.request_id] then
+                            -- The original broker request owns the reply. A
+                            -- duplicate caller waits for that exact result.
+                            local waiters = pending_opens[request.request_id]
+                            local fingerprint = contract.argument_fingerprint(request.arguments)
+                            if waiters.definition_id ~= request.definition_id or waiters.arguments_fingerprint ~= fingerprint then
+                                send_open(caller, contract.reply(request.request_id, "open", "request_conflict", "Request ID was reused for another application"))
+                            elseif not waiters.expires then
+                                send_open(caller, contract.reply(request.request_id, "open", "uncertain", "Application open outcome is unknown"))
+                            elseif #waiters.callers >= MAX_OPEN_WAITERS then
+                                send_open(caller, contract.reply(request.request_id, "open", "busy", "Too many callers are waiting for this open"))
+                            else
+                                waiters.callers[#waiters.callers + 1] = caller
+                            end
+                        else
+                            local pending_count = 0
+                            for _ in pairs(pending_opens) do pending_count = pending_count + 1 end
+                            if pending_count >= MAX_PENDING_OPENS then
+                                send_open(caller, contract.reply(request.request_id, "open", "busy", "Too many pending application opens"))
+                            else
+                                pending_opens[request.request_id] = {callers = {caller}, definition_id = request.definition_id,
+                                    arguments_fingerprint = contract.argument_fingerprint(request.arguments),
+                                    expires = time.now():unix_nano() / 1000000000 + 30, display_id = display_id}
+                                local sent, send_error = process.send(broker, "bee.app.request", {version = 1, request_id = request.request_id, op = "open",
+                                    workspace_id = workspace_id, id = "", instance_id = "", definition_id = request.definition_id,
+                                    recipient = "", restore_instance_id = "", restore_view_id = "", resume_schema = "",
+                                    resume_state = "", arguments = request.arguments})
+                                if not sent then
+                                    pending_opens[request.request_id] = nil
+                                    send_open(caller, contract.reply(request.request_id, "open", "unavailable", tostring(send_error or "Workspace broker rejected request")))
+                                end
+                            end
+                        end
+                    end
                 elseif selected.channel == requests then
                     local request = contract.request(data)
                     local caller = tostring(message:from())
@@ -323,6 +435,10 @@ local function main(owner: string, database_resource: string?)
                 elseif selected.channel == replies and message:from() == broker then
                     local reply = decode.reply(data)
                     if reply and decode.belongs(reply, workspace_id) then
+                        local open_waiters = pending_opens[reply.request_id]
+                        if open_waiters then
+                            pending_opens[reply.request_id] = nil
+                        end
                         local pending_transfer = pending_transfers[reply.request_id]
                         if pending_transfer then
                             -- A broker bind can emit an intermediate attachment
@@ -383,7 +499,29 @@ local function main(owner: string, database_resource: string?)
                                 if settle_opened_intent(reply) and ready then connections.assignments(client_connections) end
                                 if ready then connections.publish(client_connections, live_inventory, "views") end
                             end
-                            if not connections.reply(client_connections, reply, live_inventory) then
+                            if open_waiters then
+                                local assigned_display: string? = nil
+                                if reply.error_code == "" and open_waiters.display_id then
+                                    local existing, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})
+                                    if existing then
+                                        -- A replay must not undo a later display transfer.
+                                        assigned_display = existing.assignment.display_id
+                                    elseif not assignment_error then
+                                        local claimed, claim_error = database.assignments:claim({view_id = reply.id,
+                                            instance_id = reply.instance_id, display_id = open_waiters.display_id})
+                                        if claimed then
+                                            assigned_display = claimed.display_id
+                                            connections.assignments(client_connections)
+                                        else assignment_error = claim_error or "Display assignment failed" end
+                                    end
+                                    if assignment_error then reply.error_code, reply.error = "persistence_failed", assignment_error end
+                                end
+                                for _, open_caller in ipairs(open_waiters.callers) do
+                                    process.send(open_caller, "bee.host.application.reply", {version = 1, workspace_id = workspace_id,
+                                        request_id = reply.request_id, reply = reply, display_id = assigned_display})
+                                end
+                            end
+                            if not open_waiters and not connections.reply(client_connections, reply, live_inventory) then
                                 if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
                                     deliver("bee.host.restore_result", reply)
                                     restoring = ""
@@ -423,9 +561,12 @@ local function main(owner: string, database_resource: string?)
         end
     end
     local completed, run_error = pcall(run)
+    if open_timer then open_timer:stop() end
+    pending_opens = {}
     database:close()
     process.terminate(broker)
-    for _, subscription in ipairs({requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
+    process.registry.unregister(host_registry_name)
+    for _, subscription in ipairs({requests, open_requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

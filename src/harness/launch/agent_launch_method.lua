@@ -61,15 +61,20 @@ local function handle(raw: unknown): Reply
     local permitted, permit_error = agent_launch.permitted(caller_policy, request.definition_ref)
     if permit_error then return fail("UNAVAILABLE", permit_error) end
     if not permitted then return fail("LAUNCH_NOT_PERMITTED", "this agent may not launch " .. request.definition_ref) end
-    -- A definition decides on which thread its action runs. A caller-thread
-    -- definition runs on the launching agent's own thread; a new-thread one
-    -- gets a thread of its own, in which the launching agent is the owner.
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
     if definition.default_mode == "window" then
         return fail("LAUNCH_MODE_UNSUPPORTED", "a window definition has no agent-launch carrier; launch a session or batch definition")
     end
-    local on_caller_thread = definition.thread_policy.kind == "caller" and thread_id or nil
+    -- The launching agent reaches a child only through the thread tools
+    -- bound to its own attempt. A shared-thread definition lets it wait for
+    -- and read the child where it already is; a definition that opens another
+    -- thread would be unreachable with those tools, so it is refused by name
+    -- rather than started and orphaned.
+    if definition.thread_policy.kind ~= "caller" then
+        return fail("LAUNCH_THREAD_UNSUPPORTED", "only a definition naming the caller's thread can be launched by an agent")
+    end
+    local on_caller_thread = thread_id
     -- Resolve and fence the measured plan once, so the child starts under the
     -- exact plan the allow-list admitted and not one that changed underneath.
     local resolved, resolve_error = funcs.call(RESOLVE, {definition_ref = request.definition_ref, mode = definition.default_mode, workspace_id = workspace_id})

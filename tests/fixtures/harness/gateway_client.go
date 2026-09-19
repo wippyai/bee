@@ -259,6 +259,12 @@ func runGateway(mcpLiteral string) int {
 	report["read"] = readReply.status
 	readValue := outcome(readReply)
 	report["read_ok"] = readValue != nil && readValue["ok"] == true
+	if definition := os.Getenv("BEE_FIXTURE_GATEWAY_LAUNCH"); definition != "" {
+		reportLaunch(client, url, authorization, report, definition, os.Getenv("BEE_FIXTURE_GATEWAY_BRIEF"))
+	}
+	if marker := os.Getenv("BEE_FIXTURE_GATEWAY_WORKER"); marker != "" {
+		reportWorker(client, url, authorization, report, marker)
+	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR") != "" {
 		reportAuthoring(client, url, authorization, report, os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR"))
 	}
@@ -284,6 +290,103 @@ func runGateway(mcpLiteral string) int {
 	}
 	writeReport("gateway", report)
 	return 0
+}
+
+// The scripted orchestrator agent. It starts exactly one allow-listed child
+// through thread_launch and returns as soon as the child's answer moves the
+// thread; the records and the lineage are asserted from the thread itself.
+func reportLaunch(client *httpClient, url, authorization string, report object, definition, brief string) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	launched := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "fixture-launch-1"}, 30)
+	report["launch_ok"] = launched != nil && launched["ok"] == true
+	value := mustObject(launched["value"])
+	if value == nil {
+		report["launch_refusal"] = launched
+		return
+	}
+	report["child_thread"] = value["thread_id"]
+	report["child_action"] = value["action_id"]
+	report["child_attempt"] = value["attempt_id"]
+	// Read the thread first so the wait starts from the current head, then wait
+	// for the child to answer and settle.
+	readBack := call("thread_read", object{"cursor": 0, "limit": 64}, 31)
+	readValue := mustObject(readBack["value"])
+	head := 0
+	if readValue != nil {
+		if scanned, ok := readValue["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+	}
+	// Wait until the child's answer is on the thread, then until the child's
+	// own terminal receipt is, so the parent really observes that attempt's
+	// outcome and not just any movement or another action's receipt. Every
+	// wait is bounded by the transport budget the tool sets.
+	childAction := stringField(value, "action_id")
+	marker := os.Getenv("BEE_FIXTURE_WORKER_MARKER")
+	answered := false
+	settled := false
+	waits := 0
+	for attempt := 0; attempt < 12 && !(answered && settled); attempt++ {
+		waits++
+		waited := rpcWithTimeout(client, url, authorization, "tools/call", object{
+			"name":      "thread_wait",
+			"arguments": object{"after_sequence": head, "wait_ms": 20000},
+		}, 32+attempt, 40*time.Second)
+		outcomeValue := outcome(waited)
+		waitReport := mustObject(outcomeValue["value"])
+		if scanned, ok := waitReport["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+		final := call("thread_read", object{"cursor": head, "limit": 64}, 44+attempt)
+		finalValue := mustObject(final["value"])
+		records := []any{}
+		if finalValue != nil {
+			if list, ok := finalValue["records"].([]any); ok {
+				records = list
+			}
+		}
+		for _, raw := range records {
+			record := mustObject(raw)
+			if kind := stringField(record, "kind"); kind == "receipt" && stringField(record, "action_id") == childAction {
+				settled = true
+			}
+			body := mustObject(record["body"])
+			content := mustObject(body["content"])
+			if text := stringField(content, "text"); text != "" && strings.Contains(text, marker) {
+				answered = true
+			}
+		}
+		if scanned, ok := finalValue["scanned_through"].(float64); ok {
+			head = int(scanned)
+		}
+	}
+	report["waits"] = waits
+	report["final_marker"] = answered
+	report["final_receipt"] = settled
+}
+
+// The scripted worker child. It reads the thread it was started on and posts
+// its answer there, exactly as any managed agent hands a result back; the
+// carrier settles the attempt when this fixture exits.
+func reportWorker(client *httpClient, url, authorization string, report object, marker string) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	listed := rpc(client, url, authorization, "tools/list", object{}, 33)
+	names, _ := toolsOf(listed)
+	report["worker_tools"] = names
+	readBack := call("thread_read", object{"cursor": 0, "limit": 64}, 34)
+	value := mustObject(readBack["value"])
+	report["worker_read_ok"] = value != nil
+	posted := call("thread_message", object{"idempotency_key": "worker-answer-" + marker, "message_id": "worker-answer-" + marker,
+		"message_kind": "progress", "recipient_ids": []string{}, "content": object{"text": marker}}, 35)
+	report["worker_posted"] = posted != nil && posted["ok"] == true
+	// A tool the worker's policy does not admit must be refused, proving the
+	// child holds its own tools rather than the orchestrator's.
+	forbidden := call("thread_launch", object{"definition_ref": "bee.harness.catalog:agent_launch_accepted_worker", "brief": "no", "idempotency_key": "worker-must-not-launch"}, 36)
+	report["worker_launch_refused"] = forbidden == nil || forbidden["ok"] != true
 }
 
 // The scripted authoring agent. This function knows nothing about the

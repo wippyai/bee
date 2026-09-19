@@ -9,8 +9,7 @@ local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("docs tool returned no reply") end
     local result = value :: {[string]: unknown}
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
-        error("docs " .. tostring(fault.code) .. ": " .. tostring(fault.message))
+        error("docs " .. tostring(result.code) .. ": " .. tostring(result.message))
     end
     return result.value :: {[string]: unknown}
 end
@@ -27,8 +26,10 @@ local function define_tests()
             local manifest, manifest_error = corpus.manifest(volume)
             if not manifest then error(tostring(manifest_error)) end
             test.eq(manifest.schema, corpus.SCHEMA)
-            test.not_nil(string.find(manifest.selection_rule, "runtime", 1, true))
-            test.not_nil(string.find(manifest.selection_rule, "component", 1, true))
+            local rule = string.lower(manifest.selection_rule)
+            test.not_nil(string.find(rule, "runtime", 1, true))
+            test.not_nil(string.find(rule, "component", 1, true))
+            test.not_nil(string.find(rule, "toolkit", 1, true))
             test.is_true(#manifest.documents >= 100)
             -- Every declared document exists with the declared bytes, so the
             -- corpus cannot silently rot behind its manifest.
@@ -70,9 +71,9 @@ local function define_tests()
             for _, document in ipairs(cluster) do test.eq(document.topic, "cluster") end
             local _, refused = protocol.decode({operation = "list", topic = "nope"})
             test.eq(refused, nil)
-            local bad = method.handle({operation = "list", topic = "nope"})
-            test.eq((bad :: {[string]: unknown}).ok, false)
-            test.eq((((bad :: {[string]: unknown}).error :: {[string]: unknown}).code), "INVALID")
+            local bad = method.handle({operation = "list", topic = "nope"}) :: {[string]: unknown}
+            test.eq(bad.ok, false)
+            test.eq(bad.code, "INVALID")
         end)
         test.it("searches the corpus and returns the section a match sits under", function()
             local found = call({operation = "search", query = "tty.canvas"})
@@ -110,9 +111,9 @@ local function define_tests()
             local next_window = call({operation = "read", id = "runtime/lua/core/process", offset = read.next_offset, limit = 1024})
             test.eq(next_window.offset, read.next_offset)
             -- An id that is not in the corpus is refused, not widened.
-            local missing = method.handle({operation = "read", id = "runtime/lua/core/nope"})
-            test.eq((missing :: {[string]: unknown}).ok, false)
-            test.eq((((missing :: {[string]: unknown}).error :: {[string]: unknown}).code), "NOT_FOUND")
+            local missing = method.handle({operation = "read", id = "runtime/lua/core/nope"}) :: {[string]: unknown}
+            test.eq(missing.ok, false)
+            test.eq(missing.code, "NOT_FOUND")
         end)
         test.it("reads from a heading anchor and reports the section", function()
             local read = call({operation = "read", id = "toolkit", section = "lifecycle", limit = 400})
@@ -120,9 +121,9 @@ local function define_tests()
             test.is_true(string.find(read.content :: string, "tty.surface", 1, true) ~= nil)
             local _, unknown = protocol.decode({operation = "read", id = "toolkit", section = "no-such-heading"})
             test.eq(unknown, nil)
-            local refused = method.handle({operation = "read", id = "toolkit", section = "no-such-heading"})
-            test.eq((refused :: {[string]: unknown}).ok, false)
-            test.eq((((refused :: {[string]: unknown}).error :: {[string]: unknown}).code), "INVALID")
+            local refused = method.handle({operation = "read", id = "toolkit", section = "no-such-heading"}) :: {[string]: unknown}
+            test.eq(refused.ok, false)
+            test.eq(refused.code, "INVALID")
         end)
         test.it("keeps the anchors stable for the cross-node and terminal questions", function()
             local volume = corpus.open()

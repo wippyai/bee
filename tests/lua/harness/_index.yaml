@@ -347,6 +347,17 @@ entries:
     actions: [funcs.call, funcs.security]
     resources: [bee.gateway:open, bee.gateway:check, bee.gateway:revoke, bee.gateway:drain, bee.gateway:ready, bee.gateway:admit, bee.gateway:authorize_materialization, bee.gateway:materialize, bee.gateway:hook_queue, bee.placement.native:evidence, bee.placement.native:status, bee.placement.native:capabilities, bee.placement.native:measure_executable]
     effect: allow
+- name: agent_launch_acceptance_test
+  kind: function.lua
+  source: file://agent_launch_acceptance_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "240s"}
+  modules: [funcs, security, process, registry, env, time, channel, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -616,6 +627,106 @@ entries:
     executables: {claude: /bin/true}
     environment: {}
     agent_launch: []
+- name: agent_launch_shared_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A batch definition that runs on the caller's own thread, the shape an agent-launched child must have to be reachable through the bound thread tools
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-shared-fixture
+    title: Agent launch shared-thread fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:fixture_policy
+    default_mode: batch
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_launch_shared_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launch policy whose allow-list names the caller-thread batch definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    agent_launch: [bee.harness.catalog:agent_launch_shared_definition]
+- name: agent_launch_orchestrator_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The scripted orchestrator's own launch policy; it may reach the gateway tools, including thread_launch, and its allow-list names exactly one worker definition
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_wait, thread_launch]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    agent_launch: [bee.harness.catalog:agent_launch_accepted_worker]
+- name: agent_launch_worker_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The scripted worker's own launch policy; its gateway tools are exactly its own, never the orchestrator's, and it names no agent launch
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment: {}
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_message]
+    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    agent_launch: []
+- name: agent_launch_accepted_worker
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: The one worker definition the scripted orchestrator may launch; it runs on the caller's own thread so the bound thread tools reach it
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-accepted-worker
+    title: Agent launch accepted worker
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:agent_launch_worker_policy
+    default_mode: batch
+    allowed_overrides: [brief, thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    credentials: [anthropic]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: agent_launch_window_policy
   kind: registry.entry
   meta:

@@ -96,8 +96,12 @@ policies; host binding alone is not Hub or Hive installation acceptance.
 Agent activity belongs on the existing application title surface:
 `bee.application:client.title`. Bee-native applications use that same API.
 Committed harness hooks supply fixed activity labels such as `Working`,
-`Using tool`, `Stopped` and `Needs attention`. Ambiguous observations show
-`Activity uncertain`; hook stops never imply a successful attempt. Prompt text
+`Using tool`, `Stopped` and `Needs attention`. Occurrence ambiguity is not
+activity uncertainty: a stop carries no stable occurrence identity by design,
+so it is never merged, but it still reports that activity ended. An activity
+that describes a specific occurrence and arrives without that occurrence's
+identity, such as a tool event with no tool-use id, shows `Activity
+uncertain`; hook stops never imply a successful attempt. Prompt text
 and tool arguments cannot become titles. The selected profile name stays in
 the title, bounded with the existing text sanitizer. Updates follow a confirmed
 thread commit; claims, failed commits and stale replies cannot publish activity.

@@ -69,16 +69,25 @@ local function stream(name: string): string
     if err or type(base) ~= "string" or base == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return base .. "/claude/stream-json-2/" .. name
 end
+-- The host entries this acceptance temporarily widens, copied by value so a
+-- mutation made in place is really undone for every later suite.
 local saved: {[string]: unknown} = {}
+local function copy_of(value: unknown): unknown
+    local encoded, encode_error = json.encode(value)
+    if not encoded then error("copy host entry: " .. tostring(encode_error)) end
+    local decoded, decode_error = json.decode(encoded)
+    if decode_error then error("copy host entry: " .. tostring(decode_error)) end
+    return decoded
+end
 local function remember(ref: string)
     local entry = registry.get(ref)
-    if entry then saved[ref] = entry.data end
+    if entry then saved[ref] = copy_of(entry.data) end
 end
 local function restore_host()
     for ref, data in pairs(saved) do
         local entry = registry.get(ref)
         if entry then
-            entry.data = data
+            entry.data = copy_of(data)
             apply(entry)
         end
     end

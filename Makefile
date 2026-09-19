@@ -337,6 +337,10 @@ managed-launch-check: fixture-gateway-client
 managed-launch-fixture-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_launch_fixture.py
 
+.PHONY: thread-launch-check
+thread-launch-check: fixture-gateway-client
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
+
 .PHONY: headless-check
 headless-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/headless.go

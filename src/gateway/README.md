@@ -7,8 +7,12 @@ listener itself (`http.service`, router, endpoints) belongs to the host
 composition. The activation candidate binds native loopback port zero and reads
 the assigned address through supervisor state. The production-listener fixture
 passes real thread and credential checks on two runtimes. Candidate Agent
-profiles declare `thread_read`, `thread_wait`, `thread_message`, and the
-caller-owned Governance `workspace` tool. The host may admit any subset. The
+profiles declare `thread_read`, `thread_wait`, `thread_message`, the
+caller-owned Governance `workspace` tool, and `thread_launch`, which starts one
+host-allow-listed managed launch in the caller's own workspace and returns the
+child's thread, action and attempt. The host may admit any subset; no default
+launch policy advertises `thread_launch` or names an `agent_launch` definition,
+so an agent starts another only where the owner has opted in. The
 workspace tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived
 from the same rule tables preflight enforces). It can stage and freeze files but

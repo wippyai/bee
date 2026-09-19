@@ -9,10 +9,18 @@ can still run an ordinary executable with arbitrary arguments inside Native
 Terminal. Duplicate valid command claims refuse rather than following registry
 order. Registry metadata selects a candidate and grants no launch authority.
 
-The Start menu/picker and these CLI aliases now share the managed window,
-profile, carrier, thread, hook and MCP path. Remote node selection, MCP
-`thread_launch` and another Agent starting work remain proposals in this
-document until their acceptance checks exist.
+The Start menu/picker and these CLI aliases share the managed window,
+profile, carrier, thread, hook and MCP path. An agent starting work now has an
+implementation and an acceptance: the gateway tool `thread_launch` maps to one
+owner operation (`bee.harness.launch:agent_launch_call`) that reads the
+caller's own launch policy allow-list and calls the same `launch.resolve` /
+`launch.start` path a picker choice does, then the parent uses the existing
+`thread_read`, `thread_wait` and `thread_message` on the child. A definition is
+reachable by an agent only when it names the caller's own thread, because the
+bound thread tools address exactly that thread; a calling agent is the owner of
+that thread, so `thread_launch` selects it rather than inventing another. Remote
+node selection and the batch dataflow route remain proposals in this document
+until their acceptance checks exist.
 
 ## Astra's proposal in full
 

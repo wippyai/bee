@@ -77,7 +77,7 @@ Types: `Content` is bounded text/structured blocks or authorized artifact refere
 |---|---|
 | `observation` | `type:string`, `event_key:string`, `observed_at:timestamp|null`, `external_id:string|null`, `data:typed record`, `raw_ref:string|null`. Requires action/attempt IDs; turn may be unknown. |
 | `message` | `message_id:string`, `message_kind:request|progress|reply|notification`, `sender_id:string`, `recipient_ids:string[]`, `content:Content`, `in_reply_to:message reference|null`, `outcome:Outcome|null`. |
-| `action.admitted` | `request_id:string`, `principal_id:string`, `binding_ref:string`, `binding_digest:string`, `grant_refs:string[]`, `budget_ref:string`, `input:Content`. |
+| `action.admitted` | `request_id:string`, `principal_id:string`, `binding_ref:string`, `binding_digest:string`, `grant_refs:string[]`, `budget_ref:string`, `parent_action_id:string|null`, `input:Content`. `parent_action_id` names the causally parent action when an agent started this one through `thread_launch`; it is lineage only and confers no membership or read right. |
 | `attempt.started` | `execution_kind:process|runner`, `execution_ref:string`, `owner_epoch:integer`. |
 | `turn.request` | `input_message_ids:string[]`, `input:Content`, `resume_ref:string|null`, `delivery_ids:string[]`. Bee admission, not a prompt hook. |
 | `turn.end` | `outcome:Outcome`, `answer_message_ids:string[]`, `evidence_refs:string[]`, `usage:Usage|null`, `error:Error|null`. Bee settlement. |

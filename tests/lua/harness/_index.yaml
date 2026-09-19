@@ -580,6 +580,87 @@ entries:
     thread_policy: {kind: new}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_launch_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launch policy whose agent allow-list names exactly the fixture batch definition; the suite binds no executable because the operation refuses before any carrier exists
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    agent_launch: [bee.harness.catalog:fixture_definition]
+- name: agent_launch_denied_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: The same policy with an empty agent allow-list, so every agent launch is refused by name
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    agent_launch: []
+- name: agent_launch_window_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: A launch policy whose allow-list names a window definition, so the operation refuses the mode before any carrier exists
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    agent_launch: [bee.harness.catalog:agent_launch_window_definition]
+- name: agent_launch_window_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A window-mode definition, which has no agent-launch carrier
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: agent-launch-window-fixture
+    title: Agent launch window fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: window
+    policy_ref: bee.harness.catalog:agent_launch_window_policy
+    default_mode: window
+    allowed_overrides: []
+    thread_policy: {kind: new}
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: agent_launch_test
+  kind: function.lua
+  source: file://agent_launch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry]
+  imports:
+    test: wippy.test:test
+    agent_launch: bee.harness.launch:agent_launch
 - name: launch_client_policy
   kind: security.policy
   meta: {type: test_support}

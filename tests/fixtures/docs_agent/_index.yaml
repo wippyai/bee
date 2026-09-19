@@ -1,0 +1,26 @@
+version: '1.0'
+namespace: bee.docs_agent
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  imports: {bounds: bee.threads.records:bounds}
+  method: main
+  modules: [funcs, http_client, json, time, process, io]
+  meta:
+    command:
+      name: docs-agent-probe
+      security:
+        actor: {id: bee.test.docs_agent}
+  security:
+    policies: [bee.docs_agent:policy, bee:gateway_manage_policy, bee:thread_authority_client_policy,
+      bee:thread_lifecycle_client_policy, bee:thread_create_policy]
+- name: policy
+  kind: security.policy
+  meta:
+    comment: The fixture agent reaches only the managed listener and the gateway admission/authority calls the gateway probe already uses
+  policy:
+    actions: [funcs.call, http_client.private_ip, http_client.request, registry.get, bee.gateway.admit, bee.gateway.materialize]
+    resources: [bee.gateway:address, bee.gateway:admit, bee.gateway:revoke, bee.gateway:authorize_materialization,
+      bee.gateway:materialize, bee:gateway_endpoint, 127.0.0.1, '*']
+    effect: allow

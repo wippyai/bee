@@ -9,7 +9,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"net"
 	"path/filepath"
 	"testing"
@@ -18,8 +17,8 @@ import (
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	ctxapi "github.com/wippyai/runtime/api/context"
 	metricscfg "github.com/wippyai/runtime/api/service/metrics"
-	"github.com/wippyai/runtime/application/statelock"
 	"github.com/wippyai/runtime/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/runtime/service/metrics"
 	"github.com/wippyai/runtime/system/eventbus"
 	"github.com/wippyai/runtime/system/payload"
@@ -28,11 +27,15 @@ import (
 
 func TestPublisherUsesRetainedNativeEndpointUnderOwnerLock(t *testing.T) {
 	state := t.TempDir()
-	unlock, err := statelock.Acquire(state)
+	unlock, err := holdState(t, state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unlock()
+	defer func() {
+		if err := unlock(); err != nil {
+			t.Error(err)
+		}
+	}()
 	pub, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -91,11 +94,8 @@ func TestPublisherUsesRetainedNativeEndpointUnderOwnerLock(t *testing.T) {
 	if err == nil {
 		t.Fatal("published transport port was not retained")
 	}
-	if secondUnlock, err := statelock.Acquire(state); !errors.Is(err, statelock.ErrBusy) {
-		if secondUnlock != nil {
-			_ = secondUnlock()
-		}
-		t.Fatalf("client read disturbed owner exclusion: %v", err)
+	if owned, err := app.Owned(state); err != nil || !owned {
+		t.Fatalf("client read disturbed owner exclusion: owned=%v err=%v", owned, err)
 	}
 	if err := stack.Stop(); err != nil {
 		t.Fatal(err)

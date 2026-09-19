@@ -22,8 +22,8 @@ import (
 
 	machineconfig "github.com/wippyai/bee/native/hive/config"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func privateDirectory(t *testing.T) string {
@@ -92,11 +92,11 @@ func TestMissingMachineProfileKeepsLocalOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resources, err := owner.PrepareOwner(context.Background(), launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state})
+	resources, release, err := owner.PrepareOwner(context.Background(), app.Launch{Op: app.OpRun, State: state})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = resources.Close() })
+	t.Cleanup(func() { _ = release() })
 	for key, expected := range map[string]any{
 		"cluster.name":                     "local-node",
 		"relay.node_name":                  "local-node",
@@ -105,7 +105,7 @@ func TestMissingMachineProfileKeepsLocalOwner(t *testing.T) {
 		"cluster.internode.advertise_addr": "127.0.0.1",
 		"cluster.internode.advertise_port": 0,
 	} {
-		actual, ok := resources.Config.Get(key)
+		actual, ok := resources.Get(key)
 		if !ok || actual != expected {
 			t.Fatalf("%s = %#v, present %v; want %#v", key, actual, ok, expected)
 		}
@@ -127,7 +127,7 @@ func TestCorruptMachineProfileFailsWithoutReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = owner.PrepareOwner(context.Background(), launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state}); !errors.Is(err, machineconfig.ErrMalformedDocument) {
+	if _, _, err = owner.PrepareOwner(context.Background(), app.Launch{Op: app.OpRun, State: state}); !errors.Is(err, machineconfig.ErrMalformedDocument) {
 		t.Fatalf("expected malformed profile, got %v", err)
 	}
 	after, err := os.ReadFile(path)
@@ -184,11 +184,11 @@ func TestJoinedMachineProfileSuppliesExactNativeCluster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resources, err := owner.PrepareOwner(context.Background(), launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state})
+	resources, release, err := owner.PrepareOwner(context.Background(), app.Launch{Op: app.OpRun, State: state})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = resources.Close() })
+	t.Cleanup(func() { _ = release() })
 	expected := map[string]any{
 		"cluster.name":                                  "joined-node",
 		"relay.node_name":                               "joined-node",
@@ -206,7 +206,7 @@ func TestJoinedMachineProfileSuppliesExactNativeCluster(t *testing.T) {
 		"cluster.internode.identity_key":                base64.RawStdEncoding.EncodeToString(private),
 		"cluster.internode.trusted_peer_keys.seed-node": base64.StdEncoding.EncodeToString(peerPublic),
 	}
-	snapshot, ok := resources.Config.Get("cluster.internode.tls.cert_file")
+	snapshot, ok := resources.Get("cluster.internode.tls.cert_file")
 	if !ok {
 		t.Fatal("joined TLS snapshot missing")
 	}
@@ -215,18 +215,18 @@ func TestJoinedMachineProfileSuppliesExactNativeCluster(t *testing.T) {
 		t.Fatalf("joined TLS snapshot path = %#v", snapshot)
 	}
 	for _, key := range []string{"cluster.internode.tls.key_file", "cluster.internode.tls.ca_file"} {
-		value, present := resources.Config.Get(key)
+		value, present := resources.Get(key)
 		if !present || value != snapshotPath {
 			t.Fatalf("%s = %#v, want execution snapshot %q", key, value, snapshotPath)
 		}
 	}
 	for key, want := range expected {
-		actual, ok := resources.Config.Get(key)
+		actual, ok := resources.Get(key)
 		if !ok || actual != want {
 			t.Fatalf("%s = %#v, present %v; want %#v", key, actual, ok, want)
 		}
 	}
-	raw, ok := resources.Config.Get("cluster.internode.peer_key_source")
+	raw, ok := resources.Get("cluster.internode.peer_key_source")
 	if !ok {
 		t.Fatal("native peer key source missing")
 	}

@@ -3,9 +3,10 @@
 `Component()` is the builder's single Bee factory. It composes existing local
 owner bootstrap, Hive service, native client launcher and I/O events. The wrapper
 loads after cluster, supervisor, Lua and dispatcher; it publishes owner discovery
-at Start and stops I/O/admission before those dependencies shut down. It implements
-the runtime launch-preparer contract directly, so handled foreground clients open
-no application stores in their process.
+at Start and stops I/O/admission before those dependencies shut down. It
+implements the runtime's `app.Host` directly, so handled foreground clients open
+no application stores in their process. `Component()` returns the concrete host
+so the builder can name it as the executable's Host and list it as a component.
 
 The compiled host selects the exact supervisor policies, `bee-owner` lifetime
 command and ordinary `bee` route. Registry activation contains no grants. Default
@@ -25,21 +26,22 @@ Actual-source cold start, reuse, retained shell and physical detach pass through
 this composition. Standalone build/upgrade/global acceptance remain outstanding.
 
 The host selects one runtime state directory per canonical launch folder under
-its state root, so several projects on one machine keep separate state and the
+the state the model resolved for the executable, so several projects keep the
 owner's mesh identity is qualified by the selected project state. A request that
 selected state explicitly keeps it, and state created by earlier Bee versions
 stays bound to the root. The host also selects the shared same-account Hive
 directory and the protected machine configuration directory; a saved joined
 profile in the latter is what makes an owner join a Hive.
 
-A generated command hook runs `bee hook-post ENDPOINT ACTION_ID TOKEN_ENV EVENT`,
-which is answered before project selection and owner startup, and the
-`bee.harness.host:environment` storage exposes this executable's own path.
+A generated command hook runs `bee hook-post ENDPOINT ACTION_ID TOKEN_ENV EVENT`.
+The host answers it as a `Plan.Run`, so it never selects project state or starts
+an owner. The `bee.harness.host:environment` storage exposes this executable's
+own path.
 
-Ordinary application launches opt into the runtime's `EmbeddedBaseline` policy:
-code comes from this executable's digest-scoped bundle and authored registry
-history remains in the selected state's `registry.db`. Explicit recovery keeps
-its separate history. Runtime and update operations retain their existing policy.
+Ordinary application launches run the code from this executable's
+digest-scoped bundle and keep authored registry history in the selected state's
+`registry.db`. Explicit recovery re-seeds the shipped packs in its own history.
+Runtime and update operations retain their existing paths.
 The foreground physical client handles Ctrl+Q and Ctrl+] locally; exiting it
 retains the owner and applications. The client actor honors native scheduler
 cancellation so its private host shuts down without waiting for the grace timeout.

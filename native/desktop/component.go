@@ -19,35 +19,31 @@ import (
 	"github.com/wippyai/bee/native/hookpost"
 	"github.com/wippyai/bee/native/ioevents"
 	launchpkg "github.com/wippyai/bee/native/launch"
-	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/boot/components/core"
 	"github.com/wippyai/runtime/boot/components/dispatchers"
 	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
 	bootsystem "github.com/wippyai/runtime/boot/components/system"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 // Options are selected by the compiled host, never registry activation metadata.
 // Node names this same-machine mesh; external Hive enrollment remains separate.
 type Options struct {
-	Node        string
-	Lifetime    time.Duration
-	Application string
-	// StateRoot holds one runtime state directory per canonical launch folder.
-	// Empty keeps the state directory the request already selected.
-	StateRoot       string
+	Node            string
+	Lifetime        time.Duration
+	Application     string
 	HiveDirectory   string
 	ConfigDirectory string
 }
 
 type Host struct {
-	launcher  *launchpkg.OwnerLauncher
-	owner     *localowner.Component
-	desktop   boot.Component
-	events    boot.Component
-	hostenv   boot.Component
-	stateRoot string
-	initErr   error
+	launcher *launchpkg.OwnerLauncher
+	owner    *localowner.Component
+	desktop  boot.Component
+	events   boot.Component
+	hostenv  boot.Component
+	initErr  error
 }
 
 func New(options Options) (*Host, error) {
@@ -73,13 +69,14 @@ func New(options Options) (*Host, error) {
 	return &Host{
 		launcher: launcher, owner: owner, desktop: desktop,
 		events: ioevents.Component(), hostenv: harnesshost.Component(),
-		stateRoot: options.StateRoot,
 	}, nil
 }
 
-// Component is the single factory consumed by Wippy Builder. Ordinary fresh
-// desktops start empty; applications remain owned by the retained supervisor.
-func Component() boot.Component {
+// Component is the single factory consumed by Wippy Builder. It returns the
+// concrete host so the builder can name it as the executable's Host as well as
+// list it among the components. Ordinary fresh desktops start empty;
+// applications remain owned by the retained supervisor.
+func Component() *Host {
 	node, err := os.Hostname()
 	if err != nil {
 		return &Host{initErr: err}
@@ -90,7 +87,6 @@ func Component() boot.Component {
 	}
 	host, err := New(Options{
 		Node: node, Lifetime: 30 * 24 * time.Hour,
-		StateRoot:       filepath.Join(root, "bee"),
 		HiveDirectory:   filepath.Join(root, "bee", "local-hive"),
 		ConfigDirectory: filepath.Join(root, "bee"),
 	})
@@ -104,6 +100,7 @@ func (*Host) Name() string { return "bee.native" }
 func (*Host) DependsOn() []string {
 	return []string{"cluster", core.SupervisorName, luaboot.EngineName, dispatchers.DispatcherName, bootsystem.EnvironmentName}
 }
+
 // Plan decides one invocation before the runner opens state. It selects the
 // project's state, hands the retained-owner start and the client routes to the
 // launcher, and runs the hook command as a plan that never touches state.
@@ -123,25 +120,38 @@ func (h *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error) {
 			return hookpost.Run(ctx, os.Stdin, args[1], args[2], args[3], args[4])
 		}}, nil
 	}
+	// Every stateful operation selects the same project state. The runtime still
+	// owns the operation itself; this host only decides which state it targets.
 	selected, err := h.selectProject(launch)
 	if err != nil {
 		return app.Plan{}, err
 	}
-	return h.launcher.Plan(ctx, selected)
+	plan, err := h.launcher.Plan(ctx, selected)
+	if err != nil {
+		return app.Plan{}, err
+	}
+	// The model applies Plan.State to the launch, so the project state this host
+	// selected must travel in the plan rather than only in the forwarded launch.
+	if selected.State != launch.State {
+		plan.State = selected.State
+	}
+	return plan, nil
 }
 
 // selectProject gives each canonical launch folder one runtime state directory
-// under the host's state root. A launch that selected state explicitly keeps
+// under the state the model resolved for this executable. The model's default
+// state for the name "bee" is exactly this host's state root, so the host does
+// not compute a second default. A launch that selected state explicitly keeps
 // it, and state created by earlier Bee versions stays bound to the root.
 func (h *Host) selectProject(launch app.Launch) (app.Launch, error) {
-	if h.stateRoot == "" || launch.Explicit || !filepath.IsAbs(launch.Dir) {
+	if launch.Explicit || !filepath.IsAbs(launch.Dir) {
 		return launch, nil
 	}
 	selected, err := launchpkg.CanonicalProject(launch)
 	if err != nil {
 		return launch, err
 	}
-	state, err := launchpkg.DefaultProjectStateDir(h.stateRoot, selected.Dir)
+	state, err := launchpkg.DefaultProjectStateDir(selected.State, selected.Dir)
 	if err != nil {
 		return launch, err
 	}

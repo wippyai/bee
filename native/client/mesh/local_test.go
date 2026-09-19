@@ -20,9 +20,9 @@ import (
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	metricscfg "github.com/wippyai/runtime/api/service/metrics"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
 	"github.com/wippyai/runtime/cluster/internode"
+	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/runtime/service/metrics"
 	"github.com/wippyai/runtime/system/eventbus"
 	"github.com/wippyai/runtime/system/payload"
@@ -42,11 +42,15 @@ func localOwnerTransport(t *testing.T, transport internode.ManagerTLSConfig, pro
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	t.Cleanup(cancel)
 	state := t.TempDir()
-	unlock, err := statelock.Acquire(state)
+	unlock, err := holdState(t, state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { unlock() })
+	t.Cleanup(func() {
+		if err := unlock(); err != nil {
+			t.Error(err)
+		}
+	})
 	dir := filepath.Join(state, "discovery")
 	enrollment, err := rendezvous.NewEnrollment(dir)
 	if err != nil {
@@ -148,8 +152,8 @@ func TestLocalSeparateClientProcess(t *testing.T) {
 	if owner.Membership.LocalNode().ID != "owner" {
 		t.Fatal("owner changed")
 	}
-	if _, err := statelock.Acquire(filepath.Dir(dir)); !errors.Is(err, statelock.ErrBusy) {
-		t.Fatalf("owner lock disturbed: %v", err)
+	if owned, err := app.Owned(filepath.Dir(dir)); err != nil || !owned {
+		t.Fatalf("owner lock disturbed: owned=%v err=%v", owned, err)
 	}
 	entries, err := os.ReadDir(filepath.Dir(dir))
 	if err != nil {

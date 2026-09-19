@@ -21,10 +21,9 @@ import (
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/bee/native/client/physical"
 	beelaunch "github.com/wippyai/bee/native/launch"
-	applicationapi "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/tty"
-	"github.com/wippyai/runtime/application"
+	app "github.com/wippyai/runtime/cmd/app"
 	"golang.org/x/term"
 )
 
@@ -102,24 +101,26 @@ func probePhysicalSessionExit(parent context.Context, directory string, automati
 	go func() {
 		adapter := beelaunch.Client{Command: "bee", Mode: hive.Control, Stdin: slave, Stdout: &output}
 		var launcher boot.Component = busyClientLauncher{adapter}
+		var host app.Host = busyClientLauncher{adapter}
 		if automatic {
-			selected, err := beelaunch.NewLauncher(adapter, "bee-owner", func(context.Context, applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
-				return applicationapi.OwnerPlan{}, errors.New("foreground client must not become owner")
+			selected, err := beelaunch.NewLauncher(adapter, "bee-owner", func(context.Context, app.Launch) (boot.Config, func() error, error) {
+				return nil, nil, errors.New("foreground client must not become owner")
 			})
 			if err != nil {
 				sessionErr = err
 				close(done)
 				return
 			}
-			launcher = selected
+			launcher, host = selected, selected
 		}
-		// Invalid data binding and empty bundle would fail on the owner path.
-		// A live owner's real application lock must route directly to Attach.
-		sessionErr = application.Run(ctx, application.Options{
-			Name: "bee-owner-desktop", Mode: "base", Command: "bee",
-			DataEnv:    map[string]string{"INVALID=BINDING": "never-opened.db"},
-			Components: []boot.Component{launcher},
-		}, []string{"--state-dir", filepath.Dir(directory)})
+		// A data binding and an empty bundle would both fail on the owner path;
+		// the live owner's real application lock must route this launch to the
+		// client route, which never opens state or boots components.
+		sessionErr = app.Run(ctx, app.Executable{
+			Name: "bee-owner-desktop", Command: "bee",
+			Data:       map[string]string{"BEE_OWNER_PROBE_DB": "never-opened.db"},
+			Components: []boot.Component{launcher}, Host: host,
+		}, []string{"--state", filepath.Dir(directory)})
 		close(done)
 	}()
 	defer func() { cancel(); <-done }()
@@ -247,8 +248,23 @@ func (busyClientLauncher) DependsOn() []string { return nil }
 func (busyClientLauncher) Load(ctx context.Context) (context.Context, error) {
 	return ctx, errors.New("busy client must not boot runtime components")
 }
-func (c busyClientLauncher) PrepareLaunch(context.Context, applicationapi.LaunchRequest) (applicationapi.LaunchPlan, error) {
-	return applicationapi.LaunchPlan{Attach: c.client.Attach, PrepareOwner: func(context.Context, applicationapi.LaunchRequest) (applicationapi.OwnerPlan, error) {
-		return applicationapi.OwnerPlan{}, errors.New("busy client must not prepare another owner")
-	}}, nil
+
+// Plan attaches through the real client adapter when another invocation holds
+// the state, and otherwise leaves the owner path looking unprepared, so the
+// runtime's own lock-busy error is still exercised. Load fails if the runtime
+// ever boots components on this route.
+func (c busyClientLauncher) Plan(ctx context.Context, l app.Launch) (app.Plan, error) {
+	if l.Op != app.OpRun {
+		return app.Plan{}, nil
+	}
+	owned, err := app.Owned(l.State)
+	if err != nil {
+		return app.Plan{}, err
+	}
+	if !owned {
+		return app.Plan{Prepare: func(context.Context) (boot.Config, func() error, error) {
+			return nil, nil, errors.New("busy client must not prepare another owner")
+		}}, nil
+	}
+	return app.Plan{Run: func(ctx context.Context) error { return c.client.Attach(ctx, l) }}, nil
 }

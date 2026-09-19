@@ -1,14 +1,15 @@
 # Native Bee launch
 
-`NewLauncher(client, ownerCommand, prepareOwner)` is one compiled launch-preparer
-component. Ordinary launch runs a foreground native client; explicit `start`
-selects the host's headless owner command. The owner and its DesktopService are
-separate host-selected boot components. Update/tooling/base operations retain
-the runtime's existing paths. The September 10 global candidate selects this
-composition; exact pins and current limits are in `docs/handoffs/GLOBAL_BUILD.md`.
+`NewLauncher(client, ownerCommand, prepareOwner)` builds one compiled `app.Host`.
+Ordinary launch runs a foreground native client; explicit `start` selects the
+host's headless owner command. The owner and its DesktopService are separate
+host-selected boot components. The runtime's own verbs (`update`, `recover`,
+`wippy`) keep the runtime's paths; `Plan` returns an empty plan for them. The
+host's `Plan.Prepare` is the preparation the runtime calls after taking the state
+lock and whose close runs after runtime shutdown, before unlock.
 
-The foreground starts the same executable as a detached owner contender with
-literal selected state/command arguments and the original project directory.
+The foreground starts the same executable as a detached owner contender with a
+literal `--state <dir> run start` line and the original project directory.
 The child arbitrates through the runtime's actual application lock. A winner
 prepares the native owner under that lock and publishes a new execution. A loser
 authenticates the existing owner and reads its catalog without mounting a desktop.
@@ -19,17 +20,17 @@ Startup publication has a 30-second deadline. Unchanged stale discovery does not
 prove readiness; child failure never falls back to stale discovery. Invalid
 discovery fails closed. Attachment/input are not replayed. The native session
 separately bounds transport/supervisor readiness and requires explicit selection
-when the catalog is ambiguous. Warm launches probe the runtime's existing `statelock.Acquire` lock and go
-directly to authenticated attachment when it is busy. They create no contender
-or owner log. A free probe releases the lock before spawning; the child still
-arbitrates ownership under that same runtime lock, including races with other
-launchers. Filesystem errors do not count as contention.
+when the catalog is ambiguous. Warm launches ask `app.Owned` about the runtime's existing application lock and
+go directly to authenticated attachment when it reports an owner. The probe
+creates nothing, so an absent state stays absent. A free state proceeds to spawn;
+the child still arbitrates ownership under that same runtime lock, including
+races with other launchers. Filesystem errors do not count as contention.
 
-`Client.Attach` also directly supplies a runtime `LaunchPlan.Attach` callback. It
-rejects unrelated operations/commands, unhandled arguments and invalid paths
-before discovery. The callback runs before deployment/application data bindings.
-`NewOwnerLauncher` exposes only explicit-start routing for host compositions that
-do not select the automatic foreground route.
+The host runs `Client.Attach` through `Plan.Run`, so the runtime invokes it
+without opening the application state, deployment or data bindings. It rejects
+reserved verbs, unrelated commands, unhandled arguments and invalid paths before
+discovery. `NewOwnerLauncher` exposes only explicit-start routing for host
+compositions that do not select the automatic foreground route.
 
 One ordinary invocation selects the host's display client. `bee` alone attaches
 and, with no owner published, starts one. `bee NAME [ARGS]` attaches and submits
@@ -41,7 +42,8 @@ application entry for recovery and development launches.
 
 `CanonicalProject` resolves the launch folder through symlinks so one project
 keeps one native node identity. `ProjectStateDir` assigns one runtime state
-directory per canonical project under a host-selected root, and
+directory per canonical project under the state the model resolved for the
+executable, and
 `DefaultProjectStateDir` adds the upgrade rule: the first canonical project
 opened against a root that already holds Bee state is bound to that root by one
 protected receipt, and every later project uses its digest-qualified directory.

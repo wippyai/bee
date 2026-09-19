@@ -6,10 +6,7 @@ package launch
 import (
 	"context"
 	"errors"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/wippyai/bee/native/client/hive"
 	"github.com/wippyai/runtime/api/boot"
@@ -90,12 +87,10 @@ func (l *OwnerLauncher) Plan(ctx context.Context, launch app.Launch) (app.Plan, 
 	// command after admission; spawning the owner must not execute it.
 	startup := launch
 	startup.Args = nil
-	foreground, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	if selected.listing {
-		return app.Plan{Run: func(context.Context) error { return selected.list(foreground, startup) }}, nil
+		return app.Plan{Run: func(ctx context.Context) error { return selected.list(ctx, startup) }}, nil
 	}
-	return app.Plan{Run: func(context.Context) error { return selected.Run(foreground, startup) }}, nil
+	return app.Plan{Run: func(ctx context.Context) error { return selected.Run(ctx, startup) }}, nil
 }
 
 // selectClient maps one ordinary invocation onto this host's display client.

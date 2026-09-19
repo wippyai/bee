@@ -12,20 +12,25 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/security"
-	"github.com/wippyai/runtime/application/statelock"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestLocalClientPolicyFencesEnrollmentAndExecution(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stateDir := t.TempDir()
-	unlock, err := statelock.Acquire(stateDir)
+	// The owner's preparation runs under the real application state lock, so the
+	// test takes that same lock through the model's own runner.
+	unlock, err := holdState(t, stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unlock()
+	defer func() {
+		if err := unlock(); err != nil {
+			t.Error(err)
+		}
+	}()
 	owner, err := New(Options{Node: "owner", Lifetime: time.Hour})
 	if err != nil {
 		t.Fatal(err)
@@ -33,11 +38,11 @@ func TestLocalClientPolicyFencesEnrollmentAndExecution(t *testing.T) {
 	if _, err := owner.ClientPolicy(); err == nil {
 		t.Fatal("unprepared owner issued policy")
 	}
-	plan, err := owner.PrepareOwner(ctx, launch.LaunchRequest{Operation: launch.RunApplication, StateDir: stateDir})
+	_, release, err := owner.PrepareOwner(ctx, app.Launch{Op: app.OpRun, State: stateDir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer plan.Close()
+	defer release()
 	policy, err := owner.ClientPolicy()
 	if err != nil {
 		t.Fatal(err)

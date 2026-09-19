@@ -24,10 +24,10 @@ import (
 	machineconfig "github.com/wippyai/bee/native/hive/config"
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	"github.com/wippyai/runtime/cluster/internode"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 const DirectoryName = rendezvous.DirectoryName
@@ -83,6 +83,7 @@ func New(options Options) (*Component, error) {
 
 func (c *Component) Name() string        { return "bee.hive.local_owner" }
 func (c *Component) DependsOn() []string { return []string{"cluster"} }
+
 // Load installs this owner's execution credential as the bound on the running
 // runtime. The old contract carried the same bound as an owner deadline the
 // runner applied to its context; the host now installs it directly, so the

@@ -21,19 +21,24 @@ import (
 	"github.com/wippyai/bee/native/client/mesh"
 	"github.com/wippyai/bee/native/hive/localtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
 	"github.com/wippyai/runtime/api/boot"
 	topapi "github.com/wippyai/runtime/api/topology"
-	"github.com/wippyai/runtime/application"
-	"github.com/wippyai/runtime/application/statelock"
 	stackpkg "github.com/wippyai/runtime/cluster"
+	app "github.com/wippyai/runtime/cmd/app"
 	"github.com/wippyai/wapp"
 )
 
+// testLauncher is the host that routes an ordinary run to this owner's
+// lock-held preparation, exactly as the compiled desktop host does.
 type testLauncher struct{ *Component }
 
-func (c testLauncher) PrepareLaunch(context.Context, launch.LaunchRequest) (launch.LaunchPlan, error) {
-	return launch.LaunchPlan{PrepareOwner: c.PrepareOwner}, nil
+func (c testLauncher) Plan(ctx context.Context, l app.Launch) (app.Plan, error) {
+	if l.Op != app.OpRun {
+		return app.Plan{}, nil
+	}
+	return app.Plan{Prepare: func(ctx context.Context) (boot.Config, func() error, error) {
+		return c.PrepareOwner(ctx, l)
+	}}, nil
 }
 
 func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
@@ -84,12 +89,12 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 	}
 	expires := time.NewTimer(time.Until(credentials.ExpiresAt.Add(2 * time.Second)))
 	defer expires.Stop()
-	release, err := statelock.Acquire(state)
-	if release != nil {
-		_ = release()
+	owned, err := app.Owned(state)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !errors.Is(err, statelock.ErrBusy) {
-		t.Fatalf("owner does not hold application lock: %v", err)
+	if !owned {
+		t.Fatal("owner does not hold application lock")
 	}
 	err = mesh.SameAccount(ctx, filepath.Join(state, DirectoryName), func(clientContext context.Context, stack *stackpkg.Stack, actual rendezvous.Descriptor) error {
 		if actual != descriptor {
@@ -201,12 +206,12 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 		if dialError == nil {
 			t.Fatal("owner mesh survived credential expiry")
 		}
-		unlock, lockError := statelock.Acquire(state)
-		if unlock != nil {
-			_ = unlock()
+		owned, ownedError := app.Owned(state)
+		if ownedError != nil {
+			t.Fatal(ownedError)
 		}
-		if !errors.Is(lockError, statelock.ErrBusy) {
-			t.Fatalf("owner released state lock before process cleanup: %v", lockError)
+		if !owned {
+			t.Fatal("owner released state lock before process cleanup")
 		}
 		cleanup := time.NewTimer(time.Until(credentials.ExpiresAt.Add(15 * time.Second)))
 		defer cleanup.Stop()
@@ -223,12 +228,12 @@ func TestNormalApplicationBootAdmitsNativeTransportAndExpires(t *testing.T) {
 	if exitError != nil {
 		t.Fatalf("owner failed: %v\n%s", exitError, output.String())
 	}
-	release, err = statelock.Acquire(state)
+	owned, err = app.Owned(state)
 	if err != nil {
-		t.Fatalf("owner shutdown retained application lock: %v", err)
-	}
-	if err := release(); err != nil {
 		t.Fatal(err)
+	}
+	if owned {
+		t.Fatal("owner shutdown retained application lock")
 	}
 	listener, err := net.Listen("tcp", descriptor.Transport)
 	if err != nil {
@@ -329,9 +334,13 @@ return M`,
 		t.Fatal(err)
 	}
 	data := packed.Bytes()
-	bundle := application.Bundle{Root: "bee/proof", Packs: []application.Pack{{Module: "bee/proof", Version: "1.0.0", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data}}}
-	err = application.Run(context.Background(), application.Options{Name: "bee-owner-proof", Mode: "base", Command: "owner-proof", Bundle: bundle, Components: []boot.Component{testLauncher{owner}}}, []string{"--state-dir", state})
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+	bundle := app.Bundle{Root: "bee/proof", Packs: []app.Pack{{Module: "bee/proof", Version: "1.0.0", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Data: data}}}
+	executable := app.Executable{
+		Name: "bee-owner-proof", Command: "owner-proof", Bundle: bundle,
+		Components: []boot.Component{testLauncher{owner}}, Host: testLauncher{owner},
+	}
+	if err = app.Run(context.Background(), executable, []string{"--state", state, "run"}); err != nil &&
+		!errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 }

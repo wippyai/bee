@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	launch "github.com/wippyai/runtime/api/application"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestProjectNodesHaveStableDistinctNames(t *testing.T) {
@@ -19,16 +19,16 @@ func TestProjectNodesHaveStableDistinctNames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		plan, err := owner.PrepareProjectOwner(context.Background(), launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state, Directory: state})
+		config, release, err := owner.PrepareProjectOwner(context.Background(), app.Launch{Op: app.OpRun, State: state, Dir: state})
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer plan.Close()
-		name, ok := plan.Config.Get("cluster.name")
+		defer release()
+		name, ok := config.Get("cluster.name")
 		if !ok {
 			t.Fatal("missing native node name")
 		}
-		relay, ok := plan.Config.Get("relay.node_name")
+		relay, ok := config.Get("relay.node_name")
 		if !ok || relay != name {
 			t.Fatal("relay and mesh identities disagree", relay, name)
 		}

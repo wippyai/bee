@@ -5,6 +5,7 @@ package launch
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -59,5 +60,31 @@ func TestExplicitSelectionAndListNeverRunOwnerForAbsentBee(t *testing.T) {
 				t.Fatal("explicit client command created state", entries)
 			}
 		})
+	}
+}
+
+func TestClientPlanUsesExecutionContext(t *testing.T) {
+	state := t.TempDir()
+	launcher, err := NewLauncher(Client{Command: "bee", Mode: hive.Control, Stdin: os.Stdin, Stdout: io.Discard}, "bee-owner", func(context.Context, app.Launch) (boot.Config, func() error, error) {
+		t.Fatal("client plan prepared an owner")
+		return nil, nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	planning, cancelPlanning := context.WithCancel(context.Background())
+	plan, err := launcher.Plan(planning, app.Launch{
+		Op: app.OpRun, Command: "bee", Args: []string{"desktops"}, State: state, Dir: state,
+	})
+	if err != nil || plan.Run == nil {
+		t.Fatal(err, plan)
+	}
+	cancelPlanning()
+
+	// Planning and execution are separate runtime phases. Ending the planning
+	// context must not cancel work invoked later with the runner's live context.
+	err = plan.Run(context.Background())
+	if err == nil || errors.Is(err, context.Canceled) || err.Error() != "No running Bee to list; start bee first" {
+		t.Fatal("client plan retained its planning context", err)
 	}
 }

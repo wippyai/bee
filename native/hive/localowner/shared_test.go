@@ -13,9 +13,10 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
-	launch "github.com/wippyai/runtime/api/application"
+	"github.com/wippyai/runtime/api/boot"
 	cluster "github.com/wippyai/runtime/api/cluster"
 	"github.com/wippyai/runtime/api/security"
+	app "github.com/wippyai/runtime/cmd/app"
 )
 
 func TestSharedProjectEnrollmentKeepsClientAuthorityLocal(t *testing.T) {
@@ -24,29 +25,29 @@ func TestSharedProjectEnrollmentKeepsClientAuthorityLocal(t *testing.T) {
 	if err := os.Chmod(hiveDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	prepare := func() (*Component, launch.OwnerPlan) {
+	prepare := func() (*Component, boot.Config, func() error) {
 		t.Helper()
 		owner, err := New(Options{Node: "Antares", Lifetime: time.Hour, HiveDirectory: hiveDir})
 		if err != nil {
 			t.Fatal(err)
 		}
 		state := t.TempDir()
-		plan, err := owner.PrepareProjectOwner(ctx, launch.LaunchRequest{Operation: launch.RunApplication, StateDir: state, Directory: state})
+		config, release, err := owner.PrepareProjectOwner(ctx, app.Launch{Op: app.OpRun, State: state, Dir: state})
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {
-			if err := plan.Close(); err != nil {
+			if err := release(); err != nil {
 				t.Error(err)
 			}
 		})
-		return owner, plan
+		return owner, config, release
 	}
-	a, pa := prepare()
-	b, pb := prepare()
-	value := func(p launch.OwnerPlan, key string) interface{} {
+	a, pa, aRelease := prepare()
+	b, pb, _ := prepare()
+	value := func(p boot.Config, key string) interface{} {
 		t.Helper()
-		v, ok := p.Config.Get(key)
+		v, ok := p.Get(key)
 		if !ok {
 			t.Fatalf("missing %s", key)
 		}
@@ -104,7 +105,7 @@ func TestSharedProjectEnrollmentKeepsClientAuthorityLocal(t *testing.T) {
 			t.Fatalf("client authority %v, want %v", got, check.want)
 		}
 	}
-	if err := pa.Close(); err != nil {
+	if err := aRelease(); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := kb(a.options.Node); ok {

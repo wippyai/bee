@@ -416,6 +416,16 @@ research-benchmark-check:
 agent-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app.py
 
+# Explicit live-provider proof: a saved Codex agent profile naming one Codex
+# config profile reaches its model and does one real turn; consumes inference.
+.PHONY: live-codex-profile-check live-codex-profile-lint
+live-codex-profile-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_codex_profile.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_codex_profile.go -root .. -runtime "$(abspath $(WIPPY))" -profile "$(CODEX_PROFILE)"
+live-codex-profile-lint:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_codex_profile.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/live_codex_profile.go -root .. -runtime "$(abspath $(WIPPY))" -profile "$(CODEX_PROFILE)" -lint-only
+
 .PHONY: live-agy-mcp-check live-agy-mcp-lint
 live-agy-mcp-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/live_agy_mcp.go

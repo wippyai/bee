@@ -95,7 +95,12 @@ identifier matching what Codex accepts; a dot, path separator, leading dash,
 space, empty or overlong value is refused, so it can never escape the Codex
 home. The field is offered only by a host policy that sets
 `profile_config_profile: true`, and every other driver refuses a saved profile
-that carries it.
+that carries it. The shipped policies enable it only on Codex routes whose
+launch inherits the host Codex home: the picker's native Codex window
+(`launch_policy_codex_window`) and the structured `bee.driver.codex:named_batch`
+route. The private-home Codex batch policy also offers the field, but a private
+home never carries the named file, so that route refuses the launch with a
+diagnostic naming the profile. No non-Codex policy offers the field.
 
 The named file lives in the *inherited* home. Where Bee runs Codex with a
 private `CODEX_HOME` instead (the host-selected provider path, retained homes,
@@ -106,6 +111,14 @@ projection in `bee.credentials` or the materializer to use instead. A launch
 whose named file is absent from the inherited home is refused before the
 process starts, by an existence check through the read-only host volume that
 never reads the file's contents.
+
+`make live-codex-profile-check CODEX_PROFILE=<name>` proves the whole route
+against the owner's installed Codex and their own config profile (default
+`ds-flash`): it boots a disposable composition, saves a profile naming the
+config profile, launches it, and requires one real turn in which the agent
+reads its own bound thread over Bee MCP and commits an unguessable token as a
+stream observation, with a succeeded turn and a receipt. It is opt-in and
+consumes inference; the ordinary suite covers the same wiring with no provider.
 
 
 The Codex launch writes the brief to stdin and Codex reads it until end of

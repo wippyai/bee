@@ -203,6 +203,7 @@ local function handle(): nil
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "workspace" then arguments, argument_error = mcp.workspace_arguments(parameters)
+    elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end

@@ -154,6 +154,38 @@ entries:
           providers:
           - codex-sandbox
           required_placement_features: []
+      - id: named_batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: exec-json-1
+        answer_path:
+          strategy: accumulate
+          adapter_ref: bee.driver.codex:protocol
+        resume:
+          strategy: per-process
+          portable: false
+        isolation_env:
+          variables:
+          - HOME
+          - CODEX_HOME
+          private_home: false
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: protocol
+          adapter_ref: bee.driver.codex:protocol
+          timeout_ms: 15000
+        interrupt:
+          methods:
+          - signal_group
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          initialize_timeout_ms: 30000
+        sandbox:
+          providers:
+          - codex-sandbox
+          required_placement_features: []
       - id: window
         mode: window
         protocol: pty
@@ -205,6 +237,27 @@ entries:
     thread_policy: {kind: caller}
     session_resource: session
     credentials: [codex_login]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+
+- name: named_batch
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Component-owned structured Codex route that inherits the host Codex home, so a saved profile may name one Codex config profile and the answer lands on the caller's thread as a stream observation
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: codex-named-batch
+    title: Codex named profile
+    command_names: []
+    binding_ref: bee.driver.codex:binding
+    profile_id: named_batch
+    policy_ref: bee:launch_policy_codex_named_batch
+    default_mode: batch
+    allowed_overrides: [thread]
+    workdir_policy: {kind: declared_resource, resource_ref: project}
+    thread_policy: {kind: caller}
+    session_resource: session
+    credentials: []
     presentation: {start_menu: false, fullscreen: false, reuse: never}
 
 - name: credential_format

@@ -5,6 +5,7 @@
 local bounds = require("bounds")
 local message = require("message")
 local workspace_protocol = require("workspace_protocol")
+local docs_protocol = require("docs_protocol")
 local delivery_protocol = require("delivery_protocol")
 local M = {}
 M.PROTOCOL = "2025-06-18"
@@ -53,6 +54,17 @@ local TOOLS: {Tool} = {
             content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
             content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+        }}},
+    {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic, search it for a phrase, or read one bounded window of one document by stable id. Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee:docs_call",
+        policies = {"bee:gateway_tool_docs_policy"}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
+            operation = {type = "string", enum = {"list", "search", "read"}},
+            topic = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 64},
+            query = {type = "string", minLength = 1, maxLength = 256},
+            id = {type = "string", minLength = 1, maxLength = 160},
+            section = {type = "string", pattern = "^[a-z0-9_-]+$", maxLength = 120},
+            offset = {type = "integer", minimum = 0},
+            limit = {type = "integer", minimum = 1, maximum = 16384},
         }}},
     {name = "delivery", description = "Request delivery of your frozen application to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in App Delivery, approval in Approvals, apply by the activation owner, and opening from the start menu.", operation = "bee.governance:delivery_call",
         policies = {"bee:gateway_tool_delivery_policy"}, annotations = READ_ANNOTATIONS,
@@ -229,6 +241,23 @@ function M.publish_arguments(params: Object): (Object?, string?)
     local request, decode_error = delivery_protocol.decode({operation = "publish", workspace_id = arguments.workspace_id,
         source_workspace = arguments.source_workspace, version = arguments.version})
     if not request then return nil, decode_error end
+    return request, nil
+end
+
+-- The docs tool shares the corpus request decoder, so the schema the tool
+-- advertises and the fields it accepts cannot drift apart.
+function M.docs_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local decoded, decode_error = docs_protocol.decode(arguments)
+    if not decoded then return nil, decode_error end
+    -- The corpus decoder owns the schema; this copies its bounded fields into
+    -- the plain object the endpoint passes to the facade.
+    local request: Object = {}
+    for _, name in ipairs({"operation", "topic", "query", "id", "section", "offset", "limit"}) do
+        local value = decoded[name]
+        if value ~= nil then request[name] = value end
+    end
     return request, nil
 end
 

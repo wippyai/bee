@@ -184,9 +184,33 @@ function M.document(): string
         .. " a refusal names the diagnostic and its remedy. Then a person must " .. join(DELIVERY_STEPS)
         .. ". Only the activation owner may write an overlay."
     lines[#lines + 1] = ""
+    lines[#lines + 1] = M.platform_documentation()
+    lines[#lines + 1] = ""
     lines[#lines + 1] = "Minimal example: put the JSON below at path " .. M.ENTRIES_PATH
         .. " and freeze it. Its entry id is " .. M.DEFINITION_ID .. " and its title " .. M.TITLE .. "."
     return table.concat(lines, "\n")
+end
+
+-- Where the platform documentation lives and how to look things up with the
+-- read-only docs tool. It names the topics for cross-node applications and for
+-- terminal UIs by their corpus names, so the guide and the tool cannot describe
+-- different corpora for long.
+M.DOCS_REVISION = "bee.docs-corpus@1"
+M.CROSS_NODE_TOPICS = {"cluster", "process", "registry"}
+M.TERMINAL_TOPICS = {"terminal", "ui", "component"}
+function M.platform_documentation(): string
+    return "The platform documentation ships inside Bee and works offline: the docs tool"
+        .. " (" .. M.DOCS_REVISION .. ") reads the corpus with list, search and read, bounded the way this"
+        .. " tool is. list names the topics and document ids; search takes one literal phrase and returns"
+        .. " the section each match sits under; read takes a document id and returns one bounded window,"
+        .. " with section naming a heading anchor to start there. It covers the runtime modules you declare"
+        .. " or call (process, channel, tty, registry, sql, fs, http, events, time and the rest), Bee's own"
+        .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
+        .. " UI) and the terminal toolkit. For an application that works across every node, search the "
+        .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
+        .. " matches. For a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
+        .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every question"
+        .. " up in the corpus rather than guessing a signature."
 end
 
 -- The value the MCP workspace tool returns for its read-only guide operation.

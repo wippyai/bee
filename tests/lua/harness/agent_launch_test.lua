@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local agent_launch = require("agent_launch")
+local record = require("record")
 local CALL = "bee.harness.launch:agent_launch_call"
 local BINDING_KEY = "bee.gateway.binding"
 local FACADE_POLICY = "bee.harness.launch:agent_launch_facade_policy"
@@ -87,6 +88,33 @@ local function define_tests()
             local reply = launch(binding(DENYING_POLICY), {definition_ref = PERMITTED, brief = "do the work", idempotency_key = "refused-key"})
             test.eq(fault(reply), "LAUNCH_NOT_PERMITTED")
             test.is_true(tostring((reply.error :: Object).message):find(PERMITTED, 1, true) ~= nil)
+        end)
+        test.it("carries lineage on the admitted action and round-trips it unchanged", function()
+            -- The owner operation records the launching action as the child's
+            -- parent; the record family accepts, encodes and re-decodes it.
+            local admitted = {request_id = "launch:child", principal_id = AGENT, binding_ref = "binding", binding_digest = "digest",
+                grant_refs = {}, budget_ref = "policy", parent_action_id = ACTION, input = {text = "do the work"}}
+            local accepted, accept_error = record.decode({schema_revision = "bee.thread-record@1", record_id = "child-admitted", thread_id = THREAD,
+                sequence = 1, recorded_at = "2026-09-19T00:00:00.000Z", kind = "action.admitted", producer_id = AGENT, source = "bee",
+                action_id = "child-action", body = admitted})
+            if not accepted then error(tostring(accept_error)) end
+            test.eq((accepted.body :: {[string]: unknown}).parent_action_id, ACTION)
+            local encoded, encode_error = record.encode(accepted)
+            if not encoded then error(tostring(encode_error)) end
+            local decoded, decode_error = record.decode_json(encoded)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq((decoded.body :: {[string]: unknown}).parent_action_id, ACTION)
+            -- A definition's own lineage is optional and a wrong type is refused.
+            local without = {request_id = "launch:child", principal_id = AGENT, binding_ref = "binding", binding_digest = "digest",
+                grant_refs = {}, budget_ref = "policy", input = {text = "do the work"}}
+            test.not_nil(record.decode({schema_revision = "bee.thread-record@1", record_id = "child-admitted-2", thread_id = THREAD,
+                sequence = 2, recorded_at = "2026-09-19T00:00:00.000Z", kind = "action.admitted", producer_id = AGENT, source = "bee",
+                action_id = "child-action-2", body = without}))
+            local _, refused = record.decode({schema_revision = "bee.thread-record@1", record_id = "child-admitted-3", thread_id = THREAD,
+                sequence = 3, recorded_at = "2026-09-19T00:00:00.000Z", kind = "action.admitted", producer_id = AGENT, source = "bee",
+                action_id = "child-action-3", body = {request_id = "launch:child", principal_id = AGENT, binding_ref = "binding", binding_digest = "digest",
+                    grant_refs = {}, budget_ref = "policy", parent_action_id = 7, input = {text = "do the work"}}})
+            test.eq(refused, "action.admitted: parent_action_id is not an identifier")
         end)
         test.it("refuses a definition declaring a window mode, which has no agent carrier", function()
             local reply = launch(binding(WINDOW_POLICY), {definition_ref = WINDOW_DEFINITION, brief = "do the work", idempotency_key = "window-key"})

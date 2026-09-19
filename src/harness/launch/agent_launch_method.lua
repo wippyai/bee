@@ -61,9 +61,6 @@ local function handle(raw: unknown): Reply
     local permitted, permit_error = agent_launch.permitted(caller_policy, request.definition_ref)
     if permit_error then return fail("UNAVAILABLE", permit_error) end
     if not permitted then return fail("LAUNCH_NOT_PERMITTED", "this agent may not launch " .. request.definition_ref) end
-    -- A definition decides on which thread its action runs. A caller-thread
-    -- definition runs on the launching agent's own thread; a new-thread one
-    -- gets a thread of its own, in which the launching agent is the owner.
     local definition, definition_error = definitions.load(request.definition_ref)
     if not definition then return fail("NOT_FOUND", definition_error or "the launch definition is unavailable") end
     if definition.default_mode == "window" then

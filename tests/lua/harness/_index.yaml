@@ -772,6 +772,7 @@ entries:
   imports:
     test: wippy.test:test
     agent_launch: bee.harness.launch:agent_launch
+    record: bee.threads.records:record
 - name: launch_client_policy
   kind: security.policy
   meta: {type: test_support}

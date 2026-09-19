@@ -478,7 +478,7 @@ func actualCodexColdRecovery(binary, executable, loginFile, configFile string) (
 	if err = first.send("\x1b[B\x1b[B\r"); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "5 tools configured"} {
 		if err = first.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("real Codex profile summary: %w", err)
 		}

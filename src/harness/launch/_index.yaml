@@ -74,6 +74,71 @@ entries:
     admission: bee.harness.launch:admission
   security:
     policies: [bee.harness.launch:setup_facade_policy]
+- name: agent_launch
+  kind: library.lua
+  source: file://agent_launch.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: agent_launch_call
+  kind: function.lua
+  source: file://agent_launch_call_method.lua
+  method: handle
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
+  meta:
+    type: tool
+    title: Launch a managed agent
+    llm_alias: BeeThreadLaunch
+    llm_description: Start one allow-listed managed agent launch in your own workspace, hand it a brief, and get back the child's thread, action and attempt so you can thread_read, thread_message and thread_wait on it. The child receives exactly its own launch policy's gateway tools. It mints no grant, credential, trait or overlay authority.
+    input_schema: |
+      {"type":"object","additionalProperties":false,"required":["definition_ref","brief","idempotency_key"],"properties":{"definition_ref":{"type":"string","minLength":1,"maxLength":160},"brief":{"type":"string","minLength":1,"maxLength":16384},"idempotency_key":{"type":"string","minLength":1,"maxLength":64}}}
+  security:
+    policies: [bee.harness.launch:agent_launch_facade_policy]
+- name: agent_launch_backend
+  kind: function.lua
+  source: file://agent_launch_method.lua
+  method: handle
+  modules: [ctx, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    agent_launch: bee.harness.launch:agent_launch
+    policy: bee.harness.carrier:policy
+    definitions: bee.harness.launch:definitions
+  meta:
+    type: internal
+- name: agent_launch_facade_policy
+  kind: security.policy.expr
+  meta:
+    comment: The agent-launch facade runs as the bound subject; it may read the caller's own launch policy and enter the host-named launch scope, and nothing else. The scope below carries the launch pipeline and mints no grant, credential or overlay authority of its own
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:agent_launch_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:agent_launch_backend")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.harness.launch:agent_launch_execution_scope, bee.harness.launch:agent_launch_backend]
+    effect: allow
+- name: agent_launch_execution_call_policy
+  kind: security.policy
+  groups: [agent_launch_execution_scope]
+  meta:
+    comment: The exact owner operations launch admission and start call, run as the launching agent's own actor; the child itself runs under its own launch policy, never this one
+  policy:
+    actions: [funcs.call]
+    resources: [bee.harness.launch:start, bee.harness.launch:admit, bee.harness.launch:resolve, bee.harness.launch:setup, bee.harness.profiles:call,
+      bee.threads.service:get, bee.threads.service:create, bee.resources:grant, bee.credentials:issue_projection, bee.threads.carrier:checkpoint,
+      bee.resources:associate, bee.credentials:define]
+    effect: allow
+- name: agent_launch_execution_action_policy
+  kind: security.policy.expr
+  groups: [agent_launch_execution_scope]
+  meta:
+    comment: The membership, grant and projection actions the called owner operations check again in this scope, plus the registry and process-host access launch admission and start require
+  policy:
+    expression: 'action == "registry.get" || action == "registry.snapshot" || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.harness.setup" || action == "bee.threads.create" || action == "bee.threads.observe" || action == "bee.resources.grant" || action == "bee.credentials.issue"'
+    actions: [registry.get, registry.snapshot, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.resources.grant, bee.credentials.issue]
+    resources: '*'
+    effect: allow
 - name: setup_execution_policy
   kind: security.policy.expr
   groups: [harness_setup_execution_scope]

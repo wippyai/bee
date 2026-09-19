@@ -41,7 +41,8 @@ local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values
     if not subject then return nil, refused("DENIED", tostring(subject_error)) end
     local executor = funcs.new()
     local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
-        thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id})
+        thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id,
+        policy_ref = binding.policy_ref, workspace_id = binding.workspace_id})
     if not attributed then return nil, refused("DENIED", tostring(attribution_error)) end
     local contextual, context_error = executor:with_context(attributed)
     if not contextual then return nil, refused("DENIED", tostring(context_error)) end
@@ -200,6 +201,7 @@ local function handle(): nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(parameters)
     elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(parameters)
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
+    elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "workspace" then arguments, argument_error = mcp.workspace_arguments(parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters)

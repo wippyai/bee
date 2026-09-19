@@ -1104,7 +1104,7 @@ func savedProfileLaunch(binary string) error {
 	if err := ui.waitFor("Name: Antigravity", 5*time.Second); err != nil {
 		return err
 	}
-	if err := ui.send("\x15Saved Launch\t\x15" + guidance + "\t\x1b[C\x1b[C\x1b[C\t "); err != nil {
+	if err := ui.send("\x15Saved Launch\t\x15" + guidance + "\t\x1b[C\x1b[C\x1b[C\t \t "); err != nil {
 		return err
 	}
 	_, before, _ := ui.snapshot()
@@ -1142,7 +1142,7 @@ func savedProfileLaunch(binary string) error {
 		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
 		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageRefusedOK || !mcpResult.NoAppendOK ||
 		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || mcpResult.MessageWriteOK ||
-		strings.Join(mcpResult.Tools, ",") != "thread_read,thread_wait" {
+		strings.Join(mcpResult.Tools, ",") != "thread_read,thread_wait,workspace" {
 		return fmt.Errorf("saved profile MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	if err := ui.quit(); err != nil {
@@ -1664,7 +1664,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	if err = first.send("\r"); err != nil {
 		return err
 	}
-	for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
+	for _, detail := range []string{"Configured folder", "No instructions", "5 tools configured"} {
 		if err = first.waitFor(detail, 5*time.Second); err != nil {
 			return fmt.Errorf("recovery profile summary: %w", err)
 		}
@@ -2172,15 +2172,30 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 			break
 		}
 	}
-	expectedTools := 3
+	// The endpoint always appends the two protocol tools that carry no
+	// annotation. They are not part of the launch policy's admitted ceiling, so
+	// probe them separately and assert the exact admitted policy list below.
+	expected := []string{"thread_read", "thread_wait", "thread_message", "workspace", "delivery"}
 	if subset {
-		expectedTools = 2
+		// The saved-profile form starts from the reviewed default and toggles
+		// the first admitted tool (delivery, alphabetically) off.
+		expected = []string{"thread_read", "thread_wait", "workspace"}
 	}
-	if json.Unmarshal(listReply.Result, &listed) != nil || len(listed.Tools) != expectedTools {
+	if json.Unmarshal(listReply.Result, &listed) != nil {
 		return 1
 	}
+	seen := map[string]bool{}
 	for _, tool := range listed.Tools {
-		if tool.Name == "" || tool.Annotations.ReadOnlyHint == nil {
+		if tool.Name == "" {
+			return 1
+		}
+		if tool.Name == "session" || tool.Name == "call_tool" {
+			if tool.Annotations.ReadOnlyHint != nil {
+				return 1
+			}
+			continue
+		}
+		if tool.Annotations.ReadOnlyHint == nil {
 			return 1
 		}
 		switch tool.Name {
@@ -2190,14 +2205,31 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 			report.WaitAnnotationOK = *tool.Annotations.ReadOnlyHint
 		case "thread_message":
 			report.MessageWriteOK = !*tool.Annotations.ReadOnlyHint
+		case "workspace":
+			if *tool.Annotations.ReadOnlyHint {
+				return 1
+			}
+		case "delivery":
+			if !*tool.Annotations.ReadOnlyHint {
+				return 1
+			}
 		default:
 			return 1
 		}
+		seen[tool.Name] = true
 		report.Tools = append(report.Tools, tool.Name)
+	}
+	if len(report.Tools) != len(expected) {
+		return 1
+	}
+	for _, name := range expected {
+		if !seen[name] {
+			return 1
+		}
 	}
 	sort.Strings(report.Tools)
 	if subset {
-		if len(report.Tools) != 2 || report.Tools[0] != "thread_read" || report.Tools[1] != "thread_wait" ||
+		if strings.Join(report.Tools, ",") != "thread_read,thread_wait,workspace" ||
 			!report.ReadAnnotationOK || !report.WaitAnnotationOK || report.MessageWriteOK {
 			return 1
 		}
@@ -2291,7 +2323,7 @@ func runMCPProbe(provider, reportPath string, args []string) int {
 		report.WaitOK = true
 		return 0
 	}
-	if len(report.Tools) != 3 || report.Tools[0] != "thread_message" || report.Tools[1] != "thread_read" || report.Tools[2] != "thread_wait" ||
+	if strings.Join(report.Tools, ",") != "delivery,thread_message,thread_read,thread_wait,workspace" ||
 		!report.ReadAnnotationOK || !report.WaitAnnotationOK || !report.MessageWriteOK {
 		return 1
 	}
@@ -2778,7 +2810,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 				return fmt.Errorf("select profile step %d: %w", step+1, err)
 			}
 		}
-		for _, detail := range []string{"Configured folder", "No instructions", "3 tools configured"} {
+		for _, detail := range []string{"Configured folder", "No instructions", "5 tools configured"} {
 			if err := ui.waitFor(detail, 5*time.Second); err != nil {
 				return fmt.Errorf("selected profile summary: %w", err)
 			}
@@ -2811,7 +2843,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		mcpResult.ReadStatus != http.StatusOK || mcpResult.WaitStatus != http.StatusOK || mcpResult.MessageStatus != http.StatusOK ||
 		!mcpResult.ReadOK || !mcpResult.WaitOK || !mcpResult.MessageOK || !mcpResult.MessageReplayOK ||
 		!mcpResult.ReadAnnotationOK || !mcpResult.WaitAnnotationOK || !mcpResult.MessageWriteOK ||
-		strings.Join(mcpResult.Tools, ",") != "thread_message,thread_read,thread_wait" {
+		strings.Join(mcpResult.Tools, ",") != "delivery,thread_message,thread_read,thread_wait,workspace" {
 		return fmt.Errorf("managed MCP report did not prove gateway access: %q", string(mcpData))
 	}
 	retained, err = ownerChild(ui.cmd.Process.Pid, binary, state, 10*time.Second)

@@ -229,6 +229,11 @@ local function define_tests()
             end)
         end)
 
+        isolated_it("names the saved Codex config profile in a row detail", function()
+            test.eq(selection.row_detail("Codex CLI", nil), "Saved profile · Codex CLI")
+            test.eq(selection.row_detail("Codex CLI", "ds-flash"), "Saved profile · Codex CLI · Codex ds-flash")
+        end)
+
         isolated_it("summarizes configured guidance without exposing its text", function()
           for _, guidance in ipairs({
             {instructions = "PRIVATE_GUIDANCE_SENTINEL"},

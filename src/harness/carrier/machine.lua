@@ -70,6 +70,7 @@ type Request = {
     working_directory: string?,
     projections: {string}?,
     workspace_id: string?,
+    parent_action_id: string?,
 }
 -- The permission exchange the host enabled for this launch: the measured
 -- adapter, the acceptance record it stands on, and how the carrier asks.
@@ -452,7 +453,8 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     if not gateway then return nil, nil end
     local request = plan.request
     local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
-        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = plan.policy.gateway_surface})
+        owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = plan.policy.gateway_surface,
+        policy_ref = plan.policy.ref, workspace_id = request.workspace_id})
     if admit_error then return nil, "gateway admit: " .. admit_error end
     local binding = bounds.object((bounds.object(admitted) or {}).binding) or {}
     local binding_id = bounds.id(binding.binding_id)
@@ -541,8 +543,10 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
         -- Describe that action in the ledger without sending text to the child.
         local action_input = request.brief
         if action_input == "" and plan.profile.mode == "window" then action_input = "Open " .. plan.binding.title .. " window" end
-        local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
-            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}}, "admit")
+        local admitted_body = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
+            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}
+        if request.parent_action_id then admitted_body.parent_action_id = request.parent_action_id end
+        local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = admitted_body}, "admit")
         if admit_error then return nil, admit_error, nil end
         action_admitted = true
     end

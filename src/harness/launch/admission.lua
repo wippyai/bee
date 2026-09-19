@@ -69,6 +69,7 @@ type Request = {
     thread_id: string?,
     expected_plan_digest: string?,
     continuation: Continuation?,
+    parent_action_id: string?,
 }
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -235,7 +236,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id"})
     if unknown_field then return nil, unknown_field end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
@@ -248,6 +249,13 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     local brief = bounds.text(object.brief, M.MAX_BRIEF_BYTES)
     if not brief then return nil, "brief must be bounded text" end
+    -- The causally parent action, when an agent started this launch. It is
+    -- recorded on the child's admitted action and narrows nothing by itself.
+    local parent_action_id: string? = nil
+    if object.parent_action_id ~= nil then
+        parent_action_id = bounds.id(object.parent_action_id)
+        if not parent_action_id then return nil, "parent_action_id is not an identifier" end
+    end
     local mode: string? = nil
     if object.mode ~= nil then
         mode = bounds.member(object.mode, definition.MODES)
@@ -289,7 +297,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
         saved_profile_id = saved_id, saved_profile_revision = saved_revision,
-        expected_plan_digest = expected_plan_digest, continuation = previous}, nil
+        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id}, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.
@@ -421,7 +429,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         if not issued then return nil, issue_refused end
         projections[index] = tostring(issued.projection_id)
     end
-    local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1,
+    local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
         preferences = preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},

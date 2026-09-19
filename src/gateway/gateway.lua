@@ -55,7 +55,7 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
-    tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean}
+    tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean, policy_ref: string?, workspace_id: string?}
 type Generation = {epoch: integer, restarts: integer}
 type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
 type Drain = {draining: boolean, past_deadline: boolean}
@@ -153,12 +153,14 @@ local function binding_of(row: Row): (Binding?, string?)
     for _, name in ipairs(admitted_hooks :: {unknown}) do hook_names[#hook_names + 1] = tostring(name) end
     return {binding_id = tostring(row.binding_id), subject = tostring(row.subject), action_id = tostring(row.action_id), attempt_id = tostring(row.attempt_id),
         thread_id = tostring(row.thread_id), owner_incarnation = integer(row.owner_incarnation) or 0, carrier_epoch = integer(row.carrier_epoch) or 0, tools = names, hooks = hook_names,
-        epoch = integer(row.epoch) or 0, credential_generation = integer(row.credential_generation) or 0, expires_at = tostring(row.expires_at), revoked = row.revoked_at ~= nil, sealed = row.sealed_at ~= nil}, nil
+        epoch = integer(row.epoch) or 0, credential_generation = integer(row.credential_generation) or 0, expires_at = tostring(row.expires_at), revoked = row.revoked_at ~= nil, sealed = row.sealed_at ~= nil,
+        policy_ref = row.policy_ref ~= nil and tostring(row.policy_ref) or nil,
+        workspace_id = row.workspace_id ~= nil and tostring(row.workspace_id) or nil}, nil
 end
 local function view(binding: Binding): Object
     return {binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, thread_id = binding.thread_id,
         owner_incarnation = binding.owner_incarnation, carrier_epoch = binding.carrier_epoch, tools = binding.tools, hooks = binding.hooks, epoch = binding.epoch,
-        credential_generation = binding.credential_generation, expires_at = binding.expires_at, revoked = binding.revoked, sealed = binding.sealed}
+        credential_generation = binding.credential_generation, expires_at = binding.expires_at, revoked = binding.revoked, sealed = binding.sealed, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id}
 end
 local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
     local rows, err = db:query("SELECT * FROM bee_gateway_bindings WHERE binding_id = ?", {binding_id})
@@ -251,9 +253,21 @@ end
 function M.admit(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key", "surface"})
+    local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key", "surface", "policy_ref", "workspace_id"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local subject, action_id, attempt_id, thread_id = bounds.id(object.subject), bounds.id(object.action_id), bounds.id(object.attempt_id), bounds.id(object.thread_id)
+    -- The launch policy the attempt ran under, recorded so a gateway tool can
+    -- read the caller's own agent-launch allow-list. It conveys no authority.
+    local policy_ref: string? = nil
+    if object.policy_ref ~= nil then
+        policy_ref = bounds.id(object.policy_ref)
+        if not policy_ref then return fail("INVALID", "policy_ref is not an identifier") end
+    end
+    local workspace_id: string? = nil
+    if object.workspace_id ~= nil then
+        workspace_id = bounds.id(object.workspace_id)
+        if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
+    end
     if not subject then return fail("INVALID", "subject is not an identifier") end
     if not action_id then return fail("INVALID", "action_id is not an identifier") end
     if not attempt_id then return fail("INVALID", "attempt_id is not an identifier") end
@@ -302,7 +316,7 @@ function M.admit(value: unknown): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.ADMIT, action_id) then return fail("DENIED", "caller may not admit gateway bindings for action " .. action_id) end
-    local request_digest, digest_error = digest_of({subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation, carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, surface = selected_surface})
+    local request_digest, digest_error = digest_of({subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation, carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, surface = selected_surface, policy_ref = policy_ref, workspace_id = workspace_id})
     if not request_digest then return fail("INVALID", digest_error or "request is not measurable") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
@@ -364,8 +378,8 @@ function M.admit(value: unknown): Reply
     local _, supersede_error = tx:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch < ? AND revoked_at IS NULL", {stamp(created), attempt_id, carrier_epoch})
     if supersede_error then tx:rollback(); db:release(); return fail("STORAGE", "supersede earlier bindings") end
     local _, insert_error = tx:execute([[INSERT INTO bee_gateway_bindings (binding_id, subject, action_id, attempt_id, thread_id, owner_incarnation, carrier_epoch, tools_json, hooks_json,
-        epoch, credential_generation, expires_at, revoked_at, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?)]],
-        {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created)})
+        epoch, credential_generation, expires_at, revoked_at, idempotency_key, request_digest, created_at, policy_ref, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, ?, ?, ?, ?, ?)]],
+        {binding_id, subject, action_id, attempt_id, thread_id, incarnation, carrier_epoch, json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), idempotency_key, request_digest, stamp(created), policy_ref, workspace_id})
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
     if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end
@@ -373,7 +387,7 @@ function M.admit(value: unknown): Reply
     db:release()
     if commit_error then return fail("STORAGE", "commit admission") end
     local binding: Binding = {binding_id = binding_id, subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation,
-        carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, epoch = epoch, credential_generation = 0, expires_at = stamp(created + ttl), revoked = false, sealed = false}
+        carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, epoch = epoch, credential_generation = 0, expires_at = stamp(created + ttl), revoked = false, sealed = false, policy_ref = policy_ref, workspace_id = workspace_id}
     return succeed({binding = view(binding), replayed = false})
 end
 -- The binding an attempt holds under a carrier epoch: the one issued at

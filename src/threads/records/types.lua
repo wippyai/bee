@@ -53,6 +53,7 @@ type Admitted = {
     binding_digest: string,
     grant_refs: {string},
     budget_ref: string,
+    parent_action_id: string?,
     input: Content,
 }
 type ExecutionKind = "process" | "runner"

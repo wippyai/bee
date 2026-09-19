@@ -11,7 +11,7 @@ type Object = {[string]: unknown}
 type Values = {[string]: unknown}
 type Context = {[string]: unknown}
 type CopyState = {keys: integer, active: {[table]: boolean}}
-type Attribution = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
+type Attribution = {binding_id: string, thread_id: string, action_id: string, attempt_id: string, policy_ref: string?, workspace_id: string?}
 
 local function copy_value(value: unknown, parent_depth: integer, state: CopyState): (unknown, string?)
     if value == nil or type(value) == "boolean" or type(value) == "string" then return value, nil end
@@ -155,8 +155,18 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
     if not binding_id or not thread_id or not action_id or not attempt_id then
         return nil, "invalid gateway binding attribution"
     end
+    local policy_ref: string? = nil
+    if identity.policy_ref ~= nil then
+        policy_ref = bounds.id(identity.policy_ref)
+        if not policy_ref then return nil, "invalid gateway binding attribution" end
+    end
+    local workspace_id: string? = nil
+    if identity.workspace_id ~= nil then
+        workspace_id = bounds.id(identity.workspace_id)
+        if not workspace_id then return nil, "invalid gateway binding attribution" end
+    end
     copied[M.BINDING_KEY] = {binding_id = binding_id, thread_id = thread_id,
-        action_id = action_id, attempt_id = attempt_id}
+        action_id = action_id, attempt_id = attempt_id, policy_ref = policy_ref, workspace_id = workspace_id}
     return copied, nil
 end
 

@@ -305,4 +305,4 @@ entries:
     context: bee.gateway:context
     bounds: bee.threads.records:bounds
   security:
-    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_workspace_policy, bee:gateway_tool_delivery_policy, bee:gateway_tool_publish_policy, bee:gateway_access_call_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_launch_policy, bee:gateway_tool_workspace_policy, bee:gateway_tool_delivery_policy, bee:gateway_tool_publish_policy, bee:gateway_access_call_policy]

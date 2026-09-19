@@ -133,6 +133,7 @@ local function encode_admitted(body: types.Admitted): string
     field(fields, "binding_digest", encode_string(body.binding_digest))
     field(fields, "grant_refs", encode_strings(body.grant_refs))
     field(fields, "budget_ref", encode_string(body.budget_ref))
+    field(fields, "parent_action_id", optional_string(body.parent_action_id))
     field(fields, "input", encode_content(body.input))
     return encode_object(fields)
 end

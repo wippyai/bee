@@ -6,7 +6,7 @@ local M = {}
 function M.admitted(value: unknown): (types.Admitted?, string?)
     local object = bounds.object(value)
     if not object then return nil, "admission must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "principal_id", "binding_ref", "binding_digest", "grant_refs", "budget_ref", "input"})
+    local unknown_field = bounds.fields(object, {"request_id", "principal_id", "binding_ref", "binding_digest", "grant_refs", "budget_ref", "parent_action_id", "input"})
     if unknown_field then return nil, unknown_field end
     local request_id, principal_id = bounds.id(object.request_id), bounds.id(object.principal_id)
     local binding_ref, binding_digest = bounds.id(object.binding_ref), bounds.id(object.binding_digest)
@@ -16,12 +16,19 @@ function M.admitted(value: unknown): (types.Admitted?, string?)
     if not binding_ref then return nil, "binding_ref is not an identifier" end
     if not binding_digest then return nil, "binding_digest is not an identifier" end
     if not budget_ref then return nil, "budget_ref is not an identifier" end
+    -- Lineage of a launched child action: the causally parent action in the
+    -- launching agent's thread, when one exists. It narrows nothing by itself.
+    local parent_action_id: string? = nil
+    if object.parent_action_id ~= nil then
+        parent_action_id = bounds.id(object.parent_action_id)
+        if not parent_action_id then return nil, "parent_action_id is not an identifier" end
+    end
     local grants, grants_error = bounds.ids(object.grant_refs, true)
     if not grants then return nil, "grant_refs: " .. tostring(grants_error) end
     local input, input_error = values.content(object.input)
     if not input then return nil, input_error end
     return {request_id = request_id, principal_id = principal_id, binding_ref = binding_ref, binding_digest = binding_digest,
-        grant_refs = grants, budget_ref = budget_ref, input = input}, nil
+        grant_refs = grants, budget_ref = budget_ref, parent_action_id = parent_action_id, input = input}, nil
 end
 function M.prepared(value: unknown): (types.Prepared?, string?)
     local object = bounds.object(value)

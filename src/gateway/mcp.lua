@@ -11,6 +11,7 @@ M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
 M.MAX_BODY_BYTES = 524288
 M.MAX_WORKSPACE_TEXT_BYTES = 65536
+M.MAX_BRIEF_BYTES = 16384
 M.MAX_WORKSPACE_BASE64_BYTES = 87384
 type Object = {[string]: unknown}
 type Call = {id: unknown, method: string, params: Object, notification: boolean}
@@ -33,6 +34,13 @@ local TOOLS: {Tool} = {
             content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
             in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
             outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
+        }}},
+    {name = "thread_launch", description = "Start one host-allow-listed managed agent in your own workspace, hand it a brief, and return its thread, action and attempt for thread_read, thread_message and thread_wait", operation = "bee.harness.launch:agent_launch_call",
+        policies = {"bee:gateway_tool_launch_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"definition_ref", "brief", "idempotency_key"}, properties = {
+            definition_ref = {type = "string", minLength = 1, maxLength = 160},
+            brief = {type = "string", minLength = 1, maxLength = 16384},
+            idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
     {name = "workspace", description = "Learn this destination's application authoring contract (read-only guide), or create, inspect, edit or freeze a caller-owned Governance authoring workspace", operation = "bee.governance:workspace_call",
         policies = {"bee:gateway_tool_workspace_policy"}, annotations = WRITE_ANNOTATIONS,
@@ -186,6 +194,21 @@ function M.message_arguments(params: Object): (Object?, string?)
     if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
     if decoded.outcome then body.outcome = decoded.outcome end
     return {idempotency_key = key, body = body}, nil
+end
+
+-- Launch arguments are the launch facade's own bounded request; the endpoint
+-- supplies the caller's binding, never a thread, action or workspace.
+function M.launch_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"definition_ref", "brief", "idempotency_key"})
+    if unknown_field then return nil, unknown_field end
+    local definition_ref, idempotency_key = bounds.id(arguments.definition_ref), bounds.id(arguments.idempotency_key)
+    if not definition_ref then return nil, "definition_ref is required and must be an identifier" end
+    if not idempotency_key then return nil, "idempotency_key is required and must be an identifier" end
+    local brief = bounds.text(arguments.brief, M.MAX_BRIEF_BYTES)
+    if not brief or brief == "" then return nil, "brief must be nonempty bounded text" end
+    return {definition_ref = definition_ref, brief = brief, idempotency_key = idempotency_key}, nil
 end
 
 -- Delivery arguments use the governance delivery protocol's own allow-list;

@@ -133,6 +133,16 @@ entries:
     resources:
     - bee.threads.service:record
     effect: allow
+- name: gateway_tool_launch_policy
+  kind: security.policy
+  meta:
+    comment: The bound MCP subject may start only one host-allow-listed managed launch through the launch facade, as itself and in its own workspace; the facade reads the caller's own launch policy and refuses anything it does not name, and this grants no grant, credential, trait or overlay authority
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.harness.launch:agent_launch_call
+    effect: allow
 - name: gateway_tool_workspace_policy
   kind: security.policy.expr
   meta:

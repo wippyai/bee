@@ -269,6 +269,32 @@ local function define_tests()
             test.eq(resources[1].root_ref, ROOT)
             test.eq(resources[2].root_ref, ROOT)
         end)
+        test.it("refreshes a setup association after its admitted root definition changes", function()
+            local target = fresh("setup-root-refresh")
+            test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+            local before = associations(target)
+            local prior_revision = before[1].revision
+            if type(prior_revision) ~= "number" then error("setup association revision is invalid") end
+            local root = assert(registry.get(ROOT))
+            local original = root.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.meta = "setup-refresh"
+            local ok, failure = pcall(function()
+                root.data = changed
+                apply(root)
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                local after = associations(target)
+                test.eq(after[1].revision, prior_revision + 1)
+                test.neq(after[1].association_id, before[1].association_id)
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("setup-root-refresh-admit"),
+                    definition_ref = RETAINED_DEFINITION, workspace_id = target, brief = "ping"}))
+                test.eq(#((admitted.request :: {[string]: unknown}).resources :: {unknown}), 2)
+            end)
+            root.data = original
+            apply(root)
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("preserves optional login policy on setup retry and refuses a required definition", function()
             local entry = registry.get("bee:harness_setup")
             if not entry then error("host setup") end

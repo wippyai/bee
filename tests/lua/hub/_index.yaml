@@ -5,12 +5,30 @@ entries:
   kind: db.sql.sqlite
   file: .wippy/hub-migration-runner.db
   meta: {type: test_support}
+- name: migration_binding_db
+  kind: db.sql.sqlite
+  file: .wippy/hub-migration-binding.db
+  meta: {type: test_support}
 - name: migration_runner_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [db.get, funcs.call, funcs.security, security.scope.create]
-    resources: [bee.hub:migration_runner_db, bee.hub:test_default_migration, bee.hub:test_custom_migration, bee.hub:test_governance_migration, security, without]
+    actions: [db.get, funcs.call, funcs.security, security.scope.create, security.policy.get]
+    resources: [bee.hub:migration_runner_db, bee.hub:migration_binding_db, bee.hub:test_default_migration, bee.hub:test_custom_migration, bee.hub:test_governance_migration, bee.hub:test_bound_migration, bee.hub:governance_migration_grant_policy, security, without]
+    effect: allow
+- name: migration_binding_deny_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [demo:ungranted]
+    effect: deny
+- name: governance_migration_grant_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, funcs.call]
+    resources: [bee.hub:migration_runner_db, bee.hub:test_governance_migration]
     effect: allow
 - name: test_default_migration
   kind: function.lua
@@ -30,6 +48,12 @@ entries:
   method: run
   modules: [sql, security]
   meta: {type: migration, target_db: bee.hub:migration_runner_db, timestamp: '2026-09-19T12:00:00Z'}
+- name: test_bound_migration
+  kind: function.lua
+  source: file://migration_runner_probe.lua
+  method: run
+  modules: [sql, security]
+  meta: {type: migration, target_db: 'demo:data', timestamp: '2026-09-19T13:00:00Z'}
 - name: governance_migration_effect_test
   kind: function.lua
   source: file://governance_migration_effect_test.lua
@@ -54,6 +78,7 @@ entries:
   security:
     policies:
     - bee.hub:migration_runner_test_policy
+    - bee.hub:migration_binding_deny_policy
     - bee.hub:execution_policy
     - bee.hub:publisher_policy
     - bee.hub:worker_policy

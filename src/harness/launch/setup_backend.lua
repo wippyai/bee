@@ -26,7 +26,18 @@ local function ensure(workspace: string, name: string, root: string): (boolean, 
     for _, item in ipairs(associations :: {unknown}) do
         local association = bounds.object(item)
         if association and association.name == name then
-            if same(association, root, "write") then return true, nil end
+            if same(association, root, "write") then
+                local revision = bounds.count(association.revision)
+                if not revision or revision < 1 then return false, "existing association " .. name .. " has an invalid revision" end
+                local refreshed, refresh_error = funcs.call("bee.resources:associate", {workspace_id = workspace, name = name,
+                    root_ref = root, subpath = "", allowed_access = "write", expected_revision = revision})
+                local refreshed_value = bounds.object(refreshed)
+                if refresh_error or not refreshed_value or refreshed_value.ok ~= true or not same(refreshed_value.value, root, "write") then
+                    local refresh_fault = refreshed_value and bounds.object(refreshed_value.error)
+                    return false, tostring(refresh_error or (refresh_fault and refresh_fault.message) or "refresh association")
+                end
+                return true, nil
+            end
             return false, "existing association " .. name .. " differs from host setup"
         end
     end

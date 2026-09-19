@@ -157,6 +157,10 @@ function M.associate(value: unknown): Reply
         if expected_revision ~= nil and expected_revision ~= current_revision then
             return transaction.failure("CONFLICT", "expected_revision does not match the association") :: TransactionResult
         end
+        if existing and existing.root_ref == root_ref and existing.root_digest == root_digest
+            and existing.subpath == subpath and existing.allowed_access == allowed then
+            return transaction.success(association_view(existing), true) :: TransactionResult
+        end
         local at = stamp(now_ms())
         local revision = current_revision + 1
         local association_id, id_error = uuid.v7()

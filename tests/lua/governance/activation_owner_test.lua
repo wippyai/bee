@@ -105,7 +105,8 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
                 package = "demo/app", digest = checksum, references = {}, auto_start = false, grants = {}, modules = {},
                 config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
             migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}},
-            {node_id = "node-owner", registry_revision = 4, registry_digest = SHA, policy_digest = SHA,
+            {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
+                policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
                 packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
                 databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
                 applied = applied, exact_expansion = true, migration_barrier = true}, nil
@@ -464,6 +465,12 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "consuming")
             test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "authorized")
             test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "applying")
+            state.policy_digest = SHA_B
+            local changed_policy = owner.step(config, "intent-migration", "migration")
+            test.eq(changed_policy.code, "CONFLICT")
+            test.is_true(tostring(changed_policy.message):find("database policy", 1, true) ~= nil)
+            test.is_false(state.executed == true)
+            state.policy_digest = SHA
             local migrated = ok(owner.step(config, "intent-migration", "migration"))
             test.is_true(migrated.migrations_completed == true)
             test.is_false(state.applied == true)

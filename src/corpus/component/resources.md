@@ -4,7 +4,10 @@ The owner-local resource authority. An association binds a workspace name
 to an `fs.directory` root the host admits, with a subpath and the widest
 access the workspace allows; replacing it moves the association to the next
 revision. `associate` accepts an optional `expected_revision`; zero is an
-atomic create-if-absent check, and a nonzero value fences a replacement.
+atomic create-if-absent check, and a nonzero value fences a replacement. An
+exact replay keeps the association identity and revision. A manager may replay
+the same logical association after its admitted root definition changes; the
+new root digest advances the association once and invalidates earlier grants.
 A grant binds the authenticated subject, an audience (the
 placement owner), the exact association revision and root digest, a subpath,
 an access mode, a purpose, an optional attempt scope, an expiry and the

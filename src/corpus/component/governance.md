@@ -186,6 +186,17 @@ remote artifact. The boot worker follows only an already-authorized desired
 intent. Runtime PR #787 supplies the reviewed plan and bound apply contract
 used for production resolution.
 
+An activation profile may also carry `database_bindings`, a bounded list of
+logical `target_db`, physical `database_id` and optional `table_prefix` values.
+The logical target must be in the profile's database ceiling. The normalized
+list is part of the activation policy digest; execution and recovery ledger
+checks use the same host-selected mapping. When the list is present, a
+migration whose logical target has no binding is refused. Artifact metadata and
+Agent tools never select physical database resources or prefixes. The same
+profile can name bounded `migration_policies`; these host-owned references add
+the exact function and physical-database grants after Governance's private
+overlay and approval policies are removed from the migration call scope.
+
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable
 Sync artifact definitions and preserves their registry IDs. It assigns package

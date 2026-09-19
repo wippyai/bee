@@ -5,7 +5,9 @@ local security = require("security")
 local DEFAULT = "bee.hub:test_default_migration"
 local CUSTOM = "bee.hub:test_custom_migration"
 local GOVERNANCE = "bee.hub:test_governance_migration"
+local BOUND = "bee.hub:test_bound_migration"
 local DB = "bee.hub:migration_runner_db"
+local BOUND_DB = "bee.hub:migration_binding_db"
 
 local function expect_policy(id: string, wanted: boolean)
     local scope = assert(security.scope(), "migration execution scope unavailable")
@@ -33,6 +35,14 @@ local function run(options: {[string]: unknown}): {[string]: unknown}
         expect_policy("bee.hub:publisher_policy", false)
         expect_policy("bee:governance_destination_service_policy", false)
         expect_policy("bee:governance_destination_execution_policy", false)
+        expect_policy("bee.hub:governance_migration_grant_policy", true)
+        assert(options.target_db == "governance:data")
+        assert(options.database_id == DB)
+        assert(options.table_prefix == "governance_")
+    elseif id == BOUND then
+        assert(options.target_db == "demo:data")
+        assert(options.database_id == BOUND_DB)
+        assert(options.table_prefix == "demo_")
     else
         error("unexpected migration " .. id)
     end

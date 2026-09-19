@@ -7272,3 +7272,60 @@ The exact user path `bee` from `/mnt/c/Users/Wolfy-J` rendered retained workspac
 `Gentle Ember` and detached with Ctrl+Q. The rollback artifact directory is
 `bee-evidence/0919/global-before-legacy-cache-fix-1789843893`; the receipt is
 `global-legacy-cache-fix-c5b1dd7-install.json`.
+
+### 2026-09-19 Codex: host database binding adapter
+
+Commit `7813acb` keeps authored migration `target_db` values logical while the
+Hub execution adapter resolves a copied, host-owned binding to the physical SQL
+resource used for grants and ledger reads. A binding may supply a bounded table
+prefix to application migration code; an explicit map fails closed on missing,
+malformed or denied targets, and all captured grants are checked before the
+first group executes. Existing Hub callers that omit a binding retain their
+physical target identity.
+
+`make lint` passes with the existing `desktop_lifecycle` fixpoint warning;
+`make test` passes 1,118/1,118 after the final capture/preflight hardening.
+The unrelated untracked `modules/bee-registry-planner/` directory was not
+touched. Next: decode the bounded binding list in destination activation
+profiles, include it in the policy digest, and use it for execution and recovery
+ledger verification without moving policy into the Hub adapter.
+
+### 2026-09-19 Codex: governed database bindings done
+
+Commit `8860d63` completes that next slice. A destination activation profile may
+carry a bounded `database_bindings` list from logical `target_db` to physical
+`database_id`, with an optional safe table prefix. Governance validates and
+normalizes it, requires every logical key to be inside the profile's database
+ceiling, and includes the sorted list in the host policy digest. The composition
+root closes the selected map over the Hub migration effect; destination recovery
+uses the same mapping for physical-ledger evidence.
+
+Migration progress now separately pins the approved migration work's policy
+digest while permitting its pending set to shrink. A focused test changes only
+that policy during `applying`, proves execution is refused, restores the approved
+policy, and then completes. Agents and package artifacts still select no
+physical resource or prefix. Strict lint passes with the existing warning;
+`make test` passes 1,120/1,120; `make pack` and `make agent-corpus-check` pass
+with 162 embedded documents and 2,136,200 bytes. The planner directory remains
+untouched. Next narrow milestone is a real destination acceptance using an
+application-owned prefixed table in a host-selected shared database.
+
+### 2026-09-19 Codex: host-selected migration execution grants
+
+Commit `7f77687` adds the authority half needed by that acceptance. Activation
+profiles may name a bounded, canonical `migration_policies` list, measured in
+the same host policy digest as database bindings. The reusable Hub runner copies
+the list, removes the invoking owner's named private policies, and adds only
+those exact host policies to the package function's call scope. This permits
+exact function and physical-database grants without leaking Governance overlay,
+approval or scope-construction authority.
+
+The Governance migration-effect test now calls its migration under a dedicated
+grant policy and asserts that policy is present while both Governance private
+policies are absent. Strict lint, 1,120/1,120 tests, pack and the 162-document
+corpus check pass. Astra's acceptance review found the next required seam:
+resolver/preflight/migration work still interpret logical `target_db` as a
+registry entry. The next slice must carry bindings through those existing ports,
+freeze logical and physical identities plus prefix in immutable migration work,
+execute from that frozen evidence, and preserve old work bytes. No runtime or
+new manager is required.

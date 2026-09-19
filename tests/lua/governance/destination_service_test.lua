@@ -60,6 +60,54 @@ local function define_tests()
             test.is_nil(invalid)
             test.is_true(invalid_error ~= nil)
         end)
+        test.it("binds logical databases to host resources inside the measured policy", function()
+            local config = valid()
+            local profiles = config.profiles :: {{[string]: unknown}}
+            local allow = profiles[1].allow :: {[string]: unknown}
+            allow.databases = {"vendor:data"}
+            profiles[1].database_bindings = {{target_db = "vendor:data",
+                database_id = "bee.host:application_db", table_prefix = "vendor_"}}
+            profiles[1].migration_policies = {"bee.host:vendor_migration_policy"}
+            local decoded, decode_error = service.configuration(config, "node-destination")
+            if not decoded then error(tostring(decode_error)) end
+            local binding = decoded.profiles[1].database_bindings
+            if not binding then error("database binding missing") end
+            test.eq(binding["vendor:data"].database_id, "bee.host:application_db")
+            test.eq(binding["vendor:data"].table_prefix, "vendor_")
+            test.eq(decoded.profiles[1].migration_policies[1], "bee.host:vendor_migration_policy")
+            local original_digest = decoded.profiles[1].policy_digest
+            local rows = profiles[1].database_bindings :: {{[string]: unknown}}
+            rows[1].database_id = "bee.host:alternate_db"
+            local changed = assert(service.configuration(config, "node-destination"))
+            test.is_true(changed.profiles[1].policy_digest ~= original_digest)
+        end)
+        test.it("rejects unsafe, duplicate and non-admitted database bindings", function()
+            local config = valid()
+            local profiles = config.profiles :: {{[string]: unknown}}
+            local allow = profiles[1].allow :: {[string]: unknown}
+            allow.databases = {"vendor:data"}
+            profiles[1].database_bindings = {{target_db = "vendor:data",
+                database_id = "bee.host:application_db", table_prefix = "bad-prefix"}}
+            local unsafe, unsafe_error = service.configuration(config, "node-destination")
+            test.is_nil(unsafe)
+            test.is_true(unsafe_error ~= nil)
+            profiles[1].database_bindings = {{target_db = "other:data", database_id = "bee.host:application_db"}}
+            local outside, outside_error = service.configuration(config, "node-destination")
+            test.is_nil(outside)
+            test.is_true(outside_error ~= nil)
+            profiles[1].database_bindings = {
+                {target_db = "vendor:data", database_id = "bee.host:application_db"},
+                {target_db = "vendor:data", database_id = "bee.host:alternate_db"},
+            }
+            local duplicate, duplicate_error = service.configuration(config, "node-destination")
+            test.is_nil(duplicate)
+            test.is_true(duplicate_error ~= nil)
+            profiles[1].database_bindings = {}
+            profiles[1].migration_policies = {"bee.host:policy", "bee.host:policy"}
+            local duplicate_policy, duplicate_policy_error = service.configuration(config, "node-destination")
+            test.is_nil(duplicate_policy)
+            test.is_true(duplicate_policy_error ~= nil)
+        end)
         test.it("names one delivery action per operation and refuses unknown ones", function()
             test.eq(service.required_action("list"), "bee.governance.delivery.read")
             test.eq(service.required_action("get"), "bee.governance.delivery.read")

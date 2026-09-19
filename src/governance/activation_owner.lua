@@ -218,6 +218,16 @@ local function remeasure_progress(config: Config, intent: Object): (Object?, Res
     if intent.plan_revision ~= current.plan_revision or intent.selection_revision ~= current.selection_revision then
         return nil, failure("CONFLICT", "selected plan changed during migration")
     end
+    local current_blob = object(current.migration_work)
+    local prior_work, prior_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
+    local current_work, current_error = migration_work.decode(current_blob and current_blob.bytes,
+        current_blob and current_blob.digest)
+    if not prior_work or not current_work then
+        return nil, failure("INTERNAL", tostring(prior_error or current_error or "decode migration policy measurement"))
+    end
+    if prior_work.policy_digest ~= current_work.policy_digest then
+        return nil, failure("CONFLICT", "activation database policy changed during migration")
+    end
     return current, nil
 end
 

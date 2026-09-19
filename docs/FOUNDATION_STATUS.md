@@ -1,5 +1,18 @@
 # Foundation status
 
+Managed Agent first-use setup now reconciles an existing host-selected project
+or session association when the admitted root definition changes across a Bee
+deployment. The resource authority keeps exact association replays stable and
+uses its existing revision CAS to refresh a changed root digest once, so old
+grants remain fenced while a retained workspace can launch again. The focused
+retained-root regression, all 1,116 unit tests, production pack, standalone
+build and full native Agent selector pass. Commit `7100916` is installed
+globally as executable SHA-256 `aa933f387016`. Two launches of the retained
+`/mnt/c/Users/Wolfy-J` project opened the actual Antigravity CLI with its
+inherited account and project directory. Both associations advanced from
+revision 1 to 2 on the deployment refresh and remained at revision 2 on the
+second launch.
+
 Governance overlay activation now has a durable migration barrier in the current
 source candidate. Exact pending definitions, destination SQL IDs, package owners,
 checksums and order are sealed into the immutable activation intent. The existing

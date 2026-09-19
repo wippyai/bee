@@ -8,6 +8,9 @@ local migration_runner = require("migration_runner")
 local materializer = require("materializer")
 
 local M = {}
+type Binding = {database_id: string, table_prefix: string?}
+type Bindings = {[string]: Binding}
+type PolicyIds = {string}
 local PRIVATE_POLICIES = {
     "bee:governance_destination_service_policy",
     "bee:governance_destination_execution_policy",
@@ -50,7 +53,7 @@ function M.cleared(overlay_owner: string): (boolean?, string?)
     return materializer.matches(owner, {})
 end
 
-function M.execute(work: any): ({bytes: string, digest: string}?, boolean, string?)
+function M.execute(work: any, bindings: Bindings?, execution_policies: PolicyIds?): ({bytes: string, digest: string}?, boolean, string?)
     local entries: {any} = {}
     local ids: {string} = {}
     local components: {string} = {}
@@ -68,7 +71,7 @@ function M.execute(work: any): ({bytes: string, digest: string}?, boolean, strin
     end
     table.sort(components)
     local result, execute_error = hub_migrations.execute(
-        migration_runner.source(entries, PRIVATE_POLICIES),
+        migration_runner.source(entries, PRIVATE_POLICIES, bindings, execution_policies),
         {operation = "up", entry_ids = ids, components = components})
     if not result then return nil, false, execute_error or "execute captured migrations" end
     local bytes, encode_error = canonical.encode({schema_revision = "bee.governance-migration-receipt@1",

@@ -31,12 +31,16 @@ M.SCOPE = "bee:destination_execution_scope"
 local CONFIG = "bee.governance:activation_profiles"
 local ACTOR = "bee.governance.activation"
 local MAX_PROFILES = 64
+local MAX_DATABASE_BINDINGS = 256
 type Object = {[string]: unknown}
 type Set = {[string]: boolean}
+type DatabaseBinding = {database_id: string, table_prefix: string?}
+type DatabaseBindings = {[string]: DatabaseBinding}
+type PolicyIds = {string}
 type Profile = {workspace_id: string, source_node: string, source_workspace: string,
     component: string, overlay_owner: string, approval_policy: string, resolver: string, parameters: {unknown},
     packages: Set, namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
-    policy_digest: string}
+    database_bindings: DatabaseBindings?, migration_policies: PolicyIds?, policy_digest: string}
 type Configuration = {profiles: {Profile}}
 type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
@@ -78,11 +82,65 @@ local function set(raw: unknown, label: string): (Set?, string?)
     return result, nil
 end
 
+local function database_bindings(raw: unknown, databases: Set): (DatabaseBindings?, {unknown}?, string?)
+    if raw == nil then return nil, nil, nil end
+    local rows, rows_error = list(raw, "database bindings")
+    if not rows then return nil, nil, rows_error end
+    if #rows > MAX_DATABASE_BINDINGS then return nil, nil, "database bindings exceed their bound" end
+    local result: DatabaseBindings = {}
+    local measured: {unknown} = {}
+    for index, raw_binding in ipairs(rows) do
+        local value = bounds.object(raw_binding)
+        local extra = value and bounds.fields(value, {"target_db", "database_id", "table_prefix"}) or nil
+        local target_db = value and bounds.id(value.target_db) or nil
+        local database_id = value and bounds.id(value.database_id) or nil
+        local table_prefix: string? = nil
+        if value and value.table_prefix ~= nil then
+            table_prefix = bounds.text(value.table_prefix, 64)
+            if not table_prefix or not table_prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                return nil, nil, "database binding table_prefix is invalid"
+            end
+        end
+        if not value or extra or not target_db or not database_id or not databases[target_db]
+            or result[target_db] then
+            return nil, nil, extra and "database binding: " .. extra
+                or "database binding is invalid or duplicated"
+        end
+        result[target_db] = {database_id = database_id, table_prefix = table_prefix}
+        local item: Object = {target_db = target_db, database_id = database_id}
+        if table_prefix then item.table_prefix = table_prefix end
+        measured[index] = item
+    end
+    table.sort(measured, function(left: unknown, right: unknown): boolean
+        local a, b = bounds.object(left), bounds.object(right)
+        return tostring(a and a.target_db or "") < tostring(b and b.target_db or "")
+    end)
+    return result, measured, nil
+end
+
+local function policy_ids(raw: unknown): (PolicyIds?, string?)
+    if raw == nil then return nil, nil end
+    local rows, rows_error = list(raw, "migration policies")
+    if not rows then return nil, rows_error end
+    if #rows > 64 then return nil, "migration policies exceed their bound" end
+    local result: PolicyIds = {}
+    local seen: Set = {}
+    for index, raw_id in ipairs(rows) do
+        local id = bounds.id(raw_id)
+        if not id or seen[id] then return nil, "migration policies contain an invalid or duplicate value" end
+        seen[id] = true
+        result[index] = id
+    end
+    table.sort(result)
+    return result, nil
+end
+
 local function profile(raw: unknown, node_id: string): (Profile?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "activation profile must be an object" end
     local extra = bounds.fields(value, {"workspace_id", "source_node", "source_workspace", "component",
-        "overlay_owner", "approval_policy", "resolver", "parameters", "allow"})
+        "overlay_owner", "approval_policy", "resolver", "parameters", "allow", "database_bindings",
+        "migration_policies"})
     if extra then return nil, "activation profile: " .. extra end
     local workspace_id, source_node = bounds.id(value.workspace_id), bounds.id(value.source_node)
     local source_workspace, component = bounds.id(value.source_workspace), bounds.text(value.component, 160)
@@ -106,17 +164,26 @@ local function profile(raw: unknown, node_id: string): (Profile?, string?)
     if not packages or not namespaces or not kinds or not databases or not grants or not modules then
         return nil, packages_error or namespaces_error or kinds_error or databases_error or grants_error or modules_error
     end
-    local policy_bytes, encode_error = canonical.encode({schema_revision = "bee.governance-activation-policy@1",
+    local bindings, measured_bindings, bindings_error = database_bindings(value.database_bindings, databases)
+    if bindings_error then return nil, bindings_error end
+    local migration_policies, migration_policies_error = policy_ids(value.migration_policies)
+    if migration_policies_error then return nil, migration_policies_error end
+    local policy: Object = {schema_revision = "bee.governance-activation-policy@1",
         node_id = node_id, workspace_id = workspace_id, source_node = source_node,
         source_workspace = source_workspace, component = component, overlay_owner = overlay_owner,
-        approval_policy = approval_policy, resolver = resolver_kind, parameters = parameters, allow = allow})
+        approval_policy = approval_policy, resolver = resolver_kind, parameters = parameters, allow = allow}
+    if measured_bindings then policy.database_bindings = measured_bindings end
+    if migration_policies then policy.migration_policies = migration_policies end
+    local policy_bytes, encode_error = canonical.encode(policy)
     local policy_digest, digest_error = policy_bytes and hash.sha256(policy_bytes) or nil
     if not policy_digest then return nil, tostring(encode_error or digest_error or "measure activation policy") end
     return {workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
         component = component, overlay_owner = overlay_owner, approval_policy = approval_policy,
         resolver = resolver_kind :: string,
         parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
-        databases = databases, grants = grants, modules = modules, policy_digest = policy_digest}, nil
+        databases = databases, grants = grants, modules = modules,
+        database_bindings = bindings, migration_policies = migration_policies,
+        policy_digest = policy_digest}, nil
 end
 
 function M.configuration(raw: unknown, node_raw: unknown): (Configuration?, string?)
@@ -162,6 +229,13 @@ local function selected(config: Configuration, workspace_id: string, source_node
     return found, nil
 end
 
+local function migration_binding(profile_value: Profile, target: string): (DatabaseBinding?, string?)
+    if profile_value.database_bindings == nil then return nil, nil end
+    local binding = profile_value.database_bindings[target]
+    if not binding then return nil, "activation profile has no database binding for " .. target end
+    return binding, nil
+end
+
 local function approval_executor(): (unknown?, string?)
     local request, request_error = security.policy("bee:approval_request_policy")
     local consume, consume_error = security.policy("bee:approval_consume_policy")
@@ -193,7 +267,9 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                 local target = item and bounds.id(item.target_db) or nil
                 local migration_id = item and bounds.id(item.id) or nil
                 if not target or not migration_id then return nil, "stored applied migration fact is malformed" end
-                local present, ledger_error = migration_runner.is_applied(target, migration_id)
+                local binding, binding_error = migration_binding(profile_value, target)
+                if binding_error then return nil, binding_error end
+                local present, ledger_error = migration_runner.is_applied(target, migration_id, binding)
                 if present == nil then return nil, tostring(ledger_error or "read target migration ledger") end
                 if not present then return nil, "target migration ledger differs from Governance facts: " .. migration_id end
             end
@@ -220,6 +296,15 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     local executor, executor_error = approval_executor()
     if not executor then return nil, executor_error end
     local resolved = destination_resolver(profile_value, activation_store.node, profile_value.workspace_id, activation_store)
+    local migration_adapter = {
+        matches = migration_effect.matches, prepare = migration_effect.prepare,
+        clear = migration_effect.clear, cleared = migration_effect.cleared,
+        execute = function(work: unknown): ({bytes: string, digest: string}?, boolean, string?)
+            local receipt, complete, execute_error = migration_effect.execute(work,
+                profile_value.database_bindings, profile_value.migration_policies)
+            return receipt, complete, execute_error
+        end,
+    }
     return {plans = plan_store, activations = activation_store, resolver = resolved :: owner.Resolver,
         approvals = executor :: owner.Executor, actor_id = ACTOR, consumer_id = ACTOR,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
@@ -227,7 +312,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
             return materializer.reconcile(overlay_owner, entries)
         end, matches = function(overlay_owner: string, entries: unknown): (boolean?, string?)
             return materializer.matches(overlay_owner, entries)
-        end, migrations = migration_effect}, nil
+        end, migrations = migration_adapter}, nil
 end
 
 -- Read-only entry-set comparison for one staged plan. It decodes the exact

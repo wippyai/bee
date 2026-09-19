@@ -123,6 +123,34 @@ local function define_tests()
             test.is_nil(value)
             test.not_nil(err)
         end)
+
+        test.it("names a Codex config profile only where the host offers it", function()
+            -- The host does not enable the field: the editor must refuse it.
+            local value = draft()
+            local changed, err = editor.set_config_profile(value, "ds-flash")
+            test.is_false(changed)
+            test.not_nil(err)
+            -- With the field enabled, a plain name round-trips and an empty
+            -- value clears it back to the base configuration.
+            local host = allowed()
+            host.config_profile = true
+            local enabled, open_error = editor.new(profile(), host)
+            if not enabled then error(tostring(open_error)) end
+            changed, err = editor.set_config_profile(enabled, "ds-flash")
+            if not changed then error(tostring(err)) end
+            test.eq(enabled.config_profile, "ds-flash")
+            local result, result_error = editor.result(enabled)
+            if not result then error(tostring(result_error)) end
+            test.eq(result.config_profile, "ds-flash")
+            changed, err = editor.set_config_profile(enabled, "")
+            if not changed then error(tostring(err)) end
+            test.is_nil(enabled.config_profile)
+            -- A path, a dot, a leading dash, a space and an overlong name are refused.
+            for _, name in ipairs({"/etc/passwd", "a.b", "-x", "a b", "a/b", string.rep("x", 65)}) do
+                changed = editor.set_config_profile(enabled, name)
+                test.is_false(changed)
+            end
+        end)
     end)
 end
 

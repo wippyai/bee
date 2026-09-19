@@ -40,6 +40,18 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("refuses a required host file in a private home but allows it in the inherited home", function()
+            local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached",
+                required_files = {{variable = "CODEX_HOME", path = "ds-flash.config.toml", default_directory = ".codex"}}}
+            local refusal = machine.required_file_refusal(launch, true)
+            test.not_nil(refusal)
+            test.is_true(refusal:find("ds-flash", 1, true) ~= nil)
+            test.is_true(refusal:find("inherits the user's Codex home", 1, true) ~= nil)
+            test.is_nil(machine.required_file_refusal(launch, false))
+            local plain: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
+            test.is_nil(machine.required_file_refusal(plain, true))
+        end)
+
         test.it("refuses malformed driver replies before executable measurement or admission", function()
             local request = plan("window", "pty").request
             request.binding_ref = "bee.driver.claude:binding"

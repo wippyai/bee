@@ -120,6 +120,24 @@ local function define_tests()
             local workspace_annotations = workspace_tools[1].annotations :: {[string]: unknown}
             test.eq(workspace_annotations.readOnlyHint, false)
             test.eq(mcp.tool("workspace") and mcp.tool("workspace").operation, "bee.governance:workspace_call")
+            local delivery_tools = mcp.list({"delivery"}).tools :: {{[string]: unknown}}
+            test.eq(#delivery_tools, 1)
+            test.eq(delivery_tools[1].name, "delivery")
+            test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.governance:delivery_call")
+            local delivery_schema = delivery_tools[1].inputSchema :: {[string]: unknown}
+            local delivery_required = delivery_schema.required :: {string}
+            local delivery_operation = (delivery_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
+            test.eq(#delivery_required, 4)
+            test.eq(#(delivery_operation.enum :: {string}), 2)
+            local publish_tools = mcp.list({"publish"}).tools :: {{[string]: unknown}}
+            test.eq(#publish_tools, 1)
+            test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.governance:delivery_call")
+            local publish_schema = publish_tools[1].inputSchema :: {[string]: unknown}
+            test.eq(#(publish_schema.required :: {string}), 3)
+            local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1"}})
+            test.eq(publish_request and publish_request.operation, "publish")
+            local _, publish_smuggle = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1", operation = "request"}})
+            test.eq(publish_smuggle, "unknown field operation")
             local wait_only = mcp.list({"thread_wait"}).tools :: {{[string]: unknown}}
             test.eq(#wait_only, 1)
             test.eq(wait_only[1].name, "thread_wait")

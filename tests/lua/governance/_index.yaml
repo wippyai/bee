@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.governance
 entries:
+- name: delivery_protocol_test
+  kind: function.lua
+  source: file://delivery_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    delivery_protocol: bee.governance:delivery_protocol
 - name: guide_test
   kind: function.lua
   source: file://guide_test.lua

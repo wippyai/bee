@@ -135,7 +135,12 @@ local function selected_profile(workspace: string, id: string, revision: integer
 end
 local function preference_value(selected: Selected?): placement_types.Preferences?
     if not selected then return nil end
-    return {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
+    local value: placement_types.Preferences = {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
+    -- A named Codex config profile is host policy, not a general option: it
+    -- travels with the saved profile so the same profile launches identically
+    -- from the picker and from a future MCP call.
+    if selected.profile.config_profile then value.config_profile = selected.profile.config_profile end
+    return value
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?): (Plan?, Reply?)
     local definition_ref = launch.ref

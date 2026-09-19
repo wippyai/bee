@@ -65,31 +65,51 @@ M.SOURCE = [==[local tty = require("tty")
 local client = require("client")
 local process = require("process")
 local channel = require("channel")
+local json = require("json")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
+    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local count = 0
+    if launch.resume_state ~= "" then
+        local state: unknown = json.decode(launch.resume_state)
+        if type(state) ~= "table" or type(state.count) ~= "number" then error("Invalid counter checkpoint") end
+        count = math.floor(state.count)
+    end
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
-    local count = 0
+    local saved = -1
     local function paint()
         local canvas = tty.canvas(width, height)
         canvas:clear(" ")
         canvas:put(1, 1, "COUNTER APP", width)
         canvas:put(1, 2, "Count: " .. tostring(count), width)
+        canvas:put(1, 3, "Saved: " .. tostring(saved), width)
         assert(output:present(canvas:rows()))
+    end
+    local function checkpoint()
+        assert(client.checkpoint(launch, json.encode({count = count})))
     end
     paint()
     client.ready(launch)
+    checkpoint()
     while true do
-        local event = channel.select({input:case_receive(), lifecycle:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then break end
+        elseif event.channel == receipts then
+            local message = event.value
+            local data: unknown = message:payload():data()
+            if message:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then
+                saved = count; paint()
+            end
+        elseif event.value.type == "close" then checkpoint()
         elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
-        elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint() end
+        elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
     end
     output:close(); tty.stop()
 end
@@ -107,11 +127,11 @@ M.VERSION = "1.0.0"
 function M.example(): {{[string]: unknown}}
     return {{id = M.DEFINITION_ID, kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
-            modules = {"tty", "process", "channel"},
+            modules = {"tty", "process", "channel", "json"},
             imports = {client = "bee.application:client"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
-            restart_policy = "automatic"}}}}
+            resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
 end
 
 function M.example_json(): (string?, string?)
@@ -122,6 +142,14 @@ local DELIVERY_STEPS = {"review the plan in App Delivery", "select it there",
     "prepare the activation there", "approve it in Approvals",
     "let the activation owner apply the overlay",
     "open it from the start menu"}
+
+-- The steps a person takes after an agent requests delivery. Exposed so the
+-- delivery tool and the guide cannot disagree about who does what.
+function M.delivery_steps(): {string}
+    local copied: {string} = {}
+    for index, step in ipairs(DELIVERY_STEPS) do copied[index] = step end
+    return copied
+end
 
 function M.document(): string
     local lines: {string} = {}

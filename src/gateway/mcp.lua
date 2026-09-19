@@ -5,6 +5,7 @@
 local bounds = require("bounds")
 local message = require("message")
 local workspace_protocol = require("workspace_protocol")
+local delivery_protocol = require("delivery_protocol")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
@@ -44,6 +45,24 @@ local TOOLS: {Tool} = {
             content = {type = "string", maxLength = M.MAX_WORKSPACE_TEXT_BYTES},
             content_base64 = {type = "string", maxLength = M.MAX_WORKSPACE_BASE64_BYTES},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+        }}},
+    {name = "delivery", description = "Request delivery of your frozen application to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in App Delivery, approval in Approvals, apply by the activation owner, and opening from the start menu.", operation = "bee.governance:delivery_call",
+        policies = {"bee:gateway_tool_delivery_policy"}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_workspace", "version"}, properties = {
+            operation = {type = "string", enum = {"request", "status"}},
+            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            source_workspace = {type = "string", minLength = 1, maxLength = 160},
+            version = {type = "string", minLength = 1, maxLength = 160},
+            snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
+            source_node = {type = "string", minLength = 1, maxLength = 160},
+            intent_id = {type = "string", minLength = 1, maxLength = 160},
+        }}},
+    {name = "publish", description = "Publish the exact application version a person has already reviewed, selected, approved and had applied at this destination. Use delivery request first and wait for the person; publication refuses any version that is not locally reviewed and applied.", operation = "bee.governance:delivery_call",
+        policies = {"bee:gateway_tool_publish_policy"}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"workspace_id", "source_workspace", "version"}, properties = {
+            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            source_workspace = {type = "string", minLength = 1, maxLength = 160},
+            version = {type = "string", minLength = 1, maxLength = 160},
         }}},
 }
 M.TOOLS = TOOLS
@@ -167,6 +186,27 @@ function M.message_arguments(params: Object): (Object?, string?)
     if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
     if decoded.outcome then body.outcome = decoded.outcome end
     return {idempotency_key = key, body = body}, nil
+end
+
+-- Delivery arguments use the governance delivery protocol's own allow-list;
+-- the publish tool admits only its three identity fields, and the facade
+-- supplies the operation so a caller cannot smuggle one through.
+function M.delivery_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local request, decode_error = delivery_protocol.decode(arguments)
+    if not request then return nil, decode_error end
+    return request, nil
+end
+function M.publish_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"workspace_id", "source_workspace", "version"})
+    if unknown_field then return nil, unknown_field end
+    local request, decode_error = delivery_protocol.decode({operation = "publish", workspace_id = arguments.workspace_id,
+        source_workspace = arguments.source_workspace, version = arguments.version})
+    if not request then return nil, decode_error end
+    return request, nil
 end
 
 -- Governance owns the complete operation-specific schema. Keeping its decoder

@@ -2,6 +2,7 @@
 -- boundary, fences their values in its digest, and refuses unavailable names.
 local test = require("test")
 local policy = require("policy")
+local preferences = require("preferences")
 
 type Entry = {[string]: unknown}
 type Resolver = (string) -> (string?, string?)
@@ -120,6 +121,21 @@ local function define_tests()
             test.eq(selected.instructions, "Host instructions\n\nProfile instructions")
             test.eq(selected.executables.claude, host.executables.claude)
         end)
+        test.it("offers a named Codex profile only when the policy enables it", function()
+            local raw = entry({codex = "/bin/codex"})
+            local data = raw.data :: Entry
+            -- Unset means the saved field is not offered and is refused by apply.
+            local closed, closed_error = policy.decode("test:policy", raw)
+            if not closed then error(tostring(closed_error)) end
+            test.is_nil(preferences.apply(data, {config_profile = "ds-flash"}))
+            data.profile_config_profile = true
+            local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, instructions = "", config_profile = "ds-flash"})
+            if not opened then error(tostring(opened_error)) end
+            test.eq(opened.prepare_options.config_profile, "ds-flash")
+            data.profile_config_profile = "yes"
+            test.is_nil(policy.decode("test:policy", raw))
+        end)
+
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry

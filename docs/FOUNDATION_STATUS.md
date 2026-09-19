@@ -31,6 +31,32 @@ authored window opens from the start menu and is restored with its state after a
 full host restart. It is opt-in because it consumes provider inference; global
 installation is unchanged.
 
+An authoring agent now learns Bee's application contract through the MCP surface
+it already holds, is refused early with a remedy when its frozen workspace cannot
+become an application, and has an honest path from freeze to delivery. The
+`workspace` tool carries a read-only `guide` operation (contract plus one minimal
+example, generated from the rule tables preflight enforces and itself authored
+through the real chain by `make app-journey-check`). A frozen workspace without a
+usable `entries.json` is refused by publication prepare with `MISSING_ARTIFACT`
+or `INVALID_ARTIFACT` and a remedy under the destination's own `remedy` field.
+The `delivery` tool requests delivery (publish the frozen artifact, stage it,
+return the destination's preflight verdict with each remedy) and reads status;
+the `publish` tool publishes only the exact locally reviewed and applied version
+and is gated behind a host-requested trait. Review, selection, preparation,
+approval, apply and opening remain human acts or the activation owner's, and the
+delivery policies grant no overlay write. `make agent-app-check` (live Agy,
+opt-in) remains the provider-inference target. A scripted fixture-provider agent
+drives the same real MCP endpoint inside `make test`.
+
+Finding (not changed): the managed launch adds Bee's scoped MCP server
+additively to the provider's ordinary global configuration (`allow_host_home`
+for Agy, `--add-dir` under HOME by design; docs/MCP_CONFIGURATION.md and
+src/driver/agy/configure_method.lua). A host-global MCP server in the operator's
+own HOME is therefore still visible to a managed agent, and a malformed one can
+make the provider reject every request before authoring. Isolating managed agents
+from host-global MCP servers would be a product design change; the acceptance
+should run its agent in a private home if it must be hermetic.
+
 The research dashboard now passes governed installation, managed Gemini
 requesting and receiving per-attempt MCP access, real measurements, automatic
 overlay recovery, ordinary-menu launch and a second physical desktop boot that

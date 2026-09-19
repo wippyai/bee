@@ -53,3 +53,11 @@ entries:
     actions: [bee.governance.delivery.publish]
     resources: '*'
     effect: allow
+- name: delivery_facade_policy
+  kind: security.policy
+  meta:
+    comment: The public delivery facade's own dependencies; it authenticates the caller's exact delivery action first, and the publication/destination owner facades authorize again
+  policy:
+    actions: [funcs.call, security.actor.get, registry.get]
+    resources: [bee.governance:publication_call, bee.governance:destination_call, bee.governance:publication_profiles]
+    effect: allow

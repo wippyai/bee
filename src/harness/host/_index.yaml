@@ -117,6 +117,7 @@ entries:
       - medium
       - high
     profile_instructions: true
+    profile_config_profile: true
     prepare_options: {}
 - name: launch_policy_claude_batch
   kind: registry.entry
@@ -202,6 +203,7 @@ entries:
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high]}
     profile_instructions: true
+    profile_config_profile: true
     prepare_options: {sandbox: read-only}
 - name: launch_policy_muse_window
   kind: registry.entry

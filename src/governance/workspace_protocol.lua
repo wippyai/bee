@@ -24,7 +24,10 @@ function M.decode(raw: unknown): (Request?, string?)
     -- guide is read-only and names no workspace: it returns this destination's
     -- authoring contract, so it is decoded before workspace identity is required.
     if op == "guide" then
-        local extra = bounds.fields(value, {"operation"})
+        -- A direct caller sends operation alone; the MCP argument decoder
+        -- carries the empty sentinel this request returns. Both are accepted,
+        -- and no workspace identity is ever consulted for the guide.
+        local extra = bounds.fields(value, {"operation", "workspace_id"})
         if extra then return nil, extra end
         -- The facade returns the guide before any workspace is consulted,
         -- so this request carries no workspace identity.

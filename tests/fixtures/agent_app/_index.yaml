@@ -15,6 +15,10 @@ entries:
     snapshot_digest: ''
     artifact_digest: ''
     findings: ''
+    definition: ''
+    authoring_policy: ''
+    marker: ''
+    brief: ''
 - name: material
   kind: registry.entry
   meta:

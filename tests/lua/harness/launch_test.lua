@@ -10,6 +10,7 @@ local process = require("process")
 local channel = require("channel")
 local registry = require("registry")
 local env = require("env")
+local exec = require("exec")
 local time = require("time")
 local admission = require("admission")
 local definitions = require("definitions")
@@ -76,6 +77,24 @@ local function carrier_io(): machine.IO
         now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
         key = function(): string return fresh("key") end,
     }
+end
+local function shell(command: string): string
+    local executor = assert(exec.get("bee.placement.native:executor"))
+    local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
+    if not proc then error("exec " .. command .. ": " .. tostring(exec_error)) end
+    local stdout = proc:stdout_stream()
+    local started, start_error = proc:start()
+    if not started then error("start " .. command .. ": " .. tostring(start_error)) end
+    local output = ""
+    while true do
+        local chunk: unknown = stdout:read(65536)
+        if type(chunk) ~= "string" or chunk == "" then break end
+        output = output .. (chunk :: string)
+    end
+    proc:wait()
+    stdout:close()
+    executor:release()
+    return output
 end
 local function fixture_paths(): (string, string)
     local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
@@ -709,6 +728,88 @@ local function define_tests()
             restoration:update(policy_entry)
             local restored, restore_error = restoration:apply()
             if not restored then error("restore missing provider: " .. tostring(restore_error)) end
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("launches a saved profile that names a Codex config profile and still delivers Bee MCP and hooks", function()
+            local definition_entry = assert(registry.get(DEFINITION))
+            local codex_policy = assert(registry.get("bee.harness.catalog:codex_fixture_policy"))
+            local original_definition, original_policy = definition_entry.data, codex_policy.data
+            local changed_definition: {[string]: unknown} = {}
+            local changed_policy: {[string]: unknown} = {}
+            for name, value in pairs(original_definition :: {[string]: unknown}) do changed_definition[name] = value end
+            for name, value in pairs(original_policy :: {[string]: unknown}) do changed_policy[name] = value end
+            changed_definition.binding_ref = "bee.driver.codex:binding"
+            changed_definition.profile_id = "window"
+            changed_definition.default_mode = "window"
+            changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
+            changed_definition.credentials = {}
+            changed_policy.executables = {codex = "/bin/true"}
+            changed_policy.provider_ref = nil
+            changed_policy.allow_host_home = true
+            changed_policy.profile_config_profile = true
+            changed_policy.gateway_tools = {"thread_read", "thread_wait"}
+            changed_policy.gateway_hooks = {"SessionStart", "Stop"}
+            changed_policy.prepare_options = {sandbox = "read-only"}
+            local ok, failure = pcall(function()
+                definition_entry.data = changed_definition
+                codex_policy.data = changed_policy
+                local changes = registry.snapshot():changes()
+                changes:update(definition_entry)
+                changes:update(codex_policy)
+                local applied, apply_error = changes:apply()
+                if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
+                local workspace_id, saved_id = workspace, fresh("named-profile")
+                -- The named profile file lives in a throwaway Codex home, never
+                -- the owner's. Only existence is checked; the suite writes it.
+                local root = shell("pwd"):gsub("%s+$", "")
+                local codex_home = root .. "/.wippy/named-profile-" .. saved_id .. "/.codex"
+                shell("mkdir -p " .. codex_home)
+                shell("printf 'model = \"fixture\"\n' > " .. codex_home .. "/ds-flash.config.toml")
+                changed_policy.environment = {CODEX_HOME = codex_home}
+                changed_policy.environment_refs = nil
+                codex_policy.data = changed_policy
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"),
+                    profile = {title = "DeepSeek Flash", definition_ref = DEFINITION, config_profile = "ds-flash", mcp_tools = {"thread_read"}}}))
+                local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
+                    workspace_id = workspace_id, brief = "", saved_profile_id = saved_id, saved_profile_revision = 1,
+                    expected_plan_digest = selected.plan_digest})) :: admission.Admitted
+                local carrier_request = admitted.request :: {[string]: unknown}
+                local preferences = carrier_request.preferences :: {[string]: unknown}
+                test.eq(preferences.config_profile, "ds-flash")
+                local io = carrier_io()
+                local planned, plan_error = machine.plan(io, admitted.request)
+                if not planned then error(tostring(plan_error)) end
+                -- Codex layers the named profile on its base user config.
+                test.eq(planned.launch.argv[1], "--profile")
+                test.eq(planned.launch.argv[2], "ds-flash")
+                local prepared, prepare_error = machine.prepare_attempt(io, planned)
+                if not prepared then error(tostring(prepare_error)) end
+                local db = assert(placement_store.open())
+                local row = assert(placement_store.row(db, admitted.attempt_id))
+                local stored, stored_error = placement_store.request(row)
+                db:release()
+                if not stored then error(tostring(stored_error)) end
+                if not stored.delivery then error("configuration delivery missing") end
+                -- Bee's scoped MCP and hooks still arrive, layered on the named
+                -- profile by a later -c override.
+                local has_bee_mcp, has_bee_hooks = false, false
+                for _, argument in ipairs(stored.delivery.arguments) do
+                    if argument:find("mcp_servers.bee=", 1, true) then has_bee_mcp = true end
+                    if argument:find("hooks.SessionStart=", 1, true) then has_bee_hooks = true end
+                end
+                test.is_true(has_bee_mcp)
+                test.is_true(has_bee_hooks)
+            end)
+            definition_entry.data = original_definition
+            codex_policy.data = original_policy
+            local restoration = registry.snapshot():changes()
+            restoration:update(definition_entry)
+            restoration:update(codex_policy)
+            local restored, restore_error = restoration:apply()
+            if not restored then error("restore named profile: " .. tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
         end)
         test.it("fences a selected plan when its host provider changes", function()

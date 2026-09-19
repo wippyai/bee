@@ -57,7 +57,7 @@ local function configure_host(workspace_id: string, local_node: string)
         source_workspace = SOURCE_WORKSPACE, component = COMPONENT, resolver = "overlay",
         overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY, parameters = {},
         allow = {packages = {COMPONENT}, namespaces = {guide.NAMESPACE}, kinds = {"process.lua"},
-            databases = {}, grants = {}, modules = {"tty", "process", "channel"}}}}
+            databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}}
     act_entry.data = act_data
 
     local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
@@ -133,7 +133,36 @@ local function main()
     end
     if #report.pending_migrations > 0 then error("the guide example carries pending migrations") end
 
-    logger:info("APP_JOURNEY_GUIDE", {ready = true, definition_id = guide.DEFINITION_ID, title = guide.TITLE,
+    -- The product delivery tool an authoring agent holds: request delivery of
+    -- the frozen artifact, learn the destination's verdict and the human steps.
+    local delivered = call_api("bee.governance:delivery_call", {operation = "request",
+        workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE, version = guide.VERSION,
+        snapshot_digest = snapshot_digest})
+    if delivered.ready ~= true then
+        error("the product delivery tool did not report a ready destination: " .. json.encode(delivered.diagnostics))
+    end
+    if delivered.plan_digest ~= staged.plan_digest then
+        error("the product delivery tool reported another staged plan")
+    end
+    local steps = delivered.human_steps :: {unknown}
+    if type(steps) ~= "table" or #steps ~= 6 then
+        error("the product delivery tool did not name the human steps")
+    end
+    local where = object(delivered.human_steps_where)
+    if where.review ~= "App Delivery" or where.approve ~= "Approvals" or where.open ~= "start menu" then
+        error("the product delivery tool did not name where the human acts")
+    end
+    -- Delivery status reads the staged plan back by identity.
+    local status_res = call_api("bee.governance:delivery_call", {operation = "status",
+        workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE, version = guide.VERSION,
+        source_node = local_node})
+    if status_res.plan_digest ~= staged.plan_digest or status_res.selected == true then
+        error("delivery status did not read the staged, unselected plan")
+    end
+    -- The delivery tool cannot review, select, approve or apply: those are the
+    -- person's and the activation owner's. It reports no overlay authority.
+    logger:info("APP_JOURNEY_GUIDE", {ready = true, delivered = true, human_steps = #steps,
+        definition_id = guide.DEFINITION_ID, title = guide.TITLE,
         guide_revision = published.revision, snapshot_digest = snapshot_digest, artifact_digest = measured.digest,
         plan_digest = digest_of(staged.plan_digest, "guide staged plan digest"),
         example_matches = true})

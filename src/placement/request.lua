@@ -15,6 +15,8 @@ M.MAX_ENVIRONMENT = 64
 M.MAX_ARGV = 128
 M.MAX_ARGUMENT_BYTES = 16384
 M.MAX_STDIN_BYTES = 65536
+M.MAX_REQUIRED_FILES = 8
+M.MAX_REQUIRED_PATH_BYTES = 512
 -- How a launch declares its session ends once the turn is settled.
 M.SESSION_ENDS = {"stdin_close"}
 M.MAX_START_MS = 120000
@@ -26,6 +28,15 @@ M.MAX_RETAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 5000
 M.MAX_DRAIN_MS = 600000
 local ENVIRONMENT_NAME = "^[A-Z_][A-Z0-9_]*$"
+-- A required-file path is relative, has no empty, dot or dot-dot segment,
+-- no backslash, no control byte and no NUL, so it cannot escape its directory.
+local function safe_relative(value: string): boolean
+    if value == "" or value:sub(1, 1) == "/" or value:find("[%c\\]") then return false end
+    for segment in (value .. "/"):gmatch("(.-)/") do
+        if segment == "" or segment == "." or segment == ".." then return false end
+    end
+    return true
+end
 local function digest_hex(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
     return value
@@ -55,7 +66,7 @@ end
 function M.launch(value: unknown): (driver_types.Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch must be an object" end
-    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "readiness"})
+    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "required_files", "readiness"})
     if unknown_field then return nil, "launch: " .. unknown_field end
     local executable = bounds.text(object.executable, M.MAX_ARGUMENT_BYTES)
     if not executable or executable == "" or executable:find("\0", 1, true) then return nil, "launch.executable must be nonempty text" end
@@ -88,6 +99,40 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
         home = bounds.id(object.home_ref)
         if not home then return nil, "launch.home_ref is not an identifier" end
     end
+    -- A required file is a host file the launch needs before it starts. Bee
+    -- checks existence only; it never reads contents and never copies one.
+    local required: {driver_types.RequiredFile} = {}
+    if object.required_files ~= nil then
+        if type(object.required_files) ~= "table" then return nil, "launch.required_files must be a list" end
+        local raw_required = object.required_files :: {unknown}
+        if #raw_required > M.MAX_REQUIRED_FILES then return nil, "launch.required_files exceeds " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
+        local seen: {[string]: boolean} = {}
+        for index, item in ipairs(raw_required) do
+            local entry = bounds.object(item)
+            if not entry then return nil, "launch.required_files[" .. tostring(index) .. "] must be an object" end
+            local entry_field = bounds.fields(entry, {"variable", "path", "default_directory"})
+            if entry_field then return nil, "launch.required_files[" .. tostring(index) .. "]: " .. entry_field end
+            local variable = bounds.id(entry.variable)
+            if not variable or not variable:match(ENVIRONMENT_NAME) then
+                return nil, "launch.required_files[" .. tostring(index) .. "].variable must be an environment name"
+            end
+            local path = bounds.text(entry.path, M.MAX_REQUIRED_PATH_BYTES)
+            if not path or not safe_relative(path) then
+                return nil, "launch.required_files[" .. tostring(index) .. "].path must be a safe relative path"
+            end
+            local directory: string? = nil
+            if entry.default_directory ~= nil then
+                directory = bounds.text(entry.default_directory, M.MAX_REQUIRED_PATH_BYTES)
+                if not directory or not safe_relative(directory) then
+                    return nil, "launch.required_files[" .. tostring(index) .. "].default_directory must be a safe relative path"
+                end
+            end
+            local identity = variable .. "/" .. path
+            if seen[identity] then return nil, "launch.required_files repeats " .. identity end
+            seen[identity] = true
+            required[index] = {variable = variable, path = path, default_directory = directory}
+        end
+    end
     local readiness = bounds.text(object.readiness, 256)
     if not readiness or readiness == "" then return nil, "launch.readiness must be nonempty text" end
     local stdin_eof: boolean? = nil
@@ -102,7 +147,9 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
         if not session_end then return nil, "launch.session_end must be stdin_close" end
         if stdin_eof == true then return nil, "launch.session_end names a closed stdin" end
     end
-    return {executable = executable, argv = argv, stdin = stdin, stdin_eof = stdin_eof, session_end = session_end, environment = names, working_directory_ref = working, home_ref = home, readiness = readiness}, nil
+    local launch: driver_types.Launch = {executable = executable, argv = argv, stdin = stdin, stdin_eof = stdin_eof, session_end = session_end, environment = names, working_directory_ref = working, home_ref = home, readiness = readiness}
+    if #required > 0 then launch.required_files = required end
+    return launch, nil
 end
 local function decode_environment(value: unknown, field: string, values: boolean): ({[string]: string}?, string?)
     local result: {[string]: string} = {}

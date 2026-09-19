@@ -4,6 +4,7 @@
 -- credential bytes. The caller owns gateway retirement even
 -- when materialization fails after minting the binding.
 local env = require("env")
+local fs = require("fs")
 local funcs = require("funcs")
 local sql = require("sql")
 local process = require("process")
@@ -20,6 +21,41 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
         fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
     if not result.ok then return false, result.message end
     return true, nil
+end
+-- A launch may declare a host file it needs before it starts, named by the
+-- environment variable that locates its directory plus a safe relative path,
+-- or by the host home and a default directory. Placement checks existence
+-- only through the read-only host volume: it never reads contents and never
+-- copies the file into a private home. A missing file refuses before intent.
+function M.required_file_missing(request: types.LaunchRequest): string?
+    local required = request.launch.required_files
+    if not required or #required == 0 then return nil end
+    local volume = fs.get(resources.HOST_FILES)
+    if not volume then return "host files are unavailable for " .. request.launch.executable .. "'s required file" end
+    for _, file in ipairs(required) do
+        local directory = request.environment[file.variable]
+        if directory ~= nil and directory == "" then directory = nil end
+        local variable_ref = request.environment_refs[file.variable]
+        if directory == nil and variable_ref ~= nil then
+            local resolved, resolve_error = env.get(variable_ref)
+            if not resolve_error and type(resolved) == "string" and resolved ~= "" then directory = resolved end
+        end
+        if directory == nil then
+            local home = request.environment.HOME
+            if home ~= nil and home == "" then home = nil end
+            if home == nil and request.environment_refs.HOME == "bee:machine_home" then
+                local resolved, resolve_error = env.get("bee:machine_home")
+                if not resolve_error and type(resolved) == "string" and resolved ~= "" then home = resolved end
+            end
+            if home == nil then return "the launch requires " .. file.path .. " and its host home is unavailable" end
+            if file.default_directory then directory = home .. "/" .. file.default_directory else directory = home end
+        end
+        if volume:exists(directory .. "/" .. file.path) ~= true then
+            local name = file.path:gsub("%.config%.toml$", "")
+            return "the named Codex config profile " .. name .. " is not installed in " .. directory
+        end
+    end
+    return nil
 end
 -- Native placement selects either its private home or the host's user home.
 -- Arbitrary HOME values remain refused; an admitted gateway owns its tokens.

@@ -242,6 +242,24 @@ and prepares there, approves in Approvals and steps, and the activation owner's
 receipt names the overlay it applied. The agent-authored window then opens from
 the start menu and comes back with its state after a full host restart.
 
+An authoring agent now has an honest path from its frozen artifact to the
+person's decision, through the MCP surface it already holds rather than a
+contract written into its brief. The built-in `workspace` tool carries a
+read-only `guide` operation stating this destination's application contract and
+one minimal example (generated from the rule tables preflight enforces, and
+itself authored through the real chain by `make app-journey-check`, which
+requires a ready preflight). The built-in `delivery` tool requests delivery of
+a frozen artifact: it publishes the frozen artifact as immutable content, stages
+that exact version at this destination and returns the destination's own
+preflight verdict with each diagnostic's code, target, message and remedy; it
+reads a staged version's review, selection and activation status by identity.
+The built-in `publish` tool publishes only the exact locally reviewed and
+applied version, which publication itself refuses otherwise; it is gated behind
+a host-requested access trait. Review, selection, preparation, approval, apply
+and opening remain human acts or the activation owner's, and the delivery
+facade's own policy and the two gateway tool policies grant no overlay write,
+which `make app-journey-check` asserts.
+
 The runtime also defines the canonical receive surface
 `stream.pipe(peer, limit)`. Its Stream handle stays in the receiving actor's
 resource table and its opaque offer is routing metadata, not authority. The

@@ -259,6 +259,9 @@ func runGateway(mcpLiteral string) int {
 	report["read"] = readReply.status
 	readValue := outcome(readReply)
 	report["read_ok"] = readValue != nil && readValue["ok"] == true
+	if os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR") != "" {
+		reportAuthoring(client, url, authorization, report, os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR"))
+	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
 		reportSurface(client, url, authorization, report)
 	}
@@ -281,6 +284,135 @@ func runGateway(mcpLiteral string) int {
 	}
 	writeReport("gateway", report)
 	return 0
+}
+
+// The scripted authoring agent. This function knows nothing about the
+// application contract: it reads the workspace tool's guide operation over the
+// admitted MCP surface and authors exactly the file and the example text the
+// guide returns, so a contract change is visible here without editing this
+// client. mode is "author" (author the guide example and request delivery) or
+// "repair" (author only index.html and app.js, read the destination's refusal
+// and remedy, then author the guide example into the same workspace and request
+// delivery again), so the whole refusal -> remedy -> repair round is observed.
+func reportAuthoring(client *httpClient, url, authorization string, report object, mode string) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	names, descriptions := toolsOf(rpc(client, url, authorization, "tools/list", object{}, 30))
+	report["author_tools"] = names
+	report["author_has_guide"] = false
+	for _, item := range descriptions {
+		if item["name"] == "workspace" {
+			if text, ok := item["description"].(string); ok && strings.Contains(text, "guide") {
+				report["author_has_guide"] = true
+			}
+		}
+	}
+	guideReply := call("workspace", object{"operation": "guide"}, 31)
+	guideValue := mustObject(guideReply["value"])
+	example := mustObject(guideValue["example"])
+	entriesJSON, _ := example["entries_json"].(string)
+	report["guide_revision"] = guideValue["revision"]
+	report["guide_document"] = guideValue["document"]
+	report["guide_example_present"] = entriesJSON != ""
+
+	workspace := os.Getenv("BEE_FIXTURE_AUTHOR_WORKSPACE")
+	source := os.Getenv("BEE_FIXTURE_AUTHOR_SOURCE")
+	version := os.Getenv("BEE_FIXTURE_AUTHOR_VERSION")
+	destination := os.Getenv("BEE_FIXTURE_AUTHOR_DESTINATION")
+	if workspace == "" || source == "" || version == "" || destination == "" {
+		report["authoring_error"] = "authoring identities are missing"
+		return
+	}
+	created := mustObject(call("workspace", object{"operation": "create", "workspace_id": workspace,
+		"expected_revision": 0, "idempotency_key": "create-" + source}, 32)["value"])
+	report["author_create_revision"] = created["revision"]
+
+	if mode == "repair" {
+		// Round 1: a workspace holding only index.html and app.js.
+		call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 1,
+			"idempotency_key": "put-index-" + source, "path": "index.html", "content": "<html></html>"}, 33)
+		call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 2,
+			"idempotency_key": "put-app-" + source, "path": "app.js", "content": "console.log(1)"}, 34)
+		frozen := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+			"expected_revision": 3, "idempotency_key": "freeze-" + source}, 35)["value"])
+		report["author_snapshot_digest"] = frozen["digest"]
+		listed := mustObject(call("workspace", object{"operation": "list", "workspace_id": workspace}, 36)["value"])
+		report["author_files"] = listed["files"]
+		refused := call("delivery", object{"operation": "request", "workspace_id": destination,
+			"source_workspace": source, "version": version, "snapshot_digest": frozen["digest"]}, 37)
+		report["refusal_ok"] = refused["ok"]
+		report["refusal_code"] = refused["code"]
+		report["refusal_message"] = refused["message"]
+		if value := mustObject(refused["value"]); value != nil {
+			report["refusal_remedy"] = value["remedy"]
+		}
+		// Round 2: the agent repairs exactly what the refusal named.
+		repairPut := call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 3,
+			"idempotency_key": "put-entries-" + source, "path": example["path"], "content": entriesJSON}, 38)
+		var repaired any = nil
+		if repairPut["ok"] == true {
+			repairFreeze := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+				"expected_revision": 4, "idempotency_key": "freeze-repaired-" + source}, 39))
+			if repairedValue := mustObject(repairFreeze["value"]); repairedValue != nil {
+				repaired = repairedValue["digest"]
+				report["repaired_snapshot_digest"] = repaired
+			}
+		}
+		if repaired != nil {
+			reportAuthorDelivery(call, report, destination, source, version, repaired)
+		}
+		return
+	}
+
+	call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 1,
+		"idempotency_key": "put-entries-" + source, "path": example["path"], "content": entriesJSON}, 33)
+	frozen := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+		"expected_revision": 2, "idempotency_key": "freeze-" + source}, 40)["value"])
+	report["author_snapshot_digest"] = frozen["digest"]
+	reportAuthorDelivery(call, report, destination, source, version, frozen["digest"])
+}
+
+func reportAuthorDelivery(call func(string, object, int) object, report object, workspace, source, version string, snapshot any) {
+	delivered := mustObject(call("delivery", object{"operation": "request", "workspace_id": workspace,
+		"source_workspace": source, "version": version, "snapshot_digest": snapshot}, 41))
+	report["delivery_diagnostic_reply"] = delivered
+	value := mustObject(delivered["value"])
+	if value != nil {
+		report["delivery_ready"] = value["ready"]
+		report["delivery_diagnostics"] = value["diagnostics"]
+		report["delivery_human_steps"] = value["human_steps"]
+	}
+	// Report the frozen digest on the bound thread, the way any managed agent
+	// hands its result back; the desktop harness reads it from there.
+	marker := os.Getenv("BEE_FIXTURE_AUTHOR_MARKER")
+	if marker != "" && snapshot != nil {
+		if text, ok := snapshot.(string); ok {
+			call("thread_message", object{"idempotency_key": "report-" + marker, "message_id": marker,
+				"message_kind": "progress", "recipient_ids": []string{},
+				"content": object{"text": text, "artifact_ref": text}}, 42)
+		}
+	}
+}
+
+func toolsOf(listed rpcReply) ([]string, []object) {
+	names := []string{}
+	descriptions := []object{}
+	result := mustObject(listed.body["result"])
+	tools, ok := result["tools"].([]any)
+	if !ok {
+		return names, descriptions
+	}
+	for _, item := range tools {
+		if name := stringField(item, "name"); name != "" {
+			names = append(names, name)
+			if object := mustObject(item); object != nil {
+				descriptions = append(descriptions, object)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names, descriptions
 }
 
 // Exercise configurable MCP through the same projected credentials as the harness.

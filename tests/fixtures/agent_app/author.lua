@@ -21,7 +21,10 @@ type Object = {[string]: unknown}
 local INPUTS = "bee.agent_app_probe:inputs"
 local ACTOR = "bee.agent_app.operator"
 local THREAD = "agent-app-authoring"
-local DEFINITION = "bee.driver.agy:research_batch"
+-- The launch route and its policy are host-selected per run: the live Agy
+-- attempt and the scripted fixture provider use the same production launch,
+admission, carrier, placement and gateway path with a different far end.
+local DEFAULT_DEFINITION = "bee.driver.agy:research_batch"
 local ACCESS_POLICY = "local-agent-app-authoring"
 local NAMESPACE = "bee.agent_app_demo"
 local DEFINITION_ID = "bee.agent_app_demo:app"
@@ -97,14 +100,21 @@ local function surface(launch_workspace: string): Object
         access = {workspace_id = launch_workspace, policy = ACCESS_POLICY, traits = {"app:author"}}}
 end
 
-local function configure(launch_workspace: string)
-    local policy = registry.get("bee:launch_policy_agy_batch")
-    if not policy then error("Agy batch policy unavailable") end
+local function configure(launch_workspace: string, policy_ref: string, keep_executable: boolean)
+    local policy = registry.get(policy_ref)
+    if not policy then error("launch policy " .. policy_ref .. " unavailable") end
     local data = bounds.object(policy.data)
-    if not data then error("Agy policy data missing") end
-    data.gateway_tools = {"thread_read", "thread_message", "workspace", "app_docs"}
-    data.gateway_surface = surface(launch_workspace)
-    data.instructions = INSTRUCTIONS
+    if not data then error("launch policy data missing") end
+    if keep_executable then
+        -- The scripted provider binds its own executable, environment and
+        -- tools in the fixture; only the surface and instructions are added.
+        data.gateway_surface = surface(launch_workspace)
+        data.instructions = INSTRUCTIONS
+    else
+        data.gateway_tools = {"thread_read", "thread_message", "workspace", "app_docs"}
+        data.gateway_surface = surface(launch_workspace)
+        data.instructions = INSTRUCTIONS
+    end
     policy.data = data
     local approvers = registry.get("bee.approvals:approver_policies")
     if not approvers then error("approval policies missing") end
@@ -314,28 +324,39 @@ end
 
 local function main()
     local values = inputs()
+    local definition = bounds.text(values.definition, 160)
+    if not definition or definition == "" then definition = DEFAULT_DEFINITION end
+    local policy_ref = bounds.text(values.authoring_policy, 160)
+    if not policy_ref or policy_ref == "" then policy_ref = "bee:launch_policy_agy_batch" end
     local round = text_of(values.round, "round")
     local source_workspace = text_of(values.source_workspace, "source workspace")
     local launch_workspace = text_of(values.launch_workspace, "launch workspace")
     local findings = bounds.text(values.findings, 65536) or ""
 
-    configure(launch_workspace)
+    configure(launch_workspace, policy_ref, definition ~= DEFAULT_DEFINITION)
     listener_ready()
 
-    local marker = "agent-app-" .. round .. "-" .. tostring(time.now():unix_nano())
-    local plan = call("bee.harness.launch:resolve", {definition_ref = DEFINITION})
-    reply("bee.harness.launch:setup", {workspace_id = launch_workspace, definition_ref = DEFINITION,
+    -- A scripted provider cannot read a computed marker out of the brief, so
+    -- the host may pin the exact marker it will report with.
+    local pinned_marker = bounds.text(values.marker, 160)
+    local marker: string = (pinned_marker and pinned_marker ~= "") and pinned_marker
+        or ("agent-app-" .. round .. "-" .. tostring(time.now():unix_nano()))
+    local plan = call("bee.harness.launch:resolve", {definition_ref = definition})
+    reply("bee.harness.launch:setup", {workspace_id = launch_workspace, definition_ref = definition,
         expected_plan_digest = plan.plan_digest})
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "create-" .. THREAD,
         title = "Agent-authored Bee application"})
-    local brief = first_brief(source_workspace, marker, round)
+    -- A scripted provider that learns the contract from the guide is given the
+    -- plain request instead of the host's contract-bearing brief.
+    local plain = bounds.text(values.brief, 65536)
+    local brief = (plain and plain ~= "") and plain or first_brief(source_workspace, marker, round)
     if findings ~= "" then
         deliver_findings(findings, round)
-        brief = repair_brief(source_workspace, marker, round)
+        if not (plain and plain ~= "") then brief = repair_brief(source_workspace, marker, round) end
     end
 
     local started = call("bee.harness.launch:start", {request_id = "agent-app-" .. round,
-        definition_ref = DEFINITION, workspace_id = launch_workspace, thread_id = THREAD, brief = brief})
+        definition_ref = definition, workspace_id = launch_workspace, thread_id = THREAD, brief = brief})
     started.workspace_id = launch_workspace
     local approved = await_carrier(started)
 

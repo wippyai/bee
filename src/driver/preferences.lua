@@ -9,10 +9,12 @@ M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512
 M.MAX_MCP_TOOLS = 64
 M.MAX_INSTRUCTIONS_BYTES = 4096
+-- A Codex config profile name is bounded like every other saved scalar.
+M.MAX_CONFIG_PROFILE_BYTES = 64
 
 type Object = {[string]: unknown}
 type Scalar = string | number | boolean
-type Value = {options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
+type Value = {options: {[string]: Scalar}, mcp_tools: {string}, instructions: string, config_profile: string?}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -140,7 +142,7 @@ end
 function M.decode(value: unknown): (Value?, string?)
     local object = bounds.object(value)
     if not object then return nil, "saved preferences must be an object" end
-    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions"})
+    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "config_profile"})
     if unexpected then return nil, unexpected end
     local options, options_error = decode_options(object.options == nil and {} or object.options, "options")
     if not options then return nil, options_error end
@@ -148,7 +150,17 @@ function M.decode(value: unknown): (Value?, string?)
     if not mcp_tools then return nil, tools_error end
     local text, instructions_error = instructions(object.instructions, "instructions", true)
     if not text then return nil, instructions_error end
-    return {options = options, mcp_tools = mcp_tools, instructions = text}, nil
+    local config_profile: string? = nil
+    if object.config_profile ~= nil then
+        -- The same admission Codex's own `--profile` applies: a plain name,
+        -- never a path, never empty.
+        local name = bounds.text(object.config_profile, M.MAX_CONFIG_PROFILE_BYTES)
+        if not name or not name:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then
+            return nil, "config_profile must be a plain Codex profile name"
+        end
+        config_profile = name
+    end
+    return {options = options, mcp_tools = mcp_tools, instructions = text, config_profile = config_profile}, nil
 end
 
 local function allowed_value(values: {Scalar}, selected: Scalar): boolean
@@ -197,6 +209,19 @@ function M.apply(policy_data: Object, raw: unknown): (Object?, string?)
     if profile_instructions and saved.instructions ~= "" then
         if combined == "" then combined = saved.instructions else combined = combined .. "\n\n" .. saved.instructions end
         if #combined > M.MAX_INSTRUCTIONS_BYTES then return nil, "combined instructions must contain at most 4096 bytes" end
+    end
+
+    -- A named Codex config profile is host-selected configuration, not a
+    -- general option: only a policy that enables it may carry one, and the
+    -- driver that selects the profile name itself lives in launch.decode.
+    local allow_config_profile = policy.profile_config_profile
+    if allow_config_profile == nil then allow_config_profile = false end
+    if type(allow_config_profile) ~= "boolean" then return nil, "profile_config_profile must be a boolean" end
+    if saved.config_profile ~= nil then
+        if not allow_config_profile then
+            return nil, "the selected launch policy does not support a Codex config profile"
+        end
+        prepare_options.config_profile = saved.config_profile
     end
 
     local result: Object = {}

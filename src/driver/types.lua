@@ -51,6 +51,11 @@ type Binding = {
     default_profile: string,
 }
 -- A launch specification: declarative, resolved by placement, never run here.
+-- A host file a launch needs before it starts, named by the environment
+-- variable that locates its directory and a safe relative path inside it, or
+-- by the user's home plus a default directory. Placement checks existence
+-- only; the driver never reads the file's contents.
+type RequiredFile = {variable: string, path: string, default_directory: string?}
 type Launch = {
     executable: string,
     -- Arguments only. Placement prepends the separately selected executable.
@@ -63,6 +68,7 @@ type Launch = {
     environment: {string},
     working_directory_ref: string?,
     home_ref: string?,
+    required_files: {RequiredFile}?,
     readiness: string,
 }
 -- What a normalizer reports when the protocol says the turn is over.

@@ -14,12 +14,19 @@ local time = require("time")
 local channel = require("channel")
 local json = require("json")
 local placement_fixture = require("placement_fixture")
+local system = require("system")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
 local EXPIRING_POLICY = "bee.harness.catalog:gateway_expiring_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local BINDING = "bee.driver.claude:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
+-- The scripted authoring destination's host profiles; the workspace is chosen
+-- by the fixture, the source workspace by the plain request the agent is given.
+local PROFILES_WORKSPACE = "author-dest-ws"
+local PROFILES_COMPONENT = "bee.guide_demo/app"
+local PROFILES_OVERLAY = "bee.harness.catalog:author_overlay"
+local PROFILES_NODE = assert(system.node.id())
 type Object = {[string]: unknown}
 local counter = 0
 local function fresh(prefix: string): string
@@ -270,6 +277,38 @@ end
 local function no_token_in(details: {string})
     for index, item in ipairs(details) do no_secret_in(item, "evidence " .. tostring(index)) end
 end
+-- Configure the host publication/activation profiles the delivery tool reads,
+-- and an approver policy, the way an installed Bee's host profiles would.
+local function install_author_profiles(source_workspace: string)
+    local function rewrite(name: string, mutate: (Object) -> ())
+        local entry = assert(registry.get(name))
+        local data = entry.data :: Object
+        mutate(data)
+        entry.data = data
+        local changes = registry.snapshot():changes()
+        changes:update(entry)
+        local applied, err = changes:apply()
+        if not applied then error("install " .. name .. ": " .. tostring(err)) end
+    end
+    rewrite("bee.governance:publication_profiles", function(data: Object)
+        local profiles = data.profiles :: {Object}
+        profiles[#profiles + 1] = {workspace_id = PROFILES_WORKSPACE, source_workspace = source_workspace,
+            component = PROFILES_COMPONENT, overlay_owner = PROFILES_OVERLAY}
+    end)
+    rewrite("bee.governance:activation_profiles", function(data: Object)
+        local profiles = data.profiles :: {Object}
+        profiles[#profiles + 1] = {workspace_id = PROFILES_WORKSPACE, source_node = PROFILES_NODE,
+            source_workspace = source_workspace, component = PROFILES_COMPONENT, resolver = "overlay",
+            overlay_owner = PROFILES_OVERLAY, approval_policy = "local-author-app", parameters = {},
+            allow = {packages = {PROFILES_COMPONENT}, namespaces = {"bee.guide_demo"}, kinds = {"process.lua"},
+                databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}
+    end)
+    rewrite("bee.approvals:approver_policies", function(data: Object)
+        local policies = data.policies :: {Object}
+        policies[#policies + 1] = {name = "local-author-app", approvers = {ACTOR}, max_ttl_ms = 600000}
+    end)
+end
+
 local function define_tests()
     test.describe("Gateway through the carrier", function()
         install_policy(POLICY)
@@ -658,6 +697,42 @@ local function define_tests()
         end)
         test.it("lets a replacement replay rows the original committed but never acknowledged, leaving one observation", function()
             two_carriers("hooks_committed")
+        end)
+        test.it("lets a scripted agent author from the guide alone and repair a stray workspace on its remedy", function()
+            -- The scripted child holds the plain request only: it learns the
+            -- artifact from the workspace tool's guide operation over the real
+            -- MCP surface. Round 1 authors only index.html and app.js and is
+            -- refused with a named remedy; round 2 authors the guide's own
+            -- example in the same workspace and the destination preflight is
+            -- ready.
+            install_policy("bee.harness.catalog:gateway_author_policy")
+            local source = fresh("author-src")
+            install_author_profiles(source)
+            local environment = {BEE_FIXTURE_GATEWAY_AUTHOR = "repair", BEE_FIXTURE_AUTHOR_WORKSPACE = source,
+                BEE_FIXTURE_AUTHOR_SOURCE = source, BEE_FIXTURE_AUTHOR_DESTINATION = PROFILES_WORKSPACE,
+                BEE_FIXTURE_AUTHOR_VERSION = "1.0.0", BEE_FIXTURE_STREAM = stream("plain.jsonl")}
+            local thread_id = thread()
+            local attempt_id = fresh("author")
+            local outcome = run_carrier(request(thread_id, attempt_id, environment, nil,
+                "bee.harness.catalog:gateway_author_policy"), "open", nil)
+            if not outcome.value then error("authoring carrier failed: " .. tostring(outcome.error)) end
+            test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
+            local seen = report(thread_id)
+            test.eq(seen.author_has_guide, true)
+            test.is_true(type(seen.guide_document) == "string" and (seen.guide_document :: string):find("entries.json", 1, true) ~= nil)
+            test.eq(seen.guide_example_present, true)
+            -- The stray round really held only the two files.
+            local files = seen.author_files :: {Object}
+            test.eq(#files, 2)
+            -- Round 1 was refused with a named code and a remedy.
+            test.eq(seen.refusal_ok, false)
+            test.eq(seen.refusal_code, "MISSING_ARTIFACT")
+            test.is_true(type(seen.refusal_remedy) == "string" and (seen.refusal_remedy :: string):find("entries.json", 1, true) ~= nil)
+            -- Round 2 repaired exactly what the remedy named and delivery was ready.
+            test.not_nil(seen.repaired_snapshot_digest)
+            test.eq(seen.delivery_ready, true)
+            local steps = seen.delivery_human_steps :: {string}
+            test.eq(#steps, 6)
         end)
         test.it("releases a waiting child when the gateway drains", function()
             local thread_id = thread()

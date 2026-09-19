@@ -51,6 +51,20 @@ local function define_tests()
             test.is_nil(preferences.apply(policy(), {mcp_tools = {"outside"}}))
         end)
 
+        test.it("carries a named Codex profile only when the policy enables it", function()
+            local host = policy()
+            test.is_nil(preferences.apply(host, {config_profile = "ds-flash"}))
+            host.profile_config_profile = true
+            local applied = apply({config_profile = "ds-flash"}, host)
+            test.eq(applied.prepare_options.config_profile, "ds-flash")
+            test.is_nil(preferences.decode({config_profile = "a/b"}))
+            test.is_nil(preferences.decode({config_profile = ""}))
+            test.is_nil(preferences.decode({config_profile = string.rep("x", 65)}))
+            test.is_nil(preferences.decode({config_profile = "a.b"}))
+            host.profile_config_profile = "yes"
+            test.is_nil(preferences.apply(host, {config_profile = "ds-flash"}))
+        end)
+
         test.it("rejects malformed host option allowlists before applying a profile", function()
             for _, malformed in ipairs({
                 {model = {}},

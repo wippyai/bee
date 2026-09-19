@@ -3,21 +3,23 @@ local tty = require("tty")
 local appearance = require("appearance")
 local text = require("text")
 local editor = require("editor")
+local protocol = require("protocol")
 local forms = require("forms")
 local M = {}
 type Field = {kind: string, name: string, label: string}
-type State = {form: forms.Form, title: string, guidance: string, selected: integer,
+type State = {form: forms.Form, title: string, guidance: string, config_profile: string, selected: integer,
     status: string, confirming_remove: boolean}
 type Hit = {action: string, index: integer, x: integer, y: integer, width: integer}
 type Frame = {rows: {string}, hits: {Hit}}
 
 function M.new(form: forms.Form): State
     return {form = form, title = form.draft.title, guidance = form.draft.instructions,
-        selected = 1, status = "", confirming_remove = false}
+        config_profile = form.draft.config_profile or "", selected = 1, status = "", confirming_remove = false}
 end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"}}
     if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
+    if state.form.draft._allowed.config_profile then result[#result + 1] = {kind = "config_profile", name = "", label = "Codex profile"} end
     local options = editor.options(state.form.draft)
     for _, option in ipairs(options or {}) do
         result[#result + 1] = {kind = "option", name = option.name, label = option.name .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
@@ -55,6 +57,10 @@ function M.action(state: State, action: string): string?
         if not named then state.status = name_error or "Invalid name"; return nil end
         local guided, guidance_error = editor.set_guidance(state.form.draft, state.guidance)
         if not guided then state.status = guidance_error or "Invalid instructions"; return nil end
+        if state.form.draft._allowed.config_profile then
+            local profiled, profile_error = editor.set_config_profile(state.form.draft, state.config_profile)
+            if not profiled then state.status = profile_error or "Invalid Codex profile"; return nil end
+        end
         return "save"
     end
     return nil
@@ -97,7 +103,8 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
         return nil
     end
     local value = field.kind == "title" and state.title or state.guidance
-    local limit = field.kind == "title" and editor.MAX_TITLE_BYTES or editor.MAX_INSTRUCTIONS_BYTES
+    local limit = field.kind == "title" and editor.MAX_TITLE_BYTES
+        or (field.kind == "config_profile" and protocol.MAX_CONFIG_PROFILE_BYTES or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
         if event.ctrl and event.key == "u" then value = ""
@@ -107,7 +114,9 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
         elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
     end
     if #value > limit then state.status = "Text exceeds " .. tostring(limit) .. " bytes"; return nil end
-    if field.kind == "title" then state.title = value else state.guidance = value end
+    if field.kind == "title" then state.title = value
+    elseif field.kind == "config_profile" then state.config_profile = value
+    else state.guidance = value end
     return nil
 end
 
@@ -133,6 +142,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if field then
             local label = field.label
             if field.kind == "title" then label = label .. ": " .. state.title
+            elseif field.kind == "config_profile" then
+                label = label .. ": " .. (state.config_profile ~= "" and state.config_profile or "Default")
             elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
             line(row + 2, label, index == state.selected)
             hits[#hits + 1] = {action = "field", index = index, x = 2, y = row + 2, width = math.max(0, width - 2)}

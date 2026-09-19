@@ -14,6 +14,21 @@ entries:
   modules: [hash, json]
   imports:
     canonical: bee.sync:canonical
+- name: delivery_protocol
+  kind: library.lua
+  source: file://delivery_protocol.lua
+  imports: {bounds: bee.threads.records:bounds}
+- name: delivery_call
+  kind: function.lua
+  source: file://delivery_method.lua
+  method: handle
+  modules: [funcs, security, registry, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    transaction: bee.persist:transaction
+    preflight: bee.governance:preflight
+    guide: bee.governance:guide
+  security: {policies: [bee:delivery_facade_policy]}
 - name: guide
   kind: library.lua
   source: file://guide.lua
@@ -390,3 +405,39 @@ entries:
     of current files; the returned revision is the frozen revision.
     Host policy admits each workspace operation; this trait grants no authority.
   tools: [bee.governance:workspace_call]
+- name: application_delivery_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Application delivery
+    comment: Request delivery of a frozen application and read its status; publishing the reviewed version is separately gated and still leaves approval to others
+  prompt: |
+    Use BeeDelivery to request delivery of an application you froze: pass
+    operation request with the destination workspace, your source workspace, the
+    version and the frozen snapshot_digest. It publishes your frozen artifact as
+    immutable content, stages that exact version at this destination and returns
+    the destination's own preflight verdict, with a diagnostic code, target,
+    message and remedy for each finding. Repair a refusal and freeze again.
+    When the verdict is ready the person must review and select the plan in App
+    Delivery, prepare the activation there, approve it in Approvals, and the
+    activation owner applies the overlay; opening it is the person's act from
+    the start menu. Read its status operation with the same identities, and with
+    an intent_id once the person has prepared it, to see the review, selection
+    and activation outcome. You cannot review, select, approve or apply, and you
+    never write an overlay. Publishing the exact reviewed and applied version is
+    a separate, host-requested capability; ask for it, and publish only after
+    the person's apply succeeds.
+  tools: [bee.governance:delivery_call]
+- name: application_publish_trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Application publish
+    comment: Publish the exact locally reviewed and applied version; never review, approve or apply
+  prompt: |
+    Use BeePublish only after a person has reviewed, selected, prepared,
+    approved and had the activation owner apply the exact version you delivered.
+    It publishes that one version to this destination's publication feed and
+    refuses any version that is not the locally reviewed and applied one. It
+    grants no review, selection, approval, activation or overlay authority.
+  tools: [bee.governance:delivery_call]

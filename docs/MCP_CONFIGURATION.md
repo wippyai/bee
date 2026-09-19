@@ -56,6 +56,14 @@ bytes, leaving room for JSON escaping and the bounded request envelope.
 Governance continues to enforce its own larger file limit and validates that
 base64 is canonical; the MCP limits are transport bounds for one tool call.
 
+Two built-in tools carry application delivery. `delivery` requests delivery of
+a frozen artifact (publication prepare, destination stage and the destination's
+preflight verdict, with each diagnostic's remedy) and reads a staged version's
+review, selection and activation status; it names the human steps it cannot
+take. `publish` publishes only the exact locally reviewed and applied version
+and is gated by a host-requested access trait. Neither reaches an overlay
+write, which the activation owner alone holds.
+
 Clients that cache MCP discovery can use the stable `call_tool` tool with
 `{name, arguments}` after selecting traits. It uses the same active-tool check
 and invocation path as a direct call. Selecting a trait does not grant a tool

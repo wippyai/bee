@@ -58,6 +58,15 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.driver.codex:configuration
+- name: codex_launch_test
+  kind: function.lua
+  source: file://codex_launch_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    launch: bee.driver.codex:launch
+    quote: bee.driver.kit:quote
 - name: muse_config_test
   kind: function.lua
   source: file://muse_config_test.lua

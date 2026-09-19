@@ -52,6 +52,7 @@ local function define_tests()
             test.is_true(#empty == 0 and #lists == 1 and #objects == 1)
             test.eq(lists[1], "modules")
             test.eq(objects[1], "imports")
+            test.not_nil(string.find(measured.entries[1].data and (measured.entries[1].data :: {[string]: unknown}).source :: string, "client.checkpoint", 1, true))
         end)
     end)
 end

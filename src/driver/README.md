@@ -86,6 +86,27 @@ arguments; it does not select a separate named profile or write global config.
 A host-selected provider remains an explicit configuration path, described below.
 Generated files stay in Bee's private session directory.
 
+A saved agent profile may *name* one Codex config profile
+(`$CODEX_HOME/<name>.config.toml`), which the executable layers on top of its
+base user config through `-p/--profile`. Bee's own session `-c` MCP and hook
+arguments still apply, and Codex resolves a later `-c` override over the named
+profile's value (verified against the installed binary). The name is a bounded
+identifier matching what Codex accepts; a dot, path separator, leading dash,
+space, empty or overlong value is refused, so it can never escape the Codex
+home. The field is offered only by a host policy that sets
+`profile_config_profile: true`, and every other driver refuses a saved profile
+that carries it.
+
+The named file lives in the *inherited* home. Where Bee runs Codex with a
+private `CODEX_HOME` instead (the host-selected provider path, retained homes,
+Docker), that file does not exist and Bee refuses the launch with a diagnostic
+naming the profile. Bee does not copy the owner's config files or anything
+carrying credentials into a private home; there is no sanctioned named-file
+projection in `bee.credentials` or the materializer to use instead. A launch
+whose named file is absent from the inherited home is refused before the
+process starts, by an existence check through the read-only host volume that
+never reads the file's contents.
+
 
 The Codex launch writes the brief to stdin and Codex reads it until end of
 file, so the launch declares `stdin_eof`: placement admits it only where

@@ -57,6 +57,27 @@ def assert_overlay_authority(project):
     assert denied == {"bee:app_boundary_policy", "bee:scope_managing_app_boundary"}, denied
 
 
+def assert_delivery_has_no_overlay_authority(project):
+    """The agent's delivery and publish surfaces reach publication and
+    destination staging; they grant no overlay write, which is the activation
+    owner's alone."""
+    wanted = {"bee:gateway_tool_delivery_policy", "bee:gateway_tool_publish_policy",
+              "bee:delivery_facade_policy"}
+    seen = set()
+    for index in (project / "src").rglob("_index.yaml"):
+        document = yaml.safe_load(index.read_text())
+        for entry in document.get("entries", []):
+            identity = f'{document["namespace"]}:{entry["name"]}'
+            if identity not in wanted:
+                continue
+            seen.add(identity)
+            actions = (entry.get("policy") or {}).get("actions") or []
+            assert OVERLAY_WRITE not in actions, identity
+            for resource in (entry.get("policy") or {}).get("resources") or []:
+                assert "overlay" not in resource, (identity, resource)
+    assert seen == wanted, sorted(wanted - seen)
+
+
 def open_admitted(ui, timeout):
     """Boot recovery re-establishes the activation owner's overlay after the
     desktop is already up; the broker then refreshes admission from the
@@ -135,6 +156,7 @@ def exercise():
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)
         assert_overlay_authority(project)
+        assert_delivery_has_no_overlay_authority(project)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                         "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
         guide_evidence = guide(project, folder)

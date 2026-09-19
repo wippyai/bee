@@ -148,6 +148,24 @@ entries:
     - '*'
     effect: allow
 
+- name: gateway_tool_delivery_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare + destination stage/preflight) and read delivery status; the facade and the owner services enforce workspace, profile and destination authority
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.governance:delivery_call") || ((action == "bee.governance.delivery.manage" || action == "bee.governance.delivery.read") && resource != "")'
+    actions: [funcs.call, bee.governance.delivery.manage, bee.governance.delivery.read]
+    resources: [bee.governance:delivery_call, '*']
+    effect: allow
+- name: gateway_tool_publish_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject may publish only the exact locally reviewed and applied version; publication refuses anything else, and this grants no review, selection, approval or overlay authority
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.governance:delivery_call") || (action == "bee.governance.delivery.publish" && resource != "")'
+    actions: [funcs.call, bee.governance.delivery.publish]
+    resources: [bee.governance:delivery_call, '*']
+    effect: allow
 - name: gateway_access_call_policy
   kind: security.policy
   meta:

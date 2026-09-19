@@ -11,13 +11,25 @@ entries:
   kind: library.lua
   source: file://../../placement/native/materialization.lua
   meta: {type: test_support}
-  modules: [env, funcs, sql, process, hash]
+  modules: [env, fs, funcs, sql, process, hash]
   imports:
     store: bee.placement.native:store
     resources: bee.placement.native:resources
     homes: bee.placement.publication_test:homes
     configuration: bee.placement.native:configuration
     types: bee.placement:types
+- name: required_file_test
+  kind: function.lua
+  source: file://required_file_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '30s'}
+  security:
+    policies: [bee:placement_store_policy]
+  imports:
+    test: wippy.test:test
+    types: bee.placement:types
+    driver_types: bee.driver:types
+    materialization: bee.placement.publication_test:materialization
 - name: publication_test
   kind: function.lua
   source: file://publication_test.lua

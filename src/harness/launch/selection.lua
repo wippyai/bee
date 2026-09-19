@@ -202,10 +202,11 @@ local function saved_choice(pinned: catalog.Pinned, workspace: string, row: Prof
     if definition.default_mode ~= "window" or not definition.presentation.start_menu then return nil, nil end
     local plan, refused = admission.resolve(definition_ref, "window", workspace, row.profile_id, row.revision)
     local digest = plan_digest(plan, definition_ref, row.profile_id, row.revision)
+    local detail = "Saved profile · " .. definition.title
+    if profile.config_profile then detail = detail .. " · Codex " .. profile.config_profile end
     if digest then
         return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = digest,
-            saved_profile_id = row.profile_id, saved_profile_revision = row.revision,
-            summary = "Saved profile · " .. definition.title}, nil
+            saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail}, nil
     end
     local reason = "Profile is unavailable on this node"
     if refused then
@@ -217,7 +218,7 @@ local function saved_choice(pinned: catalog.Pinned, workspace: string, row: Prof
     end
     return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = "",
         unavailable = reason, saved_profile_id = row.profile_id, saved_profile_revision = row.revision,
-        summary = "Saved profile · " .. definition.title}, nil
+        summary = detail}, nil
 end
 
 -- Extends the registry defaults with authorized, workspace-scoped saved

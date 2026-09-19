@@ -118,7 +118,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "profile_config_profile", "gateway_tools", "gateway_surface", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -151,6 +151,12 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local allow_host_home = data.allow_host_home == true
     local fixture = data.fixture == true
     if observation == "eof_gated" and not fixture then return nil, ref .. ": eof_gated execution is permitted only in a fixture policy" end
+    -- The saved-profile form offers the named Codex profile field only when
+    -- this host policy enables it. The value itself lives in raw policy data;
+    -- the decoded Policy carries no per-profile field.
+    if data.profile_config_profile ~= nil and type(data.profile_config_profile) ~= "boolean" then
+        return nil, ref .. ": profile_config_profile must be a boolean"
+    end
     local exchange: PermissionExchange? = nil
     if data.permission_exchange ~= nil then
         local declared = bounds.object(data.permission_exchange)

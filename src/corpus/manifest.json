@@ -907,9 +907,9 @@
       "topic": "application"
     },
     {
-      "bytes": 30683,
+      "bytes": 31216,
       "id": "docs/gateway",
-      "sha256": "ebfa988a78bdb78215a1e7b94987bd6902d629d493ab4bdef2367b2811d50724",
+      "sha256": "297e77ec8ad21c4e382fd39ea53969754a1d664a0dac481920a35511cc021383",
       "source": "docs/GATEWAY.md",
       "title": "Gateway (build sequence step 9, harness lane)",
       "topic": "gateway"
@@ -979,17 +979,17 @@
       "topic": "cluster"
     },
     {
-      "bytes": 16147,
+      "bytes": 16548,
       "id": "docs/launch_routing",
-      "sha256": "f21c85bfa66c93450985283ed146026457a00d93270a6f39d7a604866029f168",
+      "sha256": "b1e9d44b767f2bf3d6f0df757c1a3184f389923215691f67c467e99084ddadcb",
       "source": "docs/LAUNCH_ROUTING.md",
       "title": "Launch routing, topology and lifecycle",
       "topic": "harness"
     },
     {
-      "bytes": 10479,
+      "bytes": 11642,
       "id": "docs/mcp_configuration",
-      "sha256": "9754bacf53609ff6b49e3430b5e734393e2093cd004490197e9bc3e5e81e0589",
+      "sha256": "013499d4ebbf08fb8f2c296540def9c11973ff1f42c3ab545392eec5892e9e39",
       "source": "docs/MCP_CONFIGURATION.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -1051,9 +1051,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 9644,
+      "bytes": 9870,
       "id": "docs/threads",
-      "sha256": "485d079a0702732b178d8ebcb573fa6000b9c2d1032528f4543c11b4cef1b148",
+      "sha256": "47e870bfc9ab3d25083f78ba5d11cef4af73266636f1e6b470235cb903e76f47",
       "source": "docs/THREADS.md",
       "title": "Threads, hooks and subscriptions",
       "topic": "threads"
@@ -1195,9 +1195,9 @@
       "topic": "component"
     },
     {
-      "bytes": 12100,
+      "bytes": 13139,
       "id": "component/governance",
-      "sha256": "af7eaeaf6818f3b9f8a18ea3024a354588073003b78417bc8c504fe6741c8101",
+      "sha256": "7930bde6ae749ab2b5dbcf157ba22f660234d222fa6289ed48cba0e8f29c75fa",
       "source": "src/governance",
       "title": "Governance authoring and preflight",
       "topic": "component"
@@ -1219,9 +1219,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3501,
+      "bytes": 3835,
       "id": "component/hub",
-      "sha256": "8a167b39dfcc409c3d9e32c13ecd931530a06c17d80e4757a8cb7b9080a88fa7",
+      "sha256": "f199027651aa1632a56dab87ba3f4c2ca9a17cdf2972853ee627c015b4ac3220",
       "source": "src/hub",
       "title": "Hub module management",
       "topic": "component"
@@ -1302,7 +1302,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2131208,
+    "bytes": 2134904,
     "documents": 162
   }
 }

@@ -9,7 +9,8 @@ local LIFECYCLE = {["turn.end"] = true, ["turn.request"] = true, ["receipt"] = t
 local function entry(kind: string, body: Object, extra: Object?): Object
     local value: Object = {schema_revision = "bee.thread-record@1", record_id = "r-" .. kind, thread_id = "t-1", sequence = 7, recorded_at = "2026-09-09T00:00:00.000Z",
         kind = kind, producer_id = "bee.test.producer", source = "bee", body = body}
-    if LIFECYCLE[kind] then value.action_id = "act-1"; value.attempt_id = "attempt-1" end
+    if LIFECYCLE[kind] then value.action_id = "act-1" end
+    if kind ~= "action.admitted" and LIFECYCLE[kind] then value.attempt_id = "attempt-1" end
     if kind == "turn.end" or kind == "turn.request" then value.turn_id = "turn-1" end
     for key, item in pairs(extra or {}) do value[key] = item end
     return value
@@ -58,6 +59,14 @@ local function define_tests()
             test.eq(started.glyph, format.GLYPHS.busy)
             test.is_true(started.details[2]:find("action act-1  attempt attempt-1  correlation corr-1", 1, true) ~= nil)
             test.is_true(started.details[1]:find("producer bee.test.producer  source bee", 1, true) ~= nil)
+            local child = row("action.admitted", {request_id = "launch-child", principal_id = "bee.test.worker", binding_ref = "bee.driver.fixture:binding",
+                binding_digest = "digest", grant_refs = {}, budget_ref = "budget", parent_action_id = "parent-action", input = {text = "review the changed files"}},
+                {action_id = string.rep("child-action-", 12)})
+            test.is_true(child.summary:find("child action child-action-", 1, true) ~= nil)
+            test.is_true(child.summary:find("review the changed files", 1, true) ~= nil)
+            test.is_true(#child.summary <= format.LINE_LIMIT + 3)
+            test.is_true(child.details[2]:find("action child-action-", 1, true) ~= nil)
+            test.is_true(child.details[2]:find("parent action parent-action", 1, true) ~= nil)
             local long = row("message", {message_id = "m-2", message_kind = "notification", sender_id = "bee.test.alice", recipient_ids = {}, content = {text = string.rep("x", 1000)}})
             test.is_true(#long.summary <= format.LINE_LIMIT + 3)
         end)

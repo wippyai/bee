@@ -55,6 +55,7 @@ local function define_tests()
             test.eq(work.schema_revision, migration_work.SCHEMA)
             test.eq(#work.migrations, 1)
             test.eq(work.migrations[1].id, "demo:001")
+            test.eq(work.migrations[1].package, "demo/app")
             test.eq(work.migrations[1].definition.data.up, "create table users")
             test.eq(#work.databases, 1)
             test.eq(work.databases[1].id, "demo:db")
@@ -139,6 +140,9 @@ local function define_tests()
             test.is_nil(migration_work.capture(candidate, exact, context))
             context.databases["demo:db"] = true
             candidate.destination_node = "node-c"
+            test.is_nil(migration_work.capture(candidate, exact, context))
+            candidate.destination_node = "node-a"
+            candidate.entries[1].package = "not-a-package"
             test.is_nil(migration_work.capture(candidate, exact, context))
         end)
     end)

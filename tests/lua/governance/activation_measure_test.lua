@@ -54,6 +54,36 @@ local function define_tests()
             candidate.migrations = {}
             test.is_nil(measure.measure(plan, candidate, context))
         end)
+        test.it("seals pending migration work for an existing admitted database", function()
+            local definition = {id = "demo:001", kind = "function.lua",
+                meta = {type = "migration", target_db = "host:db", ordinal = 1},
+                data = {source = "return true", modules = {}}}
+            local exact = assert(artifact.create({definition}))
+            local definition_bytes = assert(canonical.encode(definition))
+            local checksum = assert(hash.sha256(definition_bytes))
+            local plan = {owner_node = "node-a", workspace_id = "workspace-a", source_node = "node-b",
+                source_workspace = "source-app", version = "v1", plan_digest = SHA, revision = 3,
+                selection_revision = 2, selected = true, review_status = "accepted",
+                artifact_bytes = exact.bytes, artifact_digest = exact.digest}
+            local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
+                base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
+                    digest = exact.digest, dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:001",
+                    kind = "function.lua", package = "demo/app", digest = checksum, references = {}, auto_start = false,
+                    grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
+                migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
+            local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host/base",
+                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
+                config_objects = {}, config_lists = {}, config_empty = {}}
+            local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
+                registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
+                kinds = {["function.lua"] = true}, databases = {["host:db"] = true}, grants = {}, modules = {},
+                entries = {["host:db"] = database}, applied = {}, exact_expansion = true,
+                migration_barrier = true}
+            local result, problem = measure.measure(plan, candidate, context)
+            if not result then error(tostring(problem)) end
+            test.eq(#((result.report :: preflight.Report).pending_migrations), 1)
+            test.is_true(type((result.migration_work :: {[string]: unknown}).bytes) == "string")
+        end)
     end)
 end
 return test.run_cases(define_tests)

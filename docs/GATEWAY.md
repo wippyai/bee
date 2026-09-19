@@ -7,13 +7,15 @@ The gateway owns bindings and credentials; the host composition owns the native
 HTTP listener. The activation candidate uses loopback port zero, resolves the
 bound address through supervisor state, and declares `thread_read`,
 `thread_wait`, the explicitly admitted `thread_message` write, the scoped
-Governance `workspace` tool and the read-only `delivery` request tool in the
-default Agent window and batch policies. Claude and Codex also
+Governance `workspace` tool, the read-only `components` explorer and the
+read-only `delivery` request tool in the default Agent window and batch
+policies. Claude and Codex also
 declare the five supported lifecycle hooks. Agy and Grok currently refuse HTTP
 hook configuration. Actual standalone child MCP passes for Claude/Codex fixture
 executables using their generated configuration and delivered token: initialize,
-all three declared tools, thread read, authenticated message append and bounded
-wait. This does not prove a provider conversation or complete agent
+the fixture's declared tools, thread read, authenticated message append and
+bounded wait. This does not prove a provider conversation, a provider-level Hub
+browse or complete agent
 orchestration. The refreshed full regression is
 still running; see the global-build handoff for installation status.
 
@@ -130,7 +132,8 @@ origin view or workspace.
 - Admission and revocation: an admitted token lists and calls `thread_read`; a revoked token is refused; an expired token is refused; a token presented against another action or attempt is refused.
 - `thread_read` returns the owner's page for the bound subject only.
 - `thread_wait` returns within the transport budget, wakes on a new record, and leaves obligations and delivery marks untouched.
-- An explicitly admitted `thread_message` appends through the authenticated thread owner, replays an identical key without a second record, conflicts on changed payload, refuses foreign thread/sender/context and arbitrary record kind fields, leaves attempt settlement untouched, and refuses after token revocation. All default Agent profiles include the write alongside the two read tools, the scoped `workspace` authoring tool, the read-only `delivery` request tool and the read-only `docs` corpus tool.
+- An explicitly admitted `thread_message` appends through the authenticated thread owner, replays an identical key without a second record, conflicts on changed payload, refuses foreign thread/sender/context and arbitrary record kind fields, leaves attempt settlement untouched, and refuses after token revocation. All default Agent profiles include the write alongside the two read tools, the scoped `workspace` authoring tool, the read-only `components` explorer, the read-only `delivery` request tool and the read-only `docs` corpus tool.
+- The managed `components` tool advertises and accepts exactly `catalog`, `details`, `inspect`, `state`, `files`, `read_file`, `installed` and effect-free `plan`. Planning resolves the dependency closure at review time and may populate the verified immutable cache; `apply`, `status` and direct mutation names are refused at the MCP argument boundary. Its source/pack unit coverage does not claim a provider-level Hub browse.
 - Drain: a helper drains while a `thread_wait` is in flight; the wait returns `released`/`draining` before its own deadline, a new `admit` is refused, and a bounded read still finishes before the host's deadline.
 - The default composition still has no `http.service` and binds nothing; the managed fixture composition is the only place the listener exists.
 - No token bytes in captured output, records or the store.

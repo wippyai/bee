@@ -1,4 +1,4 @@
--- MIT. The application authoring guide a bound agent reads through the MCP
+-- MIT. The component authoring guide a bound agent reads through the MCP
 -- workspace tool. Pure: it composes bounded text from this repository's own
 -- rule sources (the preflight CONFIG tables it imports) and carries one
 -- minimal example. It reads no store, executes nothing and grants nothing.
@@ -10,7 +10,7 @@ local preflight = require("preflight")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-application-guide@1"
+M.REVISION = "bee.governance-component-guide@3"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -153,12 +153,19 @@ end
 
 function M.document(): string
     local lines: {string} = {}
-    lines[#lines + 1] = "Bee application authoring guide (" .. M.REVISION .. ")"
+    lines[#lines + 1] = "Bee component authoring guide (" .. M.REVISION .. ")"
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "An application artifact is one frozen file, " .. M.ENTRIES_PATH
+    lines[#lines + 1] = "A component pack is one frozen file, " .. M.ENTRIES_PATH
         .. ", holding a JSON list of complete native registry entries. Each entry has id, kind,"
         .. " an optional meta and a required data; put source, method, modules and imports inside data."
         .. " Source is inline Lua text, never a file URL. Top-level YAML shorthand is not the registry API."
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "A pack may contain process.lua applications, function.lua tools, library.lua support code,"
+        .. " registry.entry declarations and security.policy entries. Installed metadata describes a capability;"
+        .. " it never grants that capability. The destination separately constrains namespaces, entry kinds,"
+        .. " native modules, policy grants and resource bindings during preflight, and the activation owner alone"
+        .. " applies the reviewed overlay. Use the read-only components tool to inspect the effective installed"
+        .. " registry and exact Hub package entries, documentation and examples before authoring."
     lines[#lines + 1] = ""
     lines[#lines + 1] = "An application is one process.lua entry with meta.type bee.application and a"
         .. " meta.application record declaring api_version 1, lifetime view, a nonempty revision and title,"
@@ -182,7 +189,10 @@ function M.document(): string
         .. " from that exact snapshot into the canonical artifact (" .. M.SCHEMA
         .. "). Requesting delivery stages the version at this destination and reads its preflight verdict;"
         .. " a refusal names the diagnostic and its remedy. Then a person must " .. join(DELIVERY_STEPS)
-        .. ". Only the activation owner may write an overlay."
+        .. ". Only the activation owner may write an overlay. A pack may append migration functions for an"
+        .. " existing host-admitted database when every imported dependency is already installed and no"
+        .. " auto-start consumer is present. Governance seals the exact functions and runs them before exposing"
+        .. " the complete overlay. New databases, changed applied migrations and schema rollback are refused."
     lines[#lines + 1] = ""
     lines[#lines + 1] = M.platform_documentation()
     lines[#lines + 1] = ""

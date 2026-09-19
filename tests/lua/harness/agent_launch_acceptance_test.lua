@@ -248,6 +248,9 @@ local function define_tests()
             -- The child runs on the orchestrator's own thread: the bound thread
             -- tools can reach it.
             test.eq(seen.child_thread, thread_id)
+            test.eq(seen.child_definition, WORKER_DEFINITION)
+            test.eq(seen.child_title, "Agent launch accepted worker")
+            test.eq(seen.child_brief, "answer the orchestrator")
             -- The child's own launch policy, not the orchestrator's, decided
             -- what gateway tools the worker held: it read and posted, and the
             -- launch tool its policy does not admit was refused.

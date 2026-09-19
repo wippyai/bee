@@ -22,6 +22,12 @@ that thread, so `thread_launch` selects it rather than inventing another. Remote
 node selection and the batch dataflow route remain proposals in this document
 until their acceptance checks exist.
 
+The successful `thread_launch` value carries the child `thread_id`, `action_id`
+and `attempt_id` together with the admitted `definition_ref`, its bounded title,
+and the bounded brief submitted for that child. Clients can label a child from
+that response without re-resolving the registry or treating an action ID as a
+definition identity.
+
 ## Astra's proposal in full
 
 **`bee claude` resolves to a launch definition, not a Terminal command alias.** The definition selects an admitted driver profile and placement; the resulting action owns the work. A desktop window is an attachment to that action.
@@ -150,7 +156,7 @@ Status is a projection of admitted lifecycle and evidence, not a parser’s gues
 | Collapsed recap | State/duration; current tool/task summary; last bounded answer/progress |
 | Hive Manager | Action, thread, owner, mode, placement, execution/gate/attachment states |
 | Inbox badge | Number of pending requests the principal may answer; owner-labelled |
-| Timeline | Records in thread order, preserving observation versus authority and source |
+| Timeline | Records in thread order, preserving observation versus authority and source; child action rows show a bounded action ID and launch brief |
 | Disconnected window | Last frame plus “Forge unreachable; last confirmed busy” |
 
 Glyph/token vocabulary:

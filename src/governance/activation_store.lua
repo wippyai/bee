@@ -5,9 +5,11 @@ local sql = require("sql")
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local json = require("json")
 local database = require("database")
 local transaction = require("transaction")
 local migrations = require("migrations")
+local migration_work = require("migration_work")
 
 local M = {}
 local MAX_INTENTS = 128
@@ -15,6 +17,8 @@ local MAX_RECEIPTS = 512
 local MAX_ARTIFACT = 262144
 local MAX_RESOLUTION = 1048576
 local MAX_PREFLIGHT = 131072
+local MAX_MIGRATION_WORK = 1048576
+local MAX_MIGRATION_RECEIPT = 262144
 local MAX_DIAGNOSTICS = 8192
 local MAX_REQUEST = 4194304
 local MAX_REVISION = 9007199254740991
@@ -70,12 +74,14 @@ local function request_digest(value: Request): (string?, Result?)
     if not measured then return nil, failure("INTERNAL", "measure activation request") end
     return measured, nil
 end
-local function authorization_digest(store: Store, input: Request, artifact: Blob, resolution: Blob, preflight: Blob): string?
+local function authorization_digest(store: Store, input: Request, artifact: Blob, resolution: Blob,
+    preflight: Blob, work: Blob): string?
     local encoded = canonical.encode({schema_revision = "bee.governance-activation@1", owner_node = store.node,
         workspace_id = store.workspace, overlay_owner = input.overlay_owner, source_node = input.source_node,
         source_workspace = input.source_workspace, version = input.version, plan_digest = input.plan_digest,
         plan_revision = input.plan_revision, selection_revision = input.selection_revision,
-        artifact_digest = artifact.digest, resolution_digest = resolution.digest, preflight_digest = preflight.digest})
+        artifact_digest = artifact.digest, resolution_digest = resolution.digest, preflight_digest = preflight.digest,
+        migration_work_digest = work.digest})
     if not encoded then return nil end
     return digest(encoded)
 end
@@ -92,7 +98,7 @@ local function cas_result(result: unknown, err: unknown, action: string): Result
     return nil
 end
 local function load(tx: sql.Transaction, store: Store, intent_id: string): (Object?, Result?)
-    return one(tx, "SELECT i.*, e.revision, e.phase, e.approval_id, e.approval_proposal_digest, e.approval_owner_incarnation, e.consumed_consumer_id, e.consumed_proposal_digest, e.consumed_effect_key, e.outcome, e.diagnostics, e.updated_at AS execution_updated_at FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? AND i.intent_id = ?", {store.node, store.workspace, intent_id}, "activation intent")
+    return one(tx, "SELECT i.*, e.revision, e.phase, e.approval_id, e.approval_proposal_digest, e.approval_owner_incarnation, e.consumed_consumer_id, e.consumed_proposal_digest, e.consumed_effect_key, e.outcome, e.diagnostics, e.migrations_completed, e.migration_receipt_bytes, e.migration_receipt_digest, e.updated_at AS execution_updated_at FROM bee_governance_activation_intents i JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id WHERE i.owner_node = ? AND i.workspace_id = ? AND i.intent_id = ?", {store.node, store.workspace, intent_id}, "activation intent")
 end
 local function slot(tx: sql.Transaction, store: Store, overlay_owner: string, create: boolean): (Object?, Result?)
     local row, err = one(tx, "SELECT * FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ?", {store.node, store.workspace, overlay_owner}, "activation slot")
@@ -109,11 +115,15 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         artifact_digest = row.artifact_digest, resolution_bytes = row.resolution_bytes,
         resolution_digest = row.resolution_digest, preflight_bytes = row.preflight_bytes,
         preflight_digest = row.preflight_digest, authorization_digest = row.authorization_digest,
+        migration_work_bytes = row.migration_work_bytes, migration_work_digest = row.migration_work_digest,
         effect_key = row.effect_key, revision = row.revision, phase = row.phase,
         approval_id = row.approval_id, approval_proposal_digest = row.approval_proposal_digest,
         approval_owner_incarnation = row.approval_owner_incarnation, consumed_consumer_id = row.consumed_consumer_id,
         consumed_proposal_digest = row.consumed_proposal_digest, consumed_effect_key = row.consumed_effect_key,
-        outcome = row.outcome, diagnostics = row.diagnostics}
+        outcome = row.outcome, diagnostics = row.diagnostics,
+        migrations_completed = row.migrations_completed == true or tonumber(row.migrations_completed) == 1,
+        migration_receipt_bytes = row.migration_receipt_bytes,
+        migration_receipt_digest = row.migration_receipt_digest}
     if current_slot then
         result.slot_revision = current_slot.revision
         result.desired_intent_id, result.desired_execution_revision = current_slot.desired_intent_id, current_slot.desired_execution_revision
@@ -178,7 +188,7 @@ local function decode(raw: unknown): (Request?, string?)
     local result: Request = {operation = operation, intent_id = intent_id, expected_revision = expected, idempotency_key = key}
     if operation == "prepare_activation" then
         if expected ~= 0 then return nil, "prepare_activation requires expected_revision zero" end
-        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight"})
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "overlay_owner", "source_node", "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact", "resolution", "preflight", "migration_work"})
         if extra then return nil, extra end
         result.overlay_owner = id(value.overlay_owner)
         result.source_node, result.source_workspace, result.version = id(value.source_node), id(value.source_workspace), id(value.version)
@@ -187,9 +197,10 @@ local function decode(raw: unknown): (Request?, string?)
         local artifact, artifact_error = checked_blob(value.artifact, MAX_ARTIFACT, "artifact")
         local resolution, resolution_error = checked_blob(value.resolution, MAX_RESOLUTION, "resolution")
         local preflight, preflight_error = checked_blob(value.preflight, MAX_PREFLIGHT, "preflight")
-        if not result.overlay_owner or not result.source_node or not result.source_workspace or not result.version or not result.plan_digest or not result.plan_revision or not result.selection_revision or not artifact or not resolution or not preflight then return nil, artifact_error or resolution_error or preflight_error or "activation facts are invalid" end
+        local work, work_error = checked_blob(value.migration_work, MAX_MIGRATION_WORK, "migration work")
+        if not result.overlay_owner or not result.source_node or not result.source_workspace or not result.version or not result.plan_digest or not result.plan_revision or not result.selection_revision or not artifact or not resolution or not preflight or not work then return nil, artifact_error or resolution_error or preflight_error or work_error or "activation facts are invalid" end
         result.artifact_digest = artifact.digest
-        result.artifact, result.resolution, result.preflight = artifact, resolution, preflight
+        result.artifact, result.resolution, result.preflight, result.migration_work = artifact, resolution, preflight, work
         return result, nil
     end
     if operation == "bind_approval" then
@@ -209,6 +220,16 @@ local function decode(raw: unknown): (Request?, string?)
     elseif operation == "begin_apply" then
         local extra = unknown(value, common)
         if extra then return nil, extra end
+    elseif operation == "record_migrations" then
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "receipt", "complete", "diagnostics"})
+        if extra then return nil, extra end
+        local receipt, receipt_error = checked_blob(value.receipt, MAX_MIGRATION_RECEIPT, "migration receipt")
+        result.complete = value.complete
+        result.diagnostics = bounds.text(value.diagnostics or "", MAX_DIAGNOSTICS)
+        if not receipt or type(result.complete) ~= "boolean" or not result.diagnostics then
+            return nil, receipt_error or "migration result is invalid"
+        end
+        result.receipt = receipt
     elseif operation == "record_outcome" then
         local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "outcome", "diagnostics"})
         if extra then return nil, extra end
@@ -236,12 +257,13 @@ function M.prepare(store: Store, actor: string, input: Request): Result
         local intents = count(count_row.count, false)
         if not intents then return failure("INTERNAL", "activation intent count is corrupt") end
         if intents >= MAX_INTENTS then return failure("CAPACITY_EXHAUSTED", "activation intent capacity is exhausted") end
-        local authorized = authorization_digest(store, input, input.artifact :: Blob, input.resolution :: Blob, input.preflight :: Blob)
+        local authorized = authorization_digest(store, input, input.artifact :: Blob,
+            input.resolution :: Blob, input.preflight :: Blob, input.migration_work :: Blob)
         if not authorized then return failure("INTERNAL", "measure activation authorization") end
         local effect_bytes = canonical.encode({schema_revision = "bee.governance-effect@1", authorization_digest = authorized})
         local effect_key = effect_bytes and digest(effect_bytes)
         if not effect_key then return failure("INTERNAL", "measure activation effect key") end
-        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, authorized, effect_key})
+        local _, insert_error = tx:execute("INSERT INTO bee_governance_activation_intents (owner_node, workspace_id, intent_id, actor_id, overlay_owner, source_node, source_workspace, version, plan_digest, plan_revision, selection_revision, artifact_bytes, artifact_digest, resolution_bytes, resolution_digest, preflight_bytes, preflight_digest, migration_work_bytes, migration_work_digest, authorization_digest, effect_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id, actor, input.overlay_owner, input.source_node, input.source_workspace, input.version, input.plan_digest, input.plan_revision, input.selection_revision, input.artifact.bytes, input.artifact.digest, input.resolution.bytes, input.resolution.digest, input.preflight.bytes, input.preflight.digest, input.migration_work.bytes, input.migration_work.digest, authorized, effect_key})
         if insert_error then return storage(insert_error, "prepare activation") end
         local _, execution_error = tx:execute("INSERT INTO bee_governance_activation_execution (owner_node, workspace_id, intent_id, revision, phase, updated_at) VALUES (?, ?, ?, 1, 'prepared', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, input.intent_id})
         if execution_error then return storage(execution_error, "create activation execution") end
@@ -317,8 +339,11 @@ function M.begin_apply(store: Store, actor: string, input: Request): Result
         local current_slot, slot_error = slot(tx, store, row.overlay_owner :: string, false)
         if slot_error then return slot_error :: Result end
         if not current_slot or current_slot.desired_intent_id ~= row.intent_id then return failure("CONFLICT", "activation is no longer the desired slot") end
+        local work, work_error = migration_work.decode(row.migration_work_bytes, row.migration_work_digest)
+        if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
+        local completed = #work.migrations == 0 and 1 or 0
         local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'applying', revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {next_revision, store.node, store.workspace, row.intent_id, row.revision})
+        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'applying', migrations_completed = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {completed, next_revision, store.node, store.workspace, row.intent_id, row.revision})
         local update_error = cas_result(updated, err, "begin activation apply")
         if update_error then return update_error :: Result end
         local changed, changed_error = load(tx, store, row.intent_id :: string)
@@ -326,9 +351,85 @@ function M.begin_apply(store: Store, actor: string, input: Request): Result
         return finish(store, tx, actor, input, measured, changed, nil)
     end)
 end
+
+local function migration_receipt(input: Request, work: any): ({[string]: Object}?, string?)
+    local decoded, decode_error = json.decode((input.receipt :: Blob).bytes)
+    local value = bounds.object(decoded)
+    if decode_error or not value or value.schema_revision ~= "bee.governance-migration-receipt@1"
+        or type(value.rows) ~= "table" then return nil, "migration receipt is malformed" end
+    local encoded, encode_error = canonical.encode(value, MAX_MIGRATION_RECEIPT)
+    if not encoded or encoded ~= (input.receipt :: Blob).bytes then
+        return nil, tostring(encode_error or "migration receipt is not canonical")
+    end
+    local expected: {[string]: any} = {}
+    for _, item in ipairs(work.migrations) do expected[item.target_db .. "\n" .. item.id] = item end
+    local rows: {[string]: Object} = {}
+    local count_rows = 0
+    for key in pairs(value.rows :: table) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "migration receipt rows must be a dense list" end
+        count_rows = count_rows + 1
+    end
+    if count_rows ~= #(value.rows :: table) or count_rows > migration_work.MAX_MIGRATIONS then
+        return nil, "migration receipt rows exceed their bound or are sparse"
+    end
+    for index = 1, count_rows do
+        local row = bounds.object((value.rows :: table)[index])
+        if not row or bounds.fields(row, {"id", "target_db", "module", "status", "reason"}) then
+            return nil, "migration receipt row is malformed"
+        end
+        local id_value, target, component = id(row.id), id(row.target_db), bounds.text(row.module, 160)
+        local status_value = row.status
+        local selected = id_value and target and expected[target .. "\n" .. id_value] or nil
+        if not selected or component ~= selected.package or (status_value ~= "applied" and status_value ~= "skipped")
+            or rows[target .. "\n" .. id_value] then return nil, "migration receipt differs from captured work" end
+        rows[target .. "\n" .. id_value] = row
+    end
+    if input.complete then
+        for key in pairs(expected) do if not rows[key] then return nil, "complete migration receipt omits captured work" end end
+    end
+    return rows, nil
+end
+
+function M.record_migrations(store: Store, actor: string, input: Request): Result
+    local measured = request_digest(input) :: string
+    return transition(store, actor, input, {applying = true}, function(tx: sql.Transaction, row: Object): Result
+        if row.migrations_completed == true or tonumber(row.migrations_completed) == 1 then
+            return failure("CONFLICT", "activation migrations are already complete")
+        end
+        local work, work_error = migration_work.decode(row.migration_work_bytes, row.migration_work_digest)
+        if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
+        local receipt_rows, receipt_error = migration_receipt(input, work)
+        if not receipt_rows then return failure("INVALID", receipt_error or "invalid migration receipt") end
+        for _, item in ipairs(work.migrations) do
+            if receipt_rows[item.target_db .. "\n" .. item.id] then
+                local prior, prior_error = one(tx, "SELECT checksum, ordinal, component FROM bee_governance_applied_migrations WHERE owner_node = ? AND workspace_id = ? AND target_db = ? AND migration_id = ?", {store.node, store.workspace, item.target_db, item.id}, "applied migration")
+                if prior_error then return prior_error end
+                if prior and (prior.checksum ~= item.checksum or prior.ordinal ~= item.ordinal or prior.component ~= item.package) then
+                    return failure("CONFLICT", "applied migration fact differs from captured work: " .. item.id)
+                end
+                if not prior then
+                    local _, insert_error = tx:execute("INSERT INTO bee_governance_applied_migrations (owner_node, workspace_id, target_db, migration_id, component, ordinal, checksum, intent_id, applied_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))", {store.node, store.workspace, item.target_db, item.id, item.package, item.ordinal, item.checksum, row.intent_id})
+                    if insert_error then return storage(insert_error, "record applied migration") end
+                end
+            end
+        end
+        local next_revision = (row.revision :: number) + 1
+        local updated, update_error = tx:execute("UPDATE bee_governance_activation_execution SET migrations_completed = ?, migration_receipt_bytes = ?, migration_receipt_digest = ?, diagnostics = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.complete and 1 or 0, (input.receipt :: Blob).bytes, (input.receipt :: Blob).digest, input.diagnostics, next_revision, store.node, store.workspace, row.intent_id, row.revision})
+        local cas_error = cas_result(updated, update_error, "record activation migrations")
+        if cas_error then return cas_error :: Result end
+        local changed, changed_error = load(tx, store, row.intent_id :: string)
+        if changed_error or not changed then return changed_error or failure("INTERNAL", "read migration progress") end
+        return finish(store, tx, actor, input, measured, changed, nil)
+    end)
+end
+
 function M.record_outcome(store: Store, actor: string, input: Request): Result
     local measured = request_digest(input) :: string
     return transition(store, actor, input, {applying = true, settled = true}, function(tx: sql.Transaction, row: Object): Result
+        if input.outcome == "applied"
+            and not (row.migrations_completed == true or tonumber(row.migrations_completed) == 1) then
+            return failure("CONFLICT", "activation migrations are not complete")
+        end
         if row.phase == "settled" and row.outcome ~= "uncertain"
             and not (row.outcome == "applied" and input.outcome == "uncertain") then
             return failure("CONFLICT", "activation outcome is already final")
@@ -393,6 +494,22 @@ function M.desired(store: Store, overlay_raw: unknown): Result
         return transaction.success(view(store, row, current_slot), false)
     end)
 end
+
+function M.applied(store: Store, component_raw: unknown): Result
+    if store.closed then return failure("CLOSED", "governance activation store is closed") end
+    local component = bounds.text(component_raw, 160)
+    if not component or component == "" then return failure("INVALID", "migration component is invalid") end
+    return transaction.read(store.db, "governance activation", function(tx): Result
+        local rows, err = tx:query("SELECT target_db, migration_id, ordinal, checksum FROM bee_governance_applied_migrations WHERE owner_node = ? AND workspace_id = ? AND component = ? ORDER BY target_db, ordinal, migration_id", {store.node, store.workspace, component})
+        if not rows then return storage(err, "read applied migrations") end
+        local result: Object = {}
+        for _, row in ipairs(rows) do
+            result[(row.target_db :: string) .. "\n" .. (row.migration_id :: string)] = {
+                id = row.migration_id, target_db = row.target_db, ordinal = row.ordinal, checksum = row.checksum}
+        end
+        return transaction.success(result, false)
+    end)
+end
 function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if store.closed then return failure("CLOSED", "governance activation store is closed") end
     local actor = id(actor_raw)
@@ -405,6 +522,7 @@ function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if input.operation == "begin_consume" then return M.begin_consume(store, actor, input) end
     if input.operation == "record_consumption" then return M.record_consumption(store, actor, input) end
     if input.operation == "begin_apply" then return M.begin_apply(store, actor, input) end
+    if input.operation == "record_migrations" then return M.record_migrations(store, actor, input) end
     return M.record_outcome(store, actor, input)
 end
 function M.close(store: Store): (boolean, string?)

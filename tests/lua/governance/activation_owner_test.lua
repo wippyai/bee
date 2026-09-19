@@ -25,6 +25,17 @@ local function ok(result: {[string]: unknown}): {[string]: unknown}
     end
     return result.value :: {[string]: unknown}
 end
+local function migration_effect(): {[string]: unknown}
+    return {
+        matches = function(_owner: string, _work: any): (boolean?, string?) return false, nil end,
+        prepare = function(_owner: string, _work: any): ({[string]: unknown}?, string?) return {changed = false}, nil end,
+        clear = function(_owner: string): ({[string]: unknown}?, string?) return {changed = false}, nil end,
+        cleared = function(_owner: string): (boolean?, string?) return true, nil end,
+        execute = function(_work: any): ({bytes: string, digest: string}?, boolean, string?)
+            return nil, false, "unexpected migration execution"
+        end,
+    }
+end
 
 local function selected_plan(store: plan_store.Store, version: string, entry_blob: {[string]: unknown}): {[string]: unknown}
     local identity = {source_node = "source-a", source_workspace = "app-a", version = version}
@@ -74,6 +85,32 @@ end
 
 local function resolver(entry: {[string]: unknown}): owner.Resolver
     return shifting_resolver(entry, {revision = 4, digest = SHA})
+end
+
+local function migration_resolver(entry: {[string]: unknown}, state: {[string]: unknown}): owner.Resolver
+    local checksum = assert(hash.sha256(assert(canonical.encode(entry))))
+    local value = {}
+    function value:resolve(plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        local selected = plan :: {[string]: unknown}
+        local applied: {[string]: preflight.Migration} = {}
+        if state.executed == true then
+            applied["host:db\ndemo:001"] = {id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}
+        end
+        local database: preflight.Entry = {id = "host:db", kind = "db.sql.sqlite", package = "host/base",
+            digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
+            config_objects = {}, config_lists = {}, config_empty = {}}
+        return {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
+            artifacts = {{component = "demo/app", version = selected.version :: string, digest = SHA,
+                dependencies = {}, namespaces = {"demo"}}}, entries = {{id = "demo:001", kind = "function.lua",
+                package = "demo/app", digest = checksum, references = {}, auto_start = false, grants = {}, modules = {},
+                config_objects = {}, config_lists = {}, config_empty = {}}}, requirements = {},
+            migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}},
+            {node_id = "node-owner", registry_revision = 4, registry_digest = SHA, policy_digest = SHA,
+                packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
+                databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
+                applied = applied, exact_expansion = true, migration_barrier = true}, nil
+    end
+    return value :: owner.Resolver
 end
 
 local function approvals(): owner.Executor
@@ -128,7 +165,7 @@ local function define_tests()
             local applied = false
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                     applied = true
@@ -166,7 +203,7 @@ local function define_tests()
             local fail_restore = false
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = lossy_approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                     if fail_restore then return nil, "overlay restore failed" end
@@ -212,7 +249,7 @@ local function define_tests()
             local apply_count = 0
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -266,7 +303,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -308,7 +345,7 @@ local function define_tests()
             local config: owner.Config = {plans = plans, activations = activations,
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                     applied, apply_count = true, apply_count + 1
@@ -348,7 +385,7 @@ local function define_tests()
                 return {plans = plan_handle, activations = activation_handle,
                     resolver = shifting_resolver(entry, world),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
-                    overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install",
+                    overlay_owner = "bee.governance:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                     matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return applied, nil end,
                     apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
                         applied, apply_count = true, apply_count + 1
@@ -384,6 +421,59 @@ local function define_tests()
             test.eq(apply_count, 1)
             assert(activation_store.close(again_activations))
             assert(plan_store.close(again_plans))
+        end)
+
+        test.it("completes captured migrations before exposing the application overlay", function()
+            local plans = assert(plan_store.open("bee.governance:plan_test_db", "node-owner", "workspace-migration-owner"))
+            local activations = assert(activation_store.open("bee.governance:activation_test_db", "node-owner", "workspace-migration-owner"))
+            local entry = {id = "demo:001", kind = "function.lua",
+                meta = {type = "migration", target_db = "host:db", ordinal = 1},
+                data = {source = "return true", modules = {}}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local state: {[string]: unknown} = {staged = false, executed = false, applied = false}
+            local effect = {
+                matches = function(_owner: string, _work: any): (boolean?, string?) return state.staged == true, nil end,
+                prepare = function(_owner: string, _work: any): ({[string]: unknown}?, string?)
+                    state.staged = true; return {changed = true}, nil
+                end,
+                clear = function(_owner: string): ({[string]: unknown}?, string?)
+                    state.staged = false; return {changed = true}, nil
+                end,
+                cleared = function(_owner: string): (boolean?, string?) return state.staged ~= true, nil end,
+                execute = function(_work: any): ({bytes: string, digest: string}?, boolean, string?)
+                    state.executed = true
+                    local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
+                        rows = {{id = "demo:001", target_db = "host:db", module = "demo/app", status = "applied"}}}))
+                    return {bytes = bytes, digest = assert(hash.sha256(bytes))}, true, nil
+                end,
+            }
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = migration_resolver(entry, state), approvals = approvals(), actor_id = "host-a",
+                consumer_id = "destination-host", overlay_owner = "bee.governance:migration-overlay",
+                approval_policy = "local-install", migrations = effect,
+                matches = function(_overlay: string, _entries: unknown): (boolean?, string?) return state.applied == true, nil end,
+                apply = function(_overlay: string, _entries: unknown): ({[string]: unknown}?, string?)
+                    test.is_true(state.executed == true)
+                    test.is_true(state.staged ~= true)
+                    state.applied = true
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a", version = "v1",
+                intent_id = "intent-migration", receipt_key = "migration"}))
+            test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "authorized")
+            test.eq(ok(owner.step(config, "intent-migration", "migration")).phase, "applying")
+            local migrated = ok(owner.step(config, "intent-migration", "migration"))
+            test.is_true(migrated.migrations_completed == true)
+            test.is_false(state.applied == true)
+            test.is_true(ok(owner.step(config, "intent-migration", "migration")).recovered == true)
+            test.is_false(state.staged == true)
+            local settled = ok(owner.step(config, "intent-migration", "migration"))
+            test.eq(settled.outcome, "applied")
+            test.is_true(state.applied == true)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
         end)
     end)
 end

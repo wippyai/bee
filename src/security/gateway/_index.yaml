@@ -170,6 +170,15 @@ entries:
     - bee:docs_call
     - bee:docs_corpus
     effect: allow
+- name: gateway_tool_components_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject may inspect effective installed component state, package previews and effect-free plans through the strict Hub facade; it receives no apply, publication or registry-write authority
+  policy:
+    expression: '(action == "funcs.call" && resource == "bee.hub:call") || (action == "bee.hub.read" && resource != "")'
+    actions: [funcs.call, bee.hub.read]
+    resources: [bee.hub:call, '*']
+    effect: allow
 - name: gateway_tool_delivery_policy
   kind: security.policy.expr
   meta:

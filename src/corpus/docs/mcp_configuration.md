@@ -60,11 +60,27 @@ bytes, leaving room for JSON escaping and the bounded request envelope.
 Governance continues to enforce its own larger file limit and validates that
 base64 is canonical; the MCP limits are transport bounds for one tool call.
 
+The built-in `components` tool is the managed-agent read-only view of the Hub
+and effective registry. Its `operation` is one of `catalog`, `details`,
+`inspect`, `state`, `files`, `read_file`, `installed` or `plan`; package requests are
+passed as the nested `request` object and remain subject to the Hub facade's
+exact component, version, resource and path decoders. The MCP boundary rejects
+`apply`, `status`, `install`, `update`, `uninstall` and unknown fields before
+calling the Hub facade. `plan` resolves a digest-bound dependency closure at
+review time, requirements, migrations and capability definitions, and may populate the native verified
+artifact cache; it does not publish registry state. Reads may inspect installed
+state or verified package contents; they do not apply packages, publish registry entries,
+activate overlays or grant package permissions. The private `bee.hub:call`
+facade still serves separately authorized Hub management callers, but that
+surface is not part of the managed-agent `components` tool.
+
 The built-in `thread_launch` tool starts one host-allow-listed managed launch
 in the caller's own workspace and thread, and returns the child's thread,
 action and attempt so the parent reaches it through the same `thread_read`,
 `thread_wait` and `thread_message`. Its arguments are one definition reference,
-one brief and one retry key. The definition must appear in the calling
+one brief and one retry key. A successful value also returns the admitted
+definition reference and title plus the bounded brief, alongside the child
+identities. The definition must appear in the calling
 attempt's own launch policy `agent_launch` list; a definition the policy does
 not name is refused with `LAUNCH_NOT_PERMITTED`, and a definition that would
 open a different thread is refused with `LAUNCH_THREAD_UNSUPPORTED` rather than

@@ -57,8 +57,15 @@ local function handle(raw: unknown): Result
             return transaction.failure("INVALID", "operation requires a plan digest")
         end
     elseif value.expected_digest ~= nil then return transaction.failure("INVALID", "operation takes no plan digest") end
-    local action = (operation == "plan" or operation == "apply") and "bee.hub.manage" or "bee.hub.read"
+    -- Planning resolves and verifies the complete dependency closure but does
+    -- not publish registry state. It can reveal other installed roots, so a
+    -- scoped caller also needs inventory/catalog read authority. Only apply
+    -- crosses the management boundary.
+    local action = operation == "apply" and "bee.hub.manage" or "bee.hub.read"
     if not security.actor() or not security.can(action, resource) then return transaction.failure("DENIED", "Hub operation is not authorized") end
+    if operation == "plan" and not security.can("bee.hub.read", "catalog") then
+        return transaction.failure("DENIED", "Hub plan inventory is not authorized")
+    end
     local scope, scope_error = security.named_scope(SCOPE)
     if not scope then return transaction.failure("UNAVAILABLE", tostring(scope_error)) end
     local executor, executor_error = funcs.new():with_scope(scope)

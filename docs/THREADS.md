@@ -46,7 +46,10 @@ Reopening restores the thread and subscription identity from the checkpoint
 and resumes under a new lease; an earlier instance's pages are then fenced.
 Viewing acknowledges no delivery and settles nothing. Approval records name
 where they are decided; the Approvals application acts on them. An
-unreachable owner is shown as unreachable, never as an empty thread.
+unreachable owner is shown as unreachable, never as an empty thread. Child
+launch rows keep the action ID bounded and place the submitted brief beside it,
+so a Timeline reader can identify the work without confusing an action ID with
+the launch definition reference returned by `thread_launch`.
 
 `tests/timeline_app.py`, included in `make check`, boots the application
 under the broker; `tests/lua/timeline` proves the model against the real

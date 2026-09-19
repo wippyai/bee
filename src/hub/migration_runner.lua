@@ -7,6 +7,12 @@ local migrations = require("migrations")
 local M = {}
 type Applied = {id: string, group: integer}
 
+local HUB_PRIVATE_POLICIES: {string} = {
+    "bee.hub:execution_policy", "bee.hub:publisher_policy", "bee.hub:dependency_policy",
+    "bee.hub:receipt_policy", "bee.hub:worker_policy", "bee.hub:worker_name_policy",
+    "bee.hub:worker_reply_policy", "bee.hub:migration_context_policy",
+}
+
 function M.allowed(entries: {migrations.Entry}): (boolean, string?)
     for _, entry in ipairs(entries) do
         local target = entry.meta.target_db
@@ -67,9 +73,22 @@ local function read_applied(target: string, ids: {string}): ({Applied}?, string?
     return result, nil
 end
 
-function M.source(entries: {migrations.Entry}): migrations.Source
+function M.is_applied(target: string, id: string): (boolean?, string?)
+    if type(target) ~= "string" or target == "" or type(id) ~= "string" or id == "" then
+        return nil, "migration ledger identity is invalid"
+    end
+    local rows, problem = read_applied(target, {id})
+    if not rows then return nil, problem end
+    return #rows == 1, nil
+end
+
+function M.source(entries: {migrations.Entry}, private_policies: {string}?): migrations.Source
     local by_id: {[string]: migrations.Entry} = {}
     for _, entry in ipairs(entries) do by_id[entry.id] = entry end
+    local stripped_policies: {string} = {}
+    for index, policy in ipairs(private_policies or HUB_PRIVATE_POLICIES) do
+        stripped_policies[index] = policy
+    end
     local function selected(target: string, raw: unknown): {string}
         if type(raw) ~= "table" or type(raw.allowed_ids) ~= "table" then error("migration IDs required") end
         local ids: {string} = {}
@@ -93,10 +112,8 @@ function M.source(entries: {migrations.Entry}): migrations.Source
         -- component's private publication/worker authority to package code.
         local scope = security.scope()
         if not scope then error("migration execution scope unavailable") end
-        for _, name in ipairs({"execution_policy", "publisher_policy", "dependency_policy",
-            "receipt_policy", "worker_policy", "worker_name_policy", "worker_reply_policy",
-            "migration_context_policy"}) do
-            scope = scope:without("bee.hub:" .. name)
+        for _, policy in ipairs(stripped_policies) do
+            scope = scope:without(policy)
         end
         local executor, scope_error = funcs.new():with_scope(scope)
         if not executor then error(tostring(scope_error)) end
@@ -117,9 +134,7 @@ function M.source(entries: {migrations.Entry}): migrations.Source
         is_applied = function(target: string, id: string): (boolean?, string?)
             local entry = by_id[id]
             if not entry or entry.meta.target_db ~= target then return nil, "migration is outside the captured database selection" end
-            local rows, problem = read_applied(target, {id})
-            if not rows then return nil, problem end
-            return #rows == 1, nil
+            return M.is_applied(target, id)
         end,
         runner = {setup = function(target: string): (migrations.DatabaseRunner?, string?)
             return {

@@ -114,6 +114,11 @@ local function handle(raw: unknown): Reply
     if not admitted then return fail(start_fault.code, start_fault.message) end
     local child_thread, child_action, child_attempt = bounds.id(admitted.thread_id), bounds.id(admitted.action_id), bounds.id(admitted.attempt_id)
     if not child_thread or not child_action or not child_attempt then return fail("INTERNAL", "the launch admission is incomplete") end
-    return {ok = true, error = nil, value = {thread_id = child_thread, action_id = child_action, attempt_id = child_attempt}}
+    -- Return the durable child identities together with the launch definition
+    -- and the exact bounded brief that selected it. Callers can label the
+    -- child without re-resolving a registry entry or guessing from an action
+    -- id; the definition was already loaded and admitted above.
+    return {ok = true, error = nil, value = {thread_id = child_thread, action_id = child_action, attempt_id = child_attempt,
+        definition_ref = definition.ref, title = definition.title, brief = request.brief}}
 end
 return {handle = handle}

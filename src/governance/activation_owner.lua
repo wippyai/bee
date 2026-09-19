@@ -9,6 +9,7 @@ local measure = require("activation_measure")
 local approval = require("approval")
 local preflight = require("preflight")
 local json = require("json")
+local migration_work = require("migration_work")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -19,7 +20,7 @@ type Apply = (string, unknown) -> ({[string]: unknown}?, string?)
 type Observe = (string, unknown) -> (boolean?, string?)
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
-    approval_policy: string, apply: Apply, matches: Observe}
+    approval_policy: string, apply: Apply, matches: Observe, migrations: any}
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
@@ -38,7 +39,10 @@ local function configuration(raw: Config): (Config?, string?)
     local approval_kind = type(raw.approvals)
     if type(raw.resolver) ~= "table" or type(raw.resolver.resolve) ~= "function"
         or (approval_kind ~= "table" and approval_kind ~= "userdata") or type(raw.approvals.call) ~= "function"
-        or type(raw.apply) ~= "function" or type(raw.matches) ~= "function" then
+        or type(raw.apply) ~= "function" or type(raw.matches) ~= "function" or type(raw.migrations) ~= "table"
+        or type(raw.migrations.matches) ~= "function" or type(raw.migrations.prepare) ~= "function"
+        or type(raw.migrations.clear) ~= "function" or type(raw.migrations.cleared) ~= "function"
+        or type(raw.migrations.execute) ~= "function" then
         return nil, "activation owner dependencies are invalid"
     end
     if not bounds.id(raw.actor_id) or not bounds.id(raw.consumer_id)
@@ -94,7 +98,7 @@ end
 
 local function unchanged(intent: Object, current: Object): Result?
     local fields = {"owner_node", "workspace_id", "source_node", "source_workspace", "version",
-        "plan_digest", "artifact_digest", "resolution_digest", "preflight_digest"}
+        "plan_digest", "artifact_digest", "resolution_digest", "preflight_digest", "migration_work_digest"}
     for _, field in ipairs(fields) do
         if intent[field] ~= current[field] then
             if field == "resolution_digest" then
@@ -164,7 +168,8 @@ function M.prepare(raw_config: Config, raw: unknown): Result
         source_workspace = facts.source_workspace, version = facts.version,
         plan_digest = facts.plan_digest, plan_revision = facts.plan_revision,
         selection_revision = facts.selection_revision, artifact = facts.artifact,
-        resolution = facts.resolution, preflight = facts.preflight})
+        resolution = facts.resolution, preflight = facts.preflight,
+        migration_work = facts.migration_work})
     if not prepared.ok then return prepared end
     local intent = object(prepared.value)
     if not intent then return failure("INTERNAL", "activation store returned no prepared intent") end
@@ -191,6 +196,28 @@ local function remeasure_authorized(config: Config, intent: Object): (Object?, R
     if not current then return nil, measurement_error end
     local changed = unchanged(intent, current)
     if changed then return nil, changed end
+    return current, nil
+end
+
+-- Once migration execution starts, the approved pending set is expected to
+-- shrink.  The exact artifact and composed candidate must remain unchanged;
+-- preflight independently refuses changed/removed applied definitions.
+local function remeasure_progress(config: Config, intent: Object): (Object?, Result?)
+    local current, measurement_error = measured(config, approved_spec(intent))
+    if not current then return nil, measurement_error end
+    for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
+        "plan_digest", "artifact_digest", "resolution_digest"}) do
+        if intent[field] ~= current[field] then
+            if field == "resolution_digest" then
+                local named = composed_base_diagnostic(intent, current)
+                if named then return nil, failure("CONFLICT", named) end
+            end
+            return nil, failure("CONFLICT", "activation measurement changed during migration: " .. field)
+        end
+    end
+    if intent.plan_revision ~= current.plan_revision or intent.selection_revision ~= current.selection_revision then
+        return nil, failure("CONFLICT", "selected plan changed during migration")
+    end
     return current, nil
 end
 
@@ -256,7 +283,55 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "applying" or (intent.phase == "settled" and intent.outcome == "uncertain") then
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
-        local spec, measurement_error = remeasure_authorized(config, intent)
+        local work, work_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
+        if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
+        if intent.migrations_completed ~= true then
+            local staged, staged_error = config.migrations.matches(config.overlay_owner, work)
+            if staged == nil then return failure("UNAVAILABLE", tostring(staged_error)) end
+            local cleared, cleared_error = config.migrations.cleared(config.overlay_owner)
+            if cleared == nil then return failure("UNAVAILABLE", tostring(cleared_error)) end
+            if staged or not cleared then
+                local removed, remove_error = config.migrations.clear(config.overlay_owner)
+                if not removed then return failure("UNCERTAIN", tostring(remove_error or "clear migration prerequisites")) end
+                local observed, observe_error = config.migrations.cleared(config.overlay_owner)
+                if observed ~= true then return failure("UNCERTAIN", tostring(observe_error or "migration prerequisite cleanup is not observable")) end
+                local result: Object = {}
+                for field, value in pairs(intent) do result[field] = value end
+                result.recovered = true
+                result.diagnostics = "migration prerequisites cleared before recovery"
+                return transaction.success(result, false)
+            end
+            local _, measurement_error = remeasure_progress(config, intent)
+            if measurement_error then return measurement_error end
+            local prepared, prepare_error = config.migrations.prepare(config.overlay_owner, work)
+            if not prepared then return failure("UNCERTAIN", tostring(prepare_error or "prepare migration definitions")) end
+            local exact, exact_error = config.migrations.matches(config.overlay_owner, work)
+            if exact ~= true then return failure("UNCERTAIN", tostring(exact_error or "migration definitions are not exactly staged")) end
+            local receipt, complete, execute_error = config.migrations.execute(work)
+            if not receipt then return failure("UNCERTAIN", tostring(execute_error or "execute captured migrations")) end
+            local operation_key = key(prefix, "migrations-" .. tostring(intent.revision))
+            if not operation_key then return failure("INVALID", "activation receipt key is too long") end
+            local recorded = activations.call(config.activations, config.actor_id, {operation = "record_migrations",
+                intent_id = intent_id, expected_revision = intent.revision, idempotency_key = operation_key,
+                receipt = receipt, complete = complete, diagnostics = execute_error or "captured migrations ledger-confirmed"})
+            if not recorded.ok then return recorded end
+            if not complete then return failure("UNCERTAIN", tostring(execute_error or "migration execution is incomplete"), object(recorded.value)) end
+            return recorded
+        end
+        local cleared, cleanup_error = config.migrations.cleared(config.overlay_owner)
+        if cleared == nil then return failure("UNAVAILABLE", tostring(cleanup_error)) end
+        if not cleared then
+            local removed, remove_error = config.migrations.clear(config.overlay_owner)
+            if not removed then return failure("UNCERTAIN", tostring(remove_error or "clear migration prerequisites")) end
+            local observed, observe_error = config.migrations.cleared(config.overlay_owner)
+            if observed ~= true then return failure("UNCERTAIN", tostring(observe_error or "migration prerequisite cleanup is not observable")) end
+            local result: Object = {}
+            for field, value in pairs(intent) do result[field] = value end
+            result.recovered = true
+            result.diagnostics = "migration prerequisites cleared"
+            return transaction.success(result, false)
+        end
+        local spec, measurement_error = remeasure_progress(config, intent)
         if not spec then return measurement_error :: Result end
         local function uncertain(diagnostics: string): Result
             local outcome_key = key(prefix, "outcome-uncertain-" .. tostring(intent.revision))
@@ -277,7 +352,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
                 return uncertain(observed == nil and tostring(applied_observe_error)
                     or "overlay apply completed without an exact observed match")
             end
-            local reverified, reverify_error = remeasure_authorized(config, intent)
+            local reverified, reverify_error = remeasure_progress(config, intent)
             if not reverified then
                 return uncertain(tostring((reverify_error :: Result).message
                     or "activation apply could not be remeasured against the current composed registry"))
@@ -297,7 +372,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "settled" and intent.outcome == "applied" then
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
-        local spec, measurement_error = remeasure_authorized(config, intent)
+        local spec, measurement_error = remeasure_progress(config, intent)
         if not spec then return measurement_error :: Result end
         local matches, observe_error = config.matches(config.overlay_owner, spec.entries)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end

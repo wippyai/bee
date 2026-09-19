@@ -6,6 +6,7 @@ local preflight = require("preflight")
 local canonical = require("canonical")
 local hash = require("hash")
 local bounds = require("bounds")
+local migration_work = require("migration_work")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -65,7 +66,13 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         end
         return nil, "destination preflight is not ready: " .. table.concat(reasons, ", ")
     end
-    if #report.pending_migrations > 0 then return nil, "pending migrations require an activation barrier" end
+    if #candidate.migrations > 0 then
+        for _, entry in ipairs(candidate.entries) do
+            if entry.auto_start then
+                return nil, "migration-enabled activation does not yet admit auto-start consumers"
+            end
+        end
+    end
     -- A runtime rebuild may assign a new numeric registry revision to the same
     -- composed state. The live preflight above checks the actual revision.
     -- Durable approval evidence normalizes that transient fence to zero while
@@ -88,14 +95,36 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     local resolution_digest, measure_error = digest(resolution_bytes)
     if not resolution_digest then return nil, measure_error end
     local artifact_blob: Blob = {bytes = plan.artifact_bytes :: string, digest = plan.artifact_digest :: string}
+    local work, work_error = migration_work.capture(durable_candidate :: preflight.Candidate,
+        {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
+            digest = artifact_blob.digest}, durable_context :: preflight.Context)
+    if not work then return nil, work_error or "capture exact migration work" end
+    for _, database_binding in ipairs(work.databases) do
+        if database_binding.planned then
+            return nil, "migration-enabled activation currently requires an existing host-admitted database"
+        end
+    end
+    for _, migration in ipairs(work.migrations) do
+        local summary: preflight.Entry? = nil
+        for _, entry in ipairs(candidate.entries) do
+            if entry.id == migration.id then summary = entry; break end
+        end
+        if not summary then return nil, "captured migration has no measured candidate entry" end
+        for _, reference in ipairs(summary.references) do
+            if durable_context.entries[reference] == nil then
+                return nil, "migration-enabled activation currently requires migration dependencies to be installed already"
+            end
+        end
+    end
     local resolution_blob: Blob = {bytes = resolution_bytes, digest = resolution_digest}
     local preflight_blob: Blob = {bytes = report_bytes, digest = report_digest}
     return {owner_node = owner, workspace_id = workspace, source_node = source,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         plan_revision = revision, selection_revision = selection_revision,
         artifact_digest = artifact_blob.digest, resolution_digest = resolution_blob.digest,
-        preflight_digest = preflight_blob.digest,
+        preflight_digest = preflight_blob.digest, migration_work_digest = work.digest,
         entries = entries, candidate = durable_candidate, artifact = artifact_blob, resolution = resolution_blob,
+        migration_work = {bytes = work.bytes, digest = work.digest},
         preflight = preflight_blob, report = durable_report}, nil
 end
 

@@ -5,7 +5,9 @@ APIs. It has no Keeper dependency and requires no runtime changes.
 
 The public `bee.hub:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
-`bee.hub.read` or `bee.hub.manage` for the requested component; the facade
+`bee.hub.read` or `bee.hub.manage` for the requested component; effect-free
+planning also requires installed-catalog read authority, while apply alone
+requires management authority. The facade
 validates and authorizes the operation before entering its fixed private scope.
 Requests cannot select credentials, a registry URL, an actor or a host path.
 
@@ -50,4 +52,7 @@ Authored component overlays and application launch/sharing admission remain sepa
 
 Package migrations retain host-supplied permissions and registry reads, with
 Hub's private publication, receipt, worker and scope-editing policies removed
-from their call scope. Host database and function grants remain required.
+from their call scope. The runner also accepts a trusted owner's explicit
+private-policy list so another owner can reuse the execution primitive without
+passing its own authority into component code. Only those named policies are
+removed; host database and function grants remain required.

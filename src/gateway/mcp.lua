@@ -37,14 +37,14 @@ local TOOLS: {Tool} = {
             in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
             outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
         }}},
-    {name = "thread_launch", description = "Start one host-allow-listed managed agent in your own workspace, hand it a brief, and return its thread, action and attempt for thread_read, thread_message and thread_wait", operation = "bee.harness.launch:agent_launch_call",
+    {name = "thread_launch", description = "Start one host-allow-listed managed agent in your own workspace and thread. Returns the admitted definition and title, submitted brief, and child thread, action and attempt IDs for thread_read, thread_message and thread_wait.", operation = "bee.harness.launch:agent_launch_call",
         policies = {"bee:gateway_tool_launch_policy"}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_ref", "brief", "idempotency_key"}, properties = {
             definition_ref = {type = "string", minLength = 1, maxLength = 160},
             brief = {type = "string", minLength = 1, maxLength = 16384},
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
-    {name = "workspace", description = "Learn this destination's application authoring contract (read-only guide), or create, inspect, edit or freeze a caller-owned Governance authoring workspace", operation = "bee.governance:workspace_call",
+    {name = "workspace", description = "Learn this destination's component authoring contract (read-only guide), or create, inspect, edit or freeze a caller-owned Governance authoring workspace", operation = "bee.governance:workspace_call",
         policies = {"bee:gateway_tool_workspace_policy"}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "remove", "freeze"}},
@@ -67,7 +67,13 @@ local TOOLS: {Tool} = {
             offset = {type = "integer", minimum = 0},
             limit = {type = "integer", minimum = 1, maximum = 16384},
         }}},
-    {name = "delivery", description = "Request delivery of your frozen application to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in App Delivery, approval in Approvals, apply by the activation owner, and opening from the start menu.", operation = "bee.governance:delivery_call",
+    {name = "components", description = "Inspect installed registry components, explore Hub packages and review a resolved installation plan without applying it. Catalog and details discover packages; installed reads effective component state; inspect and state show exact package entries, resources and requirements; files and read_file inspect packaged documentation and examples; plan resolves the exact dependency closure, migrations and capabilities. This tool cannot apply, install, update, uninstall or write the registry.", operation = "bee.hub:call",
+        policies = {"bee:gateway_tool_components_policy"}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
+            operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}},
+            request = {type = "object"},
+        }}},
+    {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in App Delivery, approval in Approvals and apply by the activation owner.", operation = "bee.governance:delivery_call",
         policies = {"bee:gateway_tool_delivery_policy"}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_workspace", "version"}, properties = {
             operation = {type = "string", enum = {"request", "status"}},
@@ -300,5 +306,18 @@ function M.workspace_arguments(params: Object): (Object?, string?)
         return nil, "decoded content exceeds the MCP file bound"
     end
     return request, nil
+end
+
+-- The managed-agent component explorer is narrower than the private Hub
+-- facade. Keep planning, apply and receipt operations out of this MCP path.
+function M.components_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"operation", "request"})
+    if unknown_field then return nil, unknown_field end
+    local operation = bounds.member(arguments.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"})
+    if not operation then return nil, "components operation is read-only" end
+    if arguments.request ~= nil and not bounds.object(arguments.request) then return nil, "request must be an object" end
+    return {operation = operation, request = arguments.request}, nil
 end
 return M

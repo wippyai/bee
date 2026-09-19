@@ -1,6 +1,7 @@
 -- MIT. Persistence and fencing checks for destination activation state.
 local test = require("test")
 local hash = require("hash")
+local canonical = require("canonical")
 local store = require("activation_store")
 
 local function blob(bytes: string): {[string]: string}
@@ -9,7 +10,7 @@ local function blob(bytes: string): {[string]: string}
     return {bytes = bytes, digest = digest}
 end
 local function ok(result: {[string]: unknown}): {[string]: unknown}
-    test.is_true(result.ok == true)
+    test.is_true(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
     return result.value :: {[string]: unknown}
 end
 local function base(operation: string, revision: integer, key: string): {[string]: unknown}
@@ -22,7 +23,28 @@ local function prepare(): {[string]: unknown}
     input.plan_digest = string.rep("a", 64)
     input.plan_revision, input.selection_revision = 4, 2
     input.artifact, input.resolution, input.preflight = blob("artifact-v1"), blob("resolved-v1"), blob("preflight-v1")
+    input.migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+        destination_node = "node-a", source_node = "source-a", base_revision = 0,
+        base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
+        candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
+        plan_digest = string.rep("e", 64), migrations = {}, databases = {}})))
     return input
+end
+local function migration_blob(): ({[string]: string}, string)
+    local definition: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
+        meta = {type = "migration", target_db = "demo:db", ordinal = 1},
+        data = {source = "return true"}}
+    local definition_bytes = assert(canonical.encode(definition))
+    local checksum = assert(hash.sha256(definition_bytes))
+    local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+        destination_node = "node-a", source_node = "source-a", base_revision = 0,
+        base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
+        candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
+        plan_digest = string.rep("e", 64), migrations = {{id = "demo:001", target_db = "demo:db",
+            ordinal = 1, checksum = checksum, package = "demo/app", definition = definition}},
+        databases = {{id = "demo:db", kind = "db.sql.sqlite", package = "base/db",
+            digest = string.rep("f", 64), planned = false}}}))
+    return blob(bytes), checksum
 end
 local function define_tests()
     test.describe("Governance activation store", function()
@@ -55,6 +77,7 @@ local function define_tests()
             test.eq(desired.phase, "authorized")
             local applying = ok(store.call(state, "actor-a", base("begin_apply", 4, "apply-1")))
             test.eq(applying.phase, "applying")
+            test.is_true(applying.migrations_completed == true)
             local outcome = base("record_outcome", 5, "outcome-1")
             outcome.outcome, outcome.diagnostics = "uncertain", "apply reply was lost"
             local uncertain = ok(store.call(state, "actor-a", outcome))
@@ -109,7 +132,7 @@ local function define_tests()
                     source_workspace = source_workspace, version = "v1",
                     plan_digest = string.rep("a", 64), plan_revision = 2, selection_revision = 2,
                     artifact = blob("artifact-" .. intent_id), resolution = blob("resolution-" .. intent_id),
-                    preflight = blob("preflight-" .. intent_id)}
+                    preflight = blob("preflight-" .. intent_id), migration_work = prepare().migration_work}
                 local prepared = ok(store.call(state, "actor-a", input))
                 local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = intent_id,
                     expected_revision = 1, idempotency_key = prefix .. "-bind", approval_id = "approval-" .. prefix,
@@ -127,6 +150,41 @@ local function define_tests()
             test.eq(ok(store.desired(state, "bee.apps:app-a")).intent_id, "intent-app-a")
             test.eq(ok(store.desired(state, "bee.apps:app-b")).intent_id, "intent-app-b")
             test.eq(store.desired(state, "bee.apps:missing").code, "NOT_FOUND")
+            assert(store.close(state))
+        end)
+        test.it("records exact partial migration progress before overlay settlement", function()
+            local state, open_error = store.open("bee.governance:activation_test_db", "node-a", "workspace-migrations")
+            if not state then error(tostring(open_error)) end
+            local input = prepare()
+            input.intent_id, input.idempotency_key = "intent-migrations", "migrations-prepare"
+            local work, checksum = migration_blob()
+            input.migration_work = work
+            local prepared = ok(store.call(state, "actor-a", input))
+            ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = input.intent_id,
+                expected_revision = prepared.revision, idempotency_key = "migrations-bind", approval_id = "approval-migrations",
+                approval_proposal_digest = string.rep("d", 64), approval_owner_incarnation = 1}))
+            ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = input.intent_id,
+                expected_revision = 2, idempotency_key = "migrations-consume"}))
+            local authorized = ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = input.intent_id,
+                expected_revision = 3, idempotency_key = "migrations-authorized", consumer_id = "host",
+                proposal_digest = string.rep("d", 64), effect_key = prepared.effect_key}))
+            local applying = ok(store.call(state, "actor-a", {operation = "begin_apply", intent_id = input.intent_id,
+                expected_revision = authorized.revision, idempotency_key = "migrations-apply"}))
+            test.is_false(applying.migrations_completed)
+            local premature = store.call(state, "actor-a", {operation = "record_outcome", intent_id = input.intent_id,
+                expected_revision = applying.revision, idempotency_key = "migrations-premature",
+                outcome = "applied", diagnostics = "must refuse"})
+            test.is_false(premature.ok)
+            test.eq(premature.code, "CONFLICT")
+            local receipt = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-receipt@1",
+                rows = {{id = "demo:001", target_db = "demo:db", module = "demo/app", status = "applied"}}})))
+            local completed = ok(store.call(state, "actor-a", {operation = "record_migrations", intent_id = input.intent_id,
+                expected_revision = applying.revision, idempotency_key = "migrations-record", receipt = receipt,
+                complete = true, diagnostics = "ledger confirmed"}))
+            test.is_true(completed.migrations_completed)
+            test.eq(completed.phase, "applying")
+            local facts = ok(store.applied(state, "demo/app"))
+            test.eq((facts["demo:db\ndemo:001"] :: {[string]: unknown}).checksum, checksum)
             assert(store.close(state))
         end)
     end)

@@ -12,6 +12,18 @@ before calling its private backend. Catalog and installed inventory use the
 `catalog` resource. Caller input cannot choose a registry URL, credential, actor,
 execution scope or host filesystem path.
 
+Managed Agents receive the narrower MCP `components` tool when their host launch
+policy admits it. It accepts only `catalog`, `details`, `inspect`, `state`,
+`files`, `read_file`, `installed` and the effect-free `plan`, with package
+arguments under `request`. A plan resolves the dependency closure at review time,
+requirements, migrations, auto-start entries and capabilities against the
+current installed base; verified artifacts may populate the immutable local
+cache. The MCP decoder refuses `apply`, status and direct installation or
+removal names before dispatch. It can inspect effective installed state and
+verified Hub package contents; it cannot write the registry, apply a package,
+activate an overlay or grant package permissions.
+Direct `bee.hub:call` management remains a separate host-authorized API.
+
 ## Read an uninstalled package
 
 Like Kickside's Hub artifact inspection, Bee opens the exact package, reads it
@@ -60,7 +72,7 @@ accepts an exact component/version and typed requirement parameters, returning
 requirements, entries and digest. `installed` takes no request body and reports
 native ownership, direct roots and dependency users.
 
-## Manage dependencies
+## Review and manage dependencies
 
 `plan` takes `{action, component, version?, parameters?, migration_policy?}`.
 Install/update require an exact version; uninstall takes neither version nor
@@ -68,6 +80,22 @@ parameters. The planner preserves unrelated roots and refuses changes to
 host-configured roots. Exact dependency pins open the artifact without listing
 release history. Version ranges fetch pages only as needed; a large version
 history is not itself an error.
+
+`plan` requires read authority for both the selected component and the installed
+catalog because its resolved closure can describe other installed roots. It has
+no registry effect and can fetch and verify artifacts into the native immutable cache.
+`apply` separately requires management authority and the displayed digest.
+`ready` means requirement bindings are complete; it does not prove migration
+function/ledger authority. `capabilities` names policy definitions present in
+the closure and grants none of them.
+
+Apply replans and checks the displayed digest and registry base before
+publication. The native dependency publisher then resolves transitive ranges;
+if its resulting inventory differs, Bee detects the mismatch and restores the
+baseline before running migrations. Immutable caching verifies artifact bytes
+but does not freeze a transitive version choice. A hard guarantee that no
+different transitive closure is briefly published requires a future
+pinned-closure publication contract.
 
 `apply` takes the same request and the displayed plan's `expected_digest` at the
 outer call level. A private worker serializes Bee Hub operations, replans and

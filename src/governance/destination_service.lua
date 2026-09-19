@@ -21,6 +21,8 @@ local delivery = require("delivery")
 local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
+local migration_effect = require("migration_effect")
+local migration_runner = require("migration_runner")
 
 local M = {}
 M.BACKEND = "bee.governance:destination_backend_call"
@@ -167,7 +169,8 @@ local function approval_executor(): (unknown?, string?)
     return funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume})), nil
 end
 
-local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string): unknown
+local function destination_resolver(profile_value: Profile, node_id: string, workspace_id: string,
+    activation_store: activations.Store?): unknown
     local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id or spec.workspace_id ~= workspace_id
@@ -180,12 +183,25 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
     local function selected_policy(spec_raw: unknown, _captured: unknown, _preview: Object): (ResolverPolicy?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
-        -- Migration execution is deliberately absent. An artifact containing
-        -- migrations remains pending and preflight blocks activation.
+        local applied: Object = {}
+        if activation_store then
+            local known = activations.applied(activation_store, profile_value.component)
+            if not known.ok then return nil, tostring(known.message or "read applied migration facts") end
+            applied = bounds.object(known.value) or {}
+            for _, fact in pairs(applied) do
+                local item = bounds.object(fact)
+                local target = item and bounds.id(item.target_db) or nil
+                local migration_id = item and bounds.id(item.id) or nil
+                if not target or not migration_id then return nil, "stored applied migration fact is malformed" end
+                local present, ledger_error = migration_runner.is_applied(target, migration_id)
+                if present == nil then return nil, tostring(ledger_error or "read target migration ledger") end
+                if not present then return nil, "target migration ledger differs from Governance facts: " .. migration_id end
+            end
+        end
         return {node_id = node_id, policy_digest = profile_value.policy_digest,
             packages = profile_value.packages, namespaces = profile_value.namespaces, kinds = profile_value.kinds,
             databases = profile_value.databases, grants = profile_value.grants, modules = profile_value.modules,
-            applied = {}, migration_barrier = false}, nil
+            applied = applied, migration_barrier = true}, nil
     end
     if profile_value.resolver == "overlay" then
         return overlay_resolver.new({overlay_owner = profile_value.overlay_owner,
@@ -203,7 +219,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     activation_store: activations.Store): (owner.Config?, string?)
     local executor, executor_error = approval_executor()
     if not executor then return nil, executor_error end
-    local resolved = destination_resolver(profile_value, activation_store.node, profile_value.workspace_id)
+    local resolved = destination_resolver(profile_value, activation_store.node, profile_value.workspace_id, activation_store)
     return {plans = plan_store, activations = activation_store, resolver = resolved :: owner.Resolver,
         approvals = executor :: owner.Executor, actor_id = ACTOR, consumer_id = ACTOR,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
@@ -211,7 +227,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
             return materializer.reconcile(overlay_owner, entries)
         end, matches = function(overlay_owner: string, entries: unknown): (boolean?, string?)
             return materializer.matches(overlay_owner, entries)
-        end}, nil
+        end, migrations = migration_effect}, nil
 end
 
 -- Read-only entry-set comparison for one staged plan. It decodes the exact
@@ -233,7 +249,7 @@ local function by_id(rows: {Object})
     end)
 end
 
-local function plan_changes(plan_store: plans.Store, actor_id: string, workspace_id: string,
+local function plan_changes(plan_store: plans.Store, activation_store: activations.Store, actor_id: string, workspace_id: string,
     source_node: string, source_workspace: string, version: string): Result
     local found = plans.call(plan_store, actor_id, {operation = "get", source_node = source_node,
         source_workspace = source_workspace, version = version})
@@ -248,7 +264,7 @@ local function plan_changes(plan_store: plans.Store, actor_id: string, workspace
     if not chosen then return failure("BLOCKED", profile_error or "destination host has no activation profile for this source") end
     local owner_node = bounds.id(plan.owner_node)
     if not owner_node then return failure("INTERNAL", "plan store returned no owner") end
-    local resolved = destination_resolver(chosen, owner_node, workspace_id)
+    local resolved = destination_resolver(chosen, owner_node, workspace_id, activation_store)
     local _, context, resolve_error = (resolved :: Resolver):resolve({owner_node = owner_node,
         workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
         version = version, artifact_bytes = plan.artifact_bytes, artifact_digest = plan.artifact_digest})
@@ -439,7 +455,7 @@ function M.call(raw: unknown): Result
                             application.value.source_workspace)
                         if not chosen then result = failure("BLOCKED", profile_error or "activation profile is unavailable")
                         else
-                            local resolved = destination_resolver(chosen, node_id, workspace_id)
+                            local resolved = destination_resolver(chosen, node_id, workspace_id, activation_store)
                             result = destination.stage_replica(plan_store, replica_store, actor_id,
                                 {source_owner = admitted_source, feed = admitted_feed, version_key = admitted_key,
                                     descriptor_digest = admitted_digest, idempotency_key = admitted_receipt},
@@ -466,7 +482,7 @@ function M.call(raw: unknown): Result
         elseif not source_node or not source_workspace or not version then
             result = failure("INVALID", "plan identity is invalid")
         else
-            result = plan_changes(plan_store, actor_id, workspace_id, source_node, source_workspace, version)
+            result = plan_changes(plan_store, activation_store, actor_id, workspace_id, source_node, source_workspace, version)
         end
     elseif operation == "review" or operation == "select" then
         local source_node, source_workspace, version = identity(request)

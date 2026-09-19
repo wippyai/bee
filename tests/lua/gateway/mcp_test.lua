@@ -129,6 +129,27 @@ local function define_tests()
             local delivery_operation = (delivery_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
             test.eq(#delivery_required, 4)
             test.eq(#(delivery_operation.enum :: {string}), 2)
+            local components_tools = mcp.list({"components"}).tools :: {{[string]: unknown}}
+            test.eq(#components_tools, 1)
+            test.eq(mcp.tool("components") and mcp.tool("components").operation, "bee.hub:call")
+            local components_schema = components_tools[1].inputSchema :: {[string]: unknown}
+            local components_operation = (components_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
+            local read_operations = components_operation.enum :: {string}
+            test.eq(#read_operations, 8)
+            for _, operation in ipairs({"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}) do
+                local found = false
+                for _, admitted in ipairs(read_operations) do if admitted == operation then found = true end end
+                test.is_true(found)
+                local request, request_error = mcp.components_arguments({arguments = {operation = operation, request = {}}})
+                test.is_nil(request_error)
+                test.eq(request and request.operation, operation)
+            end
+            for _, operation in ipairs({"apply", "status", "install", "uninstall", "update"}) do
+                local _, mutation_error = mcp.components_arguments({arguments = {operation = operation, request = {}}})
+                test.eq(mutation_error, "components operation is read-only")
+            end
+            local _, authority_error = mcp.components_arguments({arguments = {operation = "catalog", registry = "caller-selected"}})
+            test.eq(authority_error, "unknown field registry")
             local publish_tools = mcp.list({"publish"}).tools :: {{[string]: unknown}}
             test.eq(#publish_tools, 1)
             test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.governance:delivery_call")

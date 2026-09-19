@@ -8,6 +8,7 @@ local record_types = require("record_types")
 local M = {}
 M.LINE_LIMIT = 200
 M.DETAIL_LIMIT = 400
+M.ID_LIMIT = 96
 type Record = record_types.Record
 type Object = {[string]: unknown}
 type Row = {sequence: integer, record_id: string, kind: string, glyph: string, source: string, producer_id: string, summary: string,
@@ -15,6 +16,9 @@ type Row = {sequence: integer, record_id: string, kind: string, glyph: string, s
 M.GLYPHS = {busy = "●", waiting_viewer = "◐", idle = "○", succeeded = "✓", failed = "!", cancelled = "×", uncertain = "?", record = "·"}
 local function bound(value: unknown, limit: integer?): string
     return text.bound(value, limit or M.LINE_LIMIT)
+end
+local function bounded_id(value: unknown): string
+    return bound(value, M.ID_LIMIT)
 end
 local function outcome_glyph(outcome: string): string
     if outcome == "succeeded" then return M.GLYPHS.succeeded end
@@ -65,6 +69,7 @@ end
 function M.row(entry: Record): Row
     local glyph, summary, outcome = M.GLYPHS.record, "", ""
     local approval_id: string? = nil
+    local parent_action_id: string? = nil
     local kind = entry.kind
     if kind == "observation" then
         glyph, summary, outcome = observation(entry.body :: record_types.Observation)
@@ -76,7 +81,15 @@ function M.row(entry: Record): Row
     elseif kind == "action.admitted" then
         local admitted = entry.body :: record_types.Admitted
         glyph = M.GLYPHS.busy
-        summary = "admitted " .. admitted.binding_ref .. " for " .. admitted.principal_id .. " " .. content_text(admitted.input)
+        parent_action_id = admitted.parent_action_id
+        local brief = content_text(admitted.input)
+        if admitted.parent_action_id and entry.action_id then
+            -- Child launches are the useful Timeline identity: keep the
+            -- child action visible beside the brief that caused it.
+            summary = "child action " .. bounded_id(entry.action_id) .. (brief ~= "" and (" · " .. brief) or "")
+        else
+            summary = "admitted " .. admitted.binding_ref .. " for " .. admitted.principal_id .. " " .. brief
+        end
     elseif kind == "attempt.prepared" then
         summary = "attempt prepared"
     elseif kind == "attempt.started" then
@@ -119,11 +132,12 @@ function M.row(entry: Record): Row
         "record " .. entry.record_id .. "  recorded " .. entry.recorded_at .. "  producer " .. entry.producer_id .. "  source " .. entry.source,
     }
     local links: {string} = {}
-    if entry.action_id then links[#links + 1] = "action " .. entry.action_id end
-    if entry.attempt_id then links[#links + 1] = "attempt " .. entry.attempt_id end
-    if entry.turn_id then links[#links + 1] = "turn " .. entry.turn_id end
-    if entry.correlation_id then links[#links + 1] = "correlation " .. entry.correlation_id end
-    if entry.causation then links[#links + 1] = "caused by " .. entry.causation.record_id end
+    if entry.action_id then links[#links + 1] = "action " .. bounded_id(entry.action_id) end
+    if parent_action_id then links[#links + 1] = "parent action " .. bounded_id(parent_action_id) end
+    if entry.attempt_id then links[#links + 1] = "attempt " .. bounded_id(entry.attempt_id) end
+    if entry.turn_id then links[#links + 1] = "turn " .. bounded_id(entry.turn_id) end
+    if entry.correlation_id then links[#links + 1] = "correlation " .. bounded_id(entry.correlation_id) end
+    if entry.causation then links[#links + 1] = "caused by " .. bounded_id(entry.causation.record_id) end
     if #links > 0 then details[#details + 1] = table.concat(links, "  ") end
     return {sequence = entry.sequence, record_id = entry.record_id, kind = kind, glyph = glyph, source = entry.source, producer_id = bound(entry.producer_id, 80),
         summary = bound(summary), details = {bound(details[1], M.DETAIL_LIMIT), details[2] and bound(details[2], M.DETAIL_LIMIT) or ""},

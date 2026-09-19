@@ -103,6 +103,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.governance:plan_test_policy]}
   imports:
+    canonical: bee.sync:canonical
     test: wippy.test:test
     activation_store: bee.governance:activation_store
 - name: activation_measure_test

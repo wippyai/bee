@@ -31,8 +31,6 @@ local function applied(request: unknown, digest: string)
 end
 local function main()
     local baseline = assert(registry.snapshot())
-    local denied = call("plan", {action = "install", component = "userspace/docker", version = "0.5.12"})
-    assert(denied.ok == false and denied.code == "DENIED", "foreign module management was authorized")
     local scope, scope_error = security.named_scope("bee.hub:execution_scope")
     assert(not scope and scope_error, "caller obtained private Hub execution scope")
     local backend, backend_error = funcs.new():call("bee.hub:backend", {operation = "installed"})
@@ -76,6 +74,27 @@ local function main()
     assert(status.ok == true, "receipt disappeared after later operations")
     logger:info("HUB_MANAGE_PASS")
 end
+local function narrow()
+    local result, problem = funcs.new():call("bee.hub:call", {operation = "plan",
+        request = {action = "install", component = "wippy/test", version = "0.4.16"}})
+    assert(not problem, tostring(problem))
+    local reply = assert(bounds.object(result))
+    assert(reply.ok == false and reply.code == "DENIED", "component-only read exposed plan inventory")
+    logger:info("HUB_MANAGE_NARROW_PASS")
+end
+local function reader()
+    local request = {action = "install", component = "wippy/test", version = "0.4.16"}
+    local review, review_error = funcs.new():call("bee.hub:call", {operation = "plan", request = request})
+    assert(not review_error, tostring(review_error))
+    local plan = assert(bounds.object(review))
+    local value = assert(bounds.object(plan.value))
+    local denied, denied_error = funcs.new():call("bee.hub:call", {operation = "apply", request = request,
+        expected_digest = value.digest})
+    assert(not denied_error, tostring(denied_error))
+    local denied_reply = assert(bounds.object(denied))
+    assert(denied_reply.ok == false and denied_reply.code == "DENIED", "read-only caller applied a plan")
+    logger:info("HUB_MANAGE_READER_PASS")
+end
 local function restart()
     local snapshot = assert(registry.snapshot())
     local state = assert(snapshot:state())
@@ -98,4 +117,5 @@ local function checked(run: () -> ())
     local ok, problem = pcall(run)
     if not ok then logger:error("HUB_MANAGE_FAILURE " .. tostring(problem)); error(tostring(problem)) end
 end
-return {main = function() checked(main) end, restart = function() checked(restart) end}
+return {main = function() checked(main) end, narrow = function() checked(narrow) end,
+    reader = function() checked(reader) end, restart = function() checked(restart) end}

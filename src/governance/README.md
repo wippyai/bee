@@ -13,9 +13,10 @@ from exact decoded artifact entries. `activation_owner` binds the selected plan,
 destination-local measurement, local approval, activation ledger and a
 host-supplied overlay adapter into a resumable state machine. The destination
 service supplies the Hub resolver, fixed approval consumer and boot recovery,
-and exposes local workspace-scoped operations. Its application UI and migration
-runner are still absent. The agent execution environment is separate.
-Persistent migration ledgers remain required even for ephemeral definitions.
+and exposes local workspace-scoped operations. Migration-enabled activation now
+captures exact work and runs it behind a prerequisite overlay before the full
+application overlay becomes visible. The agent execution environment is separate.
+Persistent target ledgers remain authoritative even for ephemeral definitions.
 
 `bee.governance:workspace` now freezes trusted in-memory file records into a
 deterministic binary-safe snapshot. It copies records, measures each file's bytes
@@ -60,7 +61,7 @@ the node. Exhaustion fails explicitly; there is no eviction, garbage collection
 or ownership transfer yet. Frozen content and receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
 does not mount a host directory or execute WASM. Hive transfer, inbox requests,
-plugin dispatch and application migration execution remain unimplemented.
+plugin dispatch and new-database allocation remain unimplemented.
 
 `make governance-workspace-check` proves the public route with distinct actors
 and two boots of the same database: binary round trips, denied caller/foreign
@@ -118,15 +119,18 @@ blocks the durable publication adapter, not the distinct owner/generation-fenced
 overlay adapter.
 No production
 adapter may claim `guarded_publication` or `exact_expansion` from metadata alone.
-No installer, execution worker, activation trait, application migrations runner or remote activation
-endpoint is exposed until that boundary is implemented and accepted.
+No direct registry writer or remote activation endpoint is exposed through the
+agent facade.
 
-Migration 5 and `bee.governance:activation_store` provide the internal recovery
-ledger only. An immutable intent binds the host-selected overlay owner and exact
-plan, artifact, resolution and preflight digests. Approval/consumption progress
-is stored separately, and the workspace slot keeps authorized desired state
-separate from observed applied state. This store performs no resolution,
-approval call or overlay operation.
+Migrations 5-7 and `bee.governance:activation_store` provide the internal
+recovery ledger. An immutable intent binds the host-selected overlay owner and
+exact plan, artifact, resolution, preflight and migration-work digests.
+Approval/consumption and migration progress are stored separately, and the
+workspace slot keeps authorized desired state separate from observed applied
+state. Governance checksum facts are checked against the target SQL migration
+ledger before they enter preflight; they are a recovery index, not a substitute
+for database truth. This store performs no resolution, approval call or overlay
+operation.
 
 `bee.governance:activation_owner` prepares and advances that ledger one durable
 phase at a time. Before consumption it requires the same current accepted
@@ -137,6 +141,18 @@ remeasures that exact intent, restores its absent process-local overlay with
 revision-fenced receipts, and never follows a newer plan selection. The
 resolver, approval executor, overlay owner, apply and exact-observation functions
 remain host-selected inputs; replicated content supplies none of them.
+
+Migration work stays inside the same durable `applying` effect. For the current
+accepted slice, migration functions target an existing host-admitted SQL
+database, have no newly authored dependencies, and cannot auto-start consumers.
+Governance temporarily reconciles only the captured pending function definitions
+under a deterministic prerequisite owner, executes them through the shared Hub
+runner with Governance's private policies removed, persists partial or complete
+ledger-confirmed receipts, clears the prerequisites, and only then reconciles
+the complete application overlay. A crash after SQL commit is resumed from the
+frozen work and target ledger. Removing an overlay restores registry state; it
+never claims to roll back committed schema effects. Applied definitions are
+immutable and updates append migrations.
 
 `bee.governance:hub_resolver` now provides the destination resolution adapter.
 It captures one atomic registry state, asks the runtime to plan a
@@ -174,8 +190,8 @@ Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable
 Sync artifact definitions and preserves their registry IDs. It assigns package
 ownership from the selected local profile, rejects reserved remote `registry`
-metadata, Hub dependency directives, namespace/entry collisions and migration
-definitions, and passes only the host profile's capability ceilings to
-preflight. Existing definitions from the selected destination overlay may be
-replaced; definitions outside it remain collision inputs. This mode has no Hub
-package provenance and currently supports migration-free applications only.
+metadata, Hub dependency directives and namespace/entry collisions, and passes
+only the host profile's capability ceilings to preflight. Existing definitions
+from the selected destination overlay may be replaced; definitions outside it
+remain collision inputs. Migration definitions are measured from the exact
+artifact and admitted only through the activation barrier described above.

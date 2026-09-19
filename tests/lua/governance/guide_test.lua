@@ -18,6 +18,8 @@ local function define_tests()
             test.not_nil(string.find(document, "freeze", 1, true))
             test.not_nil(string.find(document, "App Delivery", 1, true))
             test.not_nil(string.find(document, "Approvals", 1, true))
+            test.not_nil(string.find(document, "append migration functions", 1, true))
+            test.not_nil(string.find(document, "existing host-admitted database", 1, true))
         end)
         test.it("points at the offline platform documentation the docs tool reads", function()
             local document = guide.value().document :: string

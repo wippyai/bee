@@ -10,13 +10,13 @@ local preflight = require("preflight")
 
 local M = {}
 
-M.SCHEMA = "bee.governance-migration-work@1"
+M.SCHEMA = "bee.governance-migration-work@2"
 M.MAX_MIGRATIONS = 128
 M.MAX_DATABASES = 128
 M.MAX_BYTES = 1048576
 
 type Object = {[string]: unknown}
-type Migration = {id: string, target_db: string, ordinal: integer, checksum: string, definition: Object}
+type Migration = {id: string, target_db: string, ordinal: integer, checksum: string, package: string, definition: Object}
 type Database = {id: string, kind: string, package: string, digest: string, planned: boolean, definition: Object?}
 type Work = {schema_revision: string, destination_node: string, source_node: string, base_revision: integer,
     base_digest: string, policy_digest: string, candidate_digest: string, artifact_digest: string,
@@ -67,6 +67,15 @@ local function registry_id(value: unknown): string?
     return id
 end
 
+local function package_name(value: unknown): string?
+    local name = identifier(value)
+    if not name then return nil end
+    local organization, module = name:match("^([%w_.-]+)/([%w_.-]+)$")
+    if not organization or not module or organization == "." or organization == ".."
+        or module == "." or module == ".." then return nil end
+    return name
+end
+
 local function sha(value: unknown): string?
     if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
     return value
@@ -110,13 +119,13 @@ local function normalize(raw: unknown): (Object?, string?)
     for index, raw_migration in ipairs(supplied_migrations) do
         local item = object(raw_migration)
         if not item then return nil, "migration work migrations[" .. tostring(index) .. "] must be an object" end
-        local extra_migration = fields(item, {"id", "target_db", "ordinal", "checksum", "definition"})
+        local extra_migration = fields(item, {"id", "target_db", "ordinal", "checksum", "package", "definition"})
         if extra_migration then return nil, extra_migration end
         local id, target_db = registry_id(item.id), registry_id(item.target_db)
-        local ordinal, checksum = item.ordinal, sha(item.checksum)
+        local ordinal, checksum, package = item.ordinal, sha(item.checksum), package_name(item.package)
         local definition = object(item.definition)
         if not id or not target_db or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal)
-            or ordinal < 1 or ordinal > 9007199254740991 or not checksum or not definition then
+            or ordinal < 1 or ordinal > 9007199254740991 or not checksum or not package or not definition then
             return nil, "migration work contains an invalid migration definition"
         end
         local key = target_db .. "\n" .. id
@@ -141,7 +150,7 @@ local function normalize(raw: unknown): (Object?, string?)
         if not measured then return nil, measure_error end
         if measured ~= checksum then return nil, "migration work definition checksum differs" end
         migrations[#migrations + 1] = {id = id, target_db = target_db, ordinal = ordinal,
-            checksum = checksum, definition = definition}
+            checksum = checksum, package = package, definition = definition}
         seen_migrations[key], seen_ids[id], seen_ordinals[ordinal_key] = true, true, true
         previous_target, previous_ordinal, previous_id = target_db, ordinal, id
     end
@@ -333,8 +342,13 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
     for _, item in ipairs(pending) do
         local definition = artifact_entries[item.id]
         if not definition then return nil, "pending migration is missing from its exact artifact: " .. item.id end
+        local summary: preflight.Entry? = nil
+        for _, candidate_entry in ipairs(candidate.entries) do
+            if candidate_entry.id == item.id then summary = candidate_entry; break end
+        end
+        if not summary then return nil, "pending migration has no trusted package owner: " .. item.id end
         work_migrations[#work_migrations + 1] = {id = item.id, target_db = item.target_db,
-            ordinal = item.ordinal, checksum = item.checksum, definition = definition}
+            ordinal = item.ordinal, checksum = item.checksum, package = summary.package, definition = definition}
     end
     return seal({schema_revision = M.SCHEMA, destination_node = candidate.destination_node,
         source_node = candidate.source_node, base_revision = candidate.base_revision,

@@ -19,6 +19,12 @@ entries:
     actions: [bee.hub.read, registry.get]
     resources: '*'
     effect: allow
+- name: component_reader_policy
+  kind: security.policy
+  policy:
+    actions: [bee.hub.read]
+    resources: [wippy/test]
+    effect: allow
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -32,6 +38,32 @@ entries:
     command:
       name: hub-manage-probe
       security: {actor: {id: bee.hub_manage_probe}}
+- name: narrow
+  kind: process.lua
+  source: file://main.lua
+  method: narrow
+  modules: [funcs, registry, security, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.hub_manage_probe:policy, bee.hub_manage_probe:component_reader_policy]
+  meta:
+    command:
+      name: hub-manage-narrow
+      security: {actor: {id: bee.hub_manage_probe.narrow}}
+- name: reader
+  kind: process.lua
+  source: file://main.lua
+  method: reader
+  modules: [funcs, registry, security, logger]
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.hub_manage_probe:policy, bee.hub_manage_probe:reader_policy]
+  meta:
+    command:
+      name: hub-manage-reader
+      security: {actor: {id: bee.hub_manage_probe.reader}}
 - name: restart
   kind: process.lua
   source: file://main.lua

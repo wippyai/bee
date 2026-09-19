@@ -122,6 +122,18 @@ func run(runtime string, manage bool) error {
 	host, command := "bee.hub_inspect_probe:workers", "hub-inspect-probe"
 	if manage {
 		host, command = "bee:workers", "hub-manage-probe"
+		for _, check := range []struct {
+			command string
+			marker  string
+		}{
+			{command: "hub-manage-narrow", marker: "HUB_MANAGE_NARROW_PASS"},
+			{command: "hub-manage-reader", marker: "HUB_MANAGE_READER_PASS"},
+		} {
+			checked, checkErr := runCommand(ctx, root, runtime, "run", "--verbose", "--host", host, "--", check.command)
+			if checkErr != nil || !strings.Contains(string(checked), check.marker) {
+				return fmt.Errorf("Hub authority check %s failed: %v\n%s", check.command, checkErr, checked)
+			}
+		}
 	}
 	output, err := runCommand(ctx, root, runtime, "run", "--verbose", "--host", host, "--", command)
 	if err != nil {

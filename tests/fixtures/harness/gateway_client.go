@@ -309,6 +309,9 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 	report["child_thread"] = value["thread_id"]
 	report["child_action"] = value["action_id"]
 	report["child_attempt"] = value["attempt_id"]
+	report["child_definition"] = value["definition_ref"]
+	report["child_title"] = value["title"]
+	report["child_brief"] = value["brief"]
 	// Read the thread first so the wait starts from the current head, then wait
 	// for the child to answer and settle.
 	readBack := call("thread_read", object{"cursor": 0, "limit": 64}, 31)

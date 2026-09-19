@@ -231,8 +231,6 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         if not entry or not id or not kind then return nil, nil, "private artifact contains an invalid definition" end
         if entry.registry ~= nil then return nil, nil, "private artifact contains reserved registry metadata" end
         if entry.kind == "ns.dependency" then return nil, nil, "private overlay artifacts cannot introduce Hub dependency directives" end
-        local meta = object(entry.meta)
-        if meta and meta.type == "migration" then return nil, nil, "private overlay activation currently requires a migration-free artifact" end
         local namespace = id:match("^([^:]+):")
         if not namespace then return nil, nil, "private artifact definition has no namespace" end
         if not namespace_set[namespace] then namespace_set[namespace], namespace_count = true, namespace_count + 1 end
@@ -275,6 +273,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id :: string) < (right.id :: string) end)
     local candidate_entries: {Object} = {}
     local requirements: {Object} = {}
+    local candidate_migrations: {Object} = {}
     local final: {[string]: Entry} = {}
     for id, entry in pairs(current_raw) do
         if not (captured.overlay_ids and captured.overlay_ids[id]) then final[id] = entry end
@@ -288,6 +287,16 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         local measured, measured_error = measured_entry(clean, component :: string)
         if not measured then return nil, nil, measured_error end
         candidate_entries[#candidate_entries + 1] = measured
+        local meta = object(clean.meta)
+        if meta and meta.type == "migration" then
+            local target = bounds.id(meta.target_db)
+            local ordinal = bounds.count(meta.ordinal)
+            if clean.kind ~= "function.lua" or not target or not ordinal or ordinal < 1 then
+                return nil, nil, "migration has no callable definition, target database or append-only ordinal: " .. tostring(clean.id)
+            end
+            candidate_migrations[#candidate_migrations + 1] = {id = clean.id, target_db = target,
+                ordinal = ordinal, checksum = measured.digest}
+        end
     end
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
@@ -312,7 +321,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         base_revision = captured.revision, base_digest = base_digest,
         artifacts = {{component = component, version = version, digest = spec.artifact_digest,
             dependencies = {}, namespaces = names}},
-        entries = candidate_entries, requirements = requirements, migrations = {}}, context, nil
+        entries = candidate_entries, requirements = requirements, migrations = candidate_migrations}, context, nil
 end
 
 type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?),

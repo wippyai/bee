@@ -294,6 +294,58 @@ CREATE INDEX bee_governance_activation_slots_workspace
   ON bee_governance_activation_slots(owner_node, workspace_id, overlay_owner);
 ]]
 
+-- Migration execution remains part of the activation effect.  The immutable
+-- work is stored with the intent; progress and receipts remain mutable, and a
+-- separate checksum ledger lets later preflight distinguish an append from a
+-- changed or removed migration without trusting package metadata.
+local ACTIVATION_MIGRATIONS_SQL = [[
+ALTER TABLE bee_governance_activation_intents ADD COLUMN migration_work_bytes BLOB
+  CHECK(migration_work_bytes IS NULL OR length(CAST(migration_work_bytes AS BLOB)) BETWEEN 1 AND 1048576);
+ALTER TABLE bee_governance_activation_intents ADD COLUMN migration_work_digest TEXT
+  CHECK(migration_work_digest IS NULL OR length(migration_work_digest) = 64);
+ALTER TABLE bee_governance_activation_execution ADD COLUMN migrations_completed INTEGER NOT NULL DEFAULT 0
+  CHECK(migrations_completed IN (0, 1));
+ALTER TABLE bee_governance_activation_execution ADD COLUMN migration_receipt_bytes BLOB
+  CHECK(migration_receipt_bytes IS NULL OR length(CAST(migration_receipt_bytes AS BLOB)) BETWEEN 1 AND 262144);
+ALTER TABLE bee_governance_activation_execution ADD COLUMN migration_receipt_digest TEXT
+  CHECK(migration_receipt_digest IS NULL OR length(migration_receipt_digest) = 64);
+
+CREATE TABLE bee_governance_applied_migrations (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  target_db TEXT NOT NULL,
+  migration_id TEXT NOT NULL,
+  component TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK(ordinal >= 1),
+  checksum TEXT NOT NULL CHECK(length(checksum) = 64),
+  intent_id TEXT NOT NULL,
+  applied_at TEXT NOT NULL,
+  PRIMARY KEY(owner_node, workspace_id, target_db, migration_id),
+  FOREIGN KEY(owner_node, workspace_id, intent_id)
+    REFERENCES bee_governance_activation_intents(owner_node, workspace_id, intent_id)
+);
+CREATE INDEX bee_governance_applied_migrations_component
+  ON bee_governance_applied_migrations(owner_node, workspace_id, component, target_db, ordinal);
+
+CREATE TABLE bee_governance_activation_receipts_v7 (
+  owner_node TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK(operation IN ('prepare_activation', 'bind_approval', 'begin_consume', 'record_consumption', 'begin_apply', 'record_migrations', 'record_outcome')),
+  request_digest TEXT NOT NULL CHECK(length(request_digest) = 64),
+  intent_id TEXT NOT NULL,
+  result_revision INTEGER NOT NULL CHECK(result_revision >= 1),
+  PRIMARY KEY(owner_node, workspace_id, idempotency_key),
+  FOREIGN KEY(owner_node, workspace_id, intent_id)
+    REFERENCES bee_governance_activation_intents(owner_node, workspace_id, intent_id)
+);
+INSERT INTO bee_governance_activation_receipts_v7
+  SELECT * FROM bee_governance_activation_receipts;
+DROP TABLE bee_governance_activation_receipts;
+ALTER TABLE bee_governance_activation_receipts_v7 RENAME TO bee_governance_activation_receipts;
+]]
+
 
 function M.all(): {Migration}
     return {
@@ -303,6 +355,7 @@ function M.all(): {Migration}
         {id = 4, name = "governance_plan_approval_incarnation", sql = APPROVAL_INCARNATION_SQL, rebuild = false},
         {id = 5, name = "governance_activation_intents", sql = ACTIVATION_SQL, rebuild = false},
         {id = 6, name = "governance_component_slots", sql = COMPONENT_SLOTS_SQL, rebuild = false},
+        {id = 7, name = "governance_activation_migrations", sql = ACTIVATION_MIGRATIONS_SQL, rebuild = false},
     }
 end
 

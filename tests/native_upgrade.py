@@ -31,7 +31,7 @@ class PreviousDesktop(Desktop):
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.raw = bytearray()
         self.pending_output = ""
-        args = [str(binary), "--state-dir", str(state), "--command", application]
+        args = [str(binary), "--state-dir", str(state), "run", application]
         env = {key: value for key, value in os.environ.items()
                if not key.startswith("BEE_") and key != "USER"}
         env.update(TERM="xterm-256color", HOME=str(folder),

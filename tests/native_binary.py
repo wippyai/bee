@@ -10,8 +10,10 @@ BINARY = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     folder = Path(temporary) / "empty launch folder"
     folder.mkdir()
+    home = Path(temporary) / "home"
+    home.mkdir()
     state = Path(temporary) / "bee state"
-    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app")
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app", home=home)
     try:
         ui.wait("Settings")
         ui.key(b"\x1b[24~")
@@ -28,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     assert len(deployments) == 1, "No digest-scoped embedded deployment"
     assert (state / "registry.db").is_file(), "Ordinary launch lost its shared registry history"
     assert not (state / "recovery" / "registry.db").exists(), "Ordinary launch selected recovery history"
-    recovery = NativeDesktop(BINARY, folder, state, arguments=("recover",))
+    recovery = NativeDesktop(BINARY, folder, state, arguments=("recover",), home=home)
     try:
         recovery.wait(" BEE ")
         recovery.quit()
@@ -38,13 +40,13 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     # This suite verifies explicit in-process application launches. The public
     # owner/client route (which retains its owner after exit) is exercised by
     # native_client.py with explicit fixture-owned process cleanup.
-    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app")
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app", home=home)
     try:
         ui.wait("Settings")
         ui.quit()
     finally:
         ui.close()
-    ui = NativeDesktop(BINARY, folder, state, "bee.console:app")
+    ui = NativeDesktop(BINARY, folder, state, "bee.console:app", home=home)
     try:
         ui.wait("Terminal")
         ui.key(b"printf '\\102\\105\\105\\137\\116\\101\\124\\111\\126\\105\\137\\117\\113\\n'\r")
@@ -63,6 +65,5 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
         ui.quit(confirm=True)
     finally:
         ui.close()
-    assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
     assert not (folder / ".wippy").exists(), "Native host wrote runtime state into the caller directory"
 print("Standalone Bee: embedded boot, Settings recovery, terminal, wheel/burst scrolling and physical selection/copy passed")

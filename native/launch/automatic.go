@@ -60,9 +60,15 @@ func (c Client) Run(ctx context.Context, launch app.Launch) error {
 		return err
 	}
 	if busy {
+		if _, err := fmt.Fprintln(c.Stdout, "Connecting to Hive…"); err != nil {
+			return err
+		}
 		// The runtime lock is only a routing hint. Attach independently
 		// authenticates the owner; refusal never starts a competing owner.
 		return c.Attach(ctx, launch)
+	}
+	if _, err := fmt.Fprintln(c.Stdout, "Starting Bee…"); err != nil {
+		return err
 	}
 	previous, err := store.Read(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -357,7 +357,7 @@ local function main()
   local before_release=bounds.object(value("status",{attempt_id="ATTEMPT"}).attempt)
   -- Always release the HTTP reply before assertions so a regression cannot
   -- strand the function at the barrier or hide the actual final lifecycle.
-  assert(output:writefile_atomic("/release_operation","release"))
+  assert(output:writefile("/release_operation","release", {atomic = true}))
   local _,open=pending:response():receive();assert(open,"start reply disappeared")
   local payload,pending_error=pending:result();assert(payload and not pending_error,"start result missing")
   local stop_value=bounds.object(stopped.value)
@@ -367,7 +367,7 @@ local function main()
   assert(rechecked_value and rechecked_value.execution_state==(RACE_CREATE and "stopping" or "exited"),"reconciliation erased the stop intent")
   local ended=bounds.object(payload:data());local final=ended and bounds.object(ended.value)
   assert(ended and ended.ok==true and final and final.execution_state=="exited" and final.cleanup_state=="complete","late operation escaped stop cleanup")
-  assert(output:writefile_atomic("/complete","DOCKER_LIFECYCLE_COMPLETE"))
+  assert(output:writefile("/complete","DOCKER_LIFECYCLE_COMPLETE", {atomic = true}))
   return true
  end
  if not resuming then local started=value("start",{attempt_id="ATTEMPT"});assert(started.execution_state=="running") end
@@ -377,14 +377,14 @@ local function main()
  local identity=value("container_identity",{attempt_id="ATTEMPT",recipient=process.pid(),generation=generation});assert(type(identity.container_id)=="string")
  if not resuming then
   if INSPECT_FAILURE then
-   assert(output:writefile_atomic("/reject_inspection","reject one response"))
+   assert(output:writefile("/reject_inspection","reject one response", {atomic = true}))
    local rechecked=call("reconcile",{attempt_id="ATTEMPT"})
    assert(rechecked.ok==false,"failed inspection was reported as a successful reconciliation")
    local current=bounds.object(value("status",{attempt_id="ATTEMPT"}).attempt)
    assert(current and current.execution_state=="running","failed inspection retired a live attempt from supervision")
   end
   local saved=assert(json.encode({container_id=identity.container_id,started_at=identity.started_at,recipient=process.pid()}))
-  assert(output:writefile_atomic("/started",saved))
+  assert(output:writefile("/started",saved, {atomic = true}))
   return true
  end
  local saved=bounds.object(assert(json.decode(assert(output:readfile("/started")))))
@@ -393,7 +393,7 @@ local function main()
  local stopped=value("stop",{attempt_id="ATTEMPT",mode="cooperative"});assert(stopped.execution_state=="exited")
  local cleaned=value("cleanup",{attempt_id="ATTEMPT"});assert(cleaned.cleanup_state=="complete")
  local repeated=value("cleanup",{attempt_id="ATTEMPT"});assert(repeated.cleanup_state=="complete")
- assert(output:writefile_atomic("/complete","DOCKER_LIFECYCLE_COMPLETE"))
+ assert(output:writefile("/complete","DOCKER_LIFECYCLE_COMPLETE", {atomic = true}))
  return true
 end
 return {main=main}

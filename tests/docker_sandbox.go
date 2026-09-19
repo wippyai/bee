@@ -83,7 +83,7 @@ local function main()
  if not encoded then error(tostring(encode_error)) end
  local output, open_error = fs.get("app:output")
  if not output then error(tostring(open_error)) end
- local written, write_error = output:writefile_atomic("/config.json", encoded)
+ local written, write_error = output:writefile("/config.json", encoded, {atomic = true})
  if not written then error(tostring(write_error)) end
  return true
 end

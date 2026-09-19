@@ -25,6 +25,10 @@ go directly to authenticated attachment when it reports an owner. The probe
 creates nothing, so an absent state stays absent. A free state proceeds to spawn;
 the child still arbitrates ownership under that same runtime lock, including
 races with other launchers. Filesystem errors do not count as contention.
+The foreground prints `Starting Bee…` on the free-state route and
+`Connecting to Hive…` on the owned-state route. These describe routing only;
+the subsequent owner publication and authenticated attachment still decide
+whether startup succeeds.
 
 The host runs `Client.Attach` through `Plan.Run`, so the runtime invokes it
 without opening the application state, deployment or data bindings. It rejects

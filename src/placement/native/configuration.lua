@@ -7,6 +7,71 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
 local M = {}
+type Object = {[string]: unknown}
+
+local function decode_toml(content: string, empty: boolean): (Object?, string?)
+    if empty and content == "" then return {}, nil end
+    local decoded, decode_error = toml.decode(content)
+    local object = bounds.object(decoded)
+    if not object then return nil, tostring(decode_error or "TOML document is not an object") end
+    return object, nil
+end
+
+local function exact_subtree(document: Object, path: {string}): (unknown, string?)
+    local current = document
+    for index, segment in ipairs(path) do
+        local count = 0
+        for key in pairs(current) do
+            count = count + 1
+            if key ~= segment then return nil, "source contains data outside the selected TOML path" end
+        end
+        if count ~= 1 then return nil, "source does not contain the selected TOML path" end
+        local value = current[segment]
+        if value == nil then return nil, "source does not contain the selected TOML path" end
+        if index == #path then return value, nil end
+        local child = bounds.object(value)
+        if not child then return nil, "source TOML path is not a table" end
+        current = child
+    end
+    return nil, "selected TOML path is empty"
+end
+
+local function insert_missing(document: Object, path: {string}, selected: unknown): string?
+    local current = document
+    for index, segment in ipairs(path) do
+        local value = current[segment]
+        if index == #path then
+            if value ~= nil then return "selected TOML path already exists" end
+            current[segment] = selected
+            return nil
+        end
+        if value == nil then
+            local child: Object = {}
+            current[segment] = child
+            current = child
+        else
+            local child = bounds.object(value)
+            if not child then return "selected TOML path crosses a non-table value" end
+            current = child
+        end
+    end
+    return "selected TOML path is empty"
+end
+
+local function compose_toml(base: string, path: {string}, source: string): (string?, string?)
+    local document, document_error = decode_toml(base, true)
+    if not document then return nil, "decode base TOML: " .. tostring(document_error) end
+    local overlay, overlay_error = decode_toml(source, false)
+    if not overlay then return nil, "decode source TOML: " .. tostring(overlay_error) end
+    local selected, selection_error = exact_subtree(overlay, path)
+    if selection_error then return nil, selection_error end
+    local insert_error = insert_missing(document, path, selected)
+    if insert_error then return nil, insert_error end
+    local encoded, encode_error = toml.encode(document)
+    if not encoded then return nil, "encode composed TOML: " .. tostring(encode_error) end
+    return encoded, nil
+end
+
 function M.overlaps(files: {types.Configuration}, protected: {string}): boolean
     for _, file in ipairs(files) do
         for _, path in ipairs(protected) do
@@ -44,7 +109,7 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
         if file.composition.kind ~= "toml_insert" then return nil, "configuration composition is unsupported" end
         if base == nil then return nil, "configuration composition base is missing" end
         if #base > 131072 then return nil, "configuration composition base exceeds byte limit" end
-        local composed, compose_error = toml.insert(base, file.composition.path, content)
+        local composed, compose_error = compose_toml(base, file.composition.path, content)
         if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
         if #composed > 131072 then return nil, "composed configuration exceeds byte limit" end
         content = composed

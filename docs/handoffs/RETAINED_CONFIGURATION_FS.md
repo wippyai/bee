@@ -62,19 +62,20 @@ sync failure, concurrent attempts, crash/restart, and unchanged provider session
 files. Real Codex/Agy continuation must then prove fresh gateway credentials and
 no duplicate native process or prompt replay.
 
-## Runtime proposal and validation
+## Runtime implementation and validation
 
-[Runtime PR #744](https://github.com/wippyai/runtime/pull/744), assigned to Rodrigo
-(`skhaz`), adds optional `AtomicWriteFS` and Lua `fs:writefile_atomic(path, content)`.
-It is not merged. The source manifest includes its checksum-pinned patch; the
-installed runtime is tracked separately in GLOBAL_BUILD.md. The isolated runtime
-head is `5e76e3c4e1`; the shared runtime checkout was not modified.
+Runtime atomic publication is exposed through
+`fs:writefile(path, content, {atomic = true})`. The optional `AtomicWriteFS`
+backend capability and Lua option are present in Bee's selected runtime; Bee no
+longer carries the earlier standalone `writefile_atomic` patch. The installed
+runtime is tracked separately in GLOBAL_BUILD.md.
 
 The Linux/macOS directory implementation holds verified parent handles, publishes
 through an exclusive temporary file and reports post-publication directory-sync
 failure separately, with `err:details().published == true` so the caller does not
-parse error text. Lua accepts strings up to 8 MiB, requests mode `0600`, and
-uses fixed provider-error messages. Unsupported providers refuse explicitly.
+parse error text. Lua accepts strings up to 8 MiB and uses fixed provider-error
+messages. The private placement mount supplies the restrictive file boundary.
+Unsupported providers refuse explicitly.
 This is whole-file publication, not compare-and-swap or a session authority grant.
 
 Final filesystem API, directory and Lua race suites pass; repository-pinned lint

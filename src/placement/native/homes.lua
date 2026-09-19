@@ -209,10 +209,10 @@ function M.publish_configuration(home_path: string, relative: string, content: s
             end
         end
     end
-    local written, write_error = vol:writefile_atomic(target, content)
+    local written, write_error = vol:writefile(target, content, {atomic = true})
     if not written then
-        local details: unknown = write_error and write_error:details() or nil
-        local published = type(details) == "table" and details.published == true
+        local details = bounds.object(write_error and write_error:details() or nil)
+        local published = details ~= nil and details.published == true
         return nil, published and "configuration published; durability requires inspection" or "configuration publication refused", published
     end
     return target, nil, false

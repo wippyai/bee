@@ -96,6 +96,11 @@ local function define_tests()
             test.is_true(rendered:find("theme%s*=%s*['\"]dark['\"]") ~= nil)
             test.is_true(rendered:find('[mcp_servers.existing]', 1, true) ~= nil)
             test.is_true(rendered:find('[mcp_servers.bee]', 1, true) ~= nil)
+            local inline, inline_error = placement_configuration.render(decoded, {}, nil,
+                'mcp_servers = { existing = { url = "https://example.test/mcp" } }\n')
+            if not inline then error(tostring(inline_error)) end
+            test.is_true(inline:find("https://example.test/mcp", 1, true) ~= nil)
+            test.is_true(inline:find('[mcp_servers.bee]', 1, true) ~= nil)
             local collision = placement_configuration.render(decoded, {}, nil,
                 '[mcp_servers.bee]\nurl = "https://user.example/mcp"\n')
             test.is_nil(collision)

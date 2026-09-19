@@ -184,11 +184,9 @@ in separate PRs assigned to `skhaz`:
    enrollment/discovery, exact remote actor exit delivery, destination restart and
    same-name rejoin without a Bee remote-monitor subsystem.
 4. **Narrow structural TOML insertion.** Grok private configuration uses the
-   reusable `toml.insert(document, path, source)` operation. Runtime PR #746 is
-   assigned to `skhaz`. The finish branch and runtime handoff currently name
-   different candidate digests; the runtime owner must provide one accepted
-   commit, patch digest and proof command before promotion. Bee does not expose
-   general TOML parsing or carry a private copy of the codec.
+   runtime TOML codec and a bounded Bee-owned Lua merge. It inserts only the
+   exact measured subtree and refuses collisions. No provider configuration
+   parser or composition verb is added to the runtime.
 5. **Authoritative OS-assigned HTTP address.** Managed MCP binds port zero and
    receives the actual listener address from the runtime owner; Bee never probes
    and races on a guessed free port.

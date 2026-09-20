@@ -37,6 +37,9 @@ local function main()
                 elseif mode == "stale" then
                     process.send(sender, types.TOPIC_REPLY, types.reply_ok("some-other-request", {stale = true}))
                     process.send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {fresh = true}))
+                elseif mode == nil then
+                    process.send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id,
+                        {input_digest = assert(types.digest(call.input))}))
                 end
             end
         end

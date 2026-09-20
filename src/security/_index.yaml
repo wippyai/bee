@@ -7,6 +7,8 @@ entries:
   - definition_id: bee.settings:app
     policies: [bee:ordinary_app_subsystem_boundary]
     appearance_write: true
+  - definition_id: bee.stylebook:app
+    policies: [bee:ordinary_app_subsystem_boundary]
   - definition_id: bee.processes:app
     policies:
     - bee:ordinary_app_subsystem_boundary

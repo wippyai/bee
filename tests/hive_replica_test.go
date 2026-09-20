@@ -22,6 +22,106 @@ import (
 // distribution worker, node-authenticated replica admission, destination
 // availability and explicit local stage/review/activation across two runtimes.
 func TestHiveSupervisorReplica(t *testing.T) {
+	testHiveSupervisorReplica(t, nil)
+}
+
+type hiveAgentArtifactScenario struct {
+	destinationFolder string
+	workspaceID       string
+	artifactDigest    string
+	encodedArtifact   string
+}
+
+// TestHiveSupervisorAgentArtifact is intentionally opt-in. Its wrapper starts
+// an ordinary destination desktop first, then this headless half carries only
+// the retained Agent App v2 artifact across Hive and leaves that same desktop
+// database for a normal desktop boot and UI proof.
+func TestHiveSupervisorAgentArtifact(t *testing.T) {
+	artifactPath := os.Getenv("BEE_AGENT_APP_HIVE_ARTIFACT")
+	destinationFolder := os.Getenv("BEE_AGENT_APP_HIVE_DESTINATION")
+	workspaceID := os.Getenv("BEE_AGENT_APP_HIVE_WORKSPACE")
+	if artifactPath == "" || destinationFolder == "" || workspaceID == "" {
+		t.Skip("set BEE_AGENT_APP_HIVE_ARTIFACT, BEE_AGENT_APP_HIVE_DESTINATION and BEE_AGENT_APP_HIVE_WORKSPACE for retained Agent App Hive acceptance")
+	}
+	artifactPath, err := filepath.Abs(artifactPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destinationFolder, err = filepath.Abs(destinationFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lowerHex(workspaceID, 32) {
+		t.Fatalf("destination desktop workspace ID is malformed: %q", workspaceID)
+	}
+	if info, statErr := os.Stat(filepath.Join(destinationFolder, "src")); statErr != nil || !info.IsDir() {
+		t.Fatalf("pre-established destination desktop project is unavailable: %v", statErr)
+	}
+	raw, err := os.ReadFile(artifactPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Updated struct {
+			ArtifactDigest string `json:"artifact_digest"`
+		} `json:"updated"`
+		Entries json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("decode retained agent artifact: %v", err)
+	}
+	if !lowerHex(document.Updated.ArtifactDigest, 64) {
+		t.Fatalf("retained agent artifact has no updated.artifact_digest: %q", document.Updated.ArtifactDigest)
+	}
+	var entries []json.RawMessage
+	if err := json.Unmarshal(document.Entries, &entries); err != nil || len(entries) != 1 {
+		t.Fatalf("retained agent artifact must expose exactly its updated v2 entry: %v (%d entries)", err, len(entries))
+	}
+	testHiveSupervisorReplica(t, &hiveAgentArtifactScenario{
+		destinationFolder: destinationFolder,
+		workspaceID:       workspaceID,
+		artifactDigest:    document.Updated.ArtifactDigest,
+		encodedArtifact:   base64.StdEncoding.EncodeToString(raw),
+	})
+}
+
+func lowerHex(value string, length int) bool {
+	if len(value) != length {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func configureAgentArtifactFixture(folder string, scenario *hiveAgentArtifactScenario, source bool) error {
+	path := filepath.Join(folder, "src", "replica_probe", "_index.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	const scenarioMarker = "data: {workspace_id: '', artifact_digest: ''}"
+	scenarioData := fmt.Sprintf("data: {workspace_id: %s, artifact_digest: %s}", scenario.workspaceID, scenario.artifactDigest)
+	updated := strings.Replace(string(data), scenarioMarker, scenarioData, 1)
+	if updated == string(data) {
+		return fmt.Errorf("configure agent artifact scenario")
+	}
+	if source {
+		const artifactMarker = "data: {encoded: ''}"
+		artifactData := fmt.Sprintf("data: {encoded: %s}", scenario.encodedArtifact)
+		next := strings.Replace(updated, artifactMarker, artifactData, 1)
+		if next == updated {
+			return fmt.Errorf("configure source agent artifact bytes")
+		}
+		updated = next
+	}
+	return os.WriteFile(path, []byte(updated), 0600)
+}
+
+func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 	binary := os.Getenv("BEE_HIVE_SUPERVISOR_RUNTIME")
 	if binary == "" {
 		t.Skip("set BEE_HIVE_SUPERVISOR_RUNTIME for native replica acceptance")
@@ -36,7 +136,15 @@ func TestHiveSupervisorReplica(t *testing.T) {
 	}
 	repository := filepath.Dir(filepath.Dir(sourceFile))
 	root := t.TempDir()
-	transportTLS := supervisorTLS(t, root)
+	tlsRoot := root
+	if agent != nil {
+		// The destination desktop boots after this Go test has returned. Keep
+		// its node identity configuration and TLS material in the retained
+		// destination state so recovery runs as the same node with the source
+		// offline, rather than silently becoming a new local-only node.
+		tlsRoot = agent.destinationFolder
+	}
+	transportTLS := supervisorTLS(t, tlsRoot)
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 	secret := make([]byte, 32)
@@ -64,10 +172,16 @@ func TestHiveSupervisorReplica(t *testing.T) {
 	}
 	stage := func(i int, seed string) string {
 		folder := filepath.Join(root, fmt.Sprintf("node-%d", i))
-		if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(filepath.Join(repository, "src"))); err != nil {
+		externalDestination := agent != nil && i == 0
+		if externalDestination {
+			folder = agent.destinationFolder
+			if info, err := os.Stat(filepath.Join(folder, "src")); err != nil || !info.IsDir() {
+				t.Fatalf("destination desktop project disappeared before Hive staging: %v", err)
+			}
+		} else if err := os.CopyFS(filepath.Join(folder, "src"), os.DirFS(filepath.Join(repository, "src"))); err != nil {
 			t.Fatal(err)
 		}
-		if i == 0 {
+		if i == 0 && agent == nil {
 			governancePath := filepath.Join(folder, "src", "governance", "_index.yaml")
 			governance, err := os.ReadFile(governancePath)
 			if err != nil {
@@ -106,6 +220,11 @@ func TestHiveSupervisorReplica(t *testing.T) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "replica_probe"), os.DirFS(filepath.Join(repository, "tests/fixtures/hive_replica"))); err != nil {
 			t.Fatal(err)
 		}
+		if agent != nil {
+			if err := configureAgentArtifactFixture(folder, agent, i == 1); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  modules: .wippy\n  src: ./src\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -138,7 +257,11 @@ func TestHiveSupervisorReplica(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(folder, ".wippy.yaml"), data, 0600); err != nil {
 			t.Fatal(err)
 		}
-		lint := exec.CommandContext(ctx, binary, "lint", "--json")
+		lintArgs := []string{"lint", "--json"}
+		if agent != nil {
+			lintArgs = append(lintArgs, "--set", "registry.history_path="+filepath.Join(folder, "registry.db"))
+		}
+		lint := exec.CommandContext(ctx, binary, lintArgs...)
 		lint.Dir = folder
 		lint.Env = nodeEnvironment(folder)
 		if output, err := lint.CombinedOutput(); err != nil {
@@ -147,7 +270,12 @@ func TestHiveSupervisorReplica(t *testing.T) {
 		return folder
 	}
 	start := func(i int, folder string) *procRunner {
-		cmd := exec.CommandContext(ctx, binary, "run", "--silent", "hive-replica-probe", "--", fmt.Sprintf("node-%d", 1-i))
+		args := []string{"run", "--silent", "hive-replica-probe"}
+		if agent != nil {
+			args = append(args, "--set", "registry.history_path="+filepath.Join(folder, "registry.db"))
+		}
+		args = append(args, "--", fmt.Sprintf("node-%d", 1-i))
+		cmd := exec.CommandContext(ctx, binary, args...)
 		cmd.Dir = folder
 		cmd.Env = append(nodeEnvironment(folder), "GOMAXPROCS=2")
 		runner, err := newProcRunner(cmd, fmt.Sprintf("replica node %d", i))
@@ -228,6 +356,26 @@ func TestHiveSupervisorReplica(t *testing.T) {
 	command(source, "replica-source-mismatch", "replica_source_mismatch")
 	command(source, "replica-publish", "replica_published")
 	command(destination, "replica-available", "replica_available")
+	if agent != nil {
+		command(destination, "agent-artifact-absent", "agent_artifact_absent")
+		command(source, "agent-artifact-publish", "agent_artifact_published")
+		command(destination, "agent-artifact-available", "agent_artifact_available")
+		command(destination, "agent-artifact-stage", "agent_artifact_staged")
+		command(destination, "agent-artifact-apply", "agent_artifact_applied")
+		// The normal desktop below owns the only visible client. Both headless
+		// coordinators are gone before that boot; it receives only the durable
+		// destination state, its configured admission and the applied overlay.
+		command(source, "stop", "stopped")
+		command(destination, "stop", "stopped")
+		if err := source.wait(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		if err := destination.wait(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("retained Agent App v2 was recreated only on the source, published through Hive, and applied through destination-local review and approval")
+		return
+	}
 
 	command(source, "application-publish-v1", "application_published_v1")
 	command(destination, "application-available-v1", "application_available_v1")

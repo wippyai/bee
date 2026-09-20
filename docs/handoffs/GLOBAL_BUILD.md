@@ -1,4 +1,66 @@
-# Global Bee build — September 19, 2026
+# Global Bee build — September 20, 2026
+
+## Current install: agent-authored application delivery across Hive
+
+Source `be31299`, executable SHA-256
+`ff0113bb46741837aba5c8286742c78def7d8ba834438c2c38a626bed8f65863`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`.
+
+The committed acceptance carries the exact retained v2 artifact from the real
+managed-Agy authoring journey into a source-only Hive publisher. A second Bee,
+which begins without the artifact or effective definition, receives it through
+Hive, stages and reviews it locally, approves it through the production
+Approvals owner, applies its overlay, and opens it from Start. With the source
+offline, the destination checkpoints `Count: 1 / Saved: 1` and restores
+`Count: 1` after a full restart under the same view and instance identities.
+This is an exact-artifact composition proof; the original authoring process is
+not the live publisher in the cross-node gate. Evidence:
+`.wippy/evidence/agent-app-hive-20260920-011207`.
+
+Strict lint covers 490 entries with only the documented desktop-lifecycle
+fixpoint warning, all 1,142 unit cases pass, and the production pack plus the
+existing synthetic Hive delivery regression pass. The release candidate also
+passes standalone Settings, Terminal, Modules and About; the five-profile Agent
+selector; and offline cold boot, restart and retained reconnect. The exact
+installed executable passed the embedded desktop, Settings and Terminal smoke.
+
+The installer verified every artifact and runtime patch, exercised the exact
+rollback path against a disposable six-file set, backed up the previous global
+set at
+`/home/wolfy-j/wippy/bee-evidence/0920/global-before-agent-hive-be31299`,
+and atomically replaced sidecars before the executable. Receipt:
+`/home/wolfy-j/wippy/bee-evidence/0920/global-agent-hive-be31299-install.json`.
+One retained previous owner exited cleanly on SIGTERM. Databases, profiles,
+conversations, workspaces, displays, credentials and migration ledgers were
+preserved.
+
+## Current install: Bee UI brand book and runnable reference
+
+Source `9c9c94a`, executable SHA-256
+`8f35ebfeaca7e18bf1e47d3c52b8de31c75fa9114301053f1e203288043c19cc`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`.
+
+Strict lint, 1,142/1,142 units, the focused UI Guide suite and every-theme view
+matrix, source/packed UI journeys, 163-document offline corpus, standalone
+native applications, the complete five-profile Agent selector and offline
+cold/restart/reconnect gate pass. Candidate offline acceptance measured a
+0.104-second warm attach.
+
+The installer verified every artifact and runtime patch, proved the exact
+rollback path through an injected post-replacement failure, then atomically
+replaced sidecars before the executable. The previous six-file set is at
+`/home/wolfy-j/wippy/bee-evidence/0919/global-before-ui-guide-9c9c94a`; the
+receipt is `global-ui-guide-9c9c94a-install.json`. Two exact prior Bee processes
+exited on SIGTERM. Databases, profiles, conversations, workspaces, displays,
+credentials and migration ledgers were preserved.
+
+From `/mnt/c/Users/Wolfy-J`, the exact installed `bee` opened
+**Tools → Learn → UI Guide**. Keyboard navigation, selected-row reveal across
+`40×12` and `20×6` resize, application close and desktop detach passed.
 
 ## Current install: governed live application updates
 

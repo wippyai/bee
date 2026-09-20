@@ -106,6 +106,18 @@ bytes to the production publisher. The test
 does not drive the terminal Modules UI. Destination staging, resolution,
 approval, activation and recovery all use the production services.
 
+`make agent-app-hive-check` composes that boundary with the retained output of
+the real managed-agent authoring gate. It recreates the single updated Agent
+App artifact through `artifact.create`, requires equality with the authoring
+digest, seeds the bytes only on the source, and proves absence at the
+destination before publication. The destination stages through the public
+facade and approves through the local Approvals owner. After both headless
+coordinators stop, an ordinary destination desktop opens the application from
+Start, records an acknowledged checkpoint, and cold-restores it with the source
+offline and the same logical identity. This is an exact-artifact composition
+proof; publication is performed by the fixture source runtime rather than the
+original authoring process.
+
 The destination now has a durable internal plan store. Available versions retain
 their exact candidate, artifact and preflight bytes; local review, explicit
 selection and approval binding advance through CAS revisions and bounded retry

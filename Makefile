@@ -54,6 +54,9 @@ sync-hive-check:
 .PHONY: governance-hive-delivery-check
 governance-hive-delivery-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(WIPPY))" go test -race -count=1 -v tests/hive_remote.go tests/hive_supervisor_test.go tests/hive_replica_test.go -run '^TestHiveSupervisorReplica$$'
+.PHONY: agent-app-hive-check
+agent-app-hive-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app_hive.py
 .PHONY: governance-runtime-check
 governance-runtime-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/governance_runtime.py

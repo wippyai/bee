@@ -7,6 +7,18 @@ entries:
 - name: desktop_owner
   kind: library.lua
   source: file://desktop_owner.lua
+- name: agent_scenario
+  kind: registry.entry
+  meta:
+    type: bee.replica_probe.agent_scenario
+    comment: Empty by default; the opt-in agent-artifact Hive acceptance supplies its destination identity and immutable digest.
+  data: {workspace_id: '', artifact_digest: ''}
+- name: agent_artifact
+  kind: registry.entry
+  meta:
+    type: bee.replica_probe.agent_artifact
+    comment: Source-only encoded retained agent artifact; destination receives no artifact bytes through fixture configuration.
+  data: {encoded: ''}
 - name: controller_policy
   kind: security.policy
   policy:
@@ -43,7 +55,7 @@ entries:
   kind: process.lua
   source: file://coordinator.lua
   method: main
-  modules: [process, security, time, channel, io, system, funcs, registry, hash, base64]
+  modules: [process, security, time, channel, io, system, funcs, registry, hash, base64, json]
   security: {policies: [bee.replica_probe:controller_policy]}
   imports:
     types: bee.hive:types

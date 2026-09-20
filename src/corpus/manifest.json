@@ -835,9 +835,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 9934,
+      "bytes": 10154,
       "id": "docs/agent_guide",
-      "sha256": "19c343deed8c5cb9ece7584c5acfbe11dcdb54f38fd27a1c9f6a118c5c1e1ba0",
+      "sha256": "75bcf01fb871e5e404e0f8f1f70dc269a74f37dbcbe0fd5d4c6da0cf8c5375f4",
       "source": "docs/AGENT_GUIDE.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -1011,9 +1011,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 7262,
+      "bytes": 7370,
       "id": "docs/readme",
-      "sha256": "13fb0adae50d8bb5864ca90d62f0dde8f77e2fd029db19d9a6ec86e6f8f57c46",
+      "sha256": "13d541c235139b748e926ac09e292cdbd8ad26bf4b849e66d86fbc45f4eb1015",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -1089,6 +1089,14 @@
       "source": "docs/THREAD_SESSIONS.md",
       "title": "Subscriptions and owner-qualified send",
       "topic": "threads"
+    },
+    {
+      "bytes": 7096,
+      "id": "docs/ui_brand_book",
+      "sha256": "9c11c6f2d6ff8e3749e8a952b37580a00ac55622046f4feacfdc1d3114067bec",
+      "source": "docs/UI_BRAND_BOOK.md",
+      "title": "Bee UI brand book",
+      "topic": "ui"
     },
     {
       "bytes": 13491,
@@ -1302,7 +1310,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2139134,
-    "documents": 162
+    "bytes": 2146558,
+    "documents": 163
   }
 }

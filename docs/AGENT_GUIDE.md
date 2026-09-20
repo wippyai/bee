@@ -15,6 +15,9 @@ foundation work from the still-required headless/client milestone.
 `docs/README.md` distinguishes current contracts from historical/design pages.
 Keep desktop responsibilities
 in `src/core`, reusable appearance in `src/ui`, and standalone apps in `src/apps`.
+Use the [Bee UI brand book](UI_BRAND_BOOK.md) and the runnable **UI Guide** under
+Tools → Learn for application presentation, responsive layout and interaction
+patterns. It is reference source, not a widget framework.
 Use registry imports, explicit typed values and authenticated process protocols.
 App metadata describes an app; it does not grant capabilities. New apps require
 reviewed admission and an explicit scope. Do not grant generic applications the

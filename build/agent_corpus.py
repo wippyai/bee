@@ -132,6 +132,7 @@ BEE_DOCS = {
     "THREAD_RECORDS.md": "threads",
     "THREAD_SESSIONS.md": "threads",
     "UI_REFINEMENT.md": "ui",
+    "UI_BRAND_BOOK.md": "ui",
     "WORKSPACE_ATTACHMENTS.md": "ui",
     "WORKSPACE_STATE.md": "storage",
     "README.md": "platform",

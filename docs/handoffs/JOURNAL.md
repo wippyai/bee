@@ -7507,3 +7507,131 @@ retained workspace `Gentle Ember`. `bee agy` opened the managed Antigravity
 terminal with the inherited signed-in account and exact project directory; it
 was closed with Ctrl+C without submitting a turn, and the client detached with
 Ctrl+Q. The running owner resolves to the installed executable.
+
+### 2026-09-20 Codex: Bee UI brand book and runnable reference
+
+The website's Honey language is now an implemented application-authoring
+reference rather than a screenshot or a second theme system. `UI_BRAND_BOOK.md`
+defines the existing appearance roles, cell rhythm, page anatomy, controls,
+feedback, compact/wide behavior, keyboard and mouse parity, hostile text rules
+and user-visible acceptance. The generated offline corpus now contains 163
+digest-checked documents and includes that authored source. The Agent guide and
+documentation map point to it.
+
+`bee.stylebook:app` is explicitly admitted under only the ordinary application
+boundary and appears at Tools → Learn → UI Guide. Its pure view demonstrates
+principles, controls, states and responsive layout across the controlling
+display's current theme. It has no database, registry publication, system
+inspection or appearance-write access. Short views reserve their footer,
+render the current sample as their useful compact state and create hits only for
+visible controls. The disabled example is muted and inert. No new visibility
+metadata or widget framework was introduced.
+
+Promptmap scanned 478 Lua files as a wide UI sensor; its concrete narrow-layout
+and external-text leads were checked against source. Its suggested expansion to
+success/error theme roles was rejected because Bee deliberately carries state
+in words and retains the small semantic palette. Astra's focused read-only
+review confirmed the ownership, admission, menu and corpus design and found two
+reference-view defects; footer overlap/selection reveal and the falsely active
+disabled sample were fixed before acceptance.
+
+Strict lint passes on the release runtime with only the known
+`desktop_lifecycle` fixpoint warning. All 1,142 unit cases pass. The focused view
+matrix covers widths 1/20/40/80/120, heights 1/2/3/4/6/9/11/12/13/24, every
+bundled theme, bounded rows and hits, selected-sample reveal and the inert
+disabled sample. Source and packed PTY journeys pass keyboard section/item
+navigation, compact selection reveal, narrow/wide resize, clean shutdown,
+Tools → Learn discovery and singleton reopen. Pack, the 163-document corpus
+check and the admitted offline docs-agent source/pack proof pass. The unrelated
+untracked `modules/bee-registry-planner/` directory remains untouched.
+
+### 2026-09-20 Codex: UI reference installed globally
+
+The brand book/reference commit `9c9c94a8b855e2cbdc640c90997f50bff69d5e4b`
+is pushed and installed globally. The exact executable SHA-256 is
+`8f35ebfeaca7e18bf1e47d3c52b8de31c75fa9114301053f1e203288043c19cc`;
+provenance pins runtime `b476104e63b62c9679df78a585727b7f64d48d02` and
+native Bee `v0.0.0-20260919180600-ff9810fea081`.
+
+The fresh candidate passed the standalone desktop, Terminal, Settings, Modules,
+About and five-profile Agent selector; offline cold boot, restart and retained
+reconnect passed with a 0.104-second warm attach. The exact candidate UI Guide
+also passed direct admitted launch, keyboard navigation, selected-row reveal
+and narrow/wide resize from disposable state.
+
+The six-file installer verified provenance and patch contents, proved injected
+post-replacement rollback, backed up the prior global set at
+`bee-evidence/0919/global-before-ui-guide-9c9c94a`, and atomically replaced
+sidecars before the executable. Receipt:
+`bee-evidence/0919/global-ui-guide-9c9c94a-install.json`. Two exact old Bee
+processes exited cleanly on SIGTERM. No database, profile, conversation,
+workspace, display, credential or migration ledger was removed or copied.
+
+The installed executable then launched from `/mnt/c/Users/Wolfy-J`, opened
+Tools → Learn → UI Guide, navigated to Components, preserved the selected Name
+sample through 40×12 and 20×6 resize, closed the application and detached the
+desktop. The unrelated untracked `modules/bee-registry-planner/` remains
+untouched.
+
+### 2026-09-20 Codex: agent-authored application crosses Hive into a desktop
+
+The exact updated artifact produced by the real managed-Agy journey now passes
+one combined cross-node acceptance. Production `artifact.create` recreates the
+source-only bytes and requires the authoring digest
+`332c8bd7f1e919c976d5f51c313286b2c7ebba7c4f72ad2a0e9aaf329acfa817`.
+The destination proves that neither the replica nor effective definition exists
+before publication, receives it through automatic Hive distribution, and uses
+its own fixed capability ceiling, public destination calls and local Approvals
+owner to review, select, approve and apply it. No approval or overlay authority
+crosses Hive.
+
+Both headless nodes then stop. With the source offline, the destination desktop
+opens **Agent App** from Start, renders `AGENT APP UPDATED` and `Count: 0`, and
+acknowledges `x` as `Count: 1 / Saved: 1`. A full destination restart restores
+`Count: 1` with workspace `70b79399d54542dafe4c5085f7a40b02` and identical
+view/instance identities. The retained receipt, source artifact, Hive transcript
+and five UI frames are in
+`.wippy/evidence/agent-app-hive-20260920-011207`. The combined gate took 60.723
+seconds. It republishes the exact agent-authored artifact from a fixture source
+runtime; it does not claim the original authoring process stayed alive as the
+publisher.
+
+The empty top-level Hive call input now retains its object allocation across
+native transport. Before this correction the sender measured `{}` as an object
+while the receiver decoded it as a list and rejected the digest. All 1,142 unit
+cases, strict lint, the unchanged two-version Hive delivery/restart/update/
+rollback regression, and the combined agent-app Hive gate pass on the renewal
+runtime. The global Bee has not yet been refreshed from this source.
+
+### 2026-09-20 Codex: exact-artifact Hive application release installed
+
+The complete managed-application Hive proof is committed and pushed at
+`be31299`. It composes the retained real-Agy v2 authoring artifact, digest
+`332c8bd7f1e919c976d5f51c313286b2c7ebba7c4f72ad2a0e9aaf329acfa817`,
+with a source-only production publisher. The receiving Bee starts without the
+artifact or definition, receives immutable bytes over Hive, performs its own
+review, approval and overlay activation, opens **Agent App** through Start,
+checkpoints `Count: 1 / Saved: 1`, and cold-restores `Count: 1` with the source
+offline and the same logical view and instance identities. Retained evidence:
+`.wippy/evidence/agent-app-hive-20260920-011207`. The proof does not claim that
+the original authoring process remains the live publishing node.
+
+The first standalone attempt used `BEE_BUNDLE_MANIFEST` as though it selected
+the runtime; that variable names only the generated output. The successful
+release uses an isolated `BEE_BUILD_MANIFEST` whose only change from the checked
+in manifest is runtime `b476104e63`, with `.wippy/bin/bee-wippy-renewal` as the
+pack toolchain. The canonical release manifest remains unchanged. The candidate
+SHA-256 is
+`ff0113bb46741837aba5c8286742c78def7d8ba834438c2c38a626bed8f65863`.
+Standalone Settings, Terminal, Modules, About, all five default Agent profiles,
+and loopback-only cold boot/restart/reconnect pass. The exact globally installed
+binary also passes the embedded desktop, Settings and Terminal smoke.
+
+The six-file installer proved rollback before replacement, stopped one exact
+old owner cleanly, backed it up at
+`bee-evidence/0920/global-before-agent-hive-be31299`, and installed source
+`be31299` with runtime `b476104e63`. Receipt:
+`bee-evidence/0920/global-agent-hive-be31299-install.json`. No database, profile,
+conversation, workspace, display, credential or migration ledger was copied,
+removed or reset. The unrelated untracked `modules/bee-registry-planner/`
+directory remains untouched.

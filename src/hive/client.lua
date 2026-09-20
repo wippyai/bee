@@ -44,8 +44,14 @@ local function call(self: Client, owner_ref: OwnerRef, target: Target, input: {[
         if key_error or not generated then return failed(request_id, "INTERNAL", "allocate idempotency key") end
         key = generated
     end
+    -- The wire contract says the top-level input is an object. Preserve that
+    -- allocation even when it is empty; an unshaped `{}` can otherwise cross a
+    -- native transport as a list and no longer match the digest measured by
+    -- the sending supervisor.
+    local wire_input: {[string]: unknown} = table.create(0, 1)
+    for name, value in pairs(input) do wire_input[name] = value end
     local body: {[string]: unknown} = {protocol_revision = types.REVISION, request_id = request_id, idempotency_key = key,
-        owner_ref = owner_ref, target = target, input = input, deadline = settings.deadline}
+        owner_ref = owner_ref, target = target, input = wire_input, deadline = settings.deadline}
     local decoded, decode_error = types.decode_call(body)
     if not decoded then return failed(request_id, "INVALID_ARGUMENT", decode_error or "invalid call") end
     local pid, lookup_error = supervisor()

@@ -38,6 +38,7 @@
         "bee.protocol",
         "bee.session",
         "bee.settings",
+        "bee.stylebook",
         "bee.storage",
         "bee.terminal",
         "bee.timeline",

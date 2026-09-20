@@ -12,6 +12,7 @@ local funcs = require("funcs")
 local registry = require("registry")
 local hash = require("hash")
 local base64 = require("base64")
+local json = require("json")
 local sender = require("sender")
 local replicas = require("replicas")
 local version = require("version")
@@ -35,9 +36,59 @@ local PACKAGE = "private/bee-demo"
 local PACKAGE_V1 = "1.0.0"
 local PACKAGE_V2 = "2.0.0"
 local PRIVATE_ARTIFACTS: {[string]: artifact.Artifact} = {}
+local AGENT_WORKSPACE = "agent-app-source"
+local AGENT_PACKAGE = "bee.agent_app_demo/app"
+local AGENT_VERSION = "2.0.0"
+local AGENT_DEFINITION = "bee.agent_app_demo:app"
+local AGENT_OVERLAY = "bee.replica_probe:activation_overlay"
 local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
     return value :: {[string]: unknown}
+end
+type AgentScenario = {workspace_id: string, artifact_digest: string}
+local function agent_scenario(): AgentScenario?
+    local entry = registry.get("bee.replica_probe:agent_scenario")
+    if not entry then error("agent-artifact scenario entry is unavailable") end
+    local data = object(entry.data)
+    local workspace_id, artifact_digest = data.workspace_id, data.artifact_digest
+    if workspace_id == "" and artifact_digest == "" then return nil end
+    if type(workspace_id) ~= "string" or type(artifact_digest) ~= "string" then
+        error("agent-artifact scenario is malformed")
+    end
+    local selected_workspace = workspace_id :: string
+    local selected_digest = artifact_digest :: string
+    if not selected_workspace:match("^[0-9a-f]+$") or #selected_workspace ~= 32
+        or not selected_digest:match("^[0-9a-f]+$") or #selected_digest ~= 64 then error("agent-artifact scenario is malformed") end
+    return {workspace_id = selected_workspace, artifact_digest = selected_digest}
+end
+local function exact_agent_artifact(scenario: AgentScenario): artifact.Artifact
+    local entry = registry.get("bee.replica_probe:agent_artifact")
+    if not entry then error("source agent artifact entry is unavailable") end
+    local encoded = object(entry.data).encoded
+    if type(encoded) ~= "string" or encoded == "" then error("source agent artifact bytes are unavailable") end
+    local raw, decode_error = base64.decode(encoded)
+    if not raw then error(tostring(decode_error or "decode source agent artifact")) end
+    local parsed, parse_error = json.decode(raw)
+    if parse_error then error("decode source agent artifact JSON: " .. tostring(parse_error)) end
+    local document = object(parsed)
+    local updated = object(document.updated)
+    if updated.artifact_digest ~= scenario.artifact_digest then
+        error("source agent artifact does not carry updated.artifact_digest")
+    end
+    local exact, exact_error = artifact.create(document.entries)
+    if not exact then error(tostring(exact_error)) end
+    if exact.digest ~= scenario.artifact_digest then
+        error("production artifact.create did not reproduce updated.artifact_digest")
+    end
+    if #exact.entries ~= 1 then error("updated agent artifact must contain exactly one application") end
+    local definition = object(exact.entries[1])
+    local data, meta = object(definition.data), object(definition.meta)
+    local application = object(meta.application)
+    if definition.id ~= AGENT_DEFINITION or definition.kind ~= "process.lua" or type(data.source) ~= "string"
+        or meta.type ~= "bee.application" or application.title ~= "Agent App" or application.revision ~= "2" then
+        error("updated agent artifact is not the retained Agent App v2 definition")
+    end
+    return exact
 end
 local function descriptor(owner: string, key: string, content: string): version.Descriptor
     local content_digest, digest_error = hash.sha256(content)
@@ -179,6 +230,100 @@ local function configure_destination()
     local changes = registry.snapshot():changes()
     assert(changes:update(profiles)); assert(changes:update(approvals)); assert(changes:apply())
 end
+local function configure_agent_destination(scenario: AgentScenario)
+    -- The destination identity comes from a prior ordinary desktop boot. The
+    -- source artifact cannot choose a workspace, an admission binding, or an
+    -- activation policy. Trusted fixture setup installs this policy in source
+    -- so the same ordinary desktop composition can recover it after the
+    -- headless coordinator exits.
+    local profiles = assert(registry.get("bee.governance:activation_profiles"))
+    local approvals = assert(registry.get("bee.approvals:approver_policies"))
+    local admission = assert(registry.get("bee:application_admission"))
+    local configured_profiles = object(profiles.data).profiles
+    if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
+        error("agent destination activation profile is unavailable")
+    end
+    local profile = object(configured_profiles[1])
+    if profile.workspace_id ~= scenario.workspace_id or profile.source_node ~= "node-1"
+        or profile.source_workspace ~= AGENT_WORKSPACE or profile.component ~= AGENT_PACKAGE
+        or profile.resolver ~= "overlay" or profile.overlay_owner ~= AGENT_OVERLAY
+        or profile.approval_policy ~= "local-agent-app-hive" then
+        error("agent destination activation profile is not the trusted local policy")
+    end
+    local configured_approvals = object(approvals.data).policies
+    if type(configured_approvals) ~= "table" or #configured_approvals ~= 1
+        or object(configured_approvals[1]).name ~= "local-agent-app-hive" then
+        error("agent destination approval policy is unavailable")
+    end
+    local admission_data = object(admission.data)
+    local bindings = admission_data.bindings
+    if type(bindings) ~= "table" then error("application admission bindings are unavailable") end
+    local admitted = false
+    for _, raw in ipairs(bindings :: {unknown}) do
+        local binding = object(raw)
+        if binding.definition_id == AGENT_DEFINITION then admitted = true end
+    end
+    if not admitted then error("Agent App is not admitted by the trusted destination policy") end
+end
+local function agent_available(scenario: AgentScenario): {[string]: unknown}?
+    local result = destination_call({operation = "available", workspace_id = scenario.workspace_id},
+        "list agent artifact through public destination call")
+    local versions = result.versions
+    if type(versions) ~= "table" then error("available agent artifacts are malformed") end
+    for _, raw in ipairs(versions :: {unknown}) do
+        local descriptor = object(raw)
+        local manifest = object(descriptor.manifest)
+        if descriptor.owner_id == "node-1" and descriptor.feed == delivery.FEED and descriptor.object_id == AGENT_PACKAGE
+            and descriptor.version_id == AGENT_VERSION and manifest.source_workspace == AGENT_WORKSPACE
+            and manifest.artifact_digest == scenario.artifact_digest then
+            return descriptor
+        end
+    end
+    return nil
+end
+local function exact_agent_overlay(scenario: AgentScenario, evidence: {[string]: unknown}): boolean
+    if evidence.artifact_digest ~= scenario.artifact_digest then error("activation observed another agent artifact digest") end
+    local entries, decode_error = artifact.decode(evidence.artifact_bytes, evidence.artifact_digest)
+    if not entries then error(tostring(decode_error)) end
+    local matches, match_error = materializer.matches(AGENT_OVERLAY, entries)
+    if matches == nil then error(tostring(match_error)) end
+    return matches
+end
+local function activate_agent_artifact(scenario: AgentScenario): {[string]: unknown}
+    local identity: {[string]: unknown} = {workspace_id = scenario.workspace_id, source_node = "node-1",
+        source_workspace = AGENT_WORKSPACE, version = AGENT_VERSION}
+    local current = destination_call({operation = "get", workspace_id = identity.workspace_id,
+        source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version},
+        "read staged agent artifact")
+    current = destination_call({operation = "review", workspace_id = identity.workspace_id,
+        source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version,
+        expected_revision = current.revision, idempotency_key = "agent-artifact-review", review_status = "accepted",
+        review_reason = "destination reviewed retained Agent App v2"}, "review retained agent artifact")
+    current = destination_call({operation = "select", workspace_id = identity.workspace_id,
+        source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version,
+        expected_revision = current.revision, idempotency_key = "agent-artifact-select"}, "select retained agent artifact")
+    if current.selected ~= true then error("destination did not select the retained agent artifact") end
+    local prepared = destination_call({operation = "prepare", workspace_id = identity.workspace_id,
+        source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version,
+        intent_id = "agent-artifact-activation", receipt_key = "agent-artifact-activation"},
+        "prepare retained agent artifact")
+    if prepared.phase ~= "approval_bound" then error("retained agent artifact did not bind a production approval") end
+    local decided_raw, decide_error = funcs.new():call("bee.approvals:decide", {approval_id = prepared.approval_id,
+        expected_revision = 1, decision = "approved", proposal_digest = prepared.approval_proposal_digest})
+    if decide_error then error("decide retained agent artifact approval: " .. tostring(decide_error)) end
+    required(object(decided_raw), "decide retained agent artifact approval")
+    local settled: {[string]: unknown} = {}
+    for _ = 1, 8 do
+        settled = destination_call({operation = "step", workspace_id = identity.workspace_id,
+            intent_id = "agent-artifact-activation", receipt_key = "agent-artifact-activation"},
+            "apply retained agent artifact")
+        if settled.phase == "settled" then break end
+    end
+    if settled.phase ~= "settled" or settled.outcome ~= "applied" or not exact_agent_overlay(scenario, settled) then
+        error("retained agent artifact was not applied exactly")
+    end
+    return settled
+end
 local exact_application_overlay: (({[string]: unknown}) -> boolean)
 local function application_runs(selected_version: string): boolean
     local result, call_error = funcs.new():call("private.bee_demo:main", {})
@@ -244,7 +389,10 @@ local function stop(pid: string)
 end
 local function main(remote: string)
     local local_node = assert(system.node.id())
-    if local_node == "node-0" then configure_destination() else configure_exports() end
+    local agent = agent_scenario()
+    if local_node == "node-0" then
+        if agent then configure_agent_destination(agent) else configure_destination() end
+    else configure_exports() end
     local policies = {}
 	for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy", "bee:hive_policy_exposure_policy",
         "bee:hive_dispatch_policy", "bee.replica_probe:names_policy", "bee.replica_probe:execute_policy"}) do
@@ -454,6 +602,46 @@ local function main(remote: string)
             activate_version(PACKAGE_V1, "activation-v1-rollback", "activation-v1-rollback")
             if not exact_application_runs(PACKAGE_V1) then error("private application did not roll back to v1") end
             assert(io.print("BEE_HIVE_SUPERVISOR application_rolled_back_v1"))
+        elseif command == "agent-artifact-publish" then
+            if not agent or local_node ~= "node-1" then error("agent artifact publication belongs only to the configured source") end
+            local exact = exact_agent_artifact(agent)
+            local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = AGENT_WORKSPACE,
+                component = AGENT_PACKAGE, version = AGENT_VERSION, artifact = {bytes = exact.bytes, digest = exact.digest}})
+            required(result :: {[string]: unknown}, "publish retained agent artifact")
+            assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_published"))
+        elseif command == "agent-artifact-absent" then
+            if not agent or local_node ~= "node-0" then error("agent artifact absence belongs only to the configured destination") end
+            if agent_available(agent) or registry.get(AGENT_DEFINITION) then
+                error("destination held the agent artifact before source publication")
+            end
+            assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_absent"))
+        elseif command == "agent-artifact-available" then
+            if not agent or local_node ~= "node-0" then error("agent artifact availability belongs only to the configured destination") end
+            local deadline = time.now():add("30s")
+            local descriptor: {[string]: unknown}? = nil
+            while time.now():before(deadline) do
+                descriptor = agent_available(agent)
+                if descriptor then break end
+                time.sleep("100ms")
+            end
+            if not descriptor then error("retained agent artifact did not become available through Hive") end
+            assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_available"))
+        elseif command == "agent-artifact-stage" then
+            if not agent or local_node ~= "node-0" then error("agent artifact staging belongs only to the configured destination") end
+            local descriptor = agent_available(agent)
+            if not descriptor then error("retained agent artifact is not available to stage") end
+            local staged = destination_call({operation = "stage", workspace_id = agent.workspace_id,
+                source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
+                descriptor_digest = descriptor.digest, idempotency_key = "stage-retained-agent-artifact"},
+                "stage retained agent artifact through public destination call")
+            if staged.status ~= "staged" or staged.selected == true or staged.artifact_digest ~= agent.artifact_digest then
+                error("retained agent artifact stage did not preserve the exact unselected candidate")
+            end
+            assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_staged"))
+        elseif command == "agent-artifact-apply" then
+            if not agent or local_node ~= "node-0" then error("agent artifact activation belongs only to the configured destination") end
+            activate_agent_artifact(agent)
+            assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_applied"))
         elseif command == "stop" then
             stop(supervisor)
             assert(io.print("BEE_HIVE_SUPERVISOR stopped"))

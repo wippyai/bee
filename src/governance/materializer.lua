@@ -4,6 +4,7 @@
 local registry = require("registry")
 local artifact = require("artifact")
 local canonical = require("canonical")
+local hash = require("hash")
 local bounds = require("bounds")
 
 local M = {}
@@ -30,7 +31,10 @@ local function encoded(value: unknown): (string?, string?)
     -- The registry's author-facing snapshot always emits an empty metadata
     -- object. Treat omitted metadata in an artifact as that same canonical
     -- default; every non-default field remains byte-for-byte significant.
-    if normalized.meta == nil then normalized.meta = {} end
+    if normalized.meta == nil
+        or (type(normalized.meta) == "table" and next(normalized.meta :: table) == nil) then
+        normalized.meta = table.create(0, 1)
+    end
     local result, err = canonical.encode(normalized, artifact.MAX_BYTES)
     if not result then return nil, tostring(err or "cannot encode registry entry") end
     return result, nil
@@ -108,26 +112,43 @@ local function matches_snapshot(snapshot: Snapshot, desired: {Entry}): (boolean?
     return true, nil
 end
 
+-- Empty is a valid desired overlay state used for cleanup, although it is not
+-- a publishable application artifact. Measure it with the artifact envelope
+-- without weakening artifact.create's nonempty publication contract.
+local function desired(raw: unknown): ({Entry}?, string?, string?)
+    if type(raw) == "table" and next(raw :: table) == nil then
+        local entries: {Entry} = {}
+        local bytes, encode_error = canonical.encode({schema_revision = artifact.SCHEMA,
+            entries = canonical.empty_like(raw)}, artifact.MAX_BYTES)
+        if not bytes then return nil, nil, tostring(encode_error or "measure empty governance overlay") end
+        local digest, digest_error = hash.sha256(bytes)
+        if not digest then return nil, nil, tostring(digest_error or "measure empty governance overlay") end
+        return entries, digest, nil
+    end
+    local measured, artifact_error = artifact.create(raw)
+    if not measured then return nil, nil, artifact_error end
+    return measured.entries, measured.digest, nil
+end
+
 -- The injectable form keeps generation behavior testable without granting a
 -- unit test registry authority. Production uses reconcile(), below.
 function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
-    local measured, artifact_error = artifact.create(entries_raw)
-    if not measured then return nil, artifact_error end
-    local wanted = measured.entries
+    local wanted, artifact_digest, artifact_error = desired(entries_raw)
+    if not wanted or not artifact_digest then return nil, artifact_error end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
     local snapshot = raw_snapshot :: Snapshot
     local changes, changed, stage_error = stage(snapshot, wanted)
     if not changes or changed == nil then return nil, stage_error end
     if not changed then
-        return {owner = owner, artifact_digest = measured.digest, entries = #wanted,
+        return {owner = owner, artifact_digest = artifact_digest, entries = #wanted,
             changed = false, attempts = 1}, nil
     end
     local applied, apply_error = changes:apply()
     if applied then
-        return {owner = owner, artifact_digest = measured.digest, entries = #wanted,
+        return {owner = owner, artifact_digest = artifact_digest, entries = #wanted,
             changed = true, attempts = 1}, nil
     end
     if conflict(apply_error) then return nil, "governance overlay changed during apply; preflight again" end
@@ -137,11 +158,11 @@ end
 function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (boolean?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
-    local measured, artifact_error = artifact.create(entries_raw)
-    if not measured then return nil, artifact_error end
+    local wanted, _, artifact_error = desired(entries_raw)
+    if not wanted then return nil, artifact_error end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
-    return matches_snapshot(raw_snapshot :: Snapshot, measured.entries)
+    return matches_snapshot(raw_snapshot :: Snapshot, wanted)
 end
 
 local function open(owner: string): (unknown?, unknown?)

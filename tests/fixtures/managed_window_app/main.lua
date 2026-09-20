@@ -46,6 +46,13 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     result.data = data
     return result
 end
+local function clone_entry(entry: {[string]: unknown}): {[string]: unknown}
+    local encoded, encode_error = json.encode(entry)
+    if not encoded then error(tostring(encode_error or "encode registry entry")) end
+    local copied, decode_error = json.decode(encoded)
+    if type(copied) ~= "table" then error(tostring(decode_error or "decode registry entry")) end
+    return copied :: {[string]: unknown}
+end
 local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): string?
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
     if retained_id then THREAD = "managed-window-thread:" .. retained_id end
@@ -156,7 +163,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             coroutine.spawn(function()
                 escaped:send(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
             end)
-            for _ = 1, 40 do
+            local close_deadline = closing + 1500000000
+            while time.now():unix_nano() < close_deadline do
                 if not view:snapshot() then break end
                 time.sleep("25ms")
             end
@@ -400,7 +408,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         if selected.channel == events then error(label .. ": broker exited") end
         return selected.value
     end
-    local function receive_checkpoint(state: string, action: "accept" | "refuse" | "lose")
+    local function receive_checkpoint(state: string, action: "accept" | "refuse" | "lose"): string
         local message = wait_message(checkpoints, "checkpoint " .. state)
         assert(tostring(message:from()) == broker)
         local data: unknown = message:payload():data()
@@ -411,6 +419,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
             assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
                 error_code = "persistence_refused", error = "Fixture owner refused checkpoint"}))
         end
+        return data.request_id :: string
     end
     local function receive_receipt(request_id: string, code: string, app_pid: string, timeout: string?)
         local message = wait_message(receipts, "checkpoint receipt " .. code, timeout)
@@ -462,6 +471,8 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         end
         error("unreachable attachment wait")
     end
+    local view_id = opened.id :: string
+    local instance_id = opened.instance_id :: string
     attached("checkpoint-initial", initial)
     assert(process.send(app_pid, "bee.fixture.checkpoint.command", "refuse"))
     local refused_request = receive_sent(refused, app_pid)
@@ -477,25 +488,131 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local lost_request = receive_sent("lost-newer", app_pid)
     receive_checkpoint("lost-newer", "lose")
     receive_receipt(lost_request, "timeout", app_pid, "7s")
-    attached("checkpoint-timeout", acknowledged)
-    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-close", op = "close", workspace_id = WORKSPACE,
-        id = opened.id, instance_id = opened.instance_id}))
+    local retained_mount = attached("checkpoint-timeout", acknowledged)
+    local view = assert(tty.attach(retained_mount))
+    local view_handle = assert(view:handle())
+    assert(view:send({type = "resize", width = 36, height = 12}))
+    local function wait_snapshot(label: string): boolean
+        for _ = 1, 200 do
+            local snapshot = view:snapshot()
+            if snapshot and snapshot.width == 36 and snapshot.height == 12
+                and table.concat(snapshot.rows):find(label, 1, true) then return true end
+            time.sleep("25ms")
+        end
+        return false
+    end
+    assert(wait_snapshot("CHECKPOINT APP 1"), "initial checkpoint app did not retain its resized viewport")
+    local original_app = assert(registry.get("bee.managed_window_fixture:checkpoint_app"))
+    local updated_app = clone_entry(original_app)
+    local updated_data = updated_app.data :: {[string]: unknown}
+    assert(type(updated_data.source) == "string", "checkpoint app lost its executable source")
+    local updated_meta = updated_app.meta :: {[string]: unknown}
+    local application = updated_meta.application :: {[string]: unknown}
+    application.revision = "2"
+    apply(updated_app)
+    local replacement_pid = ""
+    local replacement_ready = false
+    local replacement_deadline = time.after("7s")
+    while not replacement_ready do
+        local selected = channel.select({app_ready:case_receive(), replies:case_receive(), events:case_receive(), replacement_deadline:case_receive()})
+        assert(selected.ok and selected.channel ~= replacement_deadline, "checkpoint fixture replacement timed out")
+        if selected.channel == events then error("broker exited during checkpoint fixture replacement") end
+        if selected.channel == app_ready then
+            local message = selected.value
+            local data: unknown = message:payload():data()
+            assert(type(data) == "table" and type(data.pid) == "string", "invalid replacement readiness")
+            assert(tostring(message:from()) == data.pid, "replacement readiness sender mismatch")
+            assert(data.definition_revision == "2", "replacement launched the old definition")
+            assert(data.resume_state == acknowledged, "replacement lost the last acknowledged checkpoint")
+            replacement_pid = data.pid
+            replacement_ready = true
+        elseif selected.channel == replies then
+            local message = selected.value
+            if tostring(message:from()) == broker then
+                local data: unknown = message:payload():data()
+                if type(data) == "table" and data.id == view_id and data.instance_id == instance_id then
+                    assert(data.op ~= "closed", "replacement closed the application")
+                    assert(data.op ~= "open", "replacement created a fresh application")
+                    assert(data.op ~= "attached", "replacement created a fresh attachment")
+                end
+            end
+        end
+    end
+    local quiet = time.after("250ms")
     while true do
-        local message = wait_message(replies, "checkpoint fixture close")
+        local selected = channel.select({replies:case_receive(), events:case_receive(), quiet:case_receive()})
+        if not selected.ok or selected.channel == quiet then break end
+        if selected.channel == events then error("broker exited after checkpoint fixture replacement") end
+        local message = selected.value
+        if tostring(message:from()) == broker then
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.id == view_id and data.instance_id == instance_id then
+                assert(data.op ~= "closed", "replacement closed the application")
+                assert(data.op ~= "open", "replacement created a fresh application")
+                assert(data.op ~= "attached", "replacement created a fresh attachment")
+            end
+        end
+    end
+    assert(replacement_pid ~= app_pid, "replacement reused the old execution")
+    assert(view:handle() == view_handle, "replacement changed the attached view")
+    assert(wait_snapshot("CHECKPOINT APP 2"), "replacement did not render the new definition")
+    local replacement_snapshot = assert(view:snapshot())
+    assert(replacement_snapshot.width == 36 and replacement_snapshot.height == 12,
+        "replacement lost the controller viewport geometry")
+
+    -- Drain the replacement's startup checkpoint before creating the exact
+    -- shutdown race: a later pending checkpoint fences v3 after v2 exits.
+    local replacement_initial = receive_sent(initial, replacement_pid)
+    receive_checkpoint(initial, "accept")
+    receive_receipt(replacement_initial, "", replacement_pid)
+    assert(process.send(replacement_pid, "bee.fixture.checkpoint.command", "lose"))
+    receive_sent("lost-newer", replacement_pid)
+    local pending_shutdown_write = receive_checkpoint("lost-newer", "lose")
+    assert(process.monitor(replacement_pid))
+    local third_app = clone_entry(updated_app)
+    local third_meta = third_app.meta :: {[string]: unknown}
+    local third_application = third_meta.application :: {[string]: unknown}
+    third_application.revision = "3"
+    apply(third_app)
+    local replacement_exit = time.after("5s")
+    while true do
+        local selected = channel.select({events:case_receive(), replacement_exit:case_receive()})
+        assert(selected.ok and selected.channel ~= replacement_exit, "replacement did not exit for the pending update")
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == replacement_pid then break end
+        if event.kind == process.event.EXIT and tostring(event.from) == broker then error("broker exited during replacement shutdown") end
+    end
+    -- Let the broker consume the same EXIT before workspace cleanup observes
+    -- the replacement record. The pending write remains deliberately held.
+    time.sleep("500ms")
+    assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-replacement-shutdown",
+        op = "shutdown", workspace_id = WORKSPACE}))
+    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = pending_shutdown_write,
+        error_code = "", error = ""}))
+    local shutdown_deadline = time.after("5s")
+    while true do
+        local selected = channel.select({replies:case_receive(), app_ready:case_receive(), events:case_receive(), shutdown_deadline:case_receive()})
+        assert(selected.ok and selected.channel ~= shutdown_deadline, "replacement shutdown timed out")
+        if selected.channel == app_ready then error("shutdown launched a replacement after v2 exited") end
+        if selected.channel == events then error("broker exited before shutdown acknowledgement") end
+        local message = selected.value
         assert(tostring(message:from()) == broker)
         local data: unknown = message:payload():data()
-        if type(data) == "table" and data.request_id == "checkpoint-close" and data.op == "close" then
-            assert(data.error_code == "", "checkpoint fixture close failed")
+        if type(data) == "table" and data.request_id == "checkpoint-replacement-shutdown" and data.op == "shutdown" then
+            assert(data.error_code == "", "shutdown retained an exited replacement: " .. tostring(data.error))
             break
         end
     end
+    view:close()
     process.terminate(broker)
     for _, subscription in ipairs({catalogs, replies, checkpoints, receipts, app_ready, sent}) do process.unlisten(subscription) end
 end
 
 local function checkpoint_ack()
     local original_admission = assert(registry.get("bee:application_admission"))
+    local original_app = assert(registry.get("bee.managed_window_fixture:checkpoint_app"))
     local ok, failure = pcall(checkpoint_ack_body, original_admission)
+    apply(original_app)
     apply(original_admission)
     if not ok then error(tostring(failure)) end
 end

@@ -17,6 +17,7 @@ local profile_view = require("profile_view")
 local M = {}
 type Channel = channel.Channel
 type Activation = {serial: integer, admitted: admission.Admitted?, refused: admission.Reply?, error: string?, title: string?}
+type Setup = {serial: integer, request_id: string, choice: selection.Choice}
 local function fault(reply: admission.Reply?): string
     local value = reply and reply.error
     if not value then return "Agent launch was not admitted" end
@@ -56,17 +57,31 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local activation_serial = 0
     local activations = channel.new(1) :: Channel<Activation>
     local activating = false
-    -- The surface may close while admission is already executing. Closing the
-    -- surface wins immediately and hands its one completion channel to the
-    -- runtime, which revokes authority obtained before the cancellation.
+    local setup_future: funcs.Future? = nil
+    local setup_response: Channel<unknown>? = nil
+    local setup_request: Setup? = nil
+    -- The surface may close while setup or admission is executing. Setup can
+    -- be cancelled before it acquires attempt authority; once admission has
+    -- begun, hand its one completion channel to the runtime so it can revoke
+    -- authority obtained before the cancellation.
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?, boolean?, Channel<Activation>?)
         local pending = activating
+        local setup_pending = setup_future ~= nil
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
         local closed, close_error = output:close()
         local failure = not closed and ("Close profile screen: " .. tostring(close_error)) or err
-        if pending then return nil, failure, true, activations end
+        if setup_future then
+            -- Setup only associates durable roots and definitions. It has not
+            -- acquired attempt authority yet, so cancellation lets the
+            -- visible owner leave immediately; the completion coroutine will
+            -- observe running=false before admission.
+            setup_future:cancel()
+            setup_future = nil
+        end
+        setup_response, setup_request = nil, nil
+        if pending and not setup_pending then return nil, failure, true, activations end
         activation_serial = activation_serial + 1
         return admitted, failure, nil, nil
     end
@@ -116,8 +131,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             dirty = false
         end
         if load_serial == 0 then load() end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(),
-            states:case_receive(), loads:case_receive(), activations:case_receive()})
+        local cases = {input = input:case_receive(), lifecycle = lifecycle:case_receive(), closes = closes:case_receive(),
+            states = states:case_receive(), loads = loads:case_receive(), activations = activations:case_receive()}
+        if setup_response then cases.setup = setup_response:case_receive() end
+        local event = channel.select(cases)
         if not event.ok then return finish(nil, nil) end
         local activate, refresh = false, false
         local edit, duplicate = false, false
@@ -163,6 +180,29 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     end
                 end
                 dirty = true
+            end
+        elseif setup_response and event.channel == setup_response then
+            local future, request = setup_future, setup_request
+            setup_future, setup_response, setup_request = nil, nil, nil
+            if future and request then
+                local result, setup_error = future:result()
+                local setup: unknown = nil
+                if result then setup = result:data() end
+                local prepared = bounds.object(setup)
+                if setup_error or not prepared or prepared.ok ~= true then
+                    activations:send({serial = request.serial, error = setup_error and tostring(setup_error) or
+                        (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")})
+                elseif running and request.serial == activation_serial then
+                    coroutine.spawn(function()
+                        local choice = request.choice
+                        local admitted, refused = admission.admit_request({request_id = request.request_id,
+                            definition_ref = choice.definition_ref, saved_profile_id = choice.saved_profile_id,
+                            saved_profile_revision = choice.saved_profile_revision, expected_plan_digest = choice.plan_digest,
+                            workspace_id = launch.workspace_id, brief = "", mode = "window",
+                            origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}})
+                        activations:send({serial = request.serial, admitted = admitted, refused = refused, title = choice.title})
+                    end)
+                end
             end
         else
             local data = input_event.decode(event.value)
@@ -233,28 +273,25 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 activation_serial = activation_serial + 1
                 local serial = activation_serial
                 local id = request_id :: string
-                local selected_choice = choice
                 activating = true
                 status = "Starting Agent…"
                 dirty = true
-                coroutine.spawn(function()
-                    local setup, setup_error = funcs.call("bee.harness.launch:setup", {
-                        workspace_id = launch.workspace_id, definition_ref = selected_choice.definition_ref,
-                        saved_profile_id = selected_choice.saved_profile_id, saved_profile_revision = selected_choice.saved_profile_revision,
-                        expected_plan_digest = selected_choice.plan_digest})
-                    local prepared = bounds.object(setup)
-                    if setup_error or not prepared or prepared.ok ~= true then
-                        activations:send({serial = serial, error = setup_error and tostring(setup_error) or
-                            (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")})
-                        return
+                local future, future_error = funcs.async("bee.harness.launch:setup", {
+                    workspace_id = launch.workspace_id, definition_ref = choice.definition_ref,
+                    saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
+                    expected_plan_digest = choice.plan_digest})
+                if not future then
+                    activations:send({serial = serial, error = tostring(future_error)})
+                else
+                    local response = future:response() :: Channel<unknown>
+                    if not response then
+                        future:cancel()
+                        activations:send({serial = serial, error = "Agent resource setup did not return a response"})
+                    else
+                        setup_future, setup_response = future, response
+                        setup_request = {serial = serial, request_id = id, choice = choice}
                     end
-                    if not running or serial ~= activation_serial then activations:send({serial = serial}); return end
-                    local admitted, refused = admission.admit_request({request_id = id, definition_ref = selected_choice.definition_ref,
-                        saved_profile_id = selected_choice.saved_profile_id, saved_profile_revision = selected_choice.saved_profile_revision,
-                        expected_plan_digest = selected_choice.plan_digest, workspace_id = launch.workspace_id, brief = "", mode = "window",
-                        origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}})
-                    activations:send({serial = serial, admitted = admitted, refused = refused, title = selected_choice.title})
-                end)
+                end
             end
         end
         if refresh then

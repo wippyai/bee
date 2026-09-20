@@ -1,5 +1,33 @@
 # Global Bee build — September 19, 2026
 
+## Current install: governed live application updates
+
+Source `9fb90d7`, executable SHA-256
+`3d95c4d2ffe482d9dc63e8b9a1fb0cd3af16d398dbc3e33178aad0f59fa9382c`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` on top of the
+application model from PR #787, and native Bee
+`v0.0.0-20260919180600-ff9810fea081`.
+
+Strict lint, 1,138/1,138 units, managed replacement/shutdown 5/5, source and
+packed application journeys, Governance restart, the 162-document agent corpus,
+standalone native applications and the complete five-profile Agent selector
+pass. Candidate offline acceptance proves cold boot, restart, retained-client
+reconnect and a 0.216-second warm attach.
+
+The installer verified every artifact and the runtime patch archive, injected a
+post-replacement failure against a disposable six-file set and proved rollback,
+then atomically replaced sidecars before the executable. The previous set is at
+`/home/wolfy-j/wippy/bee-evidence/0919/global-before-managed-overlay-9fb90d7`;
+the receipt is `global-managed-overlay-9fb90d7-install.json`. One exact old
+owner exited on SIGTERM. Databases, profiles, conversations, workspaces,
+displays, credentials and migration ledgers were preserved.
+
+From `/mnt/c/Users/Wolfy-J`, the installed `bee` rendered retained workspace
+`Gentle Ember`. The installed `bee agy` opened the managed Antigravity terminal,
+inherited the signed-in account and exact project directory, and was closed with
+Ctrl+C without submitting a model turn; the client then detached with Ctrl+Q.
+
 ## Current install: runtime application model and concurrent project startup
 
 Source `fbddfdc0`, binary

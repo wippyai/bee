@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local registry = require("registry")
 local system = require("system")
 local json = require("json")
+local sql = require("sql")
 local uuid = require("uuid")
 local logger = require("logger")
 local bounds = require("bounds")
@@ -26,6 +27,10 @@ local VERSION = "1.0.0"
 local DEFINITION_ID = "bee.app_journey_demo:app"
 local APP_TITLE = "App Journey"
 local RETRY_EFFECT = "app-journey-second-effect"
+local LOGICAL_DB = "bee.app_journey_demo:data"
+local PHYSICAL_DB = "bee.app_journey_probe:shared_db"
+local TABLE_PREFIX = "journey_"
+local MIGRATION_ID = "bee.app_journey_demo:001"
 
 local APP_SOURCE = [[local tty = require("tty")
 local client = require("client")
@@ -79,6 +84,52 @@ local function main(value: unknown)
 end
 return {main = main}
 ]]
+
+local MIGRATION_SOURCE = [[local sql = require("sql")
+local function run(options)
+    assert(options.target_db == "bee.app_journey_demo:data")
+    assert(options.database_id == "bee.app_journey_probe:shared_db")
+    assert(options.table_prefix == "journey_")
+    assert(options.direction == "up")
+    local db = assert(sql.get(options.database_id))
+    local table_name = options.table_prefix .. "items"
+    local tx = assert(db:begin())
+    assert(tx:execute("CREATE TABLE IF NOT EXISTS _migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"))
+    assert(tx:execute("CREATE TABLE " .. table_name .. " (id INTEGER PRIMARY KEY, value TEXT NOT NULL)"))
+    assert(tx:execute("INSERT INTO " .. table_name .. " (value) VALUES ('journey')"))
+    assert(tx:execute("INSERT INTO _migrations (id, applied_at) VALUES ($1, $2)",
+        {options.id, "2026-09-19T19:00:00Z"}))
+    assert(tx:commit())
+    db:release()
+    return {id = options.id, status = "applied"}
+end
+return {run = run}
+]]
+
+local function seed_shared_database()
+    local db = assert(sql.get(PHYSICAL_DB))
+    local tx = assert(db:begin())
+    assert(tx:execute("CREATE TABLE IF NOT EXISTS other_items (value TEXT NOT NULL)"))
+    local rows = assert(tx:query("SELECT COUNT(*) AS count FROM other_items"))
+    if tonumber(rows[1].count) == 0 then
+        assert(tx:execute("INSERT INTO other_items (value) VALUES ('preserved')"))
+    end
+    assert(tx:commit())
+    db:release()
+end
+
+local function assert_shared_database()
+    local db = assert(sql.get(PHYSICAL_DB))
+    local migrations = assert(db:query("SELECT id FROM _migrations ORDER BY id"))
+    if #migrations ~= 1 or migrations[1].id ~= MIGRATION_ID then error("physical migration ledger differs") end
+    local journey = assert(db:query("SELECT value FROM journey_items ORDER BY id"))
+    if #journey ~= 1 or journey[1].value ~= "journey" then error("prefixed application table differs") end
+    local other = assert(db:query("SELECT value FROM other_items"))
+    if #other ~= 1 or other[1].value ~= "preserved" then error("shared database row was not preserved") end
+    local unprefixed = assert(db:query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'items'"))
+    if #unprefixed ~= 0 then error("migration created an unprefixed items table") end
+    db:release()
+end
 
 local function object(value: unknown): Object
     local decoded = bounds.object(value)
@@ -134,7 +185,10 @@ local function configure_host(workspace_id: string, local_node: string)
     act_data.profiles = {{workspace_id = workspace_id, source_node = local_node, source_workspace = SOURCE_WORKSPACE,
         component = COMPONENT, resolver = "overlay", overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
         parameters = {}, allow = {packages = {COMPONENT}, namespaces = {"bee.app_journey_demo"},
-            kinds = {"process.lua"}, databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}}
+            kinds = {"process.lua", "function.lua"}, databases = {LOGICAL_DB}, grants = {},
+            modules = {"tty", "process", "channel", "json", "sql"}},
+        database_bindings = {{target_db = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX}},
+        migration_policies = {"bee.app_journey_probe:migration_policy"}}}
     act_entry.data = act_data
 
     local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
@@ -159,11 +213,14 @@ local function main()
     -- definition exists.
     if admitted_title() then error("admission binding admitted an application that does not exist") end
 
+    seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
         modules = {"tty", "process", "channel", "json"}, imports = {client = "bee.application:client"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", revision = "1",
             title = APP_TITLE, instance_policy = "multiple", resume_schema = "app-journey.v1",
-            restart_policy = "automatic"}}}}
+            restart_policy = "automatic"}}},
+        {id = MIGRATION_ID, kind = "function.lua", data = {source = MIGRATION_SOURCE, method = "run", modules = {"sql"}},
+            meta = {type = "migration", target_db = LOGICAL_DB, ordinal = 1}}}
     local measured, measure_error = artifact.create(entries)
     if not measured then error("measure app entries: " .. tostring(measure_error)) end
     local artifact_digest = digest_of(measured.digest, "authored artifact digest")
@@ -217,7 +274,9 @@ local function main()
     if report.ready ~= true or #report.diagnostics > 0 then
         error("staged plan preflight is not ready: " .. json.encode(report.diagnostics))
     end
-    if #report.pending_migrations > 0 then error("staged plan preflight reports pending migrations") end
+    if #report.pending_migrations ~= 1 or report.pending_migrations[1] ~= LOGICAL_DB .. "\n" .. MIGRATION_ID then
+        error("staged plan does not report the logical pending migration")
+    end
 
     local review_res = call_api("bee.governance:destination_call", {operation = "review", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = SOURCE_WORKSPACE, version = VERSION,
@@ -297,6 +356,14 @@ local function main()
     if status.consumed_proposal_digest ~= proposal_digest then error("settled activation consumed another proposal") end
     if status.observed_artifact_digest ~= artifact_digest then error("applied overlay observed another artifact") end
     if status.outcome ~= "applied" then error("settled activation outcome is " .. tostring(status.outcome)) end
+    if status.migrations_completed ~= true then error("settled activation did not complete migrations") end
+    local migration_receipt = json.decode(tostring(status.migration_receipt_bytes))
+    local receipt_rows = migration_receipt and migration_receipt.rows
+    if type(receipt_rows) ~= "table" or #receipt_rows ~= 1 or receipt_rows[1].id ~= MIGRATION_ID
+        or receipt_rows[1].target_db ~= LOGICAL_DB or receipt_rows[1].status ~= "applied" then
+        error("settled activation migration receipt differs")
+    end
+    assert_shared_database()
     local incarnation = status.approval_owner_incarnation
     if type(incarnation) ~= "number" then error("settled activation recorded no approval incarnation") end
 
@@ -329,7 +396,8 @@ local function main()
     logger:info("APP_JOURNEY_DELIVERED", {artifact_digest = artifact_digest, snapshot_digest = snapshot_digest,
         plan_digest = plan_digest, preflight_digest = staged.preflight_digest, proposal_digest = proposal_digest,
         workspace_id = workspace_id, admitted_title = title, overlay_owner = tostring(status.overlay_owner),
-        refused_overlay_write = tostring(force_error)})
+        refused_overlay_write = tostring(force_error), migration_id = MIGRATION_ID,
+        migration_target = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX})
 end
 
 return {main = function(...)

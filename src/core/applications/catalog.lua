@@ -76,4 +76,13 @@ function M.same(a: Selection, b: Selection): boolean
     end
     return true
 end
+-- Only an exact compatible automatic definition update may replace a running
+-- application through recovery. Incompatible checkpoints stay live until the
+-- person closes them; the catalog itself grants no destructive authority.
+function M.replaces(running: contract.Descriptor, replacement: contract.Descriptor?): boolean
+    return replacement ~= nil and running.restart_policy == "automatic"
+        and replacement.restart_policy == "automatic"
+        and replacement.resume_schema == running.resume_schema
+        and replacement.definition_revision ~= running.definition_revision
+end
 return M

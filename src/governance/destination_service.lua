@@ -46,7 +46,8 @@ type Result = transaction.Result
 type ResolverRoot = {component: string, version: string, parameters: {unknown}}
 type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     namespaces: Set, kinds: Set, databases: Set, grants: Set, modules: Set,
-    applied: {[string]: unknown}, migration_barrier: boolean}
+    database_bindings: DatabaseBindings?, applied: {[string]: unknown}, applied_databases: {[string]: unknown},
+    migration_barrier: boolean}
 type Resolver = {resolve: (Resolver, unknown) -> (unknown?, unknown?, string?)}
 
 local function failure(code: string, message: string): Result
@@ -258,18 +259,31 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id then return nil, "activation policy belongs to another node" end
         local applied: Object = {}
+        local applied_databases: Object = {}
         if activation_store then
             local known = activations.applied(activation_store, profile_value.component)
             if not known.ok then return nil, tostring(known.message or "read applied migration facts") end
-            applied = bounds.object(known.value) or {}
+            local evidence = bounds.object(known.value)
+            applied = evidence and bounds.object(evidence.migrations) or {}
+            local historical = evidence and bounds.object(evidence.databases) or {}
+            applied_databases = historical
             for _, fact in pairs(applied) do
                 local item = bounds.object(fact)
                 local target = item and bounds.id(item.target_db) or nil
                 local migration_id = item and bounds.id(item.id) or nil
                 if not target or not migration_id then return nil, "stored applied migration fact is malformed" end
+                local captured = bounds.object(historical[target])
+                if not captured then return nil, "stored applied migration has no database evidence" end
                 local binding, binding_error = migration_binding(profile_value, target)
                 if binding_error then return nil, binding_error end
-                local present, ledger_error = migration_runner.is_applied(target, migration_id, binding)
+                local current_database = binding and binding.database_id or target
+                local current_prefix = binding and binding.table_prefix or nil
+                if captured.database_id ~= current_database or captured.table_prefix ~= current_prefix then
+                    return nil, "activation profile changes an applied migration database binding: " .. target
+                end
+                local frozen = {database_id = captured.database_id :: string,
+                    table_prefix = captured.table_prefix :: string?}
+                local present, ledger_error = migration_runner.is_applied(target, migration_id, frozen)
                 if present == nil then return nil, tostring(ledger_error or "read target migration ledger") end
                 if not present then return nil, "target migration ledger differs from Governance facts: " .. migration_id end
             end
@@ -277,7 +291,8 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
         return {node_id = node_id, policy_digest = profile_value.policy_digest,
             packages = profile_value.packages, namespaces = profile_value.namespaces, kinds = profile_value.kinds,
             databases = profile_value.databases, grants = profile_value.grants, modules = profile_value.modules,
-            applied = applied, migration_barrier = true}, nil
+            database_bindings = profile_value.database_bindings,
+            applied = applied, applied_databases = applied_databases, migration_barrier = true}, nil
     end
     if profile_value.resolver == "overlay" then
         return overlay_resolver.new({overlay_owner = profile_value.overlay_owner,
@@ -300,8 +315,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
         matches = migration_effect.matches, prepare = migration_effect.prepare,
         clear = migration_effect.clear, cleared = migration_effect.cleared,
         execute = function(work: unknown): ({bytes: string, digest: string}?, boolean, string?)
-            local receipt, complete, execute_error = migration_effect.execute(work,
-                profile_value.database_bindings, profile_value.migration_policies)
+            local receipt, complete, execute_error = migration_effect.execute(work, profile_value.migration_policies)
             return receipt, complete, execute_error
         end,
     }
@@ -356,11 +370,20 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     local base = bounds.object(context)
     if not base then return failure("BLOCKED", tostring(resolve_error or "resolve the composed base")) end
     local base_entries = bounds.object(base.entries)
+    local installed_entries = base.installed_entries == nil and {} or bounds.object(base.installed_entries)
     local base_digest = bounds.text(base.registry_digest, 64)
     local base_revision = bounds.count(base.registry_revision)
-    if not base_entries or not base_digest or base_revision == nil then
+    if not base_entries or not installed_entries or not base_digest or base_revision == nil then
         return failure("INTERNAL", "resolved composed base is malformed")
     end
+    -- Approval measures the external composition and deliberately excludes
+    -- the selected overlay, since applying that overlay must not invalidate
+    -- its own evidence. Change review compares against the separately
+    -- measured installed state as well: this update replaces that complete
+    -- owner-local set.
+    local comparison: Object = {}
+    for id, item in pairs(base_entries) do comparison[id] = item end
+    for id, item in pairs(installed_entries) do comparison[id] = item end
     local packages: Set = {}
     for _, item in ipairs(reviewed.artifacts) do packages[item.component] = true end
     local proposed: Set = {}
@@ -369,7 +392,7 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     local removed: {Object} = {}
     for _, item in ipairs(reviewed.entries) do
         proposed[item.id] = true
-        local existing = bounds.object(base_entries[item.id])
+        local existing = bounds.object(comparison[item.id])
         local row = entry_change({id = item.id, kind = item.kind, digest = item.digest})
         if not row then return failure("INTERNAL", "reviewed candidate entry is malformed") end
         if not existing then added[#added + 1] = row
@@ -377,7 +400,7 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     end
     -- An update replaces the complete owned set, so a base entry of an updated
     -- package that the candidate omits is removed by this plan.
-    for id, raw in pairs(base_entries) do
+    for id, raw in pairs(comparison) do
         local existing = bounds.object(raw)
         local package = existing and bounds.id(existing.package) or nil
         if package and packages[package] and not proposed[id] then

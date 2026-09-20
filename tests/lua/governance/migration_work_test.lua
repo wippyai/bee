@@ -7,6 +7,7 @@ local preflight = require("preflight")
 local hash = require("hash")
 
 local SHA = string.rep("a", 64)
+type Object = {[string]: unknown}
 
 local function measured(value: {[string]: unknown}): string
     local bytes, problem = canonical.encode(value)
@@ -18,30 +19,29 @@ end
 
 local function fixture(existing_database: boolean?): (artifact.Artifact, preflight.Candidate, preflight.Context)
     local target_db = existing_database and "host:db" or "demo:db"
-    local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}
     local migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
         meta = {type = "migration", target_db = target_db, ordinal = 1}, data = {up = "create table users"}}
     local definitions: {{[string]: unknown}} = {migration}
     local candidate_entries: {preflight.Entry} = {{id = migration.id :: string, kind = migration.kind :: string,
         package = "demo/app", digest = measured(migration), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}}
-    local destination_entries: {[string]: preflight.Entry} = {}
-    if existing_database then
-        destination_entries[target_db] = {id = target_db, kind = "db.sql.sqlite", package = "host/storage",
-            digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
-    else
-        definitions[#definitions + 1] = database
-        candidate_entries[#candidate_entries + 1] = {id = "demo:db", kind = "db.sql.sqlite", package = "demo/app",
-            digest = measured(database), references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
-    end
+    local host_database: preflight.Entry = {id = "host:db",
+        kind = "db.sql.sqlite", package = "host/storage", digest = SHA, references = {}, auto_start = false,
+        grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+    local destination_entries: {[string]: preflight.Entry} = {["host:db"] = host_database}
     local exact = assert(artifact.create(definitions))
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7,
         base_digest = SHA, artifacts = {{component = "demo/app", version = "1.0.0", digest = SHA,
             dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, requirements = {},
         migrations = {{id = "demo:001", target_db = target_db, checksum = measured(migration), ordinal = 1}}}
+    local bindings: {[string]: preflight.DatabaseBinding}? = nil
+    if not existing_database then
+        bindings = {["demo:db"] = {database_id = "host:db", table_prefix = "demo_"}}
+    end
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA,
         policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
         kinds = {["db.sql.sqlite"] = true, ["function.lua"] = true}, databases = {[target_db] = true},
-        grants = {}, modules = {}, entries = destination_entries, applied = {}, exact_expansion = true,
+        grants = {}, modules = {}, database_bindings = bindings,
+        entries = destination_entries, installed_entries = nil, applied = {}, exact_expansion = true,
         migration_barrier = false}
     return exact, candidate, context
 end
@@ -58,9 +58,11 @@ local function define_tests()
             test.eq(work.migrations[1].package, "demo/app")
             test.eq(work.migrations[1].definition.data.up, "create table users")
             test.eq(#work.databases, 1)
-            test.eq(work.databases[1].id, "demo:db")
-            test.is_true(work.databases[1].planned)
-            test.eq(work.databases[1].definition.data.file, ".wippy/demo.db")
+            test.eq(work.databases[1].target_db, "demo:db")
+            test.eq(work.databases[1].database_id, "host:db")
+            test.eq(work.databases[1].table_prefix, "demo_")
+            test.is_false(work.databases[1].planned)
+            test.is_nil(work.databases[1].definition)
             local decoded, decode_error = migration_work.decode(work.bytes, work.digest)
             if not decoded then error(tostring(decode_error)) end
             test.eq(decoded.bytes, work.bytes)
@@ -68,14 +70,24 @@ local function define_tests()
             test.is_true(assert(migration_work.verify(work, candidate, exact, context)))
         end)
 
+        test.it("preserves the registry root owner marker for a host database", function()
+            local exact, candidate, context = fixture()
+            context.entries["host:db"].package = ""
+            local work, problem = migration_work.capture(candidate, exact, context)
+            if not work then error(tostring(problem)) end
+            test.eq(work.databases[1].package, "")
+            local decoded, decode_error = migration_work.decode(work.bytes, work.digest)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq(decoded.databases[1].package, "")
+        end)
+
         test.it("preserves numeric order across multi-digit migration ordinals", function()
             local _, candidate, context = fixture()
-            local database: {[string]: unknown} = {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}
             local first: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
                 meta = {type = "migration", target_db = "demo:db", ordinal = 2}, data = {up = "second"}}
             local later: {[string]: unknown} = {id = "demo:010", kind = "function.lua",
                 meta = {type = "migration", target_db = "demo:db", ordinal = 10}, data = {up = "tenth"}}
-            local exact = assert(artifact.create({database, first, later}))
+            local exact = assert(artifact.create({first, later}))
             candidate.entries[1].digest = measured(first)
             candidate.migrations[1].checksum, candidate.migrations[1].ordinal = measured(first), 2
             candidate.entries[#candidate.entries + 1] = {id = "demo:010", kind = "function.lua", package = "demo/app",
@@ -108,13 +120,34 @@ local function define_tests()
             local changed_migration: {[string]: unknown} = {id = "demo:001", kind = "function.lua",
                 meta = {type = "migration", target_db = "demo:db", ordinal = 1}, data = {up = "create table accounts"}}
             local changed_artifact = assert(artifact.create({
-                {id = "demo:db", kind = "db.sql.sqlite", data = {file = ".wippy/demo.db"}}, changed_migration,
+                changed_migration,
             }))
             candidate.migrations[1].checksum = measured(changed_migration)
             candidate.entries[1].digest = measured(changed_migration)
             local matches = migration_work.verify(work, candidate, changed_artifact, context)
             test.is_false(matches)
             test.is_nil(migration_work.capture(candidate, exact, context))
+        end)
+
+        test.it("decodes legacy work without rewriting its identity binding", function()
+            local exact, candidate, context = fixture(true)
+            local current = assert(migration_work.capture(candidate, exact, context))
+            local legacy: {[string]: unknown} = {}
+            for field, value in pairs(current) do
+                if field ~= "bytes" and field ~= "digest" and field ~= "schema_revision" and field ~= "databases" then
+                    legacy[field] = value
+                end
+            end
+            legacy.schema_revision = migration_work.LEGACY_SCHEMA
+            legacy.databases = {{id = "host:db", kind = "db.sql.sqlite", package = "host/storage",
+                digest = SHA, planned = false}}
+            local bytes = assert(canonical.encode(legacy))
+            local digest = assert(hash.sha256(bytes))
+            local decoded = assert(migration_work.decode(bytes, digest))
+            test.eq(decoded.schema_revision, migration_work.LEGACY_SCHEMA)
+            test.eq((decoded.databases[1] :: Object).id, "host:db")
+            test.eq(decoded.bytes, bytes)
+            test.eq(decoded.digest, digest)
         end)
 
         test.it("rejects noncanonical, tampered, and semantically forged bytes", function()

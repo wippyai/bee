@@ -57,7 +57,7 @@ entries:
 - name: materializer
   kind: library.lua
   source: file://materializer.lua
-  modules: [registry]
+  modules: [registry, hash]
   imports:
     artifact: bee.governance:artifact
     canonical: bee.sync:canonical
@@ -209,6 +209,7 @@ entries:
     canonical: bee.sync:canonical
     hub_migrations: bee.hub:migrations
     migration_runner: bee.hub:migration_runner
+    migration_work: bee.governance:migration_work
     materializer: bee.governance:materializer
 - name: hub_resolver
   kind: library.lua

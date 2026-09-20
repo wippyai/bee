@@ -65,7 +65,7 @@ local function resolver(): destination.Resolver
         local context: preflight.Context = {node_id = "node-d", registry_revision = 1,
             registry_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
             packages = {["sample/app"] = true}, namespaces = {sample = true},
-            kinds = {}, databases = {}, grants = {}, modules = {}, entries = {}, applied = {},
+            kinds = {}, databases = {}, grants = {}, modules = {}, entries = {}, installed_entries = nil, applied = {},
             exact_expansion = true, migration_barrier = false}
         return candidate, context, nil
     end

@@ -13,10 +13,12 @@ type Entry = {[string]: unknown}
 type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
     overlay_ids: {[string]: boolean}?, preview: (Entry) -> (Object?, string?)}
 type Root = {component: string, version: string, parameters: {unknown}}
+type DatabaseBinding = {database_id: string, table_prefix: string?}
+type DatabaseBindings = {[string]: DatabaseBinding}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean}
+    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Object) -> (Policy?, string?)}
 
@@ -314,10 +316,30 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
         if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
     end
+    local bindings: DatabaseBindings? = nil
+    if policy.database_bindings ~= nil then
+        if type(policy.database_bindings) ~= "table" then return nil, "host policy database bindings are malformed" end
+        bindings = {}
+        for target, raw in pairs(policy.database_bindings :: table) do
+            local item = object(raw)
+            local database_id = item and bounds.id(item.database_id) or nil
+            local prefix: string? = nil
+            if item and item.table_prefix ~= nil then
+                prefix = bounds.text(item.table_prefix, 64)
+                if not prefix or not prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                    return nil, "host policy database binding prefix is invalid"
+                end
+            end
+            if not bounds.id(target) or not item or bounds.fields(item, {"database_id", "table_prefix"})
+                or not database_id then return nil, "host policy database binding is malformed" end
+            bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
+        end
+    end
     return {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
-        entries = current, applied = policy.applied, exact_expansion = true,
+        database_bindings = bindings, entries = current, applied = policy.applied,
+        applied_databases = policy.applied_databases or {}, exact_expansion = true,
         migration_barrier = policy.migration_barrier == true}, nil
 end
 
@@ -446,6 +468,10 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
         end
     end
 
+    local policy, policy_error = deps.policy(spec, captured, preview)
+    if not policy then return nil, nil, policy_error or "read destination Hub policy" end
+    if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
+
     -- Measure only the existing definitions that can affect this closure:
     -- owned namespaces, external references, and requirement targets. This
     -- excludes unrelated boot-local registry state while retaining every
@@ -459,6 +485,14 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
         local item = raw :: Object
         for _, target in ipairs(item.targets :: {string}) do relevant_ids[target] = true end
     end
+    if policy.database_bindings ~= nil then
+        if type(policy.database_bindings) ~= "table" then return nil, nil, "host policy database bindings are malformed" end
+        for _, raw in pairs(policy.database_bindings :: table) do
+            local item = object(raw)
+            local database_id = item and bounds.id(item.database_id) or nil
+            if database_id then relevant_ids[database_id] = true end
+        end
+    end
     local relevant: {unknown} = {}
     for id, raw in pairs(current) do
         local namespace = id:match("^([^:]+):")
@@ -470,9 +504,6 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (unknown?, unknow
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
 
-    local policy, policy_error = deps.policy(spec, captured, preview)
-    if not policy then return nil, nil, policy_error or "read destination Hub policy" end
-    if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
     local context, context_error = policy_context(policy, captured, base_digest :: string, current)
     if not context then return nil, nil, context_error end
     return {destination_node = destination, source_node = source, base_revision = captured.revision,

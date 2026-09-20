@@ -23,11 +23,20 @@ entries:
     - bee.approvals.decide
     resources: '*'
     effect: allow
+- name: shared_db
+  kind: db.sql.sqlite
+  file: .wippy/app-journey-shared.db
+- name: migration_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call, db.get]
+    resources: [bee.app_journey_demo:001, bee.app_journey_probe:shared_db]
+    effect: allow
 - name: deliver
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [funcs, registry, system, json, uuid, logger]
+  modules: [funcs, registry, system, json, uuid, logger, sql]
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.governance:artifact

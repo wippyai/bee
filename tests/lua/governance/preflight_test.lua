@@ -16,7 +16,7 @@ local function fixture(): (preflight.Candidate, preflight.Context)
         migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
-        entries = entries,
+        entries = entries, installed_entries = nil,
         applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false}
     return candidate, context
 end
@@ -82,6 +82,36 @@ local function define_tests()
             test.is_true(has(other, "WRONG_DESTINATION"))
             test.is_false(other.plan_digest == report.plan_digest)
         end)
+        test.it("resolves a logical migration target only through the host database binding", function()
+            local function logical(binding: preflight.DatabaseBinding?): (preflight.Candidate, preflight.Context)
+                local candidate, context = fixture()
+                candidate.migrations[1].target_db = "demo:data"
+                local bindings: {[string]: preflight.DatabaseBinding} = {}
+                if binding then bindings["demo:data"] = binding end
+                local mapped: preflight.Context = {node_id = context.node_id,
+                    registry_revision = context.registry_revision, registry_digest = context.registry_digest,
+                    policy_digest = context.policy_digest, packages = context.packages,
+                    namespaces = context.namespaces, kinds = context.kinds, databases = {["demo:data"] = true},
+                    grants = context.grants, modules = context.modules, database_bindings = bindings,
+                    entries = context.entries, installed_entries = context.installed_entries,
+                    applied = context.applied, exact_expansion = context.exact_expansion,
+                    migration_barrier = context.migration_barrier}
+                return candidate, mapped
+            end
+            local candidate, context = logical({database_id = "host:db", table_prefix = "demo_"})
+            local report = checked(candidate, context)
+            test.is_true(report.ready)
+            test.eq(report.pending_migrations[1], "demo:data\ndemo:001")
+            local missing_candidate, missing_context = logical(nil)
+            test.is_true(has(checked(missing_candidate, missing_context), "MISSING_DATABASE_BINDING"))
+            local wrong_candidate, wrong_context = logical({database_id = "demo:run"})
+            test.is_true(has(checked(wrong_candidate, wrong_context), "MISSING_DATABASE"))
+            candidate, context = logical({database_id = "host:db"})
+            candidate.entries[#candidate.entries + 1] = {id = "host:db", kind = "db.sql.sqlite",
+                package = "wolfy-j/demo", digest = string.rep("b", 64), references = {}, auto_start = false,
+                grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
+            test.is_true(has(checked(candidate, context), "DATABASE_REPLACEMENT"))
+        end)
         test.it("fails closed on missing runtime gates and changed destination base", function()
             local candidate, context = fixture()
             context.exact_expansion = false
@@ -130,6 +160,22 @@ local function define_tests()
             context.entries["demo:retired"] = {id = "demo:retired", kind = "function.lua", package = "wolfy-j/demo", digest = SHA, references = {}, auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {}, config_empty = {}}
             test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
         end)
+        test.it("validates removals against the separately installed private overlay", function()
+            local candidate, context = fixture()
+            local retained: preflight.Entry = {id = "host:option", kind = "function.lua", package = "host",
+                digest = SHA, references = {"demo:retired"}, auto_start = false, grants = {}, modules = {},
+                config_objects = {}, config_lists = {}, config_empty = {}}
+            local retired: preflight.Entry = {id = "demo:retired", kind = "function.lua", package = "wolfy-j/demo",
+                digest = SHA, references = {}, auto_start = false, grants = {}, modules = {},
+                config_objects = {}, config_lists = {}, config_empty = {}}
+            context.entries[retained.id] = retained
+            context.installed_entries = {[retired.id] = retired}
+            local report = checked(candidate, context)
+            test.is_false(report.ready)
+            test.is_true(has(report, "DANGLING_REFERENCE"))
+            candidate.entries[#candidate.entries + 1] = retired
+            test.is_true(checked(candidate, context).ready)
+        end)
         test.it("preserves applied migrations and binds their baseline into the measurement", function()
             local candidate, context = fixture()
             local before = checked(candidate, context)
@@ -142,6 +188,18 @@ local function define_tests()
             test.is_true(has(checked(candidate, context), "APPLIED_MIGRATION_CHANGED"))
             candidate.migrations = {}
             test.is_true(has(checked(candidate, context), "APPLIED_MIGRATION_REMOVED"))
+        end)
+        test.it("refuses changed physical evidence for an applied migration chain", function()
+            local candidate, context = fixture()
+            context.applied["host:db\ndemo:001"] = candidate.migrations[1]
+            context.applied_databases = {["host:db"] = {database_id = "host:db", kind = "db.sql.sqlite",
+                package = "host", digest = string.rep("b", 64)}}
+            local changed = checked(candidate, context)
+            test.is_true(has(changed, "APPLIED_DATABASE_CHANGED"))
+            context.applied_databases["host:db"].digest = SHA
+            local stable = checked(candidate, context)
+            test.is_true(stable.ready)
+            test.is_false(stable.plan_digest == changed.plan_digest)
         end)
         test.it("rejects activation before migrations and unauthorized resource targets", function()
             local candidate, context = fixture()

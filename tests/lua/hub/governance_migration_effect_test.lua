@@ -15,8 +15,8 @@ local function define_tests()
         test.it("executes captured package ownership and returns a measured receipt", function()
             local binding = {database_id = DB, table_prefix = "governance_"}
             local receipt, complete, problem = effect.execute({migrations = {{id = ID, target_db = TARGET,
-                ordinal = 12, package = "bee/hub", definition = {id = ID, kind = "function.lua"}}}},
-                {[TARGET] = binding}, {POLICY})
+                ordinal = 12, package = "bee/hub", definition = {id = ID, kind = "function.lua"}}},
+                databases = {{target_db = TARGET, database_id = DB, table_prefix = "governance_"}}}, {POLICY})
             if not receipt then error(tostring(problem)) end
             if not complete then error("migration execution incomplete: " .. tostring(problem) .. " receipt " .. receipt.bytes) end
             local decoded = assert(json.decode(receipt.bytes))

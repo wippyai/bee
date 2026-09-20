@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -38,9 +39,12 @@ COLD_BOOT = 30
 DEFINITION_ID = "bee.agent_app_demo:app"
 TITLE = "Agent App"
 MARKER = "AGENT APP READY"
+UPDATE_MARKER = "AGENT APP UPDATED"
 DELIVERY = "App Delivery"
 APPROVALS = "Approvals"
 OVERLAY_OWNER = "bee.agent_app_probe:activation_overlay"
+SOURCE_WORKSPACE = "agent-app-source"
+AUTHORING_THREAD = "agent-app-authoring"
 ADMITTED_TOOLS = ["app_docs", "thread_message", "thread_read", "workspace"]
 ACTIVE_TRAITS = ["app:author", "app:read"]
 MATERIAL = {"contract": "tests/fixtures/agent_app/CONTRACT.md", "client": "src/ui/application/client.lua",
@@ -54,12 +58,101 @@ def evidence_root():
     return root
 
 
+def ui_evidence(folder):
+    evidence = {"schema": 1, "provider_seconds": {}, "local_ui_seconds": {}, "frames": []}
+    (folder / "ui").mkdir(exist_ok=True)
+    (folder / "ui-evidence.json").write_text(json.dumps(evidence, indent=2))
+    return evidence
+
+
+def save_evidence(folder, evidence):
+    (folder / "ui-evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True))
+
+
+def record_seconds(folder, evidence, group, name, started):
+    elapsed = time.monotonic() - started
+    evidence[group][name] = round(elapsed, 3)
+    save_evidence(folder, evidence)
+    return elapsed
+
+
+def frame_boundary(ui):
+    """Mark the end of the complete frames observed before an action."""
+    frames = getattr(ui, "observed_frames", None)
+    assert frames is not None, "UI evidence requires observed synchronized frames"
+    return len(frames)
+
+
+def find_frame(ui, boundary, required):
+    frames = getattr(ui, "observed_frames", [])
+    for index in range(len(frames) - 1, boundary - 1, -1):
+        frame = frames[index]
+        contents = "\n".join(frame)
+        if all((item.search(contents) is not None) if hasattr(item, "search") else (item in contents)
+               for item in required):
+            return index, frame
+    return None, None
+
+
+def wait_frame(ui, boundary, *required, timeout=20):
+    """Wait only for a complete synchronized frame observed after boundary."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        index, frame = find_frame(ui, boundary, required)
+        if frame is not None:
+            return index, frame
+        ui.pump(.05)
+    wanted = [item.pattern if hasattr(item, "pattern") else item for item in required]
+    raise AssertionError("no complete synchronized frame after boundary for "
+                         + ", ".join(wanted) + "\n" + ui.text())
+
+
+def capture_frame(folder, evidence, ui, name, boundary, *required):
+    """Retain a complete DEC-synchronized frame observed after boundary."""
+    index, frame = find_frame(ui, boundary, required)
+    assert frame is not None, "no complete synchronized frame after boundary for " + name + "\n" + ui.text()
+    selected = "\n".join(frame)
+    relative = "ui/" + name + ".txt"
+    (folder / relative).write_text(selected + "\n")
+    evidence["frames"].append({"name": name, "path": relative, "required": list(required),
+                                 "boundary": boundary, "observed_frame": index})
+    save_evidence(folder, evidence)
+    return frame
+
+
+def saved_app_identity(folder):
+    connection = sqlite3.connect(folder / "workspace.db")
+    try:
+        row = connection.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
+    finally:
+        connection.close()
+    assert row, "workspace has no durable state"
+    applications = json.loads(row[0])["applications"]
+    matches = [item for item in applications if item["definition_id"] == DEFINITION_ID]
+    assert len(matches) == 1, matches
+    return matches[0]["id"], matches[0]["instance_id"]
+
+
 def provider():
     """The live provider is required: no fixture stands in for this proof."""
     path = shutil.which(os.environ.get("BEE_AGY_BIN", "agy"))
     if not path:
         sys.exit("Install Agy and log it in: this acceptance proves a real managed agent authors the application")
     return str(Path(path).resolve())
+
+
+def stamp_presenter(project):
+    """Give this disposable composition an observable presenter incarnation.
+
+    F12 deliberately preserves the whole visible desktop, so identical content
+    alone cannot prove that a new presenter produced the frame. The fixture-only
+    PID suffix is the same probe used by the desktop lifecycle acceptance.
+    """
+    presenter = project / "src/core/terminal/main.lua"
+    source = presenter.read_text()
+    label = '"Workspace " .. names.label(workspace_id)'
+    assert source.count(label) == 1, "unexpected terminal presenter label anchor"
+    presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
 
 
 def set_variable(project, relative, name, variable):
@@ -96,7 +189,8 @@ def stage_material(project):
 def write_inputs(project, **values):
     rewrite(project / "src/probe/_index.yaml", "inputs",
             {"round": "", "source_workspace": "", "launch_workspace": "", "destination_workspace": "",
-             "version": "", "snapshot_digest": "", "artifact_digest": "", "findings": "", **values})
+             "version": "", "snapshot_digest": "", "artifact_digest": "", "findings": "",
+             "update": False, **values})
 
 
 def admit_docs_tool(project):
@@ -176,6 +270,9 @@ def author(project, folder, round_label):
     assert report["requested_access"] is True, report
     assert report["active_traits"] == ACTIVE_TRAITS, report["active_traits"]
     assert report["context"] == {"round": round_label}, report["context"]
+    assert report["thread_id"] == AUTHORING_THREAD, report["thread_id"]
+    assert report["source_workspace"] == SOURCE_WORKSPACE, report["source_workspace"]
+    assert report["thread_sequence"] > 0, report["thread_sequence"]
     return report
 
 
@@ -256,24 +353,23 @@ def review_contract_check():
     assert preflight_findings({"ready": True, "pending_migrations": 0, "diagnostics": []}) is None
 
 
-def open_plan(ui, label):
-    """Read one staged version's plan in the review pane, by the workspace it came from."""
+def open_plan(ui, label, version):
+    """Read one exact staged version's plan."""
     for index in range(8):
         ui.wait("STAGED PLANS", timeout=20)
         for _ in range(index):
             ui.key(b"j")
+        boundary = frame_boundary(ui)
         ui.key(b"\r")
         # Reading a plan asks the destination for it and for its entry changes.
-        deadline, opened = time.monotonic() + 20, None
-        while opened is None and time.monotonic() < deadline:
-            opened = re.search(r"REVIEW (\S+)  version", ui.text())
-            if opened is None:
-                ui.pump(.3)
+        review_header = re.compile(r"REVIEW (\S+)  version (\S+)")
+        _, frame = wait_frame(ui, boundary, review_header, timeout=20)
+        opened = review_header.search("\n".join(frame))
         assert opened, "the chosen staged version did not open its plan\n" + ui.text()
-        if opened.group(1) == label:
-            return
+        if opened.group(1) == label and opened.group(2) == version:
+            return boundary
         back_to_plans(ui)
-    raise AssertionError("no staged plan from " + label + "\n" + ui.text())
+    raise AssertionError("no staged plan from " + label + " at " + version + "\n" + ui.text())
 
 
 def open_admitted(ui, timeout):
@@ -282,29 +378,130 @@ def open_admitted(ui, timeout):
     itself, so poll the catalog rather than the clock."""
     deadline = time.monotonic() + timeout
     while True:
+        boundary = frame_boundary(ui)
         ui.open_start()
         if TITLE in ui.text():
             ui.choose(TITLE)
-            return
+            wait_frame(ui, boundary, TITLE, timeout=timeout)
+            return boundary
         ui.key(b"\x1b")
         assert time.monotonic() < deadline, ui.text()
         ui.pump(.5)
 
 
-def review_and_apply(folder, project, staged):
+def open_delivery(ui):
+    """Enter through the ordinary desktop catalog. This also focuses the
+    retained App Delivery instance when another restored application is on top."""
+    boundary = frame_boundary(ui)
+    ui.open_start()
+    ui.choose("Tools")
+    ui.choose(DELIVERY)
+    wait_frame(ui, boundary, "APP DELIVERY", timeout=COLD_BOOT)
+    return boundary
+
+
+def open_activation_approval(ui, staged, proposal):
+    """Select the exact pending activation by the evidence the person sees,
+    never by its incidental row position among earlier requests."""
+    expected = ("Asked: Establish and recover " + staged["source_workspace"]
+                + " version " + staged["version"] + " in this workspace?")
+    # Move to the bounded feed's first row a page at a time. This exercises the
+    # ordinary list control without turning 64 individual key-pump intervals
+    # into artificial UI latency.
+    for _ in range(8):
+        ui.key(b"\x1b[5~")
+    for _ in range(64):
+        boundary = frame_boundary(ui)
+        ui.key(b"o")
+        _, frame = wait_frame(ui, boundary, "Asked:", timeout=5)
+        contents = "\n".join(frame)
+        if expected in contents:
+            if "Digest " + proposal not in ui.text():
+                boundary = frame_boundary(ui)
+                ui.key(b"t")
+                wait_frame(ui, boundary, "Digest " + proposal, timeout=20)
+            wait_frame(ui, boundary, "artifact_digest: " + staged["artifact_digest"], timeout=20)
+            wait_frame(ui, boundary, "version: " + staged["version"], timeout=20)
+            return boundary
+        ui.key(b"j")
+    raise AssertionError("exact activation approval is absent\n" + ui.text())
+
+
+def review_and_apply(folder, project, staged, change, exercise_app, evidence, phase):
     """What the person does: read the verdict and the entry changes, accept,
     select and prepare here, approve in Approvals, and step."""
-    ui = Desktop(folder, project=project, apps=("bee.delivery:app",))
+    ui = Desktop(folder, project=project)
+    ui.observed_frames = []
+    previous_frame = None
     try:
-        ui.wait("APP DELIVERY", timeout=COLD_BOOT)
+        initial_boundary = frame_boundary(ui)
+        if not exercise_app:
+            # Version one is automatic and the preceding graceful restart
+            # proved its saved layout. An initial empty frame is transient
+            # while that application attaches; opening the catalog there would
+            # create a second instance and stop proving restoration.
+            wait_frame(ui, initial_boundary, MARKER, "Count: 1", timeout=COLD_BOOT)
+            geometry_boundary = frame_boundary(ui)
+            ui.corners()
+            previous_frame = ui.frame()
+            wait_frame(ui, geometry_boundary, MARKER, "Count: 1", timeout=20)
+            capture_frame(folder, evidence, ui, phase + "-previous-app", geometry_boundary, MARKER, "Count: 1")
+        else:
+            wait_frame(ui, initial_boundary, "No applications open", timeout=COLD_BOOT)
+        # The first complete desktop frame precedes input admission by a small
+        # asynchronous handoff. Wait through that handoff before opening the
+        # ordinary menu; a pre-admission F1 is correctly ignored.
+        ui.pump(.5)
+        started = time.monotonic()
+        open_delivery(ui)
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".open_delivery", started)
+        maximize_boundary = frame_boundary(ui)
         ui.window_control("□")
-        ui.pump(.4)
-        ui.key(b"\t")
+        wait_frame(ui, maximize_boundary, "APP DELIVERY", timeout=20)
+        # App Delivery checkpoints its active tab. A retained instance may
+        # already be on Staged plans, so select by the visible tab instead of
+        # blindly toggling back to Available.
+        for _ in range(3):
+            if "STAGED PLANS" in ui.text():
+                break
+            ui.key(b"\t")
         ui.wait("STAGED PLANS", timeout=20)
-        open_plan(ui, staged["source_workspace"])
-        ui.wait("Verdict ready", timeout=20)
-        ui.wait("No diagnostics and no pending migrations", timeout=20)
-        ui.wait("added  " + DEFINITION_ID + "  process.lua", timeout=20)
+        started = time.monotonic()
+        review_boundary = open_plan(ui, staged["source_workspace"], staged["version"])
+        wait_frame(ui, review_boundary, "Verdict ready", "No diagnostics and no pending migrations",
+                   change + "  " + DEFINITION_ID + "  process.lua", timeout=20)
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".open_review", started)
+        capture_frame(folder, evidence, ui, phase + "-review", review_boundary,
+                      "REVIEW " + staged["source_workspace"],
+                      "Verdict ready", change + "  " + DEFINITION_ID)
+        details_boundary = frame_boundary(ui)
+        ui.key(b"t")
+        wait_frame(ui, details_boundary, "Artifact " + staged["artifact_digest"][:12], timeout=20)
+        capture_frame(folder, evidence, ui, phase + "-review-details", details_boundary,
+                      "Artifact " + staged["artifact_digest"][:12], "plan " + staged["plan_digest"][:12])
+        narrow_boundary = frame_boundary(ui)
+        ui.resize(80, 24)
+        wait_frame(ui, narrow_boundary, "REVIEW " + staged["source_workspace"], timeout=20)
+        capture_frame(folder, evidence, ui, phase + "-review-narrow", narrow_boundary,
+                      "REVIEW " + staged["source_workspace"],
+                      "Verdict ready")
+        wide_boundary = frame_boundary(ui)
+        ui.resize(100, 30)
+        wait_frame(ui, wide_boundary, "REVIEW " + staged["source_workspace"], timeout=20)
+        old_header = ui.screen.display[0]
+        rejoin_boundary = frame_boundary(ui)
+        started = time.monotonic()
+        ui.key(b"\x1b[24~")
+        deadline = time.monotonic() + 4
+        while ui.screen.display[0] == old_header and time.monotonic() < deadline:
+            ui.pump(.05)
+        assert ui.screen.display[0] != old_header, "F12 did not replace the presenter\n" + ui.text()
+        wait_frame(ui, rejoin_boundary, "REVIEW " + staged["source_workspace"],
+                   "Artifact " + staged["artifact_digest"][:12], timeout=20)
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".presenter_replace", started)
+        capture_frame(folder, evidence, ui, phase + "-review-rejoined", rejoin_boundary,
+                      "REVIEW " + staged["source_workspace"],
+                      "Artifact " + staged["artifact_digest"][:12])
         ui.key(b"a")
         ui.wait("Plan details refreshed", timeout=20)
         ui.key(b"s")
@@ -312,6 +509,8 @@ def review_and_apply(folder, project, staged):
         ui.key(b"p")
         ui.wait("Activation approval_bound", timeout=COLD_BOOT)
         ui.wait("proposed  proposal", timeout=20)
+        proposed = re.search(r"proposed\s+proposal\s+([0-9a-f]{12})", ui.text())
+        assert proposed, ui.text()
 
         ui.open_start()
         ui.choose("Tools")
@@ -320,48 +519,85 @@ def review_and_apply(folder, project, staged):
         ui.window_control("□")
         ui.pump(.4)
         ui.wait("bee.governance:establish-overlay", timeout=COLD_BOOT)
-        ui.key(b"j")
-        ui.key(b"o")
-        ui.wait("Asked:", timeout=20)
+        started = time.monotonic()
+        approval_boundary = open_activation_approval(ui, staged, proposed.group(1))
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".open_exact_approval", started)
+        capture_frame(folder, evidence, ui, phase + "-approval-details", approval_boundary,
+                      "version: " + staged["version"], "artifact_digest: " + staged["artifact_digest"])
+        confirmation_boundary = frame_boundary(ui)
         ui.key(b"a")
-        ui.wait("Approve this request?", timeout=20)
+        wait_frame(ui, confirmation_boundary, "Approve this request?", timeout=20)
+        capture_frame(folder, evidence, ui, phase + "-approval-confirmation", confirmation_boundary,
+                      "Approve this request?")
+        started = time.monotonic()
+        approved_boundary = frame_boundary(ui)
         ui.key(b"\t")
         ui.key(b"\r")
-        ui.wait("approved by bee.local", timeout=COLD_BOOT)
+        wait_frame(ui, approved_boundary, "approved by bee.local", timeout=COLD_BOOT)
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".approve", started)
 
+        delivery_boundary = frame_boundary(ui)
         focus(ui, DELIVERY)
-        ui.wait("REVIEW " + staged["source_workspace"], timeout=20)
+        wait_frame(ui, delivery_boundary, "REVIEW " + staged["source_workspace"], timeout=20)
+        started = time.monotonic()
+        apply_boundary = frame_boundary(ui)
         for _ in range(8):
+            step_boundary = frame_boundary(ui)
             ui.key(b"x")
-            if "settled  applied" in ui.text():
+            _, step_frame = wait_frame(ui, step_boundary,
+                                       re.compile(r"\n Activation (?:consuming|authorized|applying|settled)\s*\n"),
+                                       timeout=COLD_BOOT)
+            if "settled  applied" in "\n".join(step_frame):
                 break
-            ui.pump(.5)
-        ui.wait("settled  applied", timeout=COLD_BOOT)
-        ui.wait("consumed  proposal", timeout=20)
+        wait_frame(ui, apply_boundary, "settled  applied", "consumed  proposal",
+                   "Receipt  overlay " + OVERLAY_OWNER,
+                   "Receipt  artifact " + staged["artifact_digest"][:12], timeout=COLD_BOOT)
         # The overlay is the activation owner's own receipt.
-        ui.wait("Receipt  overlay " + OVERLAY_OWNER, timeout=20)
-        ui.wait("Receipt  artifact " + staged["artifact_digest"][:12], timeout=20)
+        record_seconds(folder, evidence, "local_ui_seconds", phase + ".apply", started)
+        capture_frame(folder, evidence, ui, phase + "-applied", apply_boundary, "settled  applied",
+                      "Receipt  overlay " + OVERLAY_OWNER, "Receipt  artifact " + staged["artifact_digest"][:12])
 
-        # The applied definition is opened from the desktop's own catalog.
-        open_admitted(ui, COLD_BOOT)
-        ui.wait(MARKER, timeout=COLD_BOOT)
-        ui.wait("Count: 0")
-        ui.key(b"x")
-        ui.wait("Count: 1")
-        # The counter the window shows is the one the broker committed.
-        ui.wait("Saved: 1", timeout=20)
+        if exercise_app:
+            # The applied definition is opened from the desktop's own catalog.
+            started = time.monotonic()
+            app_boundary = open_admitted(ui, COLD_BOOT)
+            wait_frame(ui, app_boundary, MARKER, "Count: 0", timeout=COLD_BOOT)
+            record_seconds(folder, evidence, "local_ui_seconds", phase + ".open_authored_app", started)
+            ui.wait("Count: 0")
+            capture_frame(folder, evidence, ui, phase + "-app-initial", app_boundary, MARKER, "Count: 0")
+            started = time.monotonic()
+            checkpoint_boundary = frame_boundary(ui)
+            ui.key(b"x")
+            # The counter the window shows is the one the broker committed.
+            wait_frame(ui, checkpoint_boundary, "Count: 1", "Saved: 1", timeout=20)
+            record_seconds(folder, evidence, "local_ui_seconds", phase + ".checkpoint", started)
+            capture_frame(folder, evidence, ui, phase + "-app-saved", checkpoint_boundary,
+                          MARKER, "Count: 1", "Saved: 1")
+        else:
+            started = time.monotonic()
+            updated_boundary = frame_boundary(ui)
+            focus(ui, TITLE)
+            wait_frame(ui, updated_boundary, UPDATE_MARKER, "Count: 1", timeout=COLD_BOOT)
+            assert previous_frame is not None and ui.frame() == previous_frame, (
+                "definition update reset the existing window geometry", previous_frame, ui.frame(), ui.text())
+            record_seconds(folder, evidence, "local_ui_seconds", phase + ".live_update", started)
+            capture_frame(folder, evidence, ui, phase + "-app-updated-live", updated_boundary,
+                          UPDATE_MARKER, "Count: 1")
         ui.quit()
     finally:
         ui.close()
 
 
-def restore(folder, project):
+def restore(folder, project, evidence):
     restarted = Desktop(folder, project=project)
+    restarted.observed_frames = []
     try:
-        restarted.wait(TITLE, timeout=COLD_BOOT)
+        boundary = frame_boundary(restarted)
+        started = time.monotonic()
         focus(restarted, TITLE)
-        restarted.wait(MARKER, timeout=COLD_BOOT)
-        restarted.wait("Count: 1", timeout=20)
+        wait_frame(restarted, boundary, MARKER, "Count: 1", timeout=COLD_BOOT)
+        record_seconds(folder, evidence, "local_ui_seconds", "v1.restore", started)
+        capture_frame(folder, evidence, restarted, "v1-restored", boundary, MARKER, "Count: 1")
         restarted.open_start()
         assert TITLE in restarted.text(), restarted.text()
         restarted.key(b"\x1b")
@@ -371,13 +607,30 @@ def restore(folder, project):
         restarted.close()
 
 
+def restore_updated(folder, project, evidence):
+    restarted = Desktop(folder, project=project)
+    restarted.observed_frames = []
+    try:
+        boundary = frame_boundary(restarted)
+        started = time.monotonic()
+        focus(restarted, TITLE)
+        wait_frame(restarted, boundary, UPDATE_MARKER, "Count: 1", timeout=COLD_BOOT)
+        record_seconds(folder, evidence, "local_ui_seconds", "v2.restore", started)
+        capture_frame(folder, evidence, restarted, "v2-restored", boundary, UPDATE_MARKER, "Count: 1")
+        restarted.quit()
+    finally:
+        restarted.close()
+
+
 def exercise():
     review_contract_check()
     bind_host()
     folder = evidence_root()
+    evidence = ui_evidence(folder)
     print("Private evidence:", folder)
     project = folder / "project"
     shutil.copytree(ROOT / "src", project / "src")
+    stamp_presenter(project)
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
     for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copy2(ROOT / name, project / name)
@@ -401,12 +654,14 @@ def exercise():
     workspace_id = workspace_identity(folder)
 
     findings, report, staged = "", None, None
+    source_workspace = SOURCE_WORKSPACE
     for round_number in range(1, ROUNDS + 1):
         label = str(round_number)
-        source_workspace = "agent-app-source-" + label
         write_inputs(project, round=label, source_workspace=source_workspace,
                      launch_workspace=workspace_id, findings=findings)
+        started = time.monotonic()
         report = author(project, folder, label)
+        record_seconds(folder, evidence, "provider_seconds", "v1.round-" + label, started)
         findings = contract_findings(report) or candidate_findings(folder, project, report["entries"], label) or ""
         if findings:
             print("Round " + label + " returns to the agent: " + findings.splitlines()[0])
@@ -422,23 +677,62 @@ def exercise():
         print("Round " + label + " returns to the agent: " + findings.splitlines()[0])
         staged = None
     assert staged is not None, "the agent did not reach a ready version in " + str(ROUNDS) + " rounds: " + findings
+    assert source_workspace == staged["source_workspace"], staged
 
     assert [item["id"] for item in staged["added"]] == [DEFINITION_ID], staged["added"]
+    assert staged["changed"] == [], staged["changed"]
     assert staged["overlay_owner"] == OVERLAY_OWNER, staged
-    review_and_apply(folder, project, staged)
-    restore(folder, project)
-    (folder / "authored.json").write_text(json.dumps({"snapshot_digest": report["snapshot_digest"],
-                                                      "artifact_digest": report["artifact_digest"],
-                                                      "plan_digest": staged["plan_digest"],
-                                                      "source_workspace": staged["source_workspace"],
-                                                      "entries": report["entries"]}, indent=2))
+    review_and_apply(folder, project, staged, "added", True, evidence, "v1")
+    restore(folder, project, evidence)
+    initial_identity = saved_app_identity(folder)
+    first_revision = report["workspace_revision"]
+
+    write_inputs(project, round="update", source_workspace=source_workspace,
+                 launch_workspace=workspace_id, update=True)
+    started = time.monotonic()
+    updated = author(project, folder, "update")
+    record_seconds(folder, evidence, "provider_seconds", "v2.update", started)
+    assert not updated["findings"], updated["findings"]
+    assert updated["workspace_revision"] > first_revision, updated
+    assert updated["thread_sequence"] > report["thread_sequence"], updated
+    assert updated["snapshot_digest"] != report["snapshot_digest"], updated
+    assert updated["artifact_digest"] != report["artifact_digest"], updated
+    application = updated["entries"][0]["meta"]["application"]
+    assert application["revision"] == "2", application
+    findings = contract_findings(updated) or candidate_findings(folder, project, updated["entries"], "update")
+    assert not findings, findings
+    write_inputs(project, round="update", source_workspace=source_workspace,
+                 launch_workspace=workspace_id, destination_workspace=workspace_id,
+                 version="2.0.0", snapshot_digest=updated["snapshot_digest"],
+                 artifact_digest=updated["artifact_digest"], update=True)
+    updated_stage = stage(project, folder, "update")
+    assert not preflight_findings(updated_stage), preflight_findings(updated_stage)
+    assert updated_stage["added"] == [], updated_stage["added"]
+    assert [item["id"] for item in updated_stage["changed"]] == [DEFINITION_ID], updated_stage["changed"]
+    assert updated_stage["source_workspace"] == staged["source_workspace"] == source_workspace
+    assert updated_stage["overlay_owner"] == staged["overlay_owner"] == OVERLAY_OWNER
+    review_and_apply(folder, project, updated_stage, "changed", False, evidence, "v2")
+    assert saved_app_identity(folder) == initial_identity, "definition update replaced the logical application identity"
+    restore_updated(folder, project, evidence)
+    assert saved_app_identity(folder) == initial_identity, "restart replaced the logical application identity"
+
+    (folder / "authored.json").write_text(json.dumps({"initial": {
+        "snapshot_digest": report["snapshot_digest"], "artifact_digest": report["artifact_digest"],
+        "plan_digest": staged["plan_digest"], "workspace_revision": first_revision}, "updated": {
+        "snapshot_digest": updated["snapshot_digest"], "artifact_digest": updated["artifact_digest"],
+        "plan_digest": updated_stage["plan_digest"], "workspace_revision": updated["workspace_revision"]},
+        "source_workspace": source_workspace, "thread_id": AUTHORING_THREAD,
+        "application_identity": {"view_id": initial_identity[0], "instance_id": initial_identity[1]},
+        "entries": updated["entries"]}, indent=2))
     print("Agent-authored application: a live managed Agy attempt authored " + DEFINITION_ID
           + " through the scoped Governance MCP workspace tool and froze it as "
           + report["snapshot_digest"][:12] + " (artifact " + report["artifact_digest"][:12]
           + "), typed lint passed, the destination staged it as plan " + staged["plan_digest"][:12]
           + " with a ready preflight, a person reviewed, selected, prepared and approved it, "
-          + OVERLAY_OWNER + " applied the overlay, and the application opened from the desktop "
-            "catalog and was restored with its state after a host restart; evidence in " + str(folder))
+          + OVERLAY_OWNER + " applied the overlay, then the same managed thread revision-edited workspace "
+          + source_workspace + " into " + updated["snapshot_digest"][:12] + ", a person independently reviewed "
+            "and approved version 2.0.0 into the same overlay, and the updated application restored its state; "
+            "evidence in " + str(folder))
 
 
 if __name__ == "__main__":

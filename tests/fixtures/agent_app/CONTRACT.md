@@ -21,7 +21,9 @@ An application is one `process.lua` entry:
 `meta.application` declares `api_version: 1`, `lifetime: view`, a nonempty
 `revision` and `title`, and `instance_policy` of `singleton` or `multiple`.
 `icon`, `group` and `role` are optional. Metadata describes the application; it
-never authorizes it. The host separately admits the definition.
+never authorizes it. The host separately admits the definition. Advance
+`revision` whenever executable source or configuration changes; one revision
+identifies one exact runnable definition.
 
 Declare every native module and library import the source actually uses, and
 nothing else. Omit every optional configuration field you do not fill. An empty

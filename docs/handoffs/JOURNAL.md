@@ -7329,3 +7329,181 @@ registry entry. The next slice must carry bindings through those existing ports,
 freeze logical and physical identities plus prefix in immutable migration work,
 execute from that frozen evidence, and preserve old work bytes. No runtime or
 new manager is required.
+
+### 2026-09-19 Codex: immutable logical-to-physical migration evidence
+
+Governance now carries copied host database bindings through both existing
+resolvers and preflight. Migration work schema `@3` freezes the logical target,
+physical SQL resource, optional prefix and physical kind, owner and digest.
+Execution derives bindings from those immutable bytes. Applied facts recover
+the same evidence through their originating intents, so an ordinary later
+activation cannot silently relocate a migration or change its prefix. Strict
+`@2` work remains readable with its original bytes and identity binding.
+
+Strict lint passes with the existing `desktop_lifecycle` warning; Hub unit
+checks pass 86/86; the complete suite passes 1,125/1,125; production packing
+and the 162-document agent corpus check pass. No runtime API or parallel
+manager was added. Next is the existing App Journey acceptance with one shared
+host database, an application prefix, restart recovery, and source/packed runs.
+
+### 2026-09-19 Codex: governed prefixed database App Journey
+
+The source and packed App Journey now carry one logical application database
+through the full reviewed delivery and activation flow into a host-selected
+shared SQLite database with the `journey_` prefix. The migration receives the
+logical target, frozen physical database ID and prefix, writes exactly one
+ledger row and the prefixed application table, preserves an unrelated host
+table, and creates no unprefixed table. Restart restores the application
+without rerunning the committed migration.
+
+Two production edge cases found by the acceptance are fixed at their owning
+boundaries. Immutable migration work preserves the registry source root's
+bounded empty owner marker as exact host evidence. Governance materialization
+can reconcile and observe an exact empty desired overlay during prerequisite
+cleanup while the public artifact contract remains nonempty. Strict lint passes
+with the existing `desktop_lifecycle` warning; all 1,127 tests, Hub's 86/86
+unit gate, source and packed App Journey, production pack, and the 162-document
+agent corpus check pass. Next is a managed-agent update that reuses its existing
+authoring workspace, durable thread and already-applied overlay.
+
+### 2026-09-19 Codex: managed overlay v1-to-v2 acceptance complete
+
+One managed Agy authors an
+application through Governance's scoped overlay tools, a person reviews and
+approves exact v1 and v2 plans in the ordinary Bee UI, and the automatic app
+reopens on v2 with its checkpoint, identity and geometry intact before and after
+restart. App Delivery performs Governance calls on one serialized
+worker so progress paints and resize/Escape remain responsive. Governance now
+measures an installed overlay as the update baseline, so v2 is classified as
+`changed`, and canonicalizes empty artifact metadata at its typed boundary.
+
+The live evidence at `.wippy/evidence/agent-app-20260919-225922` proves v1
+authoring, review, approval, apply and open; `Count: 1` checkpointing; v2
+authoring in the same managed thread; a separate v2 review and approval; live
+replacement in 0.815 seconds with the same logical window and `Count: 1`; and
+v2 recovery after restart. Runtime PR #789 (`b476104e63`) supplies fenced
+viewport producer renewal on top of #787. Bee keeps replacement and immutable
+launch arguments on the instance, uses one execution start path, and gives
+explicit close and workspace shutdown priority over replacement. The final
+deterministic gate preserves the view and instance IDs, controller viewport,
+36×12 geometry, acknowledged checkpoint and mounts while changing the execution
+PID, and emits no fresh open, attach or close.
+
+Astra's final review found and this cut fixes one misleading-evidence race: a
+delayed read for plan A can no longer render below plan B's header. Selection
+changes are fenced while one request is pending, while resize, Escape and review
+scrolling remain responsive; the desktop acceptance delays A, attempts A→B
+navigation, and requires A's exact review. Incoming artifact entries retain
+their exact digest bytes; only captured registry snapshots normalize the
+registry's empty metadata representation. This avoids changing approved
+artifact evidence merely to match presentation.
+
+Release gates pass with the renewal runtime: strict production lint (the known
+`desktop_lifecycle` fixpoint warning only), 1,138/1,138 unit tests, App Delivery
+including the delayed-response regression, managed windows 5/5, source and
+packed App Journey, Governance workspace restart, production pack, and the
+162-document/2,139,134-byte agent corpus. The real provider proof was not
+repeated after the ownership-preserving cleanup because its behavior did not
+change.
+
+Deferred, explicit follow-ups: semantic no-op comparison may still present
+`changed` when omitted metadata and normalized empty metadata materialize to the
+same definition; staging does not yet enforce an application revision advance
+when runnable content changes; authoring workspaces have 16 durable snapshots
+but no retirement policy; and this proof starts authoring through the backend
+harness rather than Agent/Timeline and does not establish cross-node UI
+continuity. Exact artifact digests must remain immutable when addressing the
+first item. The unrelated untracked `modules/bee-registry-planner/` directory
+remains untouched.
+
+### 2026-09-19 Codex: whole-Bee design audit and release shutdown gate
+
+Astra reviewed the complete implemented product rather than only the managed
+overlay update. The ownership model remains the intended small core:
+Governance owns plans and durable authored overlays, Approvals owns decisions,
+the application broker owns executions and viewports, and the workspace host
+owns acknowledged checkpoints. Hub inspection and planning may populate the
+verified cache, while installation remains a separate managed effect. No new
+orchestration layer or broad namespace rewrite is warranted.
+
+The final release blocker found by that review is fixed. If an automatic
+application's old producer had already exited for replacement while a
+checkpoint write remained pending, workspace shutdown could wait for a second
+EXIT that would never arrive. The broker now settles that dead logical instance
+while retaining the pending write for the shutdown drain. The deterministic
+managed-window regression holds the v2 checkpoint, requests v3, observes v2
+EXIT, begins shutdown, acknowledges the exact broker-routed persistence ID and
+requires successful cleanup without starting v3. The gate passes 5/5; strict
+lint has only the known `desktop_lifecycle` warning and all 1,138 unit tests
+pass in 133.4 seconds.
+
+The whole-product next milestones are ordered by user impact and ownership:
+
+1. Complete Hive Manager's authorized client handoff. Its current attach route
+   returns `UNSUPPORTED_CAPABILITY`; one client must connect to another node and
+   return without relaunch while preserving workspace and display identity.
+2. Make Hive discovery responsive at the intended 100-node scale. The current
+   directory caps 64 nodes and probes them serially with a two-second call
+   timeout. Add pagination and bounded concurrent probes, prioritizing the
+   selected node, rather than increasing waits.
+3. Extend the cumulative approvals inbox beyond its current 16 admitted
+   sources through authenticated discovery and paging, preserving exact
+   node/workspace identity and durable once-only resolution.
+4. Freeze the exact Hub dependency closure before publication. Hub currently
+   publishes a dependency root and verifies the resulting inventory afterward,
+   so a changed transitive resolution can be briefly active before restoration.
+   Acceptance must prove an unreviewed closure never becomes active.
+5. Finish one pinned, installable Docker component chain and prove it from the
+   installed picker. Docker placement and profile acceptance exist outside the
+   default pack; the daemon still names an unpublished userspace dependency.
+6. Show stable agent/thread identity, profile and task description in Timeline
+   and link the Agent surface directly to that thread without another manager.
+7. Prove explicit profile exchange between two nodes, including conflicts and
+   exclusion of host paths and secrets. DB-backed profiles currently use a
+   node-owned feed; storage in `bee.sync` alone is not distribution evidence.
+8. Add explicit authoring snapshot retirement that preserves active overlays,
+   recovery references and idempotency evidence. The current bound of 16 fails
+   explicitly and safely but does not support indefinite editing.
+
+Focused cleanup follows those milestones: share the small pure resource-path
+resolution duplicated by general and native-placement resources; make Settings
+label display-local versus inherited node appearance; retire legacy-root launch
+selection only through an explicit installed-state transition; and extract
+large carrier or gateway files only at existing ownership boundaries. This
+audit found no dead production service supporting broad deletion. The runtime
+corpus and harness documentation were corrected to describe implemented
+DB-backed profiles and the generated offline documentation catalog accurately.
+
+One candidate-runtime typing defect remains explicit. Runtime #789's strict
+checker treats the same native `tty.Viewport` annotation as distinct nominal
+identities across the broker and private attachment component, reporting
+`expected tty.Viewport, got tty.Viewport`. Four attachment entry points
+therefore localize an `unknown` to `tty.Viewport` cast while every operation and
+return remains typed. Moving mount ownership into the broker or duplicating a
+viewport interface would be worse. The clean follow-up is to intern the native
+type identity across component compilation boundaries in runtime, then restore
+the direct typed parameters.
+
+### 2026-09-19 Codex: managed overlay global installation
+
+Bee source `9fb90d756c53afa958dd9b7e2f1c7469e2a0f004` is pushed to `main`
+and installed globally. The exact executable SHA-256 is
+`3d95c4d2ffe482d9dc63e8b9a1fb0cd3af16d398dbc3e33178aad0f59fa9382c`;
+provenance pins runtime `b476104e63b62c9679df78a585727b7f64d48d02` and
+native Bee `v0.0.0-20260919180600-ff9810fea081`. Native Settings, Terminal,
+Modules, About, all five default Agent profiles and offline cold/restart/
+reconnect acceptance pass. The candidate warm attach measured 0.216 seconds.
+
+The six-file installer verified provenance and patch contents, proved the exact
+rollback path through an injected post-replacement failure, backed up the prior
+global set at `bee-evidence/0919/global-before-managed-overlay-9fb90d7`, and
+atomically replaced sidecars before the executable. Receipt:
+`bee-evidence/0919/global-managed-overlay-9fb90d7-install.json`. One exact old
+owner exited on SIGTERM. No database, profile, conversation, workspace, display,
+credential or migration ledger was removed or copied.
+
+The installed executable was then run from `/mnt/c/Users/Wolfy-J`. It rendered
+retained workspace `Gentle Ember`. `bee agy` opened the managed Antigravity
+terminal with the inherited signed-in account and exact project directory; it
+was closed with Ctrl+C without submitting a turn, and the client detached with
+Ctrl+Q. The running owner resolves to the installed executable.

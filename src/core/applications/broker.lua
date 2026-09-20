@@ -11,6 +11,7 @@ local contract = require("contract")
 local catalog = require("catalog")
 local lifecycle = require("lifecycle")
 local attachment = require("attachment")
+local execution = require("execution")
 local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
@@ -21,9 +22,10 @@ type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
 type PreferenceWaiter = {request_id: string, recipient: string, action: AppearanceOp, renderer: string, mount: string}
 type Checkpoint = {request_id: string, pid: string, deadline: number, resume_state: string}
+type Replacement = {revision: string, exited: boolean}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
-    client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
+    producer_generation: integer, arguments: {string}, replacement: Replacement?, client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
@@ -80,8 +82,11 @@ local function main(owner: string, initial_preferences: unknown)
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
     local preference_waiters: {[string]: PreferenceWaiter} = {}
-    -- Reconcile the protected registry declaration without replacing live producers.
-    -- Reads use one snapshot; policy lookup must still finish at that revision.
+    -- Admission refresh enters the same termination path as explicit close.
+    -- The function is assigned below before the first refresh call.
+    local transition: (Instance, lifecycle.Event) -> ()
+    -- Reconcile one protected registry snapshot. Compatible automatic
+    -- producers may follow a later revision through the replacement path below.
     local function refresh_admission(initial: boolean?)
         local previous = admission.current
         local ok, loaded = pcall(function(): Admission
@@ -117,9 +122,27 @@ local function main(owner: string, initial_preferences: unknown)
             return {revision = revision, bindings = next_bindings, descriptors = next_descriptors, scopes = next_scopes, items = next_items}
         end)
         if ok then
-            if previous == loaded then return end
-            admission.current, admission.error = loaded, ""
-            assert(process.send(owner, "bee.application.catalog", {version = 1, items = loaded.items}))
+            local selected: Admission = loaded :: Admission
+            if previous == selected then return end
+            admission.current, admission.error = selected, ""
+            assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
+            -- A compatible automatic application follows its applied
+            -- definition behind the same viewport. Once an exit has been
+            -- observed, its exact requested revision is a fence: a later
+            -- catalog refresh fails closed rather than changing that target.
+            for _, value in pairs(instances) do
+                local item: Instance = value :: Instance
+                local replacement = selected.descriptors[item.descriptor.definition_id]
+                local replacement_binding: contract.Binding? = nil
+                for _, candidate in ipairs(selected.bindings) do
+                    if candidate.definition_id == item.descriptor.definition_id then replacement_binding = candidate; break end
+                end
+                if cleanup_request == "" and not item.replacement and item.state.phase == "ready" and replacement and replacement_binding
+                    and catalog.replaces(item.descriptor, replacement) then
+                    item.replacement = {revision = replacement.definition_revision, exited = false}
+                    transition(item, "force_stop")
+                end
+            end
         else
             if initial then error(tostring(loaded)) end
             -- An invalid or unreadable replacement must not leave stale grants
@@ -218,6 +241,7 @@ local function main(owner: string, initial_preferences: unknown)
         end
     end
     local function finish(item: Instance, failed: boolean)
+        item.replacement = nil
         if shutdown_plan then shutdown.remove(shutdown_plan, item.view_id) end
         if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
         item.view:close()
@@ -240,6 +264,71 @@ local function main(owner: string, initial_preferences: unknown)
             else emit(identified(item, "close", waiter.request_id), true) end
         end
     end
+    local function has_checkpoint(pid: string): boolean
+        for _, waiter in pairs(checkpoint_waiters) do
+            if waiter.pid == pid then return true end
+        end
+        return false
+    end
+    -- A compatible revision replaces only the execution behind the existing
+    -- viewport. Controller and observer mounts, geometry, page, logical IDs
+    -- and the last acknowledged checkpoint therefore remain continuous.
+    local function start_replacement(item: Instance)
+        local pending = item.replacement
+        if cleanup_request ~= "" or not pending or not pending.exited or has_checkpoint(item.execution_pid) then return end
+        local current = admission.current
+        local replacement = current and current.descriptors[item.descriptor.definition_id]
+        local replacement_binding: contract.Binding? = nil
+        if current then
+            for _, candidate in ipairs(current.bindings) do
+                if candidate.definition_id == item.descriptor.definition_id then replacement_binding = candidate; break end
+            end
+        end
+        local scope = current and current.scopes[item.descriptor.definition_id]
+        if not replacement or replacement.definition_revision ~= pending.revision
+            or not replacement_binding or not scope or not catalog.replaces(item.descriptor, replacement) then
+            item.replacement = nil
+            item.state = {phase = "stopped", deadline = 0, failure = "replacement_definition_changed"}
+            finish(item, true)
+            return
+        end
+        if interactions.remove(dialogs, item.view_id) then publish_dialogs() end
+        for id, waiter in pairs(preference_waiters) do
+            if waiter.recipient == item.execution_pid then preference_waiters[id] = nil end
+        end
+        local previous_catalog_reader = item.binding.catalog_read
+        item.descriptor, item.binding = replacement, replacement_binding
+        item.announced_title, item.title_dirty, item.negotiate_close = nil, nil, nil
+        item.close_request_id, item.attempts = nil, 0
+        item.state = lifecycle.start(now())
+        local grant, generation = item.view:renew(item.producer_generation)
+        if not grant then
+            item.replacement = nil
+            item.state = {phase = "stopped", deadline = 0, failure = "replacement_grant_failed"}
+            finish(item, true)
+            return
+        end
+        local version = assert(registry.current_version())
+        local token = uuid.v7()
+        local started = execution.start(grant, {definition_id = item.descriptor.definition_id,
+            scope = scope, workspace_pid = owner, workspace_id = workspace_id,
+            instance_id = item.instance_id, view_id = item.view_id,
+            definition_revision = item.descriptor.definition_revision,
+            registry_revision = version:string(), launch_token = token,
+            resume_schema = item.descriptor.resume_schema, resume_state = item.resume_state,
+            arguments = item.arguments})
+        if not started.pid then
+            local _, cancel_error = item.view:cancel_grant(grant)
+            item.replacement = nil
+            item.state = {phase = "stopped", deadline = 0,
+                failure = cancel_error and "replacement_grant_cancel_failed" or "replacement_" .. started.error_code}
+            finish(item, true)
+            return
+        end
+        item.execution_pid, item.launch_token, item.producer_generation = started.pid, token, assert(generation)
+        item.replacement = nil
+        if previous_catalog_reader or item.binding.catalog_read then publish_catalog_readers() end
+    end
     local function discard_dialog(item: Instance)
         local pending_dialog = interactions.remove(dialogs, item.view_id)
         if pending_dialog then
@@ -256,7 +345,8 @@ local function main(owner: string, initial_preferences: unknown)
             kind = "confirm", title = title, message = message, accept = accept, initial = ""}
         if interactions.add(dialogs, spec, item.close_request_id or "", item.execution_pid, true) then publish_dialogs() end
     end
-    local function transition(item: Instance, event: lifecycle.Event)
+    transition = function(item: Instance, event: lifecycle.Event)
+        local was_opened = item.opened
         local next_state, effect = lifecycle.reduce(item.state, event, now(), item.binding.close_grace_ms)
         item.state = next_state
         if effect == "opened" then
@@ -264,8 +354,9 @@ local function main(owner: string, initial_preferences: unknown)
             -- attachment must not turn a ready application into a startup failure.
             item.opened = true
             local attachment_error: string? = nil
-            if recipient ~= "" then attachment_error = mount(item) end
-            emit(identified(item, "open", item.open_request), true)
+            if not was_opened and recipient ~= "" then attachment_error = mount(item) end
+            if was_opened then emit(identified(item, "title", ""))
+            else emit(identified(item, "open", item.open_request), true) end
             appearance_state(item)
             if attachment_error then
                 emit(identified(item, "attached", item.open_request, "attachment_failed", attachment_error))
@@ -310,6 +401,22 @@ local function main(owner: string, initial_preferences: unknown)
             end
         elseif effect == "closed" or effect == "failed" then finish(item, effect == "failed") end
     end
+    -- An EXIT consumed for a catalog replacement leaves no producer to stop.
+    -- Explicit close cancels a now-unreachable checkpoint reply; workspace
+    -- cleanup keeps it so the owner can drain its durable write before quit.
+    local function settle_exited_replacement(item: Instance, discard_checkpoint: boolean): boolean
+        local replacement = item.replacement
+        if not replacement or not replacement.exited then return false end
+        item.replacement = nil
+        if discard_checkpoint then
+            for id, checkpoint in pairs(checkpoint_waiters) do
+                if checkpoint.pid == item.execution_pid then checkpoint_waiters[id] = nil end
+            end
+        end
+        item.state = {phase = "stopped", deadline = 0, failure = ""}
+        finish(item, false)
+        return true
+    end
     local function stop(item: Instance, waiter: Waiter, force: boolean)
         if shutdown_plan and not force then
             if waiter.control then control_result(waiter, "busy", "Quit confirmation pending")
@@ -321,7 +428,12 @@ local function main(owner: string, initial_preferences: unknown)
             else emit(identified(item, "close", waiter.request_id, "busy", "Too many pending stop requests"), true) end
             return
         end
+        -- An explicit close wins over a catalog-triggered execution swap.
+        -- Once the old producer has exited, there is no process left to
+        -- negotiate with or terminate. Settle the logical window directly.
         item.waiters[#item.waiters + 1] = waiter
+        if settle_exited_replacement(item, true) then return end
+        item.replacement = nil
         if force then item.attempts = 0 end
         if not force and item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
             or item.state.phase == "close_confirming" or item.state.phase == "close_unresponsive") then
@@ -384,7 +496,12 @@ local function main(owner: string, initial_preferences: unknown)
             if event.kind == process.event.CANCEL or (event.kind == process.event.EXIT and tostring(event.from) == owner) then break end
             if event.kind == process.event.EXIT then
                 local item = find_pid(tostring(event.from))
-                if item then transition(item, "exit") end
+                local replacement: Replacement? = nil
+                if item then replacement = item.replacement end
+                if item and replacement then
+                    replacement.exited = true
+                    start_replacement(item)
+                elseif item then transition(item, item.state.phase == "ready" and "unexpected_exit" or "exit") end
             end
         elseif selected.channel == ticks then
             refresh_admission()
@@ -395,7 +512,11 @@ local function main(owner: string, initial_preferences: unknown)
                     checkpoint_waiters[id] = nil
                 end
             end
-            for _, item in pairs(instances) do tick_instance(item) end
+            for _, item in pairs(instances) do
+                local replacement = item.replacement
+                if replacement and replacement.exited then start_replacement(item)
+                else tick_instance(item) end
+            end
             refresh_shutdown()
         elseif selected.channel == shutdown_requests and selected.value:from() == owner then
             local data: unknown = selected.value:payload():data()
@@ -675,9 +796,21 @@ local function main(owner: string, initial_preferences: unknown)
                             shutdown_dialog = nil
                             publish_dialogs()
                             for _, item in pairs(instances) do
-                                if item.state.phase == "close_unresponsive" then transition(item, "force_stop")
-                                elseif item.state.phase == "close_requested" or item.state.phase == "close_confirming" then transition(item, "accept_close")
-                                else transition(item, "stop") end
+                                -- Shutdown owns the logical window. Cancel a
+                                -- pending catalog swap before asking its old
+                                -- producer to stop, so an EXIT cannot launch
+                                -- a replacement while cleanup is in progress.
+                                local current: Instance = item :: Instance
+                                if settle_exited_replacement(current, false) then
+                                    -- Keep a pending checkpoint write: cleanup
+                                    -- must drain it, but the dead producer is
+                                    -- no longer a live logical instance.
+                                else
+                                    current.replacement = nil
+                                    if current.state.phase == "close_unresponsive" then transition(current, "force_stop")
+                                    elseif current.state.phase == "close_requested" or current.state.phase == "close_confirming" then transition(current, "accept_close")
+                                    else transition(current, "stop") end
+                                end
                             end
                         end
                     elseif req.op == "bind" then
@@ -750,7 +883,7 @@ local function main(owner: string, initial_preferences: unknown)
                         if selected_admission then
                             for _, candidate in ipairs(selected_admission.bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
                         end
-                        local descriptor = selected_admission and binding and selected_admission.descriptors[req.definition_id]
+                        local descriptor: contract.Descriptor? = selected_admission and binding and selected_admission.descriptors[req.definition_id]
                         local existing: Instance? = nil
                         local count = 0
                         for _, item in pairs(instances) do
@@ -769,27 +902,37 @@ local function main(owner: string, initial_preferences: unknown)
                             emit(contract.reply(req.request_id, "open", "identity_conflict", "View identity is already active"), true)
                         elseif count >= 16 then emit(contract.reply(req.request_id, "open", "instance_limit", "Desktop instance limit reached"), true)
                         else
+                            local admitted: Admission = selected_admission :: Admission
+                            local selected_binding: contract.Binding = binding :: contract.Binding
+                            local selected_descriptor: contract.Descriptor = descriptor :: contract.Descriptor
                             local view_id = req.restore_view_id ~= "" and req.restore_view_id or uuid.v7()
                             local instance_id = req.restore_instance_id ~= "" and req.restore_instance_id or uuid.v7()
                             local token = uuid.v7()
                             local theme = appearance.theme(preferences.theme)
-                            local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, descriptor.role == "terminal")})
+                            local view, err = tty.viewport({width = 60, height = 16, page = appearance.page(theme, selected_descriptor.role == "terminal")})
                             if not view then emit(contract.reply(req.request_id, "open", "viewport_failed", tostring(err)), true)
                             else
                                 local grant, grant_err = view:grant()
                                 if not grant then view:close(); emit(contract.reply(req.request_id, "open", "grant_failed", tostring(grant_err)), true)
                                 else
                                     local version = assert(registry.current_version())
-                                    local pid, spawn_err = process.with_options({terminal = grant}):with_scope(selected_admission.scopes[req.definition_id])
-                                        :spawn_monitored(req.definition_id, "bee:workers", {version = 1, broker_pid = tostring(process.pid()), workspace_pid = owner, workspace_id = workspace_id,
-                                            instance_id = instance_id, view_id = view_id, definition_id = req.definition_id,
-                                            definition_revision = descriptor.definition_revision, registry_revision = version:string(), launch_token = token, resume_schema = descriptor.resume_schema, resume_state = req.resume_state, arguments = req.arguments})
-                                    if not pid then view:close(); emit(contract.reply(req.request_id, "open", "spawn_failed", tostring(spawn_err)), true)
+                                    local scope = admitted.scopes[req.definition_id]
+                                    if not scope then error("Admitted application scope is unavailable") end
+                                    local launch: execution.Launch = {definition_id = req.definition_id,
+                                        scope = scope, workspace_pid = owner, workspace_id = workspace_id,
+                                        instance_id = instance_id, view_id = view_id, definition_revision = selected_descriptor.definition_revision,
+                                        registry_revision = version:string(), launch_token = token, resume_schema = selected_descriptor.resume_schema,
+                                        resume_state = req.resume_state, arguments = req.arguments}
+                                    local started = execution.start(grant, launch)
+                                    if not started.pid then view:close(); emit(contract.reply(req.request_id, "open", started.error_code, started.error), true)
                                     else
-                                        instances[view_id] = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = tostring(pid), view = view,
-                                            descriptor = descriptor, binding = binding, launch_token = token, observers = {},
-                                            state = lifecycle.start(now()), open_request = req.request_id, opened = false, resume_state = req.resume_state, waiters = {}, attempts = 0}
-                                        if binding.catalog_read then publish_catalog_readers() end
+                                        local instance: Instance = {view_id = view_id, instance_id = instance_id, thread_id = req.thread_id, execution_pid = started.pid, view = view,
+                                            descriptor = selected_descriptor, binding = selected_binding, launch_token = token, observers = {},
+                                            state = lifecycle.start(now()), open_request = req.request_id, opened = false,
+                                            resume_state = req.resume_state, arguments = req.arguments, replacement = nil,
+                                            waiters = {}, attempts = 0, producer_generation = 1}
+                                        instances[view_id] = instance
+                                        if selected_binding.catalog_read then publish_catalog_readers() end
                                     end
                                 end
                             end

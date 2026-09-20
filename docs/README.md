@@ -1,8 +1,9 @@
 # Documentation map
 
-The repository Markdown is currently authoritative. Bee does not yet publish a
-runtime documentation catalog. A future registry catalog should
-package these same pages with status and version, not maintain a second copy.
+The repository Markdown is the authored source. Bee also ships a generated,
+hashed runtime documentation corpus so managed agents can search and read the
+selected implementation contracts offline. Refresh that corpus through the
+existing generator; do not maintain a second authored copy.
 
 | Read for | Current source |
 |---|---|

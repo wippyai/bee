@@ -163,17 +163,22 @@ local function main()
         diagnostics[#diagnostics + 1] = {code = diagnostic.code, target = diagnostic.target,
             message = diagnostic.message, remedy = diagnostic.remedy}
     end
-    local added: {unknown} = {}
+    local added: {unknown} = table.create(1, 0)
+    local modified: {unknown} = table.create(1, 0)
     if report.ready == true and #report.diagnostics == 0 then
-        local changed = call_api("bee.governance:destination_call", {operation = "changes", workspace_id = workspace_id,
+        local changes = call_api("bee.governance:destination_call", {operation = "changes", workspace_id = workspace_id,
             source_node = local_node, source_workspace = source_workspace, version = version})
-        for _, raw in ipairs(changed.added :: {unknown}) do
+        for _, raw in ipairs(changes.added :: {unknown}) do
             local item = object(raw)
             added[#added + 1] = {id = item.id, kind = item.kind}
         end
+        for _, raw in ipairs(changes.changed :: {unknown}) do
+            local item = object(raw)
+            modified[#modified + 1] = {id = item.id, kind = item.kind}
+        end
     end
     logger:info("AGENT_APP_STAGED", {ready = report.ready == true and #report.diagnostics == 0,
-        pending_migrations = #report.pending_migrations, diagnostics = diagnostics, added = added,
+        pending_migrations = #report.pending_migrations, diagnostics = diagnostics, added = added, changed = modified,
         source_workspace = source_workspace, version = version,
         plan_digest = digest_of(staged.plan_digest, "staged plan digest"),
         artifact_digest = artifact_digest, overlay_owner = OVERLAY_OWNER})

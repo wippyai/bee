@@ -278,6 +278,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    canonical: bee.sync:canonical
     artifact: bee.governance:artifact
     overlay_resolver: bee.governance:overlay_resolver
     preflight: bee.governance:preflight

@@ -115,8 +115,10 @@ needs a runtime terminal-session capability, not a second ANSI parser in Bee.
 
 A profile describes **harness + isolation + options + MCP scope**. The shipped
 defaults are registry declarations owned by the separate driver components.
-Editable DB-backed profiles and policy-controlled exchange through `bee.sync`
-are planned, not implemented. Shared configuration must not contain host paths,
+Authorized clients can create and edit bounded DB-backed profiles; launch
+selection pins their revision and merges only values allowed by the host policy.
+The profile feed is node-owned. Policy-controlled exchange of profiles between
+nodes remains unproven. Shared configuration must not contain host paths,
 credential bytes or live process/session handles. Launch context uses the
 existing runtime `ctx` module and is resolved for each invocation; it is not a
 static profile payload or permission grant.
@@ -133,7 +135,10 @@ Escape. It uses the display's appearance, sanitizes label controls and disables
 launch when the window cannot show a choice. Selecting a changed plan clears the
 list and requires an explicit refresh and selection; no attempt is created.
 Before native execution, it closes its drawing surface and keeps the same input
-subscription and broker terminal grant. Existing measured request envelopes
+subscription and broker terminal grant. First-use setup runs through a
+cancellable future, so Escape closes the visible picker without waiting for
+setup to finish; admission results that arrive after close are still drained
+and their attempt-bound grants are revoked. Existing measured request envelopes
 still select a profile directly through admission.
 
 The component-owned `command_names` route `bee claude`, `bee codex`, `bee agy`

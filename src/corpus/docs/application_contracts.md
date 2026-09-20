@@ -22,18 +22,33 @@ optional `icon`, `group` (slash-separated menu path), and `role`. Roles supply
 contextual discoverability, never authority. Only protected
 `bee:application_admission.bindings` selects allowed definitions, policy IDs and
 operation grants (`appearance_write`, `application_stop`, `catalog_read`).
+Executable source or configuration changes require a new application revision;
+one revision identifies one exact runnable definition.
 
 The broker reconciles the effective protected declaration on its existing
 lifecycle tick and before each new open. It compares decoded bindings and
 descriptors from one immutable snapshot as well as the history revision:
 registry overlays can change these values without advancing history. Unchanged
 values reuse the existing scopes and do not republish the catalog. A change
-rebuilds the host-selected scopes and rechecks the catalog before publication. A replacement affects subsequent launches;
-existing instances retain their binding, scope and viewport. Removing a binding
-blocks new opens. An invalid declaration or unavailable policy clears future
-admission until a valid replacement can be loaded, without terminating existing
-instances. Replaying an already completed open may still focus that existing
-instance; it does not create a new execution.
+rebuilds the host-selected scopes and rechecks the catalog before publication. A
+compatible new revision of an automatic application replaces its execution
+behind the same viewport after the old producer exits and its pending checkpoint
+settles. The instance, controller and observer mounts, display assignment,
+geometry and last acknowledged checkpoint remain continuous. A manual
+application or one whose resume schema or restart policy changed keeps its
+existing execution. Removing a binding blocks new opens. An invalid declaration
+or unavailable policy clears future admission until a valid replacement can be
+loaded, without terminating existing instances. Replaying an already completed
+open may still focus that existing instance; it does not create a new execution.
+
+Replacement has one owner-local state on the instance. Explicit close and
+workspace shutdown cancel it. A later catalog revision cannot overwrite an
+already observed producer exit; if the exact target revision is no longer
+available, the replacement fails closed. A failed renewal spawn revokes its
+unused producer grant. An unexpected exit outside replacement is reported as an
+application failure, and the workspace preserves an automatic application's
+last acknowledged recovery record and display assignment for the next host
+recovery.
 
 This is registry reconciliation only: Hub installation does not publish an
 admission binding or grant an application approval. The reviewed publication

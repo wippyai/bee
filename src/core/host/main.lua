@@ -476,8 +476,19 @@ local function main(owner: string, database_resource: string?)
                                 transfer_result(pending_transfer.caller, request, assignment_revision, code, error_text)
                             end
                         else
+                            local preserved_record: recovery.Record? = nil
+                            if not stopping and reply.op == "closed" and reply.error_code == "application_failed" then
+                                for _, saved in ipairs(snapshot.applications) do
+                                    if saved.id == reply.id and saved.instance_id == reply.instance_id
+                                        and saved.restart_policy == "automatic" then
+                                        preserved_record = saved
+                                    end
+                                    if preserved_record then break end
+                                end
+                            end
                             local next_inventory = inventory.observe(live_inventory, reply)
-                            if not stopping and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
+                            if not preserved_record and not stopping
+                                and ((reply.op == "close" and reply.error == "") or reply.op == "closed") then
                                 local committed, err = replace_record(nil, reply.id)
                                 if not committed then error("Workspace save failed: " .. tostring(err)) end
                             end
@@ -485,7 +496,7 @@ local function main(owner: string, database_resource: string?)
                             -- proof used to retire an exact assignment.  Keep
                             -- unresolved prepared fences for recovery, and
                             -- retain every receipt regardless of retirement.
-                            if reply.op == "closed" then
+                            if reply.op == "closed" and not preserved_record then
                                 local assigned, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})
                                 if assignment_error then error("Read closed display assignment: " .. tostring(assignment_error)) end
                                 if assigned and not assigned.intent then

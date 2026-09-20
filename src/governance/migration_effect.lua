@@ -5,6 +5,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local hub_migrations = require("hub_migrations")
 local migration_runner = require("migration_runner")
+local migration_work = require("migration_work")
 local materializer = require("materializer")
 
 local M = {}
@@ -53,7 +54,22 @@ function M.cleared(overlay_owner: string): (boolean?, string?)
     return materializer.matches(owner, {})
 end
 
-function M.execute(work: any, bindings: Bindings?, execution_policies: PolicyIds?): ({bytes: string, digest: string}?, boolean, string?)
+local function frozen_bindings(work: any): (Bindings?, string?)
+    local result: Bindings = {}
+    local targets: {[string]: boolean} = {}
+    for _, item in ipairs(work.migrations) do targets[item.target_db] = true end
+    for target in pairs(targets) do
+        local item, item_error = migration_work.database(work, target)
+        if not item then return nil, item_error end
+        result[target] = {database_id = item.database_id :: string,
+            table_prefix = item.table_prefix :: string?}
+    end
+    return result, nil
+end
+
+function M.execute(work: any, execution_policies: PolicyIds?): ({bytes: string, digest: string}?, boolean, string?)
+    local bindings, binding_error = frozen_bindings(work)
+    if not bindings then return nil, false, binding_error end
     local entries: {any} = {}
     local ids: {string} = {}
     local components: {string} = {}

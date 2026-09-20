@@ -66,6 +66,18 @@ local function changes_value(version: string): {[string]: unknown}
         removed = {{id = "demo:gone", kind = "function.lua", digest = string.rep("b", 64)}}}
 end
 
+local function activation(): {[string]: unknown}
+    return {owner_node = "node-destination", workspace_id = "workspace-destination", intent_id = "intent",
+        actor_id = "actor", overlay_owner = "overlay", source_node = "node-source",
+        source_workspace = "workspace-source", version = "1.0.0", plan_digest = string.rep("a", 64),
+        plan_revision = 1, selection_revision = 1, artifact_bytes = "artifact",
+        artifact_digest = string.rep("b", 64), resolution_bytes = "resolution",
+        resolution_digest = string.rep("c", 64), preflight_bytes = "preflight",
+        preflight_digest = string.rep("d", 64), migration_work_bytes = "work",
+        migration_work_digest = string.rep("e", 64), authorization_digest = string.rep("f", 64),
+        effect_key = "effect", revision = 2, phase = "approval_bound", migrations_completed = false}
+end
+
 local function define_tests()
     test.describe("App Delivery model", function()
         test.it("keeps replicated versions staged until explicit destination actions", function()
@@ -220,6 +232,15 @@ local function define_tests()
                 workspace_id = "workspace-other", plans = {}})))
             test.is_false(model.apply_list(state, reply({owner_node = "node-destination",
                 workspace_id = "workspace-destination", plans = {plan("1.0.0", "staged", false, 0)}})))
+        end)
+
+        test.it("accepts the complete destination activation evidence", function()
+            local state = model.new("workspace-destination")
+            test.is_true(model.apply_activation(state, reply(activation())))
+            test.eq(state.intent.intent_id, "intent")
+            local malformed = activation()
+            malformed.migration_work_digest = "bad"
+            test.is_false(model.apply_activation(state, reply(malformed)))
         end)
     end)
 end

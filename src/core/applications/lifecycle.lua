@@ -1,7 +1,7 @@
 -- Pure lifecycle deadlines. Completion is emitted only after a process EXIT.
 type Phase = "starting" | "ready" | "close_requested" | "close_confirming" | "close_unresponsive"
     | "stopping" | "terminating" | "stopped"
-type Event = "ready" | "exit" | "stop" | "force_stop" | "tick"
+type Event = "ready" | "exit" | "unexpected_exit" | "stop" | "force_stop" | "tick"
     | "request_close" | "confirm_close" | "accept_close" | "cancel_close"
 type State = {phase: Phase, deadline: number, failure: string}
 type Effect = "none" | "opened" | "close" | "terminate" | "closed" | "failed"
@@ -14,6 +14,9 @@ end
 function M.start(now: number): State return {phase = "starting", deadline = now + 3, failure = ""} end
 function M.reduce(state: State, event: Event, now: number, close_grace_ms: integer?): (State, Effect)
     if state.phase == "stopped" then return state, "none" end
+    if event == "unexpected_exit" then
+        return {phase = "stopped", deadline = 0, failure = "unexpected_exit"}, "failed"
+    end
     if event == "exit" then
         local failed = state.phase == "starting" or state.failure ~= ""
         return {phase = "stopped", deadline = 0, failure = failed and (state.failure ~= "" and state.failure or "startup_failed") or ""}, failed and "failed" or "closed"

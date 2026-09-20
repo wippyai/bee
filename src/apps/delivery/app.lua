@@ -34,11 +34,42 @@ local function main(value: unknown)
     local offset = 0
     local dirty, running, announced = true, true, false
     local last_checkpoint = ""
+    -- Destination calls are serialized in one worker so a delayed owner never
+    -- blocks the presentation loop. The worker carries the existing caller
+    -- and model operations; this actor remains responsible for frames,
+    -- resize and cancellation.
+    local updates = channel.new(1)
+    local busy = false
+    local function changed()
+        dirty = true
+        if running then updates:send(true) end
+    end
+    local function perform(operation: () -> ()): boolean
+        if busy then
+            state.notice = "Request in progress"
+            -- This branch runs on the presentation loop. The worker may
+            -- already have filled the one-slot wakeup channel, so sending
+            -- here could block the only receiver. Painting needs no wakeup.
+            dirty = true
+            return false
+        end
+        busy = true
+        state.notice = "Working…"
+        dirty = true
+        coroutine.spawn(function()
+            local ok, failure = pcall(operation)
+            busy = false
+            if not running then return end
+            if not ok then state.notice = "Request failed: " .. tostring(failure)
+            elseif state.notice == "Working…" then state.notice = "" end
+            changed()
+        end)
+        return true
+    end
     local function invoke(request: unknown): caller.Reply?
         return owner:invoke(model.CALL, request)
     end
-    local function refresh()
-        state.notice = ""
+    local function refresh_now()
         local available_ok = model.apply_available(state, invoke(model.available_request(state)))
         local available_notice = available_ok and "" or state.notice
         local plans_ok = model.apply_list(state, invoke(model.list_request(state)))
@@ -48,9 +79,8 @@ local function main(value: unknown)
         elseif not plans_ok then state.notice = plans_notice
         elseif #state.available == 0 and #state.plans == 0 then state.notice = "No versions available or staged in this workspace"
         else state.notice = "" end
-        dirty = true
     end
-    local function stage_available()
+    local function stage_available_now()
         local item = model.selected_available(state)
         if not item then state.notice = "Choose an available version first"; dirty = true; return end
         for _, staged in ipairs(state.plans) do
@@ -76,10 +106,10 @@ local function main(value: unknown)
         local reply = invoke(model.stage_request(state, item, pending.idempotency_key))
         local applied = model.apply_stage(state, reply, item)
         if reply and (applied or not reply.ok) then state.pending_stage = nil end
-        if applied then refresh(); state.notice = "Staged for local review; no installation performed" end
+        if applied then refresh_now(); state.notice = "Staged for local review; no installation performed" end
         dirty = true
     end
-    local function get_selected()
+    local function get_selected_now()
         local item = model.selected(state)
         if not item then state.notice = "Choose a staged version first"; dirty = true; return end
         if model.apply_plan(state, invoke(model.get_request(state, item))) then
@@ -89,7 +119,7 @@ local function main(value: unknown)
         end
         dirty = true
     end
-    local function review(accepted: boolean)
+    local function review_now(accepted: boolean)
         local item = model.selected(state)
         local refused = accepted and model.refusal(state, item) or nil
         if refused then state.notice = refused; dirty = true; return end
@@ -99,7 +129,7 @@ local function main(value: unknown)
         model.apply_plan(state, invoke(model.review_request(state, item, accepted, new_key())))
         dirty = true
     end
-    local function select_version()
+    local function select_version_now()
         local item = model.selected(state)
         local refused = model.refusal(state, item)
         if refused then state.notice = refused; dirty = true; return end
@@ -109,7 +139,7 @@ local function main(value: unknown)
         model.apply_plan(state, invoke(model.select_request(state, item, new_key())))
         dirty = true
     end
-    local function prepare()
+    local function prepare_now()
         local item = model.selected(state)
         local refused = model.refusal(state, item)
         if refused then state.notice = refused; dirty = true; return end
@@ -129,7 +159,7 @@ local function main(value: unknown)
         if reply and (applied or not reply.ok) then state.pending_prepare = nil end
         dirty = true
     end
-    local function step()
+    local function step_now()
         local intent_id = state.intent and state.intent.intent_id or state.restored_intent_id
         if not intent_id then state.notice = "Use Recover to find the desired activation first"; dirty = true; return end
         local pending = state.pending_step
@@ -146,14 +176,14 @@ local function main(value: unknown)
         if applied then state.restored_intent_id = state.intent and state.intent.intent_id or nil end
         dirty = true
     end
-    local function activation_status()
+    local function activation_status_now()
         local intent_id = state.intent and state.intent.intent_id or state.restored_intent_id
         if not intent_id then state.notice = "No activation is known yet; use Recover to look up the desired one"; dirty = true; return end
         local applied = model.apply_activation(state, invoke(model.status_request(state, intent_id)))
         if applied then state.restored_intent_id = state.intent and state.intent.intent_id or nil end
         dirty = true
     end
-    local function recover()
+    local function recover_now()
         local key = state.pending_recover_key or new_key()
         model.set_pending_recover(state, key)
         local reply = invoke(model.recover_request(state, key))
@@ -161,6 +191,12 @@ local function main(value: unknown)
         if reply and (applied or not reply.ok) then state.pending_recover_key = nil end
         if applied then state.restored_intent_id = state.intent and state.intent.intent_id or nil end
         dirty = true
+    end
+    local function selection_locked(): boolean
+        if not busy then return false end
+        state.notice = "Request in progress"
+        dirty = true
+        return true
     end
     local function checkpoint()
         local encoded = model.checkpoint(state)
@@ -170,8 +206,10 @@ local function main(value: unknown)
         end
     end
 
-    refresh()
-    if state.restored_intent_id then activation_status() end
+    perform(function()
+        refresh_now()
+        if state.restored_intent_id then activation_status_now() end
+    end)
     if launch.broker_pid then process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
@@ -182,10 +220,12 @@ local function main(value: unknown)
             checkpoint()
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), updates:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
+        elseif event.channel == updates then
+            dirty = true
         elseif event.channel == states then
             local message = event.value
             if launch.broker_pid and message:from() == launch.broker_pid then
@@ -200,40 +240,60 @@ local function main(value: unknown)
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local text = tostring(data.key or "")
-                if key == "tab" or text == "\t" then model.toggle_pane(state); offset = 0; dirty = true
+                if key == "tab" or text == "\t" then
+                    if not selection_locked() then model.toggle_pane(state); offset = 0; dirty = true end
                 elseif key == "up" or text == "k" then
                     if state.pane == "review" then offset = math.floor(math.max(0, offset - 1))
-                    elseif state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
+                    elseif not selection_locked() then
+                        if state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
+                    end
                     dirty = true
                 elseif key == "down" or text == "j" then
                     if state.pane == "review" then offset = offset + 1
-                    elseif state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
+                    elseif not selection_locked() then
+                        if state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
+                    end
                     dirty = true
                 elseif key == "pgup" then
                     if state.pane == "review" then offset = math.floor(math.max(0, offset - 8))
-                    elseif state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
+                    elseif not selection_locked() then
+                        if state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
+                    end
                     dirty = true
                 elseif key == "pgdown" then
                     if state.pane == "review" then offset = offset + 8
-                    elseif state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
+                    elseif not selection_locked() then
+                        if state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
+                    end
                     dirty = true
-                elseif key == "enter" then if state.pane == "available" then stage_available() else get_selected() end
-                elseif text == "a" then if state.pane == "available" then stage_available() else review(true) end
-                elseif text == "n" then if state.pane == "plans" then review(false) end
-                elseif text == "s" then if state.pane == "available" then stage_available() else select_version() end
-                elseif text == "p" then prepare()
-                elseif text == "x" then step()
-                elseif text == "i" then activation_status()
-                elseif text == "g" then recover()
-                elseif text == "f" then refresh()
+                elseif key == "enter" then
+                    if state.pane == "available" then perform(stage_available_now) else perform(get_selected_now) end
+                elseif text == "a" then
+                    if state.pane == "available" then perform(stage_available_now)
+                    else perform(function() review_now(true) end) end
+                elseif text == "n" then if state.pane == "plans" then perform(function() review_now(false) end) end
+                elseif text == "s" then
+                    if state.pane == "available" then perform(stage_available_now) else perform(select_version_now) end
+                elseif text == "p" then perform(prepare_now)
+                elseif text == "x" then perform(step_now)
+                elseif text == "i" then perform(activation_status_now)
+                elseif text == "g" then perform(recover_now)
+                elseif text == "f" then perform(refresh_now)
                 elseif text == "t" then model.toggle_technical(state); dirty = true
                 elseif key == "esc" or key == "escape" then running = false end
             elseif data.type == "mouse" and data.action == "wheel" then
-                model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
+                if state.pane == "review" then
+                    offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)))
+                elseif not selection_locked() then
+                    if state.pane == "available" then model.move_available(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                    else model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1) end
+                end
+                dirty = true
             end
         end
     end
     process.unlisten(states)
+    updates:close()
     output:close()
     tty.stop()
 end

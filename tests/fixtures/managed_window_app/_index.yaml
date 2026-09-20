@@ -123,13 +123,13 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [registry.apply]
-    resources: [bee:application_admission]
+    resources: [bee:application_admission, bee.managed_window_fixture:checkpoint_app]
     effect: allow
 - name: checkpoint_app
   kind: process.lua
   source: file://checkpoint_app.lua
   method: main
-  modules: [process, channel]
+  modules: [process, channel, tty]
   imports:
     client: bee.application:client
   meta:

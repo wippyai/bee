@@ -55,7 +55,7 @@ no code and does not mutate the workspace or frozen snapshot.
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
 Checked migration 1 owns the workspace, files, frozen copies and receipt tables.
 Capacity is bounded to eight workspaces per authenticated author and 64 per node,
-two distinct snapshots and 512 mutation receipts per workspace, in addition to
+16 distinct snapshots and 512 mutation receipts per workspace, in addition to
 the file bounds above. One Agent therefore cannot consume every authoring slot on
 the node. Exhaustion fails explicitly; there is no eviction, garbage collection
 or ownership transfer yet. Frozen content and receipts are durable; they do not imply activation,
@@ -77,7 +77,9 @@ automatic process-exit cleanup. Expanded packages, service readiness and migrati
 ordering remain unproved by this registry-entry-only fixture.
 `bee.governance:materializer` keeps the overlay owner outside transferred data,
 copies and remeasures the desired artifact, and deletes definitions no longer in
-that owner's complete desired set. It makes one generation-fenced apply attempt.
+that owner's complete desired set. Cleanup can reconcile and observe the exact
+empty owner overlay without making an empty application artifact publishable. It
+makes one generation-fenced apply attempt.
 A conflict returns to the destination owner, which must rebuild its trusted
 context and rerun preflight before another attempt. It has no durable registry
 publication path. The later destination owner supplies the host-selected owner
@@ -189,13 +191,24 @@ used for production resolution.
 An activation profile may also carry `database_bindings`, a bounded list of
 logical `target_db`, physical `database_id` and optional `table_prefix` values.
 The logical target must be in the profile's database ceiling. The normalized
-list is part of the activation policy digest; execution and recovery ledger
-checks use the same host-selected mapping. When the list is present, a
+list is part of the activation policy digest. Destination resolution copies it
+into preflight and includes each selected physical database in the composed-base
+measurement. New immutable migration work uses
+`bee.governance-migration-work@3` and freezes the logical target, physical
+database, optional prefix and physical definition evidence. Execution derives
+its database map from that work rather than rereading the profile. Stored `@2`
+work remains strict and keeps its identity binding without rewriting its bytes.
+Applied facts follow their originating intent, so an ordinary update cannot
+retarget an established migration chain by changing the database or prefix.
+When the list is present, a
 migration whose logical target has no binding is refused. Artifact metadata and
 Agent tools never select physical database resources or prefixes. The same
 profile can name bounded `migration_policies`; these host-owned references add
 the exact function and physical-database grants after Governance's private
 overlay and approval policies are removed from the migration call scope.
+`table_prefix` is passed to migration code as a naming convention; a database
+grant is still authority over the physical SQL resource and is not table-level
+confinement.
 
 Host profiles now select `resolver: hub` or `resolver: overlay`; omitted legacy
 values decode as `hub`. The private-overlay resolver consumes exact immutable

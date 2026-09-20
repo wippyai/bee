@@ -35,6 +35,18 @@ COLD_BOOT = 30
 OVERLAY_WRITE = "registry.overlay.apply"
 OVERLAY_OWNER = "bee.app_journey_probe:activation_overlay"
 OPEN_SEED = "bee.app_open_probe:seed"
+MIGRATION_ID = "bee.app_journey_demo:001"
+
+
+def assert_shared_database(root):
+    """The host database keeps its unrelated row and one prefixed app table."""
+    path = Path(root) / ".wippy/app-journey-shared.db"
+    assert path.exists(), path
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT id FROM _migrations ORDER BY id").fetchall() == [(MIGRATION_ID,)]
+        assert db.execute("SELECT value FROM journey_items ORDER BY id").fetchall() == [("journey",)]
+        assert db.execute("SELECT value FROM other_items").fetchall() == [("preserved",)]
+        assert db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='items'").fetchall() == []
 
 
 def bind_admission(project):
@@ -260,6 +272,7 @@ def exercise():
                         "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
         guide_evidence = guide(project, folder)
         evidence = deliver(project, folder)
+        assert_shared_database(project)
         inspect(project, folder)
 
         open_source_root = folder / "open-source"
@@ -292,9 +305,11 @@ def exercise():
             restarted.quit()
         finally:
             restarted.close()
+        assert_shared_database(project)
 
         packed_root = folder / "packed"
         packed_root.mkdir()
+        (packed_root / ".wippy").mkdir()
         shutil.copy2(project / ".wippy.yaml", packed_root / ".wippy.yaml")
         pack_file = packed_root / "bee.wapp"
         subprocess.run([str(RUNTIME), "pack", str(pack_file)], cwd=project,
@@ -302,6 +317,7 @@ def exercise():
         # Packed entries have a different composed base (embedded assets).
         # Review that exact base rather than replaying a source-base approval.
         deliver(project, packed_root, pack_file)
+        assert_shared_database(packed_root)
         open_packed = run_open_probe(project, packed_root, packed=True,
                                      pack_file=pack_file)
         for field in ("replayed", "same_instance", "conflict_code", "missing_code",

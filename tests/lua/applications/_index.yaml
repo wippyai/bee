@@ -16,6 +16,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
     contract: bee.protocol:application
     test: wippy.test:test

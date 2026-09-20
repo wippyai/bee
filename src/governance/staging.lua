@@ -23,7 +23,10 @@ type FileSource = "workspace" | "snapshot"
 
 local MAX_WORKSPACES = 64
 local MAX_ACTOR_WORKSPACES = 8
-local MAX_SNAPSHOTS = 2
+-- Frozen revisions are the durable source history for iterative agent work.
+-- Keep the budget explicit and bounded while allowing repair and later edits
+-- to stay in one authoring workspace.
+local MAX_SNAPSHOTS = 16
 local MAX_RECEIPTS = 512
 local MAX_FILES = 256
 local MAX_PATH_BYTES = 240

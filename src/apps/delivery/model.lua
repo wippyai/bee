@@ -53,9 +53,11 @@ local CHANGE_FIELDS = {"owner_node", "workspace_id", "source_node", "source_work
 local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "overlay_owner", "source_node",
     "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact_bytes",
     "artifact_digest", "resolution_bytes", "resolution_digest", "preflight_bytes", "preflight_digest",
-    "authorization_digest", "effect_key", "revision", "phase", "approval_id", "approval_proposal_digest",
+    "migration_work_bytes", "migration_work_digest", "authorization_digest", "effect_key", "revision", "phase",
+    "approval_id", "approval_proposal_digest",
     "approval_owner_incarnation", "consumed_consumer_id", "consumed_proposal_digest", "consumed_effect_key",
-    "outcome", "diagnostics", "slot_revision", "desired_intent_id", "desired_execution_revision",
+    "outcome", "diagnostics", "migrations_completed", "migration_receipt_bytes", "migration_receipt_digest",
+    "slot_revision", "desired_intent_id", "desired_execution_revision",
     "observed_intent_id", "observed_execution_revision", "observed_artifact_digest", "observed_outcome"}
 local DESCRIPTOR_FIELDS = {"schema", "owner_id", "feed", "key", "object_id", "version_id", "content_digest",
     "manifest_digest", "content_kind", "total_bytes", "manifest", "digest"}
@@ -220,13 +222,18 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     end
     if not optional_digest(value.plan_digest) or not optional_digest(value.artifact_digest)
         or not optional_digest(value.resolution_digest) or not optional_digest(value.preflight_digest)
+        or not optional_digest(value.migration_work_digest) or not optional_digest(value.migration_receipt_digest)
         or not optional_digest(value.authorization_digest) or not optional_digest(value.approval_proposal_digest)
         or not optional_digest(value.consumed_proposal_digest) or not optional_digest(value.observed_artifact_digest)
         or not optional_count_valid(value.plan_revision, true) or not optional_count_valid(value.selection_revision, true)
         or not optional_count_valid(value.approval_owner_incarnation, true) or not optional_count_valid(value.slot_revision, false)
         or not optional_count_valid(value.desired_execution_revision, false) or not optional_count_valid(value.observed_execution_revision, false)
         or not valid_blob(value.artifact_bytes, 262144) or not valid_blob(value.resolution_bytes, 1048576)
-        or not valid_blob(value.preflight_bytes, 131072) then return nil, "activation evidence is malformed" end
+        or not valid_blob(value.preflight_bytes, 131072) or not valid_blob(value.migration_work_bytes, 1048576)
+        or not valid_blob(value.migration_receipt_bytes, 262144)
+        or (value.migrations_completed ~= nil and type(value.migrations_completed) ~= "boolean") then
+        return nil, "activation evidence is malformed"
+    end
     return {owner_node = owner_node, workspace_id = workspace, intent_id = intent_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace, version = version,
         revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,

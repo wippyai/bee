@@ -60,6 +60,27 @@ def bind_destination(project, workspace_id):
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
+def delay_destination(project, operation, duration="2s"):
+    """Delay one destination operation without changing its reply."""
+    manifest = project / "src/governance/_index.yaml"
+    document = yaml.safe_load(manifest.read_text())
+    entry = next(item for item in document["entries"] if item["name"] == "destination_call")
+    if "time" not in entry["modules"]:
+        entry["modules"].append("time")
+    manifest.write_text(yaml.safe_dump(document, sort_keys=False))
+    method = project / "src/governance/destination_method.lua"
+    source = method.read_text()
+    if 'local time = require("time")' not in source:
+        source = source.replace('local funcs = require("funcs")',
+                                'local funcs = require("funcs")\nlocal time = require("time")')
+    source = source.replace(
+        '    local result, call_error = executor:call(service.BACKEND, request)',
+        f'    if request.operation == "{operation}" then time.sleep("{duration}") end\n'
+        '    local result, call_error = executor:call(service.BACKEND, request)',
+    )
+    method.write_text(source)
+
+
 def seed(project, folder):
     args = [str(RUNTIME), "run", "--verbose", "delivery-review-seed", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
@@ -125,6 +146,41 @@ def back_to_plans(ui):
     ui.wait("STAGED PLANS", timeout=20)
 
 
+def exercise_responsive():
+    """A delayed destination must not hold the App Delivery frame or close."""
+    with tempfile.TemporaryDirectory(prefix="bee-delivery-responsive-") as directory:
+        folder = Path(directory)
+        project = folder / "project"
+        shutil.copytree(ROOT / "src", project / "src")
+        for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
+            shutil.copy2(ROOT / name, project / name)
+
+        delay_destination(project, "available")
+        subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
+
+        ui = Desktop(folder, project=project, apps=("bee.delivery:app",))
+        ui.observed_frames = []
+        try:
+            deadline = time.monotonic() + COLD_BOOT
+            while time.monotonic() < deadline and not any(
+                "Working" in "\n".join(frame) for frame in ui.observed_frames
+            ):
+                ui.pump(.02)
+            assert any("APP DELIVERY" in "\n".join(frame) for frame in ui.observed_frames), ui.text()
+            assert any("Working" in "\n".join(frame) for frame in ui.observed_frames), ui.text()
+            ui.resize(72, 24)
+            start = time.monotonic()
+            ui.key(b"\x1b")
+            while "APP DELIVERY" in ui.text() and time.monotonic() - start < 1.5:
+                ui.pump(.05)
+            assert "APP DELIVERY" not in ui.text(), ui.text()
+            assert time.monotonic() - start < 1.5, "App Delivery Escape exceeded 1.5s"
+            ui.quit()
+        finally:
+            ui.close()
+    print("App Delivery responsiveness: delayed destination still shows progress, resizes and closes within 1.5s")
+
+
 def exercise():
     with tempfile.TemporaryDirectory(prefix="bee-delivery-review-") as directory:
         folder = Path(directory)
@@ -144,6 +200,7 @@ def exercise():
             first.close()
         workspace_id = workspace_identity(folder)
         bind_destination(project, workspace_id)
+        delay_destination(project, "get")
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
         evidence = seed(project, folder)
         assert evidence["workspace_id"] == workspace_id, evidence
@@ -161,7 +218,12 @@ def exercise():
 
             # The refused plan names its verdict, the diagnostic code and the
             # entry that diagnostic concerns, and select is unavailable.
-            open_review(ui, BLOCKED_WORKSPACE, 0)
+            # A slow read pins the selected plan. Navigation during the call
+            # cannot make A's evidence appear beneath B's heading.
+            ui.key(b"\r")
+            ui.wait("Working", timeout=20)
+            ui.key(b"j")
+            ui.wait("REVIEW " + BLOCKED_WORKSPACE, timeout=20)
             ui.wait("Verdict blocked", timeout=20)
             ui.wait("DANGLING_REFERENCE  " + BLOCKED_ENTRY, timeout=20)
             ui.wait("missing final-state target " + ABSENT_TARGET, timeout=20)
@@ -244,4 +306,5 @@ def exercise():
 
 
 if __name__ == "__main__":
+    exercise_responsive()
     exercise()

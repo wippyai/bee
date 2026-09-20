@@ -10,14 +10,16 @@ local preflight = require("preflight")
 
 local M = {}
 
-M.SCHEMA = "bee.governance-migration-work@2"
+M.SCHEMA = "bee.governance-migration-work@3"
+M.LEGACY_SCHEMA = "bee.governance-migration-work@2"
 M.MAX_MIGRATIONS = 128
 M.MAX_DATABASES = 128
 M.MAX_BYTES = 1048576
 
 type Object = {[string]: unknown}
 type Migration = {id: string, target_db: string, ordinal: integer, checksum: string, package: string, definition: Object}
-type Database = {id: string, kind: string, package: string, digest: string, planned: boolean, definition: Object?}
+type Database = {target_db: string, database_id: string, table_prefix: string?, kind: string,
+    package: string, digest: string, planned: boolean, definition: Object?}
 type Work = {schema_revision: string, destination_node: string, source_node: string, base_revision: integer,
     base_digest: string, policy_digest: string, candidate_digest: string, artifact_digest: string,
     plan_digest: string, migrations: {Migration}, databases: {Database}, bytes: string, digest: string}
@@ -58,6 +60,14 @@ end
 
 local function identifier(value: unknown): string?
     if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then return nil end
+    return value
+end
+
+-- Registry source roots use the empty owner marker. It is still host-captured
+-- provenance and is compared exactly on recovery; unlike authored package
+-- identities, it does not need to be nonempty.
+local function owner(value: unknown): string?
+    if type(value) ~= "string" or #value > 160 or value:find("%c") then return nil end
     return value
 end
 
@@ -103,7 +113,8 @@ local function normalize(raw: unknown): (Object?, string?)
     local revision = value.base_revision
     local base_digest, policy_digest = sha(value.base_digest), sha(value.policy_digest)
     local candidate_digest, artifact_digest, plan_digest = sha(value.candidate_digest), sha(value.artifact_digest), sha(value.plan_digest)
-    if value.schema_revision ~= M.SCHEMA or not destination or not source
+    local schema = value.schema_revision
+    if (schema ~= M.SCHEMA and schema ~= M.LEGACY_SCHEMA) or not destination or not source
         or type(revision) ~= "number" or revision ~= math.floor(revision) or revision < 0 or revision > 9007199254740991
         or not base_digest or not policy_digest or not candidate_digest or not artifact_digest or not plan_digest then
         return nil, "migration work identity or measurement is invalid"
@@ -157,24 +168,46 @@ local function normalize(raw: unknown): (Object?, string?)
 
     local supplied_databases, database_error = dense(value.databases, "migration work databases", M.MAX_DATABASES)
     if not supplied_databases then return nil, database_error end
-    local databases: {Database} = {}
-    local seen_databases: {[string]: boolean} = {}
-    local previous_database = ""
+    local databases: {Object} = {}
+    local seen_targets: {[string]: boolean} = {}
+    local physical_evidence: {[string]: string} = {}
+    local previous_target = ""
     for index, raw_database in ipairs(supplied_databases) do
         local item = object(raw_database)
         if not item then return nil, "migration work databases[" .. tostring(index) .. "] must be an object" end
-        local extra_database = fields(item, {"id", "kind", "package", "digest", "planned", "definition"})
+        local database_fields: {string}
+        if schema == M.LEGACY_SCHEMA then
+            database_fields = {"id", "kind", "package", "digest", "planned", "definition"}
+        else
+            database_fields = {"target_db", "database_id", "table_prefix", "kind", "package", "digest", "planned", "definition"}
+        end
+        local extra_database = fields(item, database_fields)
         if extra_database then return nil, extra_database end
-        local id, kind, package, measured = registry_id(item.id), identifier(item.kind), identifier(item.package), sha(item.digest)
-        if not id or (kind ~= "db.sql.sqlite" and kind ~= "db.sql.postgres" and kind ~= "db.sql.mysql")
-            or not package or not measured
-            or type(item.planned) ~= "boolean" or seen_databases[id] or id <= previous_database then
-            return nil, "migration work contains an invalid database binding"
+        local target_db = registry_id(schema == M.LEGACY_SCHEMA and item.id or item.target_db)
+        local database_id = registry_id(schema == M.LEGACY_SCHEMA and item.id or item.database_id)
+        local prefix: string? = nil
+        if schema ~= M.LEGACY_SCHEMA and item.table_prefix ~= nil then
+            prefix = identifier(item.table_prefix)
+            if not prefix or #prefix > 64 or not prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                return nil, "migration work contains an invalid database prefix"
+            end
+        end
+        local kind, package, measured = identifier(item.kind), owner(item.package), sha(item.digest)
+        if not target_db then return nil, "migration work database has an invalid logical target" end
+        if not database_id then return nil, "migration work database has an invalid physical identity" end
+        if kind ~= "db.sql.sqlite" and kind ~= "db.sql.postgres" and kind ~= "db.sql.mysql" then
+            return nil, "migration work database has an invalid SQL kind"
+        end
+        if not package then return nil, "migration work database has no trusted owner" end
+        if not measured then return nil, "migration work database has an invalid definition digest" end
+        if type(item.planned) ~= "boolean" then return nil, "migration work database has no planned-state evidence" end
+        if seen_targets[target_db] or target_db <= previous_target then
+            return nil, "migration work database targets are duplicated or out of order"
         end
         local definition: Object? = nil
         if item.planned then
             definition = object(item.definition)
-            if not definition or definition.id ~= id or definition.kind ~= kind then
+            if not definition or definition.id ~= database_id or definition.kind ~= kind then
                 return nil, "planned migration database definition differs"
             end
             local definition_measure, measure_error = definition_digest(definition)
@@ -187,19 +220,33 @@ local function normalize(raw: unknown): (Object?, string?)
         elseif item.definition ~= nil then
             return nil, "existing migration database must not carry a package definition"
         end
-        databases[#databases + 1] = {id = id, kind = kind, package = package, digest = measured,
-            planned = item.planned :: boolean, definition = definition}
-        seen_databases[id], previous_database = true, id
+        local evidence = table.concat({kind :: string, package :: string, measured,
+            item.planned and "1" or "0", definition and assert(canonical.encode(definition, artifact.MAX_BYTES)) or ""}, "\n")
+        if physical_evidence[database_id] and physical_evidence[database_id] ~= evidence then
+            return nil, "migration work physical database evidence differs"
+        end
+        physical_evidence[database_id] = evidence
+        if schema == M.LEGACY_SCHEMA then
+            databases[#databases + 1] = {id = target_db, kind = kind, package = package, digest = measured,
+                planned = item.planned :: boolean, definition = definition}
+        else
+            local database: Object = {target_db = target_db, database_id = database_id, kind = kind,
+                package = package, digest = measured, planned = item.planned :: boolean}
+            if prefix then database.table_prefix = prefix end
+            if definition then database.definition = definition end
+            databases[#databases + 1] = database
+        end
+        seen_targets[target_db], previous_target = true, target_db
     end
     local required_databases: {[string]: boolean} = {}
     for _, migration in ipairs(migrations) do required_databases[migration.target_db] = true end
     for id in pairs(required_databases) do
-        if not seen_databases[id] then return nil, "migration work is missing database " .. id end
+        if not seen_targets[id] then return nil, "migration work is missing database " .. id end
     end
-    for id in pairs(seen_databases) do
+    for id in pairs(seen_targets) do
         if not required_databases[id] then return nil, "migration work contains an unused database " .. id end
     end
-    return {schema_revision = M.SCHEMA, destination_node = destination, source_node = source,
+    return {schema_revision = schema, destination_node = destination, source_node = source,
         base_revision = math.floor(revision :: number), base_digest = base_digest, policy_digest = policy_digest,
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, plan_digest = plan_digest,
         migrations = migrations, databases = databases}, nil
@@ -308,35 +355,24 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
     end)
     if #pending > M.MAX_MIGRATIONS then return nil, "pending migration work exceeds its bound" end
 
-    local final: {[string]: preflight.Entry} = {}
-    local package_set: {[string]: boolean} = {}
-    for _, item in ipairs(candidate.artifacts) do package_set[item.component] = true end
-    for id, item in pairs(context.entries) do if not package_set[item.package] then final[id] = item end end
-    local planned: {[string]: preflight.Entry} = {}
-    for _, item in ipairs(candidate.entries) do final[item.id], planned[item.id] = item, item end
     local target_ids: {[string]: boolean} = {}
     for _, item in ipairs(pending) do target_ids[item.target_db] = true end
     local databases: {Database} = {}
-    for id in pairs(target_ids) do
-        local summary = final[id]
-        if not summary or not context.databases[id] or not summary.kind:match("^db%.sql%.") then
-            return nil, "migration database is not an admitted final-state SQL resource: " .. id
+    for target_db in pairs(target_ids) do
+        local binding = context.database_bindings and context.database_bindings[target_db] or nil
+        if context.database_bindings ~= nil and not binding then
+            return nil, "migration database has no host binding: " .. target_db
         end
-        local definition: Object? = nil
-        local is_planned = planned[id] ~= nil
-        if is_planned then
-            definition = artifact_entries[id]
-            if not definition or definition.kind ~= summary.kind then
-                return nil, "planned migration database is missing from the exact artifact: " .. id
-            end
-            local measured, measure_error = definition_digest(definition)
-            if not measured then return nil, measure_error end
-            if measured ~= summary.digest then return nil, "planned migration database differs from its artifact: " .. id end
+        local database_id = binding and binding.database_id or target_db
+        local summary = context.entries[database_id]
+        if not summary or not context.databases[target_db] or not summary.kind:match("^db%.sql%.") then
+            return nil, "migration database is not an admitted host SQL resource: " .. target_db
         end
-        databases[#databases + 1] = {id = id, kind = summary.kind, package = summary.package,
-            digest = summary.digest, planned = is_planned, definition = definition}
+        databases[#databases + 1] = {target_db = target_db, database_id = database_id,
+            table_prefix = binding and binding.table_prefix or nil, kind = summary.kind,
+            package = summary.package, digest = summary.digest, planned = false, definition = nil}
     end
-    table.sort(databases, function(left: Database, right: Database): boolean return left.id < right.id end)
+    table.sort(databases, function(left: Database, right: Database): boolean return left.target_db < right.target_db end)
 
     local work_migrations: {Migration} = {}
     for _, item in ipairs(pending) do
@@ -376,6 +412,30 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
     end
     normalized.bytes, normalized.digest = bytes_raw, recorded
     return normalized :: Work, nil
+end
+
+-- Resolve one logical target from already validated immutable work. Legacy
+-- work used one `id` for both sides and never carried a prefix.
+function M.database(raw_work: unknown, target_raw: unknown): (Object?, string?)
+    local work = object(raw_work)
+    local target = registry_id(target_raw)
+    if not work or not target or type(work.databases) ~= "table" then
+        return nil, "migration work database lookup is invalid"
+    end
+    local found: Object? = nil
+    for _, raw in ipairs(work.databases :: {unknown}) do
+        local item = object(raw)
+        local logical = item and registry_id(item.target_db or item.id) or nil
+        local physical = item and registry_id(item.database_id or item.id) or nil
+        if logical == target then
+            if found or not physical then return nil, "migration work database binding is ambiguous" end
+            found = {target_db = target, database_id = physical, kind = item.kind,
+                package = item.package, digest = item.digest, planned = item.planned}
+            if item.table_prefix ~= nil then found.table_prefix = item.table_prefix end
+        end
+    end
+    if not found then return nil, "migration work is missing database " .. target end
+    return found, nil
 end
 
 function M.verify(raw: unknown, candidate: preflight.Candidate, artifact_raw: unknown,

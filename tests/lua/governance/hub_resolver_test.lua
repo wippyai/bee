@@ -17,14 +17,14 @@ type Candidate = {destination_node: string, source_node: string, base_revision: 
 type Context = {node_id: string, registry_revision: integer, registry_digest: string,
     policy_digest: string, packages: {[string]: boolean}, namespaces: {[string]: boolean},
     kinds: {[string]: boolean}, databases: {[string]: boolean}, grants: {[string]: boolean},
-    modules: {[string]: boolean}, entries: {[string]: CandidateEntry}, applied: {[string]: Object},
+    modules: {[string]: boolean}, database_bindings: {[string]: Object}?, entries: {[string]: CandidateEntry}, applied: {[string]: Object},
     exact_expansion: boolean, migration_barrier: boolean}
 type Facts = {candidate: Candidate, context: Context}
 type Captured = {revision: integer, entries: {Object}, resolution: Object?, preview: (Object) -> (Object?, string?)}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean}
+    database_bindings: {[string]: Object}?, migration_barrier: boolean}
 
 local SHA = string.rep("a", 64)
 
@@ -135,6 +135,21 @@ local function define_tests()
             test.is_true(find_entry(resolved.candidate.entries, "app:claimed") ~= nil)
             test.eq(resolved.candidate.artifacts[1].component, "vendor/app")
             test.eq(resolved.candidate.artifacts[1].digest, SHA)
+        end)
+
+        test.it("retains copied host database bindings in the preflight context", function()
+            local policy: Object = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["vendor/app"] = true}, namespaces = {app = true},
+                kinds = {["function.lua"] = true}, databases = {["app:data"] = true},
+                grants = {}, modules = {}, applied = {}, migration_barrier = true,
+                database_bindings = {["app:data"] = {database_id = "host:db", table_prefix = "app_"}}}
+            local deps, spec = deps_fixture(policy)
+            local resolved = facts(deps, spec)
+            test.eq(resolved.context.database_bindings["app:data"].database_id, "host:db")
+            test.eq(resolved.context.database_bindings["app:data"].table_prefix, "app_")
+            local source_binding = (policy.database_bindings :: Object)["app:data"] :: Object
+            source_binding.database_id = "other:db"
+            test.eq(resolved.context.database_bindings["app:data"].database_id, "host:db")
         end)
 
         test.it("omits empty dependency parameters from the native preview root", function()

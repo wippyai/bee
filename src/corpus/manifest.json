@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 27173,
+      "bytes": 28142,
       "id": "docs/application_contracts",
-      "sha256": "77e16507e69b19db027c9c7c8410ebf1c24fbffd3351eaa950c645ddf3119a71",
+      "sha256": "09b77ecf2f1cd9e2d1cb6e20adbfa59bfcb7c84df6e19687386a51adc06bb500",
       "source": "docs/APPLICATION_CONTRACTS.md",
       "title": "Application contracts (development version 1)",
       "topic": "application"
@@ -1011,9 +1011,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 7194,
+      "bytes": 7262,
       "id": "docs/readme",
-      "sha256": "09cd9f84cd062f6aa6a0dc816c174e11f083d3b8a1b9215c52c9093cc9e80460",
+      "sha256": "13fb0adae50d8bb5864ca90d62f0dde8f77e2fd029db19d9a6ec86e6f8f57c46",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -1195,17 +1195,17 @@
       "topic": "component"
     },
     {
-      "bytes": 13902,
+      "bytes": 14745,
       "id": "component/governance",
-      "sha256": "07adeabbc7617c86bd3f7771778f6a486502e6dcac3810c4b75e5ef30e1225cb",
+      "sha256": "ff170993fb9c6a7f12509b0c780c5b26649aa65a52a390da49fd8ea381ba2f57",
       "source": "src/governance",
       "title": "Governance authoring and preflight",
       "topic": "component"
     },
     {
-      "bytes": 18070,
+      "bytes": 18448,
       "id": "component/harness",
-      "sha256": "40e3ee4226a20d08f53283b6e0969be6e223fe6fb68038bc1687e2712bcb29cf",
+      "sha256": "3eaa770e1814441e9e00f32e0928c15a38b4b681ea37723d5c73a1af409c31f3",
       "source": "src/harness",
       "title": "bee.harness",
       "topic": "component"
@@ -1302,7 +1302,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2136876,
+    "bytes": 2139134,
     "documents": 162
   }
 }

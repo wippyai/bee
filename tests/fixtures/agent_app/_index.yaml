@@ -19,6 +19,7 @@ entries:
     authoring_policy: ''
     marker: ''
     brief: ''
+    update: false
 - name: material
   kind: registry.entry
   meta:

@@ -23,13 +23,14 @@ local ACTOR = "bee.agent_app.operator"
 local THREAD = "agent-app-authoring"
 -- The launch route and its policy are host-selected per run: the live Agy
 -- attempt and the scripted fixture provider use the same production launch,
-admission, carrier, placement and gateway path with a different far end.
+-- admission, carrier, placement and gateway path with a different far end.
 local DEFAULT_DEFINITION = "bee.driver.agy:research_batch"
 local ACCESS_POLICY = "local-agent-app-authoring"
 local NAMESPACE = "bee.agent_app_demo"
 local DEFINITION_ID = "bee.agent_app_demo:app"
 local TITLE = "Agent App"
 local MARKER_LINE = "AGENT APP READY"
+local UPDATE_MARKER_LINE = "AGENT APP UPDATED"
 
 -- Host instructions reach the agent as the driver's own instructions file, the
 -- durable part of the brief a person writes once for this destination.
@@ -184,13 +185,32 @@ local function repair_brief(source_workspace: string, marker: string, round: str
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
         .. "Read app_docs topics contract, client, example and view again for anything the findings touch. "
         .. "Fix every finding. Keep the behaviour the earlier version already had right; do not replace the application with a stub. "
-        .. "This round authors into a new workspace: create " .. source_workspace .. " with operation create at expected_revision 0, "
-        .. "put the corrected entries.json at expected_revision 1 with idempotency_key entries-" .. round
+        .. "Continue in the existing Governance workspace " .. source_workspace .. ". Call workspace list first. "
+        .. "If the earlier attempt ended before creating it, create it at expected_revision 0; otherwise read its current entries.json without a snapshot digest. "
+        .. "Put the complete corrected entries.json at the revision returned by list or create with idempotency_key entries-" .. round
         .. ", then freeze at the revision that put returned with idempotency_key freeze-" .. round .. ". "
         .. "The artifact stays one entry with id " .. DEFINITION_ID .. " and kind process.lua, with the same destination ceilings, "
         .. "the same application metadata and the same three painted rows as before. "
         .. "Finally call thread_message with idempotency_key report-" .. round .. ", message_id " .. marker
         .. ", message_kind progress, recipient_ids [" .. ACTOR .. "] and content {text: the frozen digest, artifact_ref: the frozen digest}. "
+        .. "Answer DONE after that message succeeds."
+end
+
+local function update_brief(source_workspace: string, marker: string, round: string): string
+    return "Update the Bee application you already authored and that the person already applied. "
+        .. "Read the bound thread with thread_read from cursor 0 so you retain the complete authoring and review history. "
+        .. "Read session, then request access with traits [app:author], idempotency_key update-access-" .. round
+        .. " and reason Update the Bee application. Poll access_status until the host operator grants it. "
+        .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
+        .. "Read app_docs topics contract and client. In the existing Governance workspace " .. source_workspace
+        .. ", call workspace list, then read the current entries.json without a snapshot digest. Preserve its one application and all behaviour. "
+        .. "Change the first painted line from exactly " .. MARKER_LINE .. " to exactly " .. UPDATE_MARKER_LINE
+        .. " and advance meta.application.revision from 1 to 2 because the executable definition changed. "
+        .. "Keep id " .. DEFINITION_ID .. ", title " .. TITLE .. ", resume_schema agent-app.v1 and every destination ceiling unchanged. "
+        .. "Put the complete updated entries.json at the revision returned by list with idempotency_key entries-" .. round
+        .. ", then freeze at the revision returned by put with idempotency_key freeze-" .. round .. ". "
+        .. "Finally call thread_message with idempotency_key report-" .. round .. ", message_id " .. marker
+        .. ", message_kind progress, recipient_ids [" .. ACTOR .. "] and content {text: the new frozen digest, artifact_ref: the new frozen digest}. "
         .. "Answer DONE after that message succeeds."
 end
 
@@ -252,10 +272,11 @@ end
 
 -- What the attempt left on the thread: the digest it reported, or the terminal
 -- outcome that explains why it reported none.
-local function reported_digest(started: Object, marker: string): (string?, string)
+local function reported_digest(started: Object, marker: string): (string?, string, integer)
     local cursor = 0
     local digest: string? = nil
     local terminal = ""
+    local sequence = 0
     for _ = 1, 64 do
         local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
         local records = page.records
@@ -271,6 +292,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
                     local content = bounds.object(body.content)
                     if not content or type(content.artifact_ref) ~= "string" then error("missing authored snapshot digest") end
                     digest = content.artifact_ref :: string
+                    sequence = bounds.sequence(record.sequence) or 0
                 end
             end
             if record.kind == "turn.end" or record.kind == "receipt" then
@@ -286,7 +308,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
         if not next_cursor or next_cursor <= cursor then error("invalid page progress") end
         cursor = next_cursor
     end
-    return digest, terminal
+    return digest, terminal, sequence
 end
 
 -- What the attempt's own gateway binding admits. Tool metadata grants nothing:
@@ -332,6 +354,7 @@ local function main()
     local source_workspace = text_of(values.source_workspace, "source workspace")
     local launch_workspace = text_of(values.launch_workspace, "launch workspace")
     local findings = bounds.text(values.findings, 65536) or ""
+    local updating = values.update == true
 
     configure(launch_workspace, policy_ref, definition ~= DEFAULT_DEFINITION)
     listener_ready()
@@ -349,7 +372,8 @@ local function main()
     -- A scripted provider that learns the contract from the guide is given the
     -- plain request instead of the host's contract-bearing brief.
     local plain = bounds.text(values.brief, 65536)
-    local brief = (plain and plain ~= "") and plain or first_brief(source_workspace, marker, round)
+    local brief = (plain and plain ~= "") and plain
+        or (updating and update_brief(source_workspace, marker, round) or first_brief(source_workspace, marker, round))
     if findings ~= "" then
         deliver_findings(findings, round)
         if not (plain and plain ~= "") then brief = repair_brief(source_workspace, marker, round) end
@@ -360,11 +384,13 @@ local function main()
     started.workspace_id = launch_workspace
     local approved = await_carrier(started)
 
-    local snapshot_digest, terminal = reported_digest(started, marker)
+    local snapshot_digest, terminal, thread_sequence = reported_digest(started, marker)
     local scope = binding_scope(tostring(started.attempt_id))
     local report: Object = {snapshot_digest = snapshot_digest or "", action_id = started.action_id,
         attempt_id = started.attempt_id, admitted_tools = scope.admitted_tools, requested_access = approved,
-        active_traits = scope.active_traits, context = scope.context, entries = {}, findings = ""}
+        active_traits = scope.active_traits, context = scope.context, thread_id = THREAD,
+        thread_sequence = thread_sequence, source_workspace = source_workspace,
+        entries = {}, findings = ""}
 
     if not snapshot_digest then
         -- An attempt that ends without the frozen digest is reviewed like any
@@ -391,6 +417,8 @@ local function main()
     end
     local file = call("bee.governance:workspace_call", {operation = "read", workspace_id = source_workspace,
         path = "entries.json", snapshot_digest = snapshot_digest})
+    if file.workspace_id ~= source_workspace then error("workspace read returned another workspace") end
+    report.workspace_revision = bounds.count(file.revision) or 0
     if type(file.content_base64) ~= "string" then
         report.findings = refusal_findings("MISSING_ARTIFACT", "the frozen workspace holds no entries.json")
     else

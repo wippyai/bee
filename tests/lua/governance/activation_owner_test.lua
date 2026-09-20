@@ -77,7 +77,7 @@ local function shifting_resolver(entry: {[string]: unknown}, world: {revision: i
                 registry_digest = world.digest,
                 policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
                 kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},
-                entries = {}, applied = {}, exact_expansion = true, migration_barrier = false}
+                entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, migration_barrier = false}
         return candidate, context, nil
     end
     return value :: owner.Resolver
@@ -109,7 +109,9 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
                 policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
                 packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
                 databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
-                applied = applied, exact_expansion = true, migration_barrier = true}, nil
+                installed_entries = nil,
+                database_bindings = nil, applied = applied, applied_databases = nil,
+                exact_expansion = true, migration_barrier = true}, nil
     end
     return value :: owner.Resolver
 end

@@ -1,5 +1,29 @@
 # Foundation status
 
+Managed application updates now pass the complete agent-to-UI journey in the
+source candidate. One real managed Agy authors v1 through Governance, a person
+reviews and approves it in App Delivery and Approvals, and the same durable
+thread authors v2. The second plan is shown as `changed` and requires its own
+approval. Applying it renews the application producer behind the existing
+viewport: logical instance, controller and observer mounts, display assignment,
+geometry and last acknowledged checkpoint remain continuous. The live window
+changes to `AGENT APP UPDATED` while retaining `Count: 1`, and a host restart
+restores both v2 and that state. Evidence is in
+`.wippy/evidence/agent-app-20260919-225922`.
+
+Runtime PR #789 at `b476104e63` supplies generation-fenced viewport renewal on
+top of the open application-model PR #787 at `3d9926aa`; Rodrigo is requested on
+#787. Bee keeps replacement state on each instance, shares one typed execution
+start path, and lets explicit close and workspace shutdown win. Strict lint,
+1,138/1,138 units, App Delivery's delayed-response UI regression, managed
+windows 5/5, source and packed App Journey, Governance workspace restart,
+production pack, and the 162-document agent corpus pass against the combined
+runtime candidate. Source `9fb90d7` is installed globally as executable
+SHA-256 `3d95c4d2ffe4`. The exact installed binary starts the retained
+`Gentle Ember` workspace from `/mnt/c/Users/Wolfy-J`; `bee agy` reaches the
+managed Antigravity terminal with the inherited account and project directory,
+and exits without submitting a turn.
+
 Managed Agent first-use setup now reconciles an existing host-selected project
 or session association when the admitted root definition changes across a Bee
 deployment. The resource authority keeps exact association replays stable and
@@ -14,16 +38,28 @@ revision 1 to 2 on the deployment refresh and remained at revision 2 on the
 second launch.
 
 Governance overlay activation now has a durable migration barrier in the current
-source candidate. Exact pending definitions, destination SQL IDs, package owners,
-checksums and order are sealed into the immutable activation intent. The existing
+source candidate. Exact pending definitions, logical targets, host-selected
+physical SQL IDs, optional table prefixes, physical definition evidence, package
+owners, checksums and order are sealed into the immutable activation intent.
+Execution uses that frozen binding rather than the current profile. Historical
+applied facts recover their binding through the originating intent and reject an
+ordinary update that changes the database, prefix or physical definition. Strict
+legacy `@2` work remains readable without rewriting its bytes. The existing
 `applying` phase retains partial receipts and only exposes the complete overlay
-after the target ledger confirms every captured migration. Temporary prerequisite
-definitions use a separate owner and are removed on recovery; SQL commits are
-never described as rolled back. This first slice accepts existing host-admitted
-databases and already installed migration dependencies. New database allocation,
-table-prefix bindings and the live managed-agent trait refresh remain subsequent
-milestones. Strict lint, all 1,115 unit tests, the production pack and the
-offline-agent corpus check pass for this slice. Global Bee is unchanged.
+after the original target ledger confirms every captured migration. Temporary
+prerequisite definitions use a separate owner and are removed on recovery,
+including an exact empty-overlay cleanup state; SQL
+commits are never described as rolled back. New database allocation and the live
+managed-agent trait refresh remain subsequent milestones. `table_prefix` is a
+migration convention, not table-level SQL confinement. Global Bee is unchanged.
+
+The source and packed App Journey now exercise that binding through the complete
+reviewed application flow. One logical application target resolves to a shared
+host SQLite database with the `journey_` prefix. Its migration receives all
+three identities, writes one durable ledger row and `journey_items`, preserves
+the host's unrelated `other_items`, creates no unprefixed table, and is not
+rerun when the application restores after restart. Registry source-root
+databases retain their bounded empty owner marker as immutable evidence.
 
 The Hub migration runner now accepts the invoking owner's private-policy list
 while retaining Hub's existing default. Its execution child removes those exact

@@ -4,13 +4,15 @@ local test = require("test")
 local artifact = require("artifact")
 local resolver = require("overlay_resolver")
 local preflight = require("preflight")
+local canonical = require("canonical")
+local hash = require("hash")
 
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean}
+    database_bindings: {[string]: Object}?, migration_barrier: boolean}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
     owner: (Entry) -> (string?, string?)}
 type Facts = {candidate: Object, context: Object}
@@ -100,6 +102,89 @@ local function define_tests()
             test.eq(resolve(deps, spec).candidate.base_revision, 0)
         end)
 
+        test.it("measures an incoming entry from its exact immutable artifact bytes", function()
+            local deps, spec, source = fixture(nil)
+            local bytes = assert(canonical.encode((source.artifact.entries :: {Entry})[1]))
+            local expected = assert(hash.sha256(bytes))
+            local candidate = resolve(deps, spec).candidate
+            test.eq(((candidate.entries :: {Object})[1]).digest, expected)
+        end)
+
+        test.it("keeps unrelated registry edits out of the semantic base", function()
+            local deps, spec = fixture(nil)
+            local first = resolve(deps, spec)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[#captured.entries + 1] = {id = "other:unrelated", kind = "function.lua",
+                registry = {owner = "host/other"}, data = {source = "return 'unrelated'"}}
+            local added = resolve(deps, spec)
+            test.eq(added.candidate.base_digest, first.candidate.base_digest)
+            test.is_true((added.context.entries :: Object)["other:unrelated"] ~= nil)
+            captured.entries[#captured.entries].data = {source = "return 'changed'"}
+            test.eq(resolve(deps, spec).candidate.base_digest, first.candidate.base_digest)
+            captured.entries[#captured.entries] = nil
+            test.eq(resolve(deps, spec).candidate.base_digest, first.candidate.base_digest)
+        end)
+
+        test.it("measures a referenced external definition in the semantic base", function()
+            local deps, spec = fixture(nil)
+            changes(spec, {{id = "private.app:main", kind = "function.lua", data = {
+                source = "return true", config = "bee.host:db"}}})
+            local first = resolve(deps, spec)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local data = captured.entries[1].data :: Object
+            data.changed = true
+            local second = resolve(deps, spec)
+            test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
+        end)
+
+        test.it("measures requirement targets and resolved values", function()
+            local deps, spec = fixture(nil)
+            changes(spec, {{id = "private.app:requirement", kind = "ns.requirement", data = {
+                targets = {{entry = "bee.host:db", path = ".id"}}}}})
+            local first = resolve(deps, spec)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local data = captured.entries[1].data :: Object
+            data.changed = true
+            local second = resolve(deps, spec)
+            test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
+        end)
+
+        test.it("measures the physical database selected for a migration", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {["private.app:data"] = true},
+                grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                database_bindings = {["private.app:data"] = {database_id = "bee.host:db"}}}
+            local deps, spec = fixture(policy)
+            changes(spec, {{id = "private.app:migration", kind = "function.lua",
+                meta = {type = "migration", target_db = "private.app:data", ordinal = 1},
+                data = {source = "return true"}}})
+            local first = resolve(deps, spec)
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local data = captured.entries[1].data :: Object
+            data.changed = true
+            local second = resolve(deps, spec)
+            test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
+        end)
+
+        test.it("returns selected overlay entries without including them in the base", function()
+            local deps, spec = fixture(nil)
+            local first = resolve(deps, spec)
+            local installed = first.context.installed_entries :: Object
+            test.eq((installed["private.app:old-overlay"] :: Object).package, "host/private-app")
+            local captured = (deps.capture :: () -> (Captured?, string?))()
+            captured.entries[2].meta = table.create(0, 1)
+            local same = resolve(deps, spec)
+            test.eq((same.context.installed_entries["private.app:old-overlay"] :: Object).digest,
+                (installed["private.app:old-overlay"] :: Object).digest)
+            local data = captured.entries[2].data :: Object
+            data.changed = true
+            local second = resolve(deps, spec)
+            test.eq(second.candidate.base_digest, first.candidate.base_digest)
+            test.is_true((second.context.installed_entries["private.app:old-overlay"] :: Object).digest ~=
+                (first.context.installed_entries["private.app:old-overlay"] :: Object).digest)
+        end)
+
         test.it("preserves IDs and assigns ownership from the host-selected profile", function()
             local deps, spec = fixture(nil)
             local facts = resolve(deps, spec)
@@ -114,6 +199,20 @@ local function define_tests()
             test.eq(((candidate.entries :: {Object})[1]).id, "private.app:main")
             test.eq(((candidate.entries :: {Object})[1]).package, "host/private-app")
             test.is_true(((facts.context.namespaces :: {[string]: boolean})["private.app"]) == true)
+        end)
+        test.it("retains copied host database bindings in the preflight context", function()
+            local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
+                packages = {["host/private-app"] = true}, namespaces = {["private.app"] = true},
+                kinds = {["function.lua"] = true}, databases = {["private.app:data"] = true},
+                grants = {}, modules = {}, applied = {}, migration_barrier = false,
+                database_bindings = {["private.app:data"] = {database_id = "bee.host:db", table_prefix = "private_"}}}
+            local deps, spec = fixture(policy)
+            local facts = resolve(deps, spec)
+            local bindings = facts.context.database_bindings :: Object
+            test.eq((bindings["private.app:data"] :: Object).database_id, "bee.host:db")
+            local source_binding = (policy.database_bindings :: Object)["private.app:data"] :: Object
+            source_binding.database_id = "other:db"
+            test.eq((bindings["private.app:data"] :: Object).database_id, "bee.host:db")
         end)
 
         test.it("allows replacing definitions from only the selected destination overlay", function()

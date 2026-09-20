@@ -500,14 +500,39 @@ function M.applied(store: Store, component_raw: unknown): Result
     local component = bounds.text(component_raw, 160)
     if not component or component == "" then return failure("INVALID", "migration component is invalid") end
     return transaction.read(store.db, "governance activation", function(tx): Result
-        local rows, err = tx:query("SELECT target_db, migration_id, ordinal, checksum FROM bee_governance_applied_migrations WHERE owner_node = ? AND workspace_id = ? AND component = ? ORDER BY target_db, ordinal, migration_id", {store.node, store.workspace, component})
+        local rows, err = tx:query("SELECT a.target_db, a.migration_id, a.ordinal, a.checksum, a.component, a.intent_id, i.migration_work_bytes, i.migration_work_digest FROM bee_governance_applied_migrations a JOIN bee_governance_activation_intents i ON i.owner_node = a.owner_node AND i.workspace_id = a.workspace_id AND i.intent_id = a.intent_id WHERE a.owner_node = ? AND a.workspace_id = ? AND a.component = ? ORDER BY a.target_db, a.ordinal, a.migration_id", {store.node, store.workspace, component})
         if not rows then return storage(err, "read applied migrations") end
-        local result: Object = {}
+        local migrations: Object = {}
+        local databases: Object = {}
+        local work_by_intent: Object = {}
         for _, row in ipairs(rows) do
-            result[(row.target_db :: string) .. "\n" .. (row.migration_id :: string)] = {
+            local work = work_by_intent[row.intent_id :: string]
+            if not work then
+                local decoded, decode_error = migration_work.decode(row.migration_work_bytes, row.migration_work_digest)
+                if not decoded then return failure("INTERNAL", tostring(decode_error or "decode applied migration intent")) end
+                work, work_by_intent[row.intent_id :: string] = decoded, decoded
+            end
+            local captured: Object? = nil
+            for _, raw_item in ipairs((work :: any).migrations) do
+                local item = bounds.object(raw_item)
+                if item and item.target_db == row.target_db and item.id == row.migration_id then captured = item; break end
+            end
+            if not captured or captured.ordinal ~= row.ordinal or captured.checksum ~= row.checksum
+                or captured.package ~= row.component then
+                return failure("CONFLICT", "applied migration fact differs from its immutable intent: " .. tostring(row.migration_id))
+            end
+            local database, database_error = migration_work.database(work, row.target_db)
+            if not database then return failure("INTERNAL", tostring(database_error or "read applied database binding")) end
+            local prior = bounds.object(databases[row.target_db :: string])
+            if prior and (prior.database_id ~= database.database_id or prior.table_prefix ~= database.table_prefix
+                or prior.kind ~= database.kind or prior.package ~= database.package or prior.digest ~= database.digest) then
+                return failure("CONFLICT", "applied migration database evidence differs: " .. tostring(row.target_db))
+            end
+            databases[row.target_db :: string] = database
+            migrations[(row.target_db :: string) .. "\n" .. (row.migration_id :: string)] = {
                 id = row.migration_id, target_db = row.target_db, ordinal = row.ordinal, checksum = row.checksum}
         end
-        return transaction.success(result, false)
+        return transaction.success({migrations = migrations, databases = databases}, false)
     end)
 end
 function M.call(store: Store, actor_raw: string, raw: unknown): Result

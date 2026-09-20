@@ -8,6 +8,7 @@ entries:
   modules: [security, process, channel, tty, uuid, registry, time, ctx]
   imports:
     attachment: bee.applications:attachment
+    execution: bee.applications:execution
     contract: bee.protocol:application
     catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
@@ -24,6 +25,10 @@ entries:
   kind: library.lua
   source: file://attachment.lua
   modules: [tty]
+- name: execution
+  kind: library.lua
+  source: file://execution.lua
+  modules: [process, security]
 - name: command
   kind: library.lua
   source: file://command.lua

@@ -13,10 +13,12 @@ type Entry = {[string]: unknown}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
     owner: (Entry) -> (string?, string?)}
 type Root = {component: string, version: string}
+type DatabaseBinding = {database_id: string, table_prefix: string?}
+type DatabaseBindings = {[string]: DatabaseBinding}
 type Policy = {node_id: string, policy_digest: string, packages: {[string]: boolean},
     namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean}, applied: {[string]: unknown},
-    migration_barrier: boolean}
+    applied_databases: {[string]: unknown}?, database_bindings: DatabaseBindings?, migration_barrier: boolean}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?)}
 
@@ -114,11 +116,19 @@ local function references(entry: Entry): ({string}?, string?)
     return result, nil
 end
 
-local function measured_entry(entry: Entry, package: string): (Object?, string?)
+local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (Object?, string?)
     local clean: Entry = {}
     -- `registry` is runtime provenance. It is not part of an incoming private
     -- artifact's authority or materialized definition.
     for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+    -- Registry snapshots materialize the author-facing default as an empty
+    -- object. Normalize that representation only when reading a snapshot.
+    -- An incoming artifact is immutable: its candidate digest must be the
+    -- digest of its exact entry bytes, including an omitted `meta` field.
+    if registry_default_metadata
+        and (clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta :: table) == nil)) then
+        clean.meta = table.create(0, 1)
+    end
     local encoded, encode_error = canonical.encode(clean, artifact.MAX_BYTES)
     if not encoded then return nil, "encode private overlay entry: " .. tostring(encode_error or "unknown error") end
     local digest, digest_error = hash.sha256(encoded)
@@ -181,15 +191,35 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
-    current: {[string]: Object}): (Object?, string?)
+    current: {[string]: Object}, installed: {[string]: Object}): (Object?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
         if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
     end
+    local bindings: DatabaseBindings? = nil
+    if policy.database_bindings ~= nil then
+        if type(policy.database_bindings) ~= "table" then return nil, "host policy database bindings are malformed" end
+        bindings = {}
+        for target, raw in pairs(policy.database_bindings :: table) do
+            local item = object(raw)
+            local database_id = item and bounds.id(item.database_id) or nil
+            local prefix: string? = nil
+            if item and item.table_prefix ~= nil then
+                prefix = bounds.text(item.table_prefix, 64)
+                if not prefix or not prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                    return nil, "host policy database binding prefix is invalid"
+                end
+            end
+            if not bounds.id(target) or not item or bounds.fields(item, {"database_id", "table_prefix"})
+                or not database_id then return nil, "host policy database binding is malformed" end
+            bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
+        end
+    end
     return {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
         policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
         kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
-        entries = current, applied = policy.applied, exact_expansion = true,
+        database_bindings = bindings, entries = current, installed_entries = installed, applied = policy.applied,
+        applied_databases = policy.applied_databases or {}, exact_expansion = true,
         migration_barrier = policy.migration_barrier == true}, nil
 end
 
@@ -220,6 +250,13 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         return nil, nil, root_error or "host-selected private application profile is invalid"
     end
 
+    -- Resolve the host policy before measuring the semantic base. The policy
+    -- supplies the physical database selected for each logical migration
+    -- target, and remains authoritative for the context returned below.
+    local policy, policy_error = deps.policy(spec, captured, root)
+    if not policy then return nil, nil, policy_error or "read destination private-overlay policy" end
+    if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
+
     local incoming: {Entry} = {}
     local incoming_by_id: {[string]: Entry} = {}
     local namespace_set: {[string]: boolean} = {}
@@ -241,6 +278,7 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     if namespace_count == 0 or namespace_count > 64 then return nil, nil, "private artifact namespace count exceeds its bound" end
 
     local current: {[string]: Object} = {}
+    local installed: {[string]: Object} = {}
     local current_raw: {[string]: Entry} = {}
     local current_namespace: {[string]: string} = {}
     for _, raw in ipairs(captured.entries) do
@@ -249,10 +287,17 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
         if not entry or not id then return nil, nil, "captured registry contains an invalid entry" end
         if current_raw[id] then return nil, nil, "captured registry contains duplicate entry " .. id end
         current_raw[id] = entry
-        if not (captured.overlay_ids and captured.overlay_ids[id]) then
+        if captured.overlay_ids and captured.overlay_ids[id] then
+            -- The selected overlay is intentionally absent from the approval
+            -- base, but callers still need its measured package-owned view to
+            -- compare the staged complete replacement with what is installed.
+            local measured, measured_error = measured_entry(entry, component :: string, true)
+            if not measured then return nil, nil, measured_error end
+            installed[id] = measured
+        else
             local package, package_error = captured.owner(entry)
             if not package then return nil, nil, package_error or "captured registry entry has no trusted local owner" end
-            local measured, measured_error = measured_entry(entry, package)
+            local measured, measured_error = measured_entry(entry, package, true)
             if not measured then return nil, nil, measured_error end
             current[id] = measured
             local namespace = id:match("^([^:]+):")
@@ -305,17 +350,41 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
             requirements[#requirements + 1] = item
         end
     end
-    local base_entries: {Object} = {}
-    for _, entry in pairs(current) do base_entries[#base_entries + 1] = entry end
-    table.sort(base_entries, function(left: any, right: any): boolean return left.id < right.id end)
-    local base_bytes, base_error = canonical.encode({entries = base_entries}, 1048576)
-    if not base_bytes then return nil, nil, "measure destination registry base: " .. tostring(base_error or "unknown error") end
+    -- The approval base is the external registry state that can affect this
+    -- candidate. Keep the complete external context above for preflight and
+    -- collision checks, but omit unrelated boot-local definitions and the
+    -- selected overlay itself from this semantic digest. A missing relevant
+    -- entry remains absent; when present, its measured definition is hashed.
+    local relevant_ids: {[string]: boolean} = {}
+    for _, raw in ipairs(candidate_entries) do
+        local item = raw :: Object
+        for _, reference in ipairs(item.references :: {string}) do relevant_ids[reference] = true end
+    end
+    for _, raw in ipairs(requirements) do
+        local item = raw :: Object
+        for _, target in ipairs(item.targets :: {string}) do relevant_ids[target] = true end
+        local value = bounds.id(item.value)
+        if value then relevant_ids[value] = true end
+    end
+    for _, raw in ipairs(candidate_migrations) do
+        local item = raw :: Object
+        local raw_bindings = policy.database_bindings
+        local binding = type(raw_bindings) == "table"
+            and object((raw_bindings :: table)[item.target_db :: string]) or nil
+        local physical = binding and bounds.id(binding.database_id) or item.target_db
+        if physical then relevant_ids[physical] = true end
+    end
+    local relevant: {Object} = {}
+    for id, raw in pairs(current) do
+        local namespace = id:match("^([^:]+):")
+        if relevant_ids[id] or (namespace and namespace_set[namespace]) then relevant[#relevant + 1] = raw end
+    end
+    table.sort(relevant, function(left: any, right: any): boolean return left.id < right.id end)
+    local base_bytes, base_error = canonical.encode({entries = relevant}, 1048576)
+    if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
-    if not base_digest then return nil, nil, tostring(base_measure_error or "measure destination registry base") end
-    local policy, policy_error = deps.policy(spec, captured, root)
-    if not policy then return nil, nil, policy_error or "read destination private-overlay policy" end
-    if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
-    local context, context_error = policy_context(policy, captured, base_digest :: string, current)
+    if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
+    local context, context_error = policy_context(policy, captured, base_digest :: string, current, installed)
     if not context then return nil, nil, context_error end
     return {destination_node = destination, source_node = source,
         base_revision = captured.revision, base_digest = base_digest,

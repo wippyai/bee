@@ -12,6 +12,7 @@ local catalog = require("catalog")
 local lifecycle = require("lifecycle")
 local attachment = require("attachment")
 local execution = require("execution")
+local principal = require("principal")
 local appearance = require("appearance")
 local interaction = require("interaction")
 local interactions = require("interactions")
@@ -27,6 +28,14 @@ type Instance = {view_id: string, instance_id: string, thread_id: string?, execu
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
     producer_generation: integer, arguments: {string}, replacement: Replacement?, client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
 local function now(): number return time.now():unix_nano() / 1000000000 end
+local function application_actor(workspace_id: string, instance_id: string, definition_id: string,
+    definition_revision: string, execution_generation: integer): security.Actor
+    local value = assert(principal.value(workspace_id, instance_id, definition_id,
+        definition_revision, execution_generation))
+    local actor, err = security.new_actor(value.id, value.metadata)
+    if not actor then error("Create application principal: " .. tostring(err)) end
+    return actor
+end
 local function main(owner: string, initial_preferences: unknown)
     local bootstrap: unknown = ctx.get("bee.workspace_owner")
     if bootstrap ~= owner or owner == "" then error("Untrusted broker bootstrap") end
@@ -310,9 +319,14 @@ local function main(owner: string, initial_preferences: unknown)
         end
         local version = assert(registry.current_version())
         local token = uuid.v7()
+        local execution_generation = item.producer_generation + 1
         local started = execution.start(grant, {definition_id = item.descriptor.definition_id,
             scope = scope, workspace_pid = owner, workspace_id = workspace_id,
+            actor = application_actor(workspace_id, item.instance_id, item.descriptor.definition_id,
+                item.descriptor.definition_revision, execution_generation),
             instance_id = item.instance_id, view_id = item.view_id,
+            thread_id = item.thread_id,
+            execution_generation = execution_generation,
             definition_revision = item.descriptor.definition_revision,
             registry_revision = version:string(), launch_token = token,
             resume_schema = item.descriptor.resume_schema, resume_state = item.resume_state,
@@ -920,7 +934,11 @@ local function main(owner: string, initial_preferences: unknown)
                                     if not scope then error("Admitted application scope is unavailable") end
                                     local launch: execution.Launch = {definition_id = req.definition_id,
                                         scope = scope, workspace_pid = owner, workspace_id = workspace_id,
-                                        instance_id = instance_id, view_id = view_id, definition_revision = selected_descriptor.definition_revision,
+                                        actor = application_actor(workspace_id, instance_id, req.definition_id,
+                                            selected_descriptor.definition_revision, 1),
+                                        instance_id = instance_id, view_id = view_id, thread_id = req.thread_id,
+                                        execution_generation = 1,
+                                        definition_revision = selected_descriptor.definition_revision,
                                         registry_revision = version:string(), launch_token = token, resume_schema = selected_descriptor.resume_schema,
                                         resume_state = req.resume_state, arguments = req.arguments}
                                     local started = execution.start(grant, launch)

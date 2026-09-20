@@ -102,7 +102,8 @@ function M.input(state: State, event: tty.TTYEvent, frame: Frame): string?
         end
         return nil
     end
-    local value = field.kind == "title" and state.title or state.guidance
+    local value = field.kind == "title" and state.title
+        or (field.kind == "config_profile" and state.config_profile or state.guidance)
     local limit = field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "config_profile" and protocol.MAX_CONFIG_PROFILE_BYTES or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text

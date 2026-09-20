@@ -45,12 +45,14 @@ local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
     return value :: {[string]: unknown}
 end
-type AgentScenario = {workspace_id: string, artifact_digest: string}
+type AgentScenario = {workspace_id: string, artifact_digest: string, source_node: string?,
+    source_workspace_id: string?, source_version: string?}
 local function agent_scenario(): AgentScenario?
     local entry = registry.get("bee.replica_probe:agent_scenario")
     if not entry then error("agent-artifact scenario entry is unavailable") end
     local data = object(entry.data)
     local workspace_id, artifact_digest = data.workspace_id, data.artifact_digest
+    local source_node, source_workspace_id, source_version = data.source_node, data.source_workspace_id, data.source_version
     if workspace_id == "" and artifact_digest == "" then return nil end
     if type(workspace_id) ~= "string" or type(artifact_digest) ~= "string" then
         error("agent-artifact scenario is malformed")
@@ -59,6 +61,16 @@ local function agent_scenario(): AgentScenario?
     local selected_digest = artifact_digest :: string
     if not selected_workspace:match("^[0-9a-f]+$") or #selected_workspace ~= 32
         or not selected_digest:match("^[0-9a-f]+$") or #selected_digest ~= 64 then error("agent-artifact scenario is malformed") end
+    if source_node ~= "" or source_workspace_id ~= "" then
+        if type(source_node) ~= "string" or type(source_workspace_id) ~= "string"
+            or source_node == "" or not source_workspace_id:match("^[0-9a-f]+$") or #source_workspace_id ~= 32 then
+            error("agent source scenario is malformed")
+        end
+        if type(source_version) ~= "string" or source_version == "" then error("agent source version is malformed") end
+        return {workspace_id = selected_workspace, artifact_digest = selected_digest,
+            source_node = source_node :: string, source_workspace_id = source_workspace_id :: string,
+            source_version = source_version :: string}
+    end
     return {workspace_id = selected_workspace, artifact_digest = selected_digest}
 end
 local function exact_agent_artifact(scenario: AgentScenario): artifact.Artifact
@@ -274,7 +286,7 @@ local function agent_available(scenario: AgentScenario): {[string]: unknown}?
         local descriptor = object(raw)
         local manifest = object(descriptor.manifest)
         if descriptor.owner_id == "node-1" and descriptor.feed == delivery.FEED and descriptor.object_id == AGENT_PACKAGE
-            and descriptor.version_id == AGENT_VERSION and manifest.source_workspace == AGENT_WORKSPACE
+            and descriptor.version_id == (scenario.source_version or AGENT_VERSION) and manifest.source_workspace == AGENT_WORKSPACE
             and manifest.artifact_digest == scenario.artifact_digest then
             return descriptor
         end
@@ -291,14 +303,14 @@ local function exact_agent_overlay(scenario: AgentScenario, evidence: {[string]:
 end
 local function activate_agent_artifact(scenario: AgentScenario): {[string]: unknown}
     local identity: {[string]: unknown} = {workspace_id = scenario.workspace_id, source_node = "node-1",
-        source_workspace = AGENT_WORKSPACE, version = AGENT_VERSION}
+        source_workspace = AGENT_WORKSPACE, version = scenario.source_version or AGENT_VERSION}
     local current = destination_call({operation = "get", workspace_id = identity.workspace_id,
         source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version},
         "read staged agent artifact")
     current = destination_call({operation = "review", workspace_id = identity.workspace_id,
         source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version,
         expected_revision = current.revision, idempotency_key = "agent-artifact-review", review_status = "accepted",
-        review_reason = "destination reviewed retained Agent App v2"}, "review retained agent artifact")
+        review_reason = "destination reviewed retained Agent App"}, "review retained agent artifact")
     current = destination_call({operation = "select", workspace_id = identity.workspace_id,
         source_node = identity.source_node, source_workspace = identity.source_workspace, version = identity.version,
         expected_revision = current.revision, idempotency_key = "agent-artifact-select"}, "select retained agent artifact")
@@ -387,9 +399,15 @@ local function stop(pid: string)
     local event = selected.value
     if event.kind ~= process.event.EXIT or tostring(event.from) ~= pid then error("wrong supervisor stop event") end
 end
-local function main(remote: string)
+local function main(remote: string, source_destination_workspace: string?, source_digest: string?,
+    source_workspace_id: string?, source_version: string?)
     local local_node = assert(system.node.id())
-    local agent = agent_scenario()
+    local agent: AgentScenario? = agent_scenario()
+    if source_destination_workspace and source_digest and source_workspace_id and source_version then
+        local supplied: AgentScenario = {workspace_id = source_destination_workspace, artifact_digest = source_digest,
+            source_node = local_node, source_workspace_id = source_workspace_id, source_version = source_version}
+        agent = supplied
+    end
     if local_node == "node-0" then
         if agent then configure_agent_destination(agent) else configure_destination() end
     else configure_exports() end
@@ -603,11 +621,70 @@ local function main(remote: string)
             if not exact_application_runs(PACKAGE_V1) then error("private application did not roll back to v1") end
             assert(io.print("BEE_HIVE_SUPERVISOR application_rolled_back_v1"))
         elseif command == "agent-artifact-publish" then
-            if not agent or local_node ~= "node-1" then error("agent artifact publication belongs only to the configured source") end
-            local exact = exact_agent_artifact(agent)
-            local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = AGENT_WORKSPACE,
-                component = AGENT_PACKAGE, version = AGENT_VERSION, artifact = {bytes = exact.bytes, digest = exact.digest}})
-            required(result :: {[string]: unknown}, "publish retained agent artifact")
+            if not agent or local_node ~= (agent.source_node or "node-1") then
+                error("agent artifact publication belongs only to the configured source")
+            end
+            if agent.source_workspace_id then
+                local recovered: {[string]: unknown}? = nil
+                for attempt = 1, 4 do
+                    local raw, recovery_error = funcs.call("bee.governance:destination_call", {operation = "recover",
+                        workspace_id = agent.source_workspace_id, source_node = local_node,
+                        source_workspace = AGENT_WORKSPACE,
+                        receipt_key = "agent-source-hive-recovery-" .. tostring(attempt)})
+                    if recovery_error then error("recover locally applied agent artifact: " .. tostring(recovery_error)) end
+                    local reply = object(raw)
+                    if reply.ok ~= true then
+                        local fault = type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
+                        local code, message = tostring(fault.code or reply.code), tostring(fault.message or reply.message)
+                        if (code == "UNAVAILABLE" or code == "UNCERTAIN") and attempt < 4 then
+                            time.sleep("100ms")
+                        else
+                            error("recover locally applied agent artifact was refused: " .. code .. ": " .. message)
+                        end
+                    else
+                        recovered = object(reply.value)
+                        if recovered.phase == "settled" then break end
+                    end
+                end
+                if not recovered or recovered.phase ~= "settled" or recovered.outcome ~= "applied" then
+                    error("locally applied agent artifact did not recover before publication")
+                end
+                local deadline = time.now():add("30s")
+                local reply: {[string]: unknown}? = nil
+                local publish_error: unknown? = nil
+                while time.now():before(deadline) do
+                    local raw
+                    raw, publish_error = funcs.call("bee.governance:publication_call", {operation = "publish",
+                        workspace_id = agent.source_workspace_id, component = AGENT_PACKAGE,
+                        version = agent.source_version or AGENT_VERSION})
+                    if not publish_error then
+                        reply = object(raw)
+                        if reply.ok == true then break end
+                    end
+                    time.sleep("100ms")
+                end
+                if publish_error then error("publish locally applied agent artifact: " .. tostring(publish_error)) end
+                if not reply or reply.ok ~= true then
+                    local fault = reply and type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
+                    error("publish locally applied agent artifact was refused: "
+                        .. tostring(fault.code or (reply and reply.code)) .. ": "
+                        .. tostring(fault.message or (reply and reply.message)))
+                end
+                local value = object(reply.value)
+                local descriptor = value and object(value.descriptor) or nil
+                local manifest = descriptor and object(descriptor.manifest) or nil
+                if not value or not descriptor or not manifest then
+                    error("published agent artifact reply is malformed")
+                end
+                if manifest.artifact_digest ~= agent.artifact_digest then
+                    error("source publication changed the agent-authored artifact digest")
+                end
+            else
+                local exact = exact_agent_artifact(agent)
+                local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = AGENT_WORKSPACE,
+                    component = AGENT_PACKAGE, version = AGENT_VERSION, artifact = {bytes = exact.bytes, digest = exact.digest}})
+                required(result :: {[string]: unknown}, "publish retained agent artifact")
+            end
             assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_published"))
         elseif command == "agent-artifact-absent" then
             if not agent or local_node ~= "node-0" then error("agent artifact absence belongs only to the configured destination") end

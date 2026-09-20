@@ -132,18 +132,19 @@ def focus(ui, label):
 
 def open_review(ui, source_workspace, steps):
     """Move the staged list cursor down and read that version's plan."""
-    ui.wait("STAGED PLANS", timeout=20)
+    ui.wait("Staged", timeout=20)
     for _ in range(steps):
         ui.key(b"j")
     ui.key(b"\r")
-    ui.wait("REVIEW " + source_workspace, timeout=20)
+    ui.wait(source_workspace, timeout=20)
+    ui.wait("Verdict", timeout=20)
 
 
 def back_to_plans(ui):
     ui.key(b"\t")
-    ui.wait("AVAILABLE", timeout=20)
+    ui.wait("Available", timeout=20)
     ui.key(b"\t")
-    ui.wait("STAGED PLANS", timeout=20)
+    ui.wait("Staged", timeout=20)
 
 
 def exercise_responsive():
@@ -211,7 +212,7 @@ def exercise():
             ui.window_control("□")
             ui.pump(.4)
             ui.key(b"\t")
-            ui.wait("STAGED PLANS", timeout=20)
+            ui.wait("Staged", timeout=20)
             ui.wait(BLOCKED_WORKSPACE, timeout=20)
             ui.wait(CONFIG_WORKSPACE, timeout=20)
             ui.wait(READY_WORKSPACE, timeout=20)
@@ -223,7 +224,7 @@ def exercise():
             ui.key(b"\r")
             ui.wait("Working", timeout=20)
             ui.key(b"j")
-            ui.wait("REVIEW " + BLOCKED_WORKSPACE, timeout=20)
+            ui.wait(BLOCKED_WORKSPACE, timeout=20)
             ui.wait("Verdict blocked", timeout=20)
             ui.wait("DANGLING_REFERENCE  " + BLOCKED_ENTRY, timeout=20)
             ui.wait("missing final-state target " + ABSENT_TARGET, timeout=20)
@@ -282,7 +283,7 @@ def exercise():
             # Back in the review surface, the activation outcome and the
             # activation owner's receipt are what the ledger records.
             focus(ui, DELIVERY)
-            ui.wait("REVIEW " + READY_WORKSPACE, timeout=20)
+            ui.wait(READY_WORKSPACE, timeout=20)
             for _ in range(8):
                 ui.key(b"x")
                 if "settled  applied" in ui.text():

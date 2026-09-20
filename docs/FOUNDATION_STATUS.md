@@ -59,6 +59,23 @@ App** from Start, checkpoints `Count: 1 / Saved: 1`, and cold-restores `Count:
 proved authoring result with an exact-artifact fixture publisher; it does not
 claim the original authoring process remained the live publishing node.
 
+The stronger continuous journey now passes as a separate acceptance. A managed
+Agy authors version `1.0.2` on `node-1` after one durable thread repair. That
+same Bee reviews, approves, applies, opens, checkpoints and cold-restores it,
+then resumes its retained
+Governance state and publishes the exact approved artifact. Hive transfers it
+to a separately established workspace that begins without the artifact or
+definition. The destination performs its own review, approval and apply, opens
+**Agent App**, checkpoints `Count: 1 / Saved: 1`, and cold-restores `Count: 1`
+with the source offline and the same view and instance identities. The artifact
+digest is `01b7629eb9addf5f1bb4f10422f920fb9448df8d5f3326f369f155aadec508ec`;
+evidence is in `.wippy/evidence/agent-app-hive-e2e-strict2-20260920`. The gate
+also requires the complete retained source composition to have the same digest
+before and after the Hive bridge. The globally installed Bee remains `be31299`;
+this new continuous acceptance has
+not required or received a new global build because it changes test fixtures
+and documentation rather than production `src/`.
+
 Runtime PR #789 at `b476104e63` supplies generation-fenced viewport renewal on
 top of the open application-model PR #787 at `3d9926aa`; Rodrigo is requested on
 #787. Bee keeps replacement state on each instance, shares one typed execution

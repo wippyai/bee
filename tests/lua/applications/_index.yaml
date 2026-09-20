@@ -20,6 +20,14 @@ entries:
     lifecycle: bee.applications:lifecycle
     contract: bee.protocol:application
     test: wippy.test:test
+- name: principal_test
+  kind: function.lua
+  source: file://principal_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    principal: bee.applications:principal
+    test: wippy.test:test
 - name: interactions_test
   kind: function.lua
   source: file://interactions_test.lua

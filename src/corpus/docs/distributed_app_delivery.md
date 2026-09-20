@@ -106,6 +106,34 @@ bytes to the production publisher. The test
 does not drive the terminal Modules UI. Destination staging, resolution,
 approval, activation and recovery all use the production services.
 
+`make agent-app-hive-check` composes that boundary with the retained output of
+the real managed-agent authoring gate. It recreates the single updated Agent
+App artifact through `artifact.create`, requires equality with the authoring
+digest, seeds the bytes only on the source, and proves absence at the
+destination before publication. The destination stages through the public
+facade and approves through the local Approvals owner. After both headless
+coordinators stop, an ordinary destination desktop opens the application from
+Start, records an acknowledged checkpoint, and cold-restores it with the source
+offline and the same logical identity. This is an exact-artifact composition
+proof; publication is performed by the fixture source runtime rather than the
+original authoring process.
+
+`make agent-app-hive-e2e-check` proves the continuous form. It first runs a
+real managed Agy on a source Bee whose Hive identity is already `node-1`. The
+source reviews, approves, applies, opens, checkpoints and cold-restores the
+single authored version. The Hive gate then resumes that exact project and
+state: production Governance recovery restores the authorized overlay, and the
+production publication facade verifies and publishes it without receiving
+overlay-write authority. No artifact bytes are injected into a replacement
+source. A separate destination proves prior absence, receives the immutable
+artifact through Hive, performs destination-local review, approval and apply,
+opens it from Start, checkpoints it, and cold-restores the same logical app
+identity with the source offline. The gate binds the source and destination to
+their retained workspace IDs and requires the published, received and applied
+artifact digest to remain identical. It also hashes every file in the retained
+source composition before and after the bridge and refuses any post-approval
+rewrite.
+
 The destination now has a durable internal plan store. Available versions retain
 their exact candidate, artifact and preflight bytes; local review, explicit
 selection and approval binding advance through CAS revisions and bounded retry

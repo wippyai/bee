@@ -90,9 +90,11 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     end
     activation_profiles[#activation_profiles + 1] = {workspace_id = workspace_id, source_node = local_node,
         source_workspace = source_workspace, component = COMPONENT, resolver = "overlay",
-        overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY, parameters = {},
+        overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
+        parameters = table.create(1, 0),
         allow = {packages = {COMPONENT}, namespaces = {NAMESPACE}, kinds = {"process.lua"},
-            databases = {}, grants = {}, modules = {"tty", "process", "channel", "json"}}}
+            databases = table.create(1, 0), grants = table.create(1, 0),
+            modules = {"tty", "process", "channel", "json"}}}
     activation_data.profiles = activation_profiles
     activation.data = activation_data
 
@@ -180,6 +182,7 @@ local function main()
     logger:info("AGENT_APP_STAGED", {ready = report.ready == true and #report.diagnostics == 0,
         pending_migrations = #report.pending_migrations, diagnostics = diagnostics, added = added, changed = modified,
         source_workspace = source_workspace, version = version,
+        source_node = local_node,
         plan_digest = digest_of(staged.plan_digest, "staged plan digest"),
         artifact_digest = artifact_digest, overlay_owner = OVERLAY_OWNER})
 end

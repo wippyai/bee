@@ -9,6 +9,14 @@ local function state(): view.State
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"})
 end
+local function codex_state(): view.State
+    local draft, err = editor.new({title = "Codex", definition_ref = "host:codex", options = {},
+        mcp_tools = {"thread_read"}, instructions = "Keep changes small.", config_profile = "ds-flash"},
+        {options = {}, mcp_tools = {"thread_read"}, instructions = true, config_profile = true})
+    if not draft then error(tostring(err)) end
+    return view.new({workspace_id = "workspace", profile_id = "codex", revision = 1, draft = draft,
+        save_key = "save-codex", remove_key = "remove-codex"})
+end
 local function define_tests()
     test.describe("Agent profile form input", function()
         test.it("edits text, preserves UTF-8 on backspace and prepares a save without I/O", function()
@@ -40,6 +48,23 @@ local function define_tests()
             view.input(s, {type = "paste", text = "Cannot append"}, frame)
             test.eq(s.title, "Agent")
             test.eq(view.action(s, "save"), "save")
+        end)
+        test.it("edits the named Codex profile from its own value", function()
+            local s = codex_state()
+            local frame = view.draw(60, 16, appearance.defaults(), s)
+            -- Name, instructions, then the named Codex profile.
+            for _ = 1, 2 do
+                view.input(s, {type = "key", action = "press", key = "", key_type = "tab",
+                    ctrl = false, alt = false, shift = false}, frame)
+            end
+            view.input(s, {type = "key", action = "press", key = "", key_type = "backspace",
+                ctrl = false, alt = false, shift = false}, frame)
+            view.input(s, {type = "paste", text = "h"}, frame)
+            test.eq(s.config_profile, "ds-flash")
+            test.eq(s.guidance, "Keep changes small.")
+            test.eq(view.action(s, "save"), "save")
+            test.eq(s.form.draft.config_profile, "ds-flash")
+            test.eq(s.form.draft.instructions, "Keep changes small.")
         end)
         test.it("keeps rows and mouse targets within compact terminal sizes", function()
             for _, size in ipairs({{1, 1}, {12, 4}, {30, 8}, {60, 16}}) do

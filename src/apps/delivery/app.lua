@@ -32,6 +32,7 @@ local function main(value: unknown)
     local state: model.State = model.new(launch.workspace_id)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid App Delivery checkpoint") end
     local offset = 0
+    local hits: {view.Hit} = {}
     local dirty, running, announced = true, true, false
     local last_checkpoint = ""
     -- Destination calls are serialized in one worker so a delayed owner never
@@ -192,6 +193,19 @@ local function main(value: unknown)
         if applied then state.restored_intent_id = state.intent and state.intent.intent_id or nil end
         dirty = true
     end
+    local function take(kind: string)
+        if kind == "stage" then perform(stage_available_now)
+        elseif kind == "read" then perform(get_selected_now)
+        elseif kind == "accept" then perform(function() review_now(true) end)
+        elseif kind == "reject" then perform(function() review_now(false) end)
+        elseif kind == "select" then perform(select_version_now)
+        elseif kind == "prepare" then perform(prepare_now)
+        elseif kind == "step" then perform(step_now)
+        elseif kind == "status" then perform(activation_status_now)
+        elseif kind == "recover" then perform(recover_now)
+        elseif kind == "refresh" then perform(refresh_now)
+        elseif kind == "details" then model.toggle_technical(state); dirty = true end
+    end
     local function selection_locked(): boolean
         if not busy then return false end
         state.notice = "Request in progress"
@@ -214,6 +228,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local frame = view.draw(width, height, preferences, state, offset)
+            hits = frame.hits
             offset = frame.offset
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -267,20 +282,34 @@ local function main(value: unknown)
                     end
                     dirty = true
                 elseif key == "enter" then
-                    if state.pane == "available" then perform(stage_available_now) else perform(get_selected_now) end
-                elseif text == "a" then
-                    if state.pane == "available" then perform(stage_available_now)
-                    else perform(function() review_now(true) end) end
-                elseif text == "n" then if state.pane == "plans" then perform(function() review_now(false) end) end
-                elseif text == "s" then
-                    if state.pane == "available" then perform(stage_available_now) else perform(select_version_now) end
-                elseif text == "p" then perform(prepare_now)
-                elseif text == "x" then perform(step_now)
-                elseif text == "i" then perform(activation_status_now)
-                elseif text == "g" then perform(recover_now)
-                elseif text == "f" then perform(refresh_now)
-                elseif text == "t" then model.toggle_technical(state); dirty = true
+                    local kind, _, enabled = view.primary(state)
+                    if enabled then take(kind) end
+                elseif text == "a" then take(state.pane == "available" and "stage" or "accept")
+                elseif text == "n" then take("reject")
+                elseif text == "s" then take(state.pane == "available" and "stage" or "select")
+                elseif text == "p" then take("prepare")
+                elseif text == "x" then take("step")
+                elseif text == "i" then take("status")
+                elseif text == "g" then take("recover")
+                elseif text == "f" then take("refresh")
+                elseif text == "t" then take("details")
                 elseif key == "esc" or key == "escape" then running = false end
+            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                local hit = view.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                if hit then
+                    if hit.kind == "pane" then
+                        if not selection_locked() then
+                            if hit.key == "available" then model.show_pane(state, "available")
+                            elseif hit.key == "plans" then model.show_pane(state, "plans")
+                            elseif hit.key == "review" then model.show_pane(state, "review") end
+                            offset = 0; dirty = true
+                        end
+                    elseif hit.kind == "available" then
+                        if not selection_locked() then model.select_available(state, hit.key); dirty = true end
+                    elseif hit.kind == "plan" then
+                        if not selection_locked() then model.select(state, hit.key); dirty = true end
+                    else take(hit.kind) end
+                end
             elseif data.type == "mouse" and data.action == "wheel" then
                 if state.pane == "review" then
                     offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)))

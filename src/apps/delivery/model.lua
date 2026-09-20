@@ -348,6 +348,10 @@ function M.toggle_pane(state: State)
     else state.pane = "available" end
     state.notice = ""
 end
+function M.show_pane(state: State, pane: Pane)
+    state.pane = pane
+    state.notice = ""
+end
 function M.select(state: State, key: string?)
     state.selected_key = key
     if state.detail and M.key(state.detail) ~= key then state.detail = nil end

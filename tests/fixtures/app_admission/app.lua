@@ -8,6 +8,12 @@ local function main(value: unknown)
     local closes = assert(process.listen("bee.application.close", {message = true}))
     assert(tty.start())
     local surface = assert(tty.surface())
+    local actor = assert(security.actor())
+    local meta = actor:meta()
+    assert(process.send(launch.workspace_pid, "bee.admission_probe.principal", {actor_id = actor:id(),
+        workspace_id = meta.workspace_id, definition_id = meta.definition_id,
+        definition_revision = meta.definition_revision, execution_generation = meta.execution_generation,
+        launch_generation = launch.execution_generation, thread_id = launch.thread_id}))
     assert(surface:present({security.can("bee.admission.probe", "fixture") and "GRANTED" or "DENIED"}))
     client.ready(launch)
     while true do

@@ -7635,3 +7635,125 @@ old owner cleanly, backed it up at
 conversation, workspace, display, credential or migration ledger was copied,
 removed or reset. The unrelated untracked `modules/bee-registry-planner/`
 directory remains untouched.
+
+### 2026-09-20 Codex: continuous managed-agent application Hive proof done
+
+The original authoring Bee now completes the entire source side before
+publishing. A real managed Agy authored Agent App `1.0.2` on `node-1` after the
+first attempt's missing frozen-digest finding was returned through its durable
+thread; the same
+Bee reviewed, approved, applied, opened, checkpointed and cold-restored it,
+then production Governance recovery restored the authorized overlay and the
+read-only publication facade published its exact bytes. Hive delivered them to
+a distinct workspace that began without the artifact or definition. The
+destination reviewed, approved and applied locally, opened **Agent App**,
+checkpointed `Count: 1 / Saved: 1`, and cold-restored `Count: 1` after the
+source stopped. Destination view `01a0bd9c-d1a6-7838-8528-bb5abfd5b133` and
+instance `01a0bd9c-d1a6-783a-9a70-6907a0d9118c` remained stable.
+
+Evidence is `.wippy/evidence/agent-app-hive-e2e-strict2-20260920`; artifact
+digest `01b7629eb9addf5f1bb4f10422f920fb9448df8d5f3326f369f155aadec508ec`.
+The provider rounds took 24.570 and 181.680 seconds, the Hive bridge 35.660
+seconds, destination desktop and cold restart 15.661 seconds, and the Hive half
+52.952 seconds. The bridge transcript records absence, publication,
+availability, staging, apply, both nodes stopped and `PASS
+TestHiveSupervisorAgentSource` in order. Source workspace
+`46190940e2c71a0e9c58bf0ba5734df3` retained composition digest
+`a38854959535f48e18d95e77d228bd84508816c8265a467dd8c8f7e37e1d462d`
+before and after the bridge; destination workspace is
+`a2ef02432baea4beb988fb4757326154`.
+
+The proof exposed three boundary defects in its fixtures: empty policy lists
+must retain Lua list shape with `table.create(1, 0)` so cold-restart digests are
+stable; facade faults are under `reply.error.code/message`; and a successful
+publication facade reply already places the publication value in `reply.value`.
+Source recovery now runs before guarded publication. Publication remains
+read-only and verifies the locally reviewed/applied overlay. The fixture policy
+carries overlay read for destination verification and no overlay-write action.
+
+Strict lint passes with only the known `bee.launch:desktop_lifecycle` fixpoint
+warning. `make agent-app-hive-e2e-check`, the existing no-inference
+`make agent-app-hive-check`, the synthetic two-version
+`make governance-hive-delivery-check`, and all 1,142 unit tests pass against
+`.wippy/bin/bee-wippy-renewal`. The earlier failed two-version local update in
+`.wippy/evidence/agent-app-hive-e2e-20260920-013223/source` remains a separate
+follow-up; this acceptance intentionally proves one continuous immutable
+version. Production `src/` is unchanged, so the globally installed `be31299`
+binary has not been rebuilt. The unrelated untracked
+`modules/bee-registry-planner/` remains untouched.
+
+Both managed-provider command boots still log a three-second runtime supervisor
+shutdown timeout after the Agy child exits 0 and placement records cleanup
+complete. The command exits 0 and the later source restart, recovery and
+publication pass, but this is retained as a separate headless runtime shutdown
+defect; the evidence is not described as a clean shutdown proof.
+
+### 2026-09-20 Codex: compact work stays visible and the UI reference is exact
+
+Managed agents now receive the exact manifest, process and pure-view source of
+Bee's runnable UI Guide in the offline corpus. The prose reference and resident
+example therefore describe the same revision without granting agents a broader
+Hub or registry read. Corpus regeneration remains reproducible at 163 documents
+and 2,159,745 bytes.
+
+Two hidden-mode defects are fixed. The Modules editor remains visible and modal
+after a resize below 28×14, with no underlying page hit targets exposed, and the
+Agent profile form edits a named Codex configuration profile from its own value
+instead of the persistent instructions field. Timeline compact rows now lead
+with the message or operation and a short state at 20 and 40 columns; sequence,
+kind, source, producer, cursor, lease and owner incarnation remain available in
+Details. Hostile control text stays inert and every row and hit remains bounded.
+
+`make agent-corpus-check` passes. Focused Timeline format/view acceptance passes,
+and the complete candidate-runtime unit gate passes 1,145/1,145 cases with only
+the two known interprocedural fixpoint warnings. The unrelated untracked
+`modules/bee-registry-planner/` directory remains untouched.
+
+### 2026-09-20 Codex: application principals and focused Delivery UI landed
+
+Broker-launched applications now run as stable host-issued actors derived from
+workspace and logical instance. Launch metadata records the admitted definition,
+definition revision and execution generation; app input cannot select the actor.
+Compatible producer replacement preserves the logical actor while advancing the
+generation. The broker alone holds the exact actor-creation authority and starts
+the application through `process.with_actor`. This is the identity prerequisite
+for a later bound thread facade; applications still have no raw thread service
+grant. Commit `748f9c1` is pushed.
+
+App Delivery now has Available, Staged and Review panes, mouse hit handling,
+compact application/status-first rows and one contextual primary action. Advanced
+status, recovery, rejection and apply inspection remain under Details; review,
+approval and activation authority remain separate. The continuous destination
+journey proves blocked plans remain non-actionable, an accepted plan proceeds
+through local approval, and the activated entry runs on a later boot. Strict lint,
+the real `delivery-review-check`, and the complete candidate-runtime suite pass;
+the latter reports 1,148/1,148. Commit `2398f2c` is not yet pushed or installed
+globally at the time of this entry.
+
+The live application persistence model was corrected before implementation.
+State is app-owned data in a host-bound database resource, not a physical database
+per app. Governance already freezes a logical migration target to a host-selected
+database ID and optional prefix, but that binding neither grants live SQL access
+nor confines arbitrary SQL. Running apps must use bounded typed owner operations
+that authenticate the current app binding and inject the workspace/application
+partition; they must not receive `db.get`, raw SQL, caller-selected database IDs,
+prefixes, table names or ownership predicates. Node-local SQL state remains at its
+authoritative owner. Hive distributes governed overlays, immutable artifacts and
+typed Sync descriptions; it does not replicate arbitrary SQLite rows.
+
+One shared-resource hazard is now explicit: the physical `_migrations` ledger is
+currently keyed only by migration ID. Two workspace installations of one component
+into different prefixes on the same physical resource may cause the second schema
+to be skipped as already applied. The first supported contract should therefore
+use one component schema per bound physical resource and host-injected
+workspace/application partition keys in rows. Separate schemas per installation
+require an installation-qualified physical ledger and acceptance proof. Overlay
+removal retains committed state and migration history; data deletion or destructive
+schema rollback is a separate reviewed owner operation.
+
+One node can host multiple independent workspaces today, but the active desktop
+does not yet offer a complete create/switch journey. The later focused UX milestone
+must list local and Hive workspaces, create from a selected folder, switch the
+current display without restarting Bee, and restore each workspace's retained
+display layout. The header workspace control remains informational until that
+acceptance exists.

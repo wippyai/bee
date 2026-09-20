@@ -106,8 +106,8 @@ package releases will follow contract stabilization.
 ## Launch and lifecycle
 
 The broker supplies one launch value with `version`, `broker_pid`, `workspace_pid`,
-`workspace_id`, `instance_id`, `view_id`, `definition_id`, `definition_revision`,
-`registry_revision`
+`workspace_id`, `instance_id`, `view_id`, `definition_id`, optional `thread_id`,
+`execution_generation`, `definition_revision`, `registry_revision`
 and `launch_token`. `bee.application:client` validates it. The revision identifies
 the registry state observed for launch; it is not a promise that a mutable loader
 pins every future import. Transactional activation is a future installer concern.
@@ -143,10 +143,13 @@ Open requests may carry an optional bounded `thread_id` association. The value u
 the thread record identifier bound (nonempty, printable, at most 160 bytes). It is
 an owner-selected descriptive association and grants no thread membership or
 operation permission. It is carried by the host-authorized open request and the
-broker's immutable instance; applications cannot set or infer it from launch
-arguments. Identified replies and host inventory expose the association, and
-checkpoint records retain it for recovery. An open without `thread_id` may restore
-the association saved with its selected checkpoint.
+broker's immutable instance. `bee.application.open` rejects caller-supplied
+`thread_id`; applications cannot set or infer it from launch arguments. The broker
+includes the selected value in the launch payload, and `client.launch` validates
+and copies it before returning the typed launch. Identified replies and host
+inventory expose the association, and checkpoint records retain it for recovery.
+An open without `thread_id` may restore the association saved with its selected
+checkpoint.
 
 Open requests may carry `arguments`, a dense list of up to 16 strings (1 KiB each,
 8 KiB combined, no control characters). Omission means an empty list. The broker
@@ -286,9 +289,15 @@ work. An application reaches a subsystem's store only inside that subsystem's
 methods, which attach their own store policy; `bee:workspace_storage_boundary`
 denies the stores no method may open on an application's behalf, so a store
 reached through an owner's methods (threads, approvals) is not listed there.
-Every local desktop application acts as the client's actor (`bee.local`);
-admission grants an application calls, not an identity of its own. Native execution requires OS-level confinement before admitting untrusted
-shell commands or external agents. TTY capability isolation is not filesystem isolation.
+Every broker-launched local desktop application receives a host-created actor.
+Its stable ID derives from the trusted workspace ID and logical application
+instance ID, never from application input. Bounded actor metadata carries
+`workspace_id`, `definition_id`, `definition_revision` and
+`execution_generation`; a compatible producer replacement keeps the ID and
+advances only the generation. Admission still selects scopes and capabilities:
+metadata does not authorize calls. Native execution requires OS-level
+confinement before admitting untrusted shell commands or external agents. TTY
+capability isolation is not filesystem isolation.
 
 ## Durable checkpoint and restore
 

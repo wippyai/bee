@@ -57,6 +57,10 @@ governance-hive-delivery-check:
 .PHONY: agent-app-hive-check
 agent-app-hive-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app_hive.py
+
+.PHONY: agent-app-hive-e2e-check
+agent-app-hive-e2e-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/agent_app_hive_e2e.py
 .PHONY: governance-runtime-check
 governance-runtime-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/governance_runtime.py

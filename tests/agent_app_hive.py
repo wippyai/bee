@@ -66,7 +66,8 @@ def retained_artifact():
     entry = entries[0]
     application = entry.get("meta", {}).get("application", {})
     assert entry.get("id") == DEFINITION_ID and entry.get("kind") == "process.lua", entry
-    assert application.get("title") == TITLE and application.get("revision") == "2", application
+    expected_revision = "1" if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_PROJECT") else "2"
+    assert application.get("title") == TITLE and application.get("revision") == expected_revision, application
     return path, updated["artifact_digest"]
 
 
@@ -83,14 +84,14 @@ def application_identity(folder):
     return matches[0]["id"], matches[0]["instance_id"]
 
 
-def configure_destination(project, workspace_id=None):
+def configure_destination(project, workspace_id=None, source_node="node-1"):
     """Install the destination's local policy in its source composition."""
     if workspace_id is not None:
         governance_path = project / "src/governance/_index.yaml"
         governance = yaml.safe_load(governance_path.read_text())
         profiles = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
         profiles["data"] = {"profiles": [{
-            "workspace_id": workspace_id, "source_node": "node-1",
+            "workspace_id": workspace_id, "source_node": source_node,
             "source_workspace": "agent-app-source", "component": "bee.agent_app_demo/app",
             "resolver": "overlay", "overlay_owner": "bee.replica_probe:activation_overlay",
             "approval_policy": "local-agent-app-hive", "parameters": [],
@@ -116,7 +117,7 @@ def configure_destination(project, workspace_id=None):
     security_path.write_text(yaml.safe_dump(security, sort_keys=False))
 
 
-def prepare_destination(destination, evidence):
+def prepare_destination(destination, evidence, source_node="node-1"):
     shutil.copytree(ROOT / "src", destination / "src")
     for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
         shutil.copy2(ROOT / name, destination / name)
@@ -136,7 +137,7 @@ def prepare_destination(destination, evidence):
     finally:
         desktop.close()
     workspace_id = workspace_identity(destination)
-    configure_destination(destination, workspace_id)
+    configure_destination(destination, workspace_id, source_node)
     return workspace_id
 
 
@@ -150,9 +151,17 @@ def bridge(destination, workspace_id, artifact, evidence):
         "GOWORK": "off",
         "GOTOOLCHAIN": "go1.27.0",
     })
+    source_project = os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_PROJECT")
+    source_state = os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_STATE")
+    source_workspace = os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_WORKSPACE")
+    if source_project or source_state or source_workspace:
+        assert source_project and source_state and source_workspace, "continuous source needs project, state and workspace"
+        environment.update({"BEE_AGENT_APP_HIVE_SOURCE_PROJECT": source_project,
+                            "BEE_AGENT_APP_HIVE_SOURCE_STATE": source_state,
+                            "BEE_AGENT_APP_HIVE_SOURCE_WORKSPACE": source_workspace})
     command = ["go", "test", "-race", "-count=1", "-v", "tests/hive_remote.go",
                "tests/hive_supervisor_test.go", "tests/hive_replica_test.go",
-               "-run", "^TestHiveSupervisorAgentArtifact$"]
+               "-run", "^TestHiveSupervisorAgentSource$" if source_project else "^TestHiveSupervisorAgentArtifact$"]
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=360, env=environment)
     output = result.stdout + result.stderr
     (evidence / "hive-bridge.log").write_text(output)
@@ -162,10 +171,23 @@ def bridge(destination, workspace_id, artifact, evidence):
         assert marker in output, output[-12000:]
     # The Go acceptance synchronously waits for `stop` on both coordinators;
     # only after this return can the ordinary desktop boot below own its host.
-    assert "retained Agent App v2 was recreated only on the source" in output, output[-12000:]
+    expected = ("locally applied Agent App was published by its authoring source"
+                if source_project else "retained Agent App v2 was recreated only on the source")
+    assert expected in output, output[-12000:]
 
 
-def open_and_restart(destination, workspace_id, evidence):
+def tree_digest(root):
+    """Measure the retained source composition without interpreting it."""
+    digest = hashlib.sha256()
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        digest.update(str(path.relative_to(root)).encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def open_and_restart(destination, workspace_id, evidence, marker=MARKER):
     desktop = Desktop(destination, project=destination)
     try:
         desktop.wait("No applications open", timeout=30)
@@ -180,7 +202,7 @@ def open_and_restart(destination, workspace_id, evidence):
             desktop.pump(.2)
         capture(evidence, "start-menu-agent-app", desktop)
         desktop.choose(TITLE)
-        desktop.wait(MARKER, timeout=30)
+        desktop.wait(marker, timeout=30)
         desktop.wait("Count: 0", timeout=30)
         capture(evidence, "agent-app-initial", desktop)
         desktop.key(b"\x1b\t")
@@ -196,7 +218,7 @@ def open_and_restart(destination, workspace_id, evidence):
     assert workspace_identity(destination) == workspace_id, "desktop restart changed destination workspace identity"
     restarted = Desktop(destination, project=destination)
     try:
-        restarted.wait(MARKER, timeout=30)
+        restarted.wait(marker, timeout=30)
         restarted.wait("Count: 1", timeout=30)
         capture(evidence, "agent-app-cold-restart", restarted)
         restarted_identity = application_identity(destination)
@@ -209,6 +231,16 @@ def open_and_restart(destination, workspace_id, evidence):
 
 def exercise():
     artifact, digest = retained_artifact()
+    authored = json.loads(artifact.read_text())
+    source_project = os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_PROJECT")
+    source_node = authored.get("source_node", "node-1") if source_project else "node-1"
+    source_workspace_id = authored.get("workspace_id")
+    marker = authored.get("application_marker", MARKER)
+    if source_project:
+        assert source_node == "node-1", "continuous source must retain its pre-authoring Hive identity"
+        assert re.fullmatch(r"[0-9a-f]{32}", source_workspace_id or ""), source_workspace_id
+        os.environ["BEE_AGENT_APP_HIVE_SOURCE_WORKSPACE"] = source_workspace_id
+    source_tree_before = tree_digest(Path(source_project) / "src") if source_project else None
     evidence = evidence_root()
     shutil.copy2(artifact, evidence / "authored.json")
     destination = evidence / "destination"
@@ -217,15 +249,20 @@ def exercise():
                "updated_artifact_digest": digest}, "runtime": runtime_identity(), "timings_seconds": {}}
     started = time.monotonic()
     try:
-        workspace_id = prepare_destination(destination, evidence)
+        workspace_id = prepare_destination(destination, evidence, source_node)
         receipt["timings_seconds"]["pre_establish_destination"] = round(time.monotonic() - started, 3)
         bridge_started = time.monotonic()
         bridge(destination, workspace_id, artifact, evidence)
+        source_tree_after = tree_digest(Path(source_project) / "src") if source_project else None
+        assert source_tree_after == source_tree_before, "Hive bridge changed the approved source composition"
         receipt["timings_seconds"]["hive_bridge"] = round(time.monotonic() - bridge_started, 3)
         desktop_started = time.monotonic()
-        first_identity, restarted_identity = open_and_restart(destination, workspace_id, evidence)
+        first_identity, restarted_identity = open_and_restart(destination, workspace_id, evidence, marker)
         receipt["timings_seconds"]["desktop_open_and_cold_restart"] = round(time.monotonic() - desktop_started, 3)
         receipt["destination_workspace_id"] = workspace_id
+        receipt["source"] = {"mode": "continuous_authoring_state" if source_project else "retained_artifact_fixture",
+                             "node_id": source_node, "workspace_id": source_workspace_id,
+                             "project": source_project, "src_sha256": source_tree_after}
         receipt["logical_identity"] = {
             "before_restart": {"view_id": first_identity[0], "instance_id": first_identity[1]},
             "after_restart": {"view_id": restarted_identity[0], "instance_id": restarted_identity[1]},
@@ -238,7 +275,8 @@ def exercise():
     finally:
         receipt["timings_seconds"]["total"] = round(time.monotonic() - started, 3)
         (evidence / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-    print("Agent App Hive: retained v2 artifact " + digest[:12]
+    subject = "authored artifact " if source_project else "retained v2 artifact "
+    print("Agent App Hive: " + subject + digest[:12]
           + " crossed Hive, was destination-reviewed and approved, then opened and cold-restored in the same desktop; evidence in "
           + str(evidence))
 

@@ -23,10 +23,29 @@ local function session_line(state: model.State): string
     if state.phase == "reset_required" then return "The subscription closed at the owner; reopen the thread" end
     local current = state.session
     if not current then return "" end
-    local line = "Cursor " .. tostring(current.after_sequence) .. " of " .. tostring(state.head_sequence) .. "  lease " .. tostring(current.lease_generation) .. "  owner incarnation " .. tostring(current.owner_incarnation)
+    local line = "Live · " .. tostring(state.head_sequence) .. " records"
     if current.state == "detached" then line = line .. "  detached: " .. state.unavailable end
     if state.dropped_through > 0 then line = line .. "  earlier records through " .. tostring(state.dropped_through) .. " not shown" end
     return line
+end
+local function technical_session_line(state: model.State): string
+    local current = state.session
+    if not current then return "" end
+    return "Cursor " .. tostring(current.after_sequence) .. " of " .. tostring(state.head_sequence) .. "  lease " .. tostring(current.lease_generation) ..
+        "  owner incarnation " .. tostring(current.owner_incarnation)
+end
+local function compact_thread_label(summary: {thread_id: string, title: string, state: string, head_sequence: integer, owner_id: string}, technical: boolean): string
+    local title = summary.title ~= "" and summary.title or summary.thread_id
+    if technical then
+        return title .. " · " .. summary.state .. " · " .. tostring(summary.head_sequence) .. " records · owner " .. summary.owner_id .. " · " .. summary.thread_id
+    end
+    return title .. " · " .. summary.state .. " · " .. tostring(summary.head_sequence)
+end
+local function row_label(row: model.Row, technical: boolean): string
+    if technical then
+        return string.format("%6d %s %-18s %-10s %s", row.sequence, row.glyph, row.kind, row.source, row.summary)
+    end
+    return row.glyph .. " " .. row.state_label .. " · " .. row.activity
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
     local theme = appearance.theme(preferences.theme)
@@ -55,7 +74,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         line(1, "TIMELINE  choose a thread", theme.text)
         local picker = state.picker
         if picker.unavailable then line(2, "Threads unavailable: " .. picker.unavailable, theme.muted)
-        else line(2, string.format("%-40s %-10s %6s  %s", "THREAD", "STATE", "HEAD", "OWNER"), theme.muted) end
+        else line(2, state.technical and "Thread · state · records · owner · id" or "Thread · state · records", theme.muted) end
         local first, last = 3, height - 2
         local capacity = maximum(0, last - first + 1)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #picker.threads - capacity), offset)))
@@ -71,8 +90,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             if not summary then break end
             local y = first + slot - 1
             local active = summary.thread_id == picker.selected
-            local label = string.format("%-40s %-10s %6d  %s", tty.text.truncate(summary.title ~= "" and summary.title or summary.thread_id, 40, "…"), summary.state, summary.head_sequence, summary.owner_id)
-            if state.technical then label = label .. "  " .. summary.thread_id end
+            local label = compact_thread_label(summary, state.technical)
             line(y, label, active and appearance.selection_text(theme) or theme.text, active and theme.accent or theme.surface)
             hits[#hits + 1] = {kind = "thread", index = next_offset + slot, key = summary.thread_id, x = 1, y = y, width = width, height = 1}
         end
@@ -90,16 +108,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset}
     end
     local title = "TIMELINE  " .. (state.title ~= "" and state.title or tostring(state.thread_id))
-    if state.thread_state ~= "" then title = title .. "  " .. state.thread_state end
+    if state.thread_state ~= "" then title = title .. " · " .. state.thread_state end
     if state.technical then title = title .. "  " .. tostring(state.thread_id) end
     line(1, title, theme.text)
     local recap = state.recap
     if recap then
-        local head = "Recap through " .. tostring(recap.through_sequence) .. (recap.last_turn ~= "" and ("  last turn " .. recap.last_turn) or "")
+        local head = "Recap"
         if recap.lines[1] then head = head .. ": " .. recap.lines[1] end
+        if state.technical then head = head .. " · through " .. tostring(recap.through_sequence) .. (recap.last_turn ~= "" and (" · last turn " .. recap.last_turn) or "") end
         line(2, head, theme.muted)
     else line(2, "No recap stored", theme.muted) end
-    line(3, session_line(state), theme.muted)
+    line(3, state.technical and technical_session_line(state) or session_line(state), theme.muted)
     local selected = model.selected_row(state)
     local detail_rows = 0
     if selected and state.technical and height >= 12 then detail_rows = 4 end
@@ -124,7 +143,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if not row then break end
         local y = list_first + slot - 1
         local active = selected ~= nil and row.sequence == selected.sequence
-        local label = string.format("%6d %s %-18s %-10s %s", row.sequence, row.glyph, row.kind, row.source, row.summary)
+        local label = row_label(row, state.technical)
         if state.gap_after ~= nil and next_offset + slot > 1 and rows[next_offset + slot - 1].sequence == state.gap_after then
             label = "(records between " .. tostring(state.gap_after) .. " and " .. tostring(row.sequence) .. " not shown) " .. label
         end
@@ -136,7 +155,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         put(1, y, string.rep("─", width), width, theme.border)
         line(y + 1, selected.details[1], theme.text)
         line(y + 2, selected.details[2], theme.text)
-        line(y + 3, "producer " .. selected.producer_id .. (selected.approval_id and ("  approval " .. selected.approval_id .. " is decided in Approvals") or ""), theme.text)
+        local detail = selected.details[3]
+        if selected.approval_id then detail = detail .. "  approval " .. selected.approval_id .. " is decided in Approvals" end
+        line(y + 3, detail, theme.text)
     end
     if height >= 4 then
         button("follow", state.follow and " Following " or " Follow ", true)

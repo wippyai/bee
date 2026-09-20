@@ -55,6 +55,24 @@ local function define_tests()
                 end
             end
         end)
+        test.it("keeps an active editor visible and modal after a compact resize", function()
+            for _, size in ipairs({{1, 1}, {12, 8}, {27, 13}}) do
+                local frame = view.draw(size[1], size[2], appearance.defaults(), model.new(), 0, "", false,
+                    {field = "parameter_value", name = "example:enabled", buffer = "false"})
+                test.eq(#frame.rows, size[2])
+                for _, row in ipairs(frame.rows) do test.eq(tty.text.width(row), size[1]) end
+                local rendered = table.concat(frame.rows, "\n")
+                if size[1] >= 12 then
+                    test.is_true(rendered:find("EDIT", 1, true) ~= nil)
+                    test.is_true(rendered:find("false", 1, true) ~= nil)
+                end
+                for _, hit in ipairs(frame.hits) do
+                    test.is_true(hit.kind == "save_editor" or hit.kind == "cancel_editor")
+                    test.is_true(hit.x >= 1 and hit.y >= 1)
+                    test.is_true(hit.x + hit.width - 1 <= size[1] and hit.y + hit.height - 1 <= size[2])
+                end
+            end
+        end)
         test.it("keeps installed dependencies readable and reachable after scrolling", function()
             local state = model.new()
             local modules: {{[string]: unknown}} = {}

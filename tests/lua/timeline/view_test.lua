@@ -35,8 +35,8 @@ local function define_tests()
             local picking = model.new("bee.timeline.i2")
             model.apply_list(picking, ok({threads = {{thread_id = "t-1", title = "One \27[31m", state = "open", head_sequence = 3, owner_id = "bee.test.alice"}}}))
             for _, subject in ipairs({state, picking}) do
-                for _, width in ipairs({1, 12, 40, 80, 140}) do
-                    for _, height in ipairs({1, 3, 8, 14, 30}) do
+                for _, width in ipairs({1, 20, 40, 80, 120}) do
+                    for _, height in ipairs({1, 6, 12, 24}) do
                         local frame = view.draw(width, height, appearance.defaults(), subject, 0, "")
                         test.eq(#frame.rows, height)
                         for _, row in ipairs(frame.rows) do
@@ -56,10 +56,10 @@ local function define_tests()
             end
             local frame = view.draw(140, 30, appearance.defaults(), state, 0, "")
             local text = table.concat(frame.rows, "\n")
-            test.is_true(text:find("TIMELINE  Review  [2Jrun  open", 1, true) ~= nil)
-            test.is_true(text:find("Recap through 20  last turn uncertain: first line", 1, true) ~= nil)
+            test.is_true(text:find("TIMELINE  Review  [2Jrun · open", 1, true) ~= nil)
+            test.is_true(text:find("Recap: first line  bell · through 20 · last turn uncertain", 1, true) ~= nil)
             test.is_true(text:find("Cursor 30 of 30  lease 1  owner incarnation 2", 1, true) ~= nil)
-            test.is_true(text:find("record r12  recorded", 1, true) ~= nil)
+            test.is_true(text:find("sequence 12  kind message  source bee", 1, true) ~= nil)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(frame.hits) do kinds[hit.kind] = true end
             test.is_true(kinds["row"] and kinds["follow"] and kinds["threads"] and kinds["refresh"] and kinds["technical"])
@@ -67,6 +67,21 @@ local function define_tests()
             test.is_true(picker:find("TIMELINE  choose a thread", 1, true) ~= nil)
             test.is_true(picker:find("One  [31m", 1, true) ~= nil)
             test.is_true(picker:find("↑↓ select · Enter open", 1, true) ~= nil)
+        end)
+        test.it("puts human activity before record mechanics at compact widths", function()
+            local state = attached()
+            model.select(state, 12)
+            for _, width in ipairs({20, 40}) do
+                local text = table.concat(view.draw(width, 12, appearance.defaults(), state, 0, "").rows, "\n")
+                test.is_true(text:find("request · text", 1, true) ~= nil)
+                if width >= 40 then test.is_true(text:find("request · text 12", 1, true) ~= nil) end
+                test.is_nil(text:find("sequence 12", 1, true))
+                test.is_nil(text:find("owner incarnation", 1, true))
+            end
+            model.toggle_technical(state)
+            local technical = table.concat(view.draw(120, 24, appearance.defaults(), state, 0, "").rows, "\n")
+            test.is_true(technical:find("sequence 12  kind message  source bee", 1, true) ~= nil)
+            test.is_true(technical:find("Cursor 30 of 30  lease 1  owner incarnation 2", 1, true) ~= nil)
         end)
         test.it("shows an unavailable owner, a required resume and unshown records without inventing rows", function()
             local state = model.new("bee.timeline.i1")

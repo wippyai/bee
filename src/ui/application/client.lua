@@ -3,9 +3,11 @@ local process = require("process")
 local uuid = require("uuid")
 local arguments = require("arguments")
 local interaction = require("interaction")
+local thread_bounds = require("thread_bounds")
 local M = {}
 type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
-    view_id: string, definition_id: string, definition_revision: string, registry_revision: string, launch_token: string, resume_schema: string, resume_state: string, arguments: {string}}
+    view_id: string, definition_id: string, thread_id: string?, execution_generation: integer,
+    definition_revision: string, registry_revision: string, launch_token: string, resume_schema: string, resume_state: string, arguments: {string}}
 local function field(value: unknown, size: integer): string?
     if type(value) ~= "string" or value == "" or #value > size or value:find("%c") then return nil end
     return value
@@ -21,6 +23,11 @@ function M.launch(value: unknown): Launch?
     if not workspace_id then return nil end
     local instance, view = field(value.instance_id, 80), field(value.view_id, 80)
     local definition, revision = field(value.definition_id, 160), field(value.definition_revision, 80)
+    local thread_id = value.thread_id == nil and nil or thread_bounds.id(value.thread_id)
+    if value.thread_id ~= nil and not thread_id then return nil end
+    local generation = value.execution_generation
+    if type(generation) ~= "number" or generation ~= math.floor(generation) or generation < 1
+        or generation > 2147483647 then return nil end
     local registry_revision, token = field(value.registry_revision, 160), field(value.launch_token, 80)
     if not broker or not workspace or not instance or not view or not definition or not revision or not registry_revision or not token then return nil end
     local schema = type(value.resume_schema) == "string" and value.resume_schema or ""
@@ -29,7 +36,8 @@ function M.launch(value: unknown): Launch?
     local args = arguments.decode(value.arguments)
     if not args then return nil end
     return {version = 1, broker_pid = broker, workspace_pid = workspace, workspace_id = workspace_id, instance_id = instance,
-        view_id = view, definition_id = definition, definition_revision = revision, registry_revision = registry_revision, launch_token = token, resume_schema = schema, resume_state = state, arguments = args}
+        view_id = view, definition_id = definition, thread_id = thread_id, execution_generation = math.floor(generation),
+        definition_revision = revision, registry_revision = registry_revision, launch_token = token, resume_schema = schema, resume_state = state, arguments = args}
 end
 -- A logical view reference carries no PID, mount, token or permission.
 type ViewReference = {workspace_id: string, instance_id: string, view_id: string}

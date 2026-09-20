@@ -8,6 +8,7 @@ entries:
   imports:
     arguments: bee.application:arguments
     interaction: bee.application:interaction
+    thread_bounds: bee.threads.records:bounds
 - name: arguments
   kind: library.lua
   source: file://arguments.lua

@@ -22,6 +22,7 @@ entries:
     - process.cancel
     - registry.get
     - process.security
+    - security.actor.create
     - security.scope.create
     - security.policy.get
     - registry.snapshot

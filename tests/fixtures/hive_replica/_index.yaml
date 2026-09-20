@@ -12,7 +12,7 @@ entries:
   meta:
     type: bee.replica_probe.agent_scenario
     comment: Empty by default; the opt-in agent-artifact Hive acceptance supplies its destination identity and immutable digest.
-  data: {workspace_id: '', artifact_digest: ''}
+  data: {workspace_id: '', artifact_digest: '', source_node: '', source_workspace_id: '', source_version: ''}
 - name: agent_artifact
   kind: registry.entry
   meta:
@@ -22,7 +22,7 @@ entries:
 - name: controller_policy
   kind: security.policy
   policy:
-    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call, registry.get, registry.apply, registry.preview, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, db.get, bee.governance.delivery.read, bee.governance.delivery.manage, bee.governance.delivery.activate, bee.approvals.decide]
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.cancel, process.monitor, process.context, process.security, security.scope.create, security.policy.get, funcs.call, registry.get, registry.apply, registry.preview, registry.overlay.get, db.get, bee.governance.delivery.read, bee.governance.delivery.manage, bee.governance.delivery.publish, bee.governance.delivery.activate, bee.approvals.decide]
     resources: '*'
     effect: allow
 - name: names_policy

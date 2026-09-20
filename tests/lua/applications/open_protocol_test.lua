@@ -13,6 +13,9 @@ local function define_tests()
             test.eq(request.arguments[2], "two")
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
                 definition_id = "bee.example:app", arguments = {}, caller_token = "ordinary/app"}, workspace))
+            test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
+                definition_id = "bee.example:app", arguments = {}, thread_id = "caller-selected",
+                caller_token = "bee.application.open/abc-123"}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = string.rep("b", 32), request_id = "open-1",
                 definition_id = "bee.example:app", arguments = {}, caller_token = "bee.application.open/abc-123"}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",

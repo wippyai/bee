@@ -9,6 +9,7 @@ entries:
   imports:
     attachment: bee.applications:attachment
     execution: bee.applications:execution
+    principal: bee.applications:principal
     contract: bee.protocol:application
     catalog: bee.applications:catalog
     lifecycle: bee.applications:lifecycle
@@ -29,6 +30,9 @@ entries:
   kind: library.lua
   source: file://execution.lua
   modules: [process, security]
+- name: principal
+  kind: library.lua
+  source: file://principal.lua
 - name: command
   kind: library.lua
   source: file://command.lua

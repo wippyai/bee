@@ -486,8 +486,35 @@ type Editor = {field: string, buffer: string, name: string?}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?): Frame
     local frame = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content)
     if not editor then return frame end
-    if width < 28 or height < 14 then return draw_base(width, height, preferences, state, offset, status, reading, content) end
     local theme = appearance.theme(preferences.theme)
+    local publication_editor = editor.field == "publication_component" or editor.field == "publication_version"
+        or editor.field == "publication_snapshot_digest"
+    local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
+        or (publication_editor and "Authored application version" or "Configure package"))
+    -- The editor remains the active mode after a resize. A compact frame must
+    -- therefore keep that mode visible and must never expose the underlying
+    -- page's hit targets while keystrokes still edit the buffer.
+    if width < 28 or height < 14 then
+        local compact = tty.canvas(width, height)
+        compact:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
+        local function compact_line(y: integer, value: string, fg: string?)
+            if y < 1 or y > height or width < 1 then return end
+            compact:put(1, y, appearance.style(fg or theme.text, theme.surface)
+                .. tty.text.truncate(value, width, "…") .. RESET, width)
+        end
+        compact_line(1, "EDIT · " .. title, theme.accent)
+        compact_line(2, (editor.buffer ~= "" and editor.buffer or "(empty)") .. "▏")
+        if height > 2 then compact_line(height, status ~= "" and status or "Enter save · Esc cancel", theme.muted) end
+        local compact_hits: {Hit} = {}
+        if width >= 24 and height > 2 then
+            compact_hits = {
+                {kind = "save_editor", key = "", x = 1, y = height, width = 10, height = 1},
+                {kind = "cancel_editor", key = "", x = 14, y = height, width = 10, height = 1},
+            }
+        end
+        return {rows = compact:rows(), hits = compact_hits, capacity = 0,
+            offset = frame.offset, operation_detail_offset = frame.operation_detail_offset}
+    end
     local canvas = tty.canvas(width, height)
     for y, row in ipairs(frame.rows) do canvas:put(1, y, row, width) end
     local w = math.floor(math.min(76, width - 4))
@@ -499,10 +526,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     canvas:put(left, top, appearance.style(theme.accent, theme.surface) .. "╭" .. string.rep("─", w - 2) .. "╮" .. RESET, w)
     for y = top + 1, top + h - 2 do row(y, "") end
-    local publication_editor = editor.field == "publication_component" or editor.field == "publication_version"
-        or editor.field == "publication_snapshot_digest"
-    local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
-        or (publication_editor and "Authored application version" or "Configure package"))
     row(top + 1, title, theme.accent)
     row(top + 3, editor.name or (editor.field == "parameter_name" and "Parameter name (namespace:name)" or title), theme.muted)
     local remaining = editor.buffer

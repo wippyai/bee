@@ -58,6 +58,45 @@ def evidence_root():
     return root
 
 
+def configure_source_node(project):
+    """Give the continuous Hive acceptance a stable identity before any
+    Governance row is created. Ordinary authoring keeps the runtime-selected
+    local identity."""
+    selected = os.environ.get("BEE_AGENT_APP_NODE_NAME")
+    if not selected:
+        return
+    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}", selected), selected
+    path = project / ".wippy.yaml"
+    document = yaml.safe_load(path.read_text())
+    document["relay"] = {"node_name": selected}
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def configure_continuous_source(project, workspace_id):
+    if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") != "1":
+        return
+    governance_path = project / "src/governance/_index.yaml"
+    governance = yaml.safe_load(governance_path.read_text())
+    publication = next(item for item in governance["entries"] if item["name"] == "publication_profiles")
+    publication["data"] = {"profiles": [{"workspace_id": workspace_id,
+        "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app",
+        "overlay_owner": OVERLAY_OWNER}]}
+    activation = next(item for item in governance["entries"] if item["name"] == "activation_profiles")
+    activation["data"] = {"profiles": [{"workspace_id": workspace_id, "source_node": "node-1",
+        "source_workspace": SOURCE_WORKSPACE, "component": "bee.agent_app_demo/app", "resolver": "overlay",
+        "overlay_owner": OVERLAY_OWNER, "approval_policy": "local-agent-app-delivery", "parameters": [],
+        "allow": {"packages": ["bee.agent_app_demo/app"], "namespaces": ["bee.agent_app_demo"],
+                  "kinds": ["process.lua"], "databases": [], "grants": [],
+                  "modules": ["tty", "process", "channel", "json"]}}]}
+    governance_path.write_text(yaml.safe_dump(governance, sort_keys=False))
+    approvals_path = project / "src/approvals/_index.yaml"
+    approvals = yaml.safe_load(approvals_path.read_text())
+    policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
+    policies["policies"] = [{"name": "local-agent-app-delivery", "approvers": ["bee.local"],
+                             "max_ttl_ms": 600000}]
+    approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
+
+
 def ui_evidence(folder):
     evidence = {"schema": 1, "provider_seconds": {}, "local_ui_seconds": {}, "frames": []}
     (folder / "ui").mkdir(exist_ok=True)
@@ -632,8 +671,19 @@ def exercise():
     shutil.copytree(ROOT / "src", project / "src")
     stamp_presenter(project)
     shutil.copytree(ROOT / "tests/fixtures/agent_app", project / "src/probe")
+    if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
+        shutil.copytree(ROOT / "tests/fixtures/hive_replica", project / "src/replica_probe")
+        shutil.rmtree(project / "src/replica_probe/host_environment")
+        shutil.rmtree(project / "src/hive_activation")
+        source_probe = project / "src/replica_probe/_index.yaml"
+        probe = yaml.safe_load(source_probe.read_text())
+        controller = next(item for item in probe["entries"] if item["name"] == "controller_policy")
+        controller["policy"]["actions"] = [action for action in controller["policy"]["actions"]
+                                              if not action.startswith("registry.overlay.")]
+        source_probe.write_text(yaml.safe_dump(probe, sort_keys=False))
     for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
         shutil.copy2(ROOT / name, project / name)
+    configure_source_node(project)
     stage_material(project)
     set_variable(project, "src/driver/agy/_index.yaml", "executable", "BEE_AGENT_APP_AGY")
     set_variable(project, "src/environment/_index.yaml", "machine_home", "BEE_AGENT_APP_HOME")
@@ -652,6 +702,9 @@ def exercise():
     finally:
         first.close()
     workspace_id = workspace_identity(folder)
+    configure_continuous_source(project, workspace_id)
+    if os.environ.get("BEE_AGENT_APP_HIVE_SOURCE_FIXTURE") == "1":
+        lint(project, "continuous-source")
 
     findings, report, staged = "", None, None
     source_workspace = SOURCE_WORKSPACE
@@ -686,6 +739,21 @@ def exercise():
     restore(folder, project, evidence)
     initial_identity = saved_app_identity(folder)
     first_revision = report["workspace_revision"]
+
+    if os.environ.get("BEE_AGENT_APP_SINGLE_VERSION") == "1":
+        (folder / "authored.json").write_text(json.dumps({"initial": {
+            "snapshot_digest": report["snapshot_digest"], "artifact_digest": report["artifact_digest"],
+            "plan_digest": staged["plan_digest"], "workspace_revision": first_revision}, "updated": {
+            "snapshot_digest": report["snapshot_digest"], "artifact_digest": report["artifact_digest"],
+            "plan_digest": staged["plan_digest"], "workspace_revision": first_revision},
+            "published_version": staged["version"], "application_marker": MARKER,
+            "source_workspace": source_workspace, "thread_id": AUTHORING_THREAD,
+            "source_node": staged["source_node"], "workspace_id": workspace_id,
+            "application_identity": {"view_id": initial_identity[0], "instance_id": initial_identity[1]},
+            "entries": report["entries"]}, indent=2))
+        print("Agent-authored application: the managed Agy authored, locally reviewed, approved, applied, opened and restored "
+              + DEFINITION_ID + " as " + staged["version"] + "; evidence in " + str(folder))
+        return
 
     write_inputs(project, round="update", source_workspace=source_workspace,
                  launch_workspace=workspace_id, update=True)
@@ -722,6 +790,7 @@ def exercise():
         "snapshot_digest": updated["snapshot_digest"], "artifact_digest": updated["artifact_digest"],
         "plan_digest": updated_stage["plan_digest"], "workspace_revision": updated["workspace_revision"]},
         "source_workspace": source_workspace, "thread_id": AUTHORING_THREAD,
+        "source_node": updated_stage["source_node"], "workspace_id": workspace_id,
         "application_identity": {"view_id": initial_identity[0], "instance_id": initial_identity[1]},
         "entries": updated["entries"]}, indent=2))
     print("Agent-authored application: a live managed Agy attempt authored " + DEFINITION_ID

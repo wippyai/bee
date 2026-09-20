@@ -84,21 +84,43 @@ local function define_tests()
         end)
         test.it("copies explicit arguments across both boundary decoders", function()
             local source = {"project-a", "run-a", ""}
+            local selected_thread = "thread:review"
             local request = assert(contract.request({version = 1, request_id = "r", op = "open",
-                definition_id = "test:app", arguments = source}))
+                definition_id = "test:app", thread_id = selected_thread, arguments = source}))
+            test.eq(request.thread_id, selected_thread)
             local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace", workspace_id = "0123456789abcdef0123456789abcdef",
                 instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
+                thread_id = request.thread_id, execution_generation = 1,
                 registry_revision = "1", launch_token = "token", arguments = request.arguments}))
             source[1] = "changed"
             request.arguments[2] = "changed"
+            test.eq(launch.thread_id, selected_thread)
             test.eq(launch.arguments[1], "project-a")
             test.eq(launch.arguments[2], "run-a")
             test.eq(launch.arguments[3], "")
         end)
+        test.it("keeps unbound opens and rejects malformed launch thread identity", function()
+            local value = {version = 1, broker_pid = "broker", workspace_pid = "workspace",
+                workspace_id = "0123456789abcdef0123456789abcdef", instance_id = "instance", view_id = "view",
+                definition_id = "test:app", definition_revision = "1", execution_generation = 1,
+                registry_revision = "1", launch_token = "token"}
+            local unbound = assert(client.launch(value))
+            test.is_nil(unbound.thread_id)
+            for _, invalid in ipairs({"", "thread\n", string.rep("x", 161), 42, {id = "thread"}} :: {unknown}) do
+                value.thread_id = invalid
+                test.is_nil(client.launch(value))
+            end
+            value.thread_id = nil
+            for _, invalid in ipairs({0, -1, 1.5, 2147483648, "1"} :: {unknown}) do
+                value.execution_generation = invalid
+                test.is_nil(client.launch(value))
+            end
+        end)
         test.it("requires canonical workspace identity and returns an independent view reference", function()
             local value = {version = 1, broker_pid = "broker", workspace_pid = "workspace",
                 workspace_id = "0123456789abcdef0123456789abcdef", instance_id = "instance", view_id = "view",
-                definition_id = "test:app", definition_revision = "1", registry_revision = "1", launch_token = "token"}
+                definition_id = "test:app", definition_revision = "1", execution_generation = 1,
+                registry_revision = "1", launch_token = "token"}
             local launch = client.launch(value)
             if not launch then error("Valid launch was rejected") end
             local reference = client.reference(launch)
@@ -113,12 +135,12 @@ local function define_tests()
             end
             test.is_nil(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace",
                 instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
-                registry_revision = "1", launch_token = "token"}))
+                execution_generation = 1, registry_revision = "1", launch_token = "token"}))
         end)
         test.it("authenticates cancellation results before resuming work", function()
             local launch = assert(client.launch({version = 1, broker_pid = "broker", workspace_pid = "workspace", workspace_id = "0123456789abcdef0123456789abcdef",
                 instance_id = "instance", view_id = "view", definition_id = "test:app", definition_revision = "1",
-                registry_revision = "1", launch_token = "token"}))
+                execution_generation = 1, registry_revision = "1", launch_token = "token"}))
             local reply = {version = 1, id = "view", instance_id = "instance", request_id = "close", action = "cancel"}
             test.not_nil(client.close_result(launch, "broker", reply))
             test.is_nil(client.close_result(launch, "stranger", reply))

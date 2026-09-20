@@ -203,6 +203,9 @@ def toolkit_reference() -> bytes:
     guide = (ROOT / "src/governance/guide.lua").read_text()
     client = (ROOT / "src/ui/application/client.lua").read_text()
     appearance = (ROOT / "src/ui/appearance.lua").read_text()
+    stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
+    stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
+    stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
     calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance
                                   + "".join(p.read_text() for p in apps))))
@@ -288,6 +291,31 @@ def toolkit_reference() -> bytes:
         "The native module reference is the `tty`, `appearance` and `filesystem` pages",
         "under `runtime/lua/` and `runtime/system/` in this corpus. The guide example in",
         "`src/governance/guide.lua` is the minimal working application.",
+        "",
+        "## Canonical UI Guide source",
+        "",
+        "These are the exact files used by Bee's runnable **Tools → Learn → UI Guide**",
+        "in this revision. Copy its process/view split, resize handling, bounded cell",
+        "geometry and keyboard/mouse parity as a starting point. Keep application-specific",
+        "state and actions in the authored app; this reference is not a widget framework.",
+        "",
+        "### Registry manifest (`src/apps/stylebook/_index.yaml`)",
+        "",
+        "```yaml",
+        stylebook_manifest,
+        "```",
+        "",
+        "### Process (`src/apps/stylebook/app.lua`)",
+        "",
+        "```lua",
+        stylebook_app,
+        "```",
+        "",
+        "### Pure view (`src/apps/stylebook/view.lua`)",
+        "",
+        "```lua",
+        stylebook_view,
+        "```",
         "",
     ]
     return ("\n".join(sections)).encode("utf-8")

@@ -83,8 +83,11 @@ local function define_tests()
         end)
 
         test.it("accepts only bounded unfinished recovery bindings", function()
+            local revoked = binding("revoked", 3, 9, 1, 12)
+            revoked.instance_id = "instance-two"
+            revoked.actor_id = "bee.application:" .. WORKSPACE .. ":instance-two"
             local recovered = assert(protocol.recovery({version = 1, workspace_id = WORKSPACE,
-                items = {binding("pending", 1, nil, 0, nil), binding("revoked", 3, 9, 1, 12)}}, WORKSPACE))
+                items = {binding("pending", 1, nil, 0, nil), revoked}}, WORKSPACE))
             test.eq(#recovered.items, 2)
             local finished = binding("revoked", 3, 9, 0, nil)
             test.is_nil(protocol.recovery({version = 1, workspace_id = WORKSPACE, items = {finished}}, WORKSPACE))

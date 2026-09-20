@@ -72,6 +72,28 @@ local function main(owner: string, database_resource: string?)
     local snapshot: recovery.Snapshot = {version = 1,
         desktop = {scene = model.new(80, 24), tabs = empty_tabs, preferences = appearance.defaults()}, applications = empty_records}
     if database.saved then snapshot = database.saved end
+    -- A durable revoke is the logical close fence. The host may crash after
+    -- committing it and before the broker removes the older application
+    -- checkpoint. Reconcile that checkpoint before starting a broker so the
+    -- revoked instance cannot be restored with a fresh execution.
+    local retained_records: {recovery.Record} = {}
+    local fenced = false
+    for _, record in ipairs(snapshot.applications) do
+        local app_binding, binding_error = database.thread_bindings:get(record.instance_id)
+        if binding_error then database:close(); error("Read checkpoint application binding: " .. tostring(binding_error)) end
+        if app_binding and (app_binding.thread_id ~= record.thread_id
+            or app_binding.definition_id ~= record.definition_id) then
+            database:close(); error("Checkpoint application binding identity is corrupt")
+        end
+        if app_binding and app_binding.state == "revoked" then fenced = true
+        else retained_records[#retained_records + 1] = record end
+    end
+    if fenced then
+        local reconciled: recovery.Snapshot = {version = 1, desktop = snapshot.desktop, applications = retained_records}
+        local committed, commit_error = database:write(reconciled)
+        if not committed then database:close(); error("Fence revoked application checkpoint: " .. tostring(commit_error)) end
+        snapshot = reconciled
+    end
     local live_inventory = inventory.new(workspace_id)
     local broker_policy, broker_error = security.policy("bee:broker_policy")
     if not broker_policy then database:close(); error(tostring(broker_error)) end
@@ -481,7 +503,7 @@ local function main(owner: string, database_resource: string?)
                     if type(data) == "table" and data.version == 1 and data.workspace_id == workspace_id
                         and contract.text(data.request_id, 80) and record then
                         local committed, err = replace_record(record)
-                        send("bee.application.persisted", {version = 1, request_id = data.request_id,
+                        process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
                             error_code = committed and "" or "persistence_failed", error = err or ""})
                         if committed then deliver("bee.host.checkpoint", {version = 1, workspace_id = workspace_id, record = record}) end
                     end
@@ -564,6 +586,7 @@ local function main(owner: string, database_resource: string?)
                                 if ready then connections.publish(client_connections, live_inventory, "views") end
                             end
                             if open_waiters then
+                                reply.workspace_id = workspace_id
                                 local assigned_display: string? = nil
                                 if reply.error_code == "" and open_waiters.display_id then
                                     local existing, assignment_error = database.assignments:get({view_id = reply.id, instance_id = reply.instance_id})

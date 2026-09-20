@@ -17,19 +17,84 @@ entries:
     actions: [process.send, tty.mount, tty.observe, tty.resize]
     resources: '*'
     effect: allow
-- name: gateway_policy
+- name: host_lookup_policy
   kind: security.policy.expr
   policy:
-    actions: [funcs.call, http_client.private_ip, http_client.request, process.registry.lookup,
-      bee.gateway.admit, bee.gateway.manage, bee.gateway.materialize]
+    actions: [process.registry.lookup]
     resources: '*'
-    expression: '((action == "funcs.call" && (resource == "bee.gateway:open" || resource == "bee.gateway:address" || resource == "bee.gateway:admit" || resource == "bee.gateway:authorize_materialization" || resource == "bee.gateway:materialize")) || (action == "http_client.private_ip" && resource == "127.0.0.1") || (action == "http_client.request" && resource matches "^http://127\\.0\\.0\\.1:[0-9]+/mcp/[a-z0-9-]+$") || (action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "bee.gateway.admit" && resource == "open-probe") || (action == "bee.gateway.manage" && (resource == "bindings" || resource == "listener")) || (action == "bee.gateway.materialize" && resource == "open-probe-attempt"))'
+    expression: 'action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$"'
+    effect: allow
+- name: managed_agent_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 10000
+    stop_grace_ms: 500
+    drain_ms: 2000
+    runner_drain_ms: 1000
+    fixture: true
+    executables: {}
+    environment:
+      BEE_FIXTURE_GATEWAY: '1'
+      BEE_FIXTURE_GATEWAY_APP_OPEN: '1'
+      BEE_FIXTURE_APP_DEFINITION: bee.app_journey_demo:app
+      BEE_FIXTURE_STREAM: ''
+    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    gateway_tools: [thread_read, thread_message, application_open]
+    gateway_surface:
+      tools: []
+      traits: []
+      base_tools: [thread_read, thread_message]
+      active_traits: []
+      fixed_context: {}
+      dynamic_keys: []
+      access: {workspace_id: pending, policy: app-open-runtime, traits: ['bee.application:runtime']}
+- name: managed_agent
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: app-open-managed-agent
+    title: Managed application opener
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.app_open_probe:managed_agent_policy
+    default_mode: batch
+    allowed_overrides: [brief, thread]
+    thread_policy: {kind: caller}
+    credentials: []
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: operator_signal_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.lookup]
+    resources: [bee.app_open_probe:operator]
+    effect: allow
+- name: operator_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.listen, process.send, process.monitor]
+    resources: '*'
+    effect: allow
+- name: operator_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway:address, bee.gateway:open,
+      bee.harness.launch:resolve, bee.harness.launch:start,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
     effect: allow
 - name: seed
   kind: process.lua
   source: file://seed.lua
   method: main
-  modules: [funcs, http_client, json, time, channel, process, tty, fs]
+  modules: [json, time, channel, process, tty, fs, security]
   meta:
     type: bee.application
     application:
@@ -44,4 +109,31 @@ entries:
     bounds: bee.threads.records:bounds
   security:
     policies: [bee.app_open_probe:view_policy, bee.app_open_probe:evidence_policy,
-      bee.app_open_probe:gateway_policy]
+      bee.app_open_probe:host_lookup_policy, bee.app_open_probe:operator_signal_policy]
+- name: operator
+  kind: process.lua
+  source: file://operator.lua
+  method: main
+  modules: [process, channel, time, funcs, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    thread_binding: bee.applications:thread_binding
+  security:
+    policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
+      bee:gateway_manage_policy,
+      bee:approval_decide_policy, bee.inbox:client_policy, bee:thread_authority_client_policy,
+      bee:thread_create_policy, bee:thread_observe_policy,
+      bee.harness.launch:agent_launch_execution_action_policy]
+- name: operator_service
+  kind: process.service
+  process: bee.app_open_probe:operator
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.app_open.operator}
+      policies: [bee.app_open_probe:operator_policy, bee.app_open_probe:operator_call_policy,
+        bee:gateway_manage_policy,
+        bee:approval_decide_policy, bee.inbox:client_policy, bee:thread_authority_client_policy,
+        bee:thread_create_policy, bee:thread_observe_policy,
+        bee.harness.launch:agent_launch_execution_action_policy]

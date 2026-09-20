@@ -20,9 +20,11 @@ entries:
     open_protocol: bee.applications:open_protocol
     binding_protocol: bee.host:binding_protocol
     thread_binding: bee.applications:thread_binding
+    thread_binding_reducer: bee.applications:thread_binding_reducer
     thread_protocol: bee.applications:thread_protocol
   security:
-    policies: [bee:broker_policy]
+    policies: [bee:broker_policy, bee:application_thread_membership_policy,
+      bee:application_thread_facade_policy]
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
@@ -77,6 +79,11 @@ entries:
   source: file://thread_binding.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: thread_binding_reducer
+  kind: library.lua
+  source: file://thread_binding_reducer.lua
+  imports:
+    binding_protocol: bee.host:binding_protocol
 - name: open_call
   kind: function.lua
   source: file://open_method.lua

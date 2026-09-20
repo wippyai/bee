@@ -268,6 +268,9 @@ func runGateway(mcpLiteral string) int {
 	if os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR") != "" {
 		reportAuthoring(client, url, authorization, report, os.Getenv("BEE_FIXTURE_GATEWAY_AUTHOR"))
 	}
+	if os.Getenv("BEE_FIXTURE_GATEWAY_APP_OPEN") != "" {
+		reportApplicationOpen(client, url, authorization, report)
+	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
 		reportSurface(client, url, authorization, report)
 	}
@@ -290,6 +293,85 @@ func runGateway(mcpLiteral string) int {
 	}
 	writeReport("gateway", report)
 	return 0
+}
+
+// The scripted application-opening agent uses only the MCP surface delivered
+// by its managed carrier. The host owns admission and credential delivery; the
+// child requests its declared trait, waits for the durable decision, selects
+// it, opens twice with distinct retry keys, and leaves its evidence on the
+// bound thread before exiting.
+func reportApplicationOpen(client *httpClient, url, authorization string, report object) {
+	call := func(name string, args object, id int) object {
+		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+	}
+	target := os.Getenv("BEE_FIXTURE_APP_DEFINITION")
+	if target == "" {
+		report["app_open_error"] = "target definition is missing"
+		return
+	}
+	// application_open belongs to the requested trait and must not be usable
+	// before the owner grants and the child selects that trait.
+	before := call("application_open", object{"definition_id": target, "arguments": []string{}, "idempotency_key": "unapproved-open"}, 60)
+	report["unapproved_refused"] = before == nil || before["ok"] != true
+	session := call("session", object{"operation": "read"}, 61)
+	report["session_read"] = session != nil && session["ok"] == true
+	requested := call("session", object{"operation": "request_access", "idempotency_key": "app-open-runtime",
+		"traits": []string{"bee.application:runtime"}, "reason": "Open the reviewed application and report its bound thread progress"}, 62)
+	report["app_open_request"] = requested
+	if requested == nil || requested["ok"] != true {
+		report["app_open_error"] = "access request failed"
+		return
+	}
+	requestValue := mustObject(requested["value"])
+	approvalID := stringField(requestValue, "approval_id")
+	report["approval_id"] = approvalID
+	var granted object
+	for attempt := 0; attempt < 300 && approvalID != ""; attempt++ {
+		status := call("session", object{"operation": "access_status", "approval_id": approvalID}, 63+attempt)
+		value := mustObject(status["value"])
+		if stringField(value, "status") == "granted" {
+			granted = value
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if granted == nil {
+		report["app_open_error"] = "access was not granted"
+		return
+	}
+	revision, ok := granted["revision"].(float64)
+	if !ok || revision < 1 {
+		report["app_open_error"] = "grant revision is missing"
+		return
+	}
+	selected := call("session", object{"operation": "select", "expected_revision": int(revision),
+		"active_traits": []string{"bee.application:runtime"}, "context": object{}}, 400)
+	report["selected"] = selected != nil && selected["ok"] == true
+	first := call("application_open", object{"definition_id": target, "arguments": []string{}, "idempotency_key": "open-first"}, 401)
+	second := call("application_open", object{"definition_id": target, "arguments": []string{}, "idempotency_key": "open-second"}, 402)
+	report["app_open_first"], report["app_open_second"] = first, second
+	if first == nil || second == nil || first["ok"] != true || second["ok"] != true {
+		report["app_open_error"] = "application open failed"
+		return
+	}
+	firstValue, secondValue := mustObject(first["value"]), mustObject(second["value"])
+	if firstValue == nil || secondValue == nil {
+		report["app_open_error"] = "application open returned no identity"
+		return
+	}
+	proof := object{"schema": "managed-app-open.v1", "approval_id": approvalID,
+		"unapproved_refused": report["unapproved_refused"], "selected": report["selected"],
+		"first_instance": firstValue["instance_id"], "second_instance": secondValue["instance_id"],
+		"first_view": firstValue["view_id"], "second_view": secondValue["view_id"],
+		"first_display": firstValue["display_id"], "second_display": secondValue["display_id"]}
+	encoded, err := json.Marshal(proof)
+	if err != nil {
+		report["app_open_error"] = err.Error()
+		return
+	}
+	posted := call("thread_message", object{"idempotency_key": "managed-app-open-proof", "message_id": "managed-app-open-proof",
+		"message_kind": "progress", "recipient_ids": []string{}, "content": object{"text": string(encoded)}}, 403)
+	report["app_open_posted"] = posted != nil && posted["ok"] == true
 }
 
 // The scripted orchestrator agent. It starts exactly one allow-listed child

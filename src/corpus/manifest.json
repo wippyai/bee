@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 29414,
+      "bytes": 30769,
       "id": "docs/application_contracts",
-      "sha256": "8cf4bb77af7f90717420e1d9afdd9a7ea8f857e00c3aa1b8d20894b9f6b54fd4",
+      "sha256": "e322e7933a16b57579043972b59efc10d1958a4751521ab0eb3a97f80d9215ac",
       "source": "docs/APPLICATION_CONTRACTS.md",
       "title": "Application contracts (development version 1)",
       "topic": "application"
@@ -907,9 +907,9 @@
       "topic": "application"
     },
     {
-      "bytes": 31216,
+      "bytes": 31631,
       "id": "docs/gateway",
-      "sha256": "297e77ec8ad21c4e382fd39ea53969754a1d664a0dac481920a35511cc021383",
+      "sha256": "fdf7c0dbba7bea29355d7f6ffe0c6c8a1c5d0e1f62d542e499d8d952cbbd94f2",
       "source": "docs/GATEWAY.md",
       "title": "Gateway (build sequence step 9, harness lane)",
       "topic": "gateway"
@@ -1027,9 +1027,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 3586,
+      "bytes": 4391,
       "id": "docs/storage",
-      "sha256": "a0d6a56e4b4e47cf21223d22f0f2286977fbceb48560d9e980eb06c6919c31a3",
+      "sha256": "6ec4b8bf69ecc2905a7a72d417f964656d0b2d2a6c39ce721558ff10699cb503",
       "source": "docs/STORAGE.md",
       "title": "Workspace storage",
       "topic": "storage"
@@ -1310,7 +1310,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2160328,
+    "bytes": 2163592,
     "documents": 163
   }
 }

@@ -23,11 +23,11 @@ contextual discoverability, never authority. Only protected
 `bee:application_admission.bindings` selects allowed definitions, policy IDs and
 operation grants (`appearance_write`, `application_stop`, `catalog_read`). It may
 also select the bounded `thread_access` value `none` or `observe_post`; omission
-means `none`. `observe_post` is the first narrow application-thread contract: the
-exact admitted application revision may later receive a broker-bound facade for
-reading, subscriptions and posting. It does not grant raw Threads policies or
-thread storage. Application metadata and launch arguments cannot select this
-value.
+means `none`. `observe_post` is the narrow application-thread contract: the
+exact admitted application revision may receive a broker-bound facade for
+reading, subscriptions and posting on the initiating agent's bound thread. It
+does not grant raw Threads policies or thread storage. Application metadata and
+launch arguments cannot select this value.
 Executable source or configuration changes require a new application revision;
 one revision identifies one exact runnable definition.
 
@@ -87,9 +87,28 @@ the runtime's scope-creation denial. This does not prove authenticated provider
 turns or production process-tree cleanup.
 
 Thread access is decoded with the protected binding and retained in the catalog
-comparison so an admission refresh observes a change. It is descriptive until
-the broker's bound-thread facade is implemented; no current application receives
-thread access from this field alone.
+comparison so an admission refresh observes a change. Access requires both the
+exact admitted revision's `observe_post` selection and a live agent grant for
+`bee.application:runtime`. The broker creates a durable binding to the
+originating thread and exposes seven operations to the authenticated current
+execution: `read`, `post`, `subscribe`, `page`, `ack_page`, `resume` and
+`unsubscribe`. Requests carry the logical instance, launch token and execution
+generation; they never carry a caller-selected thread, actor, workspace,
+membership or grant. The broker rechecks the durable binding and exact Threads
+membership revision for every operation and injects the stable host-derived
+application actor. Applications receive neither raw Threads policies nor the
+binding store.
+
+Explicit close first commits the durable revoke fence and disables the facade,
+then removes the execution while membership cleanup may continue. Recovery
+treats unavailable membership state as unknown rather than absent and never
+adopts or removes a different membership revision. Live acceptance pauses the
+host after the revoke row commits and before its broker reply, observes the old
+application still present, crashes the runtime, and proves the next boot
+completes cleanup without restoring the revoked checkpoint. Compatible
+execution replacement retains the logical delegation, while the old launch
+token and generation cease to authenticate; live replacement credential
+acceptance remains required before that claim is release evidence.
 
 The admitted icon is copied into the window's presentation state. Settings can
 select compact icon tabs; the taskbar clips icons to two terminal cells and falls

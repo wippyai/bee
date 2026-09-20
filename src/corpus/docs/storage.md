@@ -38,7 +38,7 @@ be a JSON object with `version = 1` and is limited to 2 MiB. The storage layer
 checks syntax and the top-level version; the workspace protocol validates
 desktop geometry, preferences, application identities and opaque resume records.
 
-The database uses three tables. Migration 2 adds `workspace_identity`, a
+The database uses four workspace-owned tables. Migration 2 adds `workspace_identity`, a
 singleton containing an opaque 32-character lowercase hexadecimal ID. It is
 generated once inside the migration transaction, independently from the state
 envelope. This ID names a workspace; it does not grant authority. There is no
@@ -62,3 +62,15 @@ compare-and-swap predicate, so a stale transaction cannot overwrite a newer
 commit. The value is validated before the transaction and again before
 replacing an existing row; malformed or oversized state remains an error and
 is never silently discarded.
+
+Migration 4 adds `workspace_application_thread_bindings`, keyed by the logical
+`instance_id`. The core-only `bee.storage:thread_bindings` helper prepares one
+immutable `{thread_id, definition_id, actor_id, role}` identity with one bounded
+idempotency key, then advances its revision through `pending`, `active` and
+`revoked` with expected revision/state compare-and-swap checks. Exact prepare
+retries replay the stored row; changed identity or key input conflicts. Revocation
+is durable before any owner performs external cleanup and cannot be undone.
+Recovery lists only pending and active rows, while revoked rows remain as
+tombstones. The row contains no process, launch, mount, scope, execution,
+database or application-data fields, and the helper is not part of ordinary app
+imports.

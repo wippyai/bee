@@ -77,7 +77,7 @@ governance-overlay-composed-base-check:
 # applied by the activation owner, admitted, opened from the desktop catalog
 # and restored with its state after a host restart. The same gate also calls
 # application_open over the real MCP listener in source and packed launches.
-app-journey-check:
+app-journey-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_journey.py
 .PHONY: delivery-review-check
 # What a person approves: the destination's own verdict, the diagnostics that

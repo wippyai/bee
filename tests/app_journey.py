@@ -55,7 +55,8 @@ def bind_admission(project):
     document = yaml.safe_load(index.read_text())
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
     admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                  "policies": ["bee:ordinary_app_subsystem_boundary"]})
+                                  "policies": ["bee:ordinary_app_subsystem_boundary"],
+                                  "thread_access": "observe_post"})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -174,10 +175,30 @@ def add_open_admission(project):
                      if entry["name"] == "application_admission")
     admission["bindings"].append({
         "definition_id": OPEN_SEED,
-        "policies": ["bee.app_open_probe:view_policy", "bee.app_open_probe:gateway_policy",
-                      "bee.app_open_probe:evidence_policy"],
-    })
+        "policies": ["bee.app_open_probe:view_policy", "bee.app_open_probe:host_lookup_policy",
+                      "bee.app_open_probe:evidence_policy", "bee.app_open_probe:operator_signal_policy"]})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def configure_open_agent(project):
+    """Bind the scripted executable at the fixture edge; the managed carrier
+    still owns gateway admission, materialization and revocation."""
+    index = project / "src/open_probe/_index.yaml"
+    document = yaml.safe_load(index.read_text())
+    policy = next(entry for entry in document["entries"] if entry["name"] == "managed_agent_policy")
+    policy["data"]["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
+    policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
+        str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
+    index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+    approvals = project / "src/approvals/_index.yaml"
+    approval_document = yaml.safe_load(approvals.read_text())
+    approvers = next(entry for entry in approval_document["entries"]
+                     if entry["name"] == "approver_policies")
+    approvers["policies"].append({"name": "app-open-runtime",
+                                  "approvers": ["bee.app_open.operator"],
+                                  "max_ttl_ms": 60000})
+    approvals.write_text(yaml.safe_dump(approval_document, sort_keys=False))
 
 
 def run_open_probe(project, directory, packed=False, pack_file=None):
@@ -218,18 +239,28 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
             evidence = report_path
             detail = evidence.read_text() if evidence.exists() else "missing"
             raise AssertionError(f"{problem}; open evidence={detail}") from problem
-        ui.quit()
+        # This first desktop owns the managed runner whose declared output
+        # drain is 2s plus a 1s runner drain. Prove that bounded cleanup rather
+        # than applying the ordinary sub-second desktop-only shutdown budget.
+        started = time.monotonic()
+        os.write(ui.master, b"\x11")
+        while ui.process.poll() is None and time.monotonic() - started < 4:
+            ui.pump(.02)
+        assert ui.process.poll() == 0, ui.text()
+        assert time.monotonic() - started < 4
     finally:
         ui.close()
     assert report_path.exists(), f"open probe did not write evidence: {ui.text()}"
     report = json.loads(report_path.read_text())
     assert report["passed"] is True, report
-    assert report["first_id"] and report["first_id"] == report["replay_id"], report
-    assert report["same_instance"] is True and report["replayed"] is True, report
-    assert report["conflict_code"] == "request_conflict", report
-    assert report["missing_code"] == "not_admitted", report
-    assert report["spoofed_code"] == "INVALID_PARAMS", report
-    assert report["direct_sender_code"] == "permission_denied", report
+    assert report["first_id"] and report["second_id"], report
+    assert report["first_id"] != report["second_id"], report
+    assert report["first_instance"] != report["second_instance"], report
+    assert report["access_approval_id"], report
+    assert report["unapproved_refused"] is True and report["agent_exited"] is True, report
+    assert report["first_thread_proof"]["instance_id"] == report["first_instance"], report
+    assert report["second_thread_proof"]["instance_id"] == report["second_instance"], report
+    assert report["direct_sender_refused"] is True, report
     restarted = Desktop(directory, packed=packed, project=project, pack_file=pack_file)
     try:
         restarted.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
@@ -249,6 +280,74 @@ def copy_activation(source, destination):
                 origin.backup(target)
 
 
+def binding_rows(root, instance_ids):
+    with sqlite3.connect(Path(root) / "workspace.db") as db:
+        rows = db.execute(
+            "SELECT instance_id, state, cleanup_pending FROM workspace_application_thread_bindings "
+            f"WHERE instance_id IN ({','.join('?' for _ in instance_ids)}) ORDER BY instance_id",
+            tuple(instance_ids)).fetchall()
+    return {instance_id: (state, cleanup_pending)
+            for instance_id, state, cleanup_pending in rows}
+
+
+def wait_binding(root, instance_ids, predicate, timeout=5):
+    deadline = time.monotonic() + timeout
+    while True:
+        rows = binding_rows(root, instance_ids)
+        selected = predicate(rows)
+        if selected is not None:
+            return selected
+        assert time.monotonic() < deadline, rows
+        time.sleep(.02)
+
+
+def saved_instances(root):
+    with sqlite3.connect(Path(root) / "workspace.db") as db:
+        row = db.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
+    assert row, "workspace checkpoint is missing"
+    return {item["instance_id"] for item in json.loads(row[0])["applications"]}
+
+
+def revoke_crash_recovery(project, source_root, report, destination):
+    """Crash after the durable revoke fence and before Threads leave.
+
+    The pause exists only in this disposable source copy. Production receives
+    no test switch or timing branch.
+    """
+    shutil.copytree(source_root, destination)
+    host = project / "src/core/host/main.lua"
+    original = host.read_text()
+    anchor = "            value, operation_error = database.thread_bindings:begin_revoke(request.value)\n"
+    assert original.count(anchor) == 1
+    host.write_text(original.replace(
+        anchor,
+        anchor + "            if value and not operation_error then while true do time.sleep(\"1s\") end end\n"))
+    instance_ids = [report["first_instance"], report["second_instance"]]
+    ui = Desktop(destination, project=project)
+    try:
+        ui.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
+        assert all(value == ("active", 0) for value in binding_rows(destination, instance_ids).values())
+        ui.window_control("×")
+        revoked = wait_binding(
+            destination, instance_ids,
+            lambda rows: next((instance_id for instance_id, value in rows.items()
+                               if value == ("revoked", 1)), None))
+        assert ui.process.poll() is None and "APP JOURNEY DELIVERED" in ui.text(), ui.text()
+    finally:
+        ui.close()
+        host.write_text(original)
+
+    restarted = Desktop(destination, project=project)
+    try:
+        restarted.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
+        wait_binding(destination, instance_ids,
+                     lambda rows: revoked if rows.get(revoked) == ("revoked", 0) else None)
+        assert revoked not in saved_instances(destination)
+        restarted.quit()
+    finally:
+        restarted.close()
+
+
 def exercise():
     with tempfile.TemporaryDirectory(prefix="bee-app-journey-") as directory, \
             patch.dict(os.environ, {"WIPPY_NODE_ID": Path(directory).name}):
@@ -264,6 +363,7 @@ def exercise():
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)
         add_open_admission(project)
+        configure_open_agent(project)
         shutil.copytree(ROOT / "tests/modules/gateway/src/managed", project / "src/managed")
         configure_managed_gateway(project)
         assert_overlay_authority(project)
@@ -279,6 +379,9 @@ def exercise():
         open_source_root.mkdir()
         copy_activation(folder, open_source_root)
         open_source = run_open_probe(project, open_source_root)
+
+        revoke_crash_recovery(project, open_source_root, open_source,
+                              folder / "open-revoke-crash")
 
         # No application is opened from the command line: the approved
         # definition has to be selectable from the desktop's own catalog.
@@ -320,8 +423,7 @@ def exercise():
         assert_shared_database(packed_root)
         open_packed = run_open_probe(project, packed_root, packed=True,
                                      pack_file=pack_file)
-        for field in ("replayed", "same_instance", "conflict_code", "missing_code",
-                      "spoofed_code", "direct_sender_code"):
+        for field in ("unapproved_refused", "agent_exited", "direct_sender_refused"):
             assert open_source[field] == open_packed[field], (field, open_source, open_packed)
     print("App journey guide: the MCP guide example authored as "
           + guide_evidence["definition_id"] + " reached a ready preflight as plan "
@@ -331,9 +433,9 @@ def exercise():
           + " with a ready preflight, approved on proposal " + evidence["proposal_digest"][:12]
           + " with the second consume refused, applied on the reviewed composed base, admitted, "
             "opened from the desktop catalog and restored with its state after a host restart")
-    print("Application open: source and packed MCP bindings opened the applied app, "
-          "replayed to the same instance, and rejected conflict, unadmitted, spoofed, "
-          "and unauthorized direct-host requests")
+    print("Application open: source and packed managed agents received one approved runtime trait, "
+          "opened two distinct bound applications, proved both thread facades, and exited while "
+          "the applications remained live")
 
 
 if __name__ == "__main__":

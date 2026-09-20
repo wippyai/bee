@@ -20,6 +20,7 @@ local shutdown = require("shutdown")
 local funcs = require("funcs")
 local open_protocol = require("open_protocol")
 local binding_protocol = require("binding_protocol")
+local thread_binding_reducer = require("thread_binding_reducer")
 local thread_binding = require("thread_binding")
 local thread_protocol = require("thread_protocol")
 type Admission = {revision: string, bindings: {contract.Binding}, items: {contract.Descriptor},
@@ -32,13 +33,12 @@ type Replacement = {revision: string, exited: boolean}
 type Instance = {view_id: string, instance_id: string, thread_id: string?, execution_pid: string, view: tty.Viewport,
     descriptor: contract.Descriptor, binding: contract.Binding, attachment: attachment.Record?, observers: {[string]: string}, launch_token: string,
     producer_generation: integer, arguments: {string}, replacement: Replacement?, client_appearance_revision: number?, negotiate_close: boolean?, close_request_id: string?, announced_title: string?, title_dirty: boolean?, state: lifecycle.State, open_request: string, opened: boolean, resume_state: string, waiters: {Waiter}, attempts: integer}
-type RuntimeOpen = {request: contract.Request, provenance: open_protocol.Provenance,
+type BindingOpen = {request: contract.Request, provenance: open_protocol.Provenance,
     descriptor: contract.Descriptor, binding: contract.Binding, scope: security.Scope,
-    view_id: string, instance_id: string, actor_id: string, binding_request_id: string,
-    stored: binding_protocol.Binding?, existing: boolean, refreshed_join: boolean,
-    refreshed_cleanup: boolean, failure_code: string?, failure_message: string?}
-type RecoveryWork = {stored: binding_protocol.Binding, binding_request_id: string,
-    refreshed_join: boolean, refreshed_cleanup: boolean}
+    view_id: string, instance_id: string, existing: boolean}
+type BindingCoordinator = {instance_id: string, state: thread_binding_reducer.State, open: BindingOpen?, retry_at: number,
+    failure_code: string?, failure_message: string?, stop_event: lifecycle.Event?, settle_after_revoke: boolean?,
+    effect: thread_binding_reducer.Effect?}
 local function now(): number return time.now():unix_nano() / 1000000000 end
 local function application_actor(workspace_id: string, instance_id: string, definition_id: string,
     definition_revision: string, execution_generation: integer): security.Actor
@@ -77,9 +77,9 @@ local function main(owner: string, initial_preferences: unknown)
     local ticks = ticker:channel()
     local admission: {current: Admission?, error: string} = {error = ""}
     local instances: {[string]: Instance} = {}
-    local durable_bindings: {[string]: binding_protocol.Binding} = {}
+    local coordinators: {[string]: BindingCoordinator} = {}
     local recovery_received = false
-    local runtime_opens: {[string]: RuntimeOpen} = {}
+    local binding_requests: {[string]: string} = {}
     local membership_policy = assert(security.policy("bee:application_thread_membership_policy"))
     local membership_scope = security.new_scope({membership_policy})
     local facade_policy = assert(security.policy("bee:application_thread_facade_policy"))
@@ -133,9 +133,21 @@ local function main(owner: string, initial_preferences: unknown)
     local recipient = ""
     local preferences = appearance.decode(initial_preferences) or appearance.defaults()
     local preference_waiters: {[string]: PreferenceWaiter} = {}
+    local function current_application(definition_id: string): (contract.Descriptor?, contract.Binding?, security.Scope?)
+        local current = admission.current
+        if not current then return nil, nil, nil end
+        local selected: contract.Binding? = nil
+        for _, candidate in ipairs(current.bindings) do
+            if candidate.definition_id == definition_id then selected = candidate; break end
+        end
+        return current.descriptors[definition_id], selected, current.scopes[definition_id]
+    end
     -- Admission refresh enters the same termination path as explicit close.
     -- The function is assigned below before the first refresh call.
     local transition: (Instance, lifecycle.Event) -> ()
+    local find_instance: (string) -> Instance?
+    local find_pid: (string) -> Instance?
+    local settle_exited_replacement: (Instance, boolean) -> boolean
     -- Reconcile one protected registry snapshot. Compatible automatic
     -- producers may follow a later revision through the replacement path below.
     local function refresh_admission(initial: boolean?)
@@ -225,192 +237,212 @@ local function main(owner: string, initial_preferences: unknown)
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
         return reply
     end
-    local function runtime_value(work: RuntimeOpen): {[string]: unknown}
-        return work.stored or {instance_id = work.instance_id, thread_id = work.provenance.thread_id,
-            actor_id = work.actor_id, role = "participant", initiating_owner_id = work.provenance.initiating_owner}
+    local launch_binding: (BindingCoordinator) -> ()
+    local drive_binding: (BindingCoordinator, thread_binding_reducer.Event) -> ()
+    local function fail_binding(coordinator: BindingCoordinator, code: string, message: string)
+        coordinator.failure_code, coordinator.failure_message = code, message
+        drive_binding(coordinator, {kind = "revoke"})
     end
-    local function fail_runtime(work: RuntimeOpen, code: string, message: string)
-        emit(contract.reply(work.request.request_id, "open", code, message), true)
-    end
-    local function send_binding(work: RuntimeOpen, op: string, value: {[string]: unknown})
-        local request_id = uuid.v7()
-        local request = binding_protocol.request({version = 1, workspace_id = workspace_id,
-            request_id = request_id, op = op, value = value}, workspace_id)
-        if not request then error("Constructed an invalid application thread binding request") end
-        work.binding_request_id = request_id
-        runtime_opens[request_id] = work
-        local sent, send_error = process.send(owner, "bee.application.binding.request", request)
-        if not sent then
-            runtime_opens[request_id] = nil
-            fail_runtime(work, "unavailable", tostring(send_error or "Workspace binding owner is unavailable"))
+    local function complete_binding(coordinator: BindingCoordinator, terminal: string)
+        if terminal == "active" then
+            if coordinator.open then launch_binding(coordinator) end
+        elseif terminal == "retry" then
+            coordinator.retry_at = now() + 0.2
+        elseif terminal == "cleanup_pending" then
+            coordinator.retry_at = now() + 1
+        else
+            local binding = coordinator.state.binding
+            if terminal == "failed" and binding then
+                -- A failed host reply does not prove the durable row vanished.
+                -- Re-enter recovery on the next bounded tick rather than
+                -- losing the only delegation record.
+                coordinator.retry_at = now() + 0.2
+                return
+            end
+            if coordinator.open then
+                local open = coordinator.open
+                emit(contract.reply(open.request.request_id, "open", coordinator.failure_code or "permission_denied",
+                    coordinator.failure_message or "Application thread access was revoked"), true)
+            end
+            for request_id, instance_id in pairs(binding_requests) do
+                if instance_id == coordinator.instance_id then binding_requests[request_id] = nil end
+            end
+            coordinators[coordinator.instance_id] = nil
         end
     end
-    local function prepare_runtime(work: RuntimeOpen)
-        local value = runtime_value(work)
-        local get = thread_binding.get_request(value, workspace_id)
-        if not get then fail_runtime(work, "permission_denied", "Application thread identity is invalid"); return end
-        local owner_reply = thread_call(work.provenance.initiating_owner, "bee.threads.service:get", get)
-        local head_revision = thread_binding.owner_get(owner_reply, value, workspace_id)
-        if not head_revision then fail_runtime(work, "permission_denied", "Only the current thread owner may delegate application access"); return end
-        send_binding(work, "prepare", {instance_id = work.instance_id, thread_id = work.provenance.thread_id,
-            definition_id = work.descriptor.definition_id, actor_id = work.actor_id, role = "participant",
-            idempotency_key = work.request.request_id, definition_revision = work.descriptor.definition_revision,
-            initiating_owner_id = work.provenance.initiating_owner, gateway_binding_id = work.provenance.binding_id,
-            gateway_approval_id = work.provenance.access_approval_id,
-            gateway_proposal_digest = work.provenance.access_proposal_digest,
-            access = "observe_post", join_expected_revision = head_revision})
+    local function run_binding_effect(coordinator: BindingCoordinator, effect: thread_binding_reducer.Effect?)
+        if not effect then return end
+        coordinator.effect = effect
+        if type(effect) == "string" then complete_binding(coordinator, effect); return end
+        local binding = coordinator.state.binding
+        if effect.kind == "host" then
+            local request_id = uuid.v7()
+            local request = binding_protocol.request({version = 1, workspace_id = workspace_id,
+                request_id = request_id, op = effect.op, value = effect.value}, workspace_id)
+            if not request then error("Reducer produced an invalid application binding request") end
+            binding_requests[request_id] = binding and binding.instance_id or coordinator.open and coordinator.open.instance_id or ""
+            local sent = process.send(owner, "bee.application.binding.request", request)
+            if not sent then
+                binding_requests[request_id] = nil
+                -- Nothing reached the host. Keep the reducer's outstanding
+                -- host effect and replay that exact request on a bounded tick.
+                coordinator.retry_at = now() + 0.2
+            else
+                coordinator.effect = nil
+            end
+        elseif not binding then
+            complete_binding(coordinator, "failed")
+        elseif effect.kind == "membership" then
+            local get = thread_binding.get_request(binding, workspace_id)
+            if effect.principal == "application" then
+                local reply = get and thread_call(binding.actor_id, "bee.threads.service:get", get) or nil
+                local status = thread_binding.application_status(reply, binding, workspace_id)
+                drive_binding(coordinator, {kind = "membership", principal = "application", purpose = effect.purpose,
+                    state = status.state, head_revision = status.head_revision, membership_revision = status.membership_revision})
+            else
+                local reply = get and thread_call(binding.initiating_owner_id, "bee.threads.service:get", get) or nil
+                local purpose = effect.purpose
+                if not purpose then error("Reducer membership effect has no purpose") end
+                local revision = purpose == "cleanup_refresh" and thread_binding.owner_head(reply, binding, workspace_id)
+                    or thread_binding.owner_get(reply, binding, workspace_id)
+                local state: "active" | "unknown" = "unknown"
+                if revision then state = "active" end
+                local event: thread_binding_reducer.Event = {kind = "membership", principal = "owner", purpose = purpose,
+                    state = state, head_revision = revision, membership_revision = nil}
+                drive_binding(coordinator, event)
+            end
+        elseif effect.kind == "join" then
+            local request = thread_binding.join_request(binding, workspace_id, binding.idempotency_key, effect.expected_revision)
+            local reply, err = nil, nil
+            if request then reply, err = thread_call(binding.initiating_owner_id, "bee.threads.service:join", request) end
+            local decoded = thread_binding.reply(reply)
+            local outcome = decoded and decoded.ok and "success" or decoded and decoded.error and decoded.error.code == "CONFLICT" and "conflict" or "unknown"
+            if err then outcome = "unknown" end
+            drive_binding(coordinator, {kind = "join", outcome = outcome})
+        else
+            local request = thread_binding.leave_request(binding, workspace_id, binding.idempotency_key .. "-leave", effect.expected_revision)
+            local reply = request and thread_call(binding.initiating_owner_id, "bee.threads.service:leave", request) or nil
+            local decoded = thread_binding.reply(reply)
+            local outcome = decoded and decoded.ok and "success" or decoded and decoded.error and decoded.error.code == "CONFLICT" and "conflict" or "unknown"
+            drive_binding(coordinator, {kind = "leave", outcome = outcome})
+        end
+    end
+    drive_binding = function(coordinator: BindingCoordinator, event: thread_binding_reducer.Event)
+        local was_revoke = event.kind == "host" and event.op == "begin_revoke" and event.outcome == "success"
+        local state, effect = thread_binding_reducer.reduce(coordinator.state, event)
+        coordinator.state = state
+        if was_revoke and coordinator.open and coordinator.failure_code then
+            local open = coordinator.open
+            emit(contract.reply(open.request.request_id, "open", coordinator.failure_code,
+                coordinator.failure_message or "Application thread access was revoked"), true)
+            coordinator.open = nil
+        end
+        if was_revoke and coordinator.stop_event then
+            local item = coordinator.state.binding and find_instance(coordinator.state.binding.instance_id)
+            if item and coordinator.settle_after_revoke then settle_exited_replacement(item, true)
+            elseif item then transition(item, coordinator.stop_event) end
+            coordinator.stop_event = nil
+            coordinator.settle_after_revoke = nil
+        end
+        run_binding_effect(coordinator, effect)
     end
     local function begin_runtime(req: contract.Request, provenance: open_protocol.Provenance,
         descriptor: contract.Descriptor, binding: contract.Binding, scope: security.Scope, existing: Instance?)
-        if binding.thread_access ~= "observe_post" then
-            emit(contract.reply(req.request_id, "open", "permission_denied", "Application admission does not allow thread access"), true)
+        if binding.thread_access ~= "observe_post" or provenance.thread_id ~= req.thread_id
+            or provenance.subject ~= provenance.initiating_owner then
+            emit(contract.reply(req.request_id, "open", "permission_denied", "Application runtime provenance is not admitted"), true)
             return
         end
-        if provenance.thread_id ~= req.thread_id or provenance.subject ~= provenance.initiating_owner then
-            emit(contract.reply(req.request_id, "open", "permission_denied", "Application runtime provenance does not match the bound thread owner"), true)
-            return
-        end
-        local instance_id = existing and existing.instance_id or uuid.v7()
-        local view_id = existing and existing.view_id or uuid.v7()
-        local actor_id = thread_binding.actor(workspace_id, instance_id)
-        if not actor_id then emit(contract.reply(req.request_id, "open", "permission_denied", "Application identity is invalid"), true); return end
-        local durable = durable_bindings[instance_id]
-        if durable then
-            if durable.state ~= "active" or durable.thread_id ~= provenance.thread_id
-                or durable.definition_id ~= descriptor.definition_id or durable.actor_id ~= actor_id then
+        local instance_id, view_id = existing and existing.instance_id or uuid.v7(), existing and existing.view_id or uuid.v7()
+        local active = coordinators[instance_id]
+        if active then
+            local stored = active.state.binding
+            if not stored or stored.state ~= "active" or stored.thread_id ~= provenance.thread_id
+                or stored.definition_id ~= descriptor.definition_id or stored.initiating_owner_id ~= provenance.initiating_owner then
                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Application instance has another thread delegation"), true)
             elseif existing and existing.state.phase == "ready" then
-                existing.thread_id = durable.thread_id
-                emit(identified(existing, "focus", req.request_id), true)
-            else
-                emit(contract.reply(req.request_id, "open", "busy", "Application binding recovery is incomplete"), true)
-            end
+                local get = thread_binding.get_request(stored, workspace_id)
+                local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
+                if not thread_binding.owner_get(owner_reply, stored, workspace_id) then
+                    emit(contract.reply(req.request_id, "open", "permission_denied", "Only the current thread owner may open the bound application"), true)
+                else
+                    local member_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+                    local membership = thread_binding.application_status(member_reply, stored, workspace_id)
+                    if membership.state == "unknown" then
+                        emit(contract.reply(req.request_id, "open", "uncertain", "Application thread membership could not be verified"), true)
+                    elseif membership.state ~= "active" or membership.membership_revision ~= stored.membership_revision then
+                        drive_binding(active, {kind = "revoke"})
+                        emit(contract.reply(req.request_id, "open", "permission_denied", "Application thread membership changed"), true)
+                    else
+                        existing.thread_id = stored.thread_id
+                        emit(identified(existing, "focus", req.request_id), true)
+                    end
+                end
+            else emit(contract.reply(req.request_id, "open", "busy", "Application binding recovery is incomplete"), true) end
             return
         end
-        local work: RuntimeOpen = {request = req, provenance = provenance, descriptor = descriptor,
-            binding = binding, scope = scope, view_id = view_id, instance_id = instance_id,
-            actor_id = actor_id, binding_request_id = "", stored = nil, existing = existing ~= nil,
-            refreshed_join = false, refreshed_cleanup = false, failure_code = nil, failure_message = nil}
-        prepare_runtime(work)
-    end
-    local function revoke_runtime(work: RuntimeOpen, code: string, message: string)
-        local stored = work.stored
-        if not stored then fail_runtime(work, code, message); return end
-        local get = thread_binding.get_request(stored, workspace_id)
-        local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
-        local head_revision = thread_binding.owner_get(owner_reply, stored, workspace_id)
+        local actor_id = thread_binding.actor(workspace_id, instance_id)
+        if not actor_id then emit(contract.reply(req.request_id, "open", "permission_denied", "Application identity is invalid"), true); return end
+        local provisional = {instance_id = instance_id, thread_id = provenance.thread_id, actor_id = actor_id,
+            role = "participant", initiating_owner_id = provenance.initiating_owner}
+        local get = thread_binding.get_request(provisional, workspace_id)
+        local owner_reply
+        if get then
+            owner_reply = thread_call(provenance.initiating_owner, "bee.threads.service:get", get)
+        end
+        local head_revision = thread_binding.owner_get(owner_reply, provisional, workspace_id)
         if not head_revision then
-            fail_runtime(work, "uncertain", "Application thread cleanup requires owner reconciliation")
+            emit(contract.reply(req.request_id, "open", "permission_denied", "Only the current thread owner may delegate application access"), true)
             return
         end
-        work.failure_code, work.failure_message = code, message
-        send_binding(work, "begin_revoke", {instance_id = stored.instance_id,
-            expected_revision = stored.binding_revision, expected_state = stored.state,
-            cleanup_expected_revision = head_revision})
+        local coordinator: BindingCoordinator = {instance_id = instance_id, state = thread_binding_reducer.new(), retry_at = 0,
+            open = {request = req, provenance = provenance, descriptor = descriptor, binding = binding, scope = scope,
+                view_id = view_id, instance_id = instance_id, existing = existing ~= nil}}
+        coordinators[instance_id] = coordinator
+        drive_binding(coordinator, {kind = "open", value = {instance_id = instance_id, thread_id = provenance.thread_id,
+            definition_id = descriptor.definition_id, actor_id = actor_id, role = "participant", idempotency_key = req.request_id,
+            definition_revision = descriptor.definition_revision, initiating_owner_id = provenance.initiating_owner,
+            gateway_binding_id = provenance.binding_id, gateway_approval_id = provenance.access_approval_id,
+            gateway_proposal_digest = provenance.access_proposal_digest, access = "observe_post", join_expected_revision = head_revision}})
     end
-    local function activate_runtime(work: RuntimeOpen, membership_revision: integer)
-        local stored = work.stored
-        if not stored then fail_runtime(work, "persistence_failed", "Application thread binding is absent"); return end
-        send_binding(work, "activate", {instance_id = stored.instance_id,
-            expected_revision = stored.binding_revision, expected_state = "pending",
-            membership_revision = membership_revision})
-    end
-    local function join_runtime(work: RuntimeOpen)
-        local stored = work.stored
-        if not stored then fail_runtime(work, "persistence_failed", "Application thread binding is absent"); return end
-        local join = thread_binding.join_request(stored, workspace_id, stored.idempotency_key, stored.join_expected_revision)
-        if not join then revoke_runtime(work, "permission_denied", "Application thread join is invalid"); return end
-        local join_reply, join_error = thread_call(stored.initiating_owner_id, "bee.threads.service:join", join)
-        local get = thread_binding.get_request(stored, workspace_id)
-        local app_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
-        local membership = thread_binding.application_get(app_reply, stored, workspace_id)
-        if membership then activate_runtime(work, membership.membership_revision); return end
-        local decoded = thread_binding.reply(join_reply)
-        if decoded and not decoded.ok and decoded.error and decoded.error.code == "CONFLICT" and not work.refreshed_join then
-            local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
-            local current = thread_binding.owner_get(owner_reply, stored, workspace_id)
-            if current then
-                work.refreshed_join = true
-                send_binding(work, "refresh_join", {instance_id = stored.instance_id,
-                    expected_revision = stored.binding_revision, expected_state = "pending",
-                    join_expected_revision = current})
-                return
-            end
+    launch_binding = function(coordinator: BindingCoordinator)
+        local open, stored = coordinator.open, coordinator.state.binding
+        if not open or not stored or stored.state ~= "active" then return end
+        local descriptor, binding, scope = current_application(open.descriptor.definition_id)
+        if not descriptor or descriptor.definition_revision ~= open.descriptor.definition_revision
+            or not binding or binding.thread_access ~= "observe_post" or not scope then
+            fail_binding(coordinator, "not_admitted", "Application admission changed while thread access was being admitted")
+            return
         end
-        revoke_runtime(work, join_error and "uncertain" or "permission_denied",
-            join_error and "Application thread join outcome is unknown" or "Application could not join the bound thread")
-    end
-    local function finish_cleanup(work: RuntimeOpen)
-        local stored = work.stored
-        if not stored then fail_runtime(work, "persistence_failed", "Application thread cleanup binding is absent"); return end
-        send_binding(work, "finish_revoke", {instance_id = stored.instance_id,
-            expected_revision = stored.binding_revision, expected_state = "revoked"})
-    end
-    local function cleanup_runtime(work: RuntimeOpen)
-        local stored = work.stored
-        if not stored then fail_runtime(work, "persistence_failed", "Application thread cleanup binding is absent"); return end
-        local get = thread_binding.get_request(stored, workspace_id)
-        local app_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
-        if not thread_binding.application_get(app_reply, stored, workspace_id) then finish_cleanup(work); return end
-        local expected = stored.cleanup_expected_revision
-        local leave = expected and thread_binding.leave_request(stored, workspace_id,
-            stored.idempotency_key .. "-leave", expected) or nil
-        local leave_reply = leave and thread_call(stored.initiating_owner_id, "bee.threads.service:leave", leave) or nil
-        local decoded = thread_binding.reply(leave_reply)
-        if decoded and decoded.ok then finish_cleanup(work); return end
-        if decoded and decoded.error and decoded.error.code == "CONFLICT" and not work.refreshed_cleanup then
-            local owner_reply = get and thread_call(stored.initiating_owner_id, "bee.threads.service:get", get) or nil
-            local current = thread_binding.owner_get(owner_reply, stored, workspace_id)
-            if current then
-                work.refreshed_cleanup = true
-                send_binding(work, "refresh_cleanup", {instance_id = stored.instance_id,
-                    expected_revision = stored.binding_revision, expected_state = "revoked",
-                    cleanup_expected_revision = current})
-                return
+        if open.existing then
+            local item = instances[open.view_id]
+            if not item or item.instance_id ~= open.instance_id or item.state.phase ~= "ready" then
+                fail_binding(coordinator, "request_expired", "Application changed while thread access was being admitted")
+            else
+                item.thread_id = stored.thread_id
+                emit(identified(item, "focus", open.request.request_id), true)
+                coordinator.open = nil
             end
-        end
-        fail_runtime(work, "uncertain", "Application thread cleanup outcome is unknown")
-    end
-    local function launch_runtime(work: RuntimeOpen)
-        local stored = work.stored
-        if not stored or stored.state ~= "active" then fail_runtime(work, "persistence_failed", "Application thread binding did not activate"); return end
-        durable_bindings[stored.instance_id] = stored
-        if work.existing then
-            local item = instances[work.view_id]
-            if not item or item.instance_id ~= work.instance_id or item.state.phase ~= "ready" then
-                fail_runtime(work, "request_expired", "Application changed while thread access was being admitted")
-                return
-            end
-            item.thread_id = stored.thread_id
-            emit(identified(item, "focus", work.request.request_id), true)
             return
         end
         local theme = appearance.theme(preferences.theme)
-        local view, view_error = tty.viewport({width = 60, height = 16,
-            page = appearance.page(theme, work.descriptor.role == "terminal")})
-        if not view then fail_runtime(work, "viewport_failed", tostring(view_error)); return end
+        local view, view_error = tty.viewport({width = 60, height = 16, page = appearance.page(theme, descriptor.role == "terminal")})
+        if not view then fail_binding(coordinator, "viewport_failed", tostring(view_error)); return end
         local grant, grant_error = view:grant()
-        if not grant then view:close(); fail_runtime(work, "grant_failed", tostring(grant_error)); return end
-        local version = assert(registry.current_version())
-        local token = uuid.v7()
-        local launch: execution.Launch = {definition_id = work.descriptor.definition_id,
-            scope = work.scope, workspace_pid = owner, workspace_id = workspace_id,
-            actor = application_actor(workspace_id, work.instance_id, work.descriptor.definition_id,
-                work.descriptor.definition_revision, 1), instance_id = work.instance_id, view_id = work.view_id,
-            thread_id = stored.thread_id, execution_generation = 1,
-            definition_revision = work.descriptor.definition_revision, registry_revision = version:string(),
-            launch_token = token, resume_schema = work.descriptor.resume_schema, resume_state = work.request.resume_state,
-            arguments = work.request.arguments}
-        local started = execution.start(grant, launch)
-        if not started.pid then view:close(); fail_runtime(work, started.error_code, started.error); return end
-        local instance: Instance = {view_id = work.view_id, instance_id = work.instance_id,
-            thread_id = stored.thread_id, execution_pid = started.pid, view = view, descriptor = work.descriptor,
-            binding = work.binding, launch_token = token, observers = {}, state = lifecycle.start(now()),
-            open_request = work.request.request_id, opened = false, resume_state = work.request.resume_state,
-            arguments = work.request.arguments, replacement = nil, waiters = {}, attempts = 0,
-            producer_generation = 1}
-        instances[work.view_id] = instance
-        if work.binding.catalog_read then publish_catalog_readers() end
+        if not grant then view:close(); fail_binding(coordinator, "grant_failed", tostring(grant_error)); return end
+        local version, token = assert(registry.current_version()), uuid.v7()
+        local started = execution.start(grant, {definition_id = descriptor.definition_id, scope = scope, workspace_pid = owner,
+            workspace_id = workspace_id, actor = application_actor(workspace_id, open.instance_id, descriptor.definition_id,
+                descriptor.definition_revision, 1), instance_id = open.instance_id, view_id = open.view_id, thread_id = stored.thread_id,
+            execution_generation = 1, definition_revision = descriptor.definition_revision, registry_revision = version:string(),
+            launch_token = token, resume_schema = descriptor.resume_schema, resume_state = open.request.resume_state, arguments = open.request.arguments})
+        if not started.pid then view:close(); fail_binding(coordinator, started.error_code, started.error); return end
+        instances[open.view_id] = {view_id = open.view_id, instance_id = open.instance_id, thread_id = stored.thread_id,
+            execution_pid = started.pid, view = view, descriptor = descriptor, binding = binding, launch_token = token, observers = {},
+            state = lifecycle.start(now()), open_request = open.request.request_id, opened = false, resume_state = open.request.resume_state,
+            arguments = open.request.arguments, replacement = nil, waiters = {}, attempts = 0, producer_generation = 1}
+        coordinator.open = nil
+        if binding.catalog_read then publish_catalog_readers() end
     end
     local function send_thread_result(pid: string, request: thread_protocol.Request,
         value: unknown, code: string?, message: string?)
@@ -428,11 +460,29 @@ local function main(owner: string, initial_preferences: unknown)
         local item = find_pid(sender)
         if not item or item.instance_id ~= request.instance_id or item.launch_token ~= request.launch_token
             or item.producer_generation ~= request.execution_generation then return end
-        local stored = durable_bindings[item.instance_id]
-        if item.binding.thread_access ~= "observe_post" or not stored or stored.state ~= "active"
+        refresh_admission()
+        local coordinator = coordinators[item.instance_id]
+        local stored = coordinator and coordinator.state.binding or nil
+        local current_descriptor, current_binding = current_application(item.descriptor.definition_id)
+        if not current_descriptor or current_descriptor.definition_revision ~= item.descriptor.definition_revision
+            or not current_binding or current_binding.thread_access ~= "observe_post"
+            or not stored or stored.state ~= "active"
             or stored.actor_id ~= thread_binding.actor(workspace_id, item.instance_id)
             or stored.thread_id ~= item.thread_id then
+            if coordinator then drive_binding(coordinator, {kind = "revoke"}) end
             send_thread_result(sender, request, nil, "DENIED", "Application thread access is not active")
+            return
+        end
+        local get = thread_binding.get_request(stored, workspace_id)
+        local membership_reply = get and thread_call(stored.actor_id, "bee.threads.service:get", get) or nil
+        local membership = thread_binding.application_status(membership_reply, stored, workspace_id)
+        if membership.state == "unknown" then
+            send_thread_result(sender, request, nil, "UNCERTAIN", "Application thread membership could not be verified")
+            return
+        end
+        if membership.state ~= "active" or membership.membership_revision ~= stored.membership_revision then
+            drive_binding(coordinator, {kind = "revoke"})
+            send_thread_result(sender, request, nil, "DENIED", "Application thread membership changed")
             return
         end
         local args = request.arguments
@@ -452,7 +502,7 @@ local function main(owner: string, initial_preferences: unknown)
             call.idempotency_key, call.kind, call.body, call.context = args.idempotency_key, "message", body, {}
         elseif request.operation == "subscribe" then
             target = "bee.threads.delivery:subscribe"
-            call.idempotency_key, call.consumer_id = args.idempotency_key, "bee.application:" .. item.instance_id
+            call.idempotency_key, call.consumer_id = args.idempotency_key, stored.actor_id
             call.after_sequence, call.filter, call.durability = args.after_sequence, {kinds = {"message"}}, "durable"
         elseif request.operation == "page" then
             target = "bee.threads.delivery:page"
@@ -503,7 +553,11 @@ local function main(owner: string, initial_preferences: unknown)
         end
         return true
     end
-    local function find_pid(pid: string): Instance?
+    find_instance = function(instance_id: string): Instance?
+        for _, item in pairs(instances) do if item.instance_id == instance_id then return item end end
+        return nil
+    end
+    find_pid = function(pid: string): Instance?
         for _, item in pairs(instances) do if item.execution_pid == pid then return item end end
         return nil
     end
@@ -707,10 +761,17 @@ local function main(owner: string, initial_preferences: unknown)
             end
         elseif effect == "closed" or effect == "failed" then finish(item, effect == "failed") end
     end
+    local function commit_explicit_close(item: Instance, event: lifecycle.Event)
+        local coordinator = coordinators[item.instance_id]
+        if coordinator then
+            coordinator.stop_event = event
+            drive_binding(coordinator, {kind = "revoke"})
+        else transition(item, event) end
+    end
     -- An EXIT consumed for a catalog replacement leaves no producer to stop.
     -- Explicit close cancels a now-unreachable checkpoint reply; workspace
     -- cleanup keeps it so the owner can drain its durable write before quit.
-    local function settle_exited_replacement(item: Instance, discard_checkpoint: boolean): boolean
+    settle_exited_replacement = function(item: Instance, discard_checkpoint: boolean): boolean
         local replacement = item.replacement
         if not replacement or not replacement.exited then return false end
         item.replacement = nil
@@ -738,7 +799,12 @@ local function main(owner: string, initial_preferences: unknown)
         -- Once the old producer has exited, there is no process left to
         -- negotiate with or terminate. Settle the logical window directly.
         item.waiters[#item.waiters + 1] = waiter
-        if settle_exited_replacement(item, true) then return end
+        local coordinator = coordinators[item.instance_id]
+        if item.replacement and item.replacement.exited and coordinator then
+            coordinator.stop_event, coordinator.settle_after_revoke = force and "force_stop" or "stop", true
+            drive_binding(coordinator, {kind = "revoke"})
+            return
+        elseif settle_exited_replacement(item, true) then return end
         item.replacement = nil
         if force then item.attempts = 0 end
         if not force and item.negotiate_close and (item.state.phase == "ready" or item.state.phase == "close_requested"
@@ -748,7 +814,7 @@ local function main(owner: string, initial_preferences: unknown)
                 transition(item, "request_close")
             end
             emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
-        else transition(item, force and "force_stop" or "stop") end
+        else commit_explicit_close(item, force and "force_stop" or "stop") end
     end
     refresh_admission(true)
     publish_catalog_readers()
@@ -804,23 +870,22 @@ local function main(owner: string, initial_preferences: unknown)
             local message = selected.value
             if message:from() == owner then
                 local reply = binding_protocol.reply(message:payload():data(), workspace_id)
-                local work: RuntimeOpen? = nil
-                if reply then work = runtime_opens[reply.request_id] end
-                if reply and work then
-                    local active: RuntimeOpen = work
-                    runtime_opens[reply.request_id] = nil
-                    if not reply.ok or not reply.binding then
-                        fail_runtime(active, "uncertain", "Workspace application binding outcome is unknown")
-                    else
-                        active.stored = reply.binding
-                        if reply.op == "prepare" or reply.op == "refresh_join" then join_runtime(active)
-                        elseif reply.op == "activate" then launch_runtime(active)
-                        elseif reply.op == "begin_revoke" or reply.op == "refresh_cleanup" then cleanup_runtime(active)
+                if reply then
+                    local instance_id: string? = binding_requests[reply.request_id]
+                    if instance_id then
+                    binding_requests[reply.request_id] = nil
+                    local coordinator = coordinators[instance_id]
+                    if coordinator then
+                        if reply.ok and reply.binding then
+                            local event: thread_binding_reducer.Event = {kind = "host", op = reply.op,
+                                outcome = "success", binding = reply.binding}
+                            drive_binding(coordinator, event)
                         else
-                            durable_bindings[active.instance_id] = nil
-                            fail_runtime(active, active.failure_code or "permission_denied",
-                                active.failure_message or "Application thread access was revoked")
+                            local event: thread_binding_reducer.Event = {kind = "host", op = reply.op,
+                                outcome = "failure", binding = nil}
+                            drive_binding(coordinator, event)
                         end
+                    end
                     end
                 end
             end
@@ -829,9 +894,25 @@ local function main(owner: string, initial_preferences: unknown)
             if message:from() == owner and not recovery_received then
                 local recovered = binding_protocol.recovery(message:payload():data(), workspace_id)
                 if not recovered then error("Invalid application thread binding recovery snapshot") end
-                for _, binding in ipairs(recovered.items) do durable_bindings[binding.instance_id] = binding end
-                recovery_received = true
-                assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+                for _, raw_binding in ipairs(recovered.items) do
+                    local binding: binding_protocol.Binding = raw_binding
+                    local coordinator: BindingCoordinator = {instance_id = binding.instance_id,
+                        state = thread_binding_reducer.new(), open = nil, retry_at = 0}
+                    coordinators[binding.instance_id] = coordinator
+                    drive_binding(coordinator, {kind = "recover", binding = binding})
+                end
+                -- An uncertain active recovery remains unacknowledged. Revoked
+                -- cleanup rows may be retried after the host owns this snapshot.
+                local settled = true
+                for _, raw_coordinator in pairs(coordinators) do
+                    local coordinator: BindingCoordinator = raw_coordinator
+                    local terminal = coordinator.state.terminal
+                    if terminal ~= "active" and terminal ~= "fenced" and terminal ~= "cleanup_pending" then settled = false; break end
+                end
+                if settled then
+                    recovery_received = true
+                    assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+                end
             end
         elseif selected.channel == events then
             local event = selected.value
@@ -847,6 +928,32 @@ local function main(owner: string, initial_preferences: unknown)
             end
         elseif selected.channel == ticks then
             refresh_admission()
+            for _, raw_coordinator in pairs(coordinators) do
+                local coordinator: BindingCoordinator = raw_coordinator
+                if coordinator.effect and type(coordinator.effect) ~= "string" and now() >= coordinator.retry_at then
+                    run_binding_effect(coordinator, coordinator.effect)
+                end
+                if (coordinator.state.terminal == "retry" or coordinator.state.terminal == "failed" or coordinator.state.terminal == "cleanup_pending")
+                    and now() >= coordinator.retry_at then
+                    local binding = coordinator.state.binding
+                    if binding then
+                        coordinator.state = thread_binding_reducer.new()
+                        drive_binding(coordinator, {kind = "recover", binding = binding})
+                    end
+                end
+            end
+            if not recovery_received then
+                local settled = true
+                for _, raw_coordinator in pairs(coordinators) do
+                    local coordinator: BindingCoordinator = raw_coordinator
+                    local terminal = coordinator.state.terminal
+                    if terminal ~= "active" and terminal ~= "fenced" and terminal ~= "cleanup_pending" then settled = false; break end
+                end
+                if settled then
+                    recovery_received = true
+                    assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+                end
+            end
             for id, waiter in pairs(checkpoint_waiters) do
                 if now() >= waiter.deadline then
                     process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
@@ -875,7 +982,9 @@ local function main(owner: string, initial_preferences: unknown)
                         transition(item, "confirm_close")
                         shutdown.record(shutdown_plan, item.view_id, item.announced_title or item.descriptor.title, "", false)
                         refresh_shutdown()
-                    else transition(item, "accept_close") end
+                    else
+                        commit_explicit_close(item, "accept_close")
+                    end
                 elseif data.action == "cancel" then
                     if shutdown_plan and shutdown_plan.pending[item.view_id] then abort_shutdown()
                     else transition(item, "cancel_close") end
@@ -924,8 +1033,10 @@ local function main(owner: string, initial_preferences: unknown)
                     local item = instances[response.id]
                     if pending_dialog.closing and item then
                         if response.action == "cancel" then transition(item, "cancel_close")
-                        elseif item.state.phase == "close_unresponsive" then transition(item, "force_stop")
-                        else transition(item, "accept_close") end
+                        else
+                            local event = item.state.phase == "close_unresponsive" and "force_stop" or "accept_close"
+                            commit_explicit_close(item, event)
+                        end
                     else
                         process.send(pending_dialog.execution_pid, "bee.application.query.result", {version = 1,
                             request_id = pending_dialog.client_request_id, id = response.id, instance_id = response.instance_id,

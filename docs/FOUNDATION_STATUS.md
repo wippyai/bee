@@ -167,22 +167,23 @@ is preserved at `bee-evidence/0919/global-before-runtime-787-c8d29db6`; the
 install receipt is `global-runtime-787-fbddfdc-install.json`. Three old owners
 exited on SIGTERM, and no application database was copied or deleted.
 
-Explicitly admitted agents can now open an applied application through the
-`application_open` MCP tool. The workspace host uses the originating agent
-view's existing display assignment; callers cannot choose a foreign workspace
-or display through tool arguments. The source and packed app journey passes
-real HTTP open, same-instance replay, conflict and authorization refusals,
-display presentation, checkpoint and restart restoration. Each composition
-reviews and applies its own exact base. Gateway migration 12 preserves the
-optional origin view through durable bindings, and child launches inherit it.
-The delayed-broker source/pack regression proves that caller expiry preserves
-the eventual display assignment and does not redispatch an unresolved request.
-All 1,110 unit tests and the full check coverage pass after correcting three
-standalone test compositions; the resumed run completes desktop acceptance.
-The existing `desktop_lifecycle` inter-function lint warning remains.
-The tool remains host-admitted rather than enabled in every profile. Global
-Bee is unchanged; cross-node app version updates and rollback still need their
-own acceptance.
+The source and packed App Journey now prove the governed managed-agent path to
+an applied application. An unapproved managed child is refused, then one exact
+durable `bee.application:runtime` approval updates that same running child. It
+opens two distinct admitted application instances without another approval and
+exits while both applications remain live. Each application uses only its
+broker-bound facade to subscribe, post, read, page and acknowledge a page on the
+originating thread; the host supplies the stable application actor and binding
+identity. The UI reaches `Thread: ok`, checkpoint mutation reaches `Count: 1 /
+Saved: 1`, and cold restart restores the application state. The workspace host
+uses the originating agent view's display assignment, so tool arguments cannot
+choose a foreign workspace, display, thread or application actor. Source and
+packed outcomes match. A live source recovery case pauses the workspace host
+after the durable revoke commit and before the broker can issue Threads leave:
+the application remains visible at the fence, a process crash follows, and the
+next boot completes cleanup without restoring the revoked checkpoint. The tool
+remains host-admitted rather than enabled in every profile. Global Bee is
+unchanged.
 
 The agent-requested MCP access backend is implemented: host-declared gated
 traits create durable approval requests for the exact binding/attempt and are

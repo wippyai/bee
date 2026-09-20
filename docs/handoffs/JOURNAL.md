@@ -7784,3 +7784,131 @@ WIPPY=.wippy/bin/bee-wippy-renewal` reports 1,149/1,149 in 133.4 seconds. The
 next bounded slice is a typed host-to-broker binding protocol; membership
 reconciliation and the app-facing thread facade remain later slices. Global Bee
 is unchanged.
+
+## 2026-09-20 — application/thread authority model corrected before integration
+
+The uncommitted host CRUD branch is retained only as a boundary prototype. It
+must not land as an application/thread feature by itself: no broker consumes it,
+`active` has no observed Threads membership behind it, and direct `revoked`
+rows disappear from recovery before a lost `leave` can be reconciled. The next
+accepted change is one vertical grant/revoke journey, not another isolated
+protocol layer.
+
+The authority model is now explicit. Governance reviews and activates exact
+overlay definitions and migration intent. The workspace host owns the durable
+logical app/thread binding. The applications broker owns current PID, launch
+token and execution generation. Threads alone owns membership, records and
+subscriptions. Hive distributes immutable artifacts and typed descriptions; it
+does not replicate application SQLite state. Running application data remains
+app-owned state behind bounded host-selected persistence operations.
+
+Bee will reuse the existing MCP `session.request_access` approval instead of
+asking once more for every app instance. A requestable
+`bee.application:runtime` trait must say that the agent may open an already
+reviewed/admitted app and delegate observe/post access to the agent's own bound
+thread. The gateway approval is already bound to the live gateway binding,
+subject, thread and measured surface and applies to that running agent without a
+relaunch. The open tool takes no thread, actor, workspace or grant fields; its
+trusted facade injects those values and the exact durable grant receipt.
+
+That agent-side grant is only one ceiling. Protected app admission must
+independently allow the exact app revision to receive participant access, and
+Threads must confirm that the authenticated opener actually owns the selected
+thread. A participant cannot delegate, there is no `bee.local` fallback, and the
+new app receives only a broker message facade. Every facade call is checked
+against the current application PID/token/generation and durable binding state;
+ordinary apps receive no raw Threads or workspace-database grant.
+
+The first contract deliberately supports one logical app instance bound to one
+thread with observe/post participant access. Durable provenance includes the
+initiating owner, gateway binding/grant receipt, exact admitted definition
+revision and stable effect identity. Revocation fences the facade first, then
+reconciles owner-authenticated `leave`; restart must retain cleanup-pending
+revocations. Ending the initiating agent prevents new operations through its
+expired gateway binding but does not silently stop an already authorized durable
+app. Expanding thread, operations or lifetime requires a new authorization.
+
+Compatible producer replacement keeps the logical instance, stable app actor and
+active delegation while advancing the broker-owned PID, launch token and execution
+generation fence. The stored definition revision is immutable origin provenance;
+the replacement's exact revision is checked independently against current protected
+admission. A replacement without `thread_access=observe_post` receives no facade,
+and no replacement may revive an explicitly revoked binding. Recovery distinguishes
+an unfinished authorized join from membership that was observed and later removed
+by the thread owner: only the former may be retried. Later absence is a loss of
+authority and fences the binding instead of silently rejoining it.
+
+The first live application-state contract uses one component schema per physical
+database resource. The host injects workspace and logical-application partitions
+into bounded operations; applications cannot select resource IDs or partition
+keys. A migration ledger keyed only by migration ID therefore applies the shared
+component schema once, and every consumer sharing that resource must tolerate its
+schema revision. Removing one workspace overlay neither drops shared tables nor
+reverses migrations. Separate schemas per installation remain unsupported until
+the physical migration ledger is installation-qualified and accepted. Hive still
+does not replicate arbitrary SQLite rows.
+
+Here `logical-application` means the broker's stable `instance_id`, paired with
+`workspace_id`; it does not mean definition ID, process ID or current revision.
+That makes state survive restart and compatible producer replacement without
+sharing rows between two instances of the same definition. A future component
+that intentionally shares data across instances must declare and receive a
+separate host-selected resource contract rather than weakening this partition.
+The first deployment may bind one application-state database resource per node,
+but that is host policy rather than an identity rule: every operation still uses
+the authenticated resource binding and injected `{workspace_id, instance_id}`.
+
+Acceptance must prove one MCP request and one visible approval update the same
+running agent; two admitted opens need no additional prompt; an unapproved
+agent, non-owner, unadmitted app and forged identity fields fail; an app reads,
+subscribes and posts only through its bound thread facade with app attribution;
+and live revocation survives a crash between its durable fence and Threads
+cleanup. Storage correction and gateway provenance are isolated implementation
+lanes; the host route will be integrated only with the broker coordinator and
+this real source/pack journey. Global Bee remains unchanged.
+
+## 2026-09-20 — governed agent-to-application journey verified
+
+`make WIPPY=.wippy/bin/bee-wippy-renewal app-journey-check` now passes from
+source and from the packed composition. The host fixture launches a managed
+child through the real carrier. Its MCP surface first proves that
+`application_open` is unavailable, then requests the exact
+`bee.application:runtime` trait. One durable approval updates the same running
+binding. That child opens two distinct admitted application instances without a
+second approval and exits while both applications remain live.
+
+Each app has only the broker message facade. Both complete `subscribe`, `post`,
+`read`, `page` and `ack_page` against the initiating thread and report a stable
+host-derived actor. The UI reaches `Thread: ok`; checkpoint mutation reaches
+`Count: 1 / Saved: 1`; cold restart restores the state. Source and packed
+results match. The host-side negative probe also proves that an ordinary caller
+cannot register the protected carrier identity or send a successful direct open
+request.
+
+Two production defects found by the vertical run were fixed. The host now adds
+the workspace identity when forwarding the broker's open reply. The broker's
+PID lookup is bound before thread requests can call it, removing the live
+`attempt to call a non-function object` crash. Checkpoint acknowledgement is a
+best-effort send to the monitored broker, so an already exited broker cannot
+hide the original failure. Lifecycle recovery across the durable revoke fence
+is still awaiting its separate live acceptance; this entry does not claim it.
+Global Bee remains unchanged.
+
+## 2026-09-20 — revoke crash recovery proved live
+
+The source App Journey now injects one failure only into its disposable copied
+host: after `begin_revoke` commits the durable row and before the host replies to
+the broker, the host actor pauses. The test observes `revoked` with cleanup
+pending while the application remains visible, then crashes the runtime. On the
+next unmodified boot, the reducer completes Threads cleanup and the revoked
+instance is absent from the durable workspace checkpoint.
+
+The first run exposed a real recovery defect: cleanup finished, but the older
+application checkpoint was restored as a new execution. The workspace host now
+reconciles checkpoint records against immutable thread-binding tombstones before
+starting its broker. A matching revoked binding removes the checkpoint
+durably; a binding whose thread or definition differs from the checkpoint is
+treated as corruption. Ordinary unbound checkpoints remain unchanged. The
+source and packed governed agent journey, including the new source-only crash
+injection, passes. Changed-membership and compatible-replacement live cases are
+still separate acceptance work. Global Bee remains unchanged.

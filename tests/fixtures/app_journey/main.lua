@@ -37,6 +37,9 @@ local client = require("client")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
+
+type Object = {[string]: unknown}
+
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid launch") end
@@ -44,11 +47,14 @@ local function main(value: unknown)
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
     local count = 0
+    local thread_complete = false
     if launch.resume_state ~= "" then
         local state: unknown = json.decode(launch.resume_state)
         if type(state) ~= "table" or type(state.count) ~= "number" then error("Invalid counter checkpoint") end
         count = math.floor(state.count)
+        thread_complete = state.thread_complete == true
     end
+    local thread_status = launch.thread_id == nil and "unbound" or (thread_complete and "ok" or "pending")
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -59,12 +65,165 @@ local function main(value: unknown)
         canvas:put(1, 1, "APP JOURNEY DELIVERED", width)
         canvas:put(1, 2, "Count: " .. tostring(count), width)
         canvas:put(1, 3, "Saved: " .. tostring(saved), width)
+        canvas:put(1, 4, "Thread: " .. thread_status, width)
         assert(output:present(canvas:rows()))
     end
     local function checkpoint()
-        assert(client.checkpoint(launch, json.encode({count = count})))
+        assert(client.checkpoint(launch, json.encode({count = count, thread_complete = thread_complete})))
     end
+
+    local function object(raw: unknown, label: string): Object
+        if type(raw) ~= "table" then error(label .. " reply value is not an object") end
+        return raw :: Object
+    end
+    local function exact_fields(value: Object, allowed: {string}, label: string)
+        local fields: {[string]: boolean} = {}
+        for _, name in ipairs(allowed) do fields[name] = true end
+        for name in pairs(value) do
+            if not fields[name] then error(label .. " reply has unexpected field " .. tostring(name)) end
+        end
+    end
+    local function identifier(raw: unknown, label: string): string
+        if type(raw) ~= "string" or raw == "" or #raw > 160 or raw:find("%c") then
+            error(label .. " is not a bounded identifier")
+        end
+        return raw
+    end
+    local function integer(raw: unknown, label: string): integer
+        if type(raw) ~= "number" or raw ~= math.floor(raw) or raw < 0 then
+            error(label .. " is not a nonnegative integer")
+        end
+        local result: integer = math.floor(raw)
+        return result
+    end
+    local function positive(raw: unknown, label: string): integer
+        local result = integer(raw, label)
+        if result < 1 then error(label .. " must be positive") end
+        return result
+    end
+    local function boolean(raw: unknown, label: string): boolean
+        if type(raw) ~= "boolean" then error(label .. " is not a boolean") end
+        return raw
+    end
+    local function records(raw: unknown, label: string, thread_id: string): {Object}
+        if type(raw) ~= "table" then error(label .. " records are not a list") end
+        local list = raw :: {unknown}
+        local result: {Object} = {}
+        for index, item in ipairs(list) do
+            local record = object(item, label .. " record")
+            identifier(record.record_id, label .. " record id")
+            if record.thread_id ~= thread_id or record.kind ~= "message" then
+                error(label .. " returned a record from another thread or family")
+            end
+            positive(record.sequence, label .. " record sequence")
+            result[index] = record
+        end
+        return result
+    end
+
+    local function run_thread_probe(thread_id: string)
+        local results = assert(process.listen("bee.application.thread.result", {message = true}))
+        local function await(operation: string, arguments: Object): Object
+            local request_id, request_error = client.thread_request(launch, operation, arguments)
+            if not request_id then error(operation .. " request failed: " .. tostring(request_error)) end
+            while true do
+                local selected = channel.select({results:case_receive(), lifecycle:case_receive()})
+                if not selected.ok then error(operation .. " reply channel closed") end
+                if selected.channel == lifecycle then
+                    if selected.value.kind == process.event.CANCEL then error(operation .. " cancelled") end
+                else
+                    local message = selected.value
+                    local reply = client.thread_result(launch, message:from(), message:payload():data())
+                    if reply and reply.request_id == request_id then
+                        if not reply.ok then
+                            local failure = reply.error
+                            error(operation .. " failed: " .. tostring(failure and failure.code or "unknown"))
+                        end
+                        return object(reply.value, operation)
+                    end
+                end
+            end
+        end
+
+        local subscription = await("subscribe", {idempotency_key = launch.instance_id .. "-thread-subscribe", after_sequence = 0})
+        exact_fields(subscription, {"subscription_id", "consumer_id", "after_sequence", "lease_generation",
+            "owner_incarnation", "owner_authority", "durability", "filter_digest", "closed"}, "subscribe")
+        local subscription_id = identifier(subscription.subscription_id, "subscription id")
+        if subscription.consumer_id ~= "bee.application:" .. launch.workspace_id .. ":" .. launch.instance_id
+            or integer(subscription.after_sequence, "subscription cursor") ~= 0
+            or positive(subscription.lease_generation, "subscription lease") < 1
+            or positive(subscription.owner_incarnation, "subscription owner incarnation") < 1
+            or identifier(subscription.owner_authority, "subscription owner authority") == ""
+            or subscription.durability ~= "durable"
+            or identifier(subscription.filter_digest, "subscription filter digest") == ""
+            or boolean(subscription.closed, "subscription closed") then
+            error("subscribe reply shape is invalid")
+        end
+
+        local marker = await("post", {idempotency_key = launch.instance_id .. "-thread-probe-post",
+            message_id = launch.instance_id .. "-thread-probe-message", message_kind = "notification",
+            recipient_ids = {}, content = {text = "app-thread-probe.v1"}})
+        exact_fields(marker, {"record_id", "sequence"}, "post")
+        local marker_id = identifier(marker.record_id, "post record id")
+        local marker_sequence = positive(marker.sequence, "post sequence")
+
+        local read = await("read", {cursor = 0, limit = 64})
+        exact_fields(read, {"records", "scanned_through", "has_more"}, "read")
+        local read_records = records(read.records, "read", thread_id)
+        integer(read.scanned_through, "read scanned cursor")
+        boolean(read.has_more, "read has_more")
+        local found_post = false
+        for _, record in ipairs(read_records) do
+            if record.record_id == marker_id and record.sequence == marker_sequence then found_post = true end
+        end
+        if not found_post then error("read did not return the posted proof") end
+
+        local page = await("page", {subscription_id = subscription_id, limit = 64})
+        exact_fields(page, {"subscription_id", "page_id", "records", "from_sequence", "scanned_through",
+            "has_more", "lease_generation"}, "page")
+        if page.subscription_id ~= subscription_id then error("page subscription identity changed") end
+        local page_id = identifier(page.page_id, "page id")
+        local page_records = records(page.records, "page", thread_id)
+        boolean(page.has_more, "page has_more")
+        if integer(page.from_sequence, "page from cursor") ~= 0
+            or integer(page.scanned_through, "page scanned cursor") < marker_sequence
+            or positive(page.lease_generation, "page lease") < 1 then
+            error("page reply shape is invalid")
+        end
+        local found_page_post = false
+        for _, record in ipairs(page_records) do
+            if record.record_id == marker_id then found_page_post = true end
+        end
+        if not found_page_post then error("page did not return the posted proof") end
+
+        local acknowledged = await("ack_page", {idempotency_key = launch.instance_id .. "-thread-proof-ack",
+            subscription_id = subscription_id, page_id = page_id, scanned_through = page.scanned_through})
+        exact_fields(acknowledged, {"subscription_id", "after_sequence"}, "ack_page")
+        if acknowledged.subscription_id ~= subscription_id
+            or integer(acknowledged.after_sequence, "acknowledged cursor") ~= integer(page.scanned_through, "page cursor") then
+            error("ack_page reply shape is invalid")
+        end
+
+        local proof = {schema = "app-thread-proof.v1", workspace_id = launch.workspace_id,
+            instance_id = launch.instance_id, thread_id = thread_id, subscribe = "ok", post = "ok",
+            read = "ok", page = "ok", ack_page = "ok"}
+        local proof_text = json.encode(proof)
+        local posted = await("post", {idempotency_key = launch.instance_id .. "-thread-proof-post",
+            message_id = launch.instance_id .. "-thread-proof-message", message_kind = "notification",
+            recipient_ids = {}, content = {text = proof_text}})
+        exact_fields(posted, {"record_id", "sequence"}, "post")
+        identifier(posted.record_id, "proof record id")
+        positive(posted.sequence, "proof sequence")
+        process.unlisten(results)
+    end
+
     paint(); client.ready(launch); checkpoint()
+    if launch.thread_id and not thread_complete then
+        run_thread_probe(launch.thread_id)
+        thread_complete = true
+        thread_status = "ok"
+        paint(); checkpoint()
+    end
     while true do
         local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive()})
         if not event.ok then break end
@@ -76,7 +235,7 @@ local function main(value: unknown)
             if message:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then
                 saved = count; paint()
             end
-        elseif event.value.type == "close" then checkpoint()
+        elseif event.value.type == "close" then checkpoint(); break
         elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
         elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
     end

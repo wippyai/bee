@@ -20,11 +20,22 @@ local function define_tests()
         test.it("derives the stable actor and exact authority calls", function()
             test.eq(binding.actor(WORKSPACE, "app-1"), "bee.application:" .. WORKSPACE .. ":app-1")
             test.is_nil(binding.actor("workspace", "app-1"))
-            test.eq(binding.get_request(value(), WORKSPACE), {thread_id = "thread-1"})
-            test.eq(binding.join_request(value(), WORKSPACE, "join-1", 7), {thread_id = "thread-1", idempotency_key = "join-1",
-                member_id = "bee.application:" .. WORKSPACE .. ":app-1", role = "participant", expected_revision = 7})
-            test.eq(binding.leave_request(value(), WORKSPACE, "leave-1", 8), {thread_id = "thread-1", idempotency_key = "leave-1",
-                member_id = "bee.application:" .. WORKSPACE .. ":app-1", expected_revision = 8})
+            local get = assert(binding.get_request(value(), WORKSPACE))
+            test.eq(get.thread_id, "thread-1")
+            local get_fields = 0; for _ in pairs(get) do get_fields = get_fields + 1 end
+            test.eq(get_fields, 1)
+            local join = assert(binding.join_request(value(), WORKSPACE, "join-1", 7))
+            test.eq(join.thread_id, "thread-1"); test.eq(join.idempotency_key, "join-1")
+            test.eq(join.member_id, "bee.application:" .. WORKSPACE .. ":app-1")
+            test.eq(join.role, "participant"); test.eq(join.expected_revision, 7)
+            local join_fields = 0; for _ in pairs(join) do join_fields = join_fields + 1 end
+            test.eq(join_fields, 5)
+            local leave = assert(binding.leave_request(value(), WORKSPACE, "leave-1", 8))
+            test.eq(leave.thread_id, "thread-1"); test.eq(leave.idempotency_key, "leave-1")
+            test.eq(leave.member_id, "bee.application:" .. WORKSPACE .. ":app-1")
+            test.is_nil(leave.role); test.eq(leave.expected_revision, 8)
+            local leave_fields = 0; for _ in pairs(leave) do leave_fields = leave_fields + 1 end
+            test.eq(leave_fields, 4)
         end)
 
         test.it("proves the owner and app memberships against the exact binding", function()

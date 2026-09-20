@@ -49,7 +49,13 @@ local function main(value: unknown): Object
             local view = (read_raw :: Object).value :: Object
             digest, revision = tostring(view.proposal_digest), math.floor(tonumber(view.revision) or 1)
         end
-        report.decide = call("bee.approvals:decide", {approval_id = approval_id, expected_revision = revision, decision = decision, proposal_digest = digest})
+        local decision_request: Object = {approval_id = approval_id, expected_revision = revision, decision = decision, proposal_digest = digest}
+        if input.forge == true then
+            -- Request payload metadata is untrusted and cannot stand in for
+            -- the authenticated process actor's host-issued definition.
+            decision_request.metadata = {definition_id = "bee.inbox:app"}
+        end
+        report.decide = call("bee.approvals:decide", decision_request)
         report.store_after_decide = attempt_store()
     end
     return report

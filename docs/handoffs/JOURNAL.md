@@ -8007,3 +8007,45 @@ picker paints its heading while its asynchronous profile catalog still shows
 readiness and immediately asserted all five rows. The selector now waits for
 the final shipped row within its existing 25-second budget before checking the
 complete set. The full native Agent gate passes without a wider deadline.
+
+The focused Approvals journey now follows the public user path in both source
+and packed runs: it opens Approvals from Start, confirms the exact pending
+proposal, and records the broker-created
+`bee.application:<workspace>:<instance>` actor as the decider before one effect
+is consumed. The companion scope test proves a sibling application sees
+nothing, request-supplied definition metadata is rejected, and only the
+authenticated host-selected `bee.inbox:app` definition selector is eligible.
+
+## 2026-09-20 — cleanup and private Approvals proof installed globally
+
+Source `8f0756a` is installed as executable SHA-256 `fbc7cce04840`, retaining
+runtime renewal `b476104e` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`. Strict lint, 1,175 units, source and packed
+private-actor Approvals acceptance, standalone native applications, the complete
+five-profile selector and loopback-only offline cold/restart/reconnect pass.
+Warm attachment measured 0.216 seconds; the installed picker passed editing,
+unavailable launch, refresh, F12 and close without creating thread work.
+
+The six-file installer proved rollback before replacement, stopped the one
+exact prior owner on SIGTERM, preserved its complete artifact set at
+`bee-evidence/0920/global-before-cleaned-8f0756a`, and installed only verified
+artifacts. Receipt: `bee-evidence/0920/global-cleaned-8f0756a-install.json`.
+Application and Bee state databases were not copied, removed or reset.
+
+## 2026-09-20 — native Hive supervisor fixture gate repaired
+
+The frozen native Hive fixtures now carry the current supervisor protocol
+dependencies and protected host policies. The obsolete `admit_feed` execution
+resource was replaced by `advertise`; the service fixture likewise grants only
+`execute` and `advertise`. The supervisor composition mirrors the production
+policy exposure, policy admission, replica admission, name lifecycle and
+foreign-name publication boundaries. The broad probe controller policy remains
+confined to the test coordinator and is not attached to the supervisor.
+
+The staging helper now freezes the current shared protocol libraries once,
+gives each node its own approvals, node and sync database, and sends a typed
+sibling-forgery request through the current wire decoder. `TestHiveSupervisors`,
+`TestHiveSupervisorFeeds` and `TestHiveSupervisorServiceBootstrap` pass together
+under the renewal runtime. The complete feed journey also passed three
+additional consecutive runs. This closes the stale-fixture failure recorded by
+the production duplication audit; production behavior is unchanged.

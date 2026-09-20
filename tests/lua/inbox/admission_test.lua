@@ -17,6 +17,7 @@ local time = require("time")
 local uuid = require("uuid")
 local REQUESTER, ALICE, STRANGER = "bee.test.inbox_requester", "bee.test.inbox_alice", "bee.test.inbox_stranger"
 local POLICY = "inbox-test"
+local SELECTOR_POLICY = "inbox-selector-test"
 local BASE = {"bee:base_app_policy", "bee:app_boundary_policy", "bee:core_spawn_boundary", "bee:workspace_storage_boundary"}
 type Object = {[string]: unknown}
 local function key(): string
@@ -54,10 +55,18 @@ local function install_policy()
     if not entry then error("approver policies entry") end
     local data = entry.data :: Object
     local policies = data.policies :: {Object}
+    local found_policy, found_selector = false, false
     for _, policy in ipairs(policies) do
-        if policy.name == POLICY then return end
+        if policy.name == POLICY then found_policy = true end
+        if policy.name == SELECTOR_POLICY then found_selector = true end
     end
-    policies[#policies + 1] = {name = POLICY, approvers = {ALICE, "bee.test.inbox_bob"}, max_ttl_ms = 60000}
+    if found_policy and found_selector then return end
+    if not found_policy then
+        policies[#policies + 1] = {name = POLICY, approvers = {ALICE, "bee.test.inbox_bob"}, max_ttl_ms = 60000}
+    end
+    if not found_selector then
+        policies[#policies + 1] = {name = SELECTOR_POLICY, approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
+    end
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
@@ -66,8 +75,8 @@ end
 local function requester(): funcs.Executor
     return funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies_of({"bee.inbox:client_test_policy", "bee:approval_request_policy"})))
 end
-local function file(workspace: string): string
-    local reply, err = requester():call("bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
+local function file(workspace: string, policy: string?): string
+    local reply, err = requester():call("bee.approvals:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,
         proposal = {kind = "attempt", ref = "attempt-" .. key(), revision = "r1", action_id = "action-1", payload = {tool_name = "Bash"}}, prompt = {text = "touch proof.txt"}})
     if err then error("request: " .. tostring(err)) end
     local typed = reply :: {ok: boolean, error: {code: string}?, value: Object}
@@ -75,8 +84,8 @@ local function file(workspace: string): string
     return tostring(typed.value.approval_id)
 end
 -- probe: the process under the admitted scope as the given actor.
-local function probe(actor: string, input: Object): Object
-    local spawner = process.with_context({}):with_actor(security.new_actor(actor)):with_scope(admitted_scope())
+local function probe(actor: string, input: Object, metadata: Object?): Object
+    local spawner = process.with_context({}):with_actor(security.new_actor(actor, metadata)):with_scope(admitted_scope())
     local pid, err = spawner:spawn_monitored("bee.inbox:admission_probe", "bee:workers", input)
     if not pid then error("spawn probe: " .. tostring(err)) end
     local events = assert(process.events())
@@ -129,6 +138,29 @@ local function define_tests()
             local record = requester():call("bee.approvals:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
             test.eq(record.value.decision, "denied")
             test.eq(record.value.decider_id, ALICE)
+        end)
+        test.it("uses the host-selected definition selector, refusing a sibling and forged decision metadata", function()
+            local workspace = "ws-" .. key():sub(1, 8)
+            local approval_id = file(workspace, SELECTOR_POLICY)
+            local workspace_id = string.rep("a", 32)
+            local app_actor = "bee.application:" .. workspace_id .. ":inbox-instance"
+            local app_metadata = {workspace_id = workspace_id, definition_id = "bee.inbox:app",
+                definition_revision = "1", execution_generation = 1}
+            local sibling = probe("bee.application:" .. workspace_id .. ":timeline-instance",
+                {workspace_id = workspace, approval_id = approval_id},
+                {workspace_id = workspace_id, definition_id = "bee.timeline:app",
+                    definition_revision = "1", execution_generation = 1})
+            test.eq(sibling.visible, 0)
+            test.eq(sibling.read, "refused: DENIED")
+            local forged = probe(app_actor,
+                {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved", forge = true},
+                app_metadata)
+            test.eq(forged.decide, "refused: INVALID")
+            local approver = probe(app_actor, {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved"}, app_metadata)
+            test.eq(approver.visible, 1)
+            test.eq(approver.decide, "ok")
+            local record = requester():call("bee.approvals:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            test.eq(record.value.decider_id, app_actor)
         end)
     end)
 end

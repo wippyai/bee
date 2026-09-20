@@ -17,7 +17,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_feed]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:admit_policy, bee.hive.supervisor:advertise]
     effect: allow
 - name: inspect_policy
   kind: security.policy

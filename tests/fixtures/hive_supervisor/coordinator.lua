@@ -8,6 +8,7 @@ local system = require("system")
 local types = require("types")
 local client = require("client")
 local funcs = require("funcs")
+local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function main(remote: string)
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee:hive_supervisor_policy", "bee:hive_catalog_policy", "bee:hive_exposure_policy",
@@ -76,7 +77,21 @@ local function main(remote: string)
         elseif command == "sibling" then
             local target = assert(process.registry.lookup(types.SUPERVISOR_NAME .. "/" .. remote))
             local replies = assert(process.listen(types.TOPIC_REPLY, {message = true}))
-            assert(process.send(target, types.TOPIC_REQUEST, {request_id = "sibling-forgery"}))
+            local local_node = assert(system.node.id())
+            local now = time.now()
+            local input: {[string]: unknown} = {}
+            local request: types.Request = {
+                protocol_revision = types.REVISION, request_id = "sibling-forgery", idempotency_key = "sibling-forgery-key",
+                caller_node_id = local_node, caller_incarnation = "sibling-forgery-incarnation",
+                owner_ref = {node_id = remote, service_id = "bee.hive.telemetry"},
+                operation_ref = "bee.hive.telemetry:stats", operation_revision = "1", input = input,
+                input_digest = assert(types.digest(input)),
+                principal_ref = {issuer = local_node, subject_id = tostring(process.pid())},
+                principal_assertion = {method = types.ASSERTION_METHOD, audience = remote,
+                    issued_at = now:utc():format(FORMAT), expires_at = now:add("5s"):utc():format(FORMAT)},
+                delegation_refs = {}, deadline = now:add("5s"):utc():format(FORMAT),
+            }
+            assert(process.send(target, types.TOPIC_REQUEST, request))
             local deadline = time.after("3s")
             local selected = channel.select({replies:case_receive(), deadline:case_receive()})
             if not selected.ok or selected.channel == deadline then error("missing sibling refusal") end

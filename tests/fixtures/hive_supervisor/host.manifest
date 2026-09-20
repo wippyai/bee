@@ -27,6 +27,43 @@ entries:
     actions: [hive.expose.open]
     resources: [bee.hive.telemetry:presence, bee.hive.telemetry:stats, bee.hive.telemetry:catalog_list]
     effect: allow
+- name: hive_policy_exposure_policy
+  kind: security.policy
+  policy:
+    actions: [hive.expose.policy]
+    resources: [bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
+      bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide,
+      bee.approvals:withdraw, bee.sync:replica_receive]
+    effect: allow
+- name: hive_replica_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call, funcs.security, security.actor.create,
+      security.scope.create, security.policy.get, hive.expose.policy]
+    resources: '*'
+    effect: allow
+- name: policy_admission_policy
+  kind: security.policy
+  policy:
+    actions: [registry.get, system.read, funcs.call]
+    resources: [node, bee.hive.supervisor:principal_mappings, bee.hive.supervisor:invoke_check,
+      bee.node:describe, bee.node:update_metadata, bee.node:snapshot, bee.node:read_after,
+      bee.approvals:feed_snapshot, bee.approvals:feed_read_after, bee.approvals:read, bee.approvals:decide,
+      bee.approvals:withdraw, bee.sync:replica_receive]
+    effect: allow
+- name: hive_names_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.register, process.registry.register.local, process.registry.register.eventual,
+      process.registry.lookup, process.registry.unregister, process.registry.unregister.eventual]
+    resources: '*'
+    effect: allow
+- name: hive_advertise_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.foreign]
+    resources: '*'
+    effect: allow
 - name: hive_dispatch_policy
   kind: security.policy
   policy:

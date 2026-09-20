@@ -1,6 +1,39 @@
 # Global Bee build — September 20, 2026
 
-## Current install: live application replacement and policy withdrawal
+## Current install: verified private approvals and production cleanup
+
+Source `8f0756a`, executable SHA-256
+`fbc7cce048402e5d12ceff5b0c04957e48633fab78f7160e8263f18a555e81d0`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It retains runtime PR #789 at `b476104e63` and native
+Bee `v0.0.0-20260919180600-ff9810fea081`.
+
+This build preserves the complete live application replacement and policy
+withdrawal journey. It removes two unreachable production modules superseded by
+the driver resolver and catalog-driven Hive policy admission. The focused
+Approvals acceptance now opens the real application from Start in source and
+packed runs, records its private broker actor as the exact decider, refuses a
+sibling application and rejects request-supplied definition metadata.
+
+Strict renewal-runtime lint covers 496 production entries with only the
+documented desktop-lifecycle fixpoint warning, and all 1,175 units pass. The
+standalone passes embedded Desktop, Settings, Terminal, Modules and About. Its
+complete five-profile Agent selector passes under catalog readiness without a
+wider deadline. Loopback-only offline cold boot, restart and retained reconnect
+pass; warm attachment measured 0.216 seconds. The exact installed picker passes
+profile editing, unavailable launch, refresh, F12, close and creates no thread
+work.
+
+The installer verified all six artifacts and the runtime patch archive, proved
+post-replacement rollback against a disposable set, stopped one exact prior
+owner cleanly on SIGTERM, backed up the previous global set at
+`/home/wolfy-j/wippy/bee-evidence/0920/global-before-cleaned-8f0756a`, and
+atomically replaced sidecars before the executable. Receipt:
+`/home/wolfy-j/wippy/bee-evidence/0920/global-cleaned-8f0756a-install.json`.
+Databases, profiles, conversations, workspaces, displays, credentials and
+migration ledgers were preserved.
+
+## Previous install: live application replacement and policy withdrawal
 
 Source `ca8a6cd`, executable SHA-256
 `c6bbca9356c2b31b369c254c2695808364238f9336e867b9adf591dd93c1a484`,

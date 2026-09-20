@@ -53,7 +53,14 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.WriteFile(filepath.Join(canonicalDir, "canonical.lua"), canonical, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(canonicalDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"), 0600); err != nil {
+	bounds, err := os.ReadFile(filepath.Join(repository, "src/threads/records/bounds.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(canonicalDir, "bounds.lua"), bounds, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(canonicalDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.threads.records\nentries:\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, dependency := range []struct{ directory, source, manifest string }{
@@ -75,6 +82,68 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte(dependency.manifest), 0600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	applicationManifest := filepath.Join(sourceSnapshot, "application_protocol/_index.yaml")
+	application, err := os.ReadFile(applicationManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	application = append(application, []byte("    thread_bounds: bee.threads.records:bounds\n")...)
+	if err := os.WriteFile(applicationManifest, application, 0600); err != nil {
+		t.Fatal(err)
+	}
+	retainedManifest := filepath.Join(sourceSnapshot, "retained_protocol/_index.yaml")
+	retained, err := os.ReadFile(retainedManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained = append(retained, []byte("    arguments: bee.application:arguments\n    clipboard: bee.client:clipboard\n")...)
+	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
+		t.Fatal(err)
+	}
+	clipboard, err := os.ReadFile(filepath.Join(repository, "src/core/client/clipboard.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clipboardDir := filepath.Join(sourceSnapshot, "clipboard")
+	if err := os.MkdirAll(clipboardDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(clipboardDir, "clipboard.lua"), clipboard, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(clipboardDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	appearance, err := os.ReadFile(filepath.Join(repository, "src/ui/appearance.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	appearanceDir := filepath.Join(sourceSnapshot, "appearance")
+	if err := os.MkdirAll(appearanceDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appearanceDir, "appearance.lua"), appearance, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appearanceDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.desktop\nentries:\n- name: appearance\n  kind: library.lua\n  source: file://appearance.lua\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	syncDir := filepath.Join(sourceSnapshot, "sync")
+	if err := os.MkdirAll(syncDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"bounds", "canonical", "version"} {
+		body, err := os.ReadFile(filepath.Join(repository, "src/sync", name+".lua"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(syncDir, name+".lua"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(syncDir, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.sync\nentries:\n- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n  imports:\n    bounds: bee.sync:bounds\n- name: version\n  kind: library.lua\n  source: file://version.lua\n  modules: [hash]\n  imports:\n    bounds: bee.sync:bounds\n    canonical: bee.sync:canonical\n"), 0600); err != nil {
+		t.Fatal(err)
 	}
 	host, err := os.ReadFile(filepath.Join(fixtureSnapshot, "host.manifest"))
 	if err != nil {
@@ -160,6 +229,11 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"node", "sync", "persist", "approvals"} {
+		if name == "sync" {
+			if err := os.RemoveAll(filepath.Join(source, name)); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := os.CopyFS(filepath.Join(source, name), os.DirFS(filepath.Join(repository, "src", name))); err != nil {
 			t.Fatal(err)
 		}
@@ -178,52 +252,11 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 	if err := os.WriteFile(approvalManifest, []byte(approvalText), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// The existing isolated helper already stages canonical under this namespace.
-	bounds, err := os.ReadFile(filepath.Join(repository, "src/threads/records/bounds.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(source, "canonical/bounds.lua"), bounds, 0600); err != nil {
-		t.Fatal(err)
-	}
-	applicationManifest := filepath.Join(source, "application_protocol/_index.yaml")
-	application, err := os.ReadFile(applicationManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	application = append(application, []byte("    thread_bounds: bee.threads.records:bounds\n")...)
-	if err := os.WriteFile(applicationManifest, application, 0600); err != nil {
-		t.Fatal(err)
-	}
-	retainedManifest := filepath.Join(source, "retained_protocol/_index.yaml")
-	retained, err := os.ReadFile(retainedManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	retained = append(retained, []byte("    arguments: bee.application:arguments\n    clipboard: bee.client:clipboard\n")...)
-	if err := os.WriteFile(retainedManifest, retained, 0600); err != nil {
-		t.Fatal(err)
-	}
-	clipboard, err := os.ReadFile(filepath.Join(repository, "src/core/client/clipboard.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	directory := filepath.Join(source, "clipboard")
-	if err := os.MkdirAll(directory, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(directory, "clipboard.lua"), clipboard, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte("version: '1.0'\nnamespace: bee.client\nentries:\n- name: clipboard\n  kind: library.lua\n  source: file://clipboard.lua\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	manifestPath := filepath.Join(source, "canonical/_index.yaml")
 	manifest, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest = append(manifest, []byte("- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n")...)
 	for _, name := range []string{"values", "types"} {
 		body, err := os.ReadFile(filepath.Join(repository, "src/threads/records", name+".lua"))
 		if err != nil {
@@ -326,6 +359,9 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		cmd := exec.CommandContext(ctx, binary, "run", verbosity, "hive-supervisor-probe", "--", fmt.Sprintf("node-%d", 1-i))
 		cmd.Dir = folder
 		cmd.Env = append(os.Environ(), "GOMAXPROCS=2", "BEE_WORKSPACE_DB="+filepath.Join(folder, "workspace.db"), "BEE_THREADS_DB="+filepath.Join(folder, "threads.db"))
+		if feeds {
+			cmd.Env = append(cmd.Env, "BEE_APPROVALS_DB="+filepath.Join(folder, "approvals.db"), "BEE_NODE_DB="+filepath.Join(folder, "node.db"), "BEE_SYNC_DB="+filepath.Join(folder, "sync.db"))
+		}
 		runner, err := newProcRunner(cmd, fmt.Sprintf("supervisor node %d", i))
 		if err != nil {
 			t.Fatal(err)

@@ -1,22 +1,23 @@
 # Foundation status
 
-Bee source `ca8a6cd` is installed globally as executable SHA-256
-`c6bbca9356c2`, pinned to runtime PR #789 at `b476104e63`. The release includes
+Bee source `8f0756a` is installed globally as executable SHA-256
+`fbc7cce04840`, pinned to runtime PR #789 at `b476104e63`. The release includes
 compatible live application replacement and per-agent thread-access withdrawal:
 the running execution observes the changed protected policy on its next facade
 call, durable revocation removes membership and its checkpoint, and restart does
 not restore or advertise the app. Strict lint, all 1,175 unit cases, source and
 packed App Journey, the 163-document corpus, production pack, embedded Settings,
 Terminal, Modules and About, all five default Agent profiles, and loopback-only
-cold boot, restart and retained-client reconnect pass. From
-`/mnt/c/Users/Wolfy-J`, the installed executable opened retained workspace
-`Gentle Ember`; Start opened Agent with all five profiles and reported seven
-configured scoped tools, then Escape and Ctrl+Q closed and detached cleanly
-without a model turn. Its six-file installer proved rollback before replacement
-and preserved the previous set at
-`bee-evidence/0920/global-before-live-policy-ca8a6cd`; receipt:
-`bee-evidence/0920/global-live-policy-ca8a6cd-install.json`. No application or
-Bee state database was copied, removed or reset.
+cold boot, restart and retained-client reconnect pass. The focused Approvals
+journey also opens the app from Start in source and packed runs, records its
+private broker application actor as the decider, and refuses sibling and forged
+definition identity. The exact installed picker passed all five default rows,
+editing, unavailable launch, refresh, F12 and close without creating thread
+work or submitting a model turn. Its six-file installer proved rollback before
+replacement and preserved the previous set at
+`bee-evidence/0920/global-before-cleaned-8f0756a`; receipt:
+`bee-evidence/0920/global-cleaned-8f0756a-install.json`. No application or Bee
+state database was copied, removed or reset.
 
 Bee now ships one canonical terminal visual language and a runnable reference.
 The authored UI brand book defines semantic appearance roles, cell spacing,

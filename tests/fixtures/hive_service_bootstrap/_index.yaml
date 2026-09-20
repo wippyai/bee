@@ -13,7 +13,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.hive.supervisor:execute]
+    resources: [bee.hive.supervisor:execute, bee.hive.supervisor:advertise]
     effect: allow
 - name: probe_policy
   kind: security.policy

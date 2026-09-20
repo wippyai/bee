@@ -30,14 +30,19 @@ local function main()
     if not listed then error("list requests: " .. tostring((list_error :: Object).message)) end
     local approval_id: string? = nil
     local incarnation: integer? = nil
+    local decider_id: string? = nil
     for _, raw in ipairs(helper.object(listed, "request list is malformed").requests :: {unknown}) do
         local item = helper.object(raw, "request list holds a malformed request")
         if item.state == "decided" and item.decision == "approved" and item.proposal_digest == proposal_digest then
             approval_id = item.approval_id :: string
             incarnation = math.floor(item.owner_incarnation :: number)
+            decider_id = item.decider_id :: string
         end
     end
     if not approval_id or not incarnation then error("approved decision for the staged plan is missing") end
+    if not decider_id or not decider_id:match("^bee%.application:[0-9a-f]+:[^:]+$") then
+        error("decision was not recorded under the broker application actor: " .. tostring(decider_id))
+    end
     -- The consume probe boots its own authority, so the incarnation the list
     -- call observed is already behind the one this process just started
     -- under; revalidate against the fault's current incarnation and retry,
@@ -66,7 +71,7 @@ local function main()
         error("consumption recorded another effect")
     end
     logger:info("INBOX_DECIDE_CONSUMED", {approval_id = approval_id, plan_digest = plan.plan_digest,
-        proposal_digest = proposal_digest, effect = receipt.consumed_effect})
+        proposal_digest = proposal_digest, effect = receipt.consumed_effect, decider_id = decider_id})
     local _, second_error = call("bee.approvals:consume", {approval_id = approval_id,
         proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.RETRY_EFFECT_KEY})
     if second_error == nil then error("a second effect consumed the same decision") end

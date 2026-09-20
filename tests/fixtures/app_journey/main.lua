@@ -7,9 +7,9 @@
 local funcs = require("funcs")
 local registry = require("registry")
 local system = require("system")
+local env = require("env")
 local json = require("json")
 local sql = require("sql")
-local uuid = require("uuid")
 local logger = require("logger")
 local bounds = require("bounds")
 local artifact = require("artifact")
@@ -37,6 +37,7 @@ local client = require("client")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
+local time = require("time")
 
 type Object = {[string]: unknown}
 
@@ -46,6 +47,19 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local thread_results = assert(process.listen("bee.application.thread.result", {message = true}))
+    local rechecks = assert(process.listen("bee.app_journey_probe.recheck", {message = true}))
+    local revocations = assert(process.listen("bee.app_open_probe.access.revoke.result", {message = true}))
+    local stale_status = "n/a"
+    local operator: string? = nil
+    for _ = 1, 100 do
+        operator = process.registry.lookup("bee.app_open_probe:operator")
+        if operator then break end
+        time.sleep("20ms")
+    end
+    if not operator then error("app-open operator is unavailable") end
+    assert(process.send(operator, "bee.app_open_probe.credentials", {instance_id = launch.instance_id,
+        launch_token = launch.launch_token, execution_generation = launch.execution_generation}))
     local count = 0
     local thread_complete = false
     if launch.resume_state ~= "" then
@@ -54,7 +68,10 @@ local function main(value: unknown)
         count = math.floor(state.count)
         thread_complete = state.thread_complete == true
     end
-    local thread_status = launch.thread_id == nil and "unbound" or (thread_complete and "ok" or "pending")
+    -- Access is execution-local evidence. A restored checkpoint records that
+    -- the durable proof completed, but every new producer must perform a
+    -- fresh request before the UI may claim current access.
+    local thread_status = launch.thread_id == nil and "unbound" or "pending"
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -65,7 +82,8 @@ local function main(value: unknown)
         canvas:put(1, 1, "APP JOURNEY DELIVERED", width)
         canvas:put(1, 2, "Count: " .. tostring(count), width)
         canvas:put(1, 3, "Saved: " .. tostring(saved), width)
-        canvas:put(1, 4, "Thread: " .. thread_status, width)
+        canvas:put(1, 4, "Access: " .. thread_status, width)
+        canvas:put(1, 5, "Stale credentials: " .. stale_status, width)
         assert(output:present(canvas:rows()))
     end
     local function checkpoint()
@@ -122,12 +140,11 @@ local function main(value: unknown)
     end
 
     local function run_thread_probe(thread_id: string)
-        local results = assert(process.listen("bee.application.thread.result", {message = true}))
         local function await(operation: string, arguments: Object): Object
             local request_id, request_error = client.thread_request(launch, operation, arguments)
             if not request_id then error(operation .. " request failed: " .. tostring(request_error)) end
             while true do
-                local selected = channel.select({results:case_receive(), lifecycle:case_receive()})
+                local selected = channel.select({thread_results:case_receive(), lifecycle:case_receive()})
                 if not selected.ok then error(operation .. " reply channel closed") end
                 if selected.channel == lifecycle then
                     if selected.value.kind == process.event.CANCEL then error(operation .. " cancelled") end
@@ -206,7 +223,7 @@ local function main(value: unknown)
 
         local proof = {schema = "app-thread-proof.v1", workspace_id = launch.workspace_id,
             instance_id = launch.instance_id, thread_id = thread_id, subscribe = "ok", post = "ok",
-            read = "ok", page = "ok", ack_page = "ok"}
+            read = "ok", page = "ok", ack_page = "ok", execution_pid = tostring(process.pid())}
         local proof_text = json.encode(proof)
         local posted = await("post", {idempotency_key = launch.instance_id .. "-thread-proof-post",
             message_id = launch.instance_id .. "-thread-proof-message", message_kind = "notification",
@@ -214,18 +231,49 @@ local function main(value: unknown)
         exact_fields(posted, {"record_id", "sequence"}, "post")
         identifier(posted.record_id, "proof record id")
         positive(posted.sequence, "proof sequence")
-        process.unlisten(results)
+    end
+
+    local function recheck(recipient: string?)
+        if not launch.thread_id then return end
+        thread_status = "checking"; paint()
+        local request_id, request_error = client.thread_request(launch, "read", {cursor = 0, limit = 1})
+        if not request_id then error("fresh read request failed: " .. tostring(request_error)) end
+        local deadline = time.after("5s")
+        while true do
+            local selected = channel.select({thread_results:case_receive(), lifecycle:case_receive(), deadline:case_receive()})
+            if not selected.ok or selected.channel == deadline then error("fresh read result timed out") end
+            if selected.channel == lifecycle then
+                if selected.value.kind == process.event.CANCEL then error("fresh read cancelled") end
+            else
+                local message = selected.value
+                local reply = client.thread_result(launch, message:from(), message:payload():data())
+                if reply and reply.request_id == request_id then
+                    local code = reply.error and tostring(reply.error.code) or ""
+                    if reply.ok then thread_status = "active"
+                    elseif code == "DENIED" then thread_status = "denied"
+                    else error("fresh read failed: " .. (code == "" and "unknown" or code)) end
+                    paint(); checkpoint()
+                    if recipient then
+                        assert(process.send(recipient, "bee.app_journey_probe.recheck.result", {
+                            instance_id = launch.instance_id, access = thread_status, code = code}))
+                    end
+                    return
+                end
+            end
+        end
     end
 
     paint(); client.ready(launch); checkpoint()
+    -- APP_JOURNEY_REPLACEMENT_PROBE
     if launch.thread_id and not thread_complete then
         run_thread_probe(launch.thread_id)
         thread_complete = true
-        thread_status = "ok"
+        thread_status = "active"
         paint(); checkpoint()
     end
     while true do
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive(),
+            rechecks:case_receive(), revocations:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then break end
@@ -235,10 +283,28 @@ local function main(value: unknown)
             if message:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then
                 saved = count; paint()
             end
+        elseif event.channel == rechecks then
+            recheck(tostring(event.value:from()))
+        elseif event.channel == revocations then
+            local revoked: unknown = event.value:payload():data()
+            if tostring(event.value:from()) ~= operator or type(revoked) ~= "table"
+                or revoked.instance_id ~= launch.instance_id or revoked.ok ~= true then
+                error("host access update failed")
+            end
+            recheck(nil)
         elseif event.value.type == "close" then checkpoint(); break
         elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
-        elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
+        elseif event.value.type == "key" and event.value.action ~= "release" then
+            if event.value.key == "r" then recheck(nil)
+            elseif event.value.key == "d" then
+                thread_status = "revoking"; paint()
+                assert(process.send(operator, "bee.app_open_probe.access.revoke", {instance_id = launch.instance_id}))
+            else count = count + 1; paint(); checkpoint() end
+        end
     end
+    process.unlisten(rechecks)
+    process.unlisten(revocations)
+    process.unlisten(thread_results)
     output:close(); tty.stop()
 end
 return {main = main}
@@ -345,7 +411,7 @@ local function configure_host(workspace_id: string, local_node: string)
         component = COMPONENT, resolver = "overlay", overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
         parameters = {}, allow = {packages = {COMPONENT}, namespaces = {"bee.app_journey_demo"},
             kinds = {"process.lua", "function.lua"}, databases = {LOGICAL_DB}, grants = {},
-            modules = {"tty", "process", "channel", "json", "sql"}},
+            modules = {"tty", "process", "channel", "json", "sql", "time"}},
         database_bindings = {{target_db = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX}},
         migration_policies = {"bee.app_journey_probe:migration_policy"}}}
     act_entry.data = act_data
@@ -353,7 +419,8 @@ local function configure_host(workspace_id: string, local_node: string)
     local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
-    policies[#policies + 1] = {name = APPROVAL_POLICY, approvers = {"bee.app_journey.operator"}, max_ttl_ms = 60000}
+    policies[#policies + 1] = {name = APPROVAL_POLICY,
+        approvers = {"bee.app_journey.operator", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
     policy_data.policies = policies
     policy_entry.data = policy_data
 
@@ -374,7 +441,7 @@ local function main()
 
     seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
-        modules = {"tty", "process", "channel", "json"}, imports = {client = "bee.application:client"}},
+        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.application:client"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", revision = "1",
             title = APP_TITLE, instance_policy = "multiple", resume_schema = "app-journey.v1",
             restart_policy = "automatic"}}},
@@ -397,7 +464,8 @@ local function main()
         workspace_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "frozen workspace digest")
 
-    local workspace_id = tostring(uuid.v7())
+    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
+    if not workspace_id then error("destination workspace identity is unavailable") end
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 

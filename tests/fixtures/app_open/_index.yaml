@@ -79,7 +79,8 @@ entries:
 - name: operator_policy
   kind: security.policy
   policy:
-    actions: [process.registry.register, process.registry.unregister, process.listen, process.send, process.monitor]
+    actions: [process.registry.register, process.registry.unregister, process.listen, process.send, process.monitor,
+      registry.get, registry.apply, registry.update.registry.entry]
     resources: '*'
     effect: allow
 - name: operator_call_policy
@@ -88,7 +89,14 @@ entries:
     actions: [funcs.call]
     resources: [bee.gateway:address, bee.gateway:open,
       bee.harness.launch:resolve, bee.harness.launch:start,
-      bee.threads.service:create, bee.threads.service:get, bee.threads.service:read_after]
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:leave,
+      bee.threads.service:read_after]
+    effect: allow
+- name: recheck_policy
+  kind: security.policy
+  policy:
+    actions: [process.listen, process.send]
+    resources: '*'
     effect: allow
 - name: seed
   kind: process.lua
@@ -114,7 +122,7 @@ entries:
   kind: process.lua
   source: file://operator.lua
   method: main
-  modules: [process, channel, time, funcs, json]
+  modules: [process, channel, time, funcs, json, registry]
   imports:
     bounds: bee.threads.records:bounds
     thread_binding: bee.applications:thread_binding

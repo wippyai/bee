@@ -909,6 +909,12 @@ func defaultPicker(binary string) error {
 	if err := ui.waitFor("Choose a profile", 25*time.Second); err != nil {
 		return err
 	}
+	// The picker shell is visible before its asynchronous catalog reply. Wait
+	// for the final shipped row so the assertions below inspect a loaded
+	// snapshot rather than racing the honest "Loading profiles…" state.
+	if err := ui.waitFor("Muse", 25*time.Second); err != nil {
+		return err
+	}
 	for _, profile := range []string{"Antigravity", "Claude", "Codex", "Grok", "Muse"} {
 		latest, _, _ := ui.snapshot()
 		if !ui.observed(profile, 0) {

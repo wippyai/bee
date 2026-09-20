@@ -177,6 +177,15 @@ local function incarnation(tx: sql.Transaction, owner: string): (integer?, Resul
     if #rows == 0 then return nil, failure("UNAVAILABLE", "approval authority is not established on this node") end
     return integer(rows[1].incarnation) or 1, nil
 end
+local function authenticated_definition(actor: string): string?
+    local definition: string? = nil
+    local current = security.actor()
+    if current and current:id() == actor then
+        local metadata = current:meta()
+        if type(metadata) == "table" then definition = bounds.id(metadata.definition_id) end
+    end
+    return definition
+end
 local function eligible(actor: string, row: Row): (boolean, string?)
     local workspace_id = text(row.workspace_id) or ""
     if not security.can(M.DECIDE, workspace_id) then return false, nil end
@@ -184,8 +193,10 @@ local function eligible(actor: string, row: Row): (boolean, string?)
     if not policies then return false, policies_error end
     local policy = policies[text(row.policy) or ""]
     if not policy then return false, nil end
+    local definition = authenticated_definition(actor)
     for _, approver in ipairs(policy.approvers) do
-        if approver == actor then return true, nil end
+        if type(approver) == "string" and approver == actor then return true, nil end
+        if type(approver) == "table" and definition and approver.definition_id == definition then return true, nil end
     end
     return false, nil
 end
@@ -581,7 +592,8 @@ local function feed_scope(actor: string, workspace: string): (string?, string?, 
     if not security.can(M.DECIDE, workspace) then return nil, nil, failure("DENIED", "caller may not read this workspace inbox") end
     local policies, policy_error = resources.policies()
     if not policies then return nil, nil, storage(policy_error or "read approver policies") end
-    local encoded, encode_error = canonical.encode({actor = actor, workspace = workspace, policies = policies})
+    local encoded, encode_error = canonical.encode({actor = actor, definition_id = authenticated_definition(actor),
+        workspace = workspace, policies = policies})
     if not encoded then return nil, nil, storage(encode_error or "encode approval visibility") end
     local scope, scope_error = hash.sha256(encoded)
     local feed, feed_error = hash.sha256(workspace)

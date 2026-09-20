@@ -1,15 +1,21 @@
 # Foundation status
 
-Bee source `be31299` is installed globally as executable SHA-256
-`ff0113bb4674`, pinned to runtime PR #789 at `b476104e63`. The release includes
-the exact-artifact Hive application journey described below. The fresh
-standalone candidate passed embedded Settings, Terminal, Modules and About,
-all five default Agent profiles, and loopback-only cold boot, restart and
-retained-client reconnect. The installed executable itself passed the embedded
-desktop, Settings and Terminal smoke. Its six-file installer proved rollback
-before replacement and preserved the previous set at
-`bee-evidence/0920/global-before-agent-hive-be31299`; receipt:
-`bee-evidence/0920/global-agent-hive-be31299-install.json`. No application or
+Bee source `ca8a6cd` is installed globally as executable SHA-256
+`c6bbca9356c2`, pinned to runtime PR #789 at `b476104e63`. The release includes
+compatible live application replacement and per-agent thread-access withdrawal:
+the running execution observes the changed protected policy on its next facade
+call, durable revocation removes membership and its checkpoint, and restart does
+not restore or advertise the app. Strict lint, all 1,175 unit cases, source and
+packed App Journey, the 163-document corpus, production pack, embedded Settings,
+Terminal, Modules and About, all five default Agent profiles, and loopback-only
+cold boot, restart and retained-client reconnect pass. From
+`/mnt/c/Users/Wolfy-J`, the installed executable opened retained workspace
+`Gentle Ember`; Start opened Agent with all five profiles and reported seven
+configured scoped tools, then Escape and Ctrl+Q closed and detached cleanly
+without a model turn. Its six-file installer proved rollback before replacement
+and preserved the previous set at
+`bee-evidence/0920/global-before-live-policy-ca8a6cd`; receipt:
+`bee-evidence/0920/global-live-policy-ca8a6cd-install.json`. No application or
 Bee state database was copied, removed or reset.
 
 Bee now ships one canonical terminal visual language and a runnable reference.
@@ -23,7 +29,7 @@ hit testing across every bundled theme, and the source and packed application
 pass real terminal navigation, selection reveal, resize and singleton reopen.
 This is reference source rather than a new widget framework.
 
-This reference is installed globally from source `9c9c94a` as executable
+This reference was installed globally from source `9c9c94a` as executable
 SHA-256 `8f35ebfeaca7`. Its provenance pins runtime PR #789 at `b476104e63`
 and native Bee `v0.0.0-20260919180600-ff9810fea081`. Strict lint, all
 1,142 unit cases, the four focused stylebook cases, every-theme geometry,
@@ -147,7 +153,7 @@ the accepted append-only migration slice and its database/dependency limits.
 Its prior 1,110-test checkpoint and production pack passed; the migration
 extension is covered by the newer acceptance record above. Global Bee is unchanged.
 
-The September 19 runtime-application cut is installed globally from Bee
+The September 19 runtime-application cut was installed globally from Bee
 `c5b1dd7` as executable SHA-256 `6f4c1d074c00`. It uses runtime PR #787 at
 `3d9926aa`, which additionally migrates verified immutable artifacts
 from the runner's previous `artifact-cache/vendor` layout. This closes a real
@@ -174,14 +180,27 @@ opens two distinct admitted application instances without another approval and
 exits while both applications remain live. Each application uses only its
 broker-bound facade to subscribe, post, read, page and acknowledge a page on the
 originating thread; the host supplies the stable application actor and binding
-identity. The UI reaches `Thread: ok`, checkpoint mutation reaches `Count: 1 /
-Saved: 1`, and cold restart restores the application state. The workspace host
+identity. The UI reaches `Access: active`, checkpoint mutation reaches `Count: 1 /
+Saved: 1`, and cold restart restores an actively bound application's state but resets access
+evidence to pending until a fresh facade read succeeds. The workspace host
 uses the originating agent view's display assignment, so tool arguments cannot
 choose a foreign workspace, display, thread or application actor. Source and
 packed outcomes match. A live source recovery case pauses the workspace host
 after the durable revoke commit and before the broker can issue Threads leave:
 the application remains visible at the fence, a process crash follows, and the
-next boot completes cleanup without restoring the revoked checkpoint. The tool
+next boot completes cleanup without restoring the revoked checkpoint. Separately,
+the tool journey has the real thread owner remove one of two application members.
+That app's next ordinary read is denied and its binding is durably revoked;
+the sibling reads successfully, retains the exact membership revision, and
+performs another fresh read after restart while the removed instance stays
+inactive and absent. A compatible replacement race now returns `UNCERTAIN` to
+the retiring producer without revoking valid delegation, and explicit close no
+longer waits on already-durable independent cleanup. The source journey also
+withdraws `observe_post` from the surviving running app's protected admission
+binding. Its next ordinary read is denied, the binding reaches `revoked` with
+cleanup complete, its membership becomes inactive at a newer revision, and its
+checkpoint is absent; restart shows no application and Start omits it. Live
+replacement token and generation acceptance remains unfinished. The tool
 remains host-admitted rather than enabled in every profile. Global Bee is
 unchanged.
 
@@ -312,7 +331,7 @@ race/vet proof passes. The candidate is not installed globally and still awaits
 the post-cut Agent and promotion gates. See
 [the runtime gate](handoffs/STATUS_RUNTIME_GATE.md).
 
-The September 13 Train A build is installed globally from production commit
+The September 13 Train A build was installed globally from production commit
 `414c03b` with executable SHA `4692e267`. The exact pinned `make check` passed
 883 Lua tests plus storage, source/pack desktop, recovery and bundled-app
 acceptance. The rebuilt executable passed native Modules/About/four-profile
@@ -720,7 +739,7 @@ actor isolation and replay using the persisted request. Source/pack application
 acceptance covers cold recovery without a local plan, cancellation, confirmation,
 status refresh, F12 and compact layouts. Strict lint and 68 focused Hub tests
 pass. The original migration source full regression also passes; the combined
-history source regression remains pending. The UI is installed globally as
+history source regression remains pending. The UI was installed globally as
 `2f3f8e5a`, preserving Agent recovery and optional machine login. Native desktop,
 Modules, Agent and real empty-history/F12 checks pass. Running nodes were retained.
 
@@ -954,7 +973,7 @@ saved-selection hints so another node cannot inherit its desktop selection. Reti
 removes the manager's cached row, catalog and session presentation; saved display
 layouts and application processes are untouched. Refresh is every five seconds
 when its directory worker is idle, so cleanup may occur later than 60 seconds.
-This change is installed globally as application source `6b2da06`; 516 Lua tests
+This change was installed globally as application source `6b2da06`; 516 Lua tests
 and native client/binary checks pass. The intermittent startup/expired-mount
 failure remains unresolved. See [current global build](handoffs/GLOBAL_BUILD.md).
 
@@ -1307,7 +1326,7 @@ It requires no upstream changes or Keeper dependency. Migration execution,
 interrupted-operation recovery and complete Modules confirmation/apply UI
 acceptance remain incomplete. Uninstalled embedded-resource listing, chunked reads
 and unchanged registry history pass against a public artifact. Basic Modules search, parameter input, F12 and
-resize pass from source and pack; this backend milestone is installed globally. See
+resize pass from source and pack; this backend milestone was installed globally. See
 [Hub installation and package reads](HUB.md) for the current contract and evidence.
 
 The shell remains the delivery focus. Hub installation, authorized overlay editing,
@@ -1358,7 +1377,7 @@ fails on the old presenter and passes on fixed source/pack; the original Process
 Manager scenario also passes. This does not fix or explain the separate retained
 node's intermittent mesh disconnection. The protected desktop storage methods and
 this presenter fix passed their combined full gate (486 tests, 519 entries) and
-are installed globally. The actual-user smoke reached the desktop in 1.568s
+were installed globally. The actual-user smoke reached the desktop in 1.568s
 cold, 0.222s on warm reconnect, and 0.219s through `bee observe`; all three
 detached in under 100 ms. See the global build handoff for exact evidence.
 
@@ -1381,7 +1400,7 @@ supplied by the trusted retained-supervisor bootstrap; unreported legacy session
 show "Not reported". This is not remote-peer health or a physical-client identity.
 The presenter performs no discovery or networking. Source/pack tests cover mouse,
 Escape, F12 and a 42×12 terminal. Hive Manager keeps readiness in view at narrow
-widths and moves addresses and full IDs to Details. The native UI build is installed globally and its executable acceptance passes,
+widths and moves addresses and full IDs to Details. The native UI build was installed globally and its executable acceptance passes,
 including stable display identity after reconnect. Hive Manager recognizes explicit
 native client-role metadata as display clients and does not query them as Bee
 services. This metadata grants no authority; names alone never establish roles.

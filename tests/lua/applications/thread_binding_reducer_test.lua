@@ -171,6 +171,28 @@ local function define_tests()
             state, effect = reducer.reduce(state, leave_event("unknown"))
             test.eq(effect, "cleanup_pending")
         end)
+
+        test.it("does not reissue durable revocation while cleanup is independent", function()
+            local active = host("active", 4, 11, 0, nil, 7)
+            local state, effect = reducer.reduce(reducer.new(), recover_event(active))
+            test.eq(field(effect, "purpose"), "active_recovery")
+
+            state, effect = reducer.reduce(state, revoke_event())
+            test.is_nil(effect)
+            state, effect = reducer.reduce(state, membership_event("application", "active_recovery", "absent", nil, nil))
+            test.eq(field(effect, "kind"), "host")
+            test.eq(field(effect, "op"), "begin_revoke")
+
+            local revoked = host("revoked", 5, 11, 1, 7, 7)
+            state, effect = reducer.reduce(state, host_event("begin_revoke", "success", revoked))
+            test.eq(field(effect, "kind"), "membership")
+            test.eq(field(effect, "purpose"), "cleanup")
+
+            state, effect = reducer.reduce(state, revoke_event())
+            test.is_nil(effect)
+            test.eq(state.binding, revoked)
+            test.eq(field(state.outstanding, "purpose"), "cleanup")
+        end)
     end)
 end
 

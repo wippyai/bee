@@ -15,7 +15,7 @@ here.
 | Request bound to a canonical proposal digest under a host approver policy; replay on key, conflict on a changed request | binds a request to its proposal digest | `tests/lua/approvals/service_test.lua` |
 | Two approvers race, one decision, every other outcome honest | two eligible approvers race | `service_test.lua`; two viewers race through the inbox model | `tests/lua/inbox/surface_test.lua` |
 | Owner-enforced expiry; only the requester withdraws; consumption bound to one effect | expiry, withdrawal, consumption | `service_test.lua`; expiry while viewing | `surface_test.lua` |
-| Unauthorized readers and approvers refused; bounded inbox | inbox shows approvers their policy's requests and nothing to anyone else | `service_test.lua`; outsider refused inbox and details | `surface_test.lua`; unlisted actor under the admitted scope | `tests/lua/inbox/admission_test.lua` |
+| Unauthorized readers and approvers refused; bounded inbox | inbox shows approvers their policy's requests and nothing to anyone else; exact private actors and authenticated definition selectors are distinct | `service_test.lua`; outsider refused inbox and details | `surface_test.lua`; unlisted actor under the admitted scope | `tests/lua/inbox/admission_test.lua` |
 | Changed action parameters authorize nothing | changed input refused at consumption, decision unchanged, new approval for the change; revised operation is another proposal; inbox shows the approved proposal | `tests/lua/inbox/changed_proposal_test.lua`; changed executable measurement or plan refused before dispatch, decision kept | `tests/lua/harness/permission_carrier_test.lua` |
 | Restart after decision commit before delivery; repeated delivery once | crash between thread commit and outbox acknowledgement | `service_test.lua`; decision through a stopped worker, restarted authority and reopened inbox | `tests/lua/inbox/recovery_test.lua` |
 | Disconnected viewers: no cursor past an unacknowledged page, nothing repeated | lost page and replayed pages | `recovery_test.lua` |
@@ -25,15 +25,18 @@ here.
 | Thread projection exactly once through the narrow ingress | projects requests and decisions through the worker exactly once | `service_test.lua`, `tests/lua/threads/approvals_test.lua` |
 | Harness permission exchange: intent, approval, consumption, one write, acknowledgment, every crash boundary, takeover, runner loss, late decision | fixture matrix | `permission_carrier_test.lua`; real executable matrix | `tests/lua/harness/claude_control_test.lua` |
 | Inbox: explicit decisions at the viewed revision and digest after the shell's confirmation; conflicts show the committed outcome; unknown answers recovered by reading; hostile text bounded | model, frame, surface | `tests/lua/inbox/model_test.lua`, `view_test.lua`, `surface_test.lua` |
-| Inbox scope: store denied, only the owner's four methods, eligibility follows the actor | admitted-scope probe | `admission_test.lua` |
+| Inbox scope: store denied, only the owner's four methods, eligibility requires the actor and workspace `decide` scope | admitted-scope probe | `admission_test.lua` |
 | Inbox boots under the broker as the local viewer and closes deciding nothing | broker smoke | `tests/inbox_app.py` |
 
 ## Boundaries stated
 
-- Every local desktop application acts as the client's actor (`bee.local`);
-  admission grants calls, never an identity. Separate inbox instances are not
-  separate approvers; eligibility is the host's approver policy naming the
-  actor. Multiple authenticated desktop viewers are not covered.
+- The broker launches each application under its private
+  `bee.application:<workspace>:<instance>` actor. An approver policy accepts
+  an exact actor string or a strict `{definition_id: "bee.inbox:app"}`
+  selector, matched to authenticated actor metadata. Eligibility also requires
+  `bee.approvals.decide` for the workspace; admission grants calls, never
+  approval eligibility. Separate inbox instances are separate actors, and the
+  decision audit records the exact instance actor.
 - The owner's methods open the approvals store on an application's behalf;
   `bee:workspace_storage_boundary` therefore does not list that store, and
   the application binding holds no store access. `tests/architecture.py`
@@ -63,7 +66,6 @@ here.
 - Remote Terminal admission through an approved scope (supervisor seam).
 - Managed-launch production enablement (pinned-runtime acceptance, see
   `MANAGED_LAUNCH_ACCEPTANCE.md`).
-- Per-viewer actors for desktop applications.
 - Remembered policies, multi-approver rules and trigger graphs.
 
 ## Commands

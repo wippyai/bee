@@ -7879,7 +7879,7 @@ second approval and exits while both applications remain live.
 
 Each app has only the broker message facade. Both complete `subscribe`, `post`,
 `read`, `page` and `ack_page` against the initiating thread and report a stable
-host-derived actor. The UI reaches `Thread: ok`; checkpoint mutation reaches
+host-derived actor. The UI reaches `Access: active`; checkpoint mutation reaches
 `Count: 1 / Saved: 1`; cold restart restores the state. Source and packed
 results match. The host-side negative probe also proves that an ordinary caller
 cannot register the protected carrier identity or send a successful direct open
@@ -7891,7 +7891,7 @@ PID lookup is bound before thread requests can call it, removing the live
 `attempt to call a non-function object` crash. Checkpoint acknowledgement is a
 best-effort send to the monitored broker, so an already exited broker cannot
 hide the original failure. Lifecycle recovery across the durable revoke fence
-is still awaiting its separate live acceptance; this entry does not claim it.
+was proved in the following checkpoint.
 Global Bee remains unchanged.
 
 ## 2026-09-20 — revoke crash recovery proved live
@@ -7910,5 +7910,100 @@ starting its broker. A matching revoked binding removes the checkpoint
 durably; a binding whose thread or definition differs from the checkpoint is
 treated as corruption. Ordinary unbound checkpoints remain unchanged. The
 source and packed governed agent journey, including the new source-only crash
-injection, passes. Changed-membership and compatible-replacement live cases are
-still separate acceptance work. Global Bee remains unchanged.
+injection, passes. Compatible-replacement credential acceptance is still
+separate work. Global Bee remains unchanged.
+
+## 2026-09-20 — changed thread membership fenced live
+
+The source and packed App Journey now use the real initiating thread owner to
+remove the first of two stable application actors at the exact current head
+revision. Both executions then receive an explicit fixture-local trigger for an
+ordinary broker-facade read. The removed member receives `DENIED`; the sibling
+succeeds. Durable evidence requires the first binding to be revoked with cleanup
+complete, its Threads member inactive and its checkpoint absent, while the
+sibling binding and membership revision remain active.
+
+On restart only the sibling returns. Its UI begins at `Access: pending` even
+though the prior full facade proof is checkpointed; a fresh read from the new
+execution is required before it paints `Access: active`. The removed membership
+stays inactive and is never silently adopted or rejoined. The crash-after-fence
+case now starts from that exact surviving binding and also requires the complete
+expected row set, avoiding a vacuous partial-row assertion.
+
+Astra's review exposed two production races while this case was being closed.
+An authenticated retiring producer now receives `UNCERTAIN` during an exact
+compatible replacement instead of revoking valid delegation or executing under
+stale bytes. A changed access binding or changed replacement target still denies
+and revokes. Explicit close also proceeds immediately after a revoke is durable,
+including an exited replacement, while the existing coordinator finishes
+membership cleanup independently. Strict lint, all 1,172 unit tests and the full
+source/packed App Journey pass. Compatible-replacement token/generation evidence
+remains the next bounded slice. Global Bee remains unchanged.
+
+## 2026-09-20 — running application policy withdrawal proved live
+
+The source App Journey now changes the surviving application's protected host
+admission from `thread_access: observe_post` to `none` while its current
+execution remains live. The application requests the change through an
+authenticated fixture message; it never receives registry access. The trusted
+fixture operator verifies the sender is that instance's current execution and
+updates the host-owned binding.
+
+The same execution's next ordinary facade read returns `DENIED`. Durable
+evidence requires the application/thread binding to reach `revoked` with cleanup
+complete and the exact Threads membership to become inactive at a newer
+revision. The process remains visible until normal close, after which its
+checkpoint is absent. A cold restart shows `No applications open`, the Start
+catalog remains responsive and omits the revoked application, and the normal
+sub-second shutdown budget still passes after startup settles. The complete
+source and packed App Journey passes. Global Bee remains unchanged.
+
+## 2026-09-20 — live application policy release installed globally
+
+Source `ca8a6cd` is installed as executable SHA-256 `c6bbca9356c2`, using
+runtime renewal `b476104e` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`. Strict production lint, 1,175 units, the
+source and packed App Journey, corpus integrity, production pack, exact
+standalone native binary and five-profile Agent selector, and offline
+cold/restart/reconnect acceptance pass. Offline warm attachment measured 0.230
+seconds.
+
+The six-file installer proved its post-replacement rollback path, stopped the
+one exact prior owner on SIGTERM, preserved its complete artifact set at
+`bee-evidence/0920/global-before-live-policy-ca8a6cd`, and installed only the
+verified binary and sidecars. Receipt:
+`bee-evidence/0920/global-live-policy-ca8a6cd-install.json`. Application and Bee
+state databases were not copied, removed or reset.
+
+The exact installed executable launched from `/mnt/c/Users/Wolfy-J`, restored
+workspace `Gentle Ember`, and opened the Agent picker with all five profiles and
+seven configured scoped tools. Escape closed the picker and Ctrl+Q detached
+cleanly without launching a provider or submitting a model turn.
+
+## 2026-09-20 — production duplication audit closed
+
+Promptmap scanned 566 production Lua and YAML files for duplicated and
+unnecessarily indirect implementation. Manual review rejected seven proposed
+policy consolidations: the similar expressions bind different principals,
+functions or execution scopes, so merging them would broaden authority. Muse's
+`gateway_tools` paths are also distinct by design: the launch decoder validates
+the carrier value while the configure method renders protected provider state.
+No byte-identical production Lua or YAML files remain.
+
+The audit found and removed two unreachable production modules: the
+unindexed harness activation decoder superseded by `bee.driver:resolver`, and
+the unindexed fixed-list Hive feed admission worker superseded by catalog-driven
+policy admission. Historical global-build sections were relabeled as previous
+installs and their installation statements changed to past tense, leaving only
+the active `ca8a6cd` build described as current. The untracked registry-planner
+work remains untouched. Renewal-runtime strict lint and all 1,175 units pass.
+The broad Hive supervisor gate remains independently red because its frozen
+fixture omits `replica_admission` and does not create the approvals database
+directory; neither failure resolves or references either removed module.
+
+The standalone release gate exposed a separate acceptance race: the Agent
+picker paints its heading while its asynchronous profile catalog still shows
+`Loading profiles…`, but the native selector treated that heading as catalog
+readiness and immediately asserted all five rows. The selector now waits for
+the final shipped row within its existing 25-second budget before checking the
+complete set. The full native Agent gate passes without a wider deadline.

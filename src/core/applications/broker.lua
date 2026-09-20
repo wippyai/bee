@@ -464,6 +464,28 @@ local function main(owner: string, initial_preferences: unknown)
         local coordinator = coordinators[item.instance_id]
         local stored = coordinator and coordinator.state.binding or nil
         local current_descriptor, current_binding = current_application(item.descriptor.definition_id)
+        if item.replacement then
+            -- Refresh can observe the compatible definition before the old
+            -- producer exits. Its descriptor is necessarily stale, but the
+            -- durable delegation has not changed. Do not execute through that
+            -- producer or mistake its expected revision skew for membership
+            -- loss. A removed current admission still fences it immediately.
+            if current_descriptor and current_binding and current_binding.thread_access == "observe_post"
+                and stored and stored.state == "active"
+                and stored.actor_id == thread_binding.actor(workspace_id, item.instance_id)
+                and stored.thread_id == item.thread_id
+                and stored.definition_id == item.descriptor.definition_id
+                and stored.definition_revision == item.descriptor.definition_revision
+                and stored.access == "observe_post"
+                and current_descriptor.definition_revision == item.replacement.revision
+                and catalog.replaces(item.descriptor, current_descriptor) then
+                send_thread_result(sender, request, nil, "UNCERTAIN", "Application replacement is in progress")
+                return
+            end
+            if coordinator then drive_binding(coordinator, {kind = "revoke"}) end
+            send_thread_result(sender, request, nil, "DENIED", "Application thread access is not active")
+            return
+        end
         if not current_descriptor or current_descriptor.definition_revision ~= item.descriptor.definition_revision
             or not current_binding or current_binding.thread_access ~= "observe_post"
             or not stored or stored.state ~= "active"
@@ -761,9 +783,19 @@ local function main(owner: string, initial_preferences: unknown)
             end
         elseif effect == "closed" or effect == "failed" then finish(item, effect == "failed") end
     end
+    local function binding_is_revoked(coordinator: BindingCoordinator?): boolean
+        return coordinator ~= nil and coordinator.state.binding ~= nil
+            and coordinator.state.binding.state == "revoked"
+    end
     local function commit_explicit_close(item: Instance, event: lifecycle.Event)
         local coordinator = coordinators[item.instance_id]
-        if coordinator then
+        -- A prior membership failure may already have committed the revoke.
+        -- Its reducer now owns independent cleanup; a second revoke resumes
+        -- that cleanup and cannot emit another begin_revoke success to wake a
+        -- close waiter. Stop this execution immediately instead.
+        if binding_is_revoked(coordinator) then
+            transition(item, event)
+        elseif coordinator then
             coordinator.stop_event = event
             drive_binding(coordinator, {kind = "revoke"})
         else transition(item, event) end
@@ -801,8 +833,12 @@ local function main(owner: string, initial_preferences: unknown)
         item.waiters[#item.waiters + 1] = waiter
         local coordinator = coordinators[item.instance_id]
         if item.replacement and item.replacement.exited and coordinator then
-            coordinator.stop_event, coordinator.settle_after_revoke = force and "force_stop" or "stop", true
-            drive_binding(coordinator, {kind = "revoke"})
+            if binding_is_revoked(coordinator) then
+                settle_exited_replacement(item, true)
+            else
+                coordinator.stop_event, coordinator.settle_after_revoke = force and "force_stop" or "stop", true
+                drive_binding(coordinator, {kind = "revoke"})
+            end
             return
         elseif settle_exited_replacement(item, true) then return end
         item.replacement = nil

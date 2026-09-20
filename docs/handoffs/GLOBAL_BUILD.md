@@ -1,10 +1,46 @@
 # Global Bee build — September 20, 2026
 
-## Current install: agent-authored application delivery across Hive
+## Current install: live application replacement and policy withdrawal
+
+Source `ca8a6cd`, executable SHA-256
+`c6bbca9356c2b31b369c254c2695808364238f9336e867b9adf591dd93c1a484`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` and native Bee
+`v0.0.0-20260919180600-ff9810fea081`.
+
+The source App Journey proves compatible replacement under the same logical
+instance, view, actor, thread, membership revision and checkpoint while the
+execution generation advances and launch token rotates. It then changes that
+running app's protected admission from `thread_access: observe_post` to `none`.
+The next facade read is denied, durable cleanup removes its exact membership and
+checkpoint, and restart leaves the desktop empty and omits the app from Start.
+
+Strict lint covers 496 production entries with only the documented
+desktop-lifecycle fixpoint warning; all 1,175 units, the source and packed App
+Journey, the 163-document offline corpus and production pack pass. The exact
+standalone passes embedded Desktop, Settings, Terminal, Modules and About, the
+five-profile Agent selector, and loopback-only cold boot, restart and retained
+reconnect. Offline acceptance measured a 0.230-second warm attach.
+
+The installer verified all six artifacts and the runtime patch archive, proved
+post-replacement rollback against a disposable set, stopped one exact prior
+owner cleanly on SIGTERM, backed up the previous global set at
+`/home/wolfy-j/wippy/bee-evidence/0920/global-before-live-policy-ca8a6cd`, and
+atomically replaced sidecars before the executable. Receipt:
+`/home/wolfy-j/wippy/bee-evidence/0920/global-live-policy-ca8a6cd-install.json`.
+Databases, profiles, conversations, workspaces, displays, credentials and
+migration ledgers were preserved.
+
+From `/mnt/c/Users/Wolfy-J`, the installed executable opened retained workspace
+`Gentle Ember`. Start opened Agent with Antigravity, Claude, Codex, Grok and Muse
+profiles and reported seven configured scoped tools. Escape closed the picker
+and Ctrl+Q detached cleanly without launching a provider or submitting a turn.
+
+## Previous install: agent-authored application delivery across Hive
 
 Source `be31299`, executable SHA-256
 `ff0113bb46741837aba5c8286742c78def7d8ba834438c2c38a626bed8f65863`,
-is installed globally with its matching license, Go module, provenance and
+was installed globally with its matching license, Go module, provenance and
 runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` and native Bee
 `v0.0.0-20260919180600-ff9810fea081`.
 
@@ -36,11 +72,11 @@ One retained previous owner exited cleanly on SIGTERM. Databases, profiles,
 conversations, workspaces, displays, credentials and migration ledgers were
 preserved.
 
-## Current install: Bee UI brand book and runnable reference
+## Previous install: Bee UI brand book and runnable reference
 
 Source `9c9c94a`, executable SHA-256
 `8f35ebfeaca7e18bf1e47d3c52b8de31c75fa9114301053f1e203288043c19cc`,
-is installed globally with its matching license, Go module, provenance and
+was installed globally with its matching license, Go module, provenance and
 runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` and native Bee
 `v0.0.0-20260919180600-ff9810fea081`.
 
@@ -62,11 +98,11 @@ From `/mnt/c/Users/Wolfy-J`, the exact installed `bee` opened
 **Tools → Learn → UI Guide**. Keyboard navigation, selected-row reveal across
 `40×12` and `20×6` resize, application close and desktop detach passed.
 
-## Current install: governed live application updates
+## Previous install: governed live application updates
 
 Source `9fb90d7`, executable SHA-256
 `3d95c4d2ffe482d9dc63e8b9a1fb0cd3af16d398dbc3e33178aad0f59fa9382c`,
-is installed globally with its matching license, Go module, provenance and
+was installed globally with its matching license, Go module, provenance and
 runtime-patch sidecars. It pins runtime PR #789 at `b476104e63` on top of the
 application model from PR #787, and native Bee
 `v0.0.0-20260919180600-ff9810fea081`.
@@ -90,11 +126,11 @@ From `/mnt/c/Users/Wolfy-J`, the installed `bee` rendered retained workspace
 inherited the signed-in account and exact project directory, and was closed with
 Ctrl+C without submitting a model turn; the client then detached with Ctrl+Q.
 
-## Current install: runtime application model and concurrent project startup
+## Previous install: runtime application model and concurrent project startup
 
 Source `fbddfdc0`, binary
 `85205596820d8ec86a513fba565e662ca94b8eb4e75279c5e22372e8450b1b18`,
-is installed globally with its matching license, Go module, provenance and
+was installed globally with its matching license, Go module, provenance and
 runtime-patch sidecars. It pins runtime PR #787 at `7f9e7e89bc70` and native Bee
 `v0.0.0-20260919180600-ff9810fea081`. Bee composes provider TOML in Lua with the
 existing runtime codec and publishes retained configuration through
@@ -118,11 +154,11 @@ old Bee owner processes exited on SIGTERM; none required SIGKILL. Databases,
 profiles, conversations, workspaces, displays, credentials and migration
 ledgers were not removed or copied.
 
-## Current install: persisted Hive profile and private application delivery
+## Previous install: persisted Hive profile and private application delivery
 
 Source `fe1eb0d`, binary
 `17cd72b19480e2c1a40d6413bf2794934a90446562180a5744118438155e0531`,
-is installed globally with its matching license, effective module, provenance
+was installed globally with its matching license, effective module, provenance
 and runtime-patch sidecars. The build uses runtime `6b40cb0f` with nine reviewed
 patches and native Bee
 `v0.0.0-20260915183420-48df9c2981b4`. The previous six files are preserved at
@@ -155,7 +191,7 @@ simultaneous joined project identities also remain open.
 
 Production `414c03b`, binary
 `4692e26713fa848bbe4c2dae32feb9a9e86778fb2d9b870eb552ffc5b85d455a`,
-is installed globally. Runtime `291f5c6b` and native
+was installed globally. Runtime `291f5c6b` and native
 `v0.0.0-20260913153139-79a1cd97446b` are unchanged. The exact composed-runtime
 `make check` passed all 883 Lua tests and the complete storage, source/pack
 desktop, client, recovery and bundled application acceptance. Its retained
@@ -192,11 +228,11 @@ Evidence:
 - `bee-train-a-414c03b-installed-offline.log`
 - `train-a-414c03b-global-install-retry.log`
 
-## Current install: visible Agent launch failures and unstarted-session cleanup
+## Previous install: visible Agent launch failures and unstarted-session cleanup
 
 Production `1a0ae17`, binary
 `c78b764d589476ebef58c69286d235766b593c69a4e889f6eb8f34240fa2edaa`,
-is installed globally. Runtime and native selections match the preceding build
+was installed globally. Runtime and native selections match the preceding build
 `c8537ef7`. All artifact hashes match provenance. Offline boot/restart/reconnect
 passes, as do 865 unit tests and three real failure-view stages: before action
 admission, after action admission, and after placement preparation. The existing
@@ -574,7 +610,7 @@ and did not restart running nodes or reset databases. Evidence:
 `offline-final-native.log`, `offline-bee-unit-check.log`, and
 `offline-final-app-{race,lint}.log` in `bee-evidence/0912`.
 
-## Current install: reconcile protected application admission
+## Previous install: reconcile protected application admission
 
 Global SHA `dac1ba49436ddb79672f6ab5a9cddc39a49d8acf55d7f992ad7e46f0e682786a`
 contains source `7b7f4af`. The broker reloads protected bindings, descriptors and
@@ -629,7 +665,7 @@ Backup: `global-before-desktop-cleanup-6cfa0071`.
 The preceding Hub source passed all 787 units on recheck in
 `hub-contents-unit-recheck.log`; this does not establish a full repository pass.
 
-## Current install: Contents and preserved update settings
+## Previous install: Contents and preserved update settings
 
 Global SHA `6cfa007158d0891f8ec3413edda2c70ca3df0e00c6ff7e41b2e6b7ade1a293ff`
 contains source `ef94c84`; acceptance-only follow-up is `aa45f5c`. Modules adds
@@ -661,7 +697,7 @@ full acceptance is incomplete. The older full run ended in the shared-desktop sh
 that exact source/pack case passed alone. See the [completion audit](HUB_COMPLETION.md)
 for remaining update discovery, optional plugin and installed-app admission work.
 
-## Current install: Modules presentation follow-up
+## Previous install: Modules presentation follow-up
 
 Global SHA `668d2e9078bcbd53935ebb1e5840ee000faae26ea036cdce52e0b6b75fdf8b21`
 contains source `bf41d0a`. Installed packages now separate names and versions from
@@ -683,7 +719,7 @@ The full repository gate on the earlier combined source remains running in
 `hub-current-full-check.log`. Saved update-parameter hydration is being developed
 separately and is not included here.
 
-## Current install: configure missing dependency parameters
+## Previous install: configure missing dependency parameters
 
 Global SHA `4f93cc36b6bb3e2b95fc81908f78c2344a9836de5feba63f64bf1843670d6b64`
 contains source `c5f636e`. Missing dependency parameters can be edited directly
@@ -698,7 +734,7 @@ The installer fenced against `adeb373c`, backed up/hash-verified the executable
 and five sidecars, and checked matching runtime/native/patch identity. No nodes
 were restarted. Earlier checkpoint sections follow.
 
-## Current install: About and Modules override reset
+## Previous install: About and Modules override reset
 
 Global SHA `adeb373c181a5f0f3e4de67aa570c3d215951622111f04ed8ea25ac6ac90dbe6`
 contains production source `491ad5b`. Settings → About shows the loaded bundle's
@@ -724,7 +760,7 @@ sidecars, and verified matching runtime/native pins and patch hashes. Backup:
 `global-before-about-887d0769`. No running nodes were restarted; they continue
 using their loaded UI until restart. Earlier checkpoint sections follow.
 
-## Current install: managed MCP and lifecycle hooks, latest Modules UI
+## Previous install: managed MCP and lifecycle hooks, latest Modules UI
 
 Global `887d0769562a5f8c64362313e833ad513374b6aa41c330ddf7c1e4e89e045fc9`
 uses combined source `9da558b`. It preserves Hub requirements, package database
@@ -1351,7 +1387,7 @@ The 60-second departed-display retirement work is not in this install.
 
 Everything below is historical installation evidence.
 
-## Current install: display isolation and direct appearance routing
+## Previous install: display isolation and direct appearance routing
 
 Global `/home/wolfy-j/.local/bin/bee` now has SHA256
 `ac0871a31007c4638c84d9e6836d512750e1ebdbbd1447eb96adfa626424416b`.

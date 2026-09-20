@@ -225,15 +225,17 @@ lists the approvals store, since the owner's methods open it on the
 application's behalf; `tests/lua/inbox/admission_test.lua` runs a process
 under that exact scope and proves the store denied before and after owner
 calls, only inbox, read, decide and withdraw answering, list, consume and
-the service library out of reach, and eligibility following the actor the
-process runs under: an actor the approver policy does not list sees no
-request and is refused, however admitted the application is. In the local
-desktop every application runs under the client's actor (`bee.local`), so
-the host's approver policy names that actor to make the local viewer an
-approver; admission alone makes no one eligible. All local desktop
-applications act as `bee.local`: separate inbox instances are not separate
-approvers, and this acceptance covers the single-actor local desktop only,
-not multiple authenticated desktop viewers.
+the service library out of reach, and eligibility following the authenticated
+actor the process runs under: an actor the approver policy does not match sees
+no request and is refused, however admitted the application is. The broker
+launches each application as the private actor
+`bee.application:<workspace>:<instance>`. A host approver policy may name
+that exact actor or use the strict selector
+`{definition_id: "bee.inbox:app"}`; a selector matches only the authenticated
+actor's definition metadata. In either case the actor also needs
+`bee.approvals.decide` for the workspace. Admission alone makes no one
+eligible. Separate inbox instances are separate actors, and an accepted
+decision records the exact instance actor in its audit history.
 `tests/lua/inbox/recovery_test.lua` proves one decision surviving an
 interrupted delivery with the owner authority and the inbox restarted and
 the delivery replayed once, no cursor advancing past a page that never

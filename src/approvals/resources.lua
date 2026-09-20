@@ -5,7 +5,9 @@ local M = {}
 M.DATABASE_REF = "bee.approvals:database_ref"
 M.POLICIES_REF = "bee.approvals:policies_ref"
 M.THREAD_APPEND = "bee.threads.approvals:append"
-type Policy = {name: string, approvers: {string}, max_ttl_ms: integer}
+type DefinitionSelector = {definition_id: string}
+type Approver = string | DefinitionSelector
+type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer}
 local function reference(id: string, label: string): (string?, string?)
     local entry = registry.get(id)
     if not entry then return nil, label .. " reference is missing" end
@@ -35,12 +37,29 @@ function M.policies(): ({[string]: Policy}?, string?)
         if type(name) ~= "string" or name == "" then return nil, "approver policy has no name" end
         if type(approvers) ~= "table" then return nil, "approver policy " .. name .. " has no approvers" end
         if type(ttl) ~= "number" or ttl < 1 then return nil, "approver policy " .. name .. " has no max_ttl_ms" end
-        local ids: {string} = {}
+        local subjects: {Approver} = {}
         for _, approver in ipairs(approvers :: {unknown}) do
-            if type(approver) ~= "string" or approver == "" then return nil, "approver policy " .. name .. " lists a non-identifier" end
-            ids[#ids + 1] = approver
+            if type(approver) == "string" then
+                if approver == "" or #approver > 200 or approver:find("%c") then
+                    return nil, "approver policy " .. name .. " lists a non-identifier"
+                end
+                subjects[#subjects + 1] = approver
+            elseif type(approver) == "table" then
+                local definition = approver.definition_id
+                for field in pairs(approver) do
+                    if field ~= "definition_id" then
+                        return nil, "approver policy " .. name .. " has an unknown approver selector field " .. tostring(field)
+                    end
+                end
+                if type(definition) ~= "string" or definition == "" or #definition > 160 or definition:find("%c") then
+                    return nil, "approver policy " .. name .. " has an invalid application definition selector"
+                end
+                subjects[#subjects + 1] = {definition_id = definition}
+            else
+                return nil, "approver policy " .. name .. " lists an invalid approver selector"
+            end
         end
-        policies[name] = {name = name, approvers = ids, max_ttl_ms = math.floor(ttl)}
+        policies[name] = {name = name, approvers = subjects, max_ttl_ms = math.floor(ttl)}
     end
     return policies, nil
 end

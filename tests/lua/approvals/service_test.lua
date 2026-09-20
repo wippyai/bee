@@ -13,6 +13,7 @@ local process = require("process")
 local sql = require("sql")
 local uuid = require("uuid")
 local service = require("service")
+local resources = require("resources")
 local outbox = require("outbox")
 local migrations = require("migrations")
 local persist = require("persist")
@@ -35,10 +36,10 @@ local function scope(names: {string}): security.Scope
     end
     return security.new_scope(policies)
 end
-local function caller(id: string, grants: {string}): funcs.Executor
+local function caller(id: string, grants: {string}, metadata: {[string]: string | integer}?): funcs.Executor
     local names: {string} = {"bee.approvals:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
-    return funcs.new():with_actor(security.new_actor(id)):with_scope(scope(names))
+    return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(scope(names))
 end
 local requester = caller(REQUESTER, {"bee:approval_request_policy", "bee:approval_consume_policy", "bee:thread_create_policy", "bee:thread_observe_policy", "bee:thread_storage_policy", "bee:thread_resource_policy"})
 local launcher = thread_harness.principal(REQUESTER, thread_harness.ALL)
@@ -49,6 +50,11 @@ local bob = caller(BOB, {"bee:approval_decide_policy"})
 local carol = caller("bee.test.carol", {"bee:approval_decide_policy"})
 local outsider = caller(OUTSIDER, {})
 local manager = caller(MANAGER, {"bee:approval_manage_policy"})
+local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
+local inbox_app = caller(INBOX_ACTOR, {"bee:approval_decide_policy"},
+    {definition_id = "bee.inbox:app", workspace_id = "0123456789abcdef0123456789abcdef"})
+local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
+    {"bee:approval_decide_policy"}, {definition_id = "bee.settings:app"})
 local owner = caller(OUTBOX, {"bee:approval_owner_policy", "bee:thread_approval_policy", "bee:thread_approval_client_policy", "bee:thread_storage_policy", "bee:thread_resource_policy"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals:" .. method, value)
@@ -94,11 +100,27 @@ local function install_policy()
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then return end
     end
-    policies[#policies + 1] = {name = POLICY, approvers = {ALICE, BOB, "bee.test.carol"}, max_ttl_ms = 60000}
+    policies[#policies + 1] = {name = POLICY,
+        approvers = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
     if not applied then error("install approver policy: " .. tostring(err)) end
+end
+local function replace_approvers(value: {unknown})
+    local entry = assert(registry.get("bee.approvals:approver_policies"))
+    local data = entry.data :: {[string]: unknown}
+    local policies = data.policies :: {{[string]: unknown}}
+    local selected: {[string]: unknown}? = nil
+    for _, policy in ipairs(policies) do
+        if policy.name == POLICY then selected = policy; break end
+    end
+    assert(selected, "test approver policy is missing")
+    selected.approvers = value
+    local changes = registry.snapshot():changes()
+    assert(changes:update(entry))
+    local applied, apply_error = changes:apply()
+    if not applied then error("replace test approvers: " .. tostring(apply_error)) end
 end
 local function proposal(payload: {[string]: unknown}?): {[string]: unknown}
     return {kind = "operation", ref = "bee.harness.launch:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
@@ -268,6 +290,32 @@ local function define_tests()
             local withdrawn = value(call(requester, "withdraw", {approval_id = approval_id}))
             test.eq(withdrawn.withdrawn, false)
             test.eq((withdrawn.request :: {[string]: unknown}).state, "decided")
+        end)
+        test.it("admits a host-selected application definition while retaining its private actor", function()
+            local workspace = "ws-" .. key()
+            local created = value(call(requester, "request", request_of(workspace, {
+                proposal = proposal({definition_id = "bee.inbox:app"})})))
+            local approval_id, digest = created.approval_id :: string, created.proposal_digest :: string
+            test.eq(code(call(other_app, "read", {approval_id = approval_id})), "DENIED")
+            test.eq(value(call(inbox_app, "read", {approval_id = approval_id})).approval_id, approval_id)
+            local decided = value(call(inbox_app, "decide", {approval_id = approval_id,
+                expected_revision = 1, decision = "approved", proposal_digest = digest}))
+            test.eq(decided.decider_id, INBOX_ACTOR)
+            test.eq(decided.state, "decided")
+        end)
+        test.it("rejects malformed application definition selectors", function()
+            local valid: {unknown} = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.inbox:app"}}
+            for _, invalid in ipairs({{{}}, {{definition_id = ""}},
+                    {{definition_id = "bee.inbox:app", extra = true}}}) do
+                replace_approvers(invalid :: {unknown})
+                local decoded, decode_error = resources.policies()
+                test.eq(decoded, nil)
+                test.eq(type(decode_error), "string")
+            end
+            replace_approvers(valid)
+            local decoded, decode_error = resources.policies()
+            test.eq(decode_error, nil)
+            test.eq(decoded ~= nil, true)
         end)
         test.it("enforces expiry at the owner, lets only the requester withdraw and binds consumption to one effect", function()
             local workspace = "ws-" .. key()

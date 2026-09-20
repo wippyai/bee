@@ -39,6 +39,7 @@ entries:
   imports:
     test: wippy.test:test
     service: bee.approvals:service
+    resources: bee.approvals:resources
     outbox: bee.approvals:outbox
     migrations: bee.approvals:migrations
     persist: bee.persist:database

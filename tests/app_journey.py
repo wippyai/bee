@@ -55,7 +55,9 @@ def bind_admission(project):
     document = yaml.safe_load(index.read_text())
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
     admission["bindings"].append({"definition_id": DEFINITION_ID,
-                                  "policies": ["bee:ordinary_app_subsystem_boundary"],
+                                  "policies": ["bee:ordinary_app_subsystem_boundary",
+                                               "bee.app_open_probe:recheck_policy",
+                                               "bee.app_open_probe:operator_signal_policy"],
                                   "thread_access": "observe_post"})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
 
@@ -96,6 +98,13 @@ def assert_delivery_has_no_overlay_authority(project):
     assert seen == wanted, sorted(wanted - seen)
 
 
+def workspace_identity(folder):
+    with sqlite3.connect(Path(folder) / "workspace.db") as db:
+        rows = db.execute("SELECT workspace_id FROM workspace_identity WHERE singleton = 1").fetchall()
+    assert len(rows) == 1 and re.fullmatch(r"[0-9a-f]{32}", rows[0][0]), rows
+    return rows[0][0]
+
+
 def open_admitted(ui, timeout):
     """Boot recovery re-establishes the activation owner's overlay after the
     desktop is already up; the broker then refreshes admission from the
@@ -118,7 +127,8 @@ def deliver(project, folder, pack_file=None):
     args += ["--verbose", "app-journey-deliver", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=folder if pack_file else project, capture_output=True, text=True,
-                            timeout=300, env=database_environment(folder))
+                            timeout=300, env=database_environment(
+                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "APP_JOURNEY_DELIVERED" in output, output
     match = re.search(r"APP_JOURNEY_DELIVERED\s+(\{.*\})", output)
@@ -131,6 +141,106 @@ def deliver(project, folder, pack_file=None):
     assert evidence["refused_overlay_write"] == \
         "not allowed to apply registry overlay: bee.app_journey_probe:forbidden_overlay", evidence
     return evidence
+
+
+def stage_replacement(project, folder):
+    """Author and stage a compatible replacement while the desktop is live.
+
+    The fixture command stops after publication and durable staging. Review,
+    selection, approval and application remain the ordinary UI flow below.
+    """
+    result = subprocess.run([str(RUNTIME), "run", "--verbose", "app-journey-stage", "--host", "bee:workers",
+                             "--override", "bee.managed:listener:addr=127.0.0.1:0",
+                             "--set", f"registry.history_path={folder}/registry.db"], cwd=project,
+                            capture_output=True, text=True, timeout=300, env=database_environment(folder))
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "APP_JOURNEY_REPLACEMENT_STAGED" in output, output[-12000:]
+    match = re.search(r"APP_JOURNEY_REPLACEMENT_STAGED\s+(\{.*\})", output)
+    assert match, output
+    evidence = json.loads(match.group(1))
+    for name in ("snapshot_digest", "artifact_digest", "plan_digest"):
+        assert re.fullmatch(r"[0-9a-f]{64}", evidence[name]), evidence
+    assert evidence["version"] == "1.0.1" and evidence["workspace"] == "app-journey-source", evidence
+    return evidence
+
+
+def replace_v2_in_ui(ui, staged, root):
+    """Review, approve and apply one exact compatible plan through the UI."""
+    ui.open_start()
+    ui.choose("Tools")
+    ui.choose("App Delivery")
+    ui.wait("APP DELIVERY", timeout=COLD_BOOT)
+    ui.pump(.5)
+    ui.key(b"\t")
+    ui.key(b"f")
+    ui.wait(staged["workspace"], timeout=20)
+    ui.wait("Read review", timeout=20)
+    ui.key(b"j")
+    ui.key(b"\r")
+    try:
+        ui.wait("REVIEW " + staged["workspace"], timeout=20)
+    except AssertionError:
+        Path("/tmp/app-journey-replacement-desktop.raw").write_bytes(ui.raw)
+        raise
+    ui.wait("Verdict ready", timeout=20)
+    ui.wait("Accept review", timeout=20)
+    ui.key(b"a")
+    ui.wait("Select version", timeout=20)
+    ui.key(b"s")
+    ui.wait("Request approval", timeout=20)
+    ui.key(b"p")
+    ui.wait("Activation approval_bound", timeout=COLD_BOOT)
+
+    ui.open_start()
+    ui.choose("Tools")
+    ui.choose("Approvals")
+    ui.wait("APPROVALS", timeout=COLD_BOOT)
+    ui.window_control("□")
+    ui.pump(.5)
+    ui.key(b"r")
+    ui.wait("bee.governance:establish-overlay", timeout=COLD_BOOT)
+    expected = ("Asked: Establish and recover " + staged["workspace"]
+                + " version " + staged["version"] + " in this workspace?")
+    for _ in range(8):
+        ui.key(b"\x1b[5~")
+    for _ in range(64):
+        ui.key(b"o")
+        ui.wait("Asked:", timeout=5)
+        if expected in ui.text():
+            break
+        ui.key(b"j")
+    else:
+        raise AssertionError("exact replacement approval is absent\n" + ui.text())
+    ui.key(b"a")
+    ui.wait("Approve this request?", timeout=20)
+    ui.key(b"\t")
+    ui.key(b"\r")
+    ui.wait("approved by bee.application:", timeout=COLD_BOOT)
+    assert_inbox_decider(root, workspace_identity(root))
+
+    # Focus the retained delivery window from the taskbar and let its own
+    # activation loop consume the one approved effect.
+    deadline = time.monotonic() + 10
+    while "App Delivery" not in ui.screen.display[0]:
+        assert time.monotonic() < deadline, ui.text()
+        ui.pump(.2)
+    x = ui.screen.display[0].index("App Delivery") + 1
+    ui.mouse(0, x, 1)
+    ui.mouse(0, x, 1, True)
+    ui.pump(.4)
+    for _ in range(8):
+        ui.key(b"x")
+        ui.pump(.1)
+        deadline = time.monotonic() + COLD_BOOT
+        while "Working…" in ui.text() or "Request in progress" in ui.text():
+            assert time.monotonic() < deadline, ui.text()
+            ui.pump(.1)
+        if "Activation settled" in ui.text(): break
+    ui.wait("Activation settled", timeout=COLD_BOOT)
+    ui.window_control("×")
+    ui.pump(.3)
+    ui.window_control("×")
+    ui.pump(.3)
 
 
 def guide(project, folder):
@@ -260,12 +370,17 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
     assert report["unapproved_refused"] is True and report["agent_exited"] is True, report
     assert report["first_thread_proof"]["instance_id"] == report["first_instance"], report
     assert report["second_thread_proof"]["instance_id"] == report["second_instance"], report
+    assert report["removed_instance"] == report["first_instance"] and report["removed_access"] == "denied", report
+    assert report["surviving_instance"] == report["second_instance"] and report["surviving_access"] == "active", report
     assert report["direct_sender_refused"] is True, report
     restarted = Desktop(directory, packed=packed, project=project, pack_file=pack_file)
     try:
         restarted.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
         restarted.wait("Count: 1")
         restarted.wait("Saved: 1")
+        restarted.wait("Access: pending")
+        restarted.key(b"r")
+        restarted.wait("Access: active")
         restarted.quit()
     finally:
         restarted.close()
@@ -274,7 +389,7 @@ def run_open_probe(project, directory, packed=False, pack_file=None):
 
 def copy_activation(source, destination):
     """Clone approved durable state; boot recovery must reapply its overlay."""
-    for name in ("registry", "governance", "approvals"):
+    for name in ("registry", "governance", "approvals", "workspace"):
         with sqlite3.connect(source / f"{name}.db") as origin:
             with sqlite3.connect(destination / f"{name}.db") as target:
                 origin.backup(target)
@@ -288,6 +403,25 @@ def binding_rows(root, instance_ids):
             tuple(instance_ids)).fetchall()
     return {instance_id: (state, cleanup_pending)
             for instance_id, state, cleanup_pending in rows}
+
+
+def binding_records(root, instance_ids):
+    with sqlite3.connect(Path(root) / "workspace.db") as db:
+        rows = db.execute(
+            "SELECT instance_id, thread_id, actor_id, state, membership_revision, cleanup_pending "
+            "FROM workspace_application_thread_bindings "
+            f"WHERE instance_id IN ({','.join('?' for _ in instance_ids)}) ORDER BY instance_id",
+            tuple(instance_ids)).fetchall()
+    return {row[0]: row[1:] for row in rows}
+
+
+def thread_members(root, actor_ids):
+    with sqlite3.connect(Path(root) / "threads.db") as db:
+        rows = db.execute(
+            "SELECT actor, revision, active FROM bee_thread_members "
+            f"WHERE actor IN ({','.join('?' for _ in actor_ids)}) ORDER BY actor",
+            tuple(actor_ids)).fetchall()
+    return {actor: (revision, active) for actor, revision, active in rows}
 
 
 def wait_binding(root, instance_ids, predicate, timeout=5):
@@ -308,6 +442,29 @@ def saved_instances(root):
     return {item["instance_id"] for item in json.loads(row[0])["applications"]}
 
 
+def saved_application(root, instance_id):
+    with sqlite3.connect(Path(root) / "workspace.db") as db:
+        row = db.execute("SELECT value FROM workspace_state WHERE singleton = 1").fetchone()
+    assert row, "workspace checkpoint is missing"
+    matches = [item for item in json.loads(row[0])["applications"]
+               if item["instance_id"] == instance_id]
+    assert len(matches) == 1, (instance_id, matches)
+    return matches[0]
+
+
+def assert_inbox_decider(root, workspace_id):
+    """The Start-menu Approvals app decides as its private broker principal."""
+    with sqlite3.connect(Path(root) / "approvals.db") as db:
+        row = db.execute(
+            "SELECT decider_id, proposal_digest FROM bee_approval_requests "
+            "WHERE policy = 'local-app-journey' AND state = 'decided' "
+            "ORDER BY created_at DESC LIMIT 1").fetchone()
+    assert row and re.fullmatch(
+        rf"bee\.application:{re.escape(workspace_id)}:[0-9a-f-]+", row[0]), row
+    checkpoint = saved_application(root, row[0].rsplit(":", 1)[1])
+    assert checkpoint["definition_id"] == "bee.inbox:app", checkpoint
+
+
 def revoke_crash_recovery(project, source_root, report, destination):
     """Crash after the durable revoke fence and before Threads leave.
 
@@ -322,11 +479,13 @@ def revoke_crash_recovery(project, source_root, report, destination):
     host.write_text(original.replace(
         anchor,
         anchor + "            if value and not operation_error then while true do time.sleep(\"1s\") end end\n"))
-    instance_ids = [report["first_instance"], report["second_instance"]]
+    instance_ids = [report["surviving_instance"]]
     ui = Desktop(destination, project=project)
     try:
         ui.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
-        assert all(value == ("active", 0) for value in binding_rows(destination, instance_ids).values())
+        initial = binding_rows(destination, instance_ids)
+        assert set(initial) == set(instance_ids) and all(
+            value == ("active", 0) for value in initial.values()), initial
         ui.window_control("×")
         revoked = wait_binding(
             destination, instance_ids,
@@ -339,10 +498,21 @@ def revoke_crash_recovery(project, source_root, report, destination):
 
     restarted = Desktop(destination, project=project)
     try:
-        restarted.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
+        restarted.wait("No applications open", timeout=COLD_BOOT)
         wait_binding(destination, instance_ids,
                      lambda rows: revoked if rows.get(revoked) == ("revoked", 0) else None)
         assert revoked not in saved_instances(destination)
+        # Catalog readiness is the user-visible owner-ready boundary; the
+        # empty desktop can render before all startup services settle.
+        deadline = time.monotonic() + COLD_BOOT
+        while True:
+            restarted.open_start()
+            if TITLE in restarted.text():
+                restarted.key(b"\x1b")
+                break
+            restarted.key(b"\x1b")
+            assert time.monotonic() < deadline, restarted.text()
+            restarted.pump(.1)
         restarted.quit()
     finally:
         restarted.close()
@@ -370,6 +540,12 @@ def exercise():
         assert_delivery_has_no_overlay_authority(project)
         subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                         "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
+        initial = Desktop(folder, project=project)
+        try:
+            initial.wait("No applications open", timeout=COLD_BOOT)
+            initial.quit()
+        finally:
+            initial.close()
         guide_evidence = guide(project, folder)
         evidence = deliver(project, folder)
         assert_shared_database(project)
@@ -380,8 +556,82 @@ def exercise():
         copy_activation(folder, open_source_root)
         open_source = run_open_probe(project, open_source_root)
 
+        removed = open_source["removed_instance"]
+        surviving = open_source["surviving_instance"]
+        assert removed == open_source["first_instance"] and surviving == open_source["second_instance"], open_source
+        assert open_source["removed_access"] == "denied" and open_source["surviving_access"] == "active", open_source
+        records = binding_records(open_source_root, [removed, surviving])
+        assert set(records) == {removed, surviving}, records
+        assert records[removed][2:] == ("revoked", records[removed][3], 0), records
+        assert records[surviving][2] == "active" and records[surviving][4] == 0, records
+        surviving_membership = records[surviving][3]
+        assert isinstance(surviving_membership, int) and surviving_membership > 0, records
+        actors = {instance: records[instance][1] for instance in (removed, surviving)}
+        members = thread_members(open_source_root, list(actors.values()))
+        assert members[actors[removed]][1] == 0 and members[actors[surviving]][1] == 1, members
+        assert removed not in saved_instances(open_source_root) and surviving in saved_instances(open_source_root)
+
         revoke_crash_recovery(project, open_source_root, open_source,
                               folder / "open-revoke-crash")
+
+        staged = stage_replacement(project, open_source_root)
+        before_application = saved_application(open_source_root, surviving)
+        before_binding = binding_records(open_source_root, [surviving])[surviving]
+        before_member = thread_members(open_source_root, [before_binding[1]])[before_binding[1]]
+        replacement = Desktop(open_source_root, project=project)
+        try:
+            replacement.wait("APP JOURNEY DELIVERED", timeout=COLD_BOOT)
+            replacement.wait("Count: 1", timeout=20)
+            replacement.wait("Access: pending", timeout=20)
+            replacement.key(b"r")
+            replacement.wait("Access: active", timeout=20)
+            replace_v2_in_ui(replacement, staged, open_source_root)
+            deadline = time.monotonic() + COLD_BOOT
+            while "Agent App Updated" not in replacement.screen.display[0]:
+                assert time.monotonic() < deadline, replacement.text()
+                replacement.pump(.2)
+            replacement.wait("AGENT APP UPDATED", timeout=COLD_BOOT)
+            replacement.wait("Count: 1", timeout=20)
+            replacement.wait("Stale credentials: refused", timeout=20)
+            replacement.key(b"r")
+            replacement.wait("Access: active", timeout=20)
+            after_application = saved_application(open_source_root, surviving)
+            after_binding = binding_records(open_source_root, [surviving])[surviving]
+            after_member = thread_members(open_source_root, [after_binding[1]])[after_binding[1]]
+            assert after_application["id"] == before_application["id"], (before_application, after_application)
+            assert after_application["instance_id"] == before_application["instance_id"] == surviving
+            assert after_application["thread_id"] == before_application["thread_id"] == before_binding[0]
+            assert after_application["resume_schema"] == before_application["resume_schema"]
+            assert json.loads(after_application["resume_state"])["count"] == 1, after_application
+            assert after_binding == before_binding and after_member == before_member, \
+                (before_binding, after_binding, before_member, after_member)
+            replacement.key(b"d")
+            replacement.wait("Access: denied", timeout=COLD_BOOT)
+            wait_binding(open_source_root, [surviving],
+                         lambda rows: surviving if rows.get(surviving) == ("revoked", 0) else None,
+                         timeout=COLD_BOOT)
+            revoked_member = thread_members(open_source_root, [before_binding[1]])[before_binding[1]]
+            assert revoked_member[1] == 0 and revoked_member[0] > before_member[0], \
+                (before_member, revoked_member)
+            replacement.quit()
+        finally:
+            replacement.close()
+
+        revoked_restart = Desktop(open_source_root, project=project)
+        try:
+            revoked_restart.wait("No applications open", timeout=COLD_BOOT)
+            assert surviving not in saved_instances(open_source_root)
+            assert binding_rows(open_source_root, [surviving]).get(surviving) == ("revoked", 0)
+            # The empty desktop can paint before its startup services have
+            # settled. The built-in catalog is the neutral ready boundary;
+            # the revoked application must remain absent from it.
+            revoked_restart.open_start()
+            assert TITLE not in revoked_restart.text(), revoked_restart.text()
+            revoked_restart.key(b"\x1b")
+            revoked_restart.pump(.5)
+            revoked_restart.quit()
+        finally:
+            revoked_restart.close()
 
         # No application is opened from the command line: the approved
         # definition has to be selectable from the desktop's own catalog.
@@ -417,6 +667,12 @@ def exercise():
         pack_file = packed_root / "bee.wapp"
         subprocess.run([str(RUNTIME), "pack", str(pack_file)], cwd=project,
                        check=True, timeout=300)
+        packed_initial = Desktop(packed_root, packed=True, project=project, pack_file=pack_file)
+        try:
+            packed_initial.wait("No applications open", timeout=COLD_BOOT)
+            packed_initial.quit()
+        finally:
+            packed_initial.close()
         # Packed entries have a different composed base (embedded assets).
         # Review that exact base rather than replaying a source-base approval.
         deliver(project, packed_root, pack_file)

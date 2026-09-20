@@ -8,6 +8,7 @@ local time = require("time")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local json = require("json")
+local registry = require("registry")
 local thread_binding = require("thread_binding")
 
 type Object = {[string]: unknown}
@@ -17,7 +18,15 @@ local SIGNAL = "bee.app_open_probe.operator.signal"
 local POLICY = "app-open-runtime"
 local THREAD = "open-probe-thread"
 local AGENT = "bee.app_open_probe:managed_agent"
+local APPLICATION = "bee.app_journey_demo:app"
 local RESULT = "bee.app_open_probe.operator.result"
+local RECHECK = "bee.app_journey_probe.recheck"
+local RECHECK_RESULT = "bee.app_journey_probe.recheck.result"
+local CREDENTIALS = "bee.app_open_probe.credentials"
+local CREDENTIALS_GET = "bee.app_open_probe.credentials.get"
+local CREDENTIALS_RESULT = "bee.app_open_probe.credentials.result"
+local ACCESS_REVOKE = "bee.app_open_probe.access.revoke"
+local ACCESS_REVOKE_RESULT = "bee.app_open_probe.access.revoke.result"
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -231,6 +240,53 @@ local function await_proofs(workspace_id: string, action_id: string, attempt_id:
         .. " applications=" .. tostring(proof_count) .. " carrier=" .. carrier_report())
 end
 
+local function revoke_first_and_recheck(workspace_id: string, proof: Object): Object
+    local first = object(proof.first_thread_proof)
+    local second = object(proof.second_thread_proof)
+    local first_instance, second_instance = first and bounds.id(first.instance_id), second and bounds.id(second.instance_id)
+    local first_pid, second_pid = first and bounds.id(first.execution_pid), second and bounds.id(second.execution_pid)
+    if not first_instance or not second_instance or not first_pid or not second_pid then
+        error("application recheck identities are missing")
+    end
+    local owner = assert(call("bee.threads.service:get", {thread_id = THREAD}))
+    local summary = object(owner.summary)
+    local revision = summary and bounds.count(summary.revision)
+    if not revision or revision < 1 then error("application thread head is missing") end
+    local actor = assert(thread_binding.actor(workspace_id, first_instance))
+    local left, leave_error = call("bee.threads.service:leave", {thread_id = THREAD,
+        idempotency_key = "remove-first-application", member_id = actor, expected_revision = revision})
+    if not left then error("remove first application member: " .. tostring(leave_error)) end
+
+    local replies = assert(process.listen(RECHECK_RESULT, {message = true}))
+    assert(process.send(first_pid, RECHECK, {}))
+    assert(process.send(second_pid, RECHECK, {}))
+    local found: {[string]: Object} = {}
+    local deadline = time.after("10s")
+    while not found[first_instance] or not found[second_instance] do
+        local selected = channel.select({replies:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then
+            process.unlisten(replies)
+            error("application membership rechecks timed out")
+        end
+        local value = object(selected.value:payload():data())
+        local instance_id = value and bounds.id(value.instance_id)
+        if instance_id and (tostring(selected.value:from()) == first_pid or tostring(selected.value:from()) == second_pid) then
+            found[instance_id] = value
+        end
+    end
+    process.unlisten(replies)
+    if found[first_instance].access ~= "denied" or found[first_instance].code ~= "DENIED"
+        or found[second_instance].access ~= "active" or found[second_instance].code ~= "" then
+        error("application membership rechecks differ: " .. json.encode(found))
+    end
+    proof.removed_instance = first_instance
+    proof.surviving_instance = second_instance
+    proof.removed_actor = actor
+    proof.removed_access = "denied"
+    proof.surviving_access = "active"
+    return proof
+end
+
 local function execute(workspace_id: string, view_id: string, instance_id: string): Object
     local started = start_agent(workspace_id, view_id, instance_id)
     local action_id, attempt_id = bounds.id(started.action_id), bounds.id(started.attempt_id)
@@ -243,20 +299,78 @@ local function execute(workspace_id: string, view_id: string, instance_id: strin
     local approved, approval_error = approve(workspace_id, THREAD, "bee.app_open.operator", action_id, attempt_id, carrier)
     if not approved then error(tostring(approval_error or "app-open approval failed")) end
     wait_carrier(carrier)
-    return await_proofs(workspace_id, action_id, attempt_id)
+    return revoke_first_and_recheck(workspace_id, await_proofs(workspace_id, action_id, attempt_id))
 end
 
 local function main()
     local registered, register_error = process.registry.register(NAME)
     if not registered then error("register app-open operator: " .. tostring(register_error)) end
     local signals = assert(process.listen(SIGNAL, {message = true}))
+    local credentials = assert(process.listen(CREDENTIALS, {message = true}))
+    local credential_requests = assert(process.listen(CREDENTIALS_GET, {message = true}))
+    local access_revocations = assert(process.listen(ACCESS_REVOKE, {message = true}))
     local events = assert(process.events())
     local completed: {[string]: boolean} = {}
+    local saved_credentials: {[string]: Object} = {}
     while true do
-        local selected = channel.select({signals:case_receive(), events:case_receive()})
+        local selected = channel.select({signals:case_receive(), credentials:case_receive(),
+            credential_requests:case_receive(), access_revocations:case_receive(), events:case_receive()})
         if not selected.ok then break end
         if selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
+        elseif selected.channel == credentials or selected.channel == credential_requests then
+            local recipient = tostring(selected.value:from())
+            local value = object(selected.value:payload():data())
+            local instance_id = value and bounds.id(value.instance_id)
+            if not instance_id then error("app-open operator received invalid credential signal") end
+            if selected.channel == credentials then
+                local launch_token = value and bounds.id(value.launch_token)
+                local execution_generation = value and bounds.count(value.execution_generation)
+                if not launch_token or not execution_generation or execution_generation < 1 then
+                    error("app-open operator received invalid launch credentials")
+                end
+                local previous = saved_credentials[instance_id]
+                saved_credentials[instance_id] = {instance_id = instance_id, launch_token = launch_token,
+                    execution_generation = execution_generation,
+                    previous_launch_token = previous and previous.launch_token or nil,
+                    previous_execution_generation = previous and previous.execution_generation or nil,
+                    execution_pid = recipient}
+            else
+                local saved = saved_credentials[instance_id]
+                if saved then
+                    assert(process.send(recipient, CREDENTIALS_RESULT, {instance_id = instance_id,
+                        launch_token = saved.launch_token, execution_generation = saved.execution_generation,
+                        previous_launch_token = saved.previous_launch_token,
+                        previous_execution_generation = saved.previous_execution_generation}))
+                else
+                    assert(process.send(recipient, CREDENTIALS_RESULT, {instance_id = instance_id, error = "credentials unavailable"}))
+                end
+            end
+        elseif selected.channel == access_revocations then
+            local recipient = tostring(selected.value:from())
+            local value = object(selected.value:payload():data())
+            local instance_id = value and bounds.id(value.instance_id)
+            local saved = instance_id and saved_credentials[instance_id] or nil
+            if not instance_id or not saved or saved.execution_pid ~= recipient then
+                error("access revocation sender is not the current application execution")
+            end
+            local entry = assert(registry.get("bee:application_admission"))
+            local data = object(entry.data)
+            local bindings = data and data.bindings
+            if type(bindings) ~= "table" then error("application admission bindings are unavailable") end
+            local found = false
+            for _, raw in ipairs(bindings :: {unknown}) do
+                local binding = object(raw)
+                if binding and binding.definition_id == APPLICATION then
+                    binding.thread_access = "none"; found = true
+                end
+            end
+            if not found then error("journey application admission is unavailable") end
+            local changes = registry.snapshot():changes()
+            assert(changes:update(entry))
+            local applied, apply_error = changes:apply()
+            if not applied then error("revoke application access: " .. tostring(apply_error)) end
+            assert(process.send(recipient, ACCESS_REVOKE_RESULT, {instance_id = instance_id, ok = true}))
         else
             local recipient = tostring(selected.value:from())
             local value = object(selected.value:payload():data())
@@ -278,6 +392,9 @@ local function main()
         end
     end
     process.unlisten(signals)
+    process.unlisten(credentials)
+    process.unlisten(credential_requests)
+    process.unlisten(access_revocations)
     process.registry.unregister(NAME, process.registry.LOCAL)
 end
 

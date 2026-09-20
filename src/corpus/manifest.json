@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 28725,
+      "bytes": 29414,
       "id": "docs/application_contracts",
-      "sha256": "3d2182fbb95e2a203da652587f14767ae3ff0e5932a76be3a3e9bf45999e10eb",
+      "sha256": "8cf4bb77af7f90717420e1d9afdd9a7ea8f857e00c3aa1b8d20894b9f6b54fd4",
       "source": "docs/APPLICATION_CONTRACTS.md",
       "title": "Application contracts (development version 1)",
       "topic": "application"

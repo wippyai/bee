@@ -59,6 +59,7 @@ type Binding = {binding_id: string, subject: string, action_id: string, attempt_
     tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean, policy_ref: string?, workspace_id: string?, origin_view: OriginView?}
 type Generation = {epoch: integer, restarts: integer}
 type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
+type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 type Drain = {draining: boolean, past_deadline: boolean}
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function fail(code: string, message: string): Reply
@@ -889,6 +890,37 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local selected, selection_error = surface.select(configured, active, dynamic)
     if not selected then return nil, fail("STORAGE", selection_error or "binding selection is invalid") end
     return {configuration = configured, selection = selected, revision = stored.revision, digest = digest}, nil
+end
+-- An application-open call is admitted only through the active built-in
+-- runtime trait.  Access receipts are immutable effects; more than one may
+-- legitimately contain the same trait after separate approved requests.  We
+-- choose the lexicographically first approval ID under an explicit SQL order,
+-- so a retried call carries stable provenance without inventing a second grant.
+-- Any malformed receipt remains a storage failure, including one unrelated to
+-- the selected trait, because it makes the binding's durable grant history
+-- untrustworthy.
+function M.application_runtime(binding: Binding, current: BoundSurface): (RuntimeGrant?, Reply?)
+    local trait = mcp.APPLICATION_RUNTIME_TRAIT.id
+    local configured = false
+    local access = current.configuration.access
+    if access then
+        for _, id in ipairs(access.traits) do if id == trait then configured = true end end
+    end
+    if not configured then return nil, fail("DENIED", "application runtime access is not configured") end
+    local active = false
+    for _, id in ipairs(current.selection.active) do if id == trait then active = true end end
+    if not active then return nil, fail("DENIED", "application runtime access is not active") end
+    local db, open_failure = open()
+    if not db then return nil, open_failure end
+    local tx, begin_error = db:begin()
+    if not tx or begin_error then db:release(); return nil, fail("STORAGE", "open application runtime access receipt") end
+    local receipt, receipt_error = surface_store.runtime_grant(tx, binding.binding_id, trait)
+    tx:rollback()
+    db:release()
+    if receipt_error then return nil, fail(receipt_error.code, receipt_error.message) end
+    if not receipt then return nil, fail("DENIED", "application runtime access has no approved receipt") end
+    return {access_approval_id = receipt.approval_id, access_proposal_digest = receipt.proposal_digest,
+        surface_revision = current.revision, surface_digest = current.digest}, nil
 end
 -- Only the authenticated HTTP handler invokes this library operation. The
 -- binding row is rechecked inside the transaction before changing selection.

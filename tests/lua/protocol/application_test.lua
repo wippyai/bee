@@ -37,6 +37,23 @@ local function define_tests()
             test.is_nil(contract.binding({definition_id = "test:app", policies = {}, close_grace = 60000}))
         end)
 
+        test.it("keeps thread facade access host-selected and strictly bounded", function()
+            local ordinary = assert(contract.binding({definition_id = "test:app", policies = {}}))
+            test.eq(ordinary.thread_access, "none")
+            local observing = assert(contract.binding({definition_id = "test:app", policies = {}, thread_access = "observe_post"}))
+            test.eq(observing.thread_access, "observe_post")
+            for _, value in ipairs({true, false, 0, 1, {}, "observe", "post", ""} :: {unknown}) do
+                test.is_nil(contract.binding({definition_id = "test:app", policies = {}, thread_access = value}))
+            end
+            local descriptor = assert(contract.descriptor("test:app", {api_version = 1, lifetime = "view", title = "Test",
+                revision = "1", instance_policy = "multiple", thread_access = "observe_post"}))
+            test.is_nil((descriptor :: {[string]: unknown}).thread_access)
+            local request = assert(contract.request({version = 1, request_id = "thread-access-argument", op = "open",
+                definition_id = "test:app", arguments = {"observe_post"}}))
+            test.eq(request.arguments[1], "observe_post")
+            test.eq(assert(contract.binding({definition_id = "test:app", policies = {}})).thread_access, "none")
+        end)
+
         test.it("limits observer requests to exact bind targets", function()
             local value = {version = 1, request_id = "observe", op = "bind", id = "view", instance_id = "instance", observer = true}
             local request = contract.request(value)

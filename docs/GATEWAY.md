@@ -117,6 +117,12 @@ bounded execution-local cache, not an indefinitely durable receipt.
 `application_open` takes `{definition_id, arguments, idempotency_key}`. Its
 successful value contains `workspace_id`, `view_id`, `instance_id`,
 `definition_id`, `title` and `reused`; `display_id` is present when assigned.
+It is not a base tool: the binding must have the active, approval-granted
+`bee.application:runtime` trait. The gateway selects a durable approval receipt
+for that trait in stable approval-ID order and attaches its approval ID,
+proposal digest, binding, bound thread, subject and current surface revision
+and digest to the host's private request. Arguments cannot supply any of those
+identities or choose a receipt.
 `reused` means the broker returned an existing instance, including a singleton,
 and is not proof of a durable retry receipt. For window agents, the trusted
 binding carries the originating view. The host resolves that view's settled

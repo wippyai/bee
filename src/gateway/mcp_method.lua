@@ -14,6 +14,7 @@ local catalog = require("catalog")
 local context = require("context")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
+type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 local function scope_for(names: {string}): (security.Scope?, string?)
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do
@@ -34,15 +35,19 @@ end
 -- The executor that runs a tool as the bound subject under the tool's
 -- host-named scope. The endpoint's own right to invoke these operations
 -- is a separate grant; membership is the thread owner's decision.
-local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values: Object?): (funcs.Executor?, Object?)
+local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values: Object?, runtime: RuntimeGrant?): (funcs.Executor?, Object?)
     local scope, scope_error = scope_for(tool.policies)
     if not scope then return nil, refused("UNAVAILABLE", scope_error or "scope") end
     local subject, subject_error = security.new_actor(binding.subject)
     if not subject then return nil, refused("DENIED", tostring(subject_error)) end
     local executor = funcs.new()
     local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
-        thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id,
-        policy_ref = binding.policy_ref, workspace_id = binding.workspace_id, origin_view = binding.origin_view})
+        thread_id = binding.thread_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id,
+        policy_ref = binding.policy_ref, workspace_id = binding.workspace_id, origin_view = binding.origin_view,
+        application_runtime = runtime and {thread_id = binding.thread_id, subject = binding.subject, initiating_owner = binding.subject,
+            binding_id = binding.binding_id, access_approval_id = runtime.access_approval_id :: string,
+            access_proposal_digest = runtime.access_proposal_digest :: string, surface_revision = runtime.surface_revision :: integer,
+            surface_digest = runtime.surface_digest :: string} or nil})
     if not attributed then return nil, refused("DENIED", tostring(attribution_error)) end
     local contextual, context_error = executor:with_context(attributed)
     if not contextual then return nil, refused("DENIED", tostring(context_error)) end
@@ -59,7 +64,7 @@ local function reply_result(reply: unknown, call_error: unknown): Object
     local is_error = type(reply) ~= "table" or (reply :: Object).ok ~= true
     return mcp.tool_result(encoded, is_error)
 end
-local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
+local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     if tool.name == "thread_read" or tool.name == "thread_message" then
         request.thread_id = binding.thread_id
     end
@@ -67,14 +72,14 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         request.kind = "message"
         request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
     end
-    local executor, failure = subject_executor(binding, tool, values)
+    local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
     local reply, call_error = executor:call(tool.operation, request)
     return reply_result(reply, call_error)
 end
 local function wait(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
     request.thread_id = binding.thread_id
-    local executor, failure = subject_executor(binding, tool, values)
+    local executor, failure = subject_executor(binding, tool, values, nil)
     if not executor then return failure :: Object end
     local remaining = tonumber(request.wait_ms) or 0
     local budget = tonumber(request.transport_budget_ms) or mcp.TRANSPORT_BUDGET_MS
@@ -210,8 +215,17 @@ local function handle(): nil
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
     if not arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, argument_error or "invalid arguments")); return nil end
+    local runtime: RuntimeGrant? = nil
+    if tool.name == "application_open" then
+        local granted, grant_failure = gateway.application_runtime(binding, bound)
+        if not granted then
+            answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(grant_failure, nil)))
+            return nil
+        end
+        runtime = granted
+    end
     if tool.name == "thread_wait" then answer(response, http.STATUS.OK, mcp.result(call.id, wait(binding, tool, arguments, values)))
-    else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values))) end
+    else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime))) end
     return nil
 end
 return {handle = handle}

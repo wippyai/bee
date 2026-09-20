@@ -21,7 +21,13 @@ Deduplication is bounded and in-memory, not durable exactly-once execution.
 optional `icon`, `group` (slash-separated menu path), and `role`. Roles supply
 contextual discoverability, never authority. Only protected
 `bee:application_admission.bindings` selects allowed definitions, policy IDs and
-operation grants (`appearance_write`, `application_stop`, `catalog_read`).
+operation grants (`appearance_write`, `application_stop`, `catalog_read`). It may
+also select the bounded `thread_access` value `none` or `observe_post`; omission
+means `none`. `observe_post` is the first narrow application-thread contract: the
+exact admitted application revision may later receive a broker-bound facade for
+reading, subscriptions and posting. It does not grant raw Threads policies or
+thread storage. Application metadata and launch arguments cannot select this
+value.
 Executable source or configuration changes require a new application revision;
 one revision identifies one exact runnable definition.
 
@@ -79,6 +85,11 @@ refusal. Real Claude/Codex window startup, input, resize, rebind and cancellatio
 pass with the host selection enabled; disabling only that selection restores
 the runtime's scope-creation denial. This does not prove authenticated provider
 turns or production process-tree cleanup.
+
+Thread access is decoded with the protected binding and retained in the catalog
+comparison so an admission refresh observes a change. It is descriptive until
+the broker's bound-thread facade is implemented; no current application receives
+thread access from this field alone.
 
 The admitted icon is copied into the window's presentation state. Settings can
 select compact icon tabs; the taskbar clips icons to two terminal cells and falls

@@ -6,7 +6,7 @@ type Object = {[string]: unknown}
 local function run()
     test.describe("Gateway MCP context values", function()
         test.it("reserves binding attribution and isolates it from caller context", function()
-            local identity = {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a",
+            local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
                 origin_view = {view_id = "view-a", instance_id = "instance-a"}}
             local spoof: Object = {}
             spoof[context.BINDING_KEY] = {thread_id = "foreign"}
@@ -29,11 +29,24 @@ local function run()
             test.eq(second.value32, 32)
             test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).view_id, "view-a")
             test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).instance_id, "instance-a")
-            local invalid_origin, invalid_origin_error = context.bind({}, {binding_id = "binding-a", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a",
+            test.eq((second[context.BINDING_KEY] :: Object).subject, "subject-a")
+            local invalid_origin, invalid_origin_error = context.bind({}, {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
                 origin_view = {view_id = "", instance_id = "instance-a"}})
             test.is_nil(invalid_origin)
             test.eq(invalid_origin_error, "invalid gateway binding attribution")
-            test.is_nil(context.bind({}, {binding_id = "", thread_id = "thread-a", action_id = "action-a", attempt_id = "attempt-a"}))
+            test.is_nil(context.bind({}, {binding_id = "", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a"}))
+        end)
+        test.it("seals runtime approval provenance to the authenticated binding", function()
+            local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
+                application_runtime = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", initiating_owner = "subject-a",
+                    access_approval_id = "approval-a", access_proposal_digest = string.rep("a", 64), surface_revision = 2, surface_digest = string.rep("b", 64)}}
+            local bound, bound_error = context.bind({}, identity)
+            if not bound then error(tostring(bound_error)) end
+            local runtime = ((bound[context.BINDING_KEY] :: Object).application_runtime :: Object)
+            test.eq(runtime.access_approval_id, "approval-a")
+            test.eq(runtime.surface_revision, 2)
+            identity.application_runtime.binding_id = "foreign"
+            test.is_nil(context.bind({}, identity))
         end)
         test.it("keeps host values fixed and admits only named dynamic keys", function()
             local fixed: Object = {action_id = "action-host", attempt_id = "attempt-host", host = {node = "node-a"}}

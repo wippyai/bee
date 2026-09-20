@@ -4,6 +4,7 @@ local uuid = require("uuid")
 local arguments = require("arguments")
 local interaction = require("interaction")
 local thread_bounds = require("thread_bounds")
+local thread_protocol = require("thread_protocol")
 local M = {}
 type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
     view_id: string, definition_id: string, thread_id: string?, execution_generation: integer,
@@ -113,5 +114,28 @@ function M.checkpoint(launch: Launch, state: string): (string?, string?)
         resume_schema = launch.resume_schema, resume_state = state})
     if not sent then return nil, tostring(err) end
     return request_id, nil
+end
+
+-- Queue one operation through the broker-bound thread facade. The caller
+-- supplies operation data only; the broker authenticates this execution and
+-- injects the durable thread and stable application actor.
+function M.thread_request(launch: Launch, operation: string, values: unknown): (string?, string?)
+    local request_id = uuid.v7()
+    local request = thread_protocol.request({version = 1, request_id = request_id,
+        instance_id = launch.instance_id, launch_token = launch.launch_token,
+        execution_generation = launch.execution_generation, operation = operation,
+        arguments = values})
+    if not request then return nil, "Invalid application thread request" end
+    local sent, err = process.send(launch.broker_pid, "bee.application.thread.request", request)
+    if not sent then return nil, tostring(err) end
+    return request_id, nil
+end
+
+function M.thread_result(launch: Launch, sender: string, value: unknown): thread_protocol.Reply?
+    if sender ~= launch.broker_pid then return nil end
+    local reply = thread_protocol.reply(value)
+    if not reply or reply.instance_id ~= launch.instance_id
+        or reply.execution_generation ~= launch.execution_generation then return nil end
+    return reply
 end
 return M

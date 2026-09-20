@@ -1,12 +1,14 @@
 -- MIT. Typed workspace persistence; no physical terminal or presenter lifetime.
 local store = require("store")
 local assignments = require("assignments")
+local thread_bindings = require("thread_bindings")
 local recovery = require("recovery")
 local json = require("json")
 
 type Persistence = {
     workspace_id: string,
     assignments: assignments.Store,
+    thread_bindings: thread_bindings.Store,
     saved: recovery.Snapshot?,
     write: (Persistence, recovery.Snapshot) -> (boolean, string?),
     close: (Persistence) -> (boolean, string?),
@@ -30,9 +32,12 @@ function M.open(resource: string?): (Persistence?, string?)
     end
     local placement, placement_error = assignments.open(database)
     if not placement then database:close(); return nil, tostring(placement_error) end
+    local application_threads, binding_error = thread_bindings.open(database)
+    if not application_threads then database:close(); return nil, tostring(binding_error) end
     local value: Persistence = {
         workspace_id = workspace_id,
         assignments = placement,
+        thread_bindings = application_threads,
         saved = saved,
         write = function(_self: Persistence, snapshot: recovery.Snapshot): (boolean, string?)
             local serialized, encode_error = json.encode(snapshot)

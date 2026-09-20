@@ -9,6 +9,7 @@ entries:
   imports:
     store: bee.storage:store
     assignments: bee.storage:assignments
+    thread_bindings: bee.storage:thread_bindings
     recovery: bee.workspace:recovery
 - name: recovery
   kind: library.lua

@@ -22,7 +22,7 @@ entries:
   source: file://catalog_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, catalog: bee.gateway:catalog, surface: bee.gateway:surface}
+  imports: {test: wippy.test:test, catalog: bee.gateway:catalog, surface: bee.gateway:surface, mcp: bee.gateway:mcp}
 - name: upgrade_db_path
   kind: env.variable
   meta: {type: test_support}

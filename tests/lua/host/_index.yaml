@@ -46,3 +46,11 @@ entries:
   imports:
     test: wippy.test:test
     transfer: bee.host:transfer
+- name: binding_protocol_test
+  kind: function.lua
+  source: file://binding_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.host:binding_protocol

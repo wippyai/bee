@@ -2,7 +2,9 @@
 local bounds = require("bounds")
 local catalog = require("catalog")
 local context = require("context")
+local mcp = require("mcp")
 local M = {}
+M.APPLICATION_RUNTIME_TRAIT = mcp.APPLICATION_RUNTIME_TRAIT
 type Access = {policy: string, workspace_id: string, traits: {string}}
 type Surface = {catalog: catalog.Catalog, ceiling: {string}, base_tools: {string},
     allowed_traits: {string}, fixed_context: context.Values, dynamic_keys: {string}, access: Access?}
@@ -36,7 +38,25 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     local combined: {catalog.Tool} = {}
     for _, tool in ipairs(builtins) do combined[#combined + 1] = tool end
     for _, tool in ipairs(configured.tools) do combined[#combined + 1] = tool end
-    local complete, complete_error = catalog.decode({tools = combined, traits = value.traits})
+    -- `application_open` has exactly one built-in trait.  A policy may not
+    -- re-declare it through an ordinary trait or present it as a base tool.
+    local declared_traits = value.traits
+    if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
+    for _, raw_trait in ipairs(declared_traits :: {unknown}) do
+        local trait = bounds.object(raw_trait)
+        local trait_tools = trait and bounds.ids(trait.tools, true)
+        if trait_tools then
+            for _, name in ipairs(trait_tools) do
+                if name == "application_open" then return nil, nil, "application_open belongs only to bee.application:runtime" end
+            end
+        end
+    end
+    local has_open = false
+    for _, name in ipairs(ceiling) do if name == "application_open" then has_open = true end end
+    local traits: {unknown} = {}
+    for _, trait in ipairs(declared_traits :: {unknown}) do traits[#traits + 1] = trait end
+    if has_open then traits[#traits + 1] = mcp.APPLICATION_RUNTIME_TRAIT end
+    local complete, complete_error = catalog.decode({tools = combined, traits = traits})
     if not complete then return nil, nil, complete_error end
     local base, base_error = bounds.ids(value.base_tools, true)
     local active, active_error = bounds.ids(value.active_traits, true)
@@ -50,6 +70,12 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     local requestable: {[string]: boolean} = {}
     if access then
         for _, id in ipairs(access.traits) do requestable[id] = true end
+    end
+    if has_open then
+        if not access then return nil, nil, "application_open requires bee.application:runtime access" end
+        local declared = false
+        for _, id in ipairs(access.traits) do if id == mcp.APPLICATION_RUNTIME_TRAIT.id then declared = true end end
+        if not declared then return nil, nil, "application_open requires bee.application:runtime access" end
     end
     local gated_tools: {[string]: boolean} = {}
     local known_traits: {[string]: catalog.Trait} = {}

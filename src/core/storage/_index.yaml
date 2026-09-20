@@ -15,3 +15,8 @@ entries:
   source: file://assignments.lua
   imports:
     workspace_store: bee.storage:store
+- name: thread_bindings
+  kind: library.lua
+  source: file://thread_bindings.lua
+  imports:
+    workspace_store: bee.storage:store

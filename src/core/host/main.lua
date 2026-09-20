@@ -17,6 +17,7 @@ local connections = require("connections")
 local inventory = require("inventory")
 local transfer = require("transfer")
 local open_protocol = require("open_protocol")
+local binding_protocol = require("binding_protocol")
 
 local function main(owner: string, database_resource: string?)
     if owner == "" or ctx.get("bee.host_owner") ~= owner then error("Untrusted host bootstrap") end
@@ -36,6 +37,9 @@ local function main(owner: string, database_resource: string?)
     local client_appearance = assert(process.listen("bee.client.appearance.result", {message = true}))
     local transfer_requests = assert(process.listen("bee.host.transfer", {message = true}))
     local open_requests = assert(process.listen("bee.host.application", {message = true}))
+    local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
+    local binding_requests = assert(process.listen("bee.application.binding.request", {message = true}))
+    local binding_recovered = assert(process.listen("bee.application.binding.recovered", {message = true}))
     local events = assert(process.events())
     assert(process.monitor(owner))
     local database, database_error = persistence.open(database_resource)
@@ -78,6 +82,8 @@ local function main(owner: string, database_resource: string?)
         ["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id,
     }):with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored(
         "bee.applications:broker", "bee:workers", self, snapshot.desktop.preferences)))
+    local broker_started = false
+    local broker_recovery_requested = false
     local restoring = ""
     local restore_queue: {recovery.Record} = {}
     for _, record in ipairs(snapshot.applications) do
@@ -200,7 +206,7 @@ local function main(owner: string, database_resource: string?)
                 definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id,
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
         else
-            if not ready then
+            if not ready and broker_started then
                 resolve_prepared_intents()
                 ready = true
                 deliver("bee.host.ready", {version = 1, workspace_id = workspace_id, fresh = fresh_workspace, saved = snapshot})
@@ -229,11 +235,41 @@ local function main(owner: string, database_resource: string?)
         return committed, err
     end
     local open_timer: time.Timer? = nil
+    local function binding_failure(request: binding_protocol.Request)
+        -- Storage errors are deliberately not forwarded as an authority or
+        -- database diagnostic. The coordinator receives a stable typed fault
+        -- and can continue its own recovery path.
+        local reply = assert(binding_protocol.failure(request, "storage_failed", "Workspace binding operation failed"))
+        assert(process.send(broker, "bee.application.binding.result", reply))
+    end
+    local function binding_request(request: binding_protocol.Request)
+        local value, operation_error
+        if request.op == "prepare" then
+            value, operation_error = database.thread_bindings:prepare(request.value)
+        elseif request.op == "activate" then
+            value, operation_error = database.thread_bindings:activate(request.value)
+        elseif request.op == "refresh_join" then
+            value, operation_error = database.thread_bindings:refresh_join(request.value)
+        elseif request.op == "begin_revoke" then
+            value, operation_error = database.thread_bindings:begin_revoke(request.value)
+        elseif request.op == "refresh_cleanup" then
+            value, operation_error = database.thread_bindings:refresh_cleanup(request.value)
+        else
+            value, operation_error = database.thread_bindings:finish_revoke(request.value)
+        end
+        if not value or operation_error then
+            binding_failure(request)
+            return
+        end
+        local reply = binding_protocol.success(request, value)
+        if not reply then error("Workspace binding store returned an invalid binding") end
+        assert(process.send(broker, "bee.application.binding.result", reply))
+    end
     local function run()
         while true do
             local cases = {requests:case_receive(), open_requests:case_receive(), replies:case_receive(), catalogs:case_receive(), catalog_readers:case_receive(),
                 checkpoints:case_receive(), questions:case_receive(), answers:case_receive(), preferences:case_receive(), shutdown_requests:case_receive(), client_requests:case_receive(), transfer_requests:case_receive(),
-                selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), events:case_receive()}
+                selections:case_receive(), client_answers:case_receive(), appearance_changes:case_receive(), client_appearance:case_receive(), broker_ready:case_receive(), binding_requests:case_receive(), binding_recovered:case_receive(), events:case_receive()}
             local next_expiry: number? = nil
             for _, pending in pairs(pending_opens) do
                 if pending.expires and (not next_expiry or pending.expires < next_expiry) then next_expiry = pending.expires end
@@ -288,6 +324,22 @@ local function main(owner: string, database_resource: string?)
                         if ready then connections.publish(client_connections, live_inventory, "catalog") end
                         restore_next()
                     end
+                elseif selected.channel == broker_ready and message:from() == broker and not broker_recovery_requested
+                    and type(data) == "table" and data.version == 1 then
+                    local bindings, binding_error = database.thread_bindings:list()
+                    if not bindings then error("List application thread bindings: " .. tostring(binding_error)) end
+                    local recovered = binding_protocol.recovery({version = 1, workspace_id = workspace_id, items = bindings}, workspace_id)
+                    if not recovered then error("Workspace application thread binding recovery is invalid") end
+                    assert(process.send(broker, "bee.application.binding.recovery", recovered))
+                    broker_recovery_requested = true
+                elseif selected.channel == binding_recovered and message:from() == broker and broker_recovery_requested and not broker_started then
+                    if binding_protocol.recovered(data, workspace_id) then
+                        broker_started = true
+                        restore_next()
+                    end
+                elseif selected.channel == binding_requests and message:from() == broker then
+                    local request = binding_protocol.request(data, workspace_id)
+                    if request then binding_request(request) end
                 elseif selected.channel == catalog_readers and message:from() == broker then
                     local snapshot = retained.catalog_readers(data, workspace_id)
                     if not snapshot then error("Invalid broker catalog reader snapshot") end
@@ -400,6 +452,7 @@ local function main(owner: string, database_resource: string?)
                                     expires = time.now():unix_nano() / 1000000000 + 30, display_id = display_id}
                                 local sent, send_error = process.send(broker, "bee.app.request", {version = 1, request_id = request.request_id, op = "open",
                                     workspace_id = workspace_id, id = "", instance_id = "", definition_id = request.definition_id,
+                                    thread_id = request.provenance.thread_id, runtime_provenance = request.provenance,
                                     recipient = "", restore_instance_id = "", restore_view_id = "", resume_schema = "",
                                     resume_state = "", arguments = request.arguments})
                                 if not sent then
@@ -577,7 +630,7 @@ local function main(owner: string, database_resource: string?)
     database:close()
     process.terminate(broker)
     process.registry.unregister(host_registry_name)
-    for _, subscription in ipairs({requests, open_requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance}) do
+    for _, subscription in ipairs({requests, open_requests, replies, catalogs, catalog_readers, checkpoints, questions, answers, preferences, shutdown_requests, client_requests, transfer_requests, selections, client_answers, appearance_changes, client_appearance, broker_ready, binding_requests, binding_recovered}) do
         process.unlisten(subscription)
     end
     if not completed then error(run_error) end

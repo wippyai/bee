@@ -25,6 +25,7 @@ entries:
     - security.actor.create
     - security.scope.create
     - security.policy.get
+    - funcs.security
     - registry.snapshot
     - registry.history
     resources: '*'

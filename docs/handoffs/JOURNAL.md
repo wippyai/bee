@@ -7757,3 +7757,30 @@ must list local and Hive workspaces, create from a selected folder, switch the
 current display without restarting Bee, and restore each workspace's retained
 display layout. The header workspace control remains informational until that
 acceptance exists.
+
+## 2026-09-20 — application/thread binding storage accepted
+
+Commit `e58ee9e` adds the workspace-owned durable intent needed before an
+application can use a bound thread. Migration 4 creates
+`workspace_application_thread_bindings`; its core-only helper records one
+immutable logical instance, thread, definition and stable host-issued app actor,
+then advances a revision through `pending`, `active` and `revoked`. Exact prepare
+retries replay, changed identities conflict, transitions use expected-state and
+expected-revision CAS, and revocation is a permanent fence. Recovery enumerates
+only live pending/active rows; revoked rows remain tombstones but do not consume
+the 256-live-binding limit.
+
+The row deliberately contains no PID, launch token, mount, scope, execution
+generation, database binding or application data. The application actor ID is
+stable for `{workspace_id, instance_id}`; definition revision and execution
+generation remain broker-owned launch metadata. The workspace host owns this
+store, Threads owns membership and records, and the broker must authenticate a
+current execution before any future facade call. Ordinary applications receive
+neither this store nor raw thread/storage authority.
+
+Focused storage acceptance, source and packed restart recovery, strict lint and
+the complete candidate-runtime suite pass. `make test
+WIPPY=.wippy/bin/bee-wippy-renewal` reports 1,149/1,149 in 133.4 seconds. The
+next bounded slice is a typed host-to-broker binding protocol; membership
+reconciliation and the app-facing thread facade remain later slices. Global Bee
+is unchanged.

@@ -79,6 +79,23 @@ local function run()
             test.eq(#own, 1)
             test.eq(own[1], "research:write")
             test.eq(#other, 0)
+            local absent_runtime, absent_runtime_error = store.runtime_grant(tx, "surface-b", "bee.application:runtime")
+            test.is_nil(absent_runtime)
+            test.is_nil(absent_runtime_error)
+            local later_runtime, later_runtime_error = store.grant(tx, "surface-a", "approval-z", string.rep("d", 64), '["bee.application:runtime"]')
+            if not later_runtime then error(tostring(later_runtime_error and later_runtime_error.message)) end
+            local first_runtime, first_runtime_error = store.grant(tx, "surface-a", "approval-a", string.rep("e", 64), '["bee.application:runtime"]')
+            if not first_runtime then error(tostring(first_runtime_error and first_runtime_error.message)) end
+            local selected_runtime, selected_runtime_error = store.runtime_grant(tx, "surface-a", "bee.application:runtime")
+            if not selected_runtime then error(tostring(selected_runtime_error and selected_runtime_error.message)) end
+            test.eq(selected_runtime.approval_id, "approval-a")
+            test.eq(selected_runtime.proposal_digest, string.rep("e", 64))
+            local _, corrupt_error = tx:execute("INSERT INTO bee_gateway_access_grants (binding_id, approval_id, proposal_digest, traits_json) VALUES ('surface-b', 'approval-corrupt', ?, 'not-json')", {string.rep("f", 64)})
+            if corrupt_error then error(tostring(corrupt_error)) end
+            local corrupt_runtime, corrupt_runtime_error = store.runtime_grant(tx, "surface-b", "bee.application:runtime")
+            test.is_nil(corrupt_runtime)
+            if not corrupt_runtime_error then error("corrupt runtime receipt accepted") end
+            test.eq(corrupt_runtime_error.code, "STORAGE")
             local before = store.read(tx, "surface-b")
             if not before then error("other binding missing") end
             local rolled_back = store.grant(tx, "surface-b", "approval-two", string.rep("c", 64), '["research:write"]')

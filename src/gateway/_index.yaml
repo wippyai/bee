@@ -70,7 +70,7 @@ entries:
 - name: surface
   kind: library.lua
   source: file://surface.lua
-  imports: {bounds: bee.threads.records:bounds, catalog: bee.gateway:catalog, context: bee.gateway:context}
+  imports: {bounds: bee.threads.records:bounds, catalog: bee.gateway:catalog, context: bee.gateway:context, mcp: bee.gateway:mcp}
 - name: mcp
   kind: library.lua
   source: file://mcp.lua

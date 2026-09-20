@@ -5,7 +5,7 @@ entries:
   kind: process.lua
   source: file://broker.lua
   method: main
-  modules: [security, process, channel, tty, uuid, registry, time, ctx]
+  modules: [security, process, channel, tty, uuid, registry, time, ctx, funcs]
   imports:
     attachment: bee.applications:attachment
     execution: bee.applications:execution
@@ -17,6 +17,10 @@ entries:
     interaction: bee.application:interaction
     interactions: bee.applications:interactions
     appearance: bee.desktop:appearance
+    open_protocol: bee.applications:open_protocol
+    binding_protocol: bee.host:binding_protocol
+    thread_binding: bee.applications:thread_binding
+    thread_protocol: bee.applications:thread_protocol
   security:
     policies: [bee:broker_policy]
 - name: lifecycle
@@ -62,6 +66,17 @@ entries:
     arguments: bee.application:arguments
     contract: bee.protocol:application
     decode: bee.protocol:decode
+    bounds: bee.threads.records:bounds
+- name: thread_protocol
+  kind: library.lua
+  source: file://thread_protocol.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: thread_binding
+  kind: library.lua
+  source: file://thread_binding.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: open_call
   kind: function.lua
   source: file://open_method.lua

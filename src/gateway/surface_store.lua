@@ -5,6 +5,7 @@ local json = require("json")
 local M = {}
 type State = {surface_json: string, active_json: string, context_json: string, revision: integer}
 type Fault = {code: string, message: string}
+type Grant = {approval_id: string, proposal_digest: string, traits: {string}}
 local function fault(code: string, message: string): Fault return {code = code, message = message} end
 local function text(value: string, limit: integer): boolean return #value > 0 and #value <= limit end
 function M.read(tx: sql.Transaction, binding_id: string): (State?, Fault?)
@@ -65,6 +66,32 @@ function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
     if #result > 64 then return nil, fault("STORAGE", "too many granted traits") end
     table.sort(result)
     return result, nil
+end
+-- A receipt is durable evidence, not a new authorization mechanism.  When
+-- several approved effects carry one trait, the explicit approval-ID order
+-- makes the provenance selected for a retried runtime call stable.
+function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: string): (Grant?, Fault?)
+    if not bounds.id(binding_id) or not bounds.id(trait_id) then return nil, fault("INVALID", "invalid runtime receipt lookup") end
+    local rows, err = tx:query("SELECT approval_id, proposal_digest, traits_json FROM bee_gateway_access_grants WHERE binding_id = ? ORDER BY approval_id ASC", {binding_id})
+    if not rows or err then return nil, fault("STORAGE", "read application runtime access receipt") end
+    if #rows > 64 then return nil, fault("STORAGE", "MCP access receipt capacity exceeded") end
+    for _, raw in ipairs(rows) do
+        local row = bounds.object(raw)
+        local approval_id = row and bounds.id(row.approval_id)
+        local proposal_digest = row and bounds.text(row.proposal_digest, 64)
+        local encoded = row and bounds.text(row.traits_json, 8192)
+        local decoded: unknown = nil
+        local decode_error: string? = nil
+        if encoded then decoded, decode_error = json.decode(encoded) end
+        local traits, traits_error = bounds.ids(decoded, true)
+        if not approval_id or not proposal_digest or #proposal_digest ~= 64 or not proposal_digest:match("^[0-9a-f]+$") or decode_error or not traits then
+            return nil, fault("STORAGE", traits_error or "invalid application runtime access receipt")
+        end
+        for _, id in ipairs(traits) do
+            if id == trait_id then return {approval_id = approval_id :: string, proposal_digest = proposal_digest :: string, traits = traits}, nil end
+        end
+    end
+    return nil, nil
 end
 function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, digest: string, traits_json: string): (State?, Fault?)
     if not bounds.id(binding_id) or not bounds.id(approval_id) or #digest ~= 64 or not digest:match("^%x+$")

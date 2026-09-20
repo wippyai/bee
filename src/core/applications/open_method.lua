@@ -21,12 +21,12 @@ local function fail(code: string, message: string): {[string]: unknown}
     return {ok = false, error = {code = code, message = message}}
 end
 
-local function attribution(): ({[string]: unknown}?, string?)
+local function attribution(): (protocol.GatewayContext?, string?)
     local values, value_error = ctx.get(BINDING_KEY)
     if value_error then return nil, "the call context is unavailable" end
-    local object = bounds.object(values)
-    if not object then return nil, "the call is not bound to a gateway attempt" end
-    return object, nil
+    local decoded = protocol.gateway_context(values)
+    if not decoded then return nil, "the call is not bound to an approved application runtime" end
+    return decoded, nil
 end
 
 local function request_id(action_id: string, idempotency_key: string): (string?, string?)
@@ -36,13 +36,10 @@ local function request_id(action_id: string, idempotency_key: string): (string?,
 end
 
 function M.handle(raw: unknown): {[string]: unknown}
-    local binding, binding_error = attribution()
-    if not binding then return fail("UNAUTHENTICATED", binding_error or "gateway binding unavailable") end
-    local action_id = bounds.id(binding.action_id)
-    local workspace_id = bounds.id(binding.workspace_id)
-    if not action_id or not workspace_id then return fail("UNAUTHENTICATED", "gateway binding has no action or workspace") end
-    local origin = protocol.origin(binding.origin_view)
-    if binding.origin_view ~= nil and not origin then return fail("UNAUTHENTICATED", "gateway binding has an invalid origin view") end
+    local gateway_context, binding_error = attribution()
+    if not gateway_context then return fail("UNAUTHENTICATED", binding_error or "gateway binding unavailable") end
+    local action_id, workspace_id = gateway_context.action_id, gateway_context.workspace_id
+    local origin = gateway_context.origin_view
     local object = bounds.object(raw)
     if not object then return fail("INVALID", "open request must be an object") end
     local extra = bounds.fields(object, {"definition_id", "arguments", "idempotency_key"})
@@ -71,7 +68,8 @@ function M.handle(raw: unknown): {[string]: unknown}
         return fail("UNAVAILABLE", tostring(listen_error or "open reply channel unavailable"))
     end
     local sent, send_error = process.send(host, "bee.host.application", {version = 1, workspace_id = workspace_id,
-        request_id = request, definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin})
+        request_id = request, definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin,
+        provenance = gateway_context.provenance})
     if not sent then
         process.unlisten(replies)
         process.registry.unregister(caller_token, process.registry.LOCAL)

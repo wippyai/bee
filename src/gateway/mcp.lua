@@ -100,6 +100,12 @@ local TOOLS: {Tool} = {
         }}},
 }
 M.TOOLS = TOOLS
+-- Opening a reviewed application is deliberately not a base capability.  The
+-- surface installs this one built-in trait when the binding admits the tool;
+-- an access receipt must then make it selectable.
+M.APPLICATION_RUNTIME_TRAIT = {id = "bee.application:runtime", title = "Application runtime",
+    prompt = "Open only reviewed and admitted workspace applications. They may read and post in this agent's bound thread and continue after the initiating agent finishes under the durable thread lifetime contract.",
+    tools = {"application_open"}}
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
 function M.tool(name: string): Tool?

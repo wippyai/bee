@@ -18,6 +18,7 @@ entries:
     inventory: bee.host:inventory
     transfer: bee.host:transfer
     open_protocol: bee.applications:open_protocol
+    binding_protocol: bee.host:binding_protocol
     retained: bee.launch:retained_protocol
 - name: inventory
   kind: library.lua
@@ -59,3 +60,6 @@ entries:
   source: file://transfer.lua
   imports:
     contract: bee.protocol:application
+- name: binding_protocol
+  kind: library.lua
+  source: file://binding_protocol.lua

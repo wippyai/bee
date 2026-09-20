@@ -54,3 +54,19 @@ entries:
     protocol: bee.applications:open_protocol
     contract: bee.protocol:application
     test: wippy.test:test
+- name: thread_protocol_test
+  kind: function.lua
+  source: file://thread_protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.applications:thread_protocol
+- name: thread_binding_test
+  kind: function.lua
+  source: file://thread_binding_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    thread_binding: bee.applications:thread_binding

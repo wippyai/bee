@@ -12,7 +12,16 @@ type Values = {[string]: unknown}
 type Context = {[string]: unknown}
 type CopyState = {keys: integer, active: {[table]: boolean}}
 type OriginView = {view_id: string, instance_id: string}
-type Attribution = {binding_id: string, thread_id: string, action_id: string, attempt_id: string, policy_ref: string?, workspace_id: string?, origin_view: OriginView?}
+type Runtime = {thread_id: string, subject: string, initiating_owner: string, binding_id: string,
+    access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
+type Attribution = {binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
+    policy_ref: string?, workspace_id: string?, origin_view: OriginView?, application_runtime: Runtime?}
+
+local function digest(value: unknown): string?
+    local text = bounds.text(value, 64)
+    if not text or #text ~= 64 or not text:match("^[0-9a-f]+$") then return nil end
+    return text
+end
 
 local function copy_value(value: unknown, parent_depth: integer, state: CopyState): (unknown, string?)
     if value == nil or type(value) == "boolean" or type(value) == "string" then return value, nil end
@@ -151,9 +160,10 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
     if not copied then return nil, copy_error end
     local binding_id = bounds.id(identity.binding_id)
     local thread_id = bounds.id(identity.thread_id)
+    local subject = bounds.id(identity.subject)
     local action_id = bounds.id(identity.action_id)
     local attempt_id = bounds.id(identity.attempt_id)
-    if not binding_id or not thread_id or not action_id or not attempt_id then
+    if not binding_id or not thread_id or not subject or not action_id or not attempt_id then
         return nil, "invalid gateway binding attribution"
     end
     local policy_ref: string? = nil
@@ -175,9 +185,23 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
         if not view_id or not instance_id then return nil, "invalid gateway binding attribution" end
         origin_view = {view_id = view_id, instance_id = instance_id}
     end
-    copied[M.BINDING_KEY] = {binding_id = binding_id, thread_id = thread_id,
+    local runtime: Runtime? = nil
+    if identity.application_runtime ~= nil then
+        local value = identity.application_runtime
+        local approval_id = bounds.id(value.access_approval_id)
+        local revision = bounds.count(value.surface_revision)
+        local proposal_digest, surface_digest = digest(value.access_proposal_digest), digest(value.surface_digest)
+        if value.thread_id ~= thread_id or value.subject ~= subject or value.initiating_owner ~= subject or value.binding_id ~= binding_id
+            or not approval_id or not revision or revision < 1 or not proposal_digest or not surface_digest then
+            return nil, "invalid application runtime attribution"
+        end
+        runtime = {thread_id = thread_id, subject = subject, initiating_owner = subject, binding_id = binding_id,
+            access_approval_id = approval_id, access_proposal_digest = proposal_digest,
+            surface_revision = revision, surface_digest = surface_digest}
+    end
+    copied[M.BINDING_KEY] = {binding_id = binding_id, thread_id = thread_id, subject = subject,
         action_id = action_id, attempt_id = attempt_id, policy_ref = policy_ref, workspace_id = workspace_id,
-        origin_view = origin_view}
+        origin_view = origin_view, application_runtime = runtime}
     return copied, nil
 end
 

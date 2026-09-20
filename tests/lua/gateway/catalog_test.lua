@@ -2,6 +2,7 @@
 local test = require("test")
 local catalog = require("catalog")
 local surface = require("surface")
+local mcp = require("mcp")
 local function sample()
     return {tools = {{name = "measure", operation = "research:measure", description = "Run the admitted benchmark",
         policies = {"research:measure_policy"}, schema = {type = "object"}, annotations = {readOnlyHint = false}}},
@@ -128,6 +129,33 @@ local function define_tests()
             test.eq(prepared.access, nil)
             test.eq(#prepared.allowed_traits, 2)
             if not surface.select(prepared, {"research:export"}, {}) then error("plain trait unavailable") end
+        end)
+        test.it("gates application_open behind the approved runtime trait", function()
+            local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}}
+            local prepared, initial = surface.prepare(raw, mcp.TOOLS, {"application_open"})
+            if not prepared or not initial then error("runtime surface refused") end
+            test.is_nil(surface.select(prepared, {"bee.application:runtime"}, {}))
+            local granted, grant_error = surface.grant(prepared, {"bee.application:runtime"})
+            if not granted then error(tostring(grant_error)) end
+            local selected = surface.select(granted, {"bee.application:runtime"}, {})
+            if not selected then error("approved runtime trait refused") end
+            local active = catalog.select(granted.catalog, granted.ceiling, granted.base_tools, granted.allowed_traits, selected.active)
+            if not active or #active ~= 1 or active[1].name ~= "application_open" then error("runtime tool not active") end
+            local inactive = surface.select(granted, {}, {})
+            if not inactive then error("runtime trait deselection refused") end
+            local hidden = catalog.select(granted.catalog, granted.ceiling, granted.base_tools, granted.allowed_traits, inactive.active)
+            if not hidden or #hidden ~= 0 then error("runtime tool remained active after deselection") end
+
+            raw = {tools = {}, traits = {}, base_tools = {"application_open"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}}
+            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
+            raw.base_tools = {}
+            raw.access = nil
+            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
+            raw.access = {policy = "application:approval", workspace_id = "workspace-one", traits = {"bee.application:runtime"}}
+            raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
+            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
         end)
     end)
 end

@@ -69,6 +69,25 @@ entries:
     - bee.threads.service:record
     - bee.threads.service:read_after
     effect: allow
+- name: application_thread_membership_policy
+  kind: security.policy
+  meta:
+    comment: Broker-only executor for owner-authenticated application membership reconciliation
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:get, bee.threads.service:join, bee.threads.service:leave]
+    effect: allow
+- name: application_thread_facade_policy
+  kind: security.policy
+  meta:
+    comment: Broker-only executor for one authenticated application's active bound thread
+  policy:
+    actions: [funcs.call]
+    resources: [bee.threads.service:read_after, bee.threads.service:record,
+      bee.threads.delivery:subscribe, bee.threads.delivery:page,
+      bee.threads.delivery:ack_page, bee.threads.delivery:resume,
+      bee.threads.delivery:unsubscribe]
+    effect: allow
 - name: thread_lifecycle_client_policy
   kind: security.policy
   policy:

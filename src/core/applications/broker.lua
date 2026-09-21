@@ -23,7 +23,7 @@ local binding_protocol = require("binding_protocol")
 local thread_binding_reducer = require("thread_binding_reducer")
 local thread_binding = require("thread_binding")
 local thread_protocol = require("thread_protocol")
-type Admission = {revision: string, bindings: {contract.Binding}, items: {contract.Descriptor},
+type Admission = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor},
     descriptors: {[string]: contract.Descriptor}, scopes: {[string]: security.Scope}}
 type Waiter = {request_id: string, recipient: string, control: boolean}
 type AppearanceOp = "state" | "set" | "inherit"
@@ -153,7 +153,7 @@ local function main(owner: string, initial_preferences: unknown)
     local function refresh_admission(initial: boolean?)
         local previous = admission.current
         local ok, loaded = pcall(function(): Admission
-            local selected = catalog.read()
+            local selected = catalog.read(workspace_id)
             if previous and catalog.same(selected, previous) then return previous end
             local revision = selected.revision
             local next_bindings = selected.bindings
@@ -179,10 +179,11 @@ local function main(owner: string, initial_preferences: unknown)
                 end
                 next_scopes[binding.definition_id] = security.new_scope(policies)
             end
-            if not catalog.same(catalog.read(), selected) then error("Application admission changed during refresh") end
+            if not catalog.same(catalog.read(workspace_id), selected) then error("Application admission changed during refresh") end
             local next_descriptors: {[string]: contract.Descriptor} = {}
             for _, item in ipairs(next_items) do next_descriptors[item.definition_id] = item end
-            return {revision = revision, bindings = next_bindings, descriptors = next_descriptors, scopes = next_scopes, items = next_items}
+            return {revision = revision, evidence = selected.evidence, bindings = next_bindings,
+                descriptors = next_descriptors, scopes = next_scopes, items = next_items}
         end)
         if ok then
             local selected: Admission = loaded :: Admission

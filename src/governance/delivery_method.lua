@@ -12,6 +12,7 @@ local json = require("json")
 local preflight = require("preflight")
 local guide = require("guide")
 local transaction = require("transaction")
+local protocol = require("protocol")
 
 local M = {}
 type Result = transaction.Result
@@ -130,12 +131,12 @@ local function request_operation(workspace_id: string, source_workspace: string,
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
     local ready = report.ready == true and #report.diagnostics == 0 and #report.pending_migrations == 0
     return transaction.success({ready = ready, plan_digest = plan.plan_digest,
-        artifact_digest = plan.artifact_digest, version = version, source_workspace = source_workspace,
+        artifact_digest = plan.artifact_digest, version = version, source_overlay_id = source_workspace,
         component = component, diagnostics = diagnostic_rows(report),
         pending_migrations = #report.pending_migrations,
-        human_steps = {"review the plan in App Delivery", "select it there", "prepare the activation there",
+        human_steps = {"review the plan in Overlays", "select it there", "prepare the activation there",
             "approve it in Approvals", "let the activation owner apply the overlay", "open it from the start menu"},
-        human_steps_where = {review = "App Delivery", approve = "Approvals", open = "start menu"}}, false)
+        human_steps_where = {review = "Overlays", approve = "Approvals", open = "start menu"}}, false)
 end
 
 -- Read the staged plan and, when an intent is named, its activation status.
@@ -150,7 +151,7 @@ local function status_operation(workspace_id: string, source_workspace: string, 
     local plan, plan_error = forward(DESTINATION, {operation = "get", workspace_id = workspace_id,
         source_node = node, source_workspace = source_workspace, version = version})
     if not plan then return plan_error :: Result end
-    local value: Object = {version = version, source_workspace = source_workspace, plan_digest = plan.plan_digest,
+    local value: Object = {version = version, source_overlay_id = source_workspace, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, plan_status = plan.status,
         review_status = plan.review_status, selected = plan.selected}
     if intent_id then
@@ -178,30 +179,17 @@ local function publish_operation(workspace_id: string, source_workspace: string,
 end
 
 function M.call(raw: unknown): Result
-    local request = object(raw)
-    if not request then return failure("INVALID", "delivery request must be an object") end
-    local extra = bounds.fields(request, {"operation", "workspace_id", "source_workspace", "version",
-        "snapshot_digest", "source_node", "intent_id"})
-    if extra then return failure("INVALID", extra) end
-    local operation = bounds.id(request.operation)
-    local workspace_id, source_workspace = bounds.id(request.workspace_id), bounds.id(request.source_workspace)
-    local version = bounds.id(request.version)
-    if not operation or not ACTIONS[operation] then return failure("INVALID", "unknown delivery operation") end
-    if not workspace_id or not source_workspace or not version then
-        return failure("INVALID", "delivery needs operation, workspace_id, source_workspace and version")
-    end
+    local request, decode_error = protocol.decode(raw)
+    if not request then return failure("INVALID", decode_error or "invalid delivery request") end
+    local operation = request.operation
+    local workspace_id, source_workspace, version = request.workspace_id, request.source_workspace, request.version
     local actor = security.actor()
     local action = ACTIONS[operation]
     if not actor or not security.can(action, workspace_id) then
         return failure("DENIED", "delivery operation is not authorized")
     end
     if operation == "request" then
-        local snapshot_digest = request.snapshot_digest
-        if type(snapshot_digest) ~= "string" or #snapshot_digest ~= 64 or not snapshot_digest:match("^[0-9a-f]+$") then
-            return failure("INVALID", "request needs the frozen snapshot_digest")
-        end
-        local frozen_digest: string = snapshot_digest :: string
-        return request_operation(workspace_id, source_workspace, version, frozen_digest)
+        return request_operation(workspace_id, source_workspace, version, request.snapshot_digest :: string)
     end
     if operation == "status" then
         return status_operation(workspace_id, source_workspace, version,

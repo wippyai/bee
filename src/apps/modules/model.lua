@@ -237,7 +237,7 @@ end
 function M.installed_intent(_: State): Intent return {operation = "installed"} end
 
 -- Publication identities are entered explicitly. Freeze remains with the
--- caller-owned authoring workspace; host profiles retain source-workspace and
+-- caller-owned overlay; host profiles retain source-workspace and
 -- overlay authority, and Governance returns only a prepared descriptor.
 function M.set_publication_field(state: State, field: string, raw: unknown): string?
     if type(raw) ~= "string" then return "publication value must be text" end
@@ -276,7 +276,7 @@ function M.publication_prepare_intent(state: State, workspace_id: unknown): (Int
     local workspace, problem = publication_identity(state, workspace_id)
     if not workspace then return nil, problem end
     if not digest(state.publication_snapshot_digest) then
-        return nil, "freeze the owned authoring workspace and enter its snapshot digest"
+        return nil, "freeze the owned overlay and enter its snapshot digest"
     end
     return {operation = "prepare", request = {operation = "prepare", workspace_id = workspace,
         component = state.publication_component, version = state.publication_version,
@@ -301,7 +301,7 @@ function M.apply_publication_prepare(state: State, reply: Reply)
     state.publication_prepared = {component = name, version = selected_version,
         snapshot_digest = state.publication_snapshot_digest, descriptor_digest = descriptor_digest}
     state.notice = (reply.replayed and "Already prepared " or "Prepared locally ") .. name .. " " .. selected_version
-        .. "; open App Delivery to stage it for local review"
+        .. "; open Overlays to stage it for local review"
 end
 
 function M.publication_ready(state: State): boolean

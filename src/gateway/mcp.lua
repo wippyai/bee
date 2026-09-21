@@ -44,11 +44,11 @@ local TOOLS: {Tool} = {
             brief = {type = "string", minLength = 1, maxLength = 16384},
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
-    {name = "workspace", description = "Learn this destination's component authoring contract (read-only guide), or create, inspect, edit or freeze a caller-owned Governance authoring workspace", operation = "bee.governance:workspace_call",
-        policies = {"bee:gateway_tool_workspace_policy"}, annotations = WRITE_ANNOTATIONS,
+    {name = "overlay", description = "Learn this destination's governed overlay contract (read-only guide), or create, inspect, edit or freeze a caller-owned overlay", operation = "bee.governance:overlay_call",
+        policies = {"bee:gateway_tool_overlay_policy"}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"guide", "create", "list", "read", "put", "remove", "freeze"}},
-            workspace_id = {type = "string", minLength = 1, maxLength = 160},
+            overlay_id = {type = "string", minLength = 1, maxLength = 160},
             expected_revision = {type = "integer", minimum = 0, maximum = 9007199254740990},
             idempotency_key = {type = "string", minLength = 1, maxLength = 160},
             path = {type = "string", minLength = 1, maxLength = 240},
@@ -73,12 +73,12 @@ local TOOLS: {Tool} = {
             operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "plan"}},
             request = {type = "object"},
         }}},
-    {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in App Delivery, approval in Approvals and apply by the activation owner.", operation = "bee.governance:delivery_call",
+    {name = "delivery", description = "Request delivery of your frozen component pack to this destination: publish the frozen artifact, stage it and read the destination's preflight verdict; or read a staged version's review, selection and activation status. It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner.", operation = "bee.governance:delivery_call",
         policies = {"bee:gateway_tool_delivery_policy"}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_workspace", "version"}, properties = {
+        schema = {type = "object", additionalProperties = false, required = {"operation", "workspace_id", "source_overlay_id", "version"}, properties = {
             operation = {type = "string", enum = {"request", "status"}},
             workspace_id = {type = "string", minLength = 1, maxLength = 160},
-            source_workspace = {type = "string", minLength = 1, maxLength = 160},
+            source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
             snapshot_digest = {type = "string", pattern = "^[0-9a-f]{64}$"},
             source_node = {type = "string", minLength = 1, maxLength = 160},
@@ -86,9 +86,9 @@ local TOOLS: {Tool} = {
         }}},
     {name = "publish", description = "Publish the exact application version a person has already reviewed, selected, approved and had applied at this destination. Use delivery request first and wait for the person; publication refuses any version that is not locally reviewed and applied.", operation = "bee.governance:delivery_call",
         policies = {"bee:gateway_tool_publish_policy"}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"workspace_id", "source_workspace", "version"}, properties = {
+        schema = {type = "object", additionalProperties = false, required = {"workspace_id", "source_overlay_id", "version"}, properties = {
             workspace_id = {type = "string", minLength = 1, maxLength = 160},
-            source_workspace = {type = "string", minLength = 1, maxLength = 160},
+            source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
         }}},
     {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.applications:open_call",
@@ -249,18 +249,21 @@ end
 function M.delivery_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local request, decode_error = delivery_protocol.decode(arguments)
-    if not request then return nil, decode_error end
-    return request, nil
+    local _, decode_error = delivery_protocol.decode(arguments)
+    if decode_error then return nil, decode_error end
+    -- The public delivery facade owns the public-to-private translation.
+    -- Preserve its source_overlay_id payload instead of decoding it twice.
+    return arguments, nil
 end
 function M.publish_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"workspace_id", "source_workspace", "version"})
+    local unknown_field = bounds.fields(arguments, {"workspace_id", "source_overlay_id", "version"})
     if unknown_field then return nil, unknown_field end
-    local request, decode_error = delivery_protocol.decode({operation = "publish", workspace_id = arguments.workspace_id,
-        source_workspace = arguments.source_workspace, version = arguments.version})
-    if not request then return nil, decode_error end
+    local request: Object = {operation = "publish", workspace_id = arguments.workspace_id,
+        source_overlay_id = arguments.source_overlay_id, version = arguments.version}
+    local _, decode_error = delivery_protocol.decode(request)
+    if decode_error then return nil, decode_error end
     return request, nil
 end
 function M.open_arguments(params: Object): (Object?, string?)
@@ -297,7 +300,7 @@ end
 -- Governance owns the complete operation-specific schema. Keeping its decoder
 -- here avoids a second, looser MCP dialect and converts canonical base64 to the
 -- exact bytes accepted by the authoring store.
-function M.workspace_arguments(params: Object): (Object?, string?)
+function M.overlay_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     if type(arguments.content) == "string" and #arguments.content > M.MAX_WORKSPACE_TEXT_BYTES then
@@ -306,12 +309,14 @@ function M.workspace_arguments(params: Object): (Object?, string?)
     if type(arguments.content_base64) == "string" and #arguments.content_base64 > M.MAX_WORKSPACE_BASE64_BYTES then
         return nil, "content_base64 exceeds the MCP body bound"
     end
-    local request, decode_error = workspace_protocol.decode(arguments)
-    if not request then return nil, decode_error end
-    if type(request.content) == "string" and #request.content > M.MAX_WORKSPACE_TEXT_BYTES then
+    local decoded, decode_error = workspace_protocol.decode_overlay(arguments)
+    if not decoded then return nil, decode_error end
+    if type(decoded.content) == "string" and #decoded.content > M.MAX_WORKSPACE_TEXT_BYTES then
         return nil, "decoded content exceeds the MCP file bound"
     end
-    return request, nil
+    -- Validation may decode base64 and translate overlay_id for its private
+    -- model, but dispatch still targets the public overlay facade.
+    return arguments, nil
 end
 
 -- The managed-agent component explorer is narrower than the private Hub

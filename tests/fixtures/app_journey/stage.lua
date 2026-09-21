@@ -1,7 +1,7 @@
 -- MIT. Stage the next application definition for the live journey.
 -- This command is deliberately limited to authoring, publication and staging:
 -- review, selection, approval, activation and overlay materialization remain
--- human and destination-owner actions in App Delivery and Approvals.
+-- human and destination-owner actions in Overlays and Approvals.
 local funcs = require("funcs")
 local registry = require("registry")
 local json = require("json")
@@ -38,12 +38,12 @@ local function call_api(target: string, request: unknown): Object
 end
 
 local function workspace_value(operation: string, workspace_id: string, expected_revision: integer?, key: string?, content: string?): Object
-    local request: Object = {operation = operation, workspace_id = workspace_id}
+    local request: Object = {operation = operation, overlay_id = workspace_id}
     if expected_revision ~= nil then request.expected_revision = expected_revision end
     if key then request.idempotency_key = key end
     if operation == "put" then request.path, request.content = "entries.json", content end
     if operation == "read" then request.path = "entries.json" end
-    return call_api("bee.governance:workspace_call", request)
+    return call_api("bee.governance:overlay_call", request)
 end
 
 local function read_entries(): {Object}

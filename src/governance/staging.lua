@@ -1,4 +1,4 @@
--- MIT. Node-local, service-owned mutable authoring workspace and frozen copies.
+-- MIT. Node-local, service-owned mutable overlay and frozen copies.
 -- It is deliberately not a registry writer, filesystem adapter, or executor.
 local sql = require("sql")
 local base64 = require("base64")
@@ -25,7 +25,7 @@ local MAX_WORKSPACES = 64
 local MAX_ACTOR_WORKSPACES = 8
 -- Frozen revisions are the durable source history for iterative agent work.
 -- Keep the budget explicit and bounded while allowing repair and later edits
--- to stay in one authoring workspace.
+-- to stay in one overlay.
 local MAX_SNAPSHOTS = 16
 local MAX_RECEIPTS = 512
 local MAX_FILES = 256
@@ -461,7 +461,7 @@ function M.read_frozen(store: Store, workspace_raw: string, path_raw: string, di
     local snapshot_digest = bounds.id(digest_raw)
     if not workspace_id or not path or #path == 0 or not snapshot_digest
         or #snapshot_digest ~= 64 or not snapshot_digest:match("^[0-9a-f]+$") then
-        return failure("INVALID", "frozen workspace file identity is invalid")
+        return failure("INVALID", "frozen overlay file identity is invalid")
     end
     local selected_workspace: string = workspace_id :: string
     local selected_digest: string = snapshot_digest :: string

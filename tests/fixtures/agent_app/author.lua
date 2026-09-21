@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- One managed Agy attempt authors a Bee application through the scoped
--- Governance MCP workspace tool and reports its frozen snapshot digest on the
+-- Governance MCP overlay tool and reports its frozen snapshot digest on the
 -- bound thread. Review findings from an earlier round reach the agent as a
 -- record on that same thread before this attempt starts.
 local funcs = require("funcs")
@@ -38,8 +38,8 @@ local INSTRUCTIONS = [[You author Bee registry entries through the Bee MCP tools
 Never use a shell, a delegate, an unrelated file, or a direct registry or source write.
 Read session first. Request the access the host declares, poll access_status with the
 returned approval_id, and select your traits only after it is granted.
-Every edit goes into your caller-owned Governance workspace through the workspace tool,
-then you freeze that workspace and report the returned digest.
+Every edit goes into your caller-owned overlay through the overlay tool,
+then you freeze that overlay and report the returned digest.
 entries.json is a JSON list of complete registry entries. Each entry uses id, kind, an
 optional meta and a required data. Put source, method, modules and imports inside data.
 Inline the Lua source; a file URL is refused. Top-level YAML shorthand is not the registry API.
@@ -94,8 +94,8 @@ local function surface(launch_workspace: string): Object
             {id = "app:read", title = "Application reader", prompt = "Read the Bee application contract and this thread.",
                 tools = {"thread_read", "app_docs"}},
             {id = "app:author", title = "Application author",
-                prompt = "Author one Bee application in your Governance workspace and report its frozen digest.",
-                tools = {"thread_message", "workspace"}}},
+                prompt = "Author one Bee application in your caller-owned overlay and report its frozen digest.",
+                tools = {"thread_message", "overlay"}}},
         base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "agent-authored-app"},
         dynamic_keys = {"round"},
         access = {workspace_id = launch_workspace, policy = ACCESS_POLICY, traits = {"app:author"}}}
@@ -112,7 +112,7 @@ local function configure(launch_workspace: string, policy_ref: string, keep_exec
         data.gateway_surface = surface(launch_workspace)
         data.instructions = INSTRUCTIONS
     else
-        data.gateway_tools = {"thread_read", "thread_message", "workspace", "app_docs"}
+        data.gateway_tools = {"thread_read", "thread_message", "overlay", "app_docs"}
         data.gateway_surface = surface(launch_workspace)
         data.instructions = INSTRUCTIONS
     end
@@ -156,7 +156,7 @@ local function first_brief(source_workspace: string, marker: string, round: stri
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
         .. "Read app_docs topics contract, client, example and view before you write anything. contract is the authoring contract for this destination, "
         .. "client is the application client library source, example and view are a real Bee application you may learn the conventions from. "
-        .. "Create the Governance workspace " .. source_workspace .. " with operation create at expected_revision 0, "
+        .. "Create the caller-owned overlay " .. source_workspace .. " with operation create at expected_revision 0, "
         .. "then put path entries.json at expected_revision 1 with idempotency_key entries-" .. round
         .. ", then freeze at the revision that put returned with idempotency_key freeze-" .. round .. ". "
         .. "entries.json holds exactly one entry with id " .. DEFINITION_ID .. " and kind process.lua, with its Lua source inline in data.source. "
@@ -185,7 +185,7 @@ local function repair_brief(source_workspace: string, marker: string, round: str
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
         .. "Read app_docs topics contract, client, example and view again for anything the findings touch. "
         .. "Fix every finding. Keep the behaviour the earlier version already had right; do not replace the application with a stub. "
-        .. "Continue in the existing Governance workspace " .. source_workspace .. ". Call workspace list first. "
+        .. "Continue in the existing overlay " .. source_workspace .. ". Call overlay list first. "
         .. "If the earlier attempt ended before creating it, create it at expected_revision 0; otherwise read its current entries.json without a snapshot digest. "
         .. "Put the complete corrected entries.json at the revision returned by list or create with idempotency_key entries-" .. round
         .. ", then freeze at the revision that put returned with idempotency_key freeze-" .. round .. ". "
@@ -202,8 +202,8 @@ local function update_brief(source_workspace: string, marker: string, round: str
         .. "Read session, then request access with traits [app:author], idempotency_key update-access-" .. round
         .. " and reason Update the Bee application. Poll access_status until the host operator grants it. "
         .. "Select active_traits [app:read, app:author] with the current revision and context {round: \"" .. round .. "\"}. "
-        .. "Read app_docs topics contract and client. In the existing Governance workspace " .. source_workspace
-        .. ", call workspace list, then read the current entries.json without a snapshot digest. Preserve its one application and all behaviour. "
+        .. "Read app_docs topics contract and client. In the existing overlay " .. source_workspace
+        .. ", call overlay list, then read the current entries.json without a snapshot digest. Preserve its one application and all behaviour. "
         .. "Change the first painted line from exactly " .. MARKER_LINE .. " to exactly " .. UPDATE_MARKER_LINE
         .. " and advance meta.application.revision from 1 to 2 because the executable definition changed. "
         .. "Keep id " .. DEFINITION_ID .. ", title " .. TITLE .. ", resume_schema agent-app.v1 and every destination ceiling unchanged. "
@@ -396,7 +396,7 @@ local function main()
         -- An attempt that ends without the frozen digest is reviewed like any
         -- other refused round: the host tells the agent what it observed.
         report.findings = "your attempt ended without reporting a frozen snapshot digest on the bound thread. "
-            .. "Author the application through the Bee MCP tools, freeze the workspace and report the digest "
+            .. "Author the application through the Bee MCP tools, freeze the overlay and report the digest "
             .. "with thread_message before you answer."
         if terminal ~= "" then
             report.findings = tostring(report.findings) .. " The host observed the attempt end as " .. terminal .. "."
@@ -405,22 +405,22 @@ local function main()
         return
     end
 
-    -- A frozen workspace that cannot become an application is refused with the
+    -- A frozen overlay that cannot become an application is refused with the
     -- destination's own named code and remedy, exactly as publication prepare
     -- would refuse it. The remedy text comes from that product surface, not
     -- from this fixture, so the agent is handed the same words.
     local function refusal_findings(code: string, detail: string): string
         local refusal = publication.artifact_refusal(code, detail)
         local value = bounds.object(refusal.value) or {}
-        return "the destination refused your frozen workspace before delivery: " .. tostring(refusal.code)
+        return "the destination refused your frozen overlay before delivery: " .. tostring(refusal.code)
             .. ": " .. tostring(refusal.message) .. " Remedy: " .. tostring(value.remedy)
     end
-    local file = call("bee.governance:workspace_call", {operation = "read", workspace_id = source_workspace,
+    local file = call("bee.governance:overlay_call", {operation = "read", overlay_id = source_workspace,
         path = "entries.json", snapshot_digest = snapshot_digest})
-    if file.workspace_id ~= source_workspace then error("workspace read returned another workspace") end
+    if file.overlay_id ~= source_workspace then error("overlay read returned another overlay") end
     report.workspace_revision = bounds.count(file.revision) or 0
     if type(file.content_base64) ~= "string" then
-        report.findings = refusal_findings("MISSING_ARTIFACT", "the frozen workspace holds no entries.json")
+        report.findings = refusal_findings("MISSING_ARTIFACT", "the frozen overlay holds no entries.json")
     else
         local source, decode_error = base64.decode(file.content_base64 :: string)
         if not source then

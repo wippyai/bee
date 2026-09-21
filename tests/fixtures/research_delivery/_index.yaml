@@ -29,8 +29,8 @@ entries:
     - registry.overlay.delete.*
     - db.get
     - system.read
-    - bee.governance.workspace.read
-    - bee.governance.workspace.write
+    - bee.governance.overlay.read
+    - bee.governance.overlay.write
     - bee.governance.delivery.read
     - bee.governance.delivery.manage
     - bee.governance.delivery.activate

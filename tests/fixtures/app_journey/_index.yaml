@@ -20,8 +20,8 @@ entries:
     - db.get
     - system.read
     - env.get
-    - bee.governance.workspace.read
-    - bee.governance.workspace.write
+    - bee.governance.overlay.read
+    - bee.governance.overlay.write
     - bee.governance.delivery.read
     - bee.governance.delivery.manage
     - bee.governance.delivery.activate
@@ -98,9 +98,10 @@ entries:
   kind: process.lua
   source: file://inspect.lua
   method: main
-  modules: [registry, time, logger]
+  modules: [registry, time, logger, env]
   imports:
     catalog: bee.applications:catalog
+    bounds: bee.threads.records:bounds
   security:
     policies: [bee.app_journey_probe:operator_policy]
   meta:

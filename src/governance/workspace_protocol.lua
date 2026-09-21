@@ -85,4 +85,27 @@ function M.decode(raw: unknown): (Request?, string?)
     end
     return request, nil
 end
+
+-- The authoring surface calls the durable object an overlay. Storage keeps its
+-- workspace identity internally; this one boundary translates the public name
+-- without accepting both dialects.
+function M.decode_overlay(raw: unknown): (Request?, string?)
+    local value = bounds.object(raw)
+    if not value then return nil, "request must be an object" end
+    local extra = bounds.fields(value, {"operation", "overlay_id", "expected_revision", "idempotency_key",
+        "path", "content", "content_base64", "snapshot_digest"})
+    if extra then return nil, extra end
+    if value.operation == "guide" and value.overlay_id ~= nil then
+        return nil, "guide names no overlay_id"
+    end
+    local translated: {[string]: unknown} = {}
+    for key, item in pairs(value) do translated[key] = item end
+    translated.workspace_id = translated.overlay_id
+    translated.overlay_id = nil
+    local request, decode_error = M.decode(translated)
+    if not request then
+        return nil, decode_error and decode_error:gsub("workspace_id", "overlay_id") or nil
+    end
+    return request, nil
+end
 return M

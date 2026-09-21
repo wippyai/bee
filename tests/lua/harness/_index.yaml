@@ -260,7 +260,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_message, workspace, delivery, publish]
+    gateway_tools: [thread_read, thread_message, overlay, delivery, publish]
 - name: gateway_expiring_policy
   kind: registry.entry
   meta:

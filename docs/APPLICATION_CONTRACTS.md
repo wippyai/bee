@@ -19,9 +19,19 @@ Deduplication is bounded and in-memory, not durable exactly-once execution.
 `meta.type = bee.application` and `meta.application` declare `api_version: 1`,
 `lifetime: view`, nonempty `revision` and `title`, `instance_policy: singleton|multiple`,
 optional `icon`, `group` (slash-separated menu path), and `role`. Roles supply
-contextual discoverability, never authority. Only protected
-`bee:application_admission.bindings` selects allowed definitions, policy IDs and
-operation grants (`appearance_write`, `application_stop`, `catalog_read`). It may
+contextual discoverability, never authority. The protected static
+`bee:application_admission.bindings` selects shipped definitions, policy IDs and
+operation grants (`appearance_write`, `application_stop`, `catalog_read`). A
+reviewed governed overlay may add workspace-local definitions through the host's
+`bee.governance:activation_profiles.applications` selection. Activation derives
+one reserved admission record from the approved artifact and external policy
+definitions, freezes it in the activation intent and applies it atomically beside
+the artifact. Portable content cannot claim the reserved identity. The broker
+accepts that record only for its own workspace, only while the current normalized
+host profile selects the same source, owner, bindings and external policies.
+Static and governed claims cannot name the same definition, and their combined
+limit remains 64. Governed bindings default every static-only operation grant to
+false. Either form may
 also select the bounded `thread_access` value `none` or `observe_post`; omission
 means `none`. `observe_post` is the narrow application-thread contract: the
 exact admitted application revision may receive a broker-bound facade for
@@ -31,10 +41,11 @@ launch arguments cannot select this value.
 Executable source or configuration changes require a new application revision;
 one revision identifies one exact runnable definition.
 
-The broker reconciles the effective protected declaration on its existing
+The broker reconciles the effective protected declarations on its existing
 lifecycle tick and before each new open. It compares decoded bindings and
-descriptors from one immutable snapshot as well as the history revision:
-registry overlays can change these values without advancing history. Unchanged
+descriptors from one immutable snapshot, the history revision and the accepted
+governed-admission digests: registry overlays can change these values without
+advancing history. Unchanged
 values reuse the existing scopes and do not republish the catalog. A change
 rebuilds the host-selected scopes and rechecks the catalog before publication. A
 compatible new revision of an automatic application replaces its execution
@@ -59,9 +70,12 @@ application failure, and the workspace preserves an automatic application's
 last acknowledged recovery record and display assignment for the next host
 recovery.
 
-This is registry reconciliation only: Hub installation does not publish an
-admission binding or grant an application approval. The reviewed publication
-owner and Modules approval workflow remain unfinished. `make app-admission-check`
+Hub installation alone does not publish an admission binding or grant application
+authority. A destination host must explicitly select applications in its activation
+profile, and the existing review and approval flow must accept that exact plan.
+Withdrawing the profile makes a retained derived record ineffective immediately;
+new opens and recovery are denied, and a running application's next governed
+thread operation reaches the existing revocation path. `make app-admission-check`
 exercises the actual broker against source and pack, including scope replacement,
 revocation, invalid-declaration recovery and retained producers. The fixture owns
 its registry writes; this is not an installed-package approval acceptance test.

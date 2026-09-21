@@ -25,7 +25,7 @@ local function define_tests()
                 local frame = view.draw(width, 18, appearance.defaults(), state, 0, "")
                 local has_prepare, has_publish = false, false
                 local rendered = table.concat(frame.rows, "\n")
-                test.is_true(rendered:find("App Delivery", 1, true) ~= nil)
+                test.is_true(rendered:find("Overlays", 1, true) ~= nil)
                 test.is_true(rendered:find("Private authored", 1, true) ~= nil or width < 24)
                 for _, hit in ipairs(frame.hits) do
                     if hit.kind == "prepare_publication" then has_prepare = true end

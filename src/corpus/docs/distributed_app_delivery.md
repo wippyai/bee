@@ -1,9 +1,9 @@
-# Distributed application delivery
+# Distributed overlay delivery
 
 Status: immutable candidate identity, generic Hive transfer, verified replica
 reading, destination plan storage, the activation ledger, private-overlay
 resolution and the destination-owner state machine are implemented in source.
-The App Delivery application presents destination-local review, selection,
+The Overlays application presents destination-local review, selection,
 activation and status; decisions remain in the existing Approvals owner. The
 real two-runtime gate transfers two distinct versions of a private application
 that is unavailable on Hub, then exercises destination review, update, recovery
@@ -13,9 +13,9 @@ profile; public invitation/profile creation, multi-project joined identities and
 destination migration execution remain unfinished.
 
 Publishing replicates content. It never installs, activates, or grants authority
-on another Bee. The sender freezes its authoring workspace and prepares one
+on another Bee. The sender freezes its overlay and prepares one
 source-owned immutable component version locally. Preparation stores exact bytes
-without appending the Sync feed. The same local App Delivery flow must stage,
+without appending the Sync feed. The same local Overlays flow must stage,
 review, select, approve and apply those bytes before publication may append their
 descriptor to the feed. That version contains no destination node, workspace,
 plan, approval or host policy. A destination receives the bytes through the
@@ -42,7 +42,7 @@ already selected.
 
 The delivery flow is deliberately small:
 
-1. Freeze an authoring workspace and prepare a destination-independent component version locally.
+1. Freeze an overlay and prepare a destination-independent component version locally.
 2. Stage, review, select, approve and apply that exact local version, then publish it.
 3. Transfer bounded chunks. Interrupted transfers remain `receiving`; only a
    complete length- and digest-verified replica becomes `available`.
@@ -141,7 +141,7 @@ receipts. Selection remains separate from receipt of a replicated version.
 
 ## What a reviewer sees
 
-App Delivery reads a staged plan and shows, in a review pane beside the
+Overlays reads a staged plan and shows, in a review pane beside the
 available and staged lists, what a person is being asked to approve:
 
 1. The verdict. The application decodes the plan's own preflight report from the
@@ -172,16 +172,16 @@ destination facade it already calls. Overlays remain the activation owner's.
 The public facade authenticates the caller's exact delivery operation and then
 enters the private destination execution scope to reach the destination store,
 the same shape the authoring facade uses. An ordinary application is denied the
-governance database directly, so without that scope hop App Delivery could not
+governance database directly, so without that scope hop Overlays could not
 read its own destination. The facade also presents an owner fault as the
 application boundary names it, so a refusal arrives with its code and reason.
 
 `make delivery-review-check` stages one version whose candidate introduces a
 reference to an entry nothing supplies and one the destination preflight
-accepts, then drives the App Delivery window: the refused version shows blocked
+accepts, then drives the Overlays window: the refused version shows blocked
 with `DANGLING_REFERENCE` on its own entry and refuses selection with that
 reason, and the accepted version shows ready with its entry changes, is reviewed,
-selected and prepared in App Delivery, approved in Approvals, and read back with
+selected and prepared in Overlays, approved in Approvals, and read back with
 its activation outcome and receipt.
 
 The owner-local overlay materializer is now implemented and tested. It accepts
@@ -225,7 +225,7 @@ drift observation has its own revision-fenced receipt. The destination service
 supplies its host configuration and real approval executor. The bundled App
 Delivery application calls that service for staged plan listing, local review,
 selection, activation and status/recovery presentation. The existing Approvals
-application remains the decision surface; App Delivery does not publish or send
+application remains the decision surface; Overlays does not publish or send
 candidates.
 
 `bee.governance:hub_resolver` now implements destination Hub resolution over
@@ -259,20 +259,20 @@ the authoring seat, and it is opt-in because it consumes provider inference. A
 managed Agy attempt is launched through the production launch definition,
 admission, carrier, placement and gateway with a brief and the launch policy's
 host instructions. It reads the application contract through one admitted
-read-only tool and authors the definition into its own Governance workspace
-through the scoped MCP `workspace` tool, then freezes it. Its binding admits
+read-only tool and authors the definition into its own caller-owned overlay
+through the scoped MCP `overlay` tool, then freezes it. Its binding admits
 four tools and no publication, approval or overlay operation. The host lints the
 frozen source, and a refusal from typed lint or from the destination preflight
 returns to the agent as a record on its bound thread, which the next attempt
 reads before repairing; the acceptance is bounded to three rounds. The person
-then reads the verdict and the entry changes in App Delivery, accepts, selects
+then reads the verdict and the entry changes in Overlays, accepts, selects
 and prepares there, approves in Approvals and steps, and the activation owner's
 receipt names the overlay it applied. The agent-authored window then opens from
 the start menu and comes back with its state after a full host restart.
 
 An authoring agent now has an honest path from its frozen artifact to the
 person's decision, through the MCP surface it already holds rather than a
-contract written into its brief. The built-in `workspace` tool carries a
+contract written into its brief. The built-in `overlay` tool carries a
 read-only `guide` operation stating this destination's application contract and
 one minimal example (generated from the rule tables preflight enforces, and
 itself authored through the real chain by `make app-journey-check`, which
@@ -287,6 +287,15 @@ a host-requested access trait. Review, selection, preparation, approval, apply
 and opening remain human acts or the activation owner's, and the delivery
 facade's own policy and the two gateway tool policies grant no overlay write,
 which `make app-journey-check` asserts.
+
+The public authoring call is `bee.governance:overlay_call`. Its requests and
+replies use `overlay_id`; `guide` carries no overlay identity, and
+`workspace_id` is rejected as an authoring alias. The public `delivery` and
+`publish` tools retain the destination `workspace_id` because it identifies the
+runtime target, and use `source_overlay_id` for the frozen source overlay. The
+private delivery and destination services may retain `source_workspace` and
+other workspace fields for storage and routing; those fields are not the public
+authoring vocabulary.
 
 The runtime also defines the canonical receive surface
 `stream.pipe(peer, limit)`. Its Stream handle stays in the receiving actor's

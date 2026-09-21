@@ -122,11 +122,11 @@ local function define_tests()
         test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
             local prepared, prepare_error = funcs.call("bee.driver.agy:prepare", {
                 profile_id = "batch",
-                brief = "Use the admitted Bee workspace tool once.",
+                brief = "Use the admitted Bee overlay tool once.",
                 model = "gemini-3.8-flash",
                 effort = "high",
                 print_timeout = "5m",
-                gateway_tools = {"thread_read", "workspace"},
+                gateway_tools = {"thread_read", "overlay"},
             })
             if prepare_error then error(tostring(prepare_error)) end
             test.is_true(prepared.ok)
@@ -143,7 +143,7 @@ local function define_tests()
             local gateway = {
                 endpoint = "127.0.0.1:18790",
                 action_id = "agy-batch-proof",
-                tools = {"thread_read", "workspace"},
+                tools = {"thread_read", "overlay"},
                 hooks = {},
                 token_environment = "BEE_GATEWAY_TOKEN",
             }

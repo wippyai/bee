@@ -49,10 +49,12 @@ permission and destination owner checks still apply. Tools exposed through
 other call paths must authorize those callers too; a context value alone does
 not authenticate a direct function caller.
 
-The built-in `workspace` tool's read-only `guide` operation returns this
-destination's application authoring contract and one minimal example, generated
-from the rule tables preflight enforces; it names no workspace and grants
-nothing. Its create/list/read/put/remove/freeze operations accept up to 65,536
+The built-in `overlay` tool calls the public `bee.governance:overlay_call`
+facade. Its read-only `guide` operation returns this destination's application
+authoring contract and one minimal example, generated from the rule tables
+preflight enforces; it names no overlay and grants nothing. Its
+create/list/read/put/remove/freeze operations take `overlay_id` and reject
+`workspace_id`; replies use `overlay_id`. They accept up to 65,536
 bytes of inline text or
 87,384 bytes of canonical padded base64 (at most 65,536 decoded bytes) per
 file. The HTTP MCP endpoint caps each complete JSON request body at 524,288
@@ -95,7 +97,11 @@ preflight verdict, with each diagnostic's remedy) and reads a staged version's
 review, selection and activation status; it names the human steps it cannot
 take. `publish` publishes only the exact locally reviewed and applied version
 and is gated by a host-requested access trait. Neither reaches an overlay
-write, which the activation owner alone holds.
+write, which the activation owner alone holds. Both public delivery requests
+name the destination `workspace_id`, the source author's `source_overlay_id`,
+and the version. The destination workspace is the runtime target; the source
+overlay ID is the authoring identity. The private delivery service may translate
+that source identity to its internal `source_workspace` field.
 
 Clients that cache MCP discovery can use the stable `call_tool` tool with
 `{name, arguments}` after selecting traits. It uses the same active-tool check

@@ -1,4 +1,4 @@
--- MIT. App Delivery frames remain bounded and distinguish available from selected.
+-- MIT. Overlays frames remain bounded and distinguish available from selected.
 local test = require("test")
 local tty = require("tty")
 local model = require("model")
@@ -7,7 +7,7 @@ local appearance = require("appearance")
 local preflight = require("preflight")
 
 local function define_tests()
-    test.describe("App Delivery frame", function()
+    test.describe("Overlays frame", function()
         test.it("shows staged updates without presenting them as active", function()
             local state = model.new("workspace-destination")
             model.toggle_pane(state)

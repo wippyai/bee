@@ -207,7 +207,7 @@ local function handle(): nil
     elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(parameters)
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
-    elseif tool.name == "workspace" then arguments, argument_error = mcp.workspace_arguments(parameters)
+    elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "components" then arguments, argument_error = mcp.components_arguments(parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters)

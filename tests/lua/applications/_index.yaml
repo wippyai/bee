@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.applications
 entries:
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  imports:
+    catalog: bee.applications:catalog
+    admission: bee.governance:governed_application_admission
+    test: wippy.test:test
 - name: command_test
   kind: function.lua
   source: file://command_test.lua

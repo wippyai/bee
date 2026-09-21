@@ -1,9 +1,9 @@
 """Carry one authored application to an open window that survives a restart.
 
-An application definition is authored into a governed workspace, frozen with
+An application definition is authored into a governed overlay, frozen with
 its digest, published, discovered, staged, preflighted, reviewed, selected,
 approved, consumed and applied by the registry owner through the production
-governance chain (bee.governance:workspace_call, publication_call,
+governance chain (bee.governance:overlay_call, publication_call,
 destination_call and the approvals owner). The application then appears in the
 desktop's effective catalog, opens from it as a real window with its own
 content, and comes back with its state after a full host restart.
@@ -168,8 +168,8 @@ def replace_v2_in_ui(ui, staged, root):
     """Review, approve and apply one exact compatible plan through the UI."""
     ui.open_start()
     ui.choose("Tools")
-    ui.choose("App Delivery")
-    ui.wait("APP DELIVERY", timeout=COLD_BOOT)
+    ui.choose("Overlays")
+    ui.wait("OVERLAYS", timeout=COLD_BOOT)
     ui.pump(.5)
     ui.key(b"\t")
     ui.key(b"f")
@@ -221,10 +221,10 @@ def replace_v2_in_ui(ui, staged, root):
     # Focus the retained delivery window from the taskbar and let its own
     # activation loop consume the one approved effect.
     deadline = time.monotonic() + 10
-    while "App Delivery" not in ui.screen.display[0]:
+    while "Overlays" not in ui.screen.display[0]:
         assert time.monotonic() < deadline, ui.text()
         ui.pump(.2)
-    x = ui.screen.display[0].index("App Delivery") + 1
+    x = ui.screen.display[0].index("Overlays") + 1
     ui.mouse(0, x, 1)
     ui.mouse(0, x, 1, True)
     ui.pump(.4)
@@ -268,7 +268,8 @@ def inspect(project, folder):
     args = [str(RUNTIME), "run", "--verbose", "app-journey-inspect", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=project, capture_output=True, text=True,
-                            timeout=300, env=database_environment(folder))
+                            timeout=300, env=database_environment(
+                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     match = re.search(r"APP_JOURNEY_COMPOSED\s+(\{.*\})", output)

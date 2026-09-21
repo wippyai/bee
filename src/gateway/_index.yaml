@@ -308,4 +308,4 @@ entries:
     bounds: bee.threads.records:bounds
     arguments: bee.application:arguments
   security:
-    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_launch_policy, bee:gateway_tool_workspace_policy, bee:gateway_tool_docs_policy, bee:gateway_tool_components_policy, bee:gateway_tool_delivery_policy, bee:gateway_tool_publish_policy, bee:gateway_tool_application_open_policy, bee:gateway_access_call_policy]
+    policies: [bee:gateway_address_call_policy, bee:gateway_store_policy, bee:gateway_execute_policy, bee:gateway_tool_read_policy, bee:gateway_tool_message_policy, bee:gateway_tool_launch_policy, bee:gateway_tool_overlay_policy, bee:gateway_tool_docs_policy, bee:gateway_tool_components_policy, bee:gateway_tool_delivery_policy, bee:gateway_tool_publish_policy, bee:gateway_tool_application_open_policy, bee:gateway_access_call_policy]

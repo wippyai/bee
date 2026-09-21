@@ -14,7 +14,7 @@ global Bee installation and reproducible use instructions.
 
 Use `feat/global-persisted-hive-20260915`, starting at `e4365f7` (PR #11).
 The shared `bee` checkout has unrelated uncommitted work; do not modify it.
-The previous checkpoint proves scoped workspace MCP authoring, fixture launch
+The previous checkpoint proves scoped overlay MCP authoring, fixture launch
 fan-out and durable subscriptions. It does not prove this application workflow.
 
 Initial inspection: the MCP catalog in `src/gateway/mcp.lua` is a closed table
@@ -173,7 +173,7 @@ The MCP benchmark boundary still needs end-to-end cancellation acceptance.
 
 Next: expose the selected source, benchmark contract and Bee authoring docs through
 host-admitted MCP tools/traits, then have Gemini author the candidate and dashboard
-in its Governance workspace. Use the existing measured-artifact review/apply
+in its Governance overlay. Use the existing measured-artifact review/apply
 flow. Do not substitute direct filesystem authoring or fixture-generated charts
 for the requested live MCP workflow. Persist actual benchmark results through
 the thread owner with trusted run attribution before rendering them.

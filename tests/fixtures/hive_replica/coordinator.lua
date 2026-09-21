@@ -250,7 +250,6 @@ local function configure_agent_destination(scenario: AgentScenario)
     -- headless coordinator exits.
     local profiles = assert(registry.get("bee.governance:activation_profiles"))
     local approvals = assert(registry.get("bee.approvals:approver_policies"))
-    local admission = assert(registry.get("bee:application_admission"))
     local configured_profiles = object(profiles.data).profiles
     if type(configured_profiles) ~= "table" or #configured_profiles ~= 1 then
         error("agent destination activation profile is unavailable")
@@ -267,15 +266,17 @@ local function configure_agent_destination(scenario: AgentScenario)
         or object(configured_approvals[1]).name ~= "local-agent-app-hive" then
         error("agent destination approval policy is unavailable")
     end
-    local admission_data = object(admission.data)
-    local bindings = admission_data.bindings
-    if type(bindings) ~= "table" then error("application admission bindings are unavailable") end
+    local bindings = profile.applications
+    if type(bindings) ~= "table" then error("governed application selection is unavailable") end
     local admitted = false
     for _, raw in ipairs(bindings :: {unknown}) do
         local binding = object(raw)
-        if binding.definition_id == AGENT_DEFINITION then admitted = true end
+        local policies = binding.policies
+        if binding.definition_id == AGENT_DEFINITION and binding.thread_access == "observe_post"
+            and type(policies) == "table" and #policies == 1
+            and policies[1] == "bee:ordinary_app_subsystem_boundary" then admitted = true end
     end
-    if not admitted then error("Agent App is not admitted by the trusted destination policy") end
+    if not admitted then error("Agent App is not selected by the trusted destination overlay profile") end
 end
 local function agent_available(scenario: AgentScenario): {[string]: unknown}?
     local result = destination_call({operation = "available", workspace_id = scenario.workspace_id},

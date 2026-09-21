@@ -15,7 +15,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.governance:workspace_call, bee.governance:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
+    resources: [bee.governance:overlay_call, bee.governance:workspace_backend_call, bee.governance_workspace_probe:authority_probe]
     effect: allow
 - name: caller_boundary
   kind: security.policy
@@ -30,10 +30,10 @@ entries:
   modules: [sql, security]
 - name: read_policy
   kind: security.policy
-  policy: {actions: [bee.governance.workspace.read], resources: 'demo', effect: allow}
+  policy: {actions: [bee.governance.overlay.read], resources: 'demo', effect: allow}
 - name: write_policy
   kind: security.policy
-  policy: {actions: [bee.governance.workspace.write], resources: 'demo', effect: allow}
+  policy: {actions: [bee.governance.overlay.write], resources: 'demo', effect: allow}
 - name: main
   kind: process.lua
   source: file://main.lua

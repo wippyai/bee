@@ -1,4 +1,4 @@
-# Governance authoring and preflight
+# Overlay authoring and preflight
 
 Internal typed checks over a destination-host-resolved package closure. The
 `hub_resolver` module supplies the internal destination resolution adapter; this
@@ -27,38 +27,44 @@ file, 16 MiB total). It is not a filesystem server or an authorization boundary;
 returned Lua values must be remeasured before execution, not treated as immutable
 merely because the helper calls them snapshots.
 
-The source now includes the `bee.governance:workspace_call` function and
-`bee.governance:workspace_contract` binding through `workspace_local`, with the
+The source now includes the `bee.governance:overlay_call` function and
+`bee.governance:overlay_contract` binding through `overlay_local`, with the
 `authoring_trait` agent description. This is private authoring, not activation.
-The managed Agent gateway admits `bee.governance.workspace.read` (list/read) and
-`bee.governance.workspace.write` (create/put/remove/freeze) only through this
+The managed Agent gateway admits `bee.governance.overlay.read` (list/read) and
+`bee.governance.overlay.write` (create/put/remove/freeze) only through this
 facade. Every operation also checks the stored author against the authenticated
-actor; an operation grant does not transfer an existing workspace's ownership.
+actor; an operation grant does not transfer an existing overlay's ownership.
 The method's protected store policy does not grant callers direct database,
 publication, approval, activation or registry/overlay access.
 
-Requests use `operation` and `workspace_id`. Create uses expected revision zero;
+Public requests use `operation` and `overlay_id`; `guide` is the only operation
+that carries no overlay identity, and `workspace_id` is rejected on this
+surface. The private store translates the public identity to `workspace_id`.
+Create uses expected revision zero;
 other mutations use the revision returned by list. Mutations and freeze require
 `expected_revision` and `idempotency_key`. Put replaces one entire relative file
 using either `content` or canonical padded `content_base64`; read returns base64.
 Remove deletes one file. Freeze copies the complete measured file set into owned
 SQLite storage without changing the edit revision. Later edits cannot change the
 stored frozen files. The same retry key and request return the original receipt,
-even after subsequent edits or restart; changing the request conflicts.
+even after subsequent edits or restart; changing the request conflicts. Replies
+expose `overlay_id`; the private storage and execution boundary continues to use
+its internal `workspace_id`.
 
 For an application candidate, the author writes `entries.json` as a plain JSON
 list of complete registry entries and freezes it with the other source files.
 The publication preparation service parses that exact frozen file and uses
 `bee.governance:artifact` to create the canonical measured envelope. It executes
-no code and does not mutate the workspace or frozen snapshot.
+no code and does not mutate the overlay or frozen snapshot.
 
 The host links `target_db`; `BEE_GOVERNANCE_DB` selects the default SQLite path.
-Checked migration 1 owns the workspace, files, frozen copies and receipt tables.
-Capacity is bounded to eight workspaces per authenticated author and 64 per node,
-16 distinct snapshots and 512 mutation receipts per workspace, in addition to
-the file bounds above. One Agent therefore cannot consume every authoring slot on
-the node. Exhaustion fails explicitly; there is no eviction, garbage collection
-or ownership transfer yet. Frozen content and receipts are durable; they do not imply activation,
+Checked migration 1 owns the private workspace rows, files, frozen copies and
+receipt tables. Capacity is bounded to eight overlays per authenticated author
+and 64 per node, 16 distinct snapshots and 512 mutation receipts per overlay,
+in addition to the file bounds above. One Agent therefore cannot consume every
+authoring overlay slot on the node. Exhaustion fails explicitly; there is no
+eviction, garbage collection or ownership transfer yet. Frozen content and
+receipts are durable; they do not imply activation,
 approval, or automatic restoration of runtime definitions. This virtual file API
 does not mount a host directory or execute WASM. Hive transfer, inbox requests,
 plugin dispatch and new-database allocation remain unimplemented.

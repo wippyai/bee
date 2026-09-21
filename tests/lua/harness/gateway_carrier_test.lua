@@ -698,12 +698,12 @@ local function define_tests()
         test.it("lets a replacement replay rows the original committed but never acknowledged, leaving one observation", function()
             two_carriers("hooks_committed")
         end)
-        test.it("lets a scripted agent author from the guide alone and repair a stray workspace on its remedy", function()
+        test.it("lets a scripted agent author from the guide alone and repair a stray overlay on its remedy", function()
             -- The scripted child holds the plain request only: it learns the
-            -- artifact from the workspace tool's guide operation over the real
+            -- artifact from the overlay tool's guide operation over the real
             -- MCP surface. Round 1 authors only index.html and app.js and is
             -- refused with a named remedy; round 2 authors the guide's own
-            -- example in the same workspace and the destination preflight is
+            -- example in the same overlay and the destination preflight is
             -- ready.
             install_policy("bee.harness.catalog:gateway_author_policy")
             local source = fresh("author-src")

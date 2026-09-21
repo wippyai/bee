@@ -492,7 +492,7 @@ local function define_tests()
                     test.is_true(has_thread_message)
                 end
                 local has_workspace = false
-                for _, tool in ipairs(policy.gateway_tools) do if tool == "workspace" then has_workspace = true end end
+                for _, tool in ipairs(policy.gateway_tools) do if tool == "overlay" then has_workspace = true end end
                 test.is_true(has_workspace)
             end
         end)

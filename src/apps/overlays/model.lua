@@ -54,6 +54,7 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
     "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact_bytes",
     "artifact_digest", "resolution_bytes", "resolution_digest", "preflight_bytes", "preflight_digest",
     "migration_work_bytes", "migration_work_digest", "authorization_digest", "effect_key", "revision", "phase",
+    "application_admission_bytes", "application_admission_digest",
     "approval_id", "approval_proposal_digest",
     "approval_owner_incarnation", "consumed_consumer_id", "consumed_proposal_digest", "consumed_effect_key",
     "outcome", "diagnostics", "migrations_completed", "migration_receipt_bytes", "migration_receipt_digest",
@@ -223,6 +224,7 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     if not optional_digest(value.plan_digest) or not optional_digest(value.artifact_digest)
         or not optional_digest(value.resolution_digest) or not optional_digest(value.preflight_digest)
         or not optional_digest(value.migration_work_digest) or not optional_digest(value.migration_receipt_digest)
+        or not optional_digest(value.application_admission_digest)
         or not optional_digest(value.authorization_digest) or not optional_digest(value.approval_proposal_digest)
         or not optional_digest(value.consumed_proposal_digest) or not optional_digest(value.observed_artifact_digest)
         or not optional_count_valid(value.plan_revision, true) or not optional_count_valid(value.selection_revision, true)
@@ -230,6 +232,7 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         or not optional_count_valid(value.desired_execution_revision, false) or not optional_count_valid(value.observed_execution_revision, false)
         or not valid_blob(value.artifact_bytes, 262144) or not valid_blob(value.resolution_bytes, 1048576)
         or not valid_blob(value.preflight_bytes, 131072) or not valid_blob(value.migration_work_bytes, 1048576)
+        or not valid_blob(value.application_admission_bytes, 65536)
         or not valid_blob(value.migration_receipt_bytes, 262144)
         or (value.migrations_completed ~= nil and type(value.migrations_completed) ~= "boolean") then
         return nil, "activation evidence is malformed"
@@ -410,7 +413,7 @@ function M.apply_list(state: State, reply: caller.Reply?)
     end
     if state.review_key and state.review_key ~= state.selected_key then M.forget_review(state) end
     visible(state)
-    state.notice = #decoded == 0 and "No staged application versions in this workspace" or ""
+    state.notice = #decoded == 0 and "No staged overlay versions in this workspace" or ""
     return true
 end
 function M.apply_available(state: State, reply: caller.Reply?)
@@ -435,7 +438,7 @@ function M.apply_available(state: State, reply: caller.Reply?)
     if not state.selected_available_key or not seen[state.selected_available_key] then
         state.selected_available_key = decoded[1] and M.available_key(decoded[1]) or nil
     end
-    state.notice = #decoded == 0 and "No application versions are available from configured sources" or ""
+    state.notice = #decoded == 0 and "No overlay versions are available from configured sources" or ""
     return true
 end
 function M.apply_plan(state: State, reply: caller.Reply?)
@@ -532,7 +535,7 @@ function M.review_request(state: State, item: Plan, accepted: boolean, key: stri
     return {operation = "review", workspace_id = state.workspace_id, source_node = item.source_node,
         source_workspace = item.source_workspace, version = item.version, expected_revision = item.revision,
         idempotency_key = key, review_status = accepted and "accepted" or "rejected",
-        review_reason = "Reviewed in Bee App Delivery"}
+        review_reason = "Reviewed in Bee Overlays"}
 end
 function M.select_request(state: State, item: Plan, key: string): Object
     return {operation = "select", workspace_id = state.workspace_id, source_node = item.source_node,

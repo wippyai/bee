@@ -4,7 +4,7 @@ local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
 
-local TARGET = "bee.governance:workspace_call"
+local TARGET = "bee.governance:overlay_call"
 local DIRECT_STORE = "bee.governance:direct_store_probe"
 local POLICY = "bee.governance:authoring_client_policy"
 local APP_BOUNDARY = "bee:ordinary_app_subsystem_boundary"
@@ -43,7 +43,9 @@ local function define_tests()
         test.it("requires current operation and exact workspace permission even for the stored author", function()
             local owner = "bee.test.governance.scoped-owner"
             for _, id in ipairs({"governance-scoped-read", "governance-scoped-other"}) do
-                successful(owner, {operation = "create", workspace_id = id, expected_revision = 0, idempotency_key = "create"})
+                local created = successful(owner, {operation = "create", overlay_id = id, expected_revision = 0, idempotency_key = "create"})
+                test.eq(created.value and created.value.overlay_id, id)
+                test.is_nil(created.value and created.value.workspace_id)
             end
             local policies: {security.Policy} = {}
             for _, name in ipairs({"bee.governance:authoring_call_only_policy", "bee.governance:authoring_exact_read_policy", APP_BOUNDARY, "bee:app_boundary_policy"}) do
@@ -52,19 +54,19 @@ local function define_tests()
                 policies[#policies + 1] = policy
             end
             local executor = funcs.new():with_actor(security.new_actor(owner)):with_scope(security.new_scope(policies))
-            local read, read_error = executor:call(TARGET, {operation = "list", workspace_id = "governance-scoped-read"})
+            local read, read_error = executor:call(TARGET, {operation = "list", overlay_id = "governance-scoped-read"})
             if read_error then error(tostring(read_error)) end
             test.is_true((read :: Reply).ok)
-            local other, other_error = executor:call(TARGET, {operation = "list", workspace_id = "governance-scoped-other"})
+            local other, other_error = executor:call(TARGET, {operation = "list", overlay_id = "governance-scoped-other"})
             if other_error then error(tostring(other_error)) end
             test.is_false((other :: Reply).ok)
             test.eq((other :: Reply).code, "DENIED")
-            local write, write_error = executor:call(TARGET, {operation = "put", workspace_id = "governance-scoped-read",
+            local write, write_error = executor:call(TARGET, {operation = "put", overlay_id = "governance-scoped-read",
                 expected_revision = 1, idempotency_key = "denied-write", path = "entry.lua", content = "return true"})
             if write_error then error(tostring(write_error)) end
             test.is_false((write :: Reply).ok)
             test.eq((write :: Reply).code, "DENIED")
-            local unchanged = successful(owner, {operation = "list", workspace_id = "governance-scoped-read"})
+            local unchanged = successful(owner, {operation = "list", overlay_id = "governance-scoped-read"})
             test.eq(unchanged.value and unchanged.value.revision, 1)
         end)
 
@@ -78,23 +80,27 @@ local function define_tests()
             local private, private_error = executor:call("bee.governance:workspace_backend_call", {operation = "list", workspace_id = workspace_id})
             if private_error then error(tostring(private_error)) end
             test.eq((private :: Reply).code, "DENIED")
-            local created = successful(owner, {operation = "create", workspace_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
+            local created = successful(owner, {operation = "create", overlay_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
             test.eq(created.value and created.value.revision, 1)
+            test.eq(created.value and created.value.overlay_id, workspace_id)
+            test.is_nil(created.value and created.value.workspace_id)
 
-            local put = successful(owner, {operation = "put", workspace_id = workspace_id, expected_revision = 1, idempotency_key = "binary", path = "assets/agent.wasm", content_base64 = "AP8="})
+            local put = successful(owner, {operation = "put", overlay_id = workspace_id, expected_revision = 1, idempotency_key = "binary", path = "assets/agent.wasm", content_base64 = "AP8="})
             test.eq(put.value and put.value.revision, 2)
-            local replay = successful(owner, {operation = "put", workspace_id = workspace_id, expected_revision = 1, idempotency_key = "binary", path = "assets/agent.wasm", content_base64 = "AP8="})
+            local replay = successful(owner, {operation = "put", overlay_id = workspace_id, expected_revision = 1, idempotency_key = "binary", path = "assets/agent.wasm", content_base64 = "AP8="})
             test.is_true(replay.replayed)
             test.eq(replay.value and replay.value.revision, 2)
 
-            local frozen = successful(owner, {operation = "freeze", workspace_id = workspace_id, expected_revision = 2, idempotency_key = "freeze"})
+            local frozen = successful(owner, {operation = "freeze", overlay_id = workspace_id, expected_revision = 2, idempotency_key = "freeze"})
             local digest = frozen.value and frozen.value.digest
             if type(digest) ~= "string" then error("freeze returned no snapshot digest") end
-            successful(owner, {operation = "put", workspace_id = workspace_id, expected_revision = 2, idempotency_key = "replace", path = "assets/agent.wasm", content = "later"})
+            successful(owner, {operation = "put", overlay_id = workspace_id, expected_revision = 2, idempotency_key = "replace", path = "assets/agent.wasm", content = "later"})
 
-            local retained = successful(owner, {operation = "read", workspace_id = workspace_id, path = "assets/agent.wasm", snapshot_digest = digest})
+            local retained = successful(owner, {operation = "read", overlay_id = workspace_id, path = "assets/agent.wasm", snapshot_digest = digest})
             test.eq(retained.value and retained.value.content_base64, "AP8=")
-            local foreign = call("bee.test.governance.other", {operation = "list", workspace_id = workspace_id}, false)
+            test.eq(retained.value and retained.value.overlay_id, workspace_id)
+            test.is_nil(retained.value and retained.value.workspace_id)
+            local foreign = call("bee.test.governance.other", {operation = "list", overlay_id = workspace_id}, false)
             test.is_false(foreign.ok)
             test.eq(foreign.code, "DENIED")
             local after, after_error = executor:call(DIRECT_STORE, {})
@@ -109,19 +115,19 @@ local function define_tests()
             local workspace_id = "governance-base64-total-bound"
             local owner = "bee.test.governance.padding-owner"
             local file = string.rep("x", 4 * 1024 * 1024)
-            successful(owner, {operation = "create", workspace_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
+            successful(owner, {operation = "create", overlay_id = workspace_id, expected_revision = 0, idempotency_key = "create"})
             for index = 1, 4 do
-                local put = successful(owner, {operation = "put", workspace_id = workspace_id, expected_revision = index,
+                local put = successful(owner, {operation = "put", overlay_id = workspace_id, expected_revision = index,
                     idempotency_key = "put-" .. tostring(index), path = "part-" .. tostring(index), content = file})
                 test.eq(put.value and put.value.revision, index + 1)
             end
-            local frozen = successful(owner, {operation = "freeze", workspace_id = workspace_id, expected_revision = 5, idempotency_key = "freeze"})
+            local frozen = successful(owner, {operation = "freeze", overlay_id = workspace_id, expected_revision = 5, idempotency_key = "freeze"})
             test.eq(frozen.value and frozen.value.file_count, 4)
             test.eq(frozen.value and frozen.value.total_bytes, 16 * 1024 * 1024)
-            local overflow = call(owner, {operation = "put", workspace_id = workspace_id, expected_revision = 5,
+            local overflow = call(owner, {operation = "put", overlay_id = workspace_id, expected_revision = 5,
                 idempotency_key = "overflow", path = "extra", content = "x"}, false)
             test.is_false(overflow.ok)
-            local unchanged = successful(owner, {operation = "list", workspace_id = workspace_id})
+            local unchanged = successful(owner, {operation = "list", overlay_id = workspace_id})
             test.eq(unchanged.value and unchanged.value.revision, 5)
         end)
     end)

@@ -2,7 +2,7 @@
 
 Create a real Bee app and an encoder candidate using the admitted MCP tools.
 You may read the harness's own saved tool-output files when it directs you there.
-All edits go into your caller-owned Governance workspace, then freeze for review.
+All edits go into your caller-owned overlay, then freeze for review.
 You have no registry publication, approval or activation capability.
 
 `workspace` requests use `operation`, `workspace_id`, and for mutations

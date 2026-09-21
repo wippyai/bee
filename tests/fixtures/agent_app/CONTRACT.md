@@ -91,7 +91,7 @@ call `output:close()` and `tty.stop()`.
 
 ## Boundaries
 
-Author only inside your Governance workspace, through the `workspace` tool. You
+Author only inside your caller-owned overlay, through the `overlay` tool. You
 hold no registry publication, approval or activation capability, and you create
 no security policy. The host reviews, lints, approves and applies your frozen
 artifact; state nothing about checks you did not run.

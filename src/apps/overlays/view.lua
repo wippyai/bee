@@ -90,7 +90,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local function selected_summary(): string
         if state.pane == "available" then
             local item = model.selected_available(state)
-            if not item then return "Choose an application version" end
+            if not item then return "Choose an overlay version" end
             return item.component .. " · " .. item.version .. " · " .. model.available_status(state, item)
         end
         local item = model.selected(state)
@@ -125,7 +125,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
 
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    line(1, "APP DELIVERY", theme.text)
+    line(1, "OVERLAYS", theme.text)
     if height >= 2 then
         local x = 2
         for _, pane in ipairs({"available", "plans", "review"}) do
@@ -181,7 +181,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
         capacity = room
     else
-        if count == 0 and capacity > 0 then line(list_first, state.pane == "available" and "No application versions are available" or "No application versions are staged", theme.muted) end
+        if count == 0 and capacity > 0 then line(list_first, state.pane == "available" and "No overlay versions are available" or "No overlay versions are staged", theme.muted) end
         for slot = 1, capacity do
             local index, y = next_offset + slot, list_first + slot - 1
             if state.pane == "available" then

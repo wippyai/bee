@@ -1,8 +1,8 @@
 -- SPDX-License-Identifier: MIT
--- Publish the frozen workspace the agent authored, stage it into the desktop's
+-- Publish the frozen overlay the agent authored, stage it into the desktop's
 -- own workspace and read the destination's preflight verdict. This probe
 -- records no review, selection, approval or activation: the person does that in
--- the App Delivery window and the activation owner applies it.
+-- the Overlays window and the activation owner applies it.
 local funcs = require("funcs")
 local registry = require("registry")
 local system = require("system")
@@ -92,6 +92,8 @@ local function configure(workspace_id: string, local_node: string, source_worksp
         source_workspace = source_workspace, component = COMPONENT, resolver = "overlay",
         overlay_owner = OVERLAY_OWNER, approval_policy = APPROVAL_POLICY,
         parameters = table.create(1, 0),
+        applications = {{definition_id = "bee.agent_app_demo:app",
+            policies = {"bee:ordinary_app_subsystem_boundary"}, thread_access = "observe_post"}},
         allow = {packages = {COMPONENT}, namespaces = {NAMESPACE}, kinds = {"process.lua"},
             databases = table.create(1, 0), grants = table.create(1, 0),
             modules = {"tty", "process", "channel", "json"}}}
@@ -108,7 +110,8 @@ local function configure(workspace_id: string, local_node: string, source_worksp
         if policy and policy.name == APPROVAL_POLICY then declared = true end
     end
     if not declared then
-        policies[#policies + 1] = {name = APPROVAL_POLICY, approvers = {"bee.local"}, max_ttl_ms = 600000}
+        policies[#policies + 1] = {name = APPROVAL_POLICY,
+            approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
     end
     approver_data.policies = policies
     approvers.data = approver_data

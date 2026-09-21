@@ -33,10 +33,10 @@ entries:
     policies:
     - bee:ordinary_app_subsystem_boundary
     - bee.timeline:client_policy
-  - definition_id: bee.delivery:app
+  - definition_id: bee.overlays:app
     policies:
     - bee:ordinary_app_subsystem_boundary
-    - bee.delivery:client_policy
+    - bee.overlays:client_policy
     - bee:governance_delivery_read_policy
     - bee:governance_delivery_manage_policy
     - bee:governance_delivery_activate_policy

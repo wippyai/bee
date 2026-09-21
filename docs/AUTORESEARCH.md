@@ -31,7 +31,7 @@ read-only sandbox. Claude is bounded to one turn. Agy selects
 `gemini-3.8-flash` with explicit high effort and a five-minute print deadline.
 Its additive configuration retains the ordinary user HOME and login.
 Their host policies may admit
-the thread tools and the caller-owned `workspace` tool. Before Bee acquires a
+the thread tools and the caller-owned `overlay` tool. Before Bee acquires a
 session, project grant or credential projection, launch admission checks that
 the requester is an active member of a supplied thread. The carrier checks
 membership again when it commits output.
@@ -39,15 +39,15 @@ membership again when it commits output.
 The coordinator can turn findings into an application candidate without
 gaining activation authority:
 
-1. Create a Governance authoring workspace with `workspace`.
+1. Create a governed overlay with `overlay`.
 2. Write findings or other source files with revision checks and stable retry
    keys.
 3. Write `entries.json` as a JSON list of complete registry entries.
-4. Freeze the workspace. Its returned digest identifies the exact file set.
+4. Freeze the overlay. Its returned digest identifies the exact file set.
 5. Ask Modules to prepare that snapshot for the configured application. The
    destination converts `entries.json` to canonical
    `bee.governance-artifact@1` bytes without executing it.
-6. Review, select, approve and apply through App Delivery.
+6. Review, select, approve and apply through Overlays.
 
 The Agent scope has no registry publication, approval, overlay or activation
 operation. A changed write needs a new retry key; a repeated launch request does
@@ -57,10 +57,10 @@ human decision.
 Current acceptance proves two managed launch actions settle into one shared
 thread with distinct action/attempt identities and no duplicate receipt on
 replay. A separate declaration check proves the shipped Codex and Claude batch
-routes select their bounded policies, credentials, caller thread and workspace
+routes select their bounded policies, credentials, caller thread and overlay
 tool. A durable coordinator subscription consumes both receipts, detaches,
 resumes with a fresh lease and sees no duplicate work. The real HTTP/MCP fixture
-proves one authenticated Agent actor can create, edit and freeze its workspace
+proves one authenticated Agent actor can create, edit and freeze its overlay
 while another actor cannot read it. A live Agy batch run also selected two MCP traits and wrote the exact requested
 message into its caller-owned thread with the bound actor/action/attempt. This
 does not prove benchmark execution or authored dashboard publication.

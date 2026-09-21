@@ -38,13 +38,13 @@ local function main()
     if not policy then error("Agy batch policy unavailable") end
     local data = bounds.object(policy.data)
     if not data then error("Agy policy data missing") end
-    data.gateway_tools = {"thread_read", "thread_message", "workspace", "research_docs"}
+    data.gateway_tools = {"thread_read", "thread_message", "overlay", "research_docs"}
     data.gateway_surface = {tools = {{name = "research_docs", operation = "bee.research_probe:docs", description = "Read the fixed research source and Bee authoring contracts",
         policies = {"bee.research_probe:docs_policy"}, schema = {type = "object", additionalProperties = false, required = {"topic"},
             properties = {topic = {type = "string", enum = {"source", "corpus", "authoring", "application", "model", "view", "proposal", "review"}}}},
         annotations = {readOnlyHint = true, destructiveHint = false, openWorldHint = false}}}, traits = {
         {id = "research:read", title = "Research reader", prompt = "Read this research thread.", tools = {"thread_read", "research_docs"}},
-        {id = "research:record", title = "Research recorder", prompt = "Author a candidate and dashboard in your Governance workspace, then report its frozen digest.", tools = {"thread_message", "workspace"}}},
+        {id = "research:record", title = "Research recorder", prompt = "Author a candidate and dashboard in your caller-owned overlay, then report its frozen digest.", tools = {"thread_message", "overlay"}}},
         base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "live-mcp-probe"}, dynamic_keys = {"experiment"},
         access = {workspace_id = "research-workspace", policy = "live-research", traits = {"research:record"}}}
     local changes = registry.snapshot():changes()
@@ -76,9 +76,9 @@ local function main()
         .. "Use research_docs to read source, corpus, authoring, application, model and view. Your task is to optimize the supplied canonical JSON encoder, fixing its native-runtime large-integer formatting bug and preserving exact output. "
         .. "Author a small working Bee dashboard app that reads real canonical-json@1 measurements from durable thread messages and draws baseline/candidate bars, values, units and correctness. Never invent measurements. "
         .. "Follow the supplied app example for lifecycle, resize and thread subscription, but keep only what the dashboard needs. Do not change core or create security policies. "
-        .. "Create a Governance workspace research-performance at revision 0, then write entries.json as a list of complete inline-source registry entries. All entry IDs must start with bee.research.demo:. "
+        .. "Create the caller-owned overlay research-performance at revision 0, then write entries.json as a list of complete inline-source registry entries. All entry IDs must start with bee.research.demo:. "
         .. "Required entries: bee.research.demo:canonical (library.lua exporting encode), bee.research.demo:app (process.lua with Bee app metadata); optional own model/view libraries. "
-        .. "Use workspace operation put with exact expected_revision and a new idempotency_key per changed write. Freeze once complete. "
+        .. "Use overlay operation put with exact expected_revision and a new idempotency_key per changed write. Freeze once complete. "
         .. "Finally call thread_message with idempotency_key and message_id " .. marker
         .. ", message_kind progress, recipient_ids [bee.research.probe], and content {text: the frozen snapshot digest, artifact_ref: the frozen snapshot digest}. "
         .. "The host will separately review, lint, approve and apply; do not claim tests or benchmarks you did not run. Answer DONE after the thread message succeeds."
@@ -89,7 +89,7 @@ local function main()
             .. "Read session; request research:record access with key repair-access; poll access_status until granted by the test operator. "
             .. "Select research:read and research:record with current revision and context {experiment: baseline}. "
             .. "Read research_docs topics proposal, review, authoring and corpus. Fix ALL review findings while preserving the candidate optimization and actual dashboard behavior; do not replace it with a stub or fabricated measurements. "
-            .. "This is a fresh authoring workspace. Create research-performance at revision 0, write the corrected complete entries.json using expected_revision 1 and retry key repaired-entries, then freeze at the returned revision. "
+            .. "This is a fresh overlay. Create research-performance at revision 0, write the corrected complete entries.json using expected_revision 1 and retry key repaired-entries, then freeze at the returned revision. "
             .. "Report the frozen digest using thread_message with idempotency_key and message_id " .. marker
             .. ", message_kind progress, recipient_ids [bee.research.probe], and content {text: the frozen digest, artifact_ref: the frozen digest}. "
             .. "Do not claim tests passed; the host will lint and review before approving. Answer DONE only after the message succeeds."
@@ -186,7 +186,7 @@ local function main()
     if active[1] ~= "research:read" or active[2] ~= "research:record" then error("wrong selected traits") end
     if context_error or not context or context.experiment ~= "baseline" then error("Gemini did not select the requested context") end
     if not frozen_digest then error("missing frozen artifact") end
-    local file = call("bee.governance:workspace_call", {operation = "read", workspace_id = "research-performance",
+    local file = call("bee.governance:overlay_call", {operation = "read", overlay_id = "research-performance",
         path = "entries.json", snapshot_digest = frozen_digest})
     if type(file.content_base64) ~= "string" then error("missing authored entries") end
     local source, decode_error = base64.decode(file.content_base64)

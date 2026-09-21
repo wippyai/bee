@@ -30,16 +30,16 @@ local function failure(code: string, message: string): Result
 end
 
 -- The delivery path consumes exactly one frozen file: entries.json, a JSON list
--- of complete registry entries. A frozen workspace that cannot become an
+-- of complete registry entries. A frozen overlay that cannot become an
 -- application is refused here, at the step where that truth is decided, with a
 -- named code and the remedy the author needs. The remedy is carried in the
 -- failure value under the field name the destination's own diagnostics use
 -- (src/governance/preflight.lua), so one reader handles both.
-local MISSING_ARTIFACT_REMEDY = "freeze a workspace that holds entries.json, a JSON list of complete "
-    .. "registry entries; read the workspace tool's guide operation for this destination's contract "
+local MISSING_ARTIFACT_REMEDY = "freeze an overlay that holds entries.json, a JSON list of complete "
+    .. "registry entries; read the overlay tool's guide operation for this destination's contract "
     .. "and one minimal example"
 local INVALID_ARTIFACT_REMEDY = "write entries.json as a JSON list of complete registry entries, each "
-    .. "with id, kind and a data object; read the workspace tool's guide operation for the exact shape "
+    .. "with id, kind and a data object; read the overlay tool's guide operation for the exact shape "
     .. "and one minimal example"
 
 local function refusal(code: string, message: string, remedy: string): Result
@@ -51,7 +51,7 @@ end
 function M.artifact_refusal(code: string, message: string?): Result
     local remedy = code == "MISSING_ARTIFACT" and MISSING_ARTIFACT_REMEDY or INVALID_ARTIFACT_REMEDY
     return refusal(code, message or (code == "MISSING_ARTIFACT"
-        and "the frozen workspace holds no entries.json"
+        and "the frozen overlay holds no entries.json"
         or "authored entries are not a JSON list"), remedy)
 end
 
@@ -105,7 +105,7 @@ function M.snapshot_artifact(raw: unknown): (unknown?, string?, string?)
     local value = reply and bounds.object(reply.value) or nil
     if not reply or reply.ok ~= true or not value or value.path ~= "entries.json"
         or type(value.content_base64) ~= "string" then
-        return nil, "the frozen workspace holds no entries.json", "MISSING_ARTIFACT"
+        return nil, "the frozen overlay holds no entries.json", "MISSING_ARTIFACT"
     end
     local bytes, decode_error = base64.decode(value.content_base64)
     if not bytes or decode_error then return nil, "decode authored entries: " .. tostring(decode_error), "INVALID_ARTIFACT" end
@@ -201,7 +201,7 @@ function M.call(raw: unknown): Result
 
     if request.operation == "prepare" then
         local store, open_error = staging.open(governance_resource, node_id)
-        if not store then return failure("UNAVAILABLE", open_error or "open authoring workspace") end
+        if not store then return failure("UNAVAILABLE", open_error or "open overlay") end
         local read = store:read_frozen(chosen.source_workspace, "entries.json", snapshot_digest :: string)
         store:close()
         local authored, authored_error, authored_code = M.snapshot_artifact(read)

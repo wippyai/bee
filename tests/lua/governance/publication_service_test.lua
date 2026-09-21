@@ -39,7 +39,7 @@ local function define_tests()
             test.is_nil(service.snapshot_artifact({ok = true, value = {
                 path = "entries.json", content_base64 = assert(base64.encode("{}"))}}))
         end)
-        test.it("names a refusal and remedy when a frozen workspace cannot become an application", function()
+        test.it("names a refusal and remedy when a frozen overlay cannot become an application", function()
             -- No entries.json at all: only other files were frozen.
             local missing, missing_error, missing_code = service.snapshot_artifact({ok = true, value = {
                 path = "entries.json", content_base64 = nil}})

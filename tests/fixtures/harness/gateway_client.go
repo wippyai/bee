@@ -475,7 +475,7 @@ func reportWorker(client *httpClient, url, authorization string, report object, 
 }
 
 // The scripted authoring agent. This function knows nothing about the
-// application contract: it reads the workspace tool's guide operation over the
+// application contract: it reads the overlay tool's guide operation over the
 // admitted MCP surface and authors exactly the file and the example text the
 // guide returns, so a contract change is visible here without editing this
 // client. mode is "author" (author the guide example and request delivery) or
@@ -490,13 +490,13 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 	report["author_tools"] = names
 	report["author_has_guide"] = false
 	for _, item := range descriptions {
-		if item["name"] == "workspace" {
+		if item["name"] == "overlay" {
 			if text, ok := item["description"].(string); ok && strings.Contains(text, "guide") {
 				report["author_has_guide"] = true
 			}
 		}
 	}
-	guideReply := call("workspace", object{"operation": "guide"}, 31)
+	guideReply := call("overlay", object{"operation": "guide"}, 31)
 	guideValue := mustObject(guideReply["value"])
 	example := mustObject(guideValue["example"])
 	entriesJSON, _ := example["entries_json"].(string)
@@ -512,23 +512,23 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 		report["authoring_error"] = "authoring identities are missing"
 		return
 	}
-	created := mustObject(call("workspace", object{"operation": "create", "workspace_id": workspace,
+	created := mustObject(call("overlay", object{"operation": "create", "overlay_id": workspace,
 		"expected_revision": 0, "idempotency_key": "create-" + source}, 32)["value"])
 	report["author_create_revision"] = created["revision"]
 
 	if mode == "repair" {
 		// Round 1: a workspace holding only index.html and app.js.
-		call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 1,
+		call("overlay", object{"operation": "put", "overlay_id": workspace, "expected_revision": 1,
 			"idempotency_key": "put-index-" + source, "path": "index.html", "content": "<html></html>"}, 33)
-		call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 2,
+		call("overlay", object{"operation": "put", "overlay_id": workspace, "expected_revision": 2,
 			"idempotency_key": "put-app-" + source, "path": "app.js", "content": "console.log(1)"}, 34)
-		frozen := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+		frozen := mustObject(call("overlay", object{"operation": "freeze", "overlay_id": workspace,
 			"expected_revision": 3, "idempotency_key": "freeze-" + source}, 35)["value"])
 		report["author_snapshot_digest"] = frozen["digest"]
-		listed := mustObject(call("workspace", object{"operation": "list", "workspace_id": workspace}, 36)["value"])
+		listed := mustObject(call("overlay", object{"operation": "list", "overlay_id": workspace}, 36)["value"])
 		report["author_files"] = listed["files"]
 		refused := call("delivery", object{"operation": "request", "workspace_id": destination,
-			"source_workspace": source, "version": version, "snapshot_digest": frozen["digest"]}, 37)
+			"source_overlay_id": source, "version": version, "snapshot_digest": frozen["digest"]}, 37)
 		report["refusal_ok"] = refused["ok"]
 		report["refusal_code"] = refused["code"]
 		report["refusal_message"] = refused["message"]
@@ -536,11 +536,11 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 			report["refusal_remedy"] = value["remedy"]
 		}
 		// Round 2: the agent repairs exactly what the refusal named.
-		repairPut := call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 3,
+		repairPut := call("overlay", object{"operation": "put", "overlay_id": workspace, "expected_revision": 3,
 			"idempotency_key": "put-entries-" + source, "path": example["path"], "content": entriesJSON}, 38)
 		var repaired any = nil
 		if repairPut["ok"] == true {
-			repairFreeze := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+			repairFreeze := mustObject(call("overlay", object{"operation": "freeze", "overlay_id": workspace,
 				"expected_revision": 4, "idempotency_key": "freeze-repaired-" + source}, 39))
 			if repairedValue := mustObject(repairFreeze["value"]); repairedValue != nil {
 				repaired = repairedValue["digest"]
@@ -553,9 +553,9 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 		return
 	}
 
-	call("workspace", object{"operation": "put", "workspace_id": workspace, "expected_revision": 1,
+	call("overlay", object{"operation": "put", "overlay_id": workspace, "expected_revision": 1,
 		"idempotency_key": "put-entries-" + source, "path": example["path"], "content": entriesJSON}, 33)
-	frozen := mustObject(call("workspace", object{"operation": "freeze", "workspace_id": workspace,
+	frozen := mustObject(call("overlay", object{"operation": "freeze", "overlay_id": workspace,
 		"expected_revision": 2, "idempotency_key": "freeze-" + source}, 40)["value"])
 	report["author_snapshot_digest"] = frozen["digest"]
 	reportAuthorDelivery(call, report, destination, source, version, frozen["digest"])
@@ -563,7 +563,7 @@ func reportAuthoring(client *httpClient, url, authorization string, report objec
 
 func reportAuthorDelivery(call func(string, object, int) object, report object, workspace, source, version string, snapshot any) {
 	delivered := mustObject(call("delivery", object{"operation": "request", "workspace_id": workspace,
-		"source_workspace": source, "version": version, "snapshot_digest": snapshot}, 41))
+		"source_overlay_id": source, "version": version, "snapshot_digest": snapshot}, 41))
 	report["delivery_diagnostic_reply"] = delivered
 	value := mustObject(delivered["value"])
 	if value != nil {

@@ -1,4 +1,4 @@
--- MIT. App Delivery presents destination-owned state and emits only facade requests.
+-- MIT. Overlays presents destination-owned state and emits only facade requests.
 local test = require("test")
 local model = require("model")
 local caller = require("caller")
@@ -75,11 +75,12 @@ local function activation(): {[string]: unknown}
         resolution_digest = string.rep("c", 64), preflight_bytes = "preflight",
         preflight_digest = string.rep("d", 64), migration_work_bytes = "work",
         migration_work_digest = string.rep("e", 64), authorization_digest = string.rep("f", 64),
+        application_admission_bytes = "admission", application_admission_digest = string.rep("a", 64),
         effect_key = "effect", revision = 2, phase = "approval_bound", migrations_completed = false}
 end
 
 local function define_tests()
-    test.describe("App Delivery model", function()
+    test.describe("Overlays model", function()
         test.it("keeps replicated versions staged until explicit destination actions", function()
             local state = model.new("workspace-destination")
             test.is_true(model.apply_list(state, reply({

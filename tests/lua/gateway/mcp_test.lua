@@ -34,9 +34,11 @@ local function define_tests()
             -- The HTTP adapter applies this whole-request limit through http.request(max_body=...).
             -- It leaves room for JSON escaping a full 64 KiB text value while bounding its envelope.
 
-            local workspace_tools = mcp.list({"workspace"}).tools :: {{[string]: unknown}}
+            local workspace_tools = mcp.list({"overlay"}).tools :: {{[string]: unknown}}
             local input_schema = workspace_tools[1].inputSchema :: {[string]: unknown}
             local properties = input_schema.properties :: {[string]: unknown}
+            test.not_nil(properties.overlay_id)
+            test.is_nil(properties.workspace_id)
             local text_property = properties.content :: {[string]: unknown}
             local base64_property = properties.content_base64 :: {[string]: unknown}
             test.eq(text_property.maxLength, mcp.MAX_WORKSPACE_TEXT_BYTES)
@@ -44,14 +46,14 @@ local function define_tests()
 
             local source = string.rep("x", 20 * 1024)
             test.is_true(#source > 8192)
-            local large = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local large = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 2, idempotency_key = "large-source", path = "entries.json", content = source}})
             test.eq(large and large.content, source)
-            local at_text_limit = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local at_text_limit = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 3, idempotency_key = "max-source", path = "entries.json",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES)}})
             test.eq(at_text_limit and #(at_text_limit.content or ""), mcp.MAX_WORKSPACE_TEXT_BYTES)
-            local _, oversized_text = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 4, idempotency_key = "oversized-source", path = "entries.json",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
             test.eq(oversized_text, "content exceeds the MCP text bound")
@@ -59,19 +61,19 @@ local function define_tests()
             -- 65,536 zero bytes in canonical padded base64 exercise the existing
             -- Governance decoder at the MCP allowance's exact decoded boundary.
             local full_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES - 2) .. "=="
-            local binary = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local binary = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 5, idempotency_key = "max-binary", path = "assets/full.bin", content_base64 = full_base64}})
-            test.eq(#(binary and binary.content or ""), 65536)
-            local _, invalid_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            test.eq(binary and binary.content_base64, full_base64)
+            local _, invalid_base64 = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 6, idempotency_key = "invalid-binary", path = "assets/invalid.bin", content_base64 = "!!!!"}})
             test.eq(invalid_base64, "invalid base64 content")
             -- A valid unpadded value at the encoded-length cap can decode to
             -- 65,538 bytes, so the MCP boundary checks decoded bytes as well.
-            local _, oversized_decoded = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local _, oversized_decoded = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 7, idempotency_key = "oversized-decoded", path = "assets/too-large.bin",
                 content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES)}})
             test.eq(oversized_decoded, "decoded content exceeds the MCP file bound")
-            local _, oversized_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local _, oversized_base64 = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 8, idempotency_key = "oversized-binary", path = "assets/large.bin",
                 content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 1)}})
             test.eq(oversized_base64, "content_base64 exceeds the MCP body bound")
@@ -114,20 +116,23 @@ local function define_tests()
             test.eq(message_annotations.readOnlyHint, false)
             test.eq(message_annotations.idempotentHint, true)
             test.eq(#mcp.list({}).tools, 0)
-            local workspace_tools = mcp.list({"workspace"}).tools :: {{[string]: unknown}}
+            local workspace_tools = mcp.list({"overlay"}).tools :: {{[string]: unknown}}
             test.eq(#workspace_tools, 1)
-            test.eq(workspace_tools[1].name, "workspace")
+            test.eq(workspace_tools[1].name, "overlay")
             local workspace_annotations = workspace_tools[1].annotations :: {[string]: unknown}
             test.eq(workspace_annotations.readOnlyHint, false)
-            test.eq(mcp.tool("workspace") and mcp.tool("workspace").operation, "bee.governance:workspace_call")
+            test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.governance:overlay_call")
             local delivery_tools = mcp.list({"delivery"}).tools :: {{[string]: unknown}}
             test.eq(#delivery_tools, 1)
             test.eq(delivery_tools[1].name, "delivery")
             test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.governance:delivery_call")
             local delivery_schema = delivery_tools[1].inputSchema :: {[string]: unknown}
             local delivery_required = delivery_schema.required :: {string}
-            local delivery_operation = (delivery_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
+            local delivery_properties = delivery_schema.properties :: {[string]: unknown}
+            local delivery_operation = delivery_properties.operation :: {[string]: unknown}
             test.eq(#delivery_required, 4)
+            test.not_nil(delivery_properties.source_overlay_id)
+            test.is_nil(delivery_properties.source_workspace)
             test.eq(#(delivery_operation.enum :: {string}), 2)
             local components_tools = mcp.list({"components"}).tools :: {{[string]: unknown}}
             test.eq(#components_tools, 1)
@@ -155,10 +160,12 @@ local function define_tests()
             test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.governance:delivery_call")
             local publish_schema = publish_tools[1].inputSchema :: {[string]: unknown}
             test.eq(#(publish_schema.required :: {string}), 3)
-            local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1"}})
+            local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1"}})
             test.eq(publish_request and publish_request.operation, "publish")
-            local _, publish_smuggle = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1", operation = "request"}})
+            local _, publish_smuggle = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1", operation = "request"}})
             test.eq(publish_smuggle, "unknown field operation")
+            local _, publish_workspace = mcp.publish_arguments({arguments = {workspace_id = "ws", source_workspace = "src", version = "1.0.1"}})
+            test.eq(publish_workspace, "unknown field source_workspace")
             local wait_only = mcp.list({"thread_wait"}).tools :: {{[string]: unknown}}
             test.eq(#wait_only, 1)
             test.eq(wait_only[1].name, "thread_wait")
@@ -209,23 +216,26 @@ local function define_tests()
             test.eq(context_override, "unknown field context")
             local _, kind_override = mcp.message_arguments({arguments = {idempotency_key = "key", kind = "receipt", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}}})
             test.eq(kind_override, "unknown field kind")
-            local workspace = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local workspace = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "finding-1", path = "findings/one.md", content = "evidence"}})
             test.eq(workspace and workspace.operation, "put")
-            test.eq(workspace and workspace.workspace_id, "research-candidate")
+            test.eq(workspace and workspace.overlay_id, "research-candidate")
+            test.is_nil(workspace and (workspace :: {[string]: unknown}).workspace_id)
             test.eq(workspace and workspace.content, "evidence")
-            local binary = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local binary = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "binary-1", path = "assets/proof.bin", content_base64 = "AP8="}})
-            test.eq(binary and binary.content, "\0\255")
-            local _, workspace_context = mcp.workspace_arguments({arguments = {operation = "list", workspace_id = "research-candidate", thread_id = "other"}})
+            test.eq(binary and binary.content_base64, "AP8=")
+            local _, workspace_context = mcp.overlay_arguments({arguments = {operation = "list", overlay_id = "research-candidate", thread_id = "other"}})
             test.eq(workspace_context, "unknown field thread_id")
-            local _, workspace_invalid = mcp.workspace_arguments({arguments = {operation = "freeze", workspace_id = "research-candidate"}})
+            local _, workspace_identity = mcp.overlay_arguments({arguments = {operation = "list", workspace_id = "research-candidate"}})
+            test.eq(workspace_identity, "unknown field workspace_id")
+            local _, workspace_invalid = mcp.overlay_arguments({arguments = {operation = "freeze", overlay_id = "research-candidate"}})
             test.eq(workspace_invalid, "expected_revision and idempotency_key are required")
-            local _, oversized_text = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local _, oversized_text = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-text", path = "large.txt",
                 content = string.rep("x", mcp.MAX_WORKSPACE_TEXT_BYTES + 1)}})
             test.eq(oversized_text, "content exceeds the MCP text bound")
-            local _, oversized_base64 = mcp.workspace_arguments({arguments = {operation = "put", workspace_id = "research-candidate",
+            local _, oversized_base64 = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "large-binary", path = "large.bin",
                 content_base64 = string.rep("A", mcp.MAX_WORKSPACE_BASE64_BYTES + 4)}})
             test.eq(oversized_base64, "content_base64 exceeds the MCP body bound")

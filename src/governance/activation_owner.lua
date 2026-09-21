@@ -1,4 +1,4 @@
--- MIT. Destination-owner orchestration for one reviewed application version.
+-- MIT. Destination-owner orchestration for one reviewed overlay version.
 -- Remote publication and Sync can make bytes available; only this local owner
 -- can measure them, request approval and establish its configured overlay.
 local bounds = require("bounds")

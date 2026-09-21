@@ -1,4 +1,4 @@
--- MIT. Workspace-local application delivery review and activation status.
+-- MIT. Workspace-local overlay review and activation status.
 -- Human approval decisions stay in the existing Approvals application.
 local tty = require("tty")
 local client = require("client")
@@ -30,7 +30,7 @@ local function main(value: unknown)
         return funcs.new():call(target, request)
     end)
     local state: model.State = model.new(launch.workspace_id)
-    if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid App Delivery checkpoint") end
+    if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid Overlays checkpoint") end
     local offset = 0
     local hits: {view.Hit} = {}
     local dirty, running, announced = true, true, false

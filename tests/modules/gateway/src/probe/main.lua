@@ -105,7 +105,7 @@ local function prove_configuration_scope(address: string)
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_workspace_policy", "bee:gateway_tool_docs_policy"}) do
+    for _, name in ipairs({"bee:gateway_address_call_policy", "bee:gateway_store_policy", "bee:gateway_execute_policy", "bee:gateway_tool_read_policy", "bee:gateway_tool_message_policy", "bee:gateway_tool_overlay_policy", "bee:gateway_tool_docs_policy"}) do
         local selected, err = security.policy(name)
         assert(selected ~= nil and err == nil, "endpoint policy unavailable")
         policies[#policies + 1] = selected
@@ -113,14 +113,14 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:workspace_call", "bee:docs_call"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.governance:overlay_call", "bee:docs_call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
     assert(scope:evaluate(actor, "fs.get", "bee:docs_corpus") == "allow", "docs corpus read is absent")
     assert(scope:evaluate(actor, "fs.get", "bee:workspace_root") ~= "allow", "docs policy reaches an unrelated filesystem")
-    assert(scope:evaluate(actor, "bee.governance.workspace.read", "any-workspace") == "allow", "workspace read is absent")
-    assert(scope:evaluate(actor, "bee.governance.workspace.write", "any-workspace") == "allow", "workspace write is absent")
+    assert(scope:evaluate(actor, "bee.governance.overlay.read", "any-overlay") == "allow", "overlay read is absent")
+    assert(scope:evaluate(actor, "bee.governance.overlay.write", "any-overlay") == "allow", "overlay write is absent")
     for _, target in ipairs({"bee.threads.service:create", "bee.gateway:materialize", "bee.hub:call", "arbitrary:operation"}) do
         assert(scope:evaluate(actor, "funcs.call", target) ~= "allow", "endpoint can invoke an unrelated operation")
     end
@@ -244,45 +244,45 @@ local function main()
     -- workspace owner remains the subject; neither thread binding fields nor
     -- publication/activation authority enter the request.
     do
-    local workspace_token, workspace_binding = admit("workspace-action", nil, 1, {"workspace"})
-    local created = tool("workspace-action", workspace_token, "workspace", {operation = "create", workspace_id = "gateway-research",
+    local workspace_token, workspace_binding = admit("workspace-action", nil, 1, {"overlay"})
+    local created = tool("workspace-action", workspace_token, "overlay", {operation = "create", overlay_id = "gateway-research",
         expected_revision = 0, idempotency_key = "create"})
-    assert(created.ok == true and (created.value :: Object).revision == 1, "MCP workspace create failed")
-    local put_arguments: Object = {operation = "put", workspace_id = "gateway-research", expected_revision = 1,
+    assert(created.ok == true and (created.value :: Object).revision == 1, "MCP overlay create failed")
+    local put_arguments: Object = {operation = "put", overlay_id = "gateway-research", expected_revision = 1,
         idempotency_key = "finding", path = "findings/one.md", content = "measured evidence"}
-    local put = tool("workspace-action", workspace_token, "workspace", put_arguments)
-    assert(put.ok == true and (put.value :: Object).revision == 2, "MCP workspace put failed")
-    local put_replay = tool("workspace-action", workspace_token, "workspace", put_arguments)
+    local put = tool("workspace-action", workspace_token, "overlay", put_arguments)
+    assert(put.ok == true and (put.value :: Object).revision == 2, "MCP overlay put failed")
+    local put_replay = tool("workspace-action", workspace_token, "overlay", put_arguments)
     assert(put_replay.ok == true and put_replay.replayed == true and (put_replay.value :: Object).revision == 2,
-        "MCP workspace retry was not idempotent")
-    local frozen = tool("workspace-action", workspace_token, "workspace", {operation = "freeze", workspace_id = "gateway-research",
+        "MCP overlay retry was not idempotent")
+    local frozen = tool("workspace-action", workspace_token, "overlay", {operation = "freeze", overlay_id = "gateway-research",
         expected_revision = 2, idempotency_key = "freeze"})
-    assert(frozen.ok == true and type((frozen.value :: Object).digest) == "string", "MCP workspace freeze failed")
+    assert(frozen.ok == true and type((frozen.value :: Object).digest) == "string", "MCP overlay freeze failed")
     local source = string.rep("local measurement = 1\n", 1024)
-    local large_created = tool("workspace-action", workspace_token, "workspace", {operation = "create", workspace_id = "gateway-large-source",
+    local large_created = tool("workspace-action", workspace_token, "overlay", {operation = "create", overlay_id = "gateway-large-source",
         expected_revision = 0, idempotency_key = "create-large"})
     assert(large_created.ok == true, "large source workspace create failed")
-    local large_put = tool("workspace-action", workspace_token, "workspace", {operation = "put", workspace_id = "gateway-large-source",
+    local large_put = tool("workspace-action", workspace_token, "overlay", {operation = "put", overlay_id = "gateway-large-source",
         expected_revision = 1, idempotency_key = "put-large", path = "app.lua", content = source})
     assert(large_put.ok == true, "app-size source refused over HTTP")
-    local large_read = tool("workspace-action", workspace_token, "workspace", {operation = "read", workspace_id = "gateway-large-source", path = "app.lua"})
+    local large_read = tool("workspace-action", workspace_token, "overlay", {operation = "read", overlay_id = "gateway-large-source", path = "app.lua"})
     assert(large_read.ok == true and (large_read.value :: Object).bytes == #source, "app-size source was truncated")
     local recovered = base64.decode(tostring((large_read.value :: Object).content_base64))
     assert(recovered == source, "app-size source changed during HTTP authoring")
-    local _, oversized = rpc("workspace-action", workspace_token, "tools/call", {name = "workspace", arguments = {
-        operation = "put", workspace_id = "gateway-large-source", expected_revision = 2,
+    local _, oversized = rpc("workspace-action", workspace_token, "tools/call", {name = "overlay", arguments = {
+        operation = "put", overlay_id = "gateway-large-source", expected_revision = 2,
         idempotency_key = "too-large", path = "app.lua", content = string.rep("x", 65537)}})
     assert(oversized and oversized.error, "oversized workspace source was admitted")
     local body_status = rpc("workspace-action", workspace_token, "ping", {padding = string.rep("x", 524288)})
     assert(body_status == 400, "whole MCP body limit was not enforced")
-    local unchanged = tool("workspace-action", workspace_token, "workspace", {operation = "list", workspace_id = "gateway-large-source"})
+    local unchanged = tool("workspace-action", workspace_token, "overlay", {operation = "list", overlay_id = "gateway-large-source"})
     assert(unchanged.ok == true and (unchanged.value :: Object).revision == 2, "refused oversized request changed the workspace")
     local foreign_admission = ok(call("bee.gateway:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
         attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
-        tools = {"workspace"}, ttl_ms = 60000}), "admit foreign workspace actor")
+        tools = {"overlay"}, ttl_ms = 60000}), "admit foreign workspace actor")
     local foreign_workspace_binding = tostring((foreign_admission.binding :: Object).binding_id)
     local foreign_workspace_token = tostring(ok(materialize("foreign-workspace-attempt", 1, foreign_workspace_binding), "materialize foreign workspace actor").token)
-    local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "workspace", {operation = "list", workspace_id = "gateway-research"})
+    local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "overlay", {operation = "list", overlay_id = "gateway-research"})
     assert(foreign_workspace.ok == false and foreign_workspace.code == "DENIED", "foreign MCP actor read another workspace")
     ok(call("bee.gateway:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
     end

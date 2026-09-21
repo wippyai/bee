@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: tests.delivery
+namespace: tests.overlays
 entries:
 - name: model_test
   kind: function.lua
@@ -9,7 +9,7 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.delivery:model
+    model: bee.overlays:model
     caller: bee.application:caller
     preflight: bee.governance:preflight
 - name: view_test
@@ -20,7 +20,7 @@ entries:
   modules: [tty]
   imports:
     test: wippy.test:test
-    model: bee.delivery:model
-    view: bee.delivery:view
+    model: bee.overlays:model
+    view: bee.overlays:view
     appearance: bee.desktop:appearance
     preflight: bee.governance:preflight

@@ -11,17 +11,17 @@ type Request = {operation: Operation, workspace_id: string, source_workspace: st
 function M.decode(raw: unknown): (Request?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "delivery request must be an object" end
-    local extra = bounds.fields(value, {"operation", "workspace_id", "source_workspace", "version",
+    local extra = bounds.fields(value, {"operation", "workspace_id", "source_overlay_id", "version",
         "snapshot_digest", "source_node", "intent_id"})
     if extra then return nil, extra end
     local operation = value.operation
     if type(operation) ~= "string" or not OPERATIONS[operation] then return nil, "unknown delivery operation" end
     local selected_operation: Operation = operation :: Operation
     local workspace_id = bounds.id(value.workspace_id)
-    local source_workspace = bounds.id(value.source_workspace)
+    local source_workspace = bounds.id(value.source_overlay_id)
     local version = bounds.id(value.version)
     if not workspace_id or not source_workspace or not version then
-        return nil, "delivery needs operation, workspace_id, source_workspace and version"
+        return nil, "delivery needs operation, workspace_id, source_overlay_id and version"
     end
     local request: Request = {operation = selected_operation, workspace_id = workspace_id,
         source_workspace = source_workspace, version = version}

@@ -64,12 +64,16 @@ staging. Returned records are copied but remain mutable Lua values: an executor
 must verify the content against the admitted measurement again.
 
 The source authoring owner now exposes create/list/read/put/remove/freeze through
-`bee.governance:workspace_call`, a contract binding and an authoring-only agent
-trait. Host-selected read/write operation permissions are scoped to workspace ID,
-and the authenticated actor must also match its stored owner. A checked SQLite
+the public `bee.governance:overlay_call`, a contract binding and an
+authoring-only agent trait. Public requests use `overlay_id`; `guide` carries no
+overlay identity, and `workspace_id` is not an alias on this boundary.
+Host-selected read/write operation permissions are scoped to the stored overlay
+owner, and the authenticated actor must also match that owner. A checked SQLite
 migration owns mutable files, frozen copies and bounded retry receipts. Writes
 use expected revisions; identical retries return committed receipts across
-restart. Freeze retains a separate binary-safe copy without activating it.
+restart. Freeze retains a separate binary-safe copy without activating it. The
+private backend, execution scope and storage keep their internal `workspace_id`
+for runtime routing.
 See [the module contract](../src/governance/README.md) for request fields and
 capacity limits. Managed Agent host policies now admit this facade through the
 private MCP gateway. Storage still enforces actor ownership, and the scope has
@@ -131,7 +135,7 @@ core changes remain maintenance operations.
 ### Sole writer and extension boundary
 
 Governance is the sole agent/application-facing mutation authority for both
-durable registry state and ephemeral overlays. Workspace files, trait installation,
+durable registry state and ephemeral overlays. Overlay files, trait installation,
 plugin registration and inbox participation confer no raw registry or overlay
 writer capability. Trusted runtime/core readers retain the lookup permissions
 needed to run Bee. Native OS-user shells are not sandboxed by this Lua boundary;
@@ -205,8 +209,8 @@ delegates to this owner rather than granting the caller its permissions.
 
 ### Agent authoring environment
 
-The agent interface must support a complete bounded application workspace, not
-just submission of registry RPCs. A host-admitted workspace exposes convenient
+The agent interface must support a complete bounded application overlay, not
+just submission of registry RPCs. A host-admitted overlay exposes convenient
 file listing, reading, writing, patches and diagnostics, with explicit resource
 identity, revision and quotas. Files can describe services, child namespaces,
 requirements/bindings, migration definitions and WASM assets. Child namespaces
@@ -219,13 +223,13 @@ read/write rights; a package cannot authorize host paths by declaring them.
 Separate writable authoring files, immutable resolved dependency/artifact inputs,
 and admitted runtime application data. The filesystem adapter must enforce
 containment, including traversal and symlink escapes, and bound storage and I/O.
-Neither Hive transfer nor a workspace descriptor carries host credentials or
+Neither Hive transfer nor an overlay descriptor carries host credentials or
 implicitly mounts the source node's directories on a destination.
 
 The intended workflow is edit, inspect/validate, test in an admitted isolated
 environment, freeze an immutable candidate, request approval, then activate or
 update and inspect service/migration outcomes. The service must execute the
-measured frozen content, never mutable workspace files changed after approval.
+measured frozen content, never mutable overlay files changed after approval.
 Service declarations include dependencies and lifecycle/readiness effects;
 dependent services cannot start before their approved migrations complete.
 Migration bodies and named database bindings are part of the reviewed closure,

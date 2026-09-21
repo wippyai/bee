@@ -82,7 +82,7 @@ app-journey-check: fixture-gateway-client
 .PHONY: delivery-review-check
 # What a person approves: the destination's own verdict, the diagnostics that
 # block it, the entry set the plan changes, and the approval and activation
-# record, all read back in the App Delivery review surface.
+# record, all read back in the Overlays review surface.
 delivery-review-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/delivery_review.py
 .PHONY: governance-workspace-check

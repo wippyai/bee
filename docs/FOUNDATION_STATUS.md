@@ -1,7 +1,23 @@
 # Foundation status
 
-Bee source `8f0756a` is installed globally as executable SHA-256
-`fbc7cce04840`, pinned to runtime PR #789 at `b476104e63`. The release includes
+Bee source `d9e8bad` is installed globally as executable SHA-256
+`e2ce5b52fe7d`, pinned to runtime PR #789 at `b476104e63`. Public governed
+authoring is overlay-native: the MCP tool is `overlay`, requests and replies use
+`overlay_id`, and delivery/publish use `source_overlay_id` while retaining
+`workspace_id` only for the destination workspace. The installed release passed
+the real managed-Agy author/review/apply/renew/restart journey, strict lint,
+1,198 unit cases, the 163-document corpus, production packaging, the complete
+native binary and five-profile Agent selector, and loopback-only offline cold
+boot/restart/reconnect. Its six-file installer proved exact rollback before
+replacement and preserved the prior artifact set at
+`bee-evidence/0920/global-before-overlay-d9e8bad`; receipt:
+`bee-evidence/0920/global-overlay-d9e8bad-install.json`. A post-install launch
+from `/mnt/c/Users/Wolfy-J` opened Overlays, Approvals and the five-profile Agent
+picker, then stopped its retained owner cleanly. Repository commit `e919da9`
+corrects the native selector's alphabetical tool-row gesture and stale expected
+tool names; production bytes are unchanged from `d9e8bad`.
+
+The preceding release includes
 compatible live application replacement and per-agent thread-access withdrawal:
 the running execution observes the changed protected policy on its next facade
 call, durable revocation removes membership and its checkpoint, and restart does
@@ -45,7 +61,7 @@ and preserved all application state. Receipt:
 
 Managed application updates now pass the complete agent-to-UI journey in the
 source candidate. One real managed Agy authors v1 through Governance, a person
-reviews and approves it in App Delivery and Approvals, and the same durable
+reviews and approves it in Overlays and Approvals, and the same durable
 thread authors v2. The second plan is shown as `changed` and requires its own
 approval. Applying it renews the application producer behind the existing
 viewport: logical instance, controller and observer mounts, display assignment,
@@ -87,7 +103,7 @@ Runtime PR #789 at `b476104e63` supplies generation-fenced viewport renewal on
 top of the open application-model PR #787 at `3d9926aa`; Rodrigo is requested on
 #787. Bee keeps replacement state on each instance, shares one typed execution
 start path, and lets explicit close and workspace shutdown win. Strict lint,
-1,138/1,138 units, App Delivery's delayed-response UI regression, managed
+1,138/1,138 units, Overlays's delayed-response UI regression, managed
 windows 5/5, source and packed App Journey, Governance workspace restart,
 production pack, and the 162-document agent corpus pass against the combined
 runtime candidate. Source `9fb90d7` was the preceding global executable
@@ -228,8 +244,8 @@ definition, admission, carrier, placement and gateway, briefs it with this
 destination's ceilings and hands it the authoring contract through one admitted
 read-only tool together with the launch policy's host instructions, and carries
 what it authors the rest of the way: frozen artifact from the scoped Governance
-MCP workspace tool, typed lint, publication, destination stage and preflight,
-the person's review in App Delivery, the decision in Approvals, and apply by the
+MCP overlay tool, typed lint, publication, destination stage and preflight,
+the person's review in Overlays, the decision in Approvals, and apply by the
 activation owner. A lint or preflight refusal returns to the agent as a record on
 its bound thread and the next attempt repairs it, bounded to three rounds. The
 authored window opens from the start menu and is restored with its state after a
@@ -237,11 +253,11 @@ full host restart. It is opt-in because it consumes provider inference; global
 installation is unchanged.
 
 An authoring agent now learns Bee's application contract through the MCP surface
-it already holds, is refused early with a remedy when its frozen workspace cannot
+it already holds, is refused early with a remedy when its frozen overlay cannot
 become an application, and has an honest path from freeze to delivery. The
-`workspace` tool carries a read-only `guide` operation (contract plus one minimal
+`overlay` tool carries a read-only `guide` operation (contract plus one minimal
 example, generated from the rule tables preflight enforces and itself authored
-through the real chain by `make app-journey-check`). A frozen workspace without a
+through the real chain by `make app-journey-check`). A frozen overlay without a
 usable `entries.json` is refused by publication prepare with `MISSING_ARTIFACT`
 or `INVALID_ARTIFACT` and a remedy under the destination's own `remedy` field.
 The `delivery` tool requests delivery (publish the frozen artifact, stage it,
@@ -296,7 +312,7 @@ and rolls back to v1. The receiving Bee remains the authority for every review
 and activation decision.
 
 Managed Agents can now self-author without receiving registry or activation
-authority. The scoped MCP catalog exposes the caller-owned Governance workspace
+authority. The scoped MCP catalog exposes the caller-owned overlay
 facade, where an Agent can create, revision-check, edit and freeze files. A
 frozen `entries.json` list is canonicalized into the measured registry artifact
 only during separately authorized publication preparation. Hidden Codex and
@@ -1435,3 +1451,30 @@ is now in the installed global build. Alt+F9 minimize and plain-F9 status pass
 source/pack and executable checks. The corrected safety checkpoint has passed its full repository check
 (493 Lua tests, 525 registry entries); the later session-identity follow-up is
 being validated separately.
+
+Governed application admission is now consumed by the source catalog. The broker
+passes its trusted workspace into both sides of the catalog refresh fence. Shipped
+static bindings remain available everywhere; destination activation profiles may
+add only their measured workspace-local bindings, with privileged static-only
+flags defaulting off. Missing, stale or withdrawn profile selections contribute
+nothing. Duplicate definition claims and a combined count above 64 fail closed.
+Accepted admission digests remain in the broker's cached selection, so overlay
+changes cannot reuse an old scope without advancing durable registry history.
+
+The activation profile schema now has one pure decoder shared by Governance and
+the core catalog. Strict lint passes with the known desktop-lifecycle warning,
+all 1,198 unit cases pass, and the existing source/packed broker admission journey
+passes. The real managed-agent fixture selects its application and `observe_post`
+thread access in the destination activation profile; it no longer adds a separate
+static admission binding.
+
+The complete live journey now passes. A real managed Agy authored through the
+public `overlay` MCP tool, reported its frozen digest through the bound thread,
+and returned once for a typed-lint repair. A person reviewed and approved versions
+`1.0.2` and `2.0.0` in Overlays and Approvals. The second activation renewed the
+running viewport from `AGENT APP READY` to `AGENT APP UPDATED` while preserving
+`Count: 1`; a cold restart restored the updated application and that state. The
+Approvals app was admitted by its authenticated `bee.inbox:app` definition
+selector, and the owner recorded its private application actor as decider.
+Evidence is in `.wippy/evidence/agent-app-20260920-225906`. The global executable
+remains unchanged pending the final build and installation gate.

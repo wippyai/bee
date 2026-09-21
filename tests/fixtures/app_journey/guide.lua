@@ -1,7 +1,7 @@
 -- MIT. Author the guide's own example through the real governed chain and
 -- require a ready destination preflight. This is what keeps the guide's
 -- example from rotting: it is the same value a person reads through the MCP
--- workspace tool, published and staged the same way tests/fixtures/app_journey
+-- overlay tool, published and staged the same way tests/fixtures/app_journey
 -- authors an application.
 local funcs = require("funcs")
 local registry = require("registry")
@@ -78,7 +78,7 @@ end
 local function main()
     -- The guide is the product surface an agent reads over MCP. Read it here
     -- through the same facade, not from this fixture.
-    local published = call_api("bee.governance:workspace_call", {operation = "guide"})
+    local published = call_api("bee.governance:overlay_call", {operation = "guide"})
     local document = bounds.text(published.document, 65536)
     if not document or not document:find(guide.ENTRIES_PATH, 1, true) then
         error("the guide document does not name " .. guide.ENTRIES_PATH)
@@ -94,15 +94,15 @@ local function main()
         error("the guide example is not the expected single process.lua entry")
     end
 
-    local create_res = call_api("bee.governance:workspace_call", {operation = "create",
-        workspace_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
+    local create_res = call_api("bee.governance:overlay_call", {operation = "create",
+        overlay_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
     if create_res.revision ~= 1 then error("workspace create revision expected 1") end
-    local put_res = call_api("bee.governance:workspace_call", {operation = "put", workspace_id = SOURCE_WORKSPACE,
+    local put_res = call_api("bee.governance:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1, idempotency_key = "put-entries-" .. SOURCE_WORKSPACE,
         path = guide.ENTRIES_PATH, content = entries_json})
     if put_res.revision ~= 2 then error("workspace put revision expected 2") end
-    local freeze_res = call_api("bee.governance:workspace_call", {operation = "freeze",
-        workspace_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
+    local freeze_res = call_api("bee.governance:overlay_call", {operation = "freeze",
+        overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "guide example frozen digest")
 
     local workspace_id = "app-journey-guide-workspace"
@@ -136,7 +136,7 @@ local function main()
     -- The product delivery tool an authoring agent holds: request delivery of
     -- the frozen artifact, learn the destination's verdict and the human steps.
     local delivered = call_api("bee.governance:delivery_call", {operation = "request",
-        workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE, version = guide.VERSION,
+        workspace_id = workspace_id, source_overlay_id = SOURCE_WORKSPACE, version = guide.VERSION,
         snapshot_digest = snapshot_digest})
     if delivered.ready ~= true then
         error("the product delivery tool did not report a ready destination: " .. json.encode(delivered.diagnostics))
@@ -149,12 +149,12 @@ local function main()
         error("the product delivery tool did not name the human steps")
     end
     local where = object(delivered.human_steps_where)
-    if where.review ~= "App Delivery" or where.approve ~= "Approvals" or where.open ~= "start menu" then
+    if where.review ~= "Overlays" or where.approve ~= "Approvals" or where.open ~= "start menu" then
         error("the product delivery tool did not name where the human acts")
     end
     -- Delivery status reads the staged plan back by identity.
     local status_res = call_api("bee.governance:delivery_call", {operation = "status",
-        workspace_id = workspace_id, source_workspace = SOURCE_WORKSPACE, version = guide.VERSION,
+        workspace_id = workspace_id, source_overlay_id = SOURCE_WORKSPACE, version = guide.VERSION,
         source_node = local_node})
     if status_res.plan_digest ~= staged.plan_digest or status_res.selected == true then
         error("delivery status did not read the staged, unselected plan")

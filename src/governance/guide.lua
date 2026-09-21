@@ -1,5 +1,5 @@
 -- MIT. The component authoring guide a bound agent reads through the MCP
--- workspace tool. Pure: it composes bounded text from this repository's own
+-- overlay tool. Pure: it composes bounded text from this repository's own
 -- rule sources (the preflight CONFIG tables it imports) and carries one
 -- minimal example. It reads no store, executes nothing and grants nothing.
 --
@@ -138,7 +138,7 @@ function M.example_json(): (string?, string?)
     return json.encode(M.example())
 end
 
-local DELIVERY_STEPS = {"review the plan in App Delivery", "select it there",
+local DELIVERY_STEPS = {"review the plan in Overlays", "select it there",
     "prepare the activation there", "approve it in Approvals",
     "let the activation owner apply the overlay",
     "open it from the start menu"}
@@ -182,8 +182,9 @@ function M.document(): string
     lines[#lines + 1] = ""
     lines[#lines + 1] = CONFIG_SHAPE_RULE
     lines[#lines + 1] = ""
+    lines[#lines + 1] = "Every authoring operation except guide names its overlay_id; it is distinct from the agent's runtime workspace."
     lines[#lines + 1] = "Freeze copies the complete measured file set into owned storage and binds it to"
-        .. " the workspace identity and revision; it does not change the edit revision, and later edits"
+        .. " the overlay identity and revision; it does not change the edit revision, and later edits"
         .. " cannot change a frozen snapshot. Freeze is not approval, installation or execution."
     lines[#lines + 1] = ""
     lines[#lines + 1] = "After freeze, publication prepare parses " .. M.ENTRIES_PATH
@@ -224,7 +225,7 @@ function M.platform_documentation(): string
         .. " up in the corpus rather than guessing a signature."
 end
 
--- The value the MCP workspace tool returns for its read-only guide operation.
+-- The value the MCP overlay tool returns for its read-only guide operation.
 function M.value(): {[string]: unknown}
     local encoded, encode_error = M.example_json()
     if not encoded then return {revision = M.REVISION, document = M.document(), example_error = tostring(encode_error)} end

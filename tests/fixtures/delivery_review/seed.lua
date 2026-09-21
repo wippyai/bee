@@ -3,7 +3,7 @@
 -- candidate introduces a reference to an entry nothing supplies, one whose
 -- function entry declares an empty modules field the destination's function
 -- config cannot read, and one the destination preflight accepts. The review surface is exercised afterwards in the
--- App Delivery window; this probe records no review, selection or approval.
+-- Overlays window; this probe records no review, selection or approval.
 local funcs = require("funcs")
 local registry = require("registry")
 local system = require("system")
@@ -146,7 +146,8 @@ local function configure(workspace_id: string, local_node: string)
     local approvers = assert(registry.get("bee.approvals:approver_policies"))
     local approver_data = object(approvers.data)
     local policies = approver_data.policies :: {unknown}
-    policies[#policies + 1] = {name = APPROVAL_POLICY, approvers = {"bee.local"}, max_ttl_ms = 600000}
+    policies[#policies + 1] = {name = APPROVAL_POLICY,
+        approvers = {{definition_id = "bee.inbox:app"}}, max_ttl_ms = 600000}
     approver_data.policies = policies
     approvers.data = approver_data
 
@@ -159,14 +160,14 @@ local function configure(workspace_id: string, local_node: string)
 end
 
 local function author(source_workspace: string, entries: {unknown}): string
-    call_api("bee.governance:workspace_call", {operation = "create", workspace_id = source_workspace,
+    call_api("bee.governance:overlay_call", {operation = "create", overlay_id = source_workspace,
         expected_revision = 0, idempotency_key = "create-" .. source_workspace})
-    call_api("bee.governance:workspace_call", {operation = "put", workspace_id = source_workspace,
+    call_api("bee.governance:overlay_call", {operation = "put", overlay_id = source_workspace,
         expected_revision = 1, idempotency_key = "put-" .. source_workspace, path = "entries.json",
         content = json.encode(entries)})
-    local frozen = call_api("bee.governance:workspace_call", {operation = "freeze",
-        workspace_id = source_workspace, expected_revision = 2, idempotency_key = "freeze-" .. source_workspace})
-    return digest_of(frozen.digest, source_workspace .. " frozen workspace digest")
+    local frozen = call_api("bee.governance:overlay_call", {operation = "freeze",
+        overlay_id = source_workspace, expected_revision = 2, idempotency_key = "freeze-" .. source_workspace})
+    return digest_of(frozen.digest, source_workspace .. " frozen overlay digest")
 end
 
 local function stage(workspace_id: string, component: string, source_workspace: string, snapshot_digest: string): Object

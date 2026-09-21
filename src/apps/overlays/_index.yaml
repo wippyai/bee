@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.delivery
+namespace: bee.overlays
 entries:
 - name: app
   kind: process.lua
@@ -10,20 +10,20 @@ entries:
     client: bee.application:client
     appearance: bee.desktop:appearance
     caller: bee.application:caller
-    model: bee.delivery:model
-    view: bee.delivery:view
+    model: bee.overlays:model
+    view: bee.overlays:view
   meta:
     type: bee.application
     application:
       api_version: 1
-      title: App Delivery
+      title: Overlays
       icon: D
       lifetime: view
       revision: '1'
       instance_policy: singleton
       group: Tools
-      role: delivery
-      resume_schema: delivery.v1
+      role: overlays
+      resume_schema: overlays.v1
       restart_policy: manual
 - name: model
   kind: library.lua
@@ -39,12 +39,12 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.desktop:appearance
-    model: bee.delivery:model
+    model: bee.overlays:model
     text: bee.application:text
 - name: client_policy
   kind: security.policy
   meta:
-    comment: App Delivery calls only the destination-owned governance facade; local review is separate from Approvals decisions
+    comment: Overlays calls only the destination-owned governance facade; local review is separate from Approvals decisions
   policy:
     actions: [funcs.call]
     resources: [bee.governance:destination_call]

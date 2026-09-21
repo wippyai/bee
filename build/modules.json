@@ -28,7 +28,7 @@
         "bee.client",
         "bee.console",
         "bee.desktop",
-        "bee.delivery",
+        "bee.overlays",
         "bee.hive_manager",
         "bee.host",
         "bee.inbox",

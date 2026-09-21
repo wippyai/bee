@@ -149,14 +149,14 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         return {rows = canvas:rows(), hits = hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "authoring" then
-        line(3, "Private authored application version", theme.muted)
+        line(3, "Private authored overlay version", theme.muted)
         line(4, "Component: " .. (state.publication_component ~= "" and state.publication_component or "(set with C)"), theme.text)
         line(5, "Version: " .. (state.publication_version ~= "" and state.publication_version or "(set with V)"), theme.text)
         local frozen = state.publication_snapshot_digest ~= "" and state.publication_snapshot_digest or "(freeze first; set with S)"
         line(6, "Frozen snapshot: " .. frozen, theme.text)
-        line(8, "Freeze the actor-owned authoring workspace, then enter its digest.", theme.muted)
+        line(8, "Freeze the actor-owned overlay, then enter its digest.", theme.muted)
         line(9, "Prepare stores this exact version locally; it does not distribute it.", theme.muted)
-        line(11, "App Delivery: Stage → Review → Select → Approvals → Apply.", theme.text)
+        line(11, "Overlays: Stage → Review → Select → Approvals → Apply.", theme.text)
         line(12, "Return here to publish only after this exact version is applied.", theme.text)
         if state.publication_prepared then
             line(14, "Prepared descriptor " .. state.publication_prepared.descriptor_digest, theme.muted)
@@ -490,7 +490,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local publication_editor = editor.field == "publication_component" or editor.field == "publication_version"
         or editor.field == "publication_snapshot_digest"
     local title = editor.field == "query" and "Search packages" or (editor.field == "keyword" and "Filter by keyword"
-        or (publication_editor and "Authored application version" or "Configure package"))
+        or (publication_editor and "Authored overlay version" or "Configure package"))
     -- The editor remains the active mode after a resize. A compact frame must
     -- therefore keep that mode visible and must never expose the underlying
     -- page's hit targets while keystrokes still edit the buffer.

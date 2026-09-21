@@ -132,20 +132,20 @@ entries:
     actions: [bee.governance.workspace.execute]
     resources: [bee.governance:workspace_backend_call]
     effect: allow
-- name: workspace_facade_policy
+- name: overlay_facade_policy
   kind: security.policy.expr
   policy:
     expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.governance:workspace_execution_scope") || (action == "funcs.call" && resource == "bee.governance:workspace_backend_call")'
     actions: [funcs.security, security.policy_group.get, funcs.call]
     resources: [security, bee.governance:workspace_execution_scope, bee.governance:workspace_backend_call]
     effect: allow
-- name: workspace_call
+- name: overlay_call
   kind: function.lua
   source: file://workspace_method.lua
   method: handle
   modules: [funcs, security]
   imports: {protocol: bee.governance:workspace_protocol, guide: bee.governance:guide, transaction: bee.persist:transaction, bounds: bee.threads.records:bounds}
-  security: {policies: [bee.governance:workspace_facade_policy]}
+  security: {policies: [bee.governance:overlay_facade_policy]}
 `
 
 func runCommand(ctx context.Context, directory, runtime string, environment []string, args ...string) ([]byte, error) {

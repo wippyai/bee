@@ -104,21 +104,21 @@ local function main()
     end
     local SOURCE_WORKSPACE = "research-performance"
 
-    -- 1 workspace_call create/put entries.json/freeze (test operator actor);
+    -- 1 overlay_call create/put entries.json/freeze (test operator actor);
     --   returned snapshot_digest is a new file snapshot, distinct from original artifact digest.
     --   Keep exact entries so artifact digest remains same.
-    local create_res = call_api("bee.governance:workspace_call", {
+    local create_res = call_api("bee.governance:overlay_call", {
         operation = "create",
-        workspace_id = SOURCE_WORKSPACE,
+        overlay_id = SOURCE_WORKSPACE,
         expected_revision = 0,
         idempotency_key = "create-" .. SOURCE_WORKSPACE,
     })
     assert(create_res.revision == 1, "create revision expected 1")
 
     local entries_json = json.encode(measured.entries)
-    local put_res = call_api("bee.governance:workspace_call", {
+    local put_res = call_api("bee.governance:overlay_call", {
         operation = "put",
-        workspace_id = SOURCE_WORKSPACE,
+        overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1,
         idempotency_key = "put-entries-" .. SOURCE_WORKSPACE,
         path = "entries.json",
@@ -126,9 +126,9 @@ local function main()
     })
     assert(put_res.revision == 2, "put revision expected 2")
 
-    local freeze_res = call_api("bee.governance:workspace_call", {
+    local freeze_res = call_api("bee.governance:overlay_call", {
         operation = "freeze",
-        workspace_id = SOURCE_WORKSPACE,
+        overlay_id = SOURCE_WORKSPACE,
         expected_revision = 2,
         idempotency_key = "freeze-" .. SOURCE_WORKSPACE,
     })

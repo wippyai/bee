@@ -391,8 +391,8 @@ local function digest_of(value: unknown, label: string): string
     return measured
 end
 
-local function admitted_title(): string?
-    for _, item in ipairs(catalog.read().items) do
+local function admitted_title(workspace_id: string): string?
+    for _, item in ipairs(catalog.read(workspace_id).items) do
         if item.definition_id == DEFINITION_ID then return item.title end
     end
     return nil
@@ -433,11 +433,13 @@ local function configure_host(workspace_id: string, local_node: string)
 end
 
 local function main()
+    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
+    if not workspace_id then error("destination workspace identity is unavailable") end
     if registry.get(DEFINITION_ID) then error("candidate must be absent before governed activation") end
     -- Admission is already bound by the host, and that binding alone admits
     -- nothing: the effective catalog carries no descriptor until the reviewed
     -- definition exists.
-    if admitted_title() then error("admission binding admitted an application that does not exist") end
+    if admitted_title(workspace_id) then error("admission binding admitted an application that does not exist") end
 
     seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
@@ -453,19 +455,17 @@ local function main()
 
     -- Author into a governed workspace and freeze it, exactly as a person
     -- editing the source tree would.
-    local create_res = call_api("bee.governance:workspace_call", {operation = "create",
-        workspace_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
+    local create_res = call_api("bee.governance:overlay_call", {operation = "create",
+        overlay_id = SOURCE_WORKSPACE, expected_revision = 0, idempotency_key = "create-" .. SOURCE_WORKSPACE})
     if create_res.revision ~= 1 then error("workspace create revision expected 1") end
-    local put_res = call_api("bee.governance:workspace_call", {operation = "put", workspace_id = SOURCE_WORKSPACE,
+    local put_res = call_api("bee.governance:overlay_call", {operation = "put", overlay_id = SOURCE_WORKSPACE,
         expected_revision = 1, idempotency_key = "put-entries-" .. SOURCE_WORKSPACE, path = "entries.json",
         content = json.encode(measured.entries)})
     if put_res.revision ~= 2 then error("workspace put revision expected 2") end
-    local freeze_res = call_api("bee.governance:workspace_call", {operation = "freeze",
-        workspace_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
-    local snapshot_digest = digest_of(freeze_res.digest, "frozen workspace digest")
+    local freeze_res = call_api("bee.governance:overlay_call", {operation = "freeze",
+        overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
+    local snapshot_digest = digest_of(freeze_res.digest, "frozen overlay digest")
 
-    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
-    if not workspace_id then error("destination workspace identity is unavailable") end
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 
@@ -617,7 +617,7 @@ local function main()
 
     -- The same effective catalog the application broker reads now carries the
     -- approved definition, so the host admits it.
-    local title = admitted_title()
+    local title = admitted_title(workspace_id)
     if title ~= APP_TITLE then error("effective catalog does not admit the applied application") end
 
     logger:info("APP_JOURNEY_DELIVERED", {artifact_digest = artifact_digest, snapshot_digest = snapshot_digest,

@@ -843,9 +843,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 32061,
+      "bytes": 33089,
       "id": "docs/application_contracts",
-      "sha256": "ce04d50a43952de2ee79aa2fe9aee37506476fa39bd8dc3585306348fc496948",
+      "sha256": "a832cddc2a50b011ae008ad2b31a743233ec7e3aa0ccac6fd3654ed4a0196b38",
       "source": "docs/APPLICATION_CONTRACTS.md",
       "title": "Application contracts (development version 1)",
       "topic": "application"
@@ -899,17 +899,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 20231,
+      "bytes": 20725,
       "id": "docs/distributed_app_delivery",
-      "sha256": "b016683432b7ffd6fb0eb85c41752a20e81c0b8133945a75123a860e9f7195ed",
+      "sha256": "1e226efdc6bc94d776991fbf4de215e3888e082c82f02d4ec11f382a0adb3a7f",
       "source": "docs/DISTRIBUTED_APP_DELIVERY.md",
-      "title": "Distributed application delivery",
+      "title": "Distributed overlay delivery",
       "topic": "application"
     },
     {
-      "bytes": 31631,
+      "bytes": 31625,
       "id": "docs/gateway",
-      "sha256": "fdf7c0dbba7bea29355d7f6ffe0c6c8a1c5d0e1f62d542e499d8d952cbbd94f2",
+      "sha256": "00df14df08a99577354d9c555172fa7de11861458326fea3f260150955a830e5",
       "source": "docs/GATEWAY.md",
       "title": "Gateway (build sequence step 9, harness lane)",
       "topic": "gateway"
@@ -923,9 +923,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 26186,
+      "bytes": 26421,
       "id": "docs/governance_implementation",
-      "sha256": "ad03553d8ae50ebd48a20c317025234efcb37f6aacaf9b8962d958697b276256",
+      "sha256": "6022da9c7d920bee5187f76f71c75e2c55ced0894c66cd3587ae96925a30f27a",
       "source": "docs/GOVERNANCE_IMPLEMENTATION.md",
       "title": "Bee governance implementation plan",
       "topic": "application"
@@ -987,9 +987,9 @@
       "topic": "harness"
     },
     {
-      "bytes": 11642,
+      "bytes": 12100,
       "id": "docs/mcp_configuration",
-      "sha256": "013499d4ebbf08fb8f2c296540def9c11973ff1f42c3ab545392eec5892e9e39",
+      "sha256": "43154599d2ef1f0f2d85b2ccfeed22206cd87cd9fc223f1974363c487ab180f8",
       "source": "docs/MCP_CONFIGURATION.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -1195,19 +1195,19 @@
       "topic": "component"
     },
     {
-      "bytes": 2898,
+      "bytes": 2879,
       "id": "component/gateway",
-      "sha256": "86d522e91975e177620c4f30f5af24f8d2cda8bbf17539be712e3d3a2e1be30d",
+      "sha256": "dd56cee2bf2bbf311b6f1b51edad5d11e869cca929f6a45a7689c05059b12cc1",
       "source": "src/gateway",
       "title": "bee.gateway",
       "topic": "component"
     },
     {
-      "bytes": 14745,
+      "bytes": 15048,
       "id": "component/governance",
-      "sha256": "ff170993fb9c6a7f12509b0c780c5b26649aa65a52a390da49fd8ea381ba2f57",
+      "sha256": "4bd458ad5976cfecd07fcee60dbe8c658a6ac4e9af2e0916bfde51785a6ce8a8",
       "source": "src/governance",
-      "title": "Governance authoring and preflight",
+      "title": "Overlay authoring and preflight",
       "topic": "component"
     },
     {
@@ -1310,7 +1310,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2165005,
+    "bytes": 2167498,
     "documents": 163
   }
 }

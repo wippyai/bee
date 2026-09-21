@@ -128,7 +128,7 @@ function M.create(source_node_raw: unknown, destination_node_raw: unknown,
     if not verified or verify_error or verified.digest ~= snapshot.digest
         or verified.files_digest ~= snapshot.files_digest or verified.file_count ~= snapshot.file_count
         or verified.total_bytes ~= snapshot.total_bytes then
-        return nil, "source snapshot is not an exact frozen workspace"
+        return nil, "source snapshot is not an exact frozen overlay"
     end
     local candidate: Candidate = {schema_revision = M.SCHEMA,
         source_node = source_node, destination_node = destination_node,

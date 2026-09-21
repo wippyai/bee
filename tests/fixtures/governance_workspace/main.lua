@@ -32,7 +32,7 @@ local function isolated(client: funcs.Executor)
 end
 
 local function call(client: funcs.Executor, request: unknown): Object
-    local result, err = client:call("bee.governance:workspace_call", request)
+    local result, err = client:call("bee.governance:overlay_call", request)
     assert(not err, tostring(err))
     local decoded = bounds.object(result)
     assert(decoded, "malformed authoring result")
@@ -50,20 +50,20 @@ local function main(phase: string?)
     local writer = principal("author-a")
     local foreign = principal("author-b")
     isolated(writer)
-    local create = {operation = "create", workspace_id = "demo", expected_revision = 0, idempotency_key = "create"}
-    local put = {operation = "put", workspace_id = "demo", expected_revision = 1, idempotency_key = "binary",
+    local create = {operation = "create", overlay_id = "demo", expected_revision = 0, idempotency_key = "create"}
+    local put = {operation = "put", overlay_id = "demo", expected_revision = 1, idempotency_key = "binary",
         path = "assets/demo.wasm", content_base64 = "AP9hc3NldA=="}
-    local freeze = {operation = "freeze", workspace_id = "demo", expected_revision = 2, idempotency_key = "freeze"}
+    local freeze = {operation = "freeze", overlay_id = "demo", expected_revision = 2, idempotency_key = "freeze"}
 
     if phase == "first" then
-        assert(call(writer, {operation = "list", workspace_id = "demo"}).code == "NOT_FOUND", "first boot reused a store")
+        assert(call(writer, {operation = "list", overlay_id = "demo"}).code == "NOT_FOUND", "first boot reused a store")
         assert(value(call(writer, create)).revision == 1)
         assert(value(call(writer, put)).revision == 2)
         local frozen = value(call(writer, freeze))
         assert(type(frozen.digest) == "string", "freeze omitted its digest")
-        assert(value(call(writer, {operation = "put", workspace_id = "demo", expected_revision = 2,
+        assert(value(call(writer, {operation = "put", overlay_id = "demo", expected_revision = 2,
             idempotency_key = "update", path = "assets/demo.wasm", content = "updated"})).revision == 3)
-        local retained = value(call(writer, {operation = "read", workspace_id = "demo", path = "assets/demo.wasm",
+        local retained = value(call(writer, {operation = "read", overlay_id = "demo", path = "assets/demo.wasm",
             snapshot_digest = frozen.digest}))
         assert(retained.content_base64 == "AP9hc3NldA==" and retained.revision == 2, "frozen binary followed a mutable edit")
         isolated(writer)
@@ -72,15 +72,15 @@ local function main(phase: string?)
     end
 
     assert(phase == "second", "unexpected governance probe phase")
-    assert(value(call(writer, {operation = "list", workspace_id = "demo"})).revision == 3, "restart lost workspace revision")
+    assert(value(call(writer, {operation = "list", overlay_id = "demo"})).revision == 3, "restart lost workspace revision")
     assert(call(writer, create).replayed == true, "restart lost create receipt")
     assert(call(writer, put).replayed == true, "restart lost binary write receipt")
     local frozen = value(call(writer, freeze))
     assert(call(writer, freeze).replayed == true, "restart lost freeze receipt")
-    local retained = value(call(writer, {operation = "read", workspace_id = "demo", path = "assets/demo.wasm",
+    local retained = value(call(writer, {operation = "read", overlay_id = "demo", path = "assets/demo.wasm",
         snapshot_digest = frozen.digest}))
     assert(retained.content_base64 == "AP9hc3NldA==" and retained.revision == 2, "restart changed frozen binary bytes")
-    local denied = call(foreign, {operation = "list", workspace_id = "demo"})
+    local denied = call(foreign, {operation = "list", overlay_id = "demo"})
     assert(denied.ok == false and denied.code == "DENIED", "foreign author accessed exact workspace")
     isolated(writer)
     logger:info("GOVERNANCE_WORKSPACE_SECOND_BOOT_PASS")

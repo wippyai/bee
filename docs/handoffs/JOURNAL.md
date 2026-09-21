@@ -8129,3 +8129,144 @@ Strict lint passes with the existing desktop-lifecycle warning, all 1,196 unit
 cases pass, and `git diff --check` passes. Commit `f00f1a0` is on `main`.
 Catalog consumption and the real managed-agent journey remain next, so the
 global executable remains unchanged.
+
+## 2026-09-20 — governed admission enters the workspace catalog
+
+The application broker now reads governed admission for its authenticated
+workspace. One shared pure decoder normalizes activation profiles for both the
+destination service and catalog. The catalog preserves shipped static bindings,
+remeasures each selected reserved record against the current profile and external
+policy definitions in one pinned snapshot, defaults privileged operation flags
+off, refuses duplicate claims and enforces the existing combined capacity.
+
+Accepted derived record digests are retained in catalog equality. This is needed
+because overlay application does not advance durable registry history; without
+that evidence a changed artifact or policy could reuse an old scope. Profile
+withdrawal or stale projection contributes no dynamic binding, while the broker's
+existing refresh, recovery and thread-facade fencing remain the lifecycle owners.
+The protected activation materializer and reserved writer remain the trust root;
+registry module provenance is not misdescribed as overlay ownership.
+
+Strict lint passes with the existing desktop-lifecycle warning, all 1,197 unit
+cases pass, and the source/packed broker admission journey passes. The complete
+managed-agent journey still needs to remove its separate static fixture binding
+and prove author, review, activation, open, thread use, restart and withdrawal.
+The global executable remains unchanged.
+
+## 2026-09-20 — managed authoring fixture uses governed admission only
+
+The real managed-agent application journey no longer mutates the shipped static
+application admission list. Its ordinary and continuous-Hive activation profiles
+select the authored definition, the existing external ordinary-app boundary and
+`observe_post` thread access. The Hive destination fixture validates that exact
+governed selection instead of checking the static host list.
+
+Strict production lint passes with the known desktop-lifecycle warning, all
+1,197 unit cases pass, and the source/packed broker admission journey passes.
+The live Agy authoring journey has not yet been repeated with this fixture
+change. The global executable remains unchanged.
+
+## 2026-09-20 — overlay identity and complete authored application journey
+
+The governed authoring surface now uses overlay consistently in its public
+identity: the MCP tool is `overlay`, the desktop application is
+`bee.overlays:app`, its process role is `overlays`, and its resume schema is
+`overlays.v1`. The source and tests live under `apps/overlays` and
+`tests/lua/overlays`. This is a greenfield identity change with no delivery or
+workspace compatibility alias. Real storage and routing identities remain
+explicit as destination `workspace_id` and private `source_workspace`; the
+public authoring call is `bee.governance:overlay_call` and its identity is
+`overlay_id`. Public delivery names the source as `source_overlay_id`.
+
+There is no `bee.governance:workspace_call` compatibility alias. Private
+backend, execution-scope, storage and runtime routing fields may continue to
+use workspace names, but they are not public overlay requests or replies.
+
+The acceptance journey exposed two independent cold-path defects. The
+destination service used canonical encoding and SHA-256 during recovery without
+declaring those dependencies; both are now explicit. The cold catalog inspector
+also required the destination workspace but its launcher omitted that environment
+value; the launcher now passes the same derived identity as the delivery phase.
+The review fixture now asks the private Approvals application actor rather than
+granting a literal local actor.
+
+Strict production lint passes with the existing desktop-lifecycle fixpoint
+warning, all 1,197 unit cases pass, and both PTY journeys pass sequentially. The
+Overlays journey proves responsive progress, blocked diagnostics, review,
+selection, private approval, apply, receipt and later cold execution. The full
+App Journey proves guide-driven authoring, freeze, publication, staging,
+preflight, review, approval, atomic apply, governed catalog admission, opening
+from source and packed managed agents, thread facade access, restart recovery
+and durable restored application state. The global executable remains unchanged
+until the live managed-agent journey is repeated.
+
+## 2026-09-20 — public delivery names the overlay source explicitly
+
+The delivery trait now documents the public request shape as destination
+`workspace_id` plus source `source_overlay_id`; the private delivery service
+continues translating that source into its internal `source_workspace` field.
+The moved overlay test package also uses the `tests.overlays` namespace, so
+the shipped public vocabulary and test registry no longer imply a Delivery app
+or a workspace authoring request. No compatibility alias was added.
+
+The offline corpus check passes at 163 documents, candidate lint passes with
+the existing desktop-lifecycle fixpoint warning, all 1,198 unit cases pass,
+and the Overlays review and source/packed App Journey gates pass. The global
+executable remains unchanged.
+
+## 2026-09-20 — live managed overlay authoring journey passes
+
+The final live journey exposed one stale fixture identity rather than an owner
+or inbox failure. The activation request was durable in the approvals table and
+inbox, but its policy named the old exact actor `bee.local`. Approvals now runs
+as a private application actor with authenticated definition `bee.inbox:app`, so
+the owner correctly filtered the request as ineligible. The fixture now uses the
+existing definition selector. No decision permission, owner filter or UI bypass
+was broadened.
+
+The first corrected run proved the request became visible, then found a stale UI
+assertion that expected a separate `version:` payload row. The current bounded
+detail view already binds the version in the exact approval question and shows
+the artifact digest from the sealed proposal. The acceptance now checks those
+two rendered facts.
+
+`make agent-app-check WIPPY=.wippy/bin/bee-wippy-renewal` passes from fresh state.
+A real managed Agy authored `bee.agent_app_demo:app` through the public `overlay`
+MCP tool, froze it and reported the digest through its bound thread. The typed
+lint repair path ran once. A person reviewed and approved versions `1.0.2` and
+`2.0.0` through Overlays and Approvals. The activation owner applied both; the
+second renewed the live window while preserving `Count: 1`, and cold restart
+restored `AGENT APP UPDATED` with the same state. Evidence is in
+`.wippy/evidence/agent-app-20260920-225906`. Strict lint still passes with the
+known desktop-lifecycle fixpoint warning. The global executable remains unchanged
+until the final candidate build and installation checks complete.
+### 2026-09-20 Codex: overlay-native global Bee installed
+
+Commit `d9e8bad` made the governed authoring surface consistently overlay-native:
+the public MCP tool is `overlay`, its exact identity field is `overlay_id`, and
+delivery/publish name the source as `source_overlay_id` while `workspace_id`
+continues to mean the destination runtime workspace. No public compatibility
+alias or fallback remains. The real managed-Agy v1/v2 authoring, human review,
+approval, live viewport renewal, state preservation and cold-restart acceptance
+passes in `.wippy/evidence/agent-app-20260920-225906`.
+
+The first assembled native gate exposed a stale positional gesture in
+`tests/native_agent_selector.go`: after `workspace` became `overlay`, alphabetical
+sorting moved the row before `thread_message`, so the fixture disabled the wrong
+tool and its child exited before printing the guidance marker. Commit `e919da9`
+skips the `overlay` row, disables `thread_message`, and expects the new exact
+discovery lists. No deadline changed. The full selector and complete
+`native-binary-check` pass against `dist/bee-overlay`; loopback-only offline cold
+boot, restart and retained-client reconnect also pass, with warm attachment at
+0.222 seconds.
+
+The six-file candidate is installed globally as SHA-256
+`e2ce5b52fe7dc1a0c20928392845891caf16c516047a6baf98e2b731c8e2f8fa`, built from
+source `d9e8bad`, runtime `b476104e63` and native
+`v0.0.0-20260919180600-ff9810fea081`. The installer injected and recovered from
+a disposable post-replacement failure before atomically replacing the real set;
+it copied, removed or reset no Bee state. Backup:
+`bee-evidence/0920/global-before-overlay-d9e8bad`. Receipt:
+`bee-evidence/0920/global-overlay-d9e8bad-install.json`. A post-install launch
+from `/mnt/c/Users/Wolfy-J` opened Overlays, Approvals and all five Agent picker
+rows, detached, and stopped the retained owner cleanly.

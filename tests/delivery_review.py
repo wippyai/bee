@@ -1,14 +1,14 @@
-"""Review an application delivery in the App Delivery window before approving it.
+"""Review an application delivery in the Overlays window before approving it.
 
 Three versions of a private application are staged into the desktop's own
 workspace through the production publication and destination chain: one whose
 candidate introduces a reference to an entry nothing supplies, one whose
 function entry declares an empty modules field the destination's function
-config cannot read, and one the destination preflight accepts. App Delivery then has to show the destination's
+config cannot read, and one the destination preflight accepts. Overlays then has to show the destination's
 own verdict, the diagnostic that blocks activation, the entry set the plan
 changes against the composed base, and the approval and activation record. The
 blocked versions must refuse selection with their reason; the ready one is
-reviewed, selected and prepared in App Delivery, approved in Approvals, and its
+reviewed, selected and prepared in Overlays, approved in Approvals, and its
 activation outcome and receipt read back in the same review surface.
 """
 import json
@@ -30,7 +30,7 @@ from workspace import ROOT, RUNTIME, database_environment  # noqa: E402
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/inbox_decide.py, tests/app_journey.py) already use.
 COLD_BOOT = 30
-DELIVERY = "App Delivery"
+DELIVERY = "Overlays"
 APPROVALS = "Approvals"
 BLOCKED_ENTRY = "bee.delivery_review_blocked:probe"
 READY_ENTRY = "bee.delivery_review_ready:probe"
@@ -148,7 +148,7 @@ def back_to_plans(ui):
 
 
 def exercise_responsive():
-    """A delayed destination must not hold the App Delivery frame or close."""
+    """A delayed destination must not hold the Overlays frame or close."""
     with tempfile.TemporaryDirectory(prefix="bee-delivery-responsive-") as directory:
         folder = Path(directory)
         project = folder / "project"
@@ -159,7 +159,7 @@ def exercise_responsive():
         delay_destination(project, "available")
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
 
-        ui = Desktop(folder, project=project, apps=("bee.delivery:app",))
+        ui = Desktop(folder, project=project, apps=("bee.overlays:app",))
         ui.observed_frames = []
         try:
             deadline = time.monotonic() + COLD_BOOT
@@ -167,19 +167,19 @@ def exercise_responsive():
                 "Working" in "\n".join(frame) for frame in ui.observed_frames
             ):
                 ui.pump(.02)
-            assert any("APP DELIVERY" in "\n".join(frame) for frame in ui.observed_frames), ui.text()
+            assert any("OVERLAYS" in "\n".join(frame) for frame in ui.observed_frames), ui.text()
             assert any("Working" in "\n".join(frame) for frame in ui.observed_frames), ui.text()
             ui.resize(72, 24)
             start = time.monotonic()
             ui.key(b"\x1b")
-            while "APP DELIVERY" in ui.text() and time.monotonic() - start < 1.5:
+            while "OVERLAYS" in ui.text() and time.monotonic() - start < 1.5:
                 ui.pump(.05)
-            assert "APP DELIVERY" not in ui.text(), ui.text()
-            assert time.monotonic() - start < 1.5, "App Delivery Escape exceeded 1.5s"
+            assert "OVERLAYS" not in ui.text(), ui.text()
+            assert time.monotonic() - start < 1.5, "Overlays Escape exceeded 1.5s"
             ui.quit()
         finally:
             ui.close()
-    print("App Delivery responsiveness: delayed destination still shows progress, resizes and closes within 1.5s")
+    print("Overlays responsiveness: delayed destination still shows progress, resizes and closes within 1.5s")
 
 
 def exercise():
@@ -206,9 +206,9 @@ def exercise():
         evidence = seed(project, folder)
         assert evidence["workspace_id"] == workspace_id, evidence
 
-        ui = Desktop(folder, project=project, apps=("bee.delivery:app",))
+        ui = Desktop(folder, project=project, apps=("bee.overlays:app",))
         try:
-            ui.wait("APP DELIVERY", timeout=COLD_BOOT)
+            ui.wait("OVERLAYS", timeout=COLD_BOOT)
             ui.window_control("□")
             ui.pump(.4)
             ui.key(b"\t")
@@ -278,7 +278,7 @@ def exercise():
             ui.wait("Approve this request?", timeout=20)
             ui.key(b"\t")
             ui.key(b"\r")
-            ui.wait("approved by bee.local", timeout=COLD_BOOT)
+            ui.wait("approved by bee.application:", timeout=COLD_BOOT)
 
             # Back in the review surface, the activation outcome and the
             # activation owner's receipt are what the ledger records.

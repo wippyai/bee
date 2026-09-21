@@ -60,8 +60,8 @@ entries:
     - process.monitor
     - process.unmonitor
     - bee.approvals.decide
-    - bee.governance.workspace.read
-    - bee.governance.workspace.write
+    - bee.governance.overlay.read
+    - bee.governance.overlay.write
     resources: '*'
     effect: allow
 - name: author
@@ -122,7 +122,7 @@ entries:
     - registry.overlay.get
     - db.get
     - system.read
-    - bee.governance.workspace.read
+    - bee.governance.overlay.read
     - bee.governance.delivery.read
     - bee.governance.delivery.manage
     - bee.governance.delivery.publish

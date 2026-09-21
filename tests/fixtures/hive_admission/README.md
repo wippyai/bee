@@ -18,11 +18,6 @@ then starts an authorized child there, authenticates its reply by sender PID,
 and observes its clean exit before repeating the negative phase. Reply and exit
 may be observed in either order; there are no timing sleeps to enforce ordering.
 
-The patched candidate passes. The unpatched baseline fails because the attacker
-is admitted during phase one. Native Go regressions separately check the exact
-PermissionDenied error kind. The runtime patch adds checks to the three direct
-linked/monitored variants; context-bound checks already existed.
-
 This is a local actor-level prerequisite. It does not prove production supervisor
 composition, process-function bridge restrictions, peer hello, enrollment,
 workspace discovery or remote Terminal launch.

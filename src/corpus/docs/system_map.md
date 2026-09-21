@@ -1,8 +1,8 @@
-# Bee system map
+# Bee ownership and boundaries
 
-This page records current ownership and explicit future boundaries. It is not a
-list of callable APIs. Use module READMEs and the linked contracts for
-implementation details.
+This page records ownership and explicit boundaries. It is not a list of
+callable APIs. Use module READMEs and the linked contracts for implementation
+details.
 
 Bee is a persistent terminal workspace. One Bee can own multiple workspaces;
 each workspace owns its application state and recovery. A client presents
@@ -23,9 +23,9 @@ resources, credentials and client presentation state retain their respective
 owners. A shared physical database does not change table authority. Aggregates
 and caches are projections that owners can rebuild.
 
-## Current subsystem boundaries
+## Subsystem boundaries
 
-| Subsystem | Owns | Status |
+| Subsystem | Owns | Availability |
 |---|---|---|
 | Native runtime | Processes, supervision, transport, storage, terminal surfaces, filesystem events and lifecycle | Implemented platform foundation; Bee policy remains above runtime primitives |
 | Workspace owner | Workspace identity, application data, resources, instances and recovery | Implemented locally; public workspace selection across nodes is a proposal |

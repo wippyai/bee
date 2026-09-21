@@ -106,7 +106,7 @@ local function start_endpoint(record: string, text: string?): string
     local executor = assert(exec.get("bee.placement.native:executor"))
     local environment: {[string]: string}? = nil
     if text then environment = {PATH = "/usr/bin:/bin", BEE_ENDPOINT_TEXT = text} end
-    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record, {env = environment})
+    local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = environment})
     if not proc then error("endpoint: " .. tostring(err)) end
     local started, start_error = proc:start()
     if not started then error("start endpoint: " .. tostring(start_error)) end

@@ -72,7 +72,7 @@ end
 -- The endpoint answers one Bash tool_use of the given command, then text.
 local function start_endpoint(record: string, command: string): (string, any, any)
     local executor = assert(exec.get("bee.placement.native:executor"))
-    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
+    local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
     for _ = 1, 100 do

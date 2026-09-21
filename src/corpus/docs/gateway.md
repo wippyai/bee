@@ -43,7 +43,7 @@ released/draining, and stops the listener at its recorded deadline.
 | revoke_attempt | placement supervision | Retire bindings after a fenced attempt failure or loss. |
 | ready, drain | carrier or managed host | Verify listener readiness or begin controlled shutdown. |
 | mcp | authenticated child | Serve JSON-RPC initialize, tools/list and tools/call. |
-| hook operations | authenticated child and carrier | Accept and drain lifecycle observations as described in [Gateway hooks](GATEWAY_HOOKS.md). |
+| hook operations | authenticated child and carrier | Accept and drain lifecycle observations as described in [Gateway hooks](hooks.md). |
 
 An MCP tool name maps to one existing owner operation. Tool annotations and
 driver flags describe behavior; the binding and target owner still enforce

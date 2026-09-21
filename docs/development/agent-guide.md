@@ -1,7 +1,7 @@
 # Working on Bee
 
-Read [the repository README](../README.md), [development conventions](DEVELOPMENT.md),
-and the [documentation map](README.md) before changing Bee. Source
+Read [the repository README](../../README.md), [development conventions](conventions.md),
+and the [documentation map](../README.md) before changing Bee. Source
 under `src/` is the runtime; tests, fixtures and the legacy proof of concept in
 `../bee-legacy/` are never runtime dependencies.
 
@@ -13,7 +13,7 @@ them. Native Terminal runs with the operating system user's authority.
 
 Keep desktop responsibilities in `src/core`, reusable appearance and public
 application helpers in `src/ui`, and standalone applications in `src/apps`.
-Use the [UI brand book](UI_BRAND_BOOK.md) and the runnable UI Guide for
+Use the [UI brand book](../guides/ui.md) and the runnable UI Guide for
 presentation and interaction rules. The guide is reference source, not a
 widget framework. Apps use public contracts such as `bee.application:client`
 and `bee.threads:client`; they do not import private broker or store modules.
@@ -59,7 +59,7 @@ session, host or application changes require the owning process lifecycle and
 recovery path. Preferences and opted-in application checkpoints persist in the
 workspace database. Settings opts in to checkpointing; a dead native Terminal
 does not become a portable checkpoint. See
-[application contracts](APPLICATION_CONTRACTS.md) for launch, attachment,
+[application contracts](../reference/applications.md) for launch, attachment,
 checkpoint and close behavior.
 
 The host keeps application execution independent from presentation. A producer
@@ -84,7 +84,7 @@ exact approval, apply it through the owning host and recover after restart.
 Hub discovery or installation alone does not publish an admission binding or
 grant an application authority. Publication, public enrollment and destination
 package transfer are separate authority boundaries; see
-[package boundaries](PACKAGE_BOUNDARIES.md) and [the system map](SYSTEM_MAP.md).
+[package boundaries](package-boundaries.md) and [the system map](ownership.md).
 
 When changing a behavior, update the relevant implementation contract and run
 the checks for that owner. Preserve stable definition IDs independently of

@@ -32,6 +32,8 @@ jobs:
         cache: false
     - name: Check workflows and scan for secrets
       run: make repository-check
+    - name: Validate public site
+      run: make site-check
     - name: Validate release tag
       if: github.ref_type == 'tag'
       run: |

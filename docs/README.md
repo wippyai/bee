@@ -8,26 +8,25 @@ generator when the corpus is intentionally updated.
 | Read for | Source |
 |---|---|
 | Runtime modules and Bee contracts available offline | [Agent documentation corpus](../src/docs/README.md) |
-| Running Bee and local development | [Repository README](../README.md), [agent guide](AGENT_GUIDE.md), [development conventions](DEVELOPMENT.md) |
-| Ownership and current limits | [System map](SYSTEM_MAP.md), [package boundaries](PACKAGE_BOUNDARIES.md) |
+| Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md) |
+| Ownership and boundaries | [System map](development/ownership.md), [package boundaries](development/package-boundaries.md) |
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
-| Bee visual language and accessible terminal UI | [UI brand book](UI_BRAND_BOOK.md) |
-| Desktop, workspace host, client attachments, and layout persistence | [Desktop](DESKTOP.md) |
-| Application admission, launch, messages, and recovery | [Application contracts](APPLICATION_CONTRACTS.md) |
-| Workspace storage and application state | [Storage](STORAGE.md), [workspace state](WORKSPACE_STATE.md) |
-| Threads, Timeline, subscriptions, and delivery | [Threads](THREADS.md) |
-| Node metadata, synchronization, and approval inbox | [Sync and inbox](SYNC_AND_INBOX.md), [approvals](APPROVALS.md) |
-| Native executable, updates, and I/O events | [Native distribution](NATIVE_DISTRIBUTION.md) |
-| Runtime integration and upstream boundaries | [Runtime integration](RUNTIME_UPSTREAM.md) |
-| Release artifacts and publication | [Releasing](RELEASING.md) |
-| GitHub protections and repository settings | [GitHub setup](GITHUB.md) |
-| System ownership and package boundaries | [System map](SYSTEM_MAP.md), [package boundaries](PACKAGE_BOUNDARIES.md) |
-| Hub package inspection and local installation | [Hub](HUB.md) |
-| Managed harness gateway, hooks, and MCP configuration | [Gateway](GATEWAY.md), [gateway hooks](GATEWAY_HOOKS.md), [MCP configuration](MCP_CONFIGURATION.md) |
-| Governed application delivery | [Distributed app delivery](DISTRIBUTED_APP_DELIVERY.md) |
+| Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
+| Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
+| Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
+| Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |
+| Threads, Timeline, subscriptions, and delivery | [Threads](reference/threads.md) |
+| Node metadata, synchronization, and approval inbox | [Sync and inbox](reference/sync-and-inbox.md), [approvals](reference/approvals.md) |
+| Native executable, updates, and I/O events | [Native distribution](operations/native.md) |
+| Runtime integration and upstream boundaries | [Runtime integration](development/runtime.md) |
+| Release artifacts and publication | [Releasing](operations/releasing.md) |
+| GitHub protections and repository settings | [GitHub setup](development/github.md) |
+| Hub package inspection and local installation | [Hub](guides/hub.md) |
+| Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
+| Governed application delivery | [Distributed app delivery](guides/overlays.md) |
 | Harness, placement, resource, and credential module contracts | [Harness module](../src/harness/README.md), [placement module](../src/placement/README.md), [native placement](../src/placement/native/README.md), [resources module](../src/resources/README.md), [credentials module](../src/credentials/README.md) |
-| Driver, persistence, governance, Hub, Hive, and sync module contracts | [Driver module](../src/driver/README.md), [persist module](../src/persist/README.md), [governance module](../src/governance/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
+| Persistence, governance, Hub, Hive, and sync module contracts | [Persist module](../src/persist/README.md), [governance module](../src/governance/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
 
 Use the source module README and tests for implementation details. A contract
 describes a callable boundary only when the source and its checks implement it;

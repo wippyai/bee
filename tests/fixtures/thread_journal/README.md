@@ -17,4 +17,4 @@ It proves the local journal boundary through the real runtime:
   journal database directly.
 
 The fixture is test-only and is not part of the Bee desktop or release pack.
-The production thread contract is documented in [docs/THREADS.md](../../docs/THREADS.md).
+The production thread contract is documented in [docs/reference/threads.md](../../docs/reference/threads.md).

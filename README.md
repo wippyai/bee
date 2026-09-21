@@ -1,32 +1,83 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Bee terminal workspace logo with the terminal bee mark and Bee wordmark" width="1200">
+  <a href="https://bee.wippy.ai/">
+    <img src="docs/assets/logo.svg" alt="Bee" width="152">
+  </a>
 </p>
+
+<h1 align="center">Bee</h1>
 
 <p align="center"><strong>A persistent terminal workspace for people, agents, and the tools they build together.</strong></p>
 
 <p align="center">
+  <a href="https://bee.wippy.ai/"><strong>Website</strong></a> ·
   <a href="docs/README.md">Documentation</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="LICENSE">MIT license</a> ·
-  <a href="https://github.com/wippyai/runtime">Wippy</a>
+  <a href="https://github.com/wippyai/bee/releases">Releases</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-Bee is a terminal desktop for coding. It keeps shells, managed coding agents,
-standalone applications, approvals, and durable threads in one workspace. The
-executable includes the desktop and its default apps, and a fresh local launch
-works offline. Hub access is optional for inspecting and installing components.
+<p align="center">
+  <a href="https://github.com/wippyai/bee/actions/workflows/native.yml"><img alt="Bee CI" src="https://github.com/wippyai/bee/actions/workflows/native.yml/badge.svg"></a>
+  <a href="https://github.com/wippyai/bee/releases"><img alt="Release" src="https://img.shields.io/github/v/release/wippyai/bee?display_name=tag&include_prereleases&sort=semver"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-ffc963"></a>
+  <img alt="Alpha" src="https://img.shields.io/badge/status-alpha-ffc963">
+</p>
 
-![Bee terminal desktop showing Settings, Terminal, and Process Manager](docs/assets/desktop.gif)
+Bee turns a terminal into a durable desktop. Shells, managed coding agents,
+standalone applications, approvals, and threads share one workspace while
+remaining separate processes with explicit authority. The executable embeds
+the desktop and its default apps, so an existing installation can start
+offline; Hub access is optional.
 
-*A real standalone Bee session: change the theme, run a command, maximize and
-reload the presenter, then inspect running processes.*
+<p align="center">
+  <a href="https://bee.wippy.ai/">
+    <img src="docs/assets/desktop.gif" alt="Bee desktop with Terminal, Settings, and Process Manager" width="100%">
+  </a>
+</p>
 
-## Run
+> [!IMPORTANT]
+> Bee is an alpha. The planned first public release is **0.1.0a**, using the
+> semantic version `v0.1.0-alpha.1`. Expect sharp edges and evolving contracts.
 
-From any project directory:
+## Install a published alpha
+
+Published alpha releases ship for Linux and macOS on amd64 and arm64.
 
 ```sh
+curl -fsSLO https://raw.githubusercontent.com/wippyai/bee/v0.1.0-alpha.1/install.sh
+sh install.sh --version 0.1.0-alpha.1
+rm install.sh
+```
+
+The installer selects the platform archive, verifies its SHA-256 checksum, and
+atomically places `bee` in `~/.local/bin`. You can instead download a checksummed
+archive from [GitHub Releases](https://github.com/wippyai/bee/releases).
+
+Open a project directory and start Bee:
+
+```sh
+cd my-project
 bee
+```
+
+Press **F1** for Start, **Alt+Tab** to switch apps, **F11** to maximize, and
+**Ctrl+Q** to detach. **F12** replaces the presenter while admitted applications
+continue running.
+
+## One workspace, many surfaces
+
+| | Surface | What it provides |
+|---:|---|---|
+| ⌁ | **Desktop** | Retained layouts, themes, multiple displays, controller and read-only observer attachments |
+| `>` | **Terminal** | Native interactive programs with the operating-system user's authority |
+| ✦ | **Agents** | Claude, Codex, Agy, Grok, and Muse profiles with scoped MCP, hooks, durable threads, and recovery contracts |
+| ◫ | **Apps** | Independent terminal applications with typed messages, owned state, services, migrations, and optional UI |
+| ◆ | **Overlays** | Durable staged edits that move through review, approval, apply, and restart recovery |
+| ⇄ | **Coordination** | Threads, Timeline, subscriptions, Inbox, Approvals, and scoped agent-to-agent launch |
+| ⬡ | **Hub** | Read-only package inspection plus host-authorized planning, installation, migration, and receipts |
+
+Launch a managed agent directly, or choose a saved profile from the Agent app:
+
+```sh
 bee claude
 bee codex
 bee agy
@@ -34,102 +85,108 @@ bee grok
 bee muse
 ```
 
-The named commands open a managed profile fullscreen through the same admission
-path as the Agent picker. The host admits the selected profile, its reviewed
-options, instructions, MCP scope, hooks, placement, and recovery behavior.
+A profile selects a harness, isolation mode, options, persistent instructions,
+and an MCP ceiling. Each turn supplies its own prompt and dynamic context. The
+host resolves executables and credentials, then admits the exact launch under
+its current policy.
 
-Run `bee observe` in another terminal for a read-only view of the retained local
-desktop. Typing cannot control its apps. Ctrl+Q or Ctrl+] detaches that display,
-and observation refuses when no Bee is running.
+## Apps agents can build
+
+An admitted agent can search Bee's offline platform corpus, inspect installed
+components, author a declarative application in a durable overlay, request
+review, and deliver the frozen result. Governance owns the persistent edit,
+approval, activation, and recovery state; the agent never needs direct registry
+publication authority.
+
+Applications can expose functions, services, traits, database migrations,
+threads, and terminal views. That makes workflows such as a test runner with a
+live metrics UI possible without adding feature-specific machinery to Bee's
+core.
+
+```mermaid
+flowchart LR
+    C[Desktop client] --> W[Workspace host]
+    W --> T[Terminal]
+    W --> A[Managed agents]
+    W --> P[Standalone apps]
+    A <--> R[Threads and approvals]
+    P <--> R
+    H[Hub packages] --> G[Governed overlays]
+    G --> P
+```
+
+Registry metadata describes capabilities; it does not authorize them. Packages
+declare what they provide, the host selects what may run, and each owner keeps
+its own state and migration ledger.
+
+## Displays and recovery
+
+A workspace can outlive the terminal presenting it. From another terminal:
 
 ```sh
 bee desktops
+bee observe
 bee attach WORKSPACE DISPLAY
 bee observe WORKSPACE DISPLAY
 ```
 
-These commands address the Bee selected by `--state-dir`. An occupied desktop
-refuses another controller; observation remains explicit. Ctrl+Q detaches a
-controller while admitted applications keep running.
+One display controls input and resize; observers are read-only. Detaching a
+client leaves admitted applications running. Supported applications may restore
+from their checkpoints after restart. A native Terminal process is deliberately
+not treated as a portable checkpoint.
 
-## What works
+## Alpha boundaries
 
-| Surface | Current behavior |
-|---|---|
-| **Desktop** | Independent client layouts, retained app execution, controller/observer attachment, F12 presenter replacement, themes, resize, mouse and keyboard input |
-| **Terminal** | Native interactive programs with the OS user's authority |
-| **Agents** | Claude, Codex, Agy, Grok and Muse profiles with scoped MCP, driver hooks, durable threads and qualified recovery |
-| **Governed apps** | Agent authoring in durable overlays, immutable freeze, review, approval, destination apply, compatible replacement and restart restoration |
-| **Components** | Read-only Hub inspection for agents; host-authorized local plan/apply, requirements, migrations and durable receipts in Modules |
-| **Coordination** | Durable Threads and Timeline, explicit subscriptions, Approvals, Inbox projection and scoped agent-to-agent launch |
-| **Operations** | Settings, Process Manager, Modules, Overlays, Approvals, Timeline, Hive Manager, About and the runnable UI Guide |
+Local workspaces, retained desktops, attachments, managed agents, Hub inspection
+and installation, governed overlays, approvals, and durable threads are the
+implemented foundation. Public Hive enrollment and discovery, remote workspace
+composition, destination-to-destination Hub transfer, managed Docker launch,
+and automatic cross-node reconnect are still being completed.
 
-Press **F1** for Start, **Alt+Tab** to switch apps, **F11** to maximize, and
-**Ctrl+Q** to detach. Drag windows by their titles and resize from their corners.
-**F12** replaces the presenter while applications keep running. Supported
-application state survives restart; a dead native terminal does not become a
-portable application.
+See the [desktop guide](docs/guides/desktop.md), [agent MCP guide](docs/guides/agents/mcp.md),
+[Hub guide](docs/guides/hub.md), and [overlay guide](docs/guides/overlays.md) for
+the exact callable contracts and current limits.
 
-## Current scope
+## Build from source
 
-Bee uses the normal Wippy substrate. An admitted component may define services,
-functions, owned databases and migrations, drivers, traits, agents, and an
-optional UI. Bee governs the exact definitions, destination permissions and
-resources, lifecycle, and receipts; component services own their protocol and
-domain state.
-
-Local desktop/client attachment, observation, Hub installation, governed app
-overlays, managed agents, and policy-routed Hive operations are implemented.
-Public Hive enrollment and discovery, remote workspace composition, destination
-Hub transfer/install, and managed headless launch remain unfinished. The current
-Hive Manager shows admitted catalog state; it does not imply general remote
-control.
-
-## Install from source
-
-**Alpha.** Native builds target Linux and macOS on amd64 and arm64. There is no
-published release download yet. Build from a checkout with Git, Go 1.27.0 and a
-C compiler:
+Building requires Git, Go 1.27.0, a C compiler, and the platform development
+tools documented in [native distribution](docs/operations/native.md).
 
 ```sh
 make setup
-make standalone
-mkdir -p "$HOME/.local/bin"
-install -m755 dist/bee "$HOME/.local/bin/bee"
-export PATH="$HOME/.local/bin:$PATH"
+make check
+make standalone BEE_VERSION=0.1.0-alpha.1
+./dist/bee
 ```
 
-The repositories are private during alpha preparation, so Git credentials need
-read access to Bee and Builder. Keep `~/.local/bin` on PATH in your shell
-configuration. The build and the tested release installer preserve Bee's
-workspace state; see [native distribution](docs/NATIVE_DISTRIBUTION.md) and
-[releasing](docs/RELEASING.md).
+Production loads only `src/`. The standalone executable contains exact,
+checksummed application packs and the two small native boundaries Bee needs for
+host launch facts and operating-system I/O events.
 
-## Development
-
-Start with the [agent guide](docs/AGENT_GUIDE.md) and
-[development conventions](docs/DEVELOPMENT.md). Production loads only `src/`;
-tests and development tools are not runtime dependencies. Run `make check` for
-typed Lua, permissions, persistence, packaging, and real terminal checks.
-
-| Code | Purpose |
+| Source | Owner |
 |---|---|
-| [src/core](src/core) | Workspace host, applications, desktop, client and storage |
-| [src/ui](src/ui) | Shared appearance and application helpers |
-| [src/apps](src/apps) | Bundled standalone application processes |
-| [src/hub](src/hub) | Local package planning, apply and receipts |
-| [src/governance](src/governance) | Overlay authoring, review, activation and recovery |
-| [src/hive](src/hive) | Authenticated cross-node operation contracts |
-| [src/threads](src/threads) | Durable records, subscriptions and delivery |
-| [tests](tests) | Model, source/pack and native acceptance |
+| [`src/core`](src/core) | Workspace, application, desktop, client, and storage lifecycle |
+| [`src/apps`](src/apps) | Bundled standalone application processes |
+| [`src/ui`](src/ui) | Shared appearance and application-facing UI helpers |
+| [`src/governance`](src/governance) | Overlay authoring, review, activation, and recovery |
+| [`src/hub`](src/hub) | Package inspection, planning, apply, migration, and receipts |
+| [`src/threads`](src/threads) | Durable records, subscriptions, and delivery |
+| [`native`](native) | Generic application launch facts and OS I/O events |
 
-[Application contracts](docs/APPLICATION_CONTRACTS.md) ·
-[Package boundaries](docs/PACKAGE_BOUNDARIES.md) ·
-[System map](docs/SYSTEM_MAP.md)
+Start with the [agent guide](docs/development/agent-guide.md) and
+[development conventions](docs/development/conventions.md). The
+[application contracts](docs/reference/applications.md),
+[package boundaries](docs/development/package-boundaries.md), and
+[ownership map](docs/development/ownership.md) describe the implemented model.
 
 ## License
 
 Bee-owned code and artwork are [MIT](LICENSE). Wippy retains MPL-2.0;
 dependencies retain their own licenses.
 
-[Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)
+<p align="center">
+  <a href="https://bee.wippy.ai/">bee.wippy.ai</a> ·
+  <a href="https://github.com/wippyai/runtime">Wippy runtime</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md">Code of conduct</a>
+</p>

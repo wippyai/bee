@@ -93,7 +93,7 @@ end
 -- Writes exact bytes to a path without shell interpretation of the content.
 local function write_file(path: string, content: string)
     local encoded = assert(base64.encode(content))
-    shell('python3 -c "import sys, base64, pathlib; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))" ' .. path .. " " .. encoded)
+    shell("printf '%s' '" .. encoded .. "' | base64 -d > " .. quote.line({path}))
 end
 local function apply(entry: Object)
     local changes = registry.snapshot():changes()
@@ -126,7 +126,7 @@ local endpoint_executor: any = nil
 -- The endpoint scripts one call of the named gateway tool, then text.
 local function start_endpoint(record: string): string
     local executor = assert(exec.get("bee.placement.native:executor"))
-    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record, {env = {BEE_ENDPOINT_MCP_TOOL = "thread_read"}})
+    local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_MCP_TOOL = "thread_read"}})
     if not proc then error("endpoint: " .. tostring(err)) end
     local started, start_error = proc:start()
     if not started then error("start endpoint: " .. tostring(start_error)) end

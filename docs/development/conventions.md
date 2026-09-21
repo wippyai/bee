@@ -2,8 +2,8 @@
 
 Bee is a typed Lua terminal desktop. Keep package ownership explicit and
 preserve the authority boundaries described in
-[application contracts](APPLICATION_CONTRACTS.md),
-[package boundaries](PACKAGE_BOUNDARIES.md) and [the system map](SYSTEM_MAP.md).
+[application contracts](../reference/applications.md),
+[package boundaries](package-boundaries.md) and [the system map](ownership.md).
 Bee-owned code and artwork are MIT; Wippy and other dependencies retain their
 upstream licenses.
 

@@ -59,7 +59,7 @@ local function define_tests()
             local record = root .. "/endpoint.jsonl"
             local endpoint_executor = assert(exec.get("bee.placement.native:executor"))
             local _ = shell("mkdir -p " .. root .. "/home/.codex " .. root .. "/work")
-            local endpoint, endpoint_error = endpoint_executor:exec(fixture_bin() .. "/endpoint " .. record)
+            local endpoint, endpoint_error = endpoint_executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record)
             if not endpoint then error("endpoint: " .. tostring(endpoint_error)) end
             local endpoint_out = endpoint:stdout_stream()
             local endpoint_started, endpoint_start_error = endpoint:start()

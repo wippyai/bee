@@ -16,7 +16,7 @@ distribution. Keep license sources and notices with the release material; do
 not put credentials, local databases or private build paths in release assets.
 
 The native dependency and archive checks are part of the release procedure in
-[Releasing](RELEASING.md). For local native validation run:
+[Releasing](releasing.md). For local native validation run:
 
     make -C native test
     make -C native patched-check

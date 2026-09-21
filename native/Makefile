@@ -19,4 +19,4 @@ patched-check:
 
 WIPPY ?= wippy
 integration:
-	python3 tests/integration.py "$(WIPPY)"
+	go run tests/integration.go "$(WIPPY)"

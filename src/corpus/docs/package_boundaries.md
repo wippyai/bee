@@ -6,7 +6,7 @@ freeze, review, apply and recover a destination-owned runtime overlay. Public
 enrollment, managed headless launch, destination package transfer/install and
 independent package extraction remain proposals. Their metadata must not be
 described as a callable API until the corresponding owner and acceptance
-contract exists. See [the system map](SYSTEM_MAP.md) for the larger topology.
+contract exists. See [the system map](ownership.md) for the larger topology.
 
 An admitted Wippy component may define services and functions, an owned
 database and migrations, drivers, traits, agents, and optional UI. Bee governs

@@ -11,7 +11,7 @@ and one terminal toolkit reference, into an embeddable, read-only filesystem.
 Storage shape: `src/corpus/` is declared as one `fs.directory` entry
 (`bee.docs:corpus`) that `wippy.yaml`'s `embed:` list names, so `wippy pack` and
 build/bundle.py both freeze it into the pack as an `fs.embed` volume the runtime
-serves read-only (see docs/NATIVE_DISTRIBUTION.md and tests/bundle_assets.py).
+serves read-only (see docs/operations/native.md and tests/bundle_assets.py).
 
 Selection rule, stated once and enforced by this table:
 
@@ -26,7 +26,7 @@ Selection rule, stated once and enforced by this table:
     surface than Bee's terminal applications), `framework/**`, `temporal/**`,
     `wasm/**` and `about/**`.
 
-  * Bee contracts: the top-level docs/ pages that state an implemented callable
+  * Bee contracts: the docs/ pages that state an implemented callable
     boundary or the path a frozen artifact travels, including application,
     thread, placement, gateway, carrier, storage and UI contracts. Repository
     process and design pages are left out.
@@ -94,24 +94,26 @@ RUNTIME_PAGES = {
     "tutorials/task-queue": "process",
     "tutorials/echo-service": "http",
 }
+# Source paths are organized for readers; IDs remain stable because they are
+# part of the offline tool's durable contract. Do not derive an ID from a path.
 BEE_DOCS = {
-    "AGENT_GUIDE.md": "platform",
-    "APPLICATION_CONTRACTS.md": "application",
-    "APPROVALS.md": "approvals",
-    "CARRIER.md": "application",
-    "DESKTOP.md": "ui",
-    "DISTRIBUTED_APP_DELIVERY.md": "application",
-    "GATEWAY.md": "gateway",
-    "GATEWAY_HOOKS.md": "gateway",
-    "MCP_CONFIGURATION.md": "gateway",
-    "PACKAGE_BOUNDARIES.md": "platform",
-    "STORAGE.md": "storage",
-    "SYNC_AND_INBOX.md": "cluster",
-    "SYSTEM_MAP.md": "platform",
-    "THREADS.md": "threads",
-    "UI_BRAND_BOOK.md": "ui",
-    "WORKSPACE_STATE.md": "storage",
-    "README.md": "platform",
+    "development/agent-guide.md": ("platform", "agent_guide"),
+    "reference/applications.md": ("application", "application_contracts"),
+    "reference/approvals.md": ("approvals", "approvals"),
+    "reference/agents/carrier.md": ("application", "carrier"),
+    "guides/desktop.md": ("ui", "desktop"),
+    "guides/overlays.md": ("application", "distributed_app_delivery"),
+    "reference/agents/gateway.md": ("gateway", "gateway"),
+    "reference/agents/hooks.md": ("gateway", "gateway_hooks"),
+    "guides/agents/mcp.md": ("gateway", "mcp_configuration"),
+    "development/package-boundaries.md": ("platform", "package_boundaries"),
+    "reference/storage.md": ("storage", "storage"),
+    "reference/sync-and-inbox.md": ("cluster", "sync_and_inbox"),
+    "development/ownership.md": ("platform", "system_map"),
+    "reference/threads.md": ("threads", "threads"),
+    "guides/ui.md": ("ui", "ui_brand_book"),
+    "reference/workspace-state.md": ("storage", "workspace_state"),
+    "README.md": ("platform", "readme"),
 }
 
 
@@ -257,7 +259,7 @@ def toolkit_reference() -> bytes:
         "client.reference(launch)                      -- logical view reference",
         "```",
         "",
-        "Read `docs/APPLICATION_CONTRACTS.md` in this corpus for the full record,",
+        "Read `docs/reference/applications.md` in this corpus for the full record,",
         "including negotiated close, shell queries and appearance.",
         "",
         "## Minimal authored application",
@@ -342,11 +344,11 @@ def build() -> int:
 
     for path, topic in selection:
         record(f"runtime/{path}", topic, fetched[path], f"{BASE}/path/en/{path}")
-    for name, topic in sorted(BEE_DOCS.items()):
+    for name, (topic, stable_name) in sorted(BEE_DOCS.items()):
         origin = ROOT / "docs" / name
         if not origin.is_file():
             raise SystemExit(f"docs/{name} is listed in the selection rule but missing")
-        record(f"docs/{name[:-3].lower()}", topic, origin.read_bytes(), f"docs/{name}")
+        record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
     for identity, topic, payload in component_documents():
         record(identity, topic, payload, f"src/{identity.split('/', 1)[1]}")
     record("toolkit", "terminal", toolkit_reference(), "generated: src/ui, src/apps, src/governance/guide.lua")

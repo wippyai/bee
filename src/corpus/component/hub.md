@@ -17,7 +17,7 @@ and `installed`. Catalog keyword defaults to `bee`; an empty keyword clears it.
 `files` and `read_file` read its embedded resource filesystem. These operations
 may populate the native verified cache but do not publish or start the package.
 They expose packaged assets, not a reconstruction of its source repository.
-See [the API and acceptance status](../../docs/HUB.md) for request examples.
+See [the API and acceptance status](../../docs/guides/hub.md) for request examples.
 
 Management operations are `plan`, `apply` and `status`. Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and

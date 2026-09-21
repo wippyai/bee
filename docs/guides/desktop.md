@@ -40,7 +40,7 @@ session and host-approved appearance operations.
 Terminal is a standalone application. Its native execution has the operating
 system user's authority; a project binding or desktop permission does not make
 it a sandbox. Application lifecycle and persistence rules are described in
-[application contracts](APPLICATION_CONTRACTS.md).
+[application contracts](../reference/applications.md).
 
 ## Admission and presentation
 
@@ -123,6 +123,6 @@ not recreated at its former instruction.
   credentials, live processes or grants. Those require the owning subsystem's
   explicit transfer or synchronization contract.
 
-See [storage](STORAGE.md) for database ownership and migration rules, and the
-[system map](SYSTEM_MAP.md) for the boundaries between the desktop, host,
+See [storage](../reference/storage.md) for database ownership and migration rules, and the
+[system map](../development/ownership.md) for the boundaries between the desktop, host,
 applications and other Bee subsystems.

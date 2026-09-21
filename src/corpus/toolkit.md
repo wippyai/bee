@@ -65,7 +65,7 @@ client.title(launch, "Title")                 -- bounded title update
 client.reference(launch)                      -- logical view reference
 ```
 
-Read `docs/APPLICATION_CONTRACTS.md` in this corpus for the full record,
+Read `docs/reference/applications.md` in this corpus for the full record,
 including negotiated close, shell queries and appearance.
 
 ## Minimal authored application

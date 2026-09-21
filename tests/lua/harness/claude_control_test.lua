@@ -122,7 +122,7 @@ local endpoint_handle: any = nil
 local endpoint_executor: any = nil
 local function start_endpoint(record: string, command: string): string
     local executor = assert(exec.get("bee.placement.native:executor"))
-    local proc, err = executor:exec(fixture_bin() .. "/endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
+    local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
     assert(proc:start())
     endpoint_handle, endpoint_executor = proc, executor

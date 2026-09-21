@@ -1,7 +1,7 @@
 # Working on Bee
 
-Read the [repository README](README.md), [agent guide](docs/AGENT_GUIDE.md),
-[development conventions](docs/DEVELOPMENT.md), and [documentation map](docs/README.md)
+Read the [repository README](README.md), [agent guide](docs/development/agent-guide.md),
+[development conventions](docs/development/conventions.md), and [documentation map](docs/README.md)
 before changing the project. Production loads only `src/`; the POC in
 `../bee-legacy/` is reference material and must never become a runtime dependency.
 

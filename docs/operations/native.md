@@ -55,7 +55,7 @@ images still need Bash and a compatible C library.
 
 The build manifest selects the runtime and any required patches. The builder
 checks out the selected runtime in a temporary directory before compiling.
-Uploads still require separate credentials. [Runtime integration](RUNTIME_UPSTREAM.md)
+Uploads still require separate credentials. [Runtime integration](../development/runtime.md)
 describes the boundary between Bee and the selected runtime.
 
 `BEE_VERSION=0.1.0-dev make standalone` prepares the explicitly owned modules
@@ -151,7 +151,7 @@ resolver in a staged deployment, lints against the compiled native modules,
 verifies artifact hashes, then switches the activation record. Failure retains
 the previous selection. Stop Bee before updating; the state directory has an
 exclusive process-lifetime lock. Hub credentials and an available published Bee
-module are required for real Bee updates. The [release protocol](RELEASING.md)
+module are required for real Bee updates. The [release protocol](releasing.md)
 provides a local Hub preflight and publication workflow. In-app Hub installation
 is not implemented.
 
@@ -200,7 +200,7 @@ directory writable only by the owning OS user.
 
 ## I/O events
 
-The Bee-owned [native component](../native/ioevents/README.md) uses the pinned MIT
+The Bee-owned [native component](../../native/ioevents/README.md) uses the pinned MIT
 Syncthing notify backend. Consumers declare `ioevents`, obtain an explicit named
 host filesystem resource, and need both `fs.get` and `ioevents.watch` permissions.
 The typed watch channel uses Wippy scheduler subscriptions with process-owned
@@ -219,7 +219,7 @@ runners and exercise each executable. Linux acceptance disables networking.
 Each target uploads an archive and checksum. Application tags also prepare a
 draft GitHub release, with write permission isolated to that job. The separate
 native-module workflow checks and releases the nested Go module. See the
-[release protocol](RELEASING.md) for local builds, required checks and tag rules.
+[release protocol](releasing.md) for local builds, required checks and tag rules.
 The reusable builder action is pinned by full commit and shared within the
 organization; native module fetching uses the consuming repository's token.
 
@@ -228,7 +228,7 @@ files, available dependency license notices and the runtime patch sources.
 Archive timestamps and ownership are normalized; pack timestamps and the native
 C toolchain still affect binary reproducibility. Each release target needs its
 own dependency inventory and root license notices. See [dependency
-notices](DEPENDENCY_NOTICES.md). Complete notice review and native target
+notices](dependencies.md). Complete notice review and native target
 acceptance before publishing a stable release. No release tag is created by
 development checks.
 

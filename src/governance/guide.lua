@@ -235,7 +235,7 @@ return {main = main}
 
 -- The example entries.json value: one application definition, the exact shape
 -- the freeze and publication path measures. Its metadata is the minimum
--- docs/APPLICATION_CONTRACTS.md requires for an admitted, listed application.
+-- docs/reference/applications.md requires for an admitted, listed application.
 M.NAMESPACE = "bee.guide_demo"
 M.DEFINITION_ID = M.NAMESPACE .. ":app"
 M.TITLE = "Counter App"
@@ -338,7 +338,7 @@ function M.platform_documentation(): string
         .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
-        .. " matches. The authored UI rules are in docs/UI_BRAND_BOOK.md, and the canonical runnable"
+        .. " matches. The authored UI rules are in docs/guides/ui.md, and the canonical runnable"
         .. " UI Guide source is src/apps/stylebook/ (Tools → Learn); it is reference source, not a widget"
         .. " framework. For a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
         .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"

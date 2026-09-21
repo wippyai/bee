@@ -1,14 +1,14 @@
 # Contributing to Bee
 
-Read the [repository README](README.md), [agent guide](docs/AGENT_GUIDE.md),
-[development conventions](docs/DEVELOPMENT.md), and [documentation map](docs/README.md)
+Read the [repository README](README.md), [agent guide](docs/development/agent-guide.md),
+[development conventions](docs/development/conventions.md), and [documentation map](docs/README.md)
 before making changes. Follow the [Wippy code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md)
 for community standards.
 
 ## Development
 
 Use the pinned Go version and native prerequisites in
-[native distribution](docs/NATIVE_DISTRIBUTION.md). Install ShellCheck for
+[native distribution](docs/operations/native.md). Install ShellCheck for
 workflow validation, then run:
 
 ```sh
@@ -32,7 +32,7 @@ boundary decoders. Add migrations without changing already-applied migration fil
 Keep each change focused on one problem. Describe the resulting behavior, checks
 run, and remaining limitations. Update implementation documentation when
 behavior changes. Main requires CI, a review, and resolved conversations; see the
-[release protocol](docs/RELEASING.md) for tags and publication.
+[release protocol](docs/operations/releasing.md) for tags and publication.
 
 Bee-owned contributions use [MIT](LICENSE). Preserve upstream license headers in
 runtime patches and include dependency notices for new native libraries.

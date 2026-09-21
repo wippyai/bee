@@ -5,7 +5,7 @@ description: A small extensible workspace desktop
 license: MIT
 # The offline agent documentation corpus is the one filesystem the pack embeds:
 # wippy pack turns bee:docs_corpus into a read-only fs.embed volume, so an agent
-# can look up the runtime and Bee contracts with no network (docs/NATIVE_DISTRIBUTION.md).
+# can look up the runtime and Bee contracts with no network (docs/operations/native.md).
 embed:
 - bee:docs_corpus
 exclude_meta:

@@ -3,8 +3,8 @@
 The carrier turns one placement attempt's byte streams into durable thread
 records. It owns the driver protocol and logical turn state for that attempt;
 the thread owner persists records and checkpoints, and placement owns the
-executor, private directories and cleanup. Read [threads](THREADS.md),
-[placement](../src/placement/README.md) and [approvals](APPROVALS.md) with this
+executor, private directories and cleanup. Read [threads](../threads.md),
+[placement](../../../src/placement/README.md) and [approvals](../approvals.md) with this
 contract.
 
 A harness profile selects a driver, execution environment, options and MCP
@@ -180,7 +180,7 @@ cannot choose `HOME` or copy credential files into a private home.
 
 When host policy enables a permission adapter, the carrier records a permission
 intent and its deterministic approval key in the same checkpoint transaction,
-then follows the approval and write rules in [approvals](APPROVALS.md).
+then follows the approval and write rules in [approvals](../approvals.md).
 Authority incarnation, plan measurements, placement grants and proposal digest
 are revalidated before consumption or recovery dispatch. A wake notification or
 approval projection only prompts a fresh owner read; it never authorizes a

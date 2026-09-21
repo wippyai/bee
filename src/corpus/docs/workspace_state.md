@@ -4,7 +4,7 @@ This describes the implemented version-1 store, not the future resource catalog.
 The workspace host alone opens `bee:workspace_db`. Its source-development default
 is `.wippy/workspace.db`; `BEE_WORKSPACE_DB` selects another file. The standalone
 executable uses its application state directory by default and preserves the
-caller's working directory for native commands. See the [launch instructions](../README.md).
+caller's working directory for native commands. See the [launch instructions](../../README.md).
 Each database has a durable opaque workspace ID in the separate
 `workspace_identity` table. Selecting a project folder does not create an
 authorized filesystem binding.
@@ -12,7 +12,7 @@ authorized filesystem binding.
 ## Persisted values
 
 The store has a checked migration ledger and one versioned JSON envelope, with a
-generation used for compare-and-swap writes. See [storage](STORAGE.md) for SQL
+generation used for compare-and-swap writes. See [storage](storage.md) for SQL
 ownership and integrity checks. The envelope is bounded to 2 MiB.
 
 | Envelope field | Contents |
@@ -34,7 +34,7 @@ resume schema. An installer must not mistake this for version pinning.
 The host retains the old desktop projection for a once-only client import; it
 does not write new window geometry into application checkpoints. The client stores
 committed scene changes, not each drag preview, in its own database. Its import
-receipt preserves later edits across repeated boots. See [the desktop contract](DESKTOP.md).
+receipt preserves later edits across repeated boots. See [the desktop contract](../guides/desktop.md).
 Host recovery retains resume records for failed or incompatible restores. Runtime PIDs, launch tokens,
 TTY mounts and native resources are recreated, never stored as authority.
 PID strings may repeat across runtime boots.
@@ -51,7 +51,7 @@ successful `bee.application.checkpoint_result` means database commit. The broker
 checks sender, identities and token; the workspace validates and writes the
 envelope. One pending request per app is retained; supersession and timeouts have
 explicit outcomes. A timeout is not proof the transaction never committed.
-See [application contracts](APPLICATION_CONTRACTS.md) for exact messages.
+See [application contracts](applications.md) for exact messages.
 
 Settings demonstrates opt-in recovery. Terminal declares no cold-resume contract:
 a dead native shell cannot be recreated at its prior instruction by saving JSON.

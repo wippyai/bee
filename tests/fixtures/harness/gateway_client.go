@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -381,7 +383,7 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 	call := func(name string, args object, id int) object {
 		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
 	}
-	launched := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "fixture-launch-1"}, 30)
+	launched := call("thread_launch", object{"definition_ref": definition, "brief": brief, "idempotency_key": "k"}, 30)
 	report["launch_ok"] = launched != nil && launched["ok"] == true
 	value := mustObject(launched["value"])
 	if value == nil {
@@ -667,7 +669,243 @@ func writeReport(prefix string, report object) {
 	fmt.Fprintf(os.Stderr, "%s:%s\n", prefix, encoded)
 }
 
+type endpointRecord struct {
+	Path          string   `json:"path"`
+	Authorization string   `json:"authorization"`
+	APIKey        string   `json:"x_api_key"`
+	ContentType   string   `json:"content_type"`
+	Messages      int      `json:"messages"`
+	InputItems    int      `json:"input_items"`
+	OffersBash    bool     `json:"offers_bash"`
+	ToolResult    bool     `json:"tool_result"`
+	MCPTools      []string `json:"mcp_tools"`
+	ResultExcerpt string   `json:"result_excerpt"`
+}
+
+// endpoint is the controlled loopback provider used by the harness tests. It
+// intentionally lives beside the other fixture clients so the harness pack
+// contains no interpreter dependency. It records the request shape and either
+// emits the small scripted Messages/Responses stream or a deterministic
+// invalid-request response.
+func endpoint(record string, hold time.Duration) error {
+	toolCommand := os.Getenv("BEE_ENDPOINT_TOOL")
+	mcpTool := os.Getenv("BEE_ENDPOINT_MCP_TOOL")
+	plainText := os.Getenv("BEE_ENDPOINT_TEXT")
+
+	messageStart := func(id string) object {
+		return object{"type": "message_start", "message": object{"id": id, "type": "message", "role": "assistant", "model": "bee-endpoint", "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": object{"input_tokens": 10, "output_tokens": 1}}}
+	}
+	sse := func(events ...object) []byte {
+		var out bytes.Buffer
+		for _, event := range events {
+			name, _ := event["event"].(string)
+			payload, _ := json.Marshal(event["data"])
+			fmt.Fprintf(&out, "event: %s\ndata: %s\n\n", name, payload)
+		}
+		return out.Bytes()
+	}
+	messageText := func(text string) []byte {
+		return sse(
+			object{"event": "message_start", "data": messageStart("msg_text")},
+			object{"event": "content_block_start", "data": object{"type": "content_block_start", "index": 0, "content_block": object{"type": "text", "text": ""}}},
+			object{"event": "content_block_delta", "data": object{"type": "content_block_delta", "index": 0, "delta": object{"type": "text_delta", "text": text}}},
+			object{"event": "content_block_stop", "data": object{"type": "content_block_stop", "index": 0}},
+			object{"event": "message_delta", "data": object{"type": "message_delta", "delta": object{"stop_reason": "end_turn", "stop_sequence": nil}, "usage": object{"output_tokens": 5}}},
+			object{"event": "message_stop", "data": object{"type": "message_stop"}},
+		)
+	}
+	mcpMessage := func(name, toolID string, arguments object) []byte {
+		encoded, _ := json.Marshal(arguments)
+		return sse(
+			object{"event": "message_start", "data": messageStart("msg_mcp")},
+			object{"event": "content_block_start", "data": object{"type": "content_block_start", "index": 0, "content_block": object{"type": "tool_use", "id": toolID, "name": name, "input": object{}}}},
+			object{"event": "content_block_delta", "data": object{"type": "content_block_delta", "index": 0, "delta": object{"type": "input_json_delta", "partial_json": string(encoded)}}},
+			object{"event": "content_block_stop", "data": object{"type": "content_block_stop", "index": 0}},
+			object{"event": "message_delta", "data": object{"type": "message_delta", "delta": object{"stop_reason": "tool_use", "stop_sequence": nil}, "usage": object{"output_tokens": 20}}},
+			object{"event": "message_stop", "data": object{"type": "message_stop"}},
+		)
+	}
+	toolMessage := func(command string) []byte {
+		return mcpMessage("Bash", "toolu_bee_1", object{"command": command, "description": "leave a marker"})
+	}
+	responses := func(item object, id string) []byte {
+		return sse(
+			object{"event": "response.created", "data": object{"type": "response.created", "response": object{"id": id, "object": "response", "status": "in_progress", "output": []any{}}}},
+			object{"event": "response.output_item.added", "data": object{"type": "response.output_item.added", "output_index": 0, "item": item}},
+			object{"event": "response.output_item.done", "data": object{"type": "response.output_item.done", "output_index": 0, "item": item}},
+			object{"event": "response.completed", "data": object{"type": "response.completed", "response": object{"id": id, "object": "response", "status": "completed", "output": []object{item}, "usage": object{"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}}}},
+		)
+	}
+	responsesText := func(text string) []byte {
+		return responses(object{"type": "message", "id": "msg_done", "role": "assistant", "status": "completed", "content": []object{{"type": "output_text", "text": text, "annotations": []any{}}}}, "resp_text")
+	}
+
+	server := &http.Server{}
+	var requestMu sync.Mutex
+	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestMu.Lock()
+		defer requestMu.Unlock()
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+		var parsed object
+		if json.Unmarshal(body, &parsed) != nil {
+			parsed = object{}
+		}
+		messages, _ := parsed["messages"].([]any)
+		tools, _ := parsed["tools"].([]any)
+		inputs, _ := parsed["input"].([]any)
+		offersBash := false
+		mcpTools := []string{}
+		for _, raw := range tools {
+			tool, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := tool["name"].(string)
+			if name == "Bash" {
+				offersBash = true
+			}
+			if strings.HasPrefix(name, "mcp__bee__") {
+				mcpTools = append(mcpTools, strings.TrimPrefix(name, "mcp__bee__"))
+			}
+			if name == "mcp__bee" {
+				if nested, ok := tool["tools"].([]any); ok {
+					for _, innerRaw := range nested {
+						if inner, ok := innerRaw.(map[string]any); ok {
+							if nestedName, ok := inner["name"].(string); ok {
+								mcpTools = append(mcpTools, nestedName)
+							}
+						}
+					}
+				}
+			}
+		}
+		hasResult := false
+		resultExcerpt := ""
+		for _, raw := range messages {
+			message, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if content, ok := message["content"].([]any); ok {
+				for _, itemRaw := range content {
+					item, ok := itemRaw.(map[string]any)
+					if !ok || item["type"] != "tool_result" {
+						continue
+					}
+					hasResult = true
+					if blocks, ok := item["content"].([]any); ok {
+						blockText := ""
+						for _, blockRaw := range blocks {
+							if block, ok := blockRaw.(map[string]any); ok {
+								if text, ok := block["text"].(string); ok {
+									blockText += text
+								}
+							}
+						}
+						if len(blockText) > 400 {
+							blockText = blockText[:400]
+						}
+						resultExcerpt = blockText
+					} else {
+						resultExcerpt = fmt.Sprint(item["content"])
+						if len(resultExcerpt) > 400 {
+							resultExcerpt = resultExcerpt[:400]
+						}
+					}
+				}
+			}
+		}
+		for _, raw := range inputs {
+			item, ok := raw.(map[string]any)
+			if ok && item["type"] == "function_call_output" {
+				hasResult = true
+				resultExcerpt = fmt.Sprint(item["output"])
+				if len(resultExcerpt) > 400 {
+					resultExcerpt = resultExcerpt[:400]
+				}
+			}
+		}
+		recordEntry := endpointRecord{Path: r.URL.RequestURI(), Authorization: r.Header.Get("authorization"), APIKey: r.Header.Get("x-api-key"), ContentType: r.Header.Get("content-type"), Messages: len(messages), InputItems: len(inputs), OffersBash: offersBash, ToolResult: hasResult, MCPTools: mcpTools, ResultExcerpt: resultExcerpt}
+		if file, err := os.OpenFile(record, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+			encoded, _ := json.Marshal(recordEntry)
+			_, _ = file.Write(append(encoded, '\n'))
+			_ = file.Close()
+		}
+		if hold > 0 {
+			time.Sleep(hold)
+		}
+		responsesAPI := strings.Contains(r.URL.RequestURI(), "/responses")
+		var payload []byte
+		status := http.StatusOK
+		contentType := "text/event-stream"
+		switch {
+		case mcpTool != "":
+			if responsesAPI {
+				if hasResult {
+					payload = responsesText("done")
+				} else {
+					payload = responses(object{"type": "function_call", "id": "fc_bee_mcp", "call_id": "call_bee_mcp", "name": mcpTool, "namespace": "mcp__bee", "arguments": `{"cursor":0}`, "status": "completed"}, "resp_mcp")
+				}
+			} else if hasResult {
+				payload = messageText("done")
+			} else {
+				payload = mcpMessage("mcp__bee__"+mcpTool, "toolu_bee_mcp", object{"cursor": 0})
+			}
+		case plainText != "":
+			if responsesAPI {
+				payload = responsesText(plainText)
+			} else {
+				payload = messageText(plainText)
+			}
+		case toolCommand != "":
+			if offersBash && !hasResult {
+				payload = toolMessage(toolCommand)
+			} else {
+				payload = messageText("done")
+			}
+		default:
+			status = http.StatusBadRequest
+			contentType = "application/json"
+			payload, _ = json.Marshal(object{"type": "error", "error": object{"message": "controlled endpoint", "type": "invalid_request_error"}})
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+		w.WriteHeader(status)
+		_, _ = w.Write(payload)
+	})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := os.WriteFile(record+".port", []byte(strconv.Itoa(port)), 0o600); err != nil {
+		_ = listener.Close()
+		return err
+	}
+	go func() { _ = server.Serve(listener) }()
+	stopping := make(chan os.Signal, 1)
+	signal.Notify(stopping, syscall.SIGTERM, syscall.SIGINT)
+	<-stopping
+	signal.Stop(stopping)
+	_ = server.Close()
+	return nil
+}
+
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "endpoint" {
+		if len(os.Args) < 3 {
+			return
+		}
+		hold := 0.0
+		if len(os.Args) > 3 {
+			hold, _ = strconv.ParseFloat(os.Args[3], 64)
+		}
+		if err := endpoint(os.Args[2], time.Duration(hold*float64(time.Second))); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) < 3 {
 		return
 	}

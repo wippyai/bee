@@ -5,7 +5,7 @@ repository mark. The SVG files are source assets; PNG files are their raster
 exports.
 
 The artwork uses the terminal welcome-screen character and the semantic Honey
-palette from the [UI brand book](../UI_BRAND_BOOK.md). SVG font lists include
+palette from the [UI brand book](../guides/ui.md). SVG font lists include
 generic fallbacks so the assets remain portable.
 
 desktop.gif demonstrates local terminal-desktop interaction. It contains no

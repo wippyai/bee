@@ -38,7 +38,7 @@ local function define_tests()
             end
             test.not_nil(string.find(document, "hive", 1, true))
             test.not_nil(string.find(document, "toolkit", 1, true))
-            test.not_nil(string.find(document, "docs/UI_BRAND_BOOK.md", 1, true))
+            test.not_nil(string.find(document, "docs/guides/ui.md", 1, true))
             test.not_nil(string.find(document, "src/apps/stylebook/", 1, true))
             test.not_nil(string.find(document, "canonical runnable", 1, true))
         end)

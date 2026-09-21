@@ -16,8 +16,11 @@ import (
 )
 
 const (
-	ComponentName boot.Name = "bee.launch"
-	StorageID               = "bee.harness.host:environment"
+	ComponentName  boot.Name = "bee.launch"
+	StorageID                = "bee.harness.host:environment"
+	desktopCommand           = "bee"
+	ownerCommand             = "bee-owner"
+	ownerArgument            = "start"
 )
 
 // Host is both Bee's app.Host and its sole native boot component. The runtime
@@ -73,18 +76,26 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if err := ctx.Err(); err != nil {
 		return app.Plan{}, err
 	}
-	if launch.Explicit {
-		return app.Plan{}, nil
+	plan := app.Plan{}
+	if !launch.Explicit {
+		root := launch.State
+		if root == "" {
+			root = host.defaultRoot
+		}
+		selected, err := DefaultProjectStateDir(root, launch.Dir)
+		if err != nil {
+			return app.Plan{}, err
+		}
+		plan.DefaultState = selected
 	}
-	root := launch.State
-	if root == "" {
-		root = host.defaultRoot
+	if launch.Op == app.OpRun && launch.Command == desktopCommand && len(launch.Args) > 0 && launch.Args[0] == ownerArgument {
+		if len(launch.Args) != 1 {
+			return app.Plan{}, errors.New("bee start takes no arguments")
+		}
+		plan.Command = ownerCommand
+		plan.Args = []string{}
 	}
-	selected, err := DefaultProjectStateDir(root, launch.Dir)
-	if err != nil {
-		return app.Plan{}, err
-	}
-	return app.Plan{DefaultState: selected}, nil
+	return plan, nil
 }
 
 func (host *Host) Load(ctx context.Context) (context.Context, error) {

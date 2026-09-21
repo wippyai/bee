@@ -26,7 +26,7 @@ generator when the corpus is intentionally updated.
 | Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
 | Governed application delivery | [Distributed app delivery](guides/overlays.md) |
 | Harness, placement, resource, and credential module contracts | [Harness module](../src/harness/README.md), [placement module](../src/placement/README.md), [native placement](../src/placement/native/README.md), [resources module](../src/resources/README.md), [credentials module](../src/credentials/README.md) |
-| Persistence, governance, Hub, Hive, and sync module contracts | [Persist module](../src/persist/README.md), [governance module](../src/governance/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
+| Persistence, governance, Hub, Hive, and sync module contracts | [Persist module](../modules/bee-persist/src/README.md), [governance module](../src/governance/README.md), [Hub module](../src/hub/README.md), [Hive module](../src/hive/README.md), [sync module](../src/sync/README.md) |
 
 Use the source module README and tests for implementation details. A contract
 describes a callable boundary only when the source and its checks implement it;

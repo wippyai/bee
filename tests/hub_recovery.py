@@ -261,7 +261,7 @@ def prepare_fixture(folder):
     for name in ("bounds.lua", "canonical.lua"):
         shutil.copy2(ROOT / "src/sync" / name, folder / "src/sync" / name)
     (folder / "src/persist").mkdir()
-    shutil.copy2(ROOT / "src/persist/transaction.lua", folder / "src/persist/transaction.lua")
+    shutil.copy2(ROOT / "modules/bee-persist/src/transaction.lua", folder / "src/persist/transaction.lua")
     (folder / "src/persist/_index.yaml").write_text(
         "version: '1.0'\nnamespace: bee.persist\nentries:\n"
         "- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"

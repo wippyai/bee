@@ -9,12 +9,13 @@ import yaml
 from workspace import ROOT, RUNTIME
 
 MODULE = ROOT / "src/threads"
+PERSIST = ROOT / "modules/bee-persist/src"
 HOST = ROOT / "tests/fixtures/modules/threads/src"
 
 
 def stage(folder, mutate=None):
     shutil.copytree(MODULE, folder / "src/threads")
-    shutil.copytree(ROOT / "src/persist", folder / "src/persist")
+    shutil.copytree(PERSIST, folder / "src/persist")
     shutil.copytree(HOST, folder / "src/host")
     (folder / "wippy.lock").write_text("directories:\n  modules: .wippy\n  src: ./src\n")
     (folder / ".wippy.yaml").write_text("version: '1.0'\nshutdown:\n  timeout: 2s\n")

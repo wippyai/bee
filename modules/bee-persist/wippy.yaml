@@ -1,0 +1,9 @@
+organization: bee
+module: persist
+type: library
+version: 0.1.0-dev
+description: Checked SQLite migration ledger and transaction helpers for Bee stores
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

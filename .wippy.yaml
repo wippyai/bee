@@ -5,3 +5,6 @@ registry:
   history_path: .wippy/registry.db
 shutdown:
   timeout: 3s
+workspace:
+  replacements:
+    bee/persist: ./modules/bee-persist

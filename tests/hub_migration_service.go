@@ -65,7 +65,7 @@ func prepareFixture(root, repo string) error {
 			return err
 		}
 	}
-	if err := copyServiceFile(filepath.Join(repo, "src/persist/transaction.lua"), filepath.Join(root, "src/persist/transaction.lua")); err != nil {
+	if err := copyServiceFile(filepath.Join(repo, "modules/bee-persist/src/transaction.lua"), filepath.Join(root, "src/persist/transaction.lua")); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(root, "src/persist/_index.yaml"), []byte("version: '1.0'\nnamespace: bee.persist\nentries:\n- name: transaction\n  kind: library.lua\n  source: file://transaction.lua\n  modules: [sql, time]\n"), 0600); err != nil {

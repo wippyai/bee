@@ -81,10 +81,16 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process]
+  modules: [process, channel, security, time, logger]
+  imports:
+    retained: bee.launch:retained_protocol
+    decode: bee.protocol:decode
   meta:
-    comment: Native start keeps this command alive while the Hive service owns the retained desktop; it spawns no host
+    comment: Retained workspace owner selected by the native launch host under the runtime state lock
     command:
       name: bee-owner
-      host: bee:terminal
-      short: Internal retained-owner lifetime entry selected by bee start
+      host: bee:workers
+      short: Run the retained Bee workspace owner
+      security:
+        actor: {id: bee.local}
+        policies: [bee:desktop_policy, bee:retained_owner_spawn_policy]

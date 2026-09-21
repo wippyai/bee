@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.hive.desktop
 entries:
+- name: display_host
+  kind: process.host
+  host: {max_processes: 8, workers: 2}
+  lifecycle: {auto_start: true}
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
@@ -26,6 +30,38 @@ entries:
     types: bee.hive:types
     retained: bee.launch:retained_protocol
     catalog: bee.hive.desktop:catalog
+- name: display
+  kind: library.lua
+  source: file://display.lua
+  modules: [tty, channel, time, process]
+  imports:
+    bounds: bee.hive:bounds
+    client: bee.hive:client
+    protocol: bee.hive.desktop:protocol
+    contract: bee.protocol:application
+    delivery: bee.terminal:delivery
+    input: bee.protocol:input
+- name: command
+  kind: process.lua
+  source: file://display_command.lua
+  method: command
+  imports:
+    display: bee.hive.desktop:display
+    arguments: bee.application:arguments
+  meta:
+    command:
+      name: bee-display
+      host: bee.hive.desktop:display_host
+      short: Attach a terminal to an admitted Hive desktop
+      security:
+        actor: {id: bee.desktop.display}
+        policies: [bee.hive.desktop:display_policy]
+- name: display_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.lookup, process.send, tty.attach, tty.read, tty.write, tty.resize, tty.viewport]
+    resources: '*'
+    effect: allow
 - name: host_policy
   kind: security.policy.expr
   meta:

@@ -325,6 +325,12 @@ headless-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/headless.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/headless.go "$(abspath $(WIPPY))"
 
+.PHONY: retained-owner-check
+retained-owner-check:
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/retained_owner.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/retained_owner.go "$(abspath $(WIPPY))"
+check: retained-owner-check
+
 .PHONY: workspace-hosts-check
 workspace-hosts-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/workspace_hosts.go

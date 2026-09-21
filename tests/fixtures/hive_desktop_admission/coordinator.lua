@@ -42,7 +42,7 @@ local function main(node: string)
             local policy, err = security.policy("bee.desktop_admission_probe:client_policy")
             if not policy then error(tostring(err)) end
             local child, spawn_error = process.with_options({}):with_scope(security.new_scope({policy}))
-                :spawn_monitored("bee.desktop_admission_probe:client", "bee.client:native", EXECUTION, command)
+                :spawn_monitored("bee.desktop_admission_probe:client", "bee.hive.desktop:display_host", EXECUTION, command)
             if not child then error(tostring(spawn_error)) end
             local timeout = time.after("45s")
             while true do

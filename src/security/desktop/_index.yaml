@@ -157,6 +157,17 @@ entries:
     - bee.host:main
     - bee.client:main
     effect: allow
+- name: retained_owner_spawn_policy
+  kind: security.policy
+  meta:
+    comment: The local retained-owner command may create only the existing retained workspace supervisor.
+  policy:
+    actions:
+    - process.spawn
+    - process.spawn.monitored
+    resources:
+    - bee.launch:retained
+    effect: allow
 - name: local_supervisor_spawn_policy
   kind: security.policy
   policy:

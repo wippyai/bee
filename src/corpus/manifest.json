@@ -835,9 +835,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 3058,
+      "bytes": 3070,
       "id": "docs/readme",
-      "sha256": "ff622a67f810c648dc284035dd06fd5ce4750fab0722b25e1ac945243204359c",
+      "sha256": "f9dbab6911751b9a39c2ef527b043d23c65ba4de84950dae4b65db3e61e76739",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -1099,14 +1099,6 @@
       "topic": "component"
     },
     {
-      "bytes": 830,
-      "id": "component/persist",
-      "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
-      "source": "src/persist",
-      "title": "bee.persist",
-      "topic": "component"
-    },
-    {
       "bytes": 3590,
       "id": "component/placement",
       "sha256": "ff729d5dfdf799f3983e81f880d438e53954c22ba6742a9d67d8ead56d88f1eb",
@@ -1147,6 +1139,14 @@
       "topic": "component"
     },
     {
+      "bytes": 830,
+      "id": "component/persist",
+      "sha256": "5642db79b763a445a62a255fe3702426bb6fd457f24d2f0d0c6b91a89b7f45f1",
+      "source": "modules/bee-persist/src",
+      "title": "bee.persist",
+      "topic": "component"
+    },
+    {
       "bytes": 23170,
       "id": "toolkit",
       "sha256": "7ab244cb9287c036bb6c7d2f577c6cdac4157d59d6a7c7b3a45d5ea417dd5b55",
@@ -1156,9 +1156,9 @@
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
+  "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per source component. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 1243696,
+    "bytes": 1243708,
     "documents": 144
   }
 }

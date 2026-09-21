@@ -48,6 +48,42 @@ func TestPlanUsesProjectDefaultAndLeavesExplicitStateAlone(t *testing.T) {
 	}
 }
 
+func TestPlanMapsOnlyExplicitOwnerStart(t *testing.T) {
+	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := makeProject(t)
+	plan, err := host.Plan(context.Background(), app.Launch{
+		Dir: project, State: t.TempDir(), Explicit: true, Op: app.OpRun,
+		Command: desktopCommand, Args: []string{ownerArgument},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Command != ownerCommand || plan.Args == nil || len(plan.Args) != 0 {
+		t.Fatalf("owner plan = command %q args %#v", plan.Command, plan.Args)
+	}
+
+	ordinary, err := host.Plan(context.Background(), app.Launch{
+		Dir: project, State: t.TempDir(), Explicit: true, Op: app.OpRun,
+		Command: desktopCommand, Args: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ordinary.Command != "" || ordinary.Args != nil {
+		t.Fatalf("ordinary launch was remapped: command %q args %#v", ordinary.Command, ordinary.Args)
+	}
+
+	if _, err := host.Plan(context.Background(), app.Launch{
+		Dir: project, State: t.TempDir(), Explicit: true, Op: app.OpRun,
+		Command: desktopCommand, Args: []string{ownerArgument, "extra"},
+	}); err == nil {
+		t.Fatal("owner start accepted extra arguments")
+	}
+}
+
 func TestHostIsOneBootComponentAndHost(t *testing.T) {
 	host, err := newHost(filepath.Join(t.TempDir(), "state"), systemHostResolver())
 	if err != nil {

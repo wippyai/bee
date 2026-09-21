@@ -485,6 +485,7 @@ def main():
         folder = Path(temporary)
         project = folder / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules" / "bee-persist", project / "modules" / "bee-persist")
         shutil.copy2(ROOT / ".wippy.yaml", project / ".wippy.yaml")
         shutil.copy2(ROOT / "wippy.lock", project / "wippy.lock")
 
@@ -701,6 +702,7 @@ def client_storage():
         root = Path(temporary)
         project = root / "project"
         shutil.copytree(ROOT / "src", project / "src")
+        shutil.copytree(ROOT / "modules" / "bee-persist", project / "modules" / "bee-persist")
         shutil.copytree(ROOT / "tests/fixtures/client_storage", project / "src/client_storage_probe")
         host = project / "src/environment/_index.yaml"
         configuration = yaml.safe_load(host.read_text())

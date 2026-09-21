@@ -30,8 +30,7 @@ entries:
   kind: library.lua
   source: file://client.lua
   modules: [process, channel, time, uuid]
-  imports:
-    types: bee.hive:types
+  imports: {types: bee.hive:types, bounds: bee.hive:bounds}
 - name: supervisor_host
   kind: process.host
   host: {max_processes: 1, workers: 1}

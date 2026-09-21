@@ -40,8 +40,9 @@ entries:
   kind: process.lua
   source: file://client.lua
   method: main
-  modules: [process, time, channel, tty, uuid]
+  modules: [process, time, channel, uuid]
   imports:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
+    display: bee.hive.desktop:display

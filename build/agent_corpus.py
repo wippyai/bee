@@ -5,7 +5,8 @@ An agent inside Bee learns the application authoring contract from the workspace
 tool's guide operation and, until now, nothing else: it cannot look up how the
 runtime's process, tty, registry, sql, http or fs modules work, nor Bee's own
 contracts. This script snapshots the part of https://wippy.ai/llm an application
-author calls, Bee's own contracts from docs/, every component README under src/,
+author calls, Bee's own contracts from docs/, every component README under src/
+or a selected physical component source,
 and one terminal toolkit reference, into an embeddable, read-only filesystem.
 
 Storage shape: `src/corpus/` is declared as one `fs.directory` entry
@@ -30,8 +31,8 @@ Selection rule, stated once and enforced by this table:
     boundary or the path a frozen artifact travels, including application,
     thread, placement, gateway, carrier, storage and UI contracts. Repository
     process and design pages are left out.
-  * component READMEs: one page per src/ component, the owner's own statement of
-    that package's contract.
+  * component READMEs: one page per source component, the owner's own statement
+    of that package's contract.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
     appearance and application client libraries Bee's own apps use).
 
@@ -313,12 +314,14 @@ def toolkit_reference() -> bytes:
     return ("\n".join(sections)).encode("utf-8")
 
 
-def component_documents() -> "list[tuple[str, str, bytes]]":
+def component_documents() -> "list[tuple[str, str, bytes, str]]":
     documents = []
     for path in sorted((ROOT / "src").rglob("README.md")):
         relative = path.relative_to(ROOT / "src")
         identity = ":".join(relative.parts[:-1]) or "bee"
-        documents.append((f"component/{identity}", "component", path.read_bytes()))
+        documents.append((f"component/{identity}", "component", path.read_bytes(), f"src/{identity}"))
+    persist = ROOT / "modules" / "bee-persist" / "src" / "README.md"
+    documents.append(("component/persist", "component", persist.read_bytes(), "modules/bee-persist/src"))
     return documents
 
 
@@ -349,8 +352,8 @@ def build() -> int:
         if not origin.is_file():
             raise SystemExit(f"docs/{name} is listed in the selection rule but missing")
         record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
-    for identity, topic, payload in component_documents():
-        record(identity, topic, payload, f"src/{identity.split('/', 1)[1]}")
+    for identity, topic, payload, source in component_documents():
+        record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(), "generated: src/ui, src/apps, src/governance/guide.lua")
 
     total = sum(document["bytes"] for document in documents)
@@ -421,7 +424,7 @@ SELECTION_RULE = (
     "pages that state an implemented callable boundary or the path a frozen artifact travels "
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
-    "Component: one README per src/ package. Terminal toolkit: one generated page composed from "
+    "Component: one README per source component. Terminal toolkit: one generated page composed from "
     "src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest."
 )
 

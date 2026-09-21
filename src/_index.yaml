@@ -5,6 +5,10 @@ entries:
   kind: ns.definition
   meta:
     title: Bee desktop foundation
+- name: dependency_persist
+  kind: ns.dependency
+  component: bee/persist
+  version: 0.1.0-dev
 - name: workers
   kind: process.host
   host:

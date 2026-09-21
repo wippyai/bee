@@ -166,6 +166,14 @@ entries:
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
     catalog: bee.hive.desktop:catalog
+- name: desktop_display_test
+  kind: function.lua
+  source: file://desktop_display_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    display: bee.hive.desktop:display
 - name: desktop_reader_test_policy
   kind: security.policy
   meta: {type: test_support}

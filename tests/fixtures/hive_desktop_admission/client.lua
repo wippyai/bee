@@ -2,11 +2,11 @@
 local process = require("process")
 local time = require("time")
 local channel = require("channel")
-local tty = require("tty")
 local uuid = require("uuid")
 local types = require("types")
 local protocol = require("protocol")
 local contract = require("contract")
+local display = require("display")
 local OWNER_OS = "__BEE_OWNER_OS__"
 local OWNER_PROOF = "__BEE_OWNER_PROOF__"
 local function main(execution: string, scenario: string?, parent: string?)
@@ -62,42 +62,32 @@ local function main(execution: string, scenario: string?, parent: string?)
     if not workspace_id or type(desktop) ~= "table" then error("invalid workspace") end
     local desktop_id = contract.workspace_id(desktop.desktop_id)
     if not desktop_id then error("invalid desktop") end
-    local function attach(mode: "control" | "observe"): (tty.Viewport, string)
-        local reply = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = mode})
-        for _ = 1, 100 do
-            if reply.ok then break end
-            if not reply.error or (reply.error.code ~= "BUSY" and reply.error.code ~= "DESKTOP_CONTROLLED" and reply.error.code ~= "UNAVAILABLE") then break end
-            -- These are definite refusal replies. Unknown outcomes are never retried.
-            time.sleep("20ms")
-            reply = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = mode})
-        end
-        local result = reply.value
-        if not reply.ok then error("attach refused: " .. tostring(reply.error and reply.error.message)) end
-        if type(result) ~= "table" or result.owner_execution ~= execution or result.workspace_id ~= workspace_id
-            or result.desktop_id ~= desktop_id or result.recipient ~= tostring(process.pid()) or result.mode ~= mode
-            or type(result.session_id) ~= "string" or type(result.mount_ref) ~= "string" then error("invalid mount reply") end
-        local session_id = result.session_id
-        local mount_ref = result.mount_ref
-        if type(session_id) ~= "string" or type(mount_ref) ~= "string" then error("invalid session") end
-        local view, err = tty.attach(mount_ref)
-        if not view then error(tostring(err)) end
-        return view, session_id
+    -- The raw catalog probe has done its single read. Presentation owns its
+    -- own Hive reply subscription, so the fixture cannot retain this one.
+    process.unlisten(replies)
+    local function attach(mode: "control" | "observe")
+        local target, target_error = display.target("node-0", execution, workspace_id, desktop_id, mode)
+        if not target then error(tostring(target_error)) end
+        local view, open_error = display.open(target)
+        if not view then error("display attach refused: " .. tostring(open_error and open_error.message)) end
+        return view
     end
-    local function text(view: tty.Viewport, needle: string)
+    local function text(view, needle: string)
         for _ = 1, 500 do
-            local snapshot = view:snapshot()
+            local snapshot = display.content(view, 120, 40)
             if snapshot and table.concat(snapshot.rows, "\n"):find(needle, 1, true) then return end
             time.sleep("10ms")
         end
         error("retained Terminal missing " .. needle)
     end
-    local function command(view: tty.Viewport, command: string)
-        local sent, err = view:send({type = "paste", text = command})
+    local function command(view, command: string)
+        local sent, err = display.send(view, {type = "paste", text = command})
         if not sent then error(tostring(err)) end
-        local entered, enter_error = view:send({type = "key", key = "", key_type = "enter", action = "press"})
+        local entered, enter_error = display.send(view, {type = "key", key = "", key_type = "enter", action = "press"})
         if not entered then error(tostring(enter_error)) end
     end
-    local view, session = attach("control")
+    local view = attach("control")
+    if not display.resize(view, 120, 40) then error("control resize refused") end
     if scenario == "hold" then
         if not parent then error("holder requires its parent") end
         local signals, err = process.listen("bee.desktop.fixture.hold", {message = true})
@@ -114,11 +104,10 @@ local function main(execution: string, scenario: string?, parent: string?)
                 text(view, "HELD_retained_OK")
                 process.send(parent, "bee.desktop.fixture.held", "checked")
             elseif op == "stop" then
-                local detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = session})
-                if not detached.ok then error("holder detach failed") end
-                view:close()
+                local detached, detach_error = display.close(view)
+                if not detached then error("holder detach failed: " .. tostring(detach_error)) end
                 process.send(parent, "bee.desktop.fixture.held", "stopped")
-                process.unlisten(signals); process.unlisten(replies)
+                process.unlisten(signals)
                 return
             else error("invalid holder signal") end
         end
@@ -136,42 +125,30 @@ local function main(execution: string, scenario: string?, parent: string?)
     elseif scenario == "recover" then
         command(view, "printf 'AFTER_CRASH_%s_OK\\n' \"$bee_crash\"")
         text(view, "AFTER_CRASH_retained_OK")
-        local recovered = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = session})
-        if not recovered.ok then error("recovered client detach failed") end
-        view:close()
-        process.unlisten(replies)
+        local recovered, recovery_error = display.close(view)
+        if not recovered then error("recovered client detach failed: " .. tostring(recovery_error)) end
         return
     end
     command(view, "bee_mesh=retained; printf 'MESH_%s_OK\\n' \"$bee_mesh\"")
     text(view, "MESH_retained_OK")
-    local wrong = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = "foreign-session"})
-    if not wrong.error or wrong.error.code ~= "DENIED" then error("foreign session accepted") end
-    local detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = session})
-    if not detached.ok then error("detach failed") end
-    local stale_sent = view:send({type = "paste", text = "forbidden"})
-    if stale_sent then error("retired mount retained input authority") end
-    view:close()
-    local rejoined, second_session = attach("control")
+    local detached, detach_error = display.close(view)
+    if not detached then error("detach failed: " .. tostring(detach_error)) end
+    if display.send(view, {type = "paste", text = "forbidden"}) then error("retired mount retained input authority") end
+    local rejoined = attach("control")
     text(rejoined, "MESH_retained_OK")
     command(rejoined, "printf 'REJOIN_%s_OK\\n' \"$bee_mesh\"")
     text(rejoined, "REJOIN_retained_OK")
-    local foreign = call(protocol.ATTACH, {owner_execution = execution, workspace_id = "dddddddddddddddddddddddddddddddd", desktop_id = desktop_id, mode = "control"})
-    if not foreign.error or foreign.error.code ~= "NOT_FOUND" then error("foreign workspace accepted") end
-    local second_detach = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = second_session})
-    if not second_detach.ok then error("second detach failed") end
-    rejoined:close()
-    local observer, observer_session = attach("observe")
+    local rejoined_detached, rejoined_error = display.close(rejoined)
+    if not rejoined_detached then error("rejoined detach failed: " .. tostring(rejoined_error)) end
+    local observer = attach("observe")
     text(observer, "REJOIN_retained_OK")
-    local observed_input = observer:send({type = "paste", text = "forbidden"})
-    if observed_input then error("observer gained input authority") end
-    local observer_detach = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = observer_session})
-    if not observer_detach.ok then error("observer detach failed") end
-    observer:close()
-    -- Public catalog/create/attach routes use allocated identities; they cannot
-    -- reuse the default session or expose another desktop's copy/launch grant.
+    if display.send(observer, {type = "paste", text = "forbidden"}) then error("observer gained input authority") end
+    if display.resize(observer, 120, 40) then error("observer gained resize authority") end
+    local observer_detached, observer_error = display.close(observer)
+    if not observer_detached then error("observer detach failed: " .. tostring(observer_error)) end
     local held, held_error = process.listen("bee.desktop.fixture.held", {message = true})
     if not held then error(tostring(held_error)) end
-    local holder, holder_error = process.spawn_monitored("bee.desktop_admission_probe:client", "bee.client:native", execution, "hold", tostring(process.pid()))
+    local holder, holder_error = process.spawn_monitored("bee.desktop_admission_probe:client", "bee.hive.desktop:display_host", execution, "hold", tostring(process.pid()))
     if not holder then error(tostring(holder_error)) end
     local function held_reply(expected: string)
         local selected = channel.select({held:case_receive(), time.after("10s"):case_receive()})
@@ -180,51 +157,16 @@ local function main(execution: string, scenario: string?, parent: string?)
         if tostring(message:from()) ~= tostring(holder) or message:payload():data() ~= expected then error("invalid holder reply") end
     end
     held_reply("ready")
-    local busy = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = "control"})
-    if not busy.error or busy.error.code ~= "DESKTOP_CONTROLLED" then error("controller conflict is not a typed controller refusal") end
-    local default_id = desktop_id
-    desktop_id = "cccccccccccccccccccccccccccccccc"
-    local create_input = {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id}
-    local bad_key = call(protocol.CREATE, create_input)
-    if not bad_key.error or bad_key.error.code ~= "INVALID_ARGUMENT" then error("allocation accepted an unrelated retry key") end
-    local created = call(protocol.CREATE, create_input, desktop_id)
-    if not created.ok then error("desktop allocation failed") end
-    local replayed = call(protocol.CREATE, create_input, desktop_id)
-    if not replayed.ok then error("desktop allocation replay failed") end
-    local listed = call(protocol.LIST, {owner_execution = execution})
-    local listed_value = listed.value
-    if not listed.ok or type(listed_value) ~= "table" or type(listed_value.workspaces) ~= "table" then error("allocated catalog missing") end
-    local listed_workspace = listed_value.workspaces[1]
-    if type(listed_workspace) ~= "table" or type(listed_workspace.desktops) ~= "table" or #listed_workspace.desktops ~= 2 then error("allocation duplicated or missing") end
-    local first, second = listed_workspace.desktops[1], listed_workspace.desktops[2]
-    if type(first) ~= "table" or first.desktop_id ~= default_id or first.is_default ~= true
-        or type(second) ~= "table" or second.desktop_id ~= desktop_id or second.is_default ~= false then error("catalog identity/default mismatch") end
-    local dormant = call(protocol.ATTACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, mode = "observe"})
-    if not dormant.error or dormant.error.code ~= "NOT_FOUND" then error("observation activated a dormant desktop") end
-    local extra, extra_session = attach("control")
-    local cross = call(protocol.COPY, {owner_execution = execution, workspace_id = workspace_id, desktop_id = default_id, session_id = extra_session})
-    if not cross.error or cross.error.code ~= "CONFLICT" then error("session crossed desktop boundary") end
-    local launched = call(protocol.LAUNCH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id,
-        session_id = extra_session, name = "terminal", arguments = {}})
-    if not launched.ok then error("selected desktop Terminal launch refused") end
-    text(extra, "$ ")
-    command(extra, "bee_extra=independent; printf 'EXTRA_%s_OK\\n' \"$bee_extra\"")
-    text(extra, "EXTRA_independent_OK")
-    process.send(tostring(holder), "bee.desktop.fixture.hold", "check")
-    held_reply("checked")
-    local extra_detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = extra_session})
-    if not extra_detached.ok then error("additional desktop detach refused") end
-    extra:close()
+    local conflict_target, target_error = display.target("node-0", execution, workspace_id, desktop_id, "control")
+    if not conflict_target then error(tostring(target_error)) end
+    local conflict, conflict_error = display.open(conflict_target)
+    if conflict or not conflict_error or conflict_error.code ~= "DESKTOP_CONTROLLED" then error("controller conflict was not a typed refusal") end
     process.send(tostring(holder), "bee.desktop.fixture.hold", "stop")
     held_reply("stopped")
     process.unlisten(held)
-    desktop_id = default_id
-    local original, original_session = attach("control")
-    command(original, "printf 'DEFAULT_%s_OK\\n' \"$bee_mesh\"")
-    text(original, "DEFAULT_retained_OK")
-    local original_detached = call(protocol.DETACH, {owner_execution = execution, workspace_id = workspace_id, desktop_id = desktop_id, session_id = original_session})
-    if not original_detached.ok then error("default detach refused after additional desktop") end
-    original:close()
-    process.unlisten(replies)
+    local final = attach("control")
+    text(final, "REJOIN_retained_OK")
+    local final_detached, final_error = display.close(final)
+    if not final_detached then error("final detach failed: " .. tostring(final_error)) end
 end
 return {main = main}

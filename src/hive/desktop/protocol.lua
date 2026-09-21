@@ -10,7 +10,10 @@ M.ATTACH = "bee.desktop:attach"
 M.DETACH = "bee.desktop:detach"
 M.COPY = "bee.desktop:copy"
 M.LAUNCH = "bee.desktop:launch"
-M.CLIENT_HOST = "bee.client:native"
+-- A display command is a native client role, but its host is deliberately
+-- separate from the retained owner and ordinary terminal applications. The
+-- owner still checks the caller node against its explicit admission grant.
+M.CLIENT_HOST = "bee.hive.desktop:display_host"
 type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, application: string?, local_clients: boolean?}
 type DesktopInput = {execution: string, workspace_id: string?, desktop_id: string?, mode: "control" | "observe", session_id: string?, name: string?, arguments: {string}?}
 function M.configuration(value: unknown): (Configuration?, string?)

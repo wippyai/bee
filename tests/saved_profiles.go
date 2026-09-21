@@ -204,7 +204,7 @@ func savedProfilesSetup(root, source string) error {
 	if err := savedProfilesStageSyncStoreIndex(filepath.Join(syncSource, "_index.yaml"), filepath.Join(syncDestination, "_index.yaml")); err != nil {
 		return fmt.Errorf("stage sync store import closure: %w", err)
 	}
-	if err := savedProfilesCopyTree(filepath.Join(root, "src", "persist"), filepath.Join(source, "src", "persist")); err != nil {
+	if err := savedProfilesCopyTree(filepath.Join(root, "src", "persist"), filepath.Join(source, "modules", "bee-persist", "src")); err != nil {
 		return fmt.Errorf("copy persist source: %w", err)
 	}
 	if err := savedProfilesCopyFile(filepath.Join(root, "src", "node", "README.md"), filepath.Join(source, "src", "node", "README.md")); err != nil {

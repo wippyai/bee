@@ -129,7 +129,7 @@ native-managed-agent-check:
 	test -n "$(AGENT_PROVIDER)"
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go managed "$(AGENT_PROVIDER)" "$(abspath $(BEE_BINARY))"
 
-.PHONY: native-agy-live-check native-agy-recovery-live-check native-claude-recovery-live-check native-codex-recovery-live-check native-grok-live-check native-grok-recovery-live-check
+.PHONY: native-agy-live-check native-agy-recovery-live-check native-claude-recovery-live-check native-codex-recovery-live-check native-grok-live-check native-grok-recovery-live-check native-muse-recovery-live-check
 .PHONY: native-agent-picker-check
 native-agent-picker-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_agent_selector.go picker "$(abspath $(BEE_BINARY))"
@@ -162,6 +162,11 @@ native-grok-recovery-live-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_grok_recovery_test.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" GROK_BIN="$(abspath $(GROK_BIN))" GROK_LOGIN_FILE="$(abspath $(GROK_LOGIN_FILE))" GROK_CONFIG_FILE="$(abspath $(GROK_CONFIG_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_grok_recovery_test.go -run '^TestActualGrokManagedColdRecovery$$' -count=1 -v
 
+native-muse-recovery-live-check:
+	test -n "$(MUSE_BIN)" -a -n "$(MUSE_LOGIN_FILE)"
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_muse_recovery_test.go
+	env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_BINARY="$(abspath $(BEE_BINARY))" MUSE_BIN="$(abspath $(MUSE_BIN))" MUSE_LOGIN_FILE="$(abspath $(MUSE_LOGIN_FILE))" go -C native test ../tests/native_agent_selector.go ../tests/native_agent_live_test.go ../tests/native_agent_muse_recovery_test.go -run '^TestActualMuseManagedColdRecovery$$' -count=1 -v
+
 # A promotion check is read-only with respect to the installed Bee. It builds a
 # fresh candidate, exercises the public journeys for one milestone, and writes a
 # machine-readable evidence receipt only after every gate succeeds. Installation
@@ -179,6 +184,7 @@ promotion-native-agents-check:
 	@test -x "$(CLAUDE_BIN)" -a "$(CLAUDE_CREDENTIAL_ENV)" = ANTHROPIC_API_KEY || { echo "Claude executable and ANTHROPIC_API_KEY selector are required" >&2; exit 2; }
 	@test -x "$(CODEX_BIN)" -a -f "$(CODEX_LOGIN_FILE)" -a -f "$(CODEX_CONFIG_FILE)" || { echo "Codex executable/login/config inputs are required" >&2; exit 2; }
 	@test -x "$(GROK_BIN)" -a -f "$(GROK_LOGIN_FILE)" -a -f "$(GROK_CONFIG_FILE)" || { echo "Grok executable/login/config inputs are required" >&2; exit 2; }
+	@test -x "$(MUSE_BIN)" -a -f "$(MUSE_LOGIN_FILE)" || { echo "Muse executable/login inputs are required" >&2; exit 2; }
 	@test -z "$$(git status --porcelain --untracked-files=all)" || { echo "promotion requires a clean immutable commit" >&2; exit 2; }
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go test -race ./cmd/promotion-receipt
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet ./cmd/promotion-receipt
@@ -192,6 +198,7 @@ promotion-native-agents-check:
 	$(MAKE) native-claude-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" CLAUDE_BIN="$(abspath $(CLAUDE_BIN))" CLAUDE_CREDENTIAL_ENV="$(CLAUDE_CREDENTIAL_ENV)"
 	$(MAKE) native-codex-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" CODEX_BIN="$(abspath $(CODEX_BIN))" CODEX_LOGIN_FILE="$(abspath $(CODEX_LOGIN_FILE))" CODEX_CONFIG_FILE="$(abspath $(CODEX_CONFIG_FILE))"
 	$(MAKE) native-grok-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" GROK_BIN="$(abspath $(GROK_BIN))" GROK_LOGIN_FILE="$(abspath $(GROK_LOGIN_FILE))" GROK_CONFIG_FILE="$(abspath $(GROK_CONFIG_FILE))"
+	$(MAKE) native-muse-recovery-live-check BEE_BINARY="$(abspath $(BEE_BINARY))" MUSE_BIN="$(abspath $(MUSE_BIN))" MUSE_LOGIN_FILE="$(abspath $(MUSE_LOGIN_FILE))"
 	$(MAKE) native-binary-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) offline-boot-check BEE_BINARY="$(abspath $(BEE_BINARY))"
 	$(MAKE) native-client-check BEE_BINARY="$(abspath $(BEE_BINARY))"
@@ -222,4 +229,6 @@ promotion-native-agents-check:
 		-grok "$(abspath $(GROK_BIN))" \
 		-grok-login "$(abspath $(GROK_LOGIN_FILE))" \
 		-grok-config "$(abspath $(GROK_CONFIG_FILE))" \
+		-muse "$(abspath $(MUSE_BIN))" \
+		-muse-login "$(abspath $(MUSE_LOGIN_FILE))" \
 		-output "$(abspath $(PROMOTION_RECEIPT))"

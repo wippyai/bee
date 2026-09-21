@@ -80,7 +80,7 @@ entries:
   kind: process.lua
   source: file://guide.lua
   method: main
-  modules: [funcs, registry, system, json, logger]
+  modules: [funcs, registry, system, env, json, logger]
   imports:
     bounds: bee.threads.records:bounds
     guide: bee.governance:guide

@@ -4,6 +4,21 @@ Installed in global Bee at production source `dc86273`. Saved-profile resolution
 admission and the picker/form workflow have native acceptance; remaining limits
 are listed below.
 
+The globally installed `de9c5d0` release adds the managed Muse 1.3.0 route. Its retained
+private `HOME` leaves `XDG_CONFIG_HOME` unset. Host-admitted Muse auth/settings
+are snapshotted, and each attempt receives a fresh settings file that preserves
+provider/model/TUI values, unrelated MCP servers and user hooks, then inserts
+Bee's scoped MCP and appends authenticated Bee hook groups. The real
+`native-muse-recovery-live-check` passes against `dist/bee-muse-v2`: first-turn
+`thread_read`, file read and selected hook delivery succeed; cold recovery
+recalls the exact session token without tools or prompt replay, retains the
+private HOME/project/application/thread, creates a fresh attempt/gateway and
+hook-token path, and leaves source auth/settings/project state unchanged. The
+test wrapper disables Muse's experimental skill, goal and verification reminder agents only for
+this exact-session check. The installed `bee muse` route also reaches Muse's
+native workspace trust screen from the caller's project directory and detaches
+without changing the user's Muse auth or settings.
+
 A saved profile selects a reviewed launch definition and stores a title, scalar
 options, MCP tool identifiers and appended instructions. The definition selects
 the harness and isolation. The saved value cannot carry executables, credentials,
@@ -112,9 +127,9 @@ instructions are transient until saved; closing the form discards the draft.
 Thirty focused model, profile store, selection and recovery cases pass with the
 form/editor source. Actual native keyboard form acceptance passes and the global build includes the form. Native launch with saved guidance passes using a fixture harness.
 
-Follow-up source adds low/medium/high effort choices to the four default window
-policies. Claude, Agy and Grok already translate effort to native flags; Codex
-now emits a bounded model_reasoning_effort configuration override before any
+Follow-up source adds low/medium/high effort choices to the five default window
+policies. Claude, Agy, Grok and Muse translate effort to native flags; Codex now
+emits a bounded model_reasoning_effort configuration override before any
 subcommand or prompt delimiter. An omitted selection preserves harness defaults.
 Strict lint and 23 focused profile/launch cases pass. These option defaults are
 in the installed dc86273 binary.

@@ -47,6 +47,43 @@ func TestInspectAndAtomicReceiptWrite(t *testing.T) {
 	}
 }
 
+func TestPromotionInvocationIncludesMuseInputs(t *testing.T) {
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(filepath.Join(workingDirectory, "..", "..")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(workingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	providers := map[string]*string{
+		"agy":    stringPointer("/providers/agy"),
+		"claude": stringPointer("/providers/claude"),
+		"codex":  stringPointer("/providers/codex"),
+		"grok":   stringPointer("/providers/grok"),
+		"muse":   stringPointer("/providers/muse"),
+	}
+	got, err := promotionInvocation("commit", "/bee", "/runtime", "/previous", "/build.json", "/bundle.json", "/receipt.json", "model", "builder", "version", providers, "ANTHROPIC_API_KEY")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Variables["MUSE_BIN"] != "/providers/muse" {
+		t.Fatalf("Muse executable missing from receipt invocation: %#v", got.Variables)
+	}
+	if len(got.PrivateInputs) != 6 || got.PrivateInputs[len(got.PrivateInputs)-1] != "muse-login" {
+		t.Fatalf("Muse login input missing from receipt invocation: %#v", got.PrivateInputs)
+	}
+}
+
+func stringPointer(value string) *string {
+	return &value
+}
+
 func TestVerifyProvenanceAndPackAudit(t *testing.T) {
 	root := t.TempDir()
 	generation := filepath.Join(root, "native-bundles", "generation")

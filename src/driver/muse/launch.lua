@@ -1,13 +1,13 @@
 -- MIT. Muse CLI launch specifications: a fresh exec, or a resumed session.
 -- The prompt travels as a positional argument behind a -- guard; exec reads
--- no prompt from stdin. Placement resolves the executable, the config home
+-- no prompt from stdin. Placement resolves the executable, the private home
 -- and the working directory; nothing here runs.
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
--- Subscription login under `muse login` is the only authentication path.
--- Copying that login into private session state is not implemented, so the
--- gate stays open until the pinned build proves it.
+-- Muse authentication uses the admitted login copied into a retained private
+-- HOME. Keep the explicit gate open until the clean-commit promotion repeats
+-- the live provider recovery proof.
 M.MUSE_AUTHENTICATION = "unproven"
 M.APPROVAL_MODES = {"untrusted", "on-request", "never"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
@@ -64,6 +64,9 @@ function M.decode(value: unknown): (Request?, string?)
         resume = bounds.id(object.resume_ref)
         if not resume then return nil, "resume_ref is not an identifier" end
         if resume:sub(1, 1) == "-" then return nil, "resume_ref must not be a command-line option" end
+    end
+    if profile_id == "window" and resume ~= nil and brief ~= "" then
+        return nil, "window resume cannot carry a brief"
     end
     return {profile_id = profile_id, brief = brief, approval_mode = mode, max_steps = steps, model = model, effort = effort, resume_ref = resume, gateway_hooks = hooks}, nil
 end

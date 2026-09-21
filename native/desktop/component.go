@@ -113,7 +113,7 @@ func (h *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error) {
 	if launch.Op == app.OpRun && launch.Command == "bee" &&
 		len(launch.Args) > 0 && launch.Args[0] == "hook-post" {
 		if len(launch.Args) != 5 {
-			return app.Plan{}, errors.New("hook-post: expected ENDPOINT ACTION_ID TOKEN_ENV EVENT")
+			return app.Plan{}, errors.New("hook-post: expected ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT")
 		}
 		args := launch.Args
 		return app.Plan{Run: func(ctx context.Context) error {

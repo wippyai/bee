@@ -29,7 +29,9 @@ local function decode_reply(value: unknown): Result?
     local code: string? = nil
     if type(reply.code) == "string" then code = reply.code end
     local message: string? = nil
-    if type(reply.message) == "string" then message = reply.message:gsub("workspace", "overlay") end
+    if type(reply.message) == "string" then
+        message = reply.message:gsub("workspace_id", "overlay_id"):gsub("workspace", "overlay")
+    end
     local commit: boolean? = nil
     if type(reply.commit) == "boolean" then commit = reply.commit end
     local result: Result = {ok = reply.ok, code = code, message = message,
@@ -53,13 +55,13 @@ local function handle(raw: unknown): Result
         return transaction.failure("DENIED", "overlay operation is not authorized")
     end
     local scope, scope_error = security.named_scope(EXECUTION_SCOPE)
-    if not scope then return transaction.failure("UNAVAILABLE", tostring(scope_error or "workspace execution scope unavailable")) end
+    if not scope then return transaction.failure("UNAVAILABLE", tostring(scope_error or "overlay execution scope unavailable")) end
     local executor, executor_error = funcs.new():with_scope(scope)
-    if not executor then return transaction.failure("DENIED", tostring(executor_error or "workspace execution scope denied")) end
+    if not executor then return transaction.failure("DENIED", tostring(executor_error or "overlay execution scope denied")) end
     local result, call_error = executor:call(BACKEND, request)
     if call_error then return transaction.failure("UNAVAILABLE", tostring(call_error)) end
     local reply = decode_reply(result)
-    if not reply then return transaction.failure("INTERNAL", "workspace backend returned a malformed reply") end
+    if not reply then return transaction.failure("INTERNAL", "overlay backend returned a malformed reply") end
     return reply
 end
 return {handle = handle}

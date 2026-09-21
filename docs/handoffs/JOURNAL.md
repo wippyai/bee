@@ -8270,3 +8270,89 @@ it copied, removed or reset no Bee state. Backup:
 `bee-evidence/0920/global-overlay-d9e8bad-install.json`. A post-install launch
 from `/mnt/c/Users/Wolfy-J` opened Overlays, Approvals and all five Agent picker
 rows, detached, and stopped the retained owner cleanly.
+
+### 2026-09-21 — Muse 1.3.0 driver source checkpoint
+
+The current source candidate extends the managed harness set with Muse 1.3.0.
+The route keeps the provider boundary declarative: managed Muse runs in a
+retained Bee-owned private `HOME` with `XDG_CONFIG_HOME` absent, while the host
+admits the user's `.config/muse/auth.json` and settings file through the
+credential setup path. The broker retains the original settings separately and
+placement regenerates a fresh `.config/muse/settings.json` for each attempt.
+
+The generated settings preserve the user's provider/model/TUI choices,
+unrelated MCP servers and existing hook groups. Bee inserts only its scoped
+`mcpServers.bee` entry and appends selected authenticated hook groups. The
+driver carries `--session-id` for batch continuation and strictly decodes the
+Muse stream protocol. Focused composition and protocol checks cover the
+bounded source contract. Exact session cold recovery and live real-provider
+MCP/hook acceptance remain pending; no global installation or live Muse turn
+is claimed by this checkpoint.
+
+### 2026-09-21 — Muse 1.3.0 real managed cold recovery passed
+
+`native-muse-recovery-live-check` passes against `dist/bee-muse-v2` with the
+real Muse 1.3.0 executable and admitted login. The first managed turn completed
+the scoped Bee `thread_read` call, a fixture file read and the selected
+SessionStart, UserPromptSubmit, PreToolUse, PostToolUse and Stop hooks. The
+retained private `HOME` was used with `XDG_CONFIG_HOME` unset; provider/model/TUI
+settings, the unrelated user MCP server and user hook survived composition.
+
+After the Bee owner restart, Muse resumed the exact provider session and
+recalled the token without tools or replaying the first prompt. The project,
+application, thread and retained HOME stayed stable while the new attempt,
+gateway binding and private hook-token path were fresh; the predecessor retired
+cleanly. Source auth, settings and project tree remained unchanged. The wrapper
+disabled Muse's experimental skill, goal and verification reminder agents only for this
+exact-session acceptance, so those provider-owned reminder turns were outside
+the proof. This source candidate has not been installed globally.
+
+### 2026-09-21 — managed Muse release installed globally
+
+Source `de9c5d0` is installed globally as executable SHA-256
+`5e8d3f608e571660edcd2376cac6c3a242f046827ad2604bdfe3005f27190dfb`,
+with runtime `b476104e63` and native Bee
+`v0.0.0-20260921050738-b2060715b014`. The clean candidate passed strict lint
+(498 entries, one known desktop-lifecycle warning), all 1,205 unit cases, the
+163-document corpus, managed Muse login/MCP/lifecycle, the complete five-profile
+selector, loopback-only offline cold boot/restart/reconnect, and two independent
+real Muse exact-session recovery runs in 106.24 and 107.79 seconds.
+
+The guarded six-file installer first refused an obsolete native-version
+assertion before touching the installed set. After the assertion was aligned
+with the candidate's two declared native entries, it proved post-replacement
+rollback on a disposable set and atomically installed the verified artifacts.
+Two exact prior owners stopped cleanly on SIGTERM. Backup:
+`bee-evidence/0921/global-before-muse-de9c5d0`. Receipt:
+`bee-evidence/0921/global-muse-de9c5d0-install.json`. No database, profile,
+conversation, workspace, display, credential or migration ledger was copied,
+removed or reset.
+
+From `/mnt/c/Users/Wolfy-J`, installed `bee muse` reached Muse's own workspace
+trust screen. Escape closed the agent and Ctrl+Q detached with exit 0. The
+user's Muse auth and settings hashes were identical before and after the smoke.
+
+### 2026-09-21 Codex: governed authoring reference installed globally
+
+A repository-wide organization and UI review found no evidence for package
+moves, namespace renames, a widget framework or production deletion. Source
+`9e28a8b` instead fixes the bounded gaps: the MCP authoring guide now returns a
+responsive, semantic Counter App with keyboard/mouse parity, authenticated
+appearance updates and correlated checkpoint receipts; the offline corpus
+embeds that exact source; public overlay error copy and current Governance status
+are accurate; and Process Manager geometry covers both tabs across the canonical
+responsive matrix.
+
+The exact source and packed App Journey authors, freezes, reviews, approves and
+applies the Guide overlay through production facades and UI, then proves resize,
+Enter, mouse, live appearance change and durable `Count: 2 / Saved: 2` reopen.
+All 1,208 unit cases, strict lint, corpus, repository, pack, standalone embedded
+applications, five-profile Agent selector and offline boot/restart/reconnect pass.
+
+The verified global executable SHA-256 is
+`e7b8e8a576495b4c0565633a86d6c4ba68f6d5c72cd85a8b4e5cac3c51d93b94`,
+with runtime `b476104e63` and native Bee
+`v0.0.0-20260921050738-b2060715b014`. The guarded installer proved rollback,
+stopped one exact prior owner cleanly and preserved every Bee state class.
+Backup: `bee-evidence/0921/global-before-guide-9e28a8b`. Receipt:
+`bee-evidence/0921/global-guide-9e28a8b-install.json`.

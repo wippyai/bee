@@ -5,13 +5,6 @@ entries:
   kind: fs.directory
   meta: {type: test_support}
   directory: ./fixtures/drivers
-- name: fixture_reader_policy
-  kind: security.policy
-  meta: {type: test_support}
-  policy:
-    actions: [fs.get, fs.read]
-    resources: '*'
-    effect: allow
 - name: profile_test
   kind: function.lua
   source: file://profile_test.lua
@@ -75,5 +68,8 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
+    registry: registry
     configuration: bee.driver.muse:configuration
     configure: bee.driver.muse:configure
+    placement_configuration: bee.placement.native:configuration
+    placement_types: bee.placement:types

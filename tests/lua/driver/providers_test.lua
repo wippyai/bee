@@ -234,9 +234,49 @@ local function define_tests()
                 test.is_true(has(echo.types, "turn.signal:ended"))
             end
         end)
-        test.it("records a failed task as a non-retryable fault and fails the terminal run", function()
+        test.it("normalizes explicit tool calls and results without guessing lifecycle tasks", function()
+            local state = muse.new(false)
+            local call = muse.normalize(state, 1, {
+                payload_type = "tool.call",
+                stream = {id = "sess-tools"},
+                payload = {call_id = "call-1", tool_name = "read_file", input = {path = "fixture.txt"}},
+            })
+            test.eq(#call.observations, 1)
+            test.eq(call.observations[1].type, "tool.call")
+            local call_data = call.observations[1].data :: {[string]: unknown}
+            test.eq(call_data.call_id, "call-1")
+            test.eq(call_data.tool_name, "read_file")
+            local result = muse.normalize(state, 2, {
+                payload_type = "tool.result",
+                stream = {id = "sess-tools"},
+                payload = {call_id = "call-1", correlation_facts = {outcome = "success", tool_name = "read_file"}, text = "line 1"},
+            })
+            test.eq(#result.observations, 1)
+            test.eq(result.observations[1].type, "tool.result")
+            local result_data = result.observations[1].data :: {[string]: unknown}
+            test.eq(result_data.call_id, "call-1")
+            test.eq(result_data.outcome, "succeeded")
+            local failed = muse.normalize(state, 3, {
+                payload_type = "tool.result",
+                stream = {id = "sess-tools"},
+                payload = {call_id = "call-2", outcome = "error", reason = "denied", text = "no"},
+            })
+            test.eq(failed.observations[1].type, "tool.result")
+            local failed_data = failed.observations[1].data :: {[string]: unknown}
+            test.eq(failed_data.outcome, "failed")
+            test.eq((failed_data.error :: {[string]: unknown}).code, "tool_error")
+
+            local lifecycle = muse.normalize(state, 4, {
+                payload_type = "task.lifecycle.proposed",
+                stream = {id = "sess-tools"},
+                payload = {task_id = "task-1", event = {kind = "proposed", task_id = "task-1", task_kind = "tool.read_file"}},
+            })
+            test.eq(lifecycle.observations[1].type, "extension")
+        end)
+        test.it("keeps an untyped failed task opaque and fails the terminal run", function()
             local failed = run(muse, "/muse/msp-exec-1/failure.jsonl", 100, false)
-            test.is_true(has(failed.types, "tool.result:failed"))
+            test.is_true(has(failed.types, "extension:"))
+            test.is_false(has(failed.types, "tool.result:failed"))
             if not failed.terminal then error("no terminal") end
             test.eq(failed.terminal.outcome, "failed")
             test.is_nil(failed.terminal.answer)
@@ -254,6 +294,84 @@ local function define_tests()
             test.is_nil(cut.terminal.answer)
             test.eq(cut.terminal.error and cut.terminal.error.code, "stream_ended")
             test.is_true(has(cut.types, "turn.signal:ended"))
+        end)
+        test.it("keeps startup and session identity honest", function()
+            local before_fixture = run(muse, "/muse/msp-exec-1/terminal_before_start.jsonl", 7, false)
+            test.eq(before_fixture.terminal and before_fixture.terminal.outcome, "uncertain")
+            test.eq(before_fixture.terminal and before_fixture.terminal.error and before_fixture.terminal.error.code, "terminal_before_start")
+            local unknown_fixture = run(muse, "/muse/msp-exec-1/unknown_terminal.jsonl", 7, false)
+            test.eq(unknown_fixture.terminal and unknown_fixture.terminal.outcome, "uncertain")
+            test.eq(unknown_fixture.terminal and unknown_fixture.terminal.error and unknown_fixture.terminal.error.code, "run_terminal_unknown")
+
+            local before_start = muse.normalize(muse.new(false), 1, {
+                payload_type = "run.terminal.completed",
+                stream = {id = "sess-before-start"},
+                payload = {terminal = "completed"},
+            })
+            if not before_start.terminal then error("no terminal-before-start result") end
+            test.eq(before_start.terminal.outcome, "uncertain")
+            test.eq(before_start.terminal.error and before_start.terminal.error.code, "terminal_before_start")
+
+            local failed_state = muse.new(false)
+            muse.normalize(failed_state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-failed"}, payload = {}})
+            muse.normalize(failed_state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-failed"}, payload = {}})
+            local failed = muse.normalize(failed_state, 3, {
+                payload_type = "run.terminal.completed",
+                stream = {id = "sess-failed"},
+                payload = {terminal = "failed", reason = "provider failed"},
+            })
+            if not failed.terminal then error("no failed terminal") end
+            test.eq(failed.terminal.outcome, "failed")
+            test.eq(failed.terminal.error and failed.terminal.error.code, "run_failed")
+
+            local unknown_state = muse.new(false)
+            muse.normalize(unknown_state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-unknown"}, payload = {}})
+            muse.normalize(unknown_state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-unknown"}, payload = {}})
+            local unknown = muse.normalize(unknown_state, 3, {
+                payload_type = "run.terminal.completed",
+                stream = {id = "sess-unknown"},
+                payload = {terminal = "new-value"},
+            })
+            if not unknown.terminal then error("no unknown terminal") end
+            test.eq(unknown.terminal.outcome, "uncertain")
+            test.eq(unknown.terminal.error and unknown.terminal.error.code, "run_terminal_unknown")
+
+            local identity_state = muse.new(false)
+            muse.normalize(identity_state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-original"}, payload = {}})
+            local changed = muse.normalize(identity_state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-other"}, payload = {}})
+            test.eq(identity_state.session_id, "sess-original")
+            local mismatch = changed.observations[1].data :: {[string]: unknown}
+            test.eq(mismatch.code, "session_mismatch")
+        end)
+        test.it("bounds retained answers and rejects untrusted persisted state", function()
+            local state = muse.new(false)
+            muse.normalize(state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-bounded"}, payload = {}})
+            muse.normalize(state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-bounded"}, payload = {}})
+            muse.normalize(state, 3, {payload_type = "run.output.delta", stream = {id = "sess-bounded"}, payload = {text = "prefix"}})
+            local oversized = muse.normalize(state, 4, {payload_type = "run.output.delta", stream = {id = "sess-bounded"}, payload = {text = string.rep("x", muse.MAX_ANSWER_BYTES)}})
+            test.is_true(state.answer_truncated)
+            test.is_nil(state.answer)
+            local saw_bound = false
+            for _, item in ipairs(oversized.observations) do
+                local data = item.data :: {[string]: unknown}
+                if data.code == "answer_truncated" then saw_bound = true end
+            end
+            test.is_true(saw_bound)
+            local done = muse.normalize(state, 5, {payload_type = "run.terminal.completed", stream = {id = "sess-bounded"}, payload = {terminal = "completed"}})
+            test.is_nil(done.terminal and done.terminal.answer)
+
+            local unknown = funcs.call("bee.driver.muse:normalize", {index = 1, state = {
+                resumed = false, command_accepted = false, run_started = false, answer_truncated = false,
+                unknown = true,
+            }, eof = true})
+            test.is_false(unknown.ok)
+            test.eq(unknown.error, "state: unknown field unknown")
+            local overlong = funcs.call("bee.driver.muse:normalize", {index = 1, state = {
+                resumed = false, command_accepted = false, run_started = false, answer_truncated = false,
+                answer = string.rep("x", muse.MAX_ANSWER_BYTES + 1),
+            }, eof = true})
+            test.is_false(overlong.ok)
+            test.eq(overlong.error, "state.answer exceeds the retained answer bound")
         end)
         test.it("produces declarative launch specifications only", function()
             local request, err = muse_launch.decode({profile_id = "batch", brief = "say ok"})
@@ -298,8 +416,8 @@ local function define_tests()
             if not native_resume then error(tostring(native_resume_error)) end
             test.eq(quote.line(muse_launch.specification(native_resume).argv), "resume native-session")
             local native_both, native_both_error = muse_launch.decode({profile_id = "window", brief = "--help", resume_ref = "native-session"})
-            if not native_both then error(tostring(native_both_error)) end
-            test.eq(quote.line(muse_launch.specification(native_both).argv), "resume native-session -- --help")
+            test.is_nil(native_both)
+            test.eq(native_both_error, "window resume cannot carry a brief")
             local reply, call_error = funcs.call("bee.driver.muse:normalize", {index = 1,
                 envelope = {payload_type = "runtime.command.accepted", stream = {id = "sess-1"}, payload = {}}})
             if call_error then error(tostring(call_error)) end

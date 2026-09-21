@@ -1,6 +1,81 @@
-# Global Bee build — September 20, 2026
+# Global Bee build — September 21, 2026
 
-## Current install: verified private approvals and production cleanup
+## Current install: governed authoring reference
+
+Source `9e28a8b`, executable SHA-256
+`e7b8e8a576495b4c0565633a86d6c4ba68f6d5c72cd85a8b4e5cac3c51d93b94`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime `b476104e63` and native Bee
+`v0.0.0-20260921050738-b2060715b014`.
+
+The governed authoring guide now carries a real Bee-quality Counter App rather
+than an unstyled protocol sketch. Its exact MCP-returned source uses semantic
+appearance, responsive terminal geometry, keyboard/mouse parity, authenticated
+appearance updates and request-correlated checkpoint receipts. Source and packed
+App Journey acceptance authors and freezes that overlay through Governance,
+reviews and approves it through Overlays and Approvals, opens it from Start,
+resizes it, changes the workspace appearance, invokes Enter and the matching
+mouse action, then reopens it with `Count: 2 / Saved: 2`.
+
+Strict lint covers 498 production entries with the documented desktop-lifecycle
+warning; all 1,208 unit cases, the 163-document corpus, repository checks,
+production pack and the complete source/packed App Journey pass. The standalone
+passes embedded Desktop, Settings, Terminal, Modules and About, the five-profile
+Agent selector, and loopback-only offline cold boot/restart/reconnect; warm
+attachment measured 0.105 seconds. The installed executable independently
+passed the embedded desktop, Settings and Terminal smoke.
+
+The six-file installer verified the candidate and runtime patch archive, proved
+post-replacement rollback against a disposable set, stopped one exact prior Bee
+owner cleanly on SIGTERM, backed up the previous set at
+`/home/wolfy-j/wippy/bee-evidence/0921/global-before-guide-9e28a8b`, and
+atomically replaced sidecars before the executable. Receipt:
+`/home/wolfy-j/wippy/bee-evidence/0921/global-guide-9e28a8b-install.json`.
+Databases, profiles, conversations, workspaces, displays, credentials and
+migration ledgers were preserved.
+
+## Previous install: managed Muse driver and exact recovery
+
+Source `de9c5d0`, executable SHA-256
+`5e8d3f608e571660edcd2376cac6c3a242f046827ad2604bdfe3005f27190dfb`,
+is installed globally with its matching license, Go module, provenance and
+runtime-patch sidecars. It pins runtime `b476104e63` and native Bee
+`v0.0.0-20260921050738-b2060715b014`.
+
+Managed Muse uses a retained private `HOME` with
+`XDG_CONFIG_HOME` absent. Host-admitted Muse auth/settings are snapshotted;
+each attempt composes fresh settings that preserve provider/model/TUI choices,
+unrelated MCP servers and user hooks, then inserts Bee's scoped MCP and
+appends authenticated Bee hook groups. The real
+`native-muse-recovery-live-check` passes against `dist/bee-muse-v2`: its first
+turn completes scoped `thread_read`, a file read and selected hooks; cold
+recovery recalls the exact session token without tools or prompt replay, keeps
+the private HOME/project/application/thread, and creates a fresh
+attempt/gateway/hook-token path while leaving source auth/settings/project
+state unchanged. The wrapper disables Muse's experimental skill, goal and verification reminder
+agents only for this exact-session check.
+
+Strict lint covers 498 entries with only the documented desktop-lifecycle
+warning; all 1,205 unit cases pass and the 163-document agent corpus is valid.
+The clean standalone passes managed Muse login/MCP/lifecycle, the complete
+five-profile selector, and loopback-only offline cold boot, restart and retained
+reconnect. Two independent real Muse recovery runs passed in 106.24 and 107.79
+seconds. The second run also proved exact terminal completion, stable provider
+session, all selected hooks, two private `0600` hook-token files, and unchanged
+user auth/settings.
+
+The installer verified all six artifacts and the runtime patch archive, proved
+post-replacement rollback against a disposable set, stopped two exact prior Bee
+owners cleanly on SIGTERM, backed up the previous set at
+`/home/wolfy-j/wippy/bee-evidence/0921/global-before-muse-de9c5d0`, and
+atomically replaced sidecars before the executable. Receipt:
+`/home/wolfy-j/wippy/bee-evidence/0921/global-muse-de9c5d0-install.json`.
+Databases, profiles, conversations, workspaces, displays, credentials and
+migration ledgers were preserved. From `/mnt/c/Users/Wolfy-J`, installed
+`bee muse` reached Muse's workspace trust screen. Escape closed the agent and
+Ctrl+Q detached with exit 0; the source auth and settings hashes were unchanged.
+
+## Previous install: verified private approvals and production cleanup
 
 Source `8f0756a`, executable SHA-256
 `fbc7cce048402e5d12ceff5b0c04957e48633fab78f7160e8263f18a555e81d0`,

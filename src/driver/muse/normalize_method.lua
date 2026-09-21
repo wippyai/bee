@@ -11,13 +11,15 @@ local function handle(request: unknown): Reply
     if unknown_field then return {ok = false, error = unknown_field} end
     local index = bounds.count(object.index)
     if not index then return {ok = false, error = "index must be a nonnegative integer"} end
+    if object.eof ~= nil and type(object.eof) ~= "boolean" then return {ok = false, error = "eof must be a boolean"} end
+    if object.resumed ~= nil and type(object.resumed) ~= "boolean" then return {ok = false, error = "resumed must be a boolean"} end
     local state: protocol.State
     if object.state == nil then
         state = protocol.new(object.resumed == true)
-    elseif type(object.state) == "table" then
-        state = object.state :: protocol.State
     else
-        return {ok = false, error = "state must be an object"}
+        local decoded, state_error = protocol.decode_state(object.state)
+        if not decoded then return {ok = false, error = state_error or "state is invalid"} end
+        state = decoded
     end
     local step: protocol.Step
     if object.eof == true then

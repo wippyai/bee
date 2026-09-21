@@ -107,3 +107,31 @@ Authorization = "Bearer ${OTHER_TOKEN}"
 		t.Fatal("probe selected unrelated MCP configuration")
 	}
 }
+
+func TestMuseMCPProbeReadsMaterializedSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	previous, present := os.LookupEnv("XDG_CONFIG_HOME")
+	if err := os.Unsetenv("XDG_CONFIG_HOME"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if present {
+			_ = os.Setenv("XDG_CONFIG_HOME", previous)
+		} else {
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
+		}
+	})
+	dir := filepath.Join(home, ".config", "muse")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	settings := "{\"schema_version\":1,\"mcpServers\":{\"bee\":{\"url\":\"http://127.0.0.1:1234/mcp/action\",\"headers\":{\"Authorization\":\"Bearer materialized-token\"}}}}"
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(settings), 0600); err != nil {
+		t.Fatal(err)
+	}
+	url, token, ok := mcpProbeConfig("muse", nil)
+	if !ok || url != "http://127.0.0.1:1234/mcp/action" || token != "materialized-token" {
+		t.Fatal("probe did not read Muse's materialized MCP settings from private HOME")
+	}
+}

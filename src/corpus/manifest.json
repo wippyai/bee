@@ -835,9 +835,9 @@
       "topic": "terminal"
     },
     {
-      "bytes": 10154,
+      "bytes": 11493,
       "id": "docs/agent_guide",
-      "sha256": "75bcf01fb871e5e404e0f8f1f70dc269a74f37dbcbe0fd5d4c6da0cf8c5375f4",
+      "sha256": "2fcefedda673dc09223d9d878188779af4db275da2c987fa86d92d266aee9215",
       "source": "docs/AGENT_GUIDE.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -923,9 +923,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 26421,
+      "bytes": 28131,
       "id": "docs/governance_implementation",
-      "sha256": "6022da9c7d920bee5187f76f71c75e2c55ced0894c66cd3587ae96925a30f27a",
+      "sha256": "9007c8e6b6fb7d8419bd0b9f3a0b52dcbb5fe31170d2103b1502634beb31f7e7",
       "source": "docs/GOVERNANCE_IMPLEMENTATION.md",
       "title": "Bee governance implementation plan",
       "topic": "application"
@@ -939,9 +939,9 @@
       "topic": "harness"
     },
     {
-      "bytes": 19216,
+      "bytes": 19118,
       "id": "docs/hive_bootstrap",
-      "sha256": "04ff9ce6ea7bc6abb7ac726f23420201b55b6914a8e67de115fd5b7b95b9abbf",
+      "sha256": "37904475706897bb90866d804201f832c0ffb64dd8dc8730f0790392bd521bf7",
       "source": "docs/HIVE_BOOTSTRAP.md",
       "title": "Hive startup",
       "topic": "cluster"
@@ -963,9 +963,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 30223,
+      "bytes": 30179,
       "id": "docs/hive_supervisor",
-      "sha256": "7f8d1a8bbb4e0b7cf6795fcd5b5f344e2f90807c87f313a1c5d4620075f59960",
+      "sha256": "e709c7572cc3174531b03d07deb44b1dd235d25694493d8946df46c618847ccf",
       "source": "docs/HIVE_SUPERVISOR.md",
       "title": "Supervisor implementation boundary",
       "topic": "cluster"
@@ -1187,9 +1187,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2048,
+      "bytes": 3930,
       "id": "component/driver:muse",
-      "sha256": "b42e2095c9171b3616e9be5c800879681fe2bd7f1ab3c1ca305244c3f5491f08",
+      "sha256": "011d7608e5a1b040149519b0bb18212b71eeb5857f15a02b4698c25d4de87f80",
       "source": "src/driver:muse",
       "title": "bee.driver.muse",
       "topic": "component"
@@ -1299,9 +1299,9 @@
       "topic": "component"
     },
     {
-      "bytes": 14962,
+      "bytes": 23169,
       "id": "toolkit",
-      "sha256": "2c0a8039c6193997339873f523fb66187fb5d4b5f220366e1ce6ff1b8354de8d",
+      "sha256": "9be979a27e37d89b1cce86a5070d48924492c025b2fe72a666656514fed16c3d",
       "source": "generated: src/ui, src/apps, src/governance/guide.lua",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -1310,7 +1310,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: every published wippy.ai/llm page under lua/**, system/** and http/** (the native modules an application author calls and the component kinds behind them), plus the named concept, guide, internals, tutorial and platform pages this project lists; frontend/**, framework/**, temporal/**, wasm/** and about/** are excluded because they are another product surface, not the terminal application contract. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, hive, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding the pages docs/README.md labels historical or proposed. Component: one README per src/ package. Terminal toolkit: one generated page composed from src/ui, src/apps and src/governance/guide.lua and digest-checked with the rest.",
   "totals": {
-    "bytes": 2167498,
+    "bytes": 2180494,
     "documents": 163
   }
 }

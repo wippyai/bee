@@ -14,18 +14,21 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	MaxPayloadBytes  = 32768
-	MaxActionBytes   = 128
-	MaxEndpointBytes = 128
-	MaxEnvNameBytes  = 128
-	MaxTokenBytes    = 4096
-	RequestTimeout   = 2 * time.Second
+	MaxPayloadBytes   = 32768
+	MaxActionBytes    = 128
+	MaxEndpointBytes  = 128
+	MaxEnvNameBytes   = 128
+	MaxTokenPathBytes = 4096
+	MaxTokenFileBytes = 8192
+	MaxTokenBytes     = 4096
+	RequestTimeout    = 2 * time.Second
 )
 
 var knownEvents = map[string]struct{}{
@@ -42,7 +45,7 @@ var knownEvents = map[string]struct{}{
 // Run validates the command values, reads one bounded JSON object from stdin,
 // and submits it once. stdin must be closeable so cancellation can interrupt a
 // blocked read (os.Stdin satisfies this contract).
-func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenEnv, event string) error {
+func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenSource, event string) error {
 	if ctx == nil {
 		return errors.New("hook-post: context is required")
 	}
@@ -55,21 +58,18 @@ func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenEnv,
 	if !safeSegment(actionID, MaxActionBytes) {
 		return errors.New("hook-post: invalid action id")
 	}
-	if !safeEnvName(tokenEnv) {
-		return errors.New("hook-post: invalid token environment")
-	}
 	if _, ok := knownEvents[event]; !ok {
 		return errors.New("hook-post: invalid event")
+	}
+	token, tokenError := resolveToken(tokenSource)
+	if tokenError != nil {
+		return tokenError
 	}
 
 	requestCtx, cancel := context.WithTimeout(ctx, RequestTimeout)
 	defer cancel()
 	if err := requestCtx.Err(); err != nil {
 		return err
-	}
-	token, ok := os.LookupEnv(tokenEnv)
-	if !ok || !validToken(token) {
-		return errors.New("hook-post: hook token is unavailable")
 	}
 	raw, err := readBounded(requestCtx, stdin)
 	if err != nil {
@@ -114,6 +114,98 @@ func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenEnv,
 		return errors.New("hook-post: gateway rejected request with status " + strconv.Itoa(response.StatusCode))
 	}
 	return nil
+}
+
+func resolveToken(source string) (string, error) {
+	if strings.HasPrefix(source, "@") {
+		path := source[1:]
+		if len(path) == 0 || len(path) > MaxTokenPathBytes || !filepath.IsAbs(path) || strings.ContainsRune(path, '\x00') {
+			return "", errors.New("hook-post: invalid token source")
+		}
+		token, err := readTokenFile(path)
+		if err != nil {
+			// The path, filesystem error and document contents are deliberately
+			// omitted: this source contains a credential and is host-selected.
+			return "", errors.New("hook-post: hook token is unavailable")
+		}
+		return token, nil
+	}
+	if !safeEnvName(source) {
+		return "", errors.New("hook-post: invalid token source")
+	}
+	token, ok := os.LookupEnv(source)
+	if !ok || !validToken(token) {
+		return "", errors.New("hook-post: hook token is unavailable")
+	}
+	return token, nil
+}
+
+func readTokenFile(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return "", errors.New("token file is not regular")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", errors.New("token file could not be opened")
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return "", errors.New("token file is not regular")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, MaxTokenFileBytes+1))
+	if err != nil || len(data) > MaxTokenFileBytes {
+		return "", errors.New("token file exceeds its bound")
+	}
+	return decodeTokenFile(data)
+}
+
+func decodeTokenFile(data []byte) (string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	opening, err := decoder.Token()
+	if err != nil {
+		return "", errors.New("token file is malformed")
+	}
+	delim, ok := opening.(json.Delim)
+	if !ok || delim != '{' {
+		return "", errors.New("token file must contain one object")
+	}
+	var token string
+	seen := false
+	for decoder.More() {
+		name, nameError := decoder.Token()
+		if nameError != nil {
+			return "", errors.New("token file is malformed")
+		}
+		field, fieldOK := name.(string)
+		if !fieldOK || field != "token" || seen {
+			return "", errors.New("token file contains an unknown or duplicate field")
+		}
+		var raw json.RawMessage
+		if decodeError := decoder.Decode(&raw); decodeError != nil {
+			return "", errors.New("token file is malformed")
+		}
+		var candidate string
+		if json.Unmarshal(raw, &candidate) != nil || !validToken(candidate) {
+			return "", errors.New("token file token is invalid")
+		}
+		token = candidate
+		seen = true
+	}
+	closing, closeError := decoder.Token()
+	if closeError != nil {
+		return "", errors.New("token file is malformed")
+	}
+	closingDelim, closingOK := closing.(json.Delim)
+	if !closingOK || closingDelim != '}' || !seen {
+		return "", errors.New("token file must contain exactly one token")
+	}
+	var extra json.RawMessage
+	if extraError := decoder.Decode(&extra); extraError != io.EOF {
+		return "", errors.New("token file contains multiple JSON documents")
+	}
+	return token, nil
 }
 
 func validateEndpoint(endpoint string) error {

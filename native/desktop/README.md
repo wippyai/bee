@@ -33,10 +33,13 @@ stays bound to the root. The host also selects the shared same-account Hive
 directory and the protected machine configuration directory; a saved joined
 profile in the latter is what makes an owner join a Hive.
 
-A generated command hook runs `bee hook-post ENDPOINT ACTION_ID TOKEN_ENV EVENT`.
-The host answers it as a `Plan.Run`, so it never selects project state or starts
-an owner. The `bee.harness.host:environment` storage exposes this executable's
-own path.
+A generated command hook runs
+`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT`. The token argument
+may name the existing environment source or an `@`-prefixed absolute private
+JSON token file; a selected file source is bounded and must remain a regular,
+non-symlink file, with no environment fallback. The host answers it as a
+`Plan.Run`, so it never selects project state or starts an owner. The
+`bee.harness.host:environment` storage exposes this executable's own path.
 
 Ordinary application launches run the code from this executable's
 digest-scoped bundle and keep authored registry history in the selected state's

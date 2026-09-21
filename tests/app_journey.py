@@ -29,6 +29,11 @@ from workspace import (ROOT, RUNTIME, configure_managed_gateway,
 
 DEFINITION_ID = "bee.app_journey_demo:app"
 TITLE = "App Journey"
+GUIDE_DEFINITION_ID = "bee.guide_demo:app"
+GUIDE_TITLE = "Counter App"
+GUIDE_WORKSPACE = "app-journey-guide"
+GUIDE_VERSION = "1.0.0"
+GUIDE_APPROVAL_POLICY = "local-app-journey-guide"
 # The cold first boot of a full composition, the budget the sibling desktop
 # acceptances (tests/inbox_decide.py) already use for one.
 COLD_BOOT = 30
@@ -164,8 +169,8 @@ def stage_replacement(project, folder):
     return evidence
 
 
-def replace_v2_in_ui(ui, staged, root):
-    """Review, approve and apply one exact compatible plan through the UI."""
+def apply_staged_in_ui(ui, staged, root):
+    """Review, approve and apply one exact staged plan through the UI."""
     ui.open_start()
     ui.choose("Tools")
     ui.choose("Overlays")
@@ -216,7 +221,7 @@ def replace_v2_in_ui(ui, staged, root):
     ui.key(b"\t")
     ui.key(b"\r")
     ui.wait("approved by bee.application:", timeout=COLD_BOOT)
-    assert_inbox_decider(root, workspace_identity(root))
+    assert_inbox_decider(root, workspace_identity(root), staged["approval_policy"])
 
     # Focus the retained delivery window from the taskbar and let its own
     # activation loop consume the one approved effect.
@@ -243,6 +248,12 @@ def replace_v2_in_ui(ui, staged, root):
     ui.pump(.3)
 
 
+def replace_v2_in_ui(ui, staged, root):
+    """Review, approve and apply one exact compatible plan through the UI."""
+    staged = dict(staged, approval_policy="local-app-journey")
+    apply_staged_in_ui(ui, staged, root)
+
+
 def guide(project, folder):
     """The guide's own example, authored through the real chain, must reach a
     ready preflight. This is what keeps the product guide from rotting: the
@@ -250,7 +261,8 @@ def guide(project, folder):
     args = [str(RUNTIME), "run", "--verbose", "app-journey-guide", "--host", "bee:workers",
             "--set", f"registry.history_path={folder}/registry.db"]
     result = subprocess.run(args, cwd=project, capture_output=True, text=True,
-                            timeout=300, env=database_environment(folder))
+                            timeout=300, env=database_environment(
+                                folder, BEE_APP_JOURNEY_WORKSPACE=workspace_identity(folder)))
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     match = re.search(r"APP_JOURNEY_GUIDE\s+(\{.*\})", output)
@@ -259,7 +271,10 @@ def guide(project, folder):
     for name in ("snapshot_digest", "artifact_digest", "plan_digest"):
         assert re.fullmatch(r"[0-9a-f]{64}", evidence[name]), (name, evidence)
     assert evidence["ready"] is True and evidence["example_matches"] is True, evidence
-    assert evidence["definition_id"] == "bee.guide_demo:app", evidence
+    assert evidence["definition_id"] == GUIDE_DEFINITION_ID, evidence
+    evidence["workspace"] = GUIDE_WORKSPACE
+    evidence["version"] = GUIDE_VERSION
+    evidence["approval_policy"] = GUIDE_APPROVAL_POLICY
     return evidence
 
 
@@ -289,6 +304,32 @@ def add_open_admission(project):
         "policies": ["bee.app_open_probe:view_policy", "bee.app_open_probe:host_lookup_policy",
                       "bee.app_open_probe:evidence_policy", "bee.app_open_probe:operator_signal_policy"]})
     index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def add_guide_admission(project):
+    """Admit the exact definition carried by the Governance guide example."""
+    index = project / "src/security/_index.yaml"
+    document = yaml.safe_load(index.read_text())
+    admission = next(entry for entry in document["entries"]
+                     if entry["name"] == "application_admission")
+    admission["bindings"].append({
+        "definition_id": GUIDE_DEFINITION_ID,
+        "policies": ["bee:ordinary_app_subsystem_boundary"],
+    })
+    index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
+def open_catalog_app(ui, title, timeout):
+    """Open a named admitted application from the desktop catalog."""
+    deadline = time.monotonic() + timeout
+    while True:
+        ui.open_start()
+        if title in ui.text():
+            ui.choose(title)
+            return
+        ui.key(b"\x1b")
+        assert time.monotonic() < deadline, ui.text()
+        ui.pump(.5)
 
 
 def configure_open_agent(project):
@@ -453,13 +494,13 @@ def saved_application(root, instance_id):
     return matches[0]
 
 
-def assert_inbox_decider(root, workspace_id):
+def assert_inbox_decider(root, workspace_id, policy="local-app-journey"):
     """The Start-menu Approvals app decides as its private broker principal."""
     with sqlite3.connect(Path(root) / "approvals.db") as db:
         row = db.execute(
             "SELECT decider_id, proposal_digest FROM bee_approval_requests "
-            "WHERE policy = 'local-app-journey' AND state = 'decided' "
-            "ORDER BY created_at DESC LIMIT 1").fetchone()
+            "WHERE policy = ? AND state = 'decided' "
+            "ORDER BY created_at DESC LIMIT 1", (policy,)).fetchone()
     assert row and re.fullmatch(
         rf"bee\.application:{re.escape(workspace_id)}:[0-9a-f-]+", row[0]), row
     checkpoint = saved_application(root, row[0].rsplit(":", 1)[1])
@@ -533,6 +574,7 @@ def exercise():
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)
+        add_guide_admission(project)
         add_open_admission(project)
         configure_open_agent(project)
         shutil.copytree(ROOT / "tests/modules/gateway/src/managed", project / "src/managed")
@@ -547,7 +589,71 @@ def exercise():
             initial.quit()
         finally:
             initial.close()
-        guide_evidence = guide(project, folder)
+        # The exact Guide example owns a durable overlay and application
+        # checkpoint. Exercise it against a separate workspace so its accepted
+        # desired state cannot alter the replacement journey below.
+        guide_root = folder / "guide"
+        guide_root.mkdir()
+        guide_initial = Desktop(guide_root, project=project)
+        try:
+            guide_initial.wait("No applications open", timeout=COLD_BOOT)
+            guide_initial.quit()
+        finally:
+            guide_initial.close()
+        guide_evidence = guide(project, guide_root)
+        guide_ui = Desktop(guide_root, project=project)
+        try:
+            guide_ui.wait("No applications open", timeout=COLD_BOOT)
+            apply_staged_in_ui(guide_ui, guide_evidence, guide_root)
+            open_catalog_app(guide_ui, GUIDE_TITLE, COLD_BOOT)
+            guide_ui.wait("COUNTER APP", timeout=20)
+            guide_ui.wait("Count: 0", timeout=20)
+
+            def app_color(label):
+                row_number, row = next((index, row) for index, row in enumerate(guide_ui.screen.display, 1)
+                                        if label in row)
+                return guide_ui.screen.buffer[row_number - 1][row.index(label)].bg
+
+            assert app_color("COUNTER APP") == "17202c", guide_ui.text()
+            guide_ui.resize(48, 18)
+            guide_ui.wait("COUNTER APP", timeout=20)
+            guide_ui.wait("Count: 0", timeout=20)
+            guide_ui.resize(100, 30)
+            guide_ui.key(b"\r")
+            guide_ui.wait("Count: 1", timeout=20)
+            guide_ui.wait("Saved count 1", timeout=20)
+
+            increment_row, increment_line = next((index, row) for index, row in enumerate(guide_ui.screen.display, 1)
+                                                  if "[Enter] Add one" in row)
+            increment_x = increment_line.index("[Enter] Add one") + 1
+            guide_ui.mouse(0, increment_x, increment_row)
+            guide_ui.mouse(0, increment_x, increment_row, True)
+            guide_ui.wait("Count: 2", timeout=20)
+            guide_ui.wait("Saved count 2", timeout=20)
+
+            guide_ui.open_start()
+            guide_ui.choose("Settings")
+            guide_ui.wait("BEE SETTINGS", timeout=20)
+            guide_ui.key(b"\x1b[C")
+            guide_ui.wait("Theme: Ocean", timeout=20)
+            guide_ui.key(b"\x1b")
+            guide_ui.wait("COUNTER APP", timeout=20)
+            deadline = time.monotonic() + 20
+            while app_color("COUNTER APP") != "102b39":
+                assert time.monotonic() < deadline, guide_ui.text()
+                guide_ui.pump(.1)
+
+            guide_ui.key(b"\x1b")
+            guide_ui.wait("No applications open", timeout=20)
+            open_catalog_app(guide_ui, GUIDE_TITLE, COLD_BOOT)
+            guide_ui.wait("COUNTER APP", timeout=20)
+            guide_ui.wait("Count: 2", timeout=20)
+            guide_ui.wait("Saved: 2", timeout=20)
+            guide_ui.window_control("×")
+            guide_ui.wait("No applications open", timeout=20)
+            guide_ui.quit()
+        finally:
+            guide_ui.close()
         evidence = deliver(project, folder)
         assert_shared_database(project)
         inspect(project, folder)

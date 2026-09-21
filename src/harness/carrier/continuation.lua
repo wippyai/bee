@@ -155,13 +155,15 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
                     end
                     local fields, fields_error = hooks.stored_fields(payload.fields)
                     if not fields or fields.event ~= payload.event then return nil, "invalid hook observation fields: " .. tostring(fields_error) end
-                    -- Occurrence ambiguity says that this delivery cannot
-                    -- identify one unique event. It does not erase the
-                    -- provider conversation claim carried by the validated
-                    -- fields. Keep that claim separate from occurrence
-                    -- deduplication, and require all eligible claims to
-                    -- agree before resuming.
-                    local candidate = bounds.id(fields.session_id)
+                    -- Tool hooks may belong to a provider-owned maintenance
+                    -- or child session while the requested conversation is
+                    -- still active. Conversation lifecycle hooks identify the
+                    -- resumable session; tool activity remains valid evidence
+                    -- for the attempt without competing for that identity.
+                    local candidate: string? = nil
+                    if payload.event == "SessionStart" or payload.event == "UserPromptSubmit" or payload.event == "Stop" then
+                        candidate = bounds.id(fields.session_id)
+                    end
                     if candidate then
                         if conversation_session_id and conversation_session_id ~= candidate then return nil, "conflicting provider conversation references" end
                         conversation_session_id = candidate

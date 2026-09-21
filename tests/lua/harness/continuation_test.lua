@@ -21,6 +21,15 @@ local function observation(sequence: integer, session: string, binding: string, 
         sequence = sequence, recorded_at = "2026-09-12T10:00:00.000Z", kind = "observation", producer_id = "alice", source = "bee",
         action_id = "action", attempt_id = attempt, body = batch.records[1].body}
 end
+local function tool_observation(sequence: integer, session: string, binding: string, event: string): {[string]: unknown}
+    local fields: {[string]: unknown} = {event = event, session_id = session, tool_use_id = "tool:" .. tostring(sequence), tool_name = "provider_maintenance"}
+    local batch, err = hook_records.batch(binding, nil, {{event_id = "event:" .. tostring(sequence), event = event,
+        occurrence = "tool:" .. tostring(sequence), ambiguous = false, provenance = "fixture", sequence = sequence, fields = fields}})
+    if not batch then error(tostring(err)) end
+    return {schema_revision = "bee.thread-record@1", record_id = "record:" .. tostring(sequence), thread_id = "thread",
+        sequence = sequence, recorded_at = "2026-09-12T10:00:00.000Z", kind = "observation", producer_id = "alice", source = "bee",
+        action_id = "action", attempt_id = "previous", body = batch.records[1].body}
+end
 local function define_tests()
     test.describe("Native harness continuation", function()
         test.it("uses the committed provider resume reference and refuses a mismatched or unfinished predecessor", function()
@@ -204,6 +213,11 @@ local function define_tests()
             rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
                 observation(1026, "different-session", "old-binding", true, "previous")}
             test.is_nil(continuation.resolve_window(call, request))
+            rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
+                observation(1027, "provider-session", "old-binding", true, "previous")}
+            table.insert(rows, 2, tool_observation(1026, "provider-maintenance-session", "old-binding", "PreToolUse"))
+            scanned = 1027
+            test.eq(continuation.resolve_window(call, request), "provider-session")
             rows = {observation(1025, "provider-session", "old-binding", false, "previous"),
                 observation(1027, "provider-session", "old-binding", true, "previous")}
             denied = true

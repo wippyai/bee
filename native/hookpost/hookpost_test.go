@@ -112,6 +112,119 @@ func TestRunPostsGenericPayloadAndOnlyAcceptsSuccess(t *testing.T) {
 	}
 }
 
+func TestRunReadsTokenFromPrivateJSONFile(t *testing.T) {
+	const secret = "file-hook-secret"
+	path := t.TempDir() + "/hook-token.json"
+	if err := os.WriteFile(path, []byte(`{"token":"`+secret+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var authorization string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	if err := Run(context.Background(), io.NopCloser(strings.NewReader(`{"session_id":"file-session"}`)), strings.TrimPrefix(server.URL, "http://"), "action", "@"+path, "SessionStart"); err != nil {
+		t.Fatal(err)
+	}
+	if authorization != "Bearer "+secret {
+		t.Fatalf("authorization = %q", authorization)
+	}
+}
+
+func TestRunRejectsInvalidTokenFilesWithoutFallbackOrDiagnostics(t *testing.T) {
+	const secret = "file-secret-that-must-not-escape"
+	setenvName := "BEE_TOKEN_FILE_FALLBACK"
+	t.Setenv(setenvName, secret)
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{name: "malformed", content: `{"token":`},
+		{name: "unknown field", content: `{"token":"` + secret + `","extra":true}`},
+		{name: "multiple documents", content: `{"token":"` + secret + `"}{}`},
+		{name: "missing token", content: `{}`},
+		{name: "wrong token type", content: `{"token":42}`},
+		{name: "duplicate token", content: `{"token":"one","token":"two"}`},
+		{name: "wrong top level", content: `[]`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := t.TempDir() + "/hook-token.json"
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", "@"+path, "Stop")
+			if err == nil {
+				t.Fatal("Run accepted invalid token file")
+			}
+			if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), path) {
+				t.Fatalf("diagnostic leaked credential or path: %v", err)
+			}
+		})
+	}
+
+	missing := t.TempDir() + "/missing-token.json"
+	err := Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", "@"+missing, "Stop")
+	if err == nil {
+		t.Fatal("Run fell back after a missing token file")
+	}
+	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), missing) {
+		t.Fatalf("diagnostic leaked credential or path: %v", err)
+	}
+}
+
+func TestRunRejectsTokenSourcesOutsideBoundsOrRegularFiles(t *testing.T) {
+	t.Setenv("BEE_TOKEN_FILE_FALLBACK", "fallback-secret")
+	cases := []struct {
+		name   string
+		source string
+	}{
+		{name: "relative file", source: "@relative-token.json"},
+		{name: "empty file path", source: "@"},
+		{name: "path bound", source: "@/" + strings.Repeat("x", MaxTokenPathBytes)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", tc.source, "Stop")
+			if err == nil {
+				t.Fatal("Run accepted invalid token source")
+			}
+			if strings.Contains(err.Error(), tc.source) {
+				t.Fatalf("diagnostic leaked token source: %v", err)
+			}
+		})
+	}
+
+	directory := t.TempDir()
+	err := Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", "@"+directory, "Stop")
+	if err == nil {
+		t.Fatal("Run accepted a directory as the token file")
+	}
+
+	target := t.TempDir() + "/target.json"
+	if err := os.WriteFile(target, []byte(`{"token":"symlink-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	symlink := t.TempDir() + "/hook-token.json"
+	if err := os.Symlink(target, symlink); err != nil {
+		t.Fatal(err)
+	}
+	err = Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", "@"+symlink, "Stop")
+	if err == nil {
+		t.Fatal("Run accepted a symlink as the token file")
+	}
+
+	oversized := t.TempDir() + "/oversized-token.json"
+	if err := os.WriteFile(oversized, []byte(strings.Repeat("x", MaxTokenFileBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = Run(context.Background(), io.NopCloser(strings.NewReader(`{}`)), "127.0.0.1:1", "action", "@"+oversized, "Stop")
+	if err == nil {
+		t.Fatal("Run accepted an oversized token file")
+	}
+}
+
 func TestRunDoesNotFollowRedirectOrLeakCredentials(t *testing.T) {
 	var redirected atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Add(1) }))

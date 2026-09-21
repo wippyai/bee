@@ -174,7 +174,7 @@ These are different artifacts with different ownership requirements. See
 `NATIVE_DISTRIBUTION.md`; bundled modules are not independently published packages.
 
 The release owner runs `make promotion-check MILESTONE=native-agents` from a
-clean immutable commit with the exact runtime, rollback executable and four
+clean immutable commit with the exact runtime, rollback executable and five
 provider inputs named on the command line. The target rebuilds the candidate,
 composes existing source, pack, native, recovery, display, project-upgrade and
 real-provider gates, and writes `dist/promotion-native-agents.json` only after

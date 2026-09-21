@@ -6,6 +6,7 @@
 local funcs = require("funcs")
 local registry = require("registry")
 local system = require("system")
+local env = require("env")
 local json = require("json")
 local logger = require("logger")
 local bounds = require("bounds")
@@ -63,7 +64,8 @@ local function configure_host(workspace_id: string, local_node: string)
     local policy_entry = assert(registry.get("bee.approvals:approver_policies"))
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
-    policies[#policies + 1] = {name = APPROVAL_POLICY, approvers = {"bee.app_journey.operator"}, max_ttl_ms = 60000}
+    policies[#policies + 1] = {name = APPROVAL_POLICY,
+        approvers = {"bee.app_journey.operator", {definition_id = "bee.inbox:app"}}, max_ttl_ms = 60000}
     policy_data.policies = policies
     policy_entry.data = policy_data
 
@@ -105,7 +107,8 @@ local function main()
         overlay_id = SOURCE_WORKSPACE, expected_revision = 2, idempotency_key = "freeze-" .. SOURCE_WORKSPACE})
     local snapshot_digest = digest_of(freeze_res.digest, "guide example frozen digest")
 
-    local workspace_id = "app-journey-guide-workspace"
+    local workspace_id = bounds.id(env.get("bee.app_journey_probe:destination_workspace"))
+    if not workspace_id then error("destination workspace identity is unavailable") end
     local local_node = assert(system.node.id())
     configure_host(workspace_id, local_node)
 

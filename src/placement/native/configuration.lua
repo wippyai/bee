@@ -72,6 +72,134 @@ local function compose_toml(base: string, path: {string}, source: string): (stri
     return encoded, nil
 end
 
+-- The driver owns each recipe's selected paths. This is deliberately not a
+-- general JSON merge: it can only retain an equal default, insert a missing
+-- leaf, or append one array.
+local function json_object(value: unknown, label: string): (Object?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, label .. " must be a JSON object" end
+    local encoded, encode_error = canonical.encode(object)
+    if not encoded or encode_error or encoded:sub(1, 1) ~= "{" then return nil, label .. " must be a JSON object" end
+    return object, nil
+end
+
+local function json_array(value: unknown, label: string): ({unknown}?, string?)
+    if type(value) ~= "table" then return nil, label .. " must be a JSON array" end
+    local list = value :: {unknown}
+    local count = 0
+    local highest = 0
+    for key in pairs(list) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a JSON array" end
+        count = count + 1
+        if key > highest then highest = key end
+    end
+    if count ~= highest then return nil, label .. " must be a dense JSON array" end
+    local encoded, encode_error = canonical.encode(list)
+    if not encoded or encode_error or encoded:sub(1, 1) ~= "[" then return nil, label .. " must be a JSON array" end
+    return list, nil
+end
+
+local function decode_json_object(content: string, label: string, empty: boolean): (Object?, string?)
+    if empty and content == "" then return table.create(0, 1) :: Object, nil end
+    local decoded, decode_error = json.decode(content)
+    local object, object_error = json_object(decoded, label)
+    if not object then return nil, tostring(decode_error or object_error) end
+    return object, nil
+end
+
+local function selected_json_path(document: Object, path: {string}, label: string): (unknown, string?)
+    local current = document
+    for index, segment in ipairs(path) do
+        local value = current[segment]
+        if value == nil then return nil, label .. " is missing" end
+        if index == #path then return value, nil end
+        local child, child_error = json_object(value, label)
+        if not child then return nil, child_error end
+        current = child
+    end
+    return nil, label .. " is missing"
+end
+
+local function target_parent(document: Object, path: {string}): (Object?, string?)
+    local current = document
+    for index = 1, #path - 1 do
+        local key = path[index]
+        local value = current[key]
+        if value == nil then
+            local child: Object = table.create(0, 1) :: Object
+            current[key] = child
+            current = child
+        else
+            local child, child_error = json_object(value, "base JSON recipe path")
+            if not child then return nil, child_error end
+            current = child
+        end
+    end
+    return current, nil
+end
+
+local function rebuild_patch_source(source: Object, operations: {types.JsonOperation}): (Object?, string?)
+    local rebuilt: Object = table.create(0, 1) :: Object
+    for _, operation in ipairs(operations) do
+        local selected, selected_error = selected_json_path(source, operation.path, "source JSON recipe path")
+        if selected == nil then return nil, selected_error end
+        local parent, parent_error = target_parent(rebuilt, operation.path)
+        if not parent then return nil, parent_error end
+        local key = operation.path[#operation.path]
+        if parent[key] ~= nil then return nil, "source JSON recipe paths overlap" end
+        parent[key] = selected
+    end
+    local encoded_source, source_encode_error = canonical.encode(source)
+    local encoded_rebuilt, rebuilt_encode_error = canonical.encode(rebuilt)
+    if not encoded_source or source_encode_error or not encoded_rebuilt or rebuilt_encode_error then return nil, "encode JSON patch source" end
+    if encoded_source ~= encoded_rebuilt then return nil, "source JSON contains data outside the selected recipe paths" end
+    return rebuilt, nil
+end
+
+local function compose_json_patch(base: string, source: string, operations: {types.JsonOperation}): (string?, string?)
+    local document, document_error = decode_json_object(base, "base JSON configuration", true)
+    if not document then return nil, "decode base JSON: " .. tostring(document_error) end
+    local overlay, overlay_error = decode_json_object(source, "source JSON configuration", false)
+    if not overlay then return nil, "decode source JSON: " .. tostring(overlay_error) end
+    local patch, patch_error = rebuild_patch_source(overlay, operations)
+    if not patch then return nil, patch_error end
+    for _, operation in ipairs(operations) do
+        local selected, selected_error = selected_json_path(patch, operation.path, "source JSON recipe path")
+        if selected == nil then return nil, selected_error end
+        local parent, parent_error = target_parent(document, operation.path)
+        if not parent then return nil, parent_error end
+        local key = operation.path[#operation.path]
+        if operation.kind == "default" then
+            if parent[key] == nil then
+                parent[key] = selected
+            else
+                local prior_encoded = canonical.encode(parent[key])
+                local selected_encoded = canonical.encode(selected)
+                if not prior_encoded or not selected_encoded or prior_encoded ~= selected_encoded then
+                    return nil, "base JSON recipe default path differs"
+                end
+            end
+        elseif operation.kind == "insert" then
+            if parent[key] ~= nil then return nil, "base JSON recipe insert path already exists" end
+            parent[key] = selected
+        else
+            local additions, additions_error = json_array(selected, "source JSON recipe append path")
+            if not additions then return nil, additions_error end
+            local prior = parent[key]
+            if prior == nil then
+                parent[key] = additions
+            else
+                local retained, retained_error = json_array(prior, "base JSON recipe append path")
+                if not retained then return nil, retained_error end
+                for _, item in ipairs(additions) do retained[#retained + 1] = item end
+            end
+        end
+    end
+    local encoded, encode_error = canonical.encode(document)
+    if not encoded then return nil, "encode composed JSON configuration: " .. tostring(encode_error) end
+    return encoded .. "\n", nil
+end
+
 function M.overlaps(files: {types.Configuration}, protected: {string}): boolean
     for _, file in ipairs(files) do
         for _, path in ipairs(protected) do
@@ -106,11 +234,19 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
         content = encoded .. "\n"
     end
     if file.composition then
-        if file.composition.kind ~= "toml_insert" then return nil, "configuration composition is unsupported" end
         if base == nil then return nil, "configuration composition base is missing" end
         if #base > 131072 then return nil, "configuration composition base exceeds byte limit" end
-        local composed, compose_error = compose_toml(base, file.composition.path, content)
-        if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
+        local composed: string?
+        local compose_error: string?
+        if file.composition.kind == "toml_insert" then
+            composed, compose_error = compose_toml(base, file.composition.path, content)
+            if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
+        elseif file.composition.kind == "json_patch" then
+            composed, compose_error = compose_json_patch(base, content, file.composition.operations)
+            if not composed then return nil, "compose JSON configuration: " .. tostring(compose_error) end
+        else
+            return nil, "configuration composition is unsupported"
+        end
         if #composed > 131072 then return nil, "composed configuration exceeds byte limit" end
         content = composed
     elseif base ~= nil then

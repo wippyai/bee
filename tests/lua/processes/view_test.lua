@@ -3,6 +3,7 @@
 local test = require("test")
 local appearance = require("appearance")
 local probe = require("probe")
+local tty = require("tty")
 local view = require("view")
 
 local function snapshot(): probe.Snapshot
@@ -16,6 +17,28 @@ end
 
 local function define_tests()
     test.describe("Process Manager frame", function()
+        test.it("fits every responsive geometry in both modes and strips hostile text", function()
+            local sample = snapshot()
+            local history = probe.new_history()
+            probe.append(history, sample, nil, 0)
+            for _, services in ipairs({false, true}) do
+                local rows = view.items(sample, services)
+                for _, width in ipairs({1, 20, 40, 80, 120}) do
+                    for _, height in ipairs({1, 6, 12, 24}) do
+                        local frame = view.draw(width, height, sample, history, appearance.defaults(), rows[1].pid,
+                            0, false, "", false, services, rows, false)
+                        test.eq(#frame.rows, height)
+                        for _, row in ipairs(frame.rows) do
+                            test.eq(tty.text.width(row), width)
+                            local rendered = row:gsub("\27%[[0-9;]*m", "")
+                            test.is_nil(rendered:find("\27", 1, true))
+                            test.is_nil(rendered:find("\r", 1, true))
+                            test.is_nil(rendered:find("\7", 1, true))
+                        end
+                    end
+                end
+            end
+        end)
         test.it("shows the active compact mode and bounds native text", function()
             local sample = snapshot()
             local history = probe.new_history()

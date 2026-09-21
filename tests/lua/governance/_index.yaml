@@ -242,6 +242,22 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.governance:workspace_protocol
+- name: workspace_method_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.governance.overlay.read]
+    resources: '*'
+    effect: allow
+- name: workspace_method_test
+  kind: function.lua
+  source: file://workspace_method_test.lua
+  method: run
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.governance:workspace_method_test_policy]}
+  imports:
+    test: wippy.test:test
 - name: preflight_test
   kind: function.lua
   source: file://preflight_test.lua

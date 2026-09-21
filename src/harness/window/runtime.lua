@@ -371,7 +371,12 @@ local function main(value: unknown, constructors: {[string]: Open})
             local serial = operation
             phase = phase == "initial" and "initializing" or "confirming"
             coroutine.spawn(function()
-                local choice, refused = admission.admit_request(candidate)
+                local choice: admission.Admitted? = nil
+                local refused: admission.Reply? = nil
+                local ok, unexpected = pcall(function()
+                    choice, refused = admission.admit_request(candidate)
+                end)
+                if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 -- A cancelled continuation may finish reconciliation after
                 -- the UI has gone away. It never hands an admitted request to
                 -- the native preparation path in that case.
@@ -386,8 +391,13 @@ local function main(value: unknown, constructors: {[string]: Open})
             status = refusal and "Checking the reviewed launch plan…" or "Checking the saved launch plan…"
             dirty = true
             coroutine.spawn(function()
-                local plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
-                    restored.saved_profile_id, restored.saved_profile_revision)
+                local plan: admission.Plan? = nil
+                local refused: admission.Reply? = nil
+                local ok, unexpected = pcall(function()
+                    plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
+                        restored.saved_profile_id, restored.saved_profile_revision)
+                end)
+                if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 if cancelled or serial ~= operation then return end
                 completed:send({kind = "resolve", serial = serial, plan = plan, refused = refused, admission_refusal = refusal})
             end)

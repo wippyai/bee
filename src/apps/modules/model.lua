@@ -265,7 +265,7 @@ local function publication_identity(state: State, workspace_id: unknown): (strin
         return nil, "workspace identity is unavailable"
     end
     if state.phase ~= "authoring" then
-        return nil, "open the Authored workspace first"
+        return nil, "open the Authored pane first"
     end
     if not component(state.publication_component) then return nil, "enter a component in namespace/name form" end
     if not version(state.publication_version) then return nil, "enter an explicit version" end

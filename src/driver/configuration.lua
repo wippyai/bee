@@ -19,12 +19,13 @@ M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type SecretField = {path: {string}, environment: string, prefix: string}
-type Composition = {kind: "toml_insert", base_path: string, path: {string}}
+type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
+type Composition = {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}}
-type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, fixture: boolean}
+type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 function M.instructions(value: unknown): (string?, string?)
@@ -99,7 +100,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "fixture", "instructions", "instruction_builder"})
+    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "attempt_id", "fixture", "instructions", "instruction_builder"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
     local instructions, instructions_error = M.instructions(request.instructions)
@@ -129,7 +130,12 @@ function M.decode_request(value: unknown): (Request?, string?)
         home_directory = bounds.text(request.home_directory, M.MAX_HOME_DIRECTORY_BYTES)
         if not home_directory or home_directory == "" or home_directory:sub(1, 1) ~= "/" then return nil, "configuration request.home_directory must be an absolute bounded path" end
     end
-    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, fixture = request.fixture :: boolean}, nil
+    local attempt_id: string? = nil
+    if request.attempt_id ~= nil then
+        attempt_id = bounds.id(request.attempt_id)
+        if not attempt_id then return nil, "configuration request.attempt_id is not an identifier" end
+    end
+    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, attempt_id = attempt_id, fixture = request.fixture :: boolean}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
@@ -170,22 +176,58 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     local result: Configuration = {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}
     if item.composition ~= nil then
         local composition = bounds.object(item.composition)
-        if not composition or bounds.fields(composition, {"kind", "base_path", "path"}) or composition.kind ~= "toml_insert" then
-            return nil, "invalid configuration composition"
-        end
+        if not composition then return nil, "invalid configuration composition" end
         local base_path, base_error = bounds.subpath(composition.base_path)
         if base_error or not base_path or base_path == "" or base_path == path then
             return nil, "configuration composition base_path must be a distinct safe relative path"
         end
-        local raw_path, path_error = sequence(composition.path, "configuration composition path", 8)
-        if not raw_path or #raw_path == 0 then return nil, path_error or "configuration composition path is empty" end
-        local selected_path: {string} = {}
-        for index, key in ipairs(raw_path) do
-            local selected = bounds.text(key, 128)
-            if not selected or selected == "" then return nil, "configuration composition path key " .. tostring(index) .. " is invalid" end
-            selected_path[index] = selected
+        if composition.kind == "toml_insert" then
+            if bounds.fields(composition, {"kind", "base_path", "path"}) then return nil, "invalid configuration composition" end
+            local raw_path, path_error = sequence(composition.path, "configuration composition path", 8)
+            if not raw_path or #raw_path == 0 then return nil, path_error or "configuration composition path is empty" end
+            local selected_path: {string} = {}
+            for index, key in ipairs(raw_path) do
+                local selected = bounds.text(key, 128)
+                if not selected or selected == "" then return nil, "configuration composition path key " .. tostring(index) .. " is invalid" end
+                selected_path[index] = selected
+            end
+            result.composition = {kind = "toml_insert", base_path = base_path, path = selected_path}
+        elseif composition.kind == "json_patch" then
+            if bounds.fields(composition, {"kind", "base_path", "operations"}) then return nil, "invalid configuration composition" end
+            local raw_operations, operations_error = sequence(composition.operations, "configuration composition operations", 16)
+            if not raw_operations or #raw_operations == 0 then return nil, operations_error or "configuration composition operations are empty" end
+            local operations: {JsonOperation} = {}
+            local seen: {[string]: boolean} = {}
+            for index, raw in ipairs(raw_operations) do
+                local operation = bounds.object(raw)
+                if not operation or bounds.fields(operation, {"kind", "path"}) then return nil, "invalid configuration composition operation " .. tostring(index) end
+                local kind = operation.kind
+                if kind ~= "default" and kind ~= "insert" and kind ~= "append" then return nil, "invalid configuration composition operation " .. tostring(index) end
+                local raw_path, operation_path_error = sequence(operation.path, "configuration composition operation path", 8)
+                if not raw_path or #raw_path == 0 then return nil, operation_path_error or "configuration composition operation path is empty" end
+                local operation_path: {string} = {}
+                for path_index, key in ipairs(raw_path) do
+                    local selected = bounds.text(key, 128)
+                    if not selected or selected == "" then return nil, "configuration composition operation path key " .. tostring(path_index) .. " is invalid" end
+                    operation_path[path_index] = selected
+                end
+                local identity = canonical.encode(operation_path)
+                if not identity or seen[identity] then return nil, "duplicate configuration composition operation path" end
+                for _, previous in ipairs(operations) do
+                    local shared = math.min(#previous.path, #operation_path)
+                    local prefix = true
+                    for path_index = 1, shared do
+                        if previous.path[path_index] ~= operation_path[path_index] then prefix = false break end
+                    end
+                    if prefix then return nil, "overlapping configuration composition operation paths" end
+                end
+                seen[identity] = true
+                operations[index] = {kind = kind, path = operation_path}
+            end
+            result.composition = {kind = "json_patch", base_path = base_path, operations = operations}
+        else
+            return nil, "invalid configuration composition"
         end
-        result.composition = {kind = "toml_insert", base_path = base_path, path = selected_path}
     end
     if item.secret_fields ~= nil then
         local fields, fields_error = sequence(item.secret_fields, "configuration.secret_fields", 8)
@@ -322,6 +364,7 @@ function M.call(target: string, request_value: unknown): (Delivery?, string?)
         provider = request.provider,
         gateway = request.gateway,
         home_directory = request.home_directory,
+        attempt_id = request.attempt_id,
         fixture = request.fixture,
     }
     local raw, call_error = scoped:call(target, driver_request)

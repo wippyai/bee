@@ -10,7 +10,7 @@ local preflight = require("preflight")
 local json = require("json")
 local M = {}
 
-M.REVISION = "bee.governance-component-guide@3"
+M.REVISION = "bee.governance-component-guide@4"
 M.SCHEMA = "bee.governance-artifact@1"
 M.ENTRIES_PATH = "entries.json"
 
@@ -59,59 +59,176 @@ end
 local CONFIG_SHAPE_RULE = M.config_shape_rule()
 
 -- The minimal application: one process.lua entry carrying its Lua source
--- inline, which renders through the terminal toolkit. It paints one line,
--- counts key presses and leaves on CANCEL.
+-- inline, which renders a small responsive terminal surface with semantic
+-- appearance, keyboard/mouse parity and honest checkpoint feedback.
 M.SOURCE = [==[local tty = require("tty")
 local client = require("client")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
+local appearance = require("appearance")
+
+local RESET = "\27[0m"
+
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local states = assert(process.listen("bee.appearance.state", {message = true}))
     local count = 0
     if launch.resume_state ~= "" then
         local state: unknown = json.decode(launch.resume_state)
-        if type(state) ~= "table" or type(state.count) ~= "number" then error("Invalid counter checkpoint") end
+        if type(state) ~= "table" or type(state.count) ~= "number"
+            or state.count ~= math.floor(state.count) or state.count < 0 then
+            error("Invalid counter checkpoint")
+        end
         count = math.floor(state.count)
     end
     assert(tty.start())
+    assert(tty.mouse(true))
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
-    local saved = -1
+    local preferences = appearance.defaults()
+    local saved: integer? = nil
+    local pending_request_id: string? = nil
+    local pending_count: integer? = nil
+    local status = "Ready"
+    local running = true
+    local action_y = 0
+    local increment_x, increment_width = 0, 0
+    local exit_x, exit_width = 0, 0
+
+    local function clip(value: string, room: integer): string
+        if room <= 0 then return "" end
+        return tty.text.truncate(value:gsub("%c", " "), room, "…")
+    end
+
+    local function fit(value: string, room: integer): string
+        local clipped = clip(value, room)
+        return clipped .. string.rep(" ", math.max(0, room - tty.text.width(clipped)))
+    end
+
     local function paint()
+        local theme = appearance.theme(preferences.theme)
         local canvas = tty.canvas(width, height)
-        canvas:clear(" ")
-        canvas:put(1, 1, "COUNTER APP", width)
-        canvas:put(1, 2, "Count: " .. tostring(count), width)
-        canvas:put(1, 3, "Saved: " .. tostring(saved), width)
+        local function line(y: integer, value: string, foreground: string?, background: string?)
+            if y < 1 or y > height then return end
+            local fg = foreground or theme.text
+            local bg = background or theme.surface
+            canvas:put(1, y, appearance.style(fg, bg) .. fit(value, width) .. RESET, width)
+        end
+        local function put(x: integer, y: integer, value: string, foreground: string, background: string): integer
+            if x < 1 or x > width or y < 1 or y > height then return 0 end
+            local room = width - x + 1
+            local clipped = clip(value, room)
+            canvas:put(x, y, appearance.style(foreground, background) .. clipped .. RESET, room)
+            return tty.text.width(clipped)
+        end
+        canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
+        for y = 1, height do line(y, "") end
+
+        local title = height >= 3 and "COUNTER APP" or "COUNTER APP · " .. tostring(count)
+        line(1, title, theme.text)
+        if height >= 5 then
+            line(2, "WORK", theme.muted)
+            line(3, "Count: " .. tostring(count), theme.accent)
+            local saved_text = saved == nil and "Saved: —" or "Saved: " .. tostring(saved)
+            line(4, saved_text, theme.muted)
+        elseif height >= 4 then
+            line(2, "Count: " .. tostring(count), theme.accent)
+        end
+
+        action_y = height >= 2 and height or 0
+        if height >= 3 then line(height - 1, "Status: " .. status, theme.muted) end
+        increment_x, increment_width, exit_x, exit_width = 0, 0, 0, 0
+        if action_y > 0 then
+            line(action_y, "", theme.text)
+            local increment_label = width >= 24 and " [Enter] Add one " or (width >= 10 and " [Enter] +1 " or " +1 ")
+            local exit_label = width >= 24 and " [Escape] Exit " or (width >= 10 and " [Esc] Exit " or " Esc ")
+            local x = width >= 2 and 2 or 1
+            local increment_size = tty.text.width(increment_label)
+            if x + increment_size - 1 <= width then
+                increment_x, increment_width = x, put(x, action_y, increment_label, appearance.selection_text(theme), theme.accent)
+                x = x + increment_width + 1
+            end
+            local exit_size = tty.text.width(exit_label)
+            if x + exit_size - 1 <= width then
+                exit_x, exit_width = x, put(x, action_y, exit_label, theme.text, theme.surface)
+            end
+        end
         assert(output:present(canvas:rows()))
     end
+
     local function checkpoint()
-        assert(client.checkpoint(launch, json.encode({count = count})))
+        local request_id = client.checkpoint(launch, json.encode({count = count}))
+        if request_id then
+            pending_request_id, pending_count = request_id, count
+            status = "Saving count " .. tostring(count)
+        else
+            pending_request_id, pending_count = nil, nil
+            status = "Save unavailable"
+        end
+        paint()
     end
+
+    local function increment()
+        count = count + 1
+        checkpoint()
+    end
+
+    local appearance_request_id = launch.instance_id
+    assert(process.send(launch.broker_pid, "bee.appearance.request", {version = 1,
+        request_id = appearance_request_id, op = "state"}))
     paint()
     client.ready(launch)
     checkpoint()
-    while true do
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive()})
+    while running do
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive(), states:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
-            if event.value.kind == process.event.CANCEL then break end
+            if event.value.kind == process.event.CANCEL then running = false end
+        elseif event.channel == states then
+            local message = event.value
+            local data: unknown = message:payload():data()
+            if message:from() == launch.broker_pid and type(data) == "table" and data.version == 1 then
+                local next_preferences = appearance.decode(data)
+                if next_preferences then preferences = next_preferences; paint() end
+            end
         elseif event.channel == receipts then
             local message = event.value
             local data: unknown = message:payload():data()
-            if message:from() == launch.broker_pid and type(data) == "table" and data.error_code == "" then
-                saved = count; paint()
+            if message:from() == launch.broker_pid and type(data) == "table" and data.version == 1
+                and type(data.request_id) == "string" and data.request_id == pending_request_id then
+                local submitted = pending_count
+                pending_request_id, pending_count = nil, nil
+                if data.error_code == "" and submitted ~= nil then
+                    saved = submitted
+                    status = "Saved count " .. tostring(submitted)
+                elseif data.error_code == "superseded" then
+                    status = "Save superseded"
+                else
+                    status = "Save failed"
+                end
+                paint()
             end
-        elseif event.value.type == "close" then checkpoint()
-        elseif event.value.type == "resize" then width, height = event.value.width, event.value.height; paint()
-        elseif event.value.type == "key" and event.value.action ~= "release" then count = count + 1; paint(); checkpoint() end
+        else
+            local data = event.value
+            if data.type == "close" then running = false
+            elseif data.type == "resize" then width, height = data.width, data.height; paint()
+            elseif data.type == "key" and data.action == "press" then
+                if data.key_type == "enter" then increment()
+                elseif data.key_type == "escape" or data.key_type == "esc" then running = false end
+            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                local x, y = math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0)
+                if y == action_y and x >= increment_x and x < increment_x + increment_width then increment()
+                elseif y == action_y and x >= exit_x and x < exit_x + exit_width then running = false end
+            end
+        end
     end
-    output:close(); tty.stop()
+    process.unlisten(states); process.unlisten(receipts)
+    output:close(); tty.mouse(false); tty.stop()
 end
 return {main = main}
 ]==]
@@ -128,7 +245,7 @@ function M.example(): {{[string]: unknown}}
     return {{id = M.DEFINITION_ID, kind = "process.lua",
         data = {source = M.SOURCE, method = "main",
             modules = {"tty", "process", "channel", "json"},
-            imports = {client = "bee.application:client"}},
+            imports = {client = "bee.application:client", appearance = "bee.desktop:appearance"}},
         meta = {type = "bee.application", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
             resume_schema = "guide-counter.v1", restart_policy = "automatic"}}}}
@@ -177,8 +294,9 @@ function M.document(): string
     lines[#lines + 1] = "The process entry carries its Lua source inline and renders with the terminal"
         .. " toolkit: tty.events, tty.start, tty.surface, tty.screen_size, tty.canvas with one-based"
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
-        .. " metadata declares a resume_schema. Declare exactly the native modules and library imports"
-        .. " the source uses."
+        .. " metadata declares a resume_schema. Use semantic appearance roles from"
+        .. " bee.desktop:appearance, authenticate appearance messages by their broker sender, and"
+        .. " declare exactly the native modules and library imports the source uses."
     lines[#lines + 1] = ""
     lines[#lines + 1] = CONFIG_SHAPE_RULE
     lines[#lines + 1] = ""
@@ -220,9 +338,11 @@ function M.platform_documentation(): string
         .. " contracts (application, threads, hive, placement and subscriptions, gateway, carrier, storage,"
         .. " UI) and the terminal toolkit. For an application that works across every node, search the "
         .. table.concat(M.CROSS_NODE_TOPICS, ", ") .. " topics for hive, subscriptions and placement and read the"
-        .. " matches. For a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
-        .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every question"
-        .. " up in the corpus rather than guessing a signature."
+        .. " matches. The authored UI rules are in docs/UI_BRAND_BOOK.md, and the canonical runnable"
+        .. " UI Guide source is src/apps/stylebook/ (Tools → Learn); it is reference source, not a widget"
+        .. " framework. For a terminal UI, search the " .. table.concat(M.TERMINAL_TOPICS, ", ")
+        .. " topics for the toolkit, layout, styles and input. Read the guide once, then look every"
+        .. " question up in the corpus rather than guessing a signature."
 end
 
 -- The value the MCP overlay tool returns for its read-only guide operation.

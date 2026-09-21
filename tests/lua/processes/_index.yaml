@@ -5,6 +5,7 @@ entries:
   kind: function.lua
   source: file://view_test.lua
   method: run
+  modules: [tty]
   meta:
     type: test
     suite: bee

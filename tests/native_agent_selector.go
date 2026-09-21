@@ -97,6 +97,7 @@ func filteredEnvironment() []string {
 	remove := map[string]bool{
 		"BEE_RUNTIME": true, "BEE_BINARY": true, "USER": true,
 		"CODEX_HOME": true, "CLAUDE_CONFIG_DIR": true, "GROK_HOME": true,
+		"MUSE_HOME": true, "MUSE_CONFIG_HOME": true,
 		"CLAUDE_BIN": true, "CLAUDE_LOGIN_FILE": true, "CLAUDE_CREDENTIAL_ENV": true,
 		"AGY_BIN": true, "AGY_LOGIN_FILE": true, "AGY_MODEL": true,
 		"ANTHROPIC_API_KEY": true, "ANTHROPIC_AUTH_TOKEN": true,
@@ -105,6 +106,8 @@ func filteredEnvironment() []string {
 		"CLAUDE_CODE_USE_FOUNDRY": true, "OPENAI_API_KEY": true,
 		"XAI_API_KEY": true, "GROK_BIN": true, "GROK_LOGIN_FILE": true,
 		"GROK_CONFIG_FILE": true, "GROK_MODEL": true,
+		"MUSE_BIN": true, "MUSE_LOGIN_FILE": true, "MUSE_MODEL": true,
+		"MUSE_API_KEY": true, "MUSE_AUTH_TOKEN": true, "MUSE_SESSION_TOKEN": true,
 		"AWS_ACCESS_KEY_ID": true, "AWS_SECRET_ACCESS_KEY": true,
 		"AWS_SESSION_TOKEN": true, "AWS_PROFILE": true,
 		"AWS_WEB_IDENTITY_TOKEN_FILE": true, "AWS_BEARER_TOKEN_BEDROCK": true,
@@ -1512,8 +1515,11 @@ func recoveryHookCounts(state, attemptID, bindingID, sessionID string) (map[stri
 			continue
 		}
 		fields, _ := payload["fields"].(map[string]any)
+		// One provider process may run its own maintenance or child sessions.
+		// They are valid observations for the bound thread, but they do not
+		// prove hooks for the conversation this recovery check follows.
 		if fields["session_id"] != sessionID {
-			return nil, errors.New("provider hook changed conversation identity")
+			continue
 		}
 		event, _ := payload["event"].(string)
 		counts[event]++
@@ -1953,8 +1959,9 @@ type mcpProbeReport struct {
 }
 
 // mcpProbeConfig follows the provider credential syntax. Agy uses literal
-// headers; Claude and Codex resolve their declared environment references.
-// Credential bytes are never written to reports or diagnostics.
+// headers; Claude and Codex resolve their declared environment references;
+// Muse reads its materialized settings file from the private HOME. Credential
+// bytes are never written to reports or diagnostics.
 func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 	if provider == "codex" {
 		for index, arg := range args {
@@ -1991,6 +1998,35 @@ func mcpProbeConfig(provider string, args []string) (string, string, bool) {
 			return "", "", false
 		}
 		args = []string{"--mcp-config", string(config)}
+	}
+	if provider == "muse" {
+		home := os.Getenv("HOME")
+		if home == "" {
+			return "", "", false
+		}
+		config, err := os.ReadFile(filepath.Join(home, ".config", "muse", "settings.json"))
+		if err != nil {
+			return "", "", false
+		}
+		var document struct {
+			Servers map[string]struct {
+				URL     string            `json:"url"`
+				Headers map[string]string `json:"headers"`
+			} `json:"mcpServers"`
+		}
+		if json.Unmarshal(config, &document) != nil {
+			return "", "", false
+		}
+		server, ok := document.Servers["bee"]
+		if !ok || server.URL == "" {
+			return "", "", false
+		}
+		const prefix = "Bearer "
+		if !strings.HasPrefix(server.Headers["Authorization"], prefix) {
+			return "", "", false
+		}
+		token := strings.TrimPrefix(server.Headers["Authorization"], prefix)
+		return server.URL, token, token != "" && !strings.ContainsAny(token, "\x00\r\n") && !strings.Contains(token, "${")
 	}
 	if provider == "claude" || provider == "agy" {
 		for index, arg := range args {
@@ -2467,6 +2503,12 @@ func runCommandHookProbe(provider, event string, args []string) int {
 	}
 	if provider == "grok" {
 		path = filepath.Join(os.Getenv("HOME"), ".grok", "hooks", "bee.json")
+	} else if provider == "muse" {
+		home := os.Getenv("HOME")
+		if home == "" {
+			return 1
+		}
+		path = filepath.Join(home, ".config", "muse", "settings.json")
 	} else if provider != "agy" {
 		return 1
 	}
@@ -2490,21 +2532,42 @@ func runCommandHookProbe(provider, event string, args []string) int {
 	if json.Unmarshal(data, &config) != nil {
 		return 1
 	}
-	if provider == "grok" {
-		config.Bee = config.Hooks
-	}
-	if len(config.Bee[event]) != 1 {
-		return 1
-	}
-	selected := config.Bee[event][0]
-	command := selected.Command
-	if event == "PreToolUse" || provider == "grok" {
-		if len(selected.Hooks) != 1 || selected.Hooks[0].Type != "command" {
+	var command string
+	if provider == "muse" {
+		// Muse settings are composed from the user's existing hook groups and
+		// Bee's generated group. Find the generated command by its stable
+		// hook-post route instead of assuming Bee owns the only group.
+		for _, group := range config.Hooks[event] {
+			for _, hook := range group.Hooks {
+				if hook.Type != "command" || !strings.Contains(hook.Command, "hook-post") {
+					continue
+				}
+				if command != "" {
+					return 1
+				}
+				command = hook.Command
+			}
+		}
+		if command == "" {
 			return 1
 		}
-		command = selected.Hooks[0].Command
-	} else if event != "Stop" || selected.Type != "command" || len(selected.Hooks) != 0 {
-		return 1
+	} else {
+		if provider == "grok" {
+			config.Bee = config.Hooks
+		}
+		if len(config.Bee[event]) != 1 {
+			return 1
+		}
+		selected := config.Bee[event][0]
+		command = selected.Command
+		if event == "PreToolUse" || provider == "grok" {
+			if len(selected.Hooks) != 1 || selected.Hooks[0].Type != "command" {
+				return 1
+			}
+			command = selected.Hooks[0].Command
+		} else if event != "Stop" || selected.Type != "command" || len(selected.Hooks) != 0 {
+			return 1
+		}
 	}
 	if command == "" {
 		return 1
@@ -2517,8 +2580,9 @@ func runCommandHookProbe(provider, event string, args []string) int {
 		payload["fullyIdle"] = true
 		payload["executionNum"] = 1
 	}
-	if provider == "grok" {
-		payload = map[string]any{"sessionId": "native-grok-hook-session", "session_id": "native-grok-hook-session", "promptId": "prompt-1", "permissionMode": "default", "permission_mode": "default"}
+	if provider == "grok" || provider == "muse" {
+		sessionID := "native-" + provider + "-hook-session"
+		payload = map[string]any{"sessionId": sessionID, "session_id": sessionID, "promptId": "prompt-1", "permissionMode": "default", "permission_mode": "default"}
 		if event == "PreToolUse" {
 			payload["toolUseId"] = "tool-1"
 			payload["toolName"] = "run_terminal_command"
@@ -2583,7 +2647,7 @@ func waitCommandHook(state, provider, event string) error {
 				continue
 			}
 			identityOK := payload.Ambiguous && payload.Fields["tool_use_id"] == nil
-			if provider == "grok" && event == "PreToolUse" {
+			if (provider == "grok" || provider == "muse") && event == "PreToolUse" {
 				identityOK = !payload.Ambiguous && payload.Fields["tool_use_id"] == "tool-1"
 			}
 			if !identityOK || strings.Contains(text, "BEE_PRIVATE_HOOK_CONTENT") || strings.Contains(text, "/private/hook-transcript") {
@@ -2709,6 +2773,8 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	project, state, home := filepath.Join(root, "project"), filepath.Join(root, "state"), filepath.Join(root, "home")
 	report := filepath.Join(root, "launch-paths")
 	mcpReport := filepath.Join(root, "mcp-report")
+	var museGlobalSettingsPath string
+	const museGlobalSettings = "{\"model\":\"muse-spark-1.3-contributor\",\"provider\":\"meta\",\"schema_version\":1,\"tui\":{\"foreign_context_notice_shown\":true},\"mcpServers\":{\"user_fixture\":{\"url\":\"http://127.0.0.1:9/mcp\",\"headers\":{\"Authorization\":\"Bearer user-fixture-token\"}}},\"hooks\":{\"PreToolUse\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"printf user-pre\"}]}],\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"printf user-stop\"}]}]}}\n"
 	if err := os.MkdirAll(filepath.Join(project, "bin"), 0700); err != nil {
 		return err
 	}
@@ -2730,6 +2796,17 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if provider == "grok" {
 		providerDirectory, loginFile = ".grok", "auth.json"
 		selection, label = "\x1b[B\x1b[B\x1b[B\r", "Grok"
+	}
+	if provider == "muse" {
+		providerDirectory, loginFile = filepath.Join(".config", "muse"), "auth.json"
+		selection, label = "\x1b[B\x1b[B\x1b[B\x1b[B\r", "Muse"
+		museGlobalSettingsPath = filepath.Join(home, ".config", "muse", "settings.json")
+		if err := os.MkdirAll(filepath.Dir(museGlobalSettingsPath), 0700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(museGlobalSettingsPath, []byte(museGlobalSettings), 0600); err != nil {
+			return err
+		}
 	}
 	loginRoot := filepath.Join(home, providerDirectory)
 	var extraEnv []string
@@ -2780,7 +2857,12 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if configVariable != "" {
 		script = strings.Replace(script, "\nif ! ", "\nprintf '%s\\n' \"$"+configVariable+"\" >> "+shellQuote(report)+"\nif ! ", 1)
 	}
-	if provider == "agy" || provider == "grok" {
+	if provider == "muse" {
+		marker := "\nif env | grep -q '^XDG_CONFIG_HOME='; then printf '%s\\n' 'XDG_CONFIG_HOME=present' >> " + shellQuote(report) +
+			"; else printf '%s\\n' 'XDG_CONFIG_HOME=absent' >> " + shellQuote(report) + "; fi\nif ! "
+		script = strings.Replace(script, "\nif ! ", marker, 1)
+	}
+	if provider == "agy" || provider == "grok" || provider == "muse" {
 		probe := shellQuote(helper) + " command-hook-probe " + shellQuote(provider)
 		script = strings.Replace(script, "printf 'BEE_MANAGED_AGENT_READY", probe+" PreToolUse \"$@\" || exit 1\nprintf 'BEE_MANAGED_AGENT_READY", 1)
 		script += probe + " Stop \"$@\" || exit 1\n"
@@ -2872,6 +2954,9 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if provider == "agy" {
 		expectedPaths = 3
 	}
+	if provider == "muse" {
+		expectedPaths = 3
+	}
 	if len(lines) != expectedPaths {
 		return fmt.Errorf("managed launch wrote malformed paths: %q", string(paths))
 	}
@@ -2958,6 +3043,97 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			}
 		}
 	}
+	if provider == "muse" {
+		if lines[2] != "XDG_CONFIG_HOME=absent" {
+			return errors.New("Muse launch set XDG_CONFIG_HOME in the child")
+		}
+		statePath, err := filepath.EvalSymlinks(state)
+		if err != nil {
+			return fmt.Errorf("resolve Bee state root: %w", err)
+		}
+		relative, err := filepath.Rel(statePath, childHome)
+		if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return errors.New("Muse private HOME is outside Bee-owned state")
+		}
+		if childHome == home || childHome == projectPath {
+			return errors.New("Muse private HOME overlaps the global HOME or project")
+		}
+		info, err := os.Stat(childHome)
+		if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+			return errors.New("Muse private HOME is not a private directory")
+		}
+		globalData, err := os.ReadFile(filepath.Join(childHome, ".config", "muse", ".bee-global-settings.json"))
+		if err != nil || string(globalData) != museGlobalSettings {
+			return errors.New("Muse private global settings snapshot differs from host settings")
+		}
+		settingsData, err := os.ReadFile(filepath.Join(childHome, ".config", "muse", "settings.json"))
+		if err != nil {
+			return fmt.Errorf("read Muse private settings: %w", err)
+		}
+		var document struct {
+			SchemaVersion int `json:"schema_version"`
+			Servers       map[string]struct {
+				URL     string            `json:"url"`
+				Headers map[string]string `json:"headers"`
+			} `json:"mcpServers"`
+			Hooks map[string][]struct {
+				Hooks []struct {
+					Type    string `json:"type"`
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"hooks"`
+		}
+		if json.Unmarshal(settingsData, &document) != nil || document.SchemaVersion != 1 {
+			return errors.New("invalid Muse private settings")
+		}
+		var settingsObject map[string]any
+		if json.Unmarshal(settingsData, &settingsObject) != nil {
+			return errors.New("invalid Muse private settings")
+		}
+		providerName, providerOK := settingsObject["provider"].(string)
+		modelName, modelOK := settingsObject["model"].(string)
+		tuiObject, tuiOK := settingsObject["tui"].(map[string]any)
+		foreignNotice, noticeOK := tuiObject["foreign_context_notice_shown"].(bool)
+		if !providerOK || providerName != "meta" || !modelOK || modelName != "muse-spark-1.3-contributor" ||
+			!tuiOK || !noticeOK || !foreignNotice {
+			return errors.New("Muse private settings did not preserve provider, model and TUI values")
+		}
+		if len(document.Servers) != 2 {
+			return errors.New("Muse MCP composition did not preserve exactly one user server and one Bee server")
+		}
+		userServer, ok := document.Servers["user_fixture"]
+		if !ok || userServer.URL != "http://127.0.0.1:9/mcp" ||
+			userServer.Headers["Authorization"] != "Bearer user-fixture-token" {
+			return errors.New("Muse MCP composition did not preserve the unrelated user server")
+		}
+		server, ok := document.Servers["bee"]
+		if !ok || server.URL == "" || !strings.HasPrefix(server.Headers["Authorization"], "Bearer ") ||
+			strings.TrimPrefix(server.Headers["Authorization"], "Bearer ") == "" ||
+			strings.Contains(server.Headers["Authorization"], "$"+"{") {
+			return errors.New("Muse MCP credential was not materialized")
+		}
+		for _, event := range []string{"PreToolUse", "Stop"} {
+			beeHooks, userHooks := 0, 0
+			for _, group := range document.Hooks[event] {
+				for _, hook := range group.Hooks {
+					if hook.Type != "command" {
+						continue
+					}
+					if strings.Contains(hook.Command, "hook-post") {
+						beeHooks++
+					}
+					if (event == "PreToolUse" && hook.Command == "printf user-pre") ||
+						(event == "Stop" && hook.Command == "printf user-stop") {
+						userHooks++
+					}
+				}
+			}
+			if beeHooks != 1 || userHooks != 1 {
+				return fmt.Errorf("Muse %s command hook was not rendered", event)
+			}
+		}
+	}
+
 	if provider == "grok" {
 		base, err := os.ReadFile(filepath.Join(childHome, ".grok", ".bee-global-config.toml"))
 		if err != nil || string(base) != fixtureGrokConfig {
@@ -3010,7 +3186,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 		if !os.IsNotExist(loginErr) {
 			return errors.New("absent machine login unexpectedly produced a login file")
 		}
-		if provider != "grok" {
+		if provider != "grok" && provider != "muse" {
 			if _, err := os.Stat(filepath.Join(home, providerDirectory)); !os.IsNotExist(err) {
 				return errors.New("launch created a machine credential directory")
 			}
@@ -3028,7 +3204,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if err != nil || string(data) != "retained" {
 		return fmt.Errorf("managed session marker = %q, err=%v", string(data), err)
 	}
-	if provider == "agy" || provider == "grok" {
+	if provider == "agy" || provider == "grok" || provider == "muse" {
 		if err := waitCommandHook(state, provider, "PreToolUse"); err != nil {
 			return err
 		}
@@ -3042,6 +3218,9 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			if provider == "agy" {
 				titleEvidence = "Antigravity CLI · Act"
 			}
+			if provider == "muse" {
+				titleEvidence = "Muse CLI · Using"
+			}
 		}
 		if err := ui.waitFor(titleEvidence, 5*time.Second); err != nil {
 			return fmt.Errorf("committed %s hook title: %w", provider, err)
@@ -3050,7 +3229,7 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 	if err := ui.send("finish\r"); err != nil {
 		return err
 	}
-	if provider == "agy" || provider == "grok" {
+	if provider == "agy" || provider == "grok" || provider == "muse" {
 		if err := waitCommandHook(state, provider, "Stop"); err != nil {
 			return err
 		}
@@ -3083,6 +3262,12 @@ func managedLaunch(binary, provider string, machineLogin bool, customConfig ...b
 			return errors.New("Grok private composition base did not survive node exit")
 		}
 	}
+	if provider == "muse" {
+		global, err := os.ReadFile(museGlobalSettingsPath)
+		if err != nil || string(global) != museGlobalSettings {
+			return errors.New("Muse launch or shutdown changed the global settings")
+		}
+	}
 	return nil
 }
 
@@ -3104,7 +3289,7 @@ func main() {
 	}
 	if len(os.Args) == 4 && os.Args[1] == "managed" {
 		provider := os.Args[2]
-		if provider != "grok" && provider != "agy" && provider != "claude" && provider != "codex" {
+		if provider != "grok" && provider != "agy" && provider != "claude" && provider != "codex" && provider != "muse" {
 			os.Exit(2)
 		}
 		binary, err := filepath.Abs(os.Args[3])
@@ -3198,7 +3383,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "managed alias raw-argument refusal failed: %v\n", err)
 		os.Exit(1)
 	}
-	for _, provider := range []string{"codex", "claude", "agy", "grok"} {
+	for _, provider := range []string{"codex", "claude", "agy", "grok", "muse"} {
 		for _, present := range []bool{false, true} {
 			if err := managedLaunch(binary, provider, present); err != nil {
 				fmt.Fprintf(os.Stderr, "managed %s launch (machine login=%v) failed: %v\n", provider, present, err)

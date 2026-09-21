@@ -4,7 +4,8 @@ This guide describes available development operations. The optional Hub componen
 provides scoped package reads, planning and installation through `bee.hub:call`
 and the Modules application; see [the implemented Hub contract](HUB.md), including
 its migration limits. Managed Agent profiles have scoped native MCP delivery;
-provider-specific acceptance and end-to-end in-app self-edit remain incomplete.
+some provider-specific acceptance and end-to-end in-app self-edit remain
+incomplete.
 See [saved profiles](handoffs/SAVED_AGENT_PROFILES.md) and the current foundation
 checkpoint for their verified scope. [Package boundaries](PACKAGE_BOUNDARIES.md) also contains proposals;
 use implementation contracts to determine which operations are callable.
@@ -52,6 +53,24 @@ slice; Timeline is the read-only application, and Test Status has been removed.
 See [the build sequence](BUILD_SEQUENCE.md) for implemented driver and gateway
 components and their remaining public activation gates. Do not route new
 authority through the desktop merely because it is the visible client.
+
+The globally installed Bee contains the Muse 1.3.0 driver integration.
+Managed Muse uses a retained private `HOME` with `XDG_CONFIG_HOME` absent. The
+host admits and snapshots the user's Muse auth/settings, then placement builds
+a fresh settings file that preserves the provider/model/TUI, unrelated MCP
+servers and user hooks while inserting Bee's scoped MCP and appending its
+authenticated hook groups. The real `native-muse-recovery-live-check` passes
+against `dist/bee-muse-v2`: its first turn uses scoped `thread_read`, reads a
+file and commits the selected hooks; cold recovery resumes the exact session,
+recalls the token without tools or prompt replay, keeps the retained HOME,
+project, application and thread, and creates a fresh attempt, gateway binding
+and hook-token path. Source auth/settings/project state remain unchanged. The
+test wrapper disables Muse's experimental skill, goal and verification reminder agents only for
+this exact-session acceptance. Source `de9c5d0` is installed globally as
+executable SHA-256 `5e8d3f608e57`; its installed `bee muse` route reaches Muse's
+native workspace trust screen from the caller's project directory and detaches
+cleanly without changing the user's Muse auth or settings.
+
 The shared source currently needs the candidate runtime described in
 [the runtime gate](handoffs/STATUS_RUNTIME_GATE.md); historical standalone
 acceptance does not prove a release of these newer changes.
@@ -135,12 +154,14 @@ The registry owns definitions/configuration/history. Workspace application state
 journal events and exported application data retain their respective owners.
 Transfer declarative content and explicitly supported state, not local credentials,
 live PIDs or mounts. Legacy drivers are source references outside the repository,
-never runtime dependencies. The `bee claude/codex/agy/grok` aliases and the
+never runtime dependencies. The `bee claude/codex/agy/grok/muse` aliases and the
 managed Agent picker use the same reviewed definitions, profiles, admission and
 scoped gateway configuration; provider hooks feed their bound threads. Fixture acceptance
 proves saved-conversation continuation. Real Agy, Codex and Grok cold-recovery
-rows pass against the selected-state candidate; real Claude recovery remains
-unqualified because the provider account refuses inference. Read [saved
+rows pass against the selected-state candidate. Muse's exact session cold
+recovery and live MCP/hook acceptance pass against `dist/bee-muse-v2`; real
+Claude recovery remains unqualified because the provider account refuses
+inference. Read [saved
 profiles](handoffs/SAVED_AGENT_PROFILES.md) before extending this path.
 
 Use `make check` for production changes. `tests/lifecycle.py::detached` is the

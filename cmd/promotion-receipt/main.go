@@ -94,10 +94,10 @@ func main() {
 	flag.StringVar(&agyModel, "agy-model", "", "Agy model used by the live recovery gate")
 	flag.StringVar(&builderCommand, "builder-command", "", "builder command selected by the Make invocation")
 	flag.StringVar(&beeVersion, "bee-version", "", "optional bundle version override")
-	for _, name := range []string{"agy", "claude", "codex", "grok"} {
+	for _, name := range []string{"agy", "claude", "codex", "grok", "muse"} {
 		providers[name] = flag.String(name, "", name+" executable")
 	}
-	for _, name := range []string{"agy-login", "codex-login", "codex-config", "grok-login", "grok-config"} {
+	for _, name := range []string{"agy-login", "codex-login", "codex-config", "grok-login", "grok-config", "muse-login"} {
 		privateFiles[name] = flag.String(name, "", name+" input")
 	}
 	flag.StringVar(&claudeCredentialEnv, "claude-credential-env", "", "Claude credential environment selector")
@@ -134,7 +134,7 @@ func main() {
 		PrivateInputs: map[string]privateInput{},
 		PassedGates: []string{
 			"real-agy-cold-recovery", "real-claude-cold-recovery",
-			"real-codex-cold-recovery", "real-grok-cold-recovery",
+			"real-codex-cold-recovery", "real-grok-cold-recovery", "real-muse-cold-recovery",
 			"repository", "full-check", "native-check", "standalone",
 			"native-binary", "offline-boot", "native-client",
 			"independent-displays", "agent-recovery", "agent-crash-recovery",
@@ -703,13 +703,14 @@ func promotionInvocation(commit, binary, runtime, previous, buildManifest, bundl
 		"CLAUDE_CREDENTIAL_ENV": claudeEnv,
 		"CODEX_BIN":             *providers["codex"],
 		"GROK_BIN":              *providers["grok"],
+		"MUSE_BIN":              *providers["muse"],
 	}
 	return invocation{
 		EntryTarget:   "make promotion-check",
 		GateTarget:    "make promotion-native-agents-check",
 		Makefile:      makefile,
 		Variables:     variables,
-		PrivateInputs: []string{"agy-login", "codex-login", "codex-config", "grok-login", "grok-config"},
+		PrivateInputs: []string{"agy-login", "codex-login", "codex-config", "grok-login", "grok-config", "muse-login"},
 	}, nil
 }
 

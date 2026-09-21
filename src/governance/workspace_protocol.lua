@@ -94,6 +94,8 @@ function M.decode_overlay(raw: unknown): (Request?, string?)
     if not value then return nil, "request must be an object" end
     local extra = bounds.fields(value, {"operation", "overlay_id", "expected_revision", "idempotency_key",
         "path", "content", "content_base64", "snapshot_digest"})
+    -- Unknown fields name exactly what the caller sent. This is a strict
+    -- boundary, not an alias for an older dialect.
     if extra then return nil, extra end
     if value.operation == "guide" and value.overlay_id ~= nil then
         return nil, "guide names no overlay_id"
@@ -104,7 +106,7 @@ function M.decode_overlay(raw: unknown): (Request?, string?)
     translated.overlay_id = nil
     local request, decode_error = M.decode(translated)
     if not request then
-        return nil, decode_error and decode_error:gsub("workspace_id", "overlay_id") or nil
+        return nil, decode_error and decode_error:gsub("workspace_id", "overlay_id"):gsub("workspace", "overlay") or nil
     end
     return request, nil
 end

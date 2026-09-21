@@ -1,0 +1,13 @@
+# Generated documentation examples and deterministic test identities.
+# Fingerprints are exact so a new finding in the same files still fails.
+4bf602cca1a19239111a086f543eef1224f71cc4:src/corpus/runtime/guides/cluster.md:generic-api-key:277
+4bf602cca1a19239111a086f543eef1224f71cc4:src/corpus/runtime/guides/cluster.md:generic-api-key:279
+2f6a92d47769f9c50c2d4ee5879ca789db63e67b:tests/lua/governance/activation_owner_test.lua:generic-api-key:319
+2f6a92d47769f9c50c2d4ee5879ca789db63e67b:tests/lua/governance/destination_test.lua:generic-api-key:138
+eb5c25df8e0d5416d9b4f549bfb01806b4da83d9:tests/fixtures/harness/gateway_client.go:generic-api-key:302
+dist/native-bundles/847db4f3904a99afe6a4732f52615310d8bd973f449d5131fd135bc3edf6cfc6/ownership.json:generic-api-key:203
+src/corpus/runtime/guides/cluster.md:generic-api-key:277
+src/corpus/runtime/guides/cluster.md:generic-api-key:279
+tests/fixtures/harness/gateway_client.go:generic-api-key:384
+tests/lua/governance/activation_owner_test.lua:generic-api-key:465
+tests/lua/governance/destination_test.lua:generic-api-key:138

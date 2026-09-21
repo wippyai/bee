@@ -201,13 +201,17 @@ def fetch_runtime(paths: "list[str]") -> "dict[str, bytes]":
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
     guide = (ROOT / "src/governance/guide.lua").read_text()
+    source_match = re.search(r"M[.]SOURCE = \[==\[(.*?)\]==\]", guide, re.DOTALL)
+    if not source_match:
+        raise SystemExit("src/governance/guide.lua has no bounded M.SOURCE example")
+    guide_source = source_match.group(1).strip()
     client = (ROOT / "src/ui/application/client.lua").read_text()
     appearance = (ROOT / "src/ui/appearance.lua").read_text()
     stylebook_manifest = (ROOT / "src/apps/stylebook/_index.yaml").read_text().rstrip()
     stylebook_app = (ROOT / "src/apps/stylebook/app.lua").read_text().rstrip()
     stylebook_view = (ROOT / "src/apps/stylebook/view.lua").read_text().rstrip()
     apps = sorted((ROOT / "src/apps").glob("*/view.lua"))
-    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance
+    calls = sorted(set(re.findall(r"tty\.[A-Za-z_.]+", client + appearance + guide_source
                                   + "".join(p.read_text() for p in apps))))
     sections = [
         "# Bee terminal toolkit",
@@ -279,6 +283,16 @@ def toolkit_reference() -> bytes:
         "",
         "Read `docs/APPLICATION_CONTRACTS.md` in this corpus for the full record,",
         "including negotiated close, shell queries and appearance.",
+        "",
+        "## Minimal authored application",
+        "",
+        "This is the exact inline source returned by Governance's read-only authoring",
+        "guide in this Bee revision. It demonstrates semantic appearance, bounded",
+        "responsive rows, keyboard/mouse parity and correlated checkpoint receipts.",
+        "",
+        "```lua",
+        guide_source,
+        "```",
         "",
         "## Toolkit names in this Bee revision",
         "",

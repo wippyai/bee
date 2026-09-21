@@ -26,7 +26,8 @@ type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, r
 -- rendered by the driver at admission, created in an attempt home or atomically
 -- published in a retained session home. Provider state has separate ownership.
 type SecretField = {path: {string}, environment: string, prefix: string}
-type Composition = {kind: "toml_insert", base_path: string, path: {string}}
+type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
+type Composition = {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type ConfigurationDelivery = {arguments: {string}, files: {Configuration}}
 -- The plan's measurement of the launch executable, verified by the runner

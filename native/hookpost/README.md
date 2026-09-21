@@ -1,9 +1,18 @@
 # Native hook POST
 
-`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV EVENT` is the generated command-hook
-entry. It runs before project selection, workspace state or Hive startup. The
-host selects this executable; the gateway still authorizes the submitted token.
-The helper has no registry, database or thread authority.
+`bee hook-post ENDPOINT ACTION_ID TOKEN_ENV_OR_FILE EVENT` is the generated
+command-hook entry. It runs before project selection, workspace state or Hive
+startup. The host selects this executable; the gateway still authorizes the
+submitted token. The helper has no registry, database or thread authority.
+
+`TOKEN_ENV_OR_FILE` accepts the existing environment-name form and the private
+file form `@/absolute/path/to/token.json`. A file source must be an absolute
+path of at most 4096 bytes to one JSON object of exactly `{"token":"..."}`;
+the file is limited to 8192 bytes and the token to 4096 bytes. It is checked as
+a regular, non-symlink file both before and after opening; directories,
+symlinks, oversized files and malformed or oversized tokens are refused.
+Selecting `@...` never falls back to an environment variable, and errors do not
+disclose the path or token.
 
 It reads one JSON object, adds the selected `hook_event_name`, and submits once
 to the existing loopback hook endpoint. Input and encoded output are limited to

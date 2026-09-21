@@ -28,9 +28,8 @@ contents or grant an actor access to them.
 
 ## Native enrollment integration
 
-The candidate trust controller and its verification are recorded in
-[native trust research](../runtime/research/TRUST_OWNER.md). It is not in the
-build manifest. Keep the following boundaries when connecting it to Bee:
+The earlier native trust research is not in the build manifest. Keep the
+following boundaries when connecting it to Bee:
 
 1. `PrepareLaunch` reads protected machine configuration and selects startup
    configuration before opening registry or application state. It preserves

@@ -102,8 +102,7 @@ are state-library proofs, not proof of a running admission service.
 Discovery supplies a candidate address. Admission first checks the native sender
 node against enrolled peer authority and the sender host against the protected
 supervisor host. Neither a payload node ID nor a registry name establishes this.
-The dedicated-host prerequisite is tracked in
-[the host admission review](../runtime/research/PROCESS_HOST_ADMISSION.md).
+The dedicated-host prerequisite remains runtime work outside this repository.
 
 A challenge exchange then establishes the exact peer PID and incarnation.
 Challenge values come from a fresh random source supplied by the owner, not a

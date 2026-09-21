@@ -68,12 +68,191 @@ client.reference(launch)                      -- logical view reference
 Read `docs/APPLICATION_CONTRACTS.md` in this corpus for the full record,
 including negotiated close, shell queries and appearance.
 
+## Minimal authored application
+
+This is the exact inline source returned by Governance's read-only authoring
+guide in this Bee revision. It demonstrates semantic appearance, bounded
+responsive rows, keyboard/mouse parity and correlated checkpoint receipts.
+
+```lua
+local tty = require("tty")
+local client = require("client")
+local process = require("process")
+local channel = require("channel")
+local json = require("json")
+local appearance = require("appearance")
+
+local RESET = "\27[0m"
+
+local function main(value: unknown)
+    local launch = client.launch(value)
+    if not launch then error("Invalid launch") end
+    local input = assert(tty.events())
+    local lifecycle = assert(process.events())
+    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local states = assert(process.listen("bee.appearance.state", {message = true}))
+    local count = 0
+    if launch.resume_state ~= "" then
+        local state: unknown = json.decode(launch.resume_state)
+        if type(state) ~= "table" or type(state.count) ~= "number"
+            or state.count ~= math.floor(state.count) or state.count < 0 then
+            error("Invalid counter checkpoint")
+        end
+        count = math.floor(state.count)
+    end
+    assert(tty.start())
+    assert(tty.mouse(true))
+    local output = assert(tty.surface())
+    local width, height = tty.screen_size()
+    local preferences = appearance.defaults()
+    local saved: integer? = nil
+    local pending_request_id: string? = nil
+    local pending_count: integer? = nil
+    local status = "Ready"
+    local running = true
+    local action_y = 0
+    local increment_x, increment_width = 0, 0
+    local exit_x, exit_width = 0, 0
+
+    local function clip(value: string, room: integer): string
+        if room <= 0 then return "" end
+        return tty.text.truncate(value:gsub("%c", " "), room, "…")
+    end
+
+    local function fit(value: string, room: integer): string
+        local clipped = clip(value, room)
+        return clipped .. string.rep(" ", math.max(0, room - tty.text.width(clipped)))
+    end
+
+    local function paint()
+        local theme = appearance.theme(preferences.theme)
+        local canvas = tty.canvas(width, height)
+        local function line(y: integer, value: string, foreground: string?, background: string?)
+            if y < 1 or y > height then return end
+            local fg = foreground or theme.text
+            local bg = background or theme.surface
+            canvas:put(1, y, appearance.style(fg, bg) .. fit(value, width) .. RESET, width)
+        end
+        local function put(x: integer, y: integer, value: string, foreground: string, background: string): integer
+            if x < 1 or x > width or y < 1 or y > height then return 0 end
+            local room = width - x + 1
+            local clipped = clip(value, room)
+            canvas:put(x, y, appearance.style(foreground, background) .. clipped .. RESET, room)
+            return tty.text.width(clipped)
+        end
+        canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
+        for y = 1, height do line(y, "") end
+
+        local title = height >= 3 and "COUNTER APP" or "COUNTER APP · " .. tostring(count)
+        line(1, title, theme.text)
+        if height >= 5 then
+            line(2, "WORK", theme.muted)
+            line(3, "Count: " .. tostring(count), theme.accent)
+            local saved_text = saved == nil and "Saved: —" or "Saved: " .. tostring(saved)
+            line(4, saved_text, theme.muted)
+        elseif height >= 4 then
+            line(2, "Count: " .. tostring(count), theme.accent)
+        end
+
+        action_y = height >= 2 and height or 0
+        if height >= 3 then line(height - 1, "Status: " .. status, theme.muted) end
+        increment_x, increment_width, exit_x, exit_width = 0, 0, 0, 0
+        if action_y > 0 then
+            line(action_y, "", theme.text)
+            local increment_label = width >= 24 and " [Enter] Add one " or (width >= 10 and " [Enter] +1 " or " +1 ")
+            local exit_label = width >= 24 and " [Escape] Exit " or (width >= 10 and " [Esc] Exit " or " Esc ")
+            local x = width >= 2 and 2 or 1
+            local increment_size = tty.text.width(increment_label)
+            if x + increment_size - 1 <= width then
+                increment_x, increment_width = x, put(x, action_y, increment_label, appearance.selection_text(theme), theme.accent)
+                x = x + increment_width + 1
+            end
+            local exit_size = tty.text.width(exit_label)
+            if x + exit_size - 1 <= width then
+                exit_x, exit_width = x, put(x, action_y, exit_label, theme.text, theme.surface)
+            end
+        end
+        assert(output:present(canvas:rows()))
+    end
+
+    local function checkpoint()
+        local request_id = client.checkpoint(launch, json.encode({count = count}))
+        if request_id then
+            pending_request_id, pending_count = request_id, count
+            status = "Saving count " .. tostring(count)
+        else
+            pending_request_id, pending_count = nil, nil
+            status = "Save unavailable"
+        end
+        paint()
+    end
+
+    local function increment()
+        count = count + 1
+        checkpoint()
+    end
+
+    local appearance_request_id = launch.instance_id
+    assert(process.send(launch.broker_pid, "bee.appearance.request", {version = 1,
+        request_id = appearance_request_id, op = "state"}))
+    paint()
+    client.ready(launch)
+    checkpoint()
+    while running do
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), receipts:case_receive(), states:case_receive()})
+        if not event.ok then break end
+        if event.channel == lifecycle then
+            if event.value.kind == process.event.CANCEL then running = false end
+        elseif event.channel == states then
+            local message = event.value
+            local data: unknown = message:payload():data()
+            if message:from() == launch.broker_pid and type(data) == "table" and data.version == 1 then
+                local next_preferences = appearance.decode(data)
+                if next_preferences then preferences = next_preferences; paint() end
+            end
+        elseif event.channel == receipts then
+            local message = event.value
+            local data: unknown = message:payload():data()
+            if message:from() == launch.broker_pid and type(data) == "table" and data.version == 1
+                and type(data.request_id) == "string" and data.request_id == pending_request_id then
+                local submitted = pending_count
+                pending_request_id, pending_count = nil, nil
+                if data.error_code == "" and submitted ~= nil then
+                    saved = submitted
+                    status = "Saved count " .. tostring(submitted)
+                elseif data.error_code == "superseded" then
+                    status = "Save superseded"
+                else
+                    status = "Save failed"
+                end
+                paint()
+            end
+        else
+            local data = event.value
+            if data.type == "close" then running = false
+            elseif data.type == "resize" then width, height = data.width, data.height; paint()
+            elseif data.type == "key" and data.action == "press" then
+                if data.key_type == "enter" then increment()
+                elseif data.key_type == "escape" or data.key_type == "esc" then running = false end
+            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                local x, y = math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0)
+                if y == action_y and x >= increment_x and x < increment_x + increment_width then increment()
+                elseif y == action_y and x >= exit_x and x < exit_x + exit_width then running = false end
+            end
+        end
+    end
+    process.unlisten(states); process.unlisten(receipts)
+    output:close(); tty.mouse(false); tty.stop()
+end
+return {main = main}
+```
+
 ## Toolkit names in this Bee revision
 
 `tty` and `appearance`/`client` members this repository actually calls:
 
 ```
-tty.Canvas tty.canvas tty.text.truncate tty.text.width
+tty.Canvas tty.canvas tty.events tty.mouse tty.screen_size tty.start tty.stop tty.surface tty.text.truncate tty.text.width
 ```
 
 The native module reference is the `tty`, `appearance` and `filesystem` pages

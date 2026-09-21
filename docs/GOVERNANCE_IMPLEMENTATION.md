@@ -1,9 +1,11 @@
 # Bee governance implementation plan
 
 Status: source authoring, immutable transfer-candidate identity, exact resolved
-registry artifact encoding, Hive replica transfer and the internal destination plan
-store, activation ledger and overlay materializer are implemented; public installation, activation and plugin dispatch remain
-unimplemented. See
+registry artifact encoding, Hive replica transfer, the internal destination plan
+store, destination resolver/service, activation owner/recovery worker and overlay
+materializer are implemented. The public overlay author/review/apply path and its
+accepted restart restoration are implemented; durable registry installation and
+plugin dispatch remain unimplemented. See
 [distributed delivery](DISTRIBUTED_APP_DELIVERY.md) for the staged destination-owned flow.
 
 The internal `bee.governance:preflight` library now checks a host-resolved closure
@@ -19,15 +21,17 @@ candidate, host policy and applied-migration baseline. A reference is the
 candidate's to answer for when the candidate defines the entry holding it, or
 when the candidate removes the target; a destination whose base already points
 at an entry its host supplies out of band is not blamed on the plan. It has no write capability.
-`make governance-preflight-check` exercises this slice. There is no production
-resolver adapter, installer, activation trait or worker yet; the context supplied
-to this internal library must never be accepted as authority from a remote peer.
+The destination resolver/service, activation owner and auto-start recovery worker
+consume this library for destination-local overlay activation; the optional
+durable registry installer remains unimplemented. The context supplied to this
+internal library must never be accepted as authority from a remote peer.
 
 `bee.governance:activation_measure` now turns a host-resolved candidate and
 current context into exact local execution evidence. It requires an accepted
 selected plan, byte-for-byte artifact entry measurements, a ready fresh
 preflight, no pending migrations and no dependency directive in the overlay.
-The host resolver that supplies those facts still needs to be wired to Hub.
+The destination service supplies those facts through its host-selected Hub or
+private-overlay resolver.
 
 The pure `bee.governance:artifact` library copies, sorts and canonically encodes
 the complete resolved registry definitions needed for a later overlay apply. Its
@@ -44,8 +48,9 @@ candidate, artifact and preflight digests. Approval binding retains that plan
 digest separately from the Approvals owner's canonical proposal digest, so the
 effect owner can both prove what was reviewed and consume the exact approval.
 CAS revisions and bounded retry
-receipts survive database reopen. This internal store does not request or consume
-approval, expose a public method, read the registry or apply an overlay yet.
+receipts survive database reopen. This internal store deliberately does not
+request or consume approval, read the registry or apply an overlay; the
+destination service and its public facade own those operations.
 `bee.governance:destination.stage_replica` is the internal bridge into this store:
 the caller supplies only a complete local replica identity and idempotency key.
 The bridge rechecks the available replica's descriptor and bytes, decodes the
@@ -108,11 +113,16 @@ pending migrations in a fresh context. Bee retains these requirements without
 importing Keeper, its agents, views, migration bootloader or permission scope.
 Remediation produces a new candidate; no suggested fix mutates an approved plan.
 
+> Historical design-stage target: the original first acceptance target below was
+> a headless durable Hub install/update. The accepted local slice is the
+> destination-owned overlay authoring, review and activation path described
+> later; durable registry publication remains a separate runtime gate.
+
 Bee owns a small governance subsystem. It has no Keeper, Kickside, web view,
-or language-model dependency. The first acceptance target is a headless install
-and update of a private Hub component, including its migrations. The existing
-`wolfy-j/bee-registry-planner` package only plans harness activation and stores
-candidates; it does not satisfy this target.
+or language-model dependency. The original first acceptance target was a
+headless install and update of a private Hub component, including its migrations.
+The existing `wolfy-j/bee-registry-planner` package only plans harness activation
+and stores candidates; it does not satisfy this target.
 
 ## Decision and ownership
 
@@ -176,9 +186,11 @@ changes. The primary execution target is an ephemeral, service-owned runtime
 overlay, not a durable registry publication. Definitions participate in composed
 runtime lookup, but are not written to durable registry history. The owner holds
 the overlay handle and generation, controls its lifetime, and reports cleanup
-failure rather than pretending the application was removed. Persisted operation
-and approval receipts do not imply persisted definitions or automatic reactivation.
-Cold-start restoration is an explicit later policy, not the default.
+failure rather than pretending the application was removed. An approval receipt
+by itself does not imply persisted definitions or automatic reactivation. Once
+the activation owner has established an authorized desired intent, the auto-start
+recovery worker restores that exact overlay after a host restart; the accepted
+application journey covers this flow.
 
 `make governance-overlay-check` proves the executable's owner-local boundary:
 create/update/delete leave durable history unchanged; stale owner generations,
@@ -195,28 +207,31 @@ replacement for one caller-selected logical overlay. It remeasures and copies
 the artifact, creates, updates and removes exact owner entries, and treats one
 native overlay generation as its write CAS. A conflict returns without retry so
 the destination owner must rebuild context and rerun preflight before another
-attempt. The destination owner still has to consume approval before invoking it
-and reconstruct the selected overlay on boot.
+attempt. The destination owner consumes approval before invoking it, and the
+auto-start recovery worker reconstructs the selected overlay from its durable
+authorized intent on boot.
 
-Agents require a host-admitted headless execution environment with typed
-governance operations, destination identity, bounded staging access and scoped
-status/receipt access. The environment must not expose raw overlay/registry
-writers, host credentials or authority to approve its own requests. The service
-resolves and measures content in its trusted destination context; an agent cannot
-supply policy flags or claim that a package passed validation. Approval waiting
-and continuation work without a keyboard or a live client. The governance trait
-delegates to this owner rather than granting the caller its permissions.
+The implemented managed-Agent route provides a host-admitted headless execution
+environment with typed authoring/delivery operations, destination identity,
+bounded staging access and scoped status/receipt access. It does not expose raw
+overlay/registry writers, host credentials or authority to approve its own
+requests. The service resolves and measures content in its trusted destination
+context; an agent cannot supply policy flags or claim that a package passed
+validation. Review and approval remain human operations, and the activation
+owner applies the approved intent without a keyboard or live client. The
+governance traits delegate to this owner rather than granting the caller its
+permissions.
 
 ### Agent authoring environment
 
-The agent interface must support a complete bounded application overlay, not
-just submission of registry RPCs. A host-admitted overlay exposes convenient
-file listing, reading, writing, patches and diagnostics, with explicit resource
-identity, revision and quotas. Files can describe services, child namespaces,
-requirements/bindings, migration definitions and WASM assets. Child namespaces
-belong to the measured package closure; nesting does not bypass ownership,
-collision or host-policy checks. These are planned capabilities, not callable
-operations today.
+The public authoring facade supports a bounded application overlay with file
+listing, reading, writing, removal and freeze, plus explicit overlay identity,
+revisions and quotas. It is the callable authoring surface used by the accepted
+managed-Agent journey. Patches, richer diagnostics and files that describe
+services, child namespaces, requirements/bindings, migration definitions and
+WASM assets remain planned extensions; child namespaces must belong to the
+measured package closure and cannot bypass ownership, collision or host-policy
+checks.
 
 WASM filesystem access uses explicit host-selected virtual/preopened roots and
 read/write rights; a package cannot authorize host paths by declaring them.
@@ -226,20 +241,22 @@ containment, including traversal and symlink escapes, and bound storage and I/O.
 Neither Hive transfer nor an overlay descriptor carries host credentials or
 implicitly mounts the source node's directories on a destination.
 
-The intended workflow is edit, inspect/validate, test in an admitted isolated
-environment, freeze an immutable candidate, request approval, then activate or
-update and inspect service/migration outcomes. The service must execute the
-measured frozen content, never mutable overlay files changed after approval.
+The accepted application workflow is edit, freeze an immutable candidate,
+request destination delivery, inspect the destination preflight, review and
+select it in Overlays, approve it in Approvals, then let the activation owner
+apply or update it and report service/migration outcomes. The service executes
+the measured frozen content, never mutable overlay files changed after approval.
 Service declarations include dependencies and lifecycle/readiness effects;
 dependent services cannot start before their approved migrations complete.
 Migration bodies and named database bindings are part of the reviewed closure,
 with persistent checksum ledgers and unchanged applied migrations on update.
 Testing receives its own bounded authority and disposable stores; it does not
 implicitly gain production data access or permission to run arbitrary host code.
-The trait exposes structured errors, precheck remedies, operation status and
-scoped logs so agents can iterate without a keyboard. Repairs produce a new
-candidate and approval. Public operation names and the concrete WASM filesystem
-adapter remain to be established against available runtime capabilities.
+The traits expose structured errors, precheck remedies and operation status so
+agents can iterate without a keyboard. Repairs produce a new candidate and
+approval. The overlay, delivery and destination operation names are established;
+the richer isolated test environment and concrete WASM filesystem adapter remain
+future work.
 
 The executable `make governance-wasm-check` currently fails its containment
 gate: a read-only `fs.directory` WASI mount permits reading a synthetic outside
@@ -252,20 +269,23 @@ pass before enabling that adapter. Lexical authoring-path checks cannot repair
 runtime symlink resolution. The focused gate stays separate from the foundation
 suite while red.
 
-Overlay activation and update need their own acceptance: exact expanded content,
-owner/generation fencing, immediate owner-local re-preflight, migration ordering,
-replacement, and owner-exit cleanup. The owner may retry only after an overlay
-generation conflict and another preflight. The failing durable-publication probe
-below does not block this distinct adapter.
+Owner-local overlay activation and update are implemented and accepted: the
+destination resolver measures the expanded content, the activation owner
+re-preflights and fences the owner/generation apply, migrations run behind the
+prerequisite overlay, updates replace the complete owned set, and the recovery
+worker restores the authorized result after restart. The owner may retry only
+after an overlay-generation conflict and another preflight. The failing
+durable-publication probe below does not block this distinct adapter.
 Ephemeral definitions do not make database effects ephemeral: migrations still
 use persistent append-only ledgers, including on update, and overlay removal
 does not roll back application data. Durable registry installation is a separate
 explicit mode, subject to the durable-publication gate below.
 
-The following sequence describes the shared planning/approval lifecycle; its
-publication step must use the selected overlay or durable adapter, never silently
-fall back between them. These adapters and the agent environment are not yet
-implemented.
+> Historical design-stage lifecycle: the following sequence records the shared
+> planning/approval model and the still-future durable publication adapter. The
+> implemented overlay authoring, destination service, activation owner and
+> recovery worker above are the current local path; their publication step must
+> not silently fall back to an unguarded durable adapter.
 
 1. Resolve an exact Hub request against a pinned registry state. Record every
    selected version and verified artifact digest, requirement binding, changed
@@ -288,6 +308,11 @@ initial operations. Approval remains a separate user operation. No physical
 terminal is needed to carry the workflow from a committed decision to its receipt.
 
 ## Waiting, callbacks and distributed inbox
+
+The local activation owner and auto-start recovery worker are implemented above.
+The generic wait/lease/callback protocol in this section is retained as a
+distributed design-stage extension; it must not be read as a claim that the
+reusable continuation dispatcher is implemented.
 
 Use the reusable wait/wakeup contract already specified in
 [approvals](APPROVALS.md#required-reusable-wait-and-wakeup-contract). Persist the
@@ -327,7 +352,7 @@ A temporary worker lease serializes this workflow's workers. It does not make
 the runtime's durable registry apply atomic against other registry writers;
 the publication precondition gate below remains required.
 
-## Runtime publication contract
+## Runtime publication contract (durable publication gate)
 
 - The executable under test must expose the same verified artifact and registry
   APIs as the selected runtime source; source documentation alone is insufficient.
@@ -385,7 +410,7 @@ check followed by ordinary `Apply` is insufficient. The existing isolated
 `governance-runtime-check` reproduces the missing durable-base guarantee; extend
 it for the exact guarded capability the runtime exposes.
 
-## Acceptance
+## Acceptance (durable publication and distributed extensions)
 
 Use an isolated headless Bee composition with no Keeper or view packages.
 Publish immutable private fixture versions under `wolfy-j`; install the first
@@ -409,8 +434,9 @@ separate from the existing local inbox and local approval-owner tests.
 ## Following slices
 
 Overlay candidates use the same validation, approval and receipt contracts.
-Optional durable desired state and cold-start reconstruction are separate from
-the default service-owned ephemeral lifetime. Hub installation does not establish
-overlay acceptance.
+The owner-local activation path now persists authorized desired intent and
+restores the selected overlay on restart. Optional durable registry desired state,
+broader cold-start reconstruction and Hub installation remain separate future
+slices; Hub installation does not establish overlay acceptance.
 Harness/model support and self-modification follow those foundations, with
 protected authority changes still requiring maintenance approval.

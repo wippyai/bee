@@ -18,17 +18,12 @@ entries:
   kind: env.storage.os
   lifecycle:
     auto_start: true
-- name: config_home
-  kind: env.variable
-  storage: bee.driver.muse:environment
-  variable: XDG_CONFIG_HOME
-  default: ''
-  readonly: true
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   modules: [json]
   imports:
+    bounds: bee.threads.records:bounds
     events: bee.driver.kit:events
     types: bee.driver:types
 - name: configuration
@@ -125,9 +120,7 @@ entries:
           strategy: per-process
           portable: false
         isolation_env:
-          variables:
-          - HOME
-          - XDG_CONFIG_HOME
+          variables: [HOME]
           private_home: true
         exit_codes_trustworthy: false
         input_ready:
@@ -152,8 +145,8 @@ entries:
         answer_path: {strategy: none}
         resume: {strategy: none, portable: false}
         isolation_env:
-          variables: [HOME, XDG_CONFIG_HOME]
-          private_home: false
+          variables: [HOME]
+          private_home: true
         exit_codes_trustworthy: false
         input_ready: {strategy: none}
         permission_exchange: {mode: none}
@@ -175,7 +168,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: []
+    credentials: [muse_login]
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 - name: research_batch
   kind: registry.entry

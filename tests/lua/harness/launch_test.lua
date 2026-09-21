@@ -447,7 +447,7 @@ local function define_tests()
                 test.eq(invalid == nil, false)
             end
         end)
-        test.it("ships hidden Codex, Claude, and Agy research routes with bounded batch policies", function()
+        test.it("ships hidden research routes for every batch driver with bounded policies", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
@@ -458,6 +458,9 @@ local function define_tests()
                 {definition = "bee.driver.agy:research_batch", policy = "bee:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
+                {definition = "bee.driver.muse:research_batch", policy = "bee:launch_policy_muse_batch",
+                    binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
+                    option = "approval_mode", expected = "never", additional_options = {max_steps = 1}},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))

@@ -1,8 +1,9 @@
 # Runtime patch composition
 
 Bee builds from runtime PR
-[#787](https://github.com/wippyai/runtime/pull/787) at the exact commit recorded
-in `wippy.build.json`.
+[#789](https://github.com/wippyai/runtime/pull/789), on top of the application
+model in [#787](https://github.com/wippyai/runtime/pull/787), at the exact
+commit recorded in `wippy.build.json`.
 
 `runtime-terminal-session-identity.patch` is the sole remaining composition. It
 preserves the optional host process identity after PTY ownership transfers to a

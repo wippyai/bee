@@ -476,6 +476,10 @@ function M.prepare(value: unknown): Reply
     local home_directory, home_error = configured_home(request)
     if not home_directory then db:release(); return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
     configuration.home_directory = home_directory
+    -- Placement supplies the measured attempt identity only while rendering
+    -- private delivery. It is excluded from the host configuration digest and
+    -- cannot be selected by the caller or saved profile.
+    configuration.attempt_id = request.attempt_id
     local delivery, delivery_error = configuration_protocol.call(configure_target, configuration)
     if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
     -- Keep the admitted request unchanged: its digest excludes this private
